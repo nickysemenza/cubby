@@ -24,7 +24,8 @@ import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Stack, SectionHeading } from "~/ui/layout";
+import { Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 
 import { useNeedsYouTarget } from "./needs-you";
@@ -125,17 +126,11 @@ function QualityCheckRows({
       {checks.map((check) => (
         <LedgerRow key={check.check} id={`${context.prefix}-${check.check}`}>
           <LedgerCell slot="group">
-            <details>
-              <summary className="flex cursor-pointer items-center justify-between gap-2">
-                <QualityResult check={check} />
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  Explain
-                </span>
-              </summary>
-              <div className="py-2">
+            <Disclosure summary={<QualityResult check={check} />}>
+              <div className="pb-2">
                 <QualityCheckDetails check={check} entityId={context.id} />
               </div>
-            </details>
+            </Disclosure>
           </LedgerCell>
         </LedgerRow>
       ))}
@@ -341,12 +336,9 @@ function AssessedRecordQuality({
               />
             </div>
           ) : null}
-          <details className="mt-1">
-            <summary className="cursor-pointer text-muted-foreground">
-              Score calculation
-            </summary>
-            <p className="pt-2">{breakdown.summary}</p>
-          </details>
+          <Disclosure summary="Score calculation" className="mt-1">
+            <p>{breakdown.summary}</p>
+          </Disclosure>
         </div>
       ) : null}
     </>
@@ -363,10 +355,9 @@ function AssessedRecordQuality({
               )
             : null}
         {orphaned.length > 0 ? (
-          <section>
-            <SectionHeading title="Record quality" />
+          <Section title="Record quality" headingAs="h2">
             <QualityCheckRows checks={orphaned} />
-          </section>
+          </Section>
         ) : null}
         {children}
       </Stack>

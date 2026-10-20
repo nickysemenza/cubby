@@ -23,18 +23,11 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { Grid, Row, Stack } from "~/ui/layout";
+import { Grid, Panel, Row, Stack } from "~/ui/layout";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { StatTile } from "~/ui/primitives/stat-tile";
 
 import {
   type EntityGraphLens,
@@ -130,26 +123,22 @@ export function EntityIntegrityTab({
 
   return (
     <Stack gap="lg">
-      <Grid cols="summary">
-        <StatTile label="Relationships">
-          {catalog.coverage.relationships}
-        </StatTile>
-        <StatTile label="Physical edges">
-          {catalog.coverage.incomingEdges}
-        </StatTile>
-        <StatTile label="Audited edges">
-          {catalog.coverage.auditedEdges}
-        </StatTile>
-        <StatTile label="Exempt edges">{catalog.coverage.exemptEdges}</StatTile>
-        <StatTile label="Operations">{catalog.coverage.operations}</StatTile>
-        <StatTile label="Live violations">
-          <span
-            className={violations.length > 0 ? "text-destructive" : undefined}
-          >
-            {violations.length}
-          </span>
-        </StatTile>
-      </Grid>
+      <KeyNumbers
+        layout="strip"
+        label="Integrity coverage"
+        items={[
+          { label: "Relationships", value: catalog.coverage.relationships },
+          { label: "Physical edges", value: catalog.coverage.incomingEdges },
+          { label: "Audited edges", value: catalog.coverage.auditedEdges },
+          { label: "Exempt edges", value: catalog.coverage.exemptEdges },
+          { label: "Operations", value: catalog.coverage.operations },
+          {
+            label: "Live violations",
+            value: violations.length,
+            tone: violations.length > 0 ? "destructive" : undefined,
+          },
+        ]}
+      />
 
       <Row justify="between" align="center" wrap gap="md">
         <p className="text-sm text-muted-foreground">
@@ -495,26 +484,26 @@ function EntityDetailPanel({
 }) {
   if (!entity || !row) {
     return (
-      <Card
-        variant="panel"
+      <Panel
+        tone="default"
         className="flex h-[420px] items-center justify-center"
       >
         <p className="text-sm text-muted-foreground">
           Select an entity in the graph to inspect it.
         </p>
-      </Card>
+      </Panel>
     );
   }
 
-  const def = isBrowserRoutedEntity(entity) ? entities[entity] : null;
-  const Icon = def?.phosphorIcon ?? PathIcon;
   const label = entityLabel(entity);
 
   return (
-    <Card variant="panel" className="h-[420px] overflow-y-auto">
-      <CardHeader>
-        <CardTitle icon={Icon}>{label}</CardTitle>
-        <CardDescription>
+    <Panel
+      tone="default"
+      headingAs="h3"
+      title={label}
+      caption={
+        <>
           {row.dbTable ? (
             <span className="font-mono">{row.dbTable}</span>
           ) : (
@@ -524,74 +513,74 @@ function EntityDetailPanel({
             ? ` · ${row.lifecycle.delete.mode} delete${row.lifecycle.delete.bulk ? " · bulk" : " · single"}`
             : " · not deletable"}
           {row.lifecycle.merge ? " · mergeable" : ""}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Stack gap="lg">
-          {violations.length > 0 && (
-            <Stack gap="sm">
-              <Eyebrow>Live findings ({violations.length})</Eyebrow>
-              <Stack gap="tight">
-                {violations.map((v) => (
-                  <ViolationRow
-                    key={`${v.edgeKey}-${v.sourceId}`}
-                    violation={v}
-                  />
-                ))}
-              </Stack>
+        </>
+      }
+      className="h-[420px] overflow-y-auto"
+    >
+      <Stack gap="lg">
+        {violations.length > 0 && (
+          <Stack gap="sm">
+            <Eyebrow>Live findings ({violations.length})</Eyebrow>
+            <Stack gap="tight">
+              {violations.map((v) => (
+                <ViolationRow
+                  key={`${v.edgeKey}-${v.sourceId}`}
+                  violation={v}
+                />
+              ))}
+            </Stack>
+          </Stack>
+        )}
+
+        <Stack gap="sm">
+          <Eyebrow>Relationships ({row.relationships.length})</Eyebrow>
+          {row.relationships.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No outgoing relationships.
+            </p>
+          ) : (
+            <Stack gap="tight">
+              {row.relationships.map((rel) => (
+                <RelationshipRow
+                  key={rel.key}
+                  relationship={rel}
+                  onSelect={onSelect}
+                />
+              ))}
             </Stack>
           )}
-
-          <Stack gap="sm">
-            <Eyebrow>Relationships ({row.relationships.length})</Eyebrow>
-            {row.relationships.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No outgoing relationships.
-              </p>
-            ) : (
-              <Stack gap="tight">
-                {row.relationships.map((rel) => (
-                  <RelationshipRow
-                    key={rel.key}
-                    relationship={rel}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </Stack>
-            )}
-          </Stack>
-
-          <Stack gap="sm">
-            <Eyebrow>Incoming edges ({row.incomingEdges.length})</Eyebrow>
-            {row.incomingEdges.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Nothing points at this entity.
-              </p>
-            ) : (
-              <Stack gap="tight">
-                {row.incomingEdges.map((edge) => (
-                  <IncomingEdgeRow key={edge.edgeKey} edge={edge} />
-                ))}
-              </Stack>
-            )}
-          </Stack>
-
-          <Stack gap="sm">
-            <Eyebrow>Lifecycle operations</Eyebrow>
-            {operations.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No delete or merge operation declared.
-              </p>
-            ) : (
-              <Stack gap="md">
-                {operations.map((op) => (
-                  <OperationBlock key={op.operation} operation={op} />
-                ))}
-              </Stack>
-            )}
-          </Stack>
         </Stack>
-      </CardContent>
-    </Card>
+
+        <Stack gap="sm">
+          <Eyebrow>Incoming edges ({row.incomingEdges.length})</Eyebrow>
+          {row.incomingEdges.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nothing points at this entity.
+            </p>
+          ) : (
+            <Stack gap="tight">
+              {row.incomingEdges.map((edge) => (
+                <IncomingEdgeRow key={edge.edgeKey} edge={edge} />
+              ))}
+            </Stack>
+          )}
+        </Stack>
+
+        <Stack gap="sm">
+          <Eyebrow>Lifecycle operations</Eyebrow>
+          {operations.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No delete or merge operation declared.
+            </p>
+          ) : (
+            <Stack gap="md">
+              {operations.map((op) => (
+                <OperationBlock key={op.operation} operation={op} />
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </Stack>
+    </Panel>
   );
 }

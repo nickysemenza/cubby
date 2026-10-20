@@ -52,7 +52,7 @@ export function PersonAvatar({
       aria-hidden
       data-person-avatar={avatarToneIndex(id) + 1}
       className={cn(
-        "inline-flex size-4 shrink-0 items-center justify-center rounded-full text-[0.53rem] leading-none font-semibold tracking-tight text-white",
+        "inline-flex size-4 shrink-0 items-center justify-center rounded-full text-3xs leading-none font-semibold tracking-tight text-white",
         AVATAR_TONES[avatarToneIndex(id)],
         className,
       )}

@@ -282,14 +282,14 @@ export function LocationVisual({
         {media}
       </div>
       <figcaption className="grid grid-cols-2 border-t border-border bg-card">
-        <span className="min-w-0 px-2 py-1 font-mono text-2xs text-muted-foreground uppercase sm:py-2">
+        <span className="min-w-0 px-2 py-1 text-xs font-medium text-muted-foreground sm:py-2">
           {visual.primarySource === "product"
             ? `Product · ${location.product?.name ?? "linked vessel"}`
             : visual.primarySource === "location"
               ? "Location photo"
               : "Location"}
         </span>
-        <span className="min-w-0 border-l border-border px-2 py-1 text-right font-mono text-2xs text-muted-foreground uppercase sm:py-2">
+        <span className="min-w-0 border-l border-border px-2 py-1 text-right text-xs font-medium text-muted-foreground sm:py-2">
           {visual.childCount > 0
             ? `${visual.childCount} ${childLabel}`
             : "No compartments"}

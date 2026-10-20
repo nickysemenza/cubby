@@ -24,9 +24,9 @@ export function useDenseCell(stacked?: boolean) {
 export const useHeaderEntity = () =>
   useContext(DenseCellContext)?.linksTo ?? null;
 
-/** A stacked value's muted second line: 11px on 13px. */
+/** A stacked value's muted second line: 12px on 13px. */
 export const STACKED_SECONDARY_CLASS =
-  "block truncate text-[0.6875rem] leading-[13px] font-normal text-muted-foreground no-underline";
+  "block truncate text-xs leading-[13px] font-normal text-muted-foreground no-underline";
 
 /**
  * A value over a muted secondary line, both fitting one 32px table row
@@ -59,7 +59,7 @@ export function StackedValue({
       <span
         data-stacked-line=""
         data-cell-spill-text={primarySpillText}
-        className="block truncate text-[0.8125rem] leading-[15px]"
+        className="block truncate text-sm leading-[15px]"
       >
         {primary}
       </span>

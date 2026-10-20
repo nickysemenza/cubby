@@ -69,7 +69,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
         // must drive something other than the row's own background — currently
         // VendorMark's desaturate-at-rest logo. Named so it can't be captured by
         // an unrelated `group` nested inside a cell.
-        "group/row hover:bg-muted/60 data-[state=selected]:bg-[var(--row-selected)] data-[state=selected]:shadow-[inset_2px_0_0_var(--row-accent,var(--brand-ultramarine))] border-b transition-colors duration-100",
+        "group/row hover:bg-muted/60 data-[state=selected]:bg-[var(--row-selected)] border-b transition-colors duration-100",
         className,
       )}
       {...props}

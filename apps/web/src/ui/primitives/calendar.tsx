@@ -43,7 +43,7 @@ function Calendar({
         months: "flex flex-col gap-2",
         month: "grid grid-cols-[auto_1fr_auto] items-center gap-y-1",
         month_caption:
-          "col-span-1 flex items-center justify-center px-1 font-mono text-xs font-medium uppercase tracking-wide text-foreground",
+          "col-span-1 flex items-center justify-center px-1 text-xs font-medium text-foreground",
         button_previous:
           "inline-flex size-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
         button_next:
@@ -51,7 +51,7 @@ function Calendar({
         month_grid: "col-span-3 mt-1 w-full border-collapse",
         weekdays: "",
         weekday:
-          "w-8 pb-1 text-center font-mono text-2xs font-medium uppercase tracking-wide text-muted-foreground",
+          "w-8 pb-1 text-center text-xs font-medium text-muted-foreground",
         weeks: "",
         week: "",
         day: "p-0 text-center align-middle",

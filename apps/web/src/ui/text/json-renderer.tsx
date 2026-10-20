@@ -1,5 +1,7 @@
-import { useState, type JSX } from "react";
+import type { JSX } from "react";
 import { z } from "zod";
+
+import { Disclosure } from "~/ui/layout/disclosure";
 
 const jsonValue = z.json();
 type JsonValue = z.infer<typeof jsonValue>;
@@ -13,7 +15,6 @@ function JsonNode({
   name: string;
   expanded?: boolean;
 }) {
-  const [open, setOpen] = useState(expanded);
   if (value === null || typeof value !== "object") {
     return (
       <div className="flex gap-2">
@@ -27,21 +28,16 @@ function JsonNode({
   const entries = Object.entries(value);
   const noun = Array.isArray(value) ? "items" : "fields";
   return (
-    <details
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+    <Disclosure
+      summary={`${name} · ${entries.length} ${noun}`}
+      defaultOpen={expanded}
     >
-      <summary className="cursor-pointer break-all">
-        {name} · {entries.length} {noun}
-      </summary>
-      {open && (
-        <div className="ml-3 border-l border-border pl-2">
-          {entries.map(([key, child]) => (
-            <JsonNode key={key} name={key} value={child} />
-          ))}
-        </div>
-      )}
-    </details>
+      <div className="border-l border-border pl-2">
+        {entries.map(([key, child]) => (
+          <JsonNode key={key} name={key} value={child} />
+        ))}
+      </div>
+    </Disclosure>
   );
 }
 

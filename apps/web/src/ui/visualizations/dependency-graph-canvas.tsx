@@ -5,6 +5,7 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 
 import { appendGraphImages, type GraphImage } from "./dependency-graph-images";
@@ -447,12 +448,13 @@ export function DependencyGraphCanvas({
           onRetry={() => setAttempt((value) => value + 1)}
         />
       )}
-      <section
-        ref={host}
-        aria-label="Scrollable dependency graph"
+      <Panel
+        tone="default"
+        flush
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to focus and scroll this two-dimensional canvas.
-        tabIndex={0}
-        className="dependency-graph rounded-panel h-[65dvh] min-h-80 min-w-0 overflow-auto border bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        render={<section ref={host} tabIndex={0} />}
+        aria-label="Scrollable dependency graph"
+        className="dependency-graph h-[65dvh] min-h-80 overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onPointerDown={(event) => {
           if (event.button !== 0 || event.pointerType === "touch") return;
           drag.current = {

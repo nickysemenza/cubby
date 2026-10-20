@@ -50,7 +50,7 @@ function ImageAssociationLink({
     <div className="flex min-w-0 items-baseline justify-between gap-2">
       {link}
       {showRole && (
-        <span className="shrink-0 font-mono text-2xs text-muted-foreground uppercase">
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">
           {roleLabel[association.role]}
         </span>
       )}

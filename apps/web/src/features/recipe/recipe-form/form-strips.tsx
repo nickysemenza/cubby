@@ -85,7 +85,7 @@ export const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
     <Row
       align="center"
       gap="sm"
-      className="min-w-0 font-mono text-2xs text-muted-foreground uppercase"
+      className="min-w-0 text-xs font-medium text-muted-foreground"
     >
       <span className="truncate tabular-nums">
         {ingredients} ingredients · {steps} steps

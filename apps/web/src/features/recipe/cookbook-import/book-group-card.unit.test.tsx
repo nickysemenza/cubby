@@ -370,7 +370,8 @@ describe("cookbook book card", () => {
     expect(
       screen.getByRole("button", { name: /Retry extraction/ }),
     ).toBeVisible();
-    expect(screen.getByText(/Run report — \$0\.42/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Run report" })).toBeVisible();
+    expect(screen.getByText(/\$0\.42.* charged/)).toBeVisible();
   });
 
   it("warns when aggregate charge coverage is unknown without a call roster", () => {

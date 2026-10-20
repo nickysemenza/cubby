@@ -3,11 +3,12 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { capitalize, parseShortcode } from "@cubby/shared";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
@@ -263,17 +264,16 @@ export function ResolutionEvidence({
             />
           ))}
           {contributors.length > 6 ? (
-            <details>
-              <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium md:min-h-0">
-                Show {contributors.length - 6} more contributors
-              </summary>
+            <Disclosure
+              summary={`Show ${contributors.length - 6} more contributors`}
+            >
               {contributors.slice(6).map((block) => (
                 <Contributor
                   key={block.chain.key ?? JSON.stringify(block.chain)}
                   block={block}
                 />
               ))}
-            </details>
+            </Disclosure>
           ) : null}
         </>
       ) : null}
@@ -290,15 +290,19 @@ function Contributor({
 }) {
   const block = contributor.chain;
   return (
-    <details className="min-w-0 border-t border-border pt-2">
-      <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium break-words md:min-h-0">
-        {block.title ?? "Contributor"}
-        {block.rows[0]?.trailing ? (
-          <span className="ml-2 text-muted-foreground">
-            {block.rows[0].trailing}
-          </span>
-        ) : null}
-      </summary>
+    <Disclosure
+      summary={
+        <>
+          {block.title ?? "Contributor"}
+          {block.rows[0]?.trailing ? (
+            <span className="ml-2 text-muted-foreground">
+              {block.rows[0].trailing}
+            </span>
+          ) : null}
+        </>
+      }
+      className="border-t border-border pt-2"
+    >
       <ResolutionChain block={{ ...block, title: undefined }} />
       <FieldEvaluationInputs
         evidence={{
@@ -308,7 +312,7 @@ function Contributor({
           fallbackSource: null,
         }}
       />
-    </details>
+    </Disclosure>
   );
 }
 
@@ -317,10 +321,9 @@ function ResolutionChain({ block }: { block: Chain }) {
     <>
       <RecordsBlockView block={{ ...block, rows: block.rows.slice(0, 6) }} />
       {block.rows.length > 6 ? (
-        <details>
-          <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium md:min-h-0">
-            Show {block.rows.length - 6} more resolution steps
-          </summary>
+        <Disclosure
+          summary={`Show ${block.rows.length - 6} more resolution steps`}
+        >
           <RecordsBlockView
             block={{
               ...block,
@@ -329,7 +332,7 @@ function ResolutionChain({ block }: { block: Chain }) {
               rows: block.rows.slice(6),
             }}
           />
-        </details>
+        </Disclosure>
       ) : null}
     </>
   );
@@ -337,7 +340,6 @@ function ResolutionChain({ block }: { block: Chain }) {
 
 /** Render the resolver's trace verbatim; an unresolved winner still blocks later sources. */
 function FieldEvaluationInputs({ evidence }: { evidence: Evidence }) {
-  const [inputsOpen, setInputsOpen] = useState(false);
   return (
     <div className="grid min-w-0 gap-2">
       {evidence.coverage && evidence.coverage.omitted > 0 ? (
@@ -353,70 +355,65 @@ function FieldEvaluationInputs({ evidence }: { evidence: Evidence }) {
         </p>
       ) : null}
       {evidence.steps?.some((step) => step.observed.length > 0) ? (
-        <details onToggle={(event) => setInputsOpen(event.currentTarget.open)}>
-          <summary className="cursor-pointer text-xs font-medium">
-            Inputs and source settings
-          </summary>
-          {inputsOpen ? (
-            <div className="grid gap-3 pt-2">
-              {evidence.steps.map((step) => (
-                <div
-                  key={`${step.branch?.entityId ?? "subject"}:${step.source}:${step.rowIndex}`}
-                  className="grid min-w-0 gap-1"
-                >
-                  <p className="text-xs font-semibold">
-                    {evidence.chain.rows[step.rowIndex]?.title ?? step.source}
-                  </p>
-                  {step.observed.map((observation) => (
-                    <div
-                      key={`${observation.label}:${observation.entity?.entityId ?? "self"}:${JSON.stringify(observation.value)}`}
-                      className="grid min-w-0 gap-1 text-xs"
-                    >
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span>{observation.label}</span>
-                        {observation.entity ? (
-                          <ExplanationEntityLink
-                            entity={observation.entity.entityKind}
-                            id={observation.entity.entityId}
-                          />
-                        ) : null}
-                      </div>
-                      {observation.entity
-                        ? observation.fields?.map((key) => {
-                            const target = observation.entity!;
-                            const sourceField = entityFieldModels[
-                              target.entityKind
-                            ].fields.find((candidate) => candidate.key === key);
-                            return sourceField?.explanation ? (
-                              <span
-                                key={key}
-                                className="inline-flex items-center gap-1"
-                              >
-                                <span>{sourceField.label}</span>
-                                <FieldExplanation
-                                  entity={target.entityKind}
-                                  id={target.entityId}
-                                  field={key}
-                                  label={sourceField.label}
-                                />
-                              </span>
-                            ) : null;
-                          })
-                        : null}
-                      <ReadableExplanationValue value={observation.value} />
+        <Disclosure summary="Inputs and source settings">
+          <div className="grid gap-3">
+            {evidence.steps.map((step) => (
+              <div
+                key={`${step.branch?.entityId ?? "subject"}:${step.source}:${step.rowIndex}`}
+                className="grid min-w-0 gap-1"
+              >
+                <p className="text-xs font-semibold">
+                  {evidence.chain.rows[step.rowIndex]?.title ?? step.source}
+                </p>
+                {step.observed.map((observation) => (
+                  <div
+                    key={`${observation.label}:${observation.entity?.entityId ?? "self"}:${JSON.stringify(observation.value)}`}
+                    className="grid min-w-0 gap-1 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span>{observation.label}</span>
+                      {observation.entity ? (
+                        <ExplanationEntityLink
+                          entity={observation.entity.entityKind}
+                          id={observation.entity.entityId}
+                        />
+                      ) : null}
                     </div>
-                  ))}
-                  {step.coverage && step.coverage.omitted > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      Showing {step.coverage.shown} of {step.coverage.total}{" "}
-                      inputs.
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </details>
+                    {observation.entity
+                      ? observation.fields?.map((key) => {
+                          const target = observation.entity!;
+                          const sourceField = entityFieldModels[
+                            target.entityKind
+                          ].fields.find((candidate) => candidate.key === key);
+                          return sourceField?.explanation ? (
+                            <span
+                              key={key}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <span>{sourceField.label}</span>
+                              <FieldExplanation
+                                entity={target.entityKind}
+                                id={target.entityId}
+                                field={key}
+                                label={sourceField.label}
+                              />
+                            </span>
+                          ) : null;
+                        })
+                      : null}
+                    <ReadableExplanationValue value={observation.value} />
+                  </div>
+                ))}
+                {step.coverage && step.coverage.omitted > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Showing {step.coverage.shown} of {step.coverage.total}{" "}
+                    inputs.
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </Disclosure>
       ) : null}
     </div>
   );

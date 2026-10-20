@@ -5,6 +5,7 @@ import {
 import { type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { Panel } from "~/ui/layout/panel";
 import { Image } from "~/ui/primitives/image";
 
 export interface PhotoGridImage {
@@ -40,10 +41,12 @@ export function PhotoGrid<TImage extends PhotoGridImage>({
       )}
     >
       {images.map((image, index) => (
-        <div
+        <Panel
           key={image.id}
+          tone="default"
+          flush
           className={cn(
-            "group relative aspect-square overflow-hidden rounded-md border border-border bg-muted/30",
+            "group relative aspect-square bg-muted/30",
             tileClassName,
           )}
         >
@@ -65,7 +68,7 @@ export function PhotoGrid<TImage extends PhotoGridImage>({
             )}
           />
           {renderOverlay?.(image, index)}
-        </div>
+        </Panel>
       ))}
     </div>
   );

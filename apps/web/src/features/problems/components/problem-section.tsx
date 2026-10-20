@@ -26,7 +26,7 @@ import {
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
-import type { Fact } from "~/ui/common/fact-list";
+import type { Fact } from "~/ui/common/facts";
 import {
   RecordDot,
   RecordFold,
@@ -306,7 +306,7 @@ export function ProblemSection<T>({
       {meter && (
         <Stack gap="xs">
           <Progress value={meter.total - total} max={meter.total} />
-          <span className="font-mono text-xs tracking-wider text-slate uppercase">
+          <span className="text-xs font-medium text-slate">
             {formatCount(meter.total - total)} of {formatCount(meter.total)}{" "}
             {meter.doneLabel}
             {" · "}

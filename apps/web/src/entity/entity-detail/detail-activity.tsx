@@ -9,16 +9,17 @@ import {
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
 import {
-  entityDetailLink,
-  EntityIcon,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
-import { formatCalendarDay, formatInstant } from "~/lib/date-format";
+  formatCalendarDay,
+  formatInstant,
+  formatRelative,
+} from "~/lib/date-format";
+import { householdDateTime, householdLocalDate } from "~/lib/household-date";
 import { formatCurrency } from "~/lib/number-format";
 import { RecordList, RecordMore, RecordRow } from "~/ui/common/record-list";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { SectionHeading } from "~/ui/layout";
+import { Section } from "~/ui/layout";
 
 import { AuditLogList } from "../audit-log/audit-log-list";
 import { useDetailActivity } from "./use-detail-data";
@@ -42,6 +43,23 @@ const changeVerb = (action: string) =>
         ? "Deleted"
         : action;
 
+function activityDay(event: DetailActivityEvent) {
+  return event.allDay
+    ? event.date.slice(0, 10)
+    : householdLocalDate(new Date(event.date));
+}
+
+function groupActivityByDay(events: readonly DetailActivityEvent[]) {
+  const groups: { day: string; events: DetailActivityEvent[] }[] = [];
+  for (const event of events) {
+    const day = activityDay(event);
+    const last = groups.at(-1);
+    if (last?.day === day) last.events.push(event);
+    else groups.push({ day, events: [event] });
+  }
+  return groups;
+}
+
 /** Audit rows carry the action and changed keys; show the verb and labels. */
 function changeText(event: DetailActivityEvent) {
   const fields: readonly { key: string; label: string }[] =
@@ -64,63 +82,69 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
     hydrated,
   );
   const events = activity.data?.pages.flatMap((page) => page.items) ?? [];
+  const groups = groupActivityByDay(events);
+  const today = householdLocalDate();
   return (
-    <section
+    <Section
       // The page's established activity anchor: `#history` links keep working.
       id="history"
-      aria-label="Activity"
+      title="Activity"
+      headingAs="h2"
       data-detail-group
       tabIndex={-1}
-      className="min-w-0 scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       data-testid="detail-activity"
     >
-      <SectionHeading title="Activity" />
-      <RecordList
-        aria-label="Recent changes and spend"
-        empty="No activity yet."
-        state={
-          activity.isError
-            ? { status: "error", error: activity.error, title: "activity" }
-            : activity.isPending
-              ? { status: "pending" }
-              : { status: "success" }
-        }
-      >
-        {events.map((event) => {
-          const link = linkOf(event);
-          const { title, subtitle } =
-            event.kind === "change"
-              ? changeText(event)
-              : { title: event.title, subtitle: event.subtitle };
-          return (
-            <RecordRow
-              key={event.id}
-              leading={
+      {activity.isError || activity.isPending ? (
+        <RecordList
+          aria-label="Recent changes and spend"
+          state={
+            activity.isError
+              ? { status: "error", error: activity.error, title: "activity" }
+              : { status: "pending" }
+          }
+        />
+      ) : events.length === 0 ? (
+        <RecordList
+          aria-label="Recent changes and spend"
+          empty="No activity yet."
+        />
+      ) : (
+        <div className="space-y-2.5" aria-label="Recent changes and spend">
+          {groups.map(({ day, events: dayEvents }) => (
+            <div
+              key={day}
+              className="grid grid-cols-[6rem_minmax(0,1fr)] items-start"
+            >
+              <div>
                 <time
-                  dateTime={event.allDay ? event.date.slice(0, 10) : event.date}
-                  title={
-                    event.allDay
-                      ? formatCalendarDay(event.date.slice(0, 10), "dateShort")
-                      : formatInstant(event.date, "dateShortTime")
-                  }
-                  className="inline-block w-12 font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums"
+                  dateTime={day}
+                  className="text-xs/4 font-medium text-foreground-strong tabular-nums"
                 >
-                  {(event.allDay
-                    ? formatCalendarDay(event.date.slice(0, 10), "dateShort")
-                    : formatInstant(event.date, "dateShort")
-                  ).replace(/, \d{4}$/, "")}
+                  {formatCalendarDay(
+                    day,
+                    day.startsWith(today.slice(0, 4))
+                      ? "monthDay"
+                      : "dateShort",
+                  )}
                 </time>
-              }
-              primary={
-                <>
-                  {event.kind === "record" ? (
-                    <EntityIcon
-                      entity={event.entity}
-                      aria-hidden
-                      className="size-3.5 shrink-0 text-muted-foreground"
-                    />
-                  ) : null}
-                  {link ? (
+                <div className="text-xs/4 text-muted-foreground">
+                  {day === today
+                    ? "today"
+                    : formatRelative(householdDateTime(day, 12 * 60))}
+                </div>
+              </div>
+              <RecordList
+                variant="timeline"
+                aria-label={`${formatCalendarDay(day, "dateShort")} activity`}
+              >
+                {dayEvents.map((event) => {
+                  const link = linkOf(event);
+                  const { title, subtitle } =
+                    event.kind === "change"
+                      ? changeText(event)
+                      : { title: event.title, subtitle: event.subtitle };
+                  const primary = link ? (
                     <Link
                       {...link}
                       className="truncate font-medium text-foreground-strong underline-offset-2 hover:underline"
@@ -137,31 +161,60 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
                     >
                       {title}
                     </span>
-                  )}
-                </>
-              }
-              secondary={subtitle}
-              trailing={
-                event.amountCents === undefined ? undefined : (
-                  <span className="font-mono text-foreground-strong tabular-nums">
-                    {formatCurrency(event.amountCents / 100)}
-                  </span>
-                )
-              }
-            />
-          );
-        })}
-        {activity.hasNextPage ? (
-          <RecordMore
-            label={activity.isFetchingNextPage ? "Loading…" : "Show older"}
-            onClick={() => void activity.fetchNextPage()}
-          />
-        ) : null}
-      </RecordList>
+                  );
+                  return (
+                    <RecordRow
+                      key={event.id}
+                      primary={
+                        <>
+                          {primary}
+                          {event.kind === "record" && event.shortcode ? (
+                            <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                              {event.shortcode}
+                            </span>
+                          ) : null}
+                        </>
+                      }
+                      secondary={subtitle}
+                      trailing={
+                        event.amountCents !== undefined ? (
+                          <span className="font-mono text-foreground-strong tabular-nums">
+                            {formatCurrency(event.amountCents / 100)}
+                          </span>
+                        ) : event.allDay ? undefined : (
+                          <time
+                            dateTime={event.date}
+                            className="font-mono text-xs text-muted-foreground tabular-nums"
+                          >
+                            {formatInstant(event.date, "clock")}
+                          </time>
+                        )
+                      }
+                    />
+                  );
+                })}
+              </RecordList>
+            </div>
+          ))}
+          {activity.hasNextPage ? (
+            <div className="grid grid-cols-[6rem_minmax(0,1fr)]">
+              <span aria-hidden />
+              <RecordList aria-label="Older activity">
+                <RecordMore
+                  label={
+                    activity.isFetchingNextPage ? "Loading…" : "Show older"
+                  }
+                  onClick={() => void activity.fetchNextPage()}
+                />
+              </RecordList>
+            </div>
+          ) : null}
+        </div>
+      )}
       {isAuditableEntity(entity) ? (
         <ChangeDetails entity={entity} id={id} />
       ) : null}
-    </section>
+    </Section>
   );
 }
 

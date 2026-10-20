@@ -33,10 +33,10 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Description } from "~/ui/primitives/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
 
 const isRowSelectionUpdater = (
@@ -214,12 +214,12 @@ export function LinkProductsDialog({
           mode="embedded"
           ariaLabel="Products available to attach"
           emptyState={
-            <Empty variant="minimal" className="py-6">
-              <EmptyTitle>No products found</EmptyTitle>
-              <EmptyDescription>
-                {searchQuery.data?.message ?? "Nothing to attach."}
-              </EmptyDescription>
-            </Empty>
+            <EmptyState
+              size="page"
+              description={searchQuery.data?.message ?? "Nothing to attach."}
+            >
+              No products found
+            </EmptyState>
           }
         />
       </div>

@@ -11,7 +11,6 @@ import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
@@ -26,7 +25,6 @@ import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {
@@ -36,8 +34,8 @@ import {
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
 import { useImageState } from "~/ui/hooks/use-image-state";
 import { Row } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
-import { Collapsible, CollapsibleContent } from "~/ui/primitives/collapsible";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { PendingImageUpload } from "../../entity/entity-media/pending-image-upload";
@@ -379,68 +377,48 @@ export function QuickInventoryAdd({
           nullable={false}
         />
 
-        {/* Expandable product details */}
-        <Collapsible open={fieldsExpanded} onOpenChange={setFieldsExpanded}>
-          <button
-            type="button"
-            onClick={() => setFieldsExpanded((prev) => !prev)}
-            className={cn(
-              "flex w-full items-center gap-1 text-xs text-muted-foreground hover:text-foreground",
-              "transition-colors",
-            )}
-          >
-            <CaretDownIcon
-              className={cn(
-                "size-3 transition-transform",
-                fieldsExpanded && "rotate-180",
-              )}
-            />
-            {fieldsExpanded ? "Hide" : "Show"} product details
-          </button>
-          <CollapsibleContent
-            className={cn(
-              "overflow-hidden",
-              "transition-all duration-200 ease-out",
-              "data-[panel-open]:animate-in data-[panel-open]:fade-in-0",
-            )}
-          >
-            <div className="space-y-4 pt-4">
-              {/* `categoryId` renders with `suggestField="categoryId"` —
+        <Disclosure
+          summary="Product details"
+          open={fieldsExpanded}
+          onOpenChange={setFieldsExpanded}
+          keepMounted
+        >
+          <div className="space-y-4 pt-3">
+            {/* `categoryId` renders with `suggestField="categoryId"` —
                   without a provider mounted here, `useAutoFieldSuggestion`
                   now reports it loudly in dev (see the discard-dialog gap
                   this guard exists to catch). */}
-              <FieldSuggestionProvider
+            <FieldSuggestionProvider
+              entity="product"
+              mode="create"
+              receiptHandler={receiptHandler}
+              fieldKeys={["categoryId"]}
+            >
+              <EntityIntentFields
                 entity="product"
+                intent="quickDetails"
                 mode="create"
-                receiptHandler={receiptHandler}
-                fieldKeys={["categoryId"]}
-              >
-                <EntityIntentFields
-                  entity="product"
-                  intent="quickDetails"
-                  mode="create"
-                />
-              </FieldSuggestionProvider>
-              {/* Images stay hand-wired here (not the generic editor's
+              />
+            </FieldSuggestionProvider>
+            {/* Images stay hand-wired here (not the generic editor's
                   shell): this compact panel has no `pendingImageIds` in its
                   own roster, and `useImageState` already owns the create
                   form's pending-image lifecycle. */}
-              <PendingImageUpload
-                entityKind="PRODUCT"
-                onImagesChange={imageState.handlePendingImagesChange}
-              />
-              <IdentifyProductButton
-                form={{
-                  setValue: (update) =>
-                    createForm.setValue(update.field, update.value, {
-                      shouldDirty: true,
-                    }),
-                }}
-                pendingImages={imageState.pendingImages}
-              />
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+            <PendingImageUpload
+              entityKind="PRODUCT"
+              onImagesChange={imageState.handlePendingImagesChange}
+            />
+            <IdentifyProductButton
+              form={{
+                setValue: (update) =>
+                  createForm.setValue(update.field, update.value, {
+                    shouldDirty: true,
+                  }),
+              }}
+              pendingImages={imageState.pendingImages}
+            />
+          </div>
+        </Disclosure>
 
         {/* Price + Amount + submit */}
         <Row align="end" gap="sm">

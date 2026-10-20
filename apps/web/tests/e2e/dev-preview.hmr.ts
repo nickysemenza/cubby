@@ -40,7 +40,7 @@ for (const entity of ["task", "product"] as const) {
     );
 
     await open("empty");
-    await expect(page.locator('main [data-slot="empty"]')).toBeVisible();
+    await expect(page.locator('main [data-slot="empty-state"]')).toBeVisible();
     await expect(page.locator(recordLink(list))).toHaveCount(0);
 
     await open("edge");
@@ -71,6 +71,6 @@ test("an owned fixture reaches the HMR list and cleanup removes it", async ({
 
   await owned.cleanup();
   await page.goto(search);
-  await expect(page.locator('main [data-slot="empty"]')).toBeVisible();
+  await expect(page.locator('main [data-slot="empty-state"]')).toBeVisible();
   await expect(link).toHaveCount(0);
 });

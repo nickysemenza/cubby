@@ -709,9 +709,7 @@ function CalendarDaySheet({
         </div>
 
         <Stack gap="xs">
-          <span className="font-mono text-xs tracking-wider text-slate uppercase">
-            Add
-          </span>
+          <span className="text-xs font-medium text-slate">Add</span>
           <Row wrap gap="xs">
             {ALL_KINDS.map((kind) => {
               const Icon = KIND_ICONS[kind];
@@ -762,9 +760,7 @@ function CalendarRangeError({
 function SummaryValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="font-mono tracking-wider text-slate uppercase">
-        {label}
-      </div>
+      <div className="text-xs font-medium text-slate">{label}</div>
       <div className="font-semibold tabular-nums">{value}</div>
     </div>
   );

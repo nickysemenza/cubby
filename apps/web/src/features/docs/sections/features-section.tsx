@@ -1,15 +1,4 @@
-import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
-import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
-
-import { entities } from "~/entity/entities";
-import { Grid, Row } from "~/ui/layout";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
+import { Grid, Section } from "~/ui/layout";
 
 import { Prose } from "../components/prose";
 
@@ -21,84 +10,48 @@ export function FeaturesSection() {
       </Prose>
 
       <Grid cols="cards3" className="my-6">
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.recipe.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Recipes</CardTitle>
-            </Row>
-            <CardDescription>
-              Create recipes with multiple sections, import from URLs, and nest
-              recipes within other recipes as sub-components.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Recipes">
+          <p className="text-muted-foreground">
+            Create recipes with multiple sections, import from URLs, and nest
+            recipes within other recipes as sub-components.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.product.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Products</CardTitle>
-            </Row>
-            <CardDescription>
-              Link to ingredients, add unit mappings, connect to USDA for
-              nutrition. Use <code className="text-xs">misc:</code> prefix for
-              items not worth tracking individually.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Products">
+          <p className="text-muted-foreground">
+            Link to ingredients, add unit mappings, connect to USDA for
+            nutrition. Use <code className="text-xs">misc:</code> prefix for
+            items not worth tracking individually.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.inventory.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Inventory Management</CardTitle>
-            </Row>
-            <CardDescription>
-              Track quantities at locations, bulk edit/move items, and
-              automatically detect duplicate unique products.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Inventory management">
+          <p className="text-muted-foreground">
+            Track quantities at locations, bulk edit/move items, and
+            automatically detect duplicate unique products.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <BowlFoodIcon className="size-5 text-muted-foreground" />
-              <CardTitle>USDA Integration</CardTitle>
-            </Row>
-            <CardDescription>
-              Search FoodData Central by name, UPC, or NDB number. View detailed
-              nutrition and link products to USDA entries.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="USDA integration">
+          <p className="text-muted-foreground">
+            Search FoodData Central by name, UPC, or NDB number. View detailed
+            nutrition and link products to USDA entries.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <ScalesIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Unit Conversions</CardTitle>
-            </Row>
-            <CardDescription>
-              WASM-powered engine that chains conversions through multiple units
-              (cups → grams → dollars) using product mappings.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Unit conversions">
+          <p className="text-muted-foreground">
+            WASM-powered engine that chains conversions through multiple units
+            (cups → grams → dollars) using product mappings.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <WarningIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Problems Dashboard</CardTitle>
-            </Row>
-            <CardDescription>
-              Find duplicate products, missing inventory, invalid UPCs, products
-              without unit mappings, and empty locations.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Problems dashboard">
+          <p className="text-muted-foreground">
+            Find duplicate products, missing inventory, invalid UPCs, products
+            without unit mappings, and empty locations.
+          </p>
+        </Section>
       </Grid>
     </>
   );

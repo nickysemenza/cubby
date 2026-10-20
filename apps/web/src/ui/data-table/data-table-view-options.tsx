@@ -74,7 +74,7 @@ export function DataTableViewOptions<TData extends RowData>({
         <Button
           variant="ghost"
           size="default"
-          className="text-muted-foreground hover:text-foreground"
+          className="h-7.5 text-sm text-muted-foreground hover:text-foreground"
           aria-haspopup="dialog"
           aria-expanded={mobileOpen}
           onClick={() => setMobileOpen(true)}
@@ -108,7 +108,7 @@ export function DataTableViewOptions<TData extends RowData>({
           <Button
             variant="ghost"
             size="default"
-            className="text-muted-foreground hover:text-foreground"
+            className="h-7.5 text-sm text-muted-foreground hover:text-foreground"
           />
         }
       >

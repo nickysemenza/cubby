@@ -5,6 +5,7 @@ import { z } from "zod";
 import { formatCount } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { BooleanValue, EnumPill } from "~/ui/primitives/enum-pill";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
@@ -82,12 +83,11 @@ function StructuredValue({
   if (summary === null) return <NoneValue />;
   if (surface === "detail")
     return (
-      <details className="max-w-full min-w-0">
-        <summary className="cursor-pointer text-primary">{summary}</summary>
-        <div className="mt-2 max-h-80 max-w-full overflow-auto text-xs">
+      <Disclosure summary={summary} className="max-w-full">
+        <div className="max-h-80 max-w-full overflow-auto text-xs">
           <JsonRenderer input={value.raw} />
         </div>
-      </details>
+      </Disclosure>
     );
   return (
     <Popover>

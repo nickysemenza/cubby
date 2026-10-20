@@ -34,7 +34,7 @@ export function PickerVisual({
             alt=""
             displayWidth={size}
             fallback={thumb.fallback}
-            className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+            className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10"
           />
         ) : (
           thumb.fallback

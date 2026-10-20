@@ -97,10 +97,11 @@ const EntityTimeline = lazy(() =>
 );
 
 type CardDensity = "cards" | "compact";
-const CardDensityContext = createContext<{
+type CardDensityState = {
   density: CardDensity;
   setDensity: (density: CardDensity) => void;
-} | null>(null);
+};
+const CardDensityContext = createContext<CardDensityState | null>(null);
 
 /**
  * Compactness belongs to the mounted list screen, not the URL or persistence.
@@ -109,12 +110,15 @@ const CardDensityContext = createContext<{
  */
 export function EntityListCardDensityProvider({
   children,
+  value,
 }: {
   children: ReactNode;
+  /** Carries the same screen state into chrome rendered outside the route. */
+  value?: CardDensityState;
 }) {
   const [density, setDensity] = useState<CardDensity>("cards");
   return (
-    <CardDensityContext value={{ density, setDensity }}>
+    <CardDensityContext value={value ?? { density, setDensity }}>
       {children}
     </CardDensityContext>
   );
@@ -431,6 +435,7 @@ function ServerListBody({
   const sweepEntity = z.enum(shortcodeEntities).safeParse(entity);
   const sweepAction = sweepEntity.success ? (
     <FindSuggestionsAction
+      inline
       entity={sweepEntity.data}
       filters={list.currentFilters}
     />
@@ -446,7 +451,7 @@ function ServerListBody({
             suggestion sweep/review status. */}
         <div
           data-list-status-strip=""
-          className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-2 py-1 text-xs md:px-4"
+          className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border px-2 py-2 text-xs md:px-4"
         >
           <div
             ref={setChipsTarget}

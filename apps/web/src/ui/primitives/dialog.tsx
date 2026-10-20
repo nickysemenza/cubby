@@ -3,6 +3,7 @@ import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
 import { cn } from "~/lib/utils";
+import { popoverElevationClassName } from "~/ui/primitives/popover-elevation";
 import { Button } from "~/ui/primitives/button";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
@@ -65,7 +66,8 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "bg-popover data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border-[var(--border)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border p-4 text-xs/relaxed shadow-[var(--shadow-overlay)] duration-150 outline-none",
+          popoverElevationClassName,
+          "bg-popover data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border-[var(--border)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border p-4 text-xs/relaxed duration-150 outline-none",
           dialogSizes[size],
           className,
         )}

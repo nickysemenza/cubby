@@ -36,47 +36,56 @@ export function defineMutationWriter<
   read: (receipt: Receipt, ...args: Args) => Promise<Full>;
   item?: (full: NoInfer<Full>) => object;
 }) {
-  const run = (...args: Args): Promise<Full> =>
-    config.write(
-      (receipt, readFull) =>
-        readFull ? readFull() : config.read(receipt, ...args),
-      ...args,
-    );
-  const read = (fields: readonly string[], ...args: Args) =>
-    config.write(
-      async (receipt, readFull) => {
-        if (fields.every((field) => field === "id")) {
-          const code =
-            receipt.shortcode ??
-            (
-              await lookupEntityReferences(args[0], config.entity, [
-                receipt.entityId,
-              ])
-            ).get(receipt.entityId)?.id;
-          if (!code)
-            throw new Error(`Missing ${config.entity} mutation identity`);
-          return { ...receipt, output: { id: code } };
-        }
-        const full = await (readFull
-          ? readFull()
-          : config.read(receipt, ...args));
-        const envelope = z
-          .object({ output: z.looseObject({}) })
-          .safeParse(full);
-        const item =
-          config.item?.(full) ??
-          (envelope.success
-            ? envelope.data.output
-            : z.looseObject({}).parse(full));
-        return {
-          ...receipt,
-          output: selectListReadFields(
-            z.looseObject({ id: z.string() }).parse(item),
-            fields,
-          ),
-        };
-      },
-      ...args,
-    );
-  return Object.assign(run, { read, withOutput: config.write });
+  // Methods, not arrow constants: the dev SSR transform wraps named arrow
+  // constants in `__name(...)`, which is undefined during Worker startup.
+  const writer = {
+    run(...args: Args): Promise<Full> {
+      return config.write(
+        (receipt, readFull) =>
+          readFull ? readFull() : config.read(receipt, ...args),
+        ...args,
+      );
+    },
+    read(fields: readonly string[], ...args: Args) {
+      return config.write(
+        async (receipt, readFull) => {
+          if (fields.every((field) => field === "id")) {
+            const code =
+              receipt.shortcode ??
+              (
+                await lookupEntityReferences(args[0], config.entity, [
+                  receipt.entityId,
+                ])
+              ).get(receipt.entityId)?.id;
+            if (!code)
+              throw new Error(`Missing ${config.entity} mutation identity`);
+            return { ...receipt, output: { id: code } };
+          }
+          const full = await (readFull
+            ? readFull()
+            : config.read(receipt, ...args));
+          const envelope = z
+            .object({ output: z.looseObject({}) })
+            .safeParse(full);
+          const item =
+            config.item?.(full) ??
+            (envelope.success
+              ? envelope.data.output
+              : z.looseObject({}).parse(full));
+          return {
+            ...receipt,
+            output: selectListReadFields(
+              z.looseObject({ id: z.string() }).parse(item),
+              fields,
+            ),
+          };
+        },
+        ...args,
+      );
+    },
+  };
+  return Object.assign(writer.run, {
+    read: writer.read,
+    withOutput: config.write,
+  });
 }

@@ -11,6 +11,7 @@ export const Route = createFileRoute("/_authenticated/work-queue")({
   // Column filters ride the URL as comma-joined lists with Any/No value
   // tokens; `buildQueueFilters` parses them against the household input.
   validateSearch: z.object({
+    view: workQueueHouseholdInput.shape.view,
     query: workQueueHouseholdInput.shape.query,
     waitingFor: z.string().optional(),
     source: z.string().optional(),

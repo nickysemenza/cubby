@@ -689,11 +689,13 @@ remain unchanged. Cards use the declared title and `list.shelfSubtitleOverride`
 fields, falling back to declared mobile subtitle metadata when no shelf
 caption is specified; missing captions stay absent. `list.titleSubtitle: true` puts the same
 caption under the table's identity column as a muted second line inside the
-32px row (Vendor and Purchase opt in). Server-resolved display
+32px row (Vendor, Purchase, Product, Inventory and Expense opt in). Server-resolved display
 images are reused, with an entity icon when no image is available. Exceptional
 list projections use explicit adapters rather than per-card detail requests.
 Compact is the same card presentation with screen-local density state, not a
-stored preference or a URL parameter. Shared web and Swift grid components own
+stored preference or a URL parameter. Web list chrome carries that same state
+across the phone header boundary, where controls render outside the route subtree.
+Shared web and Swift grid components own
 tile sizing; declarations own record-specific presentation facts. All three
 presentations retain the list's query, filters, sort, and pagination. Bulk
 selection and editing are available only in List.

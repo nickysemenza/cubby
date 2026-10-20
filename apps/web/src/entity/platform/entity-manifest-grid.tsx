@@ -115,11 +115,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         compare: byText((row) => row.domain ?? ""),
         render: (row) =>
           row.domain ? (
-            <span
-              style={{
-                color: `var(${domainWayfinding(row.domain).accentToken})`,
-              }}
-            >
+            <span className="text-foreground">
               {domainWayfinding(row.domain).label}
             </span>
           ) : (
@@ -454,7 +450,7 @@ function SchemaTable({
               <TableCell
                 className={cn(
                   gridCell,
-                  "sticky left-0 z-10 bg-card p-0 group-hover/row:bg-muted group-data-[state=selected]/row:bg-[var(--row-selected)] group-data-[state=selected]/row:shadow-[inset_2px_0_0_var(--foreground)]",
+                  "sticky left-0 z-10 bg-card p-0 group-hover/row:bg-muted group-data-[state=selected]/row:bg-[var(--row-selected)]",
                 )}
               >
                 <button
@@ -781,8 +777,8 @@ export function EntityManifestGrid({
               buttons={buttons}
             />
             {selected && (
-              // Docked beside the sheet at 1280px+, a right-edge drawer below.
-              <aside className="z-40 overflow-y-auto border-border bg-card max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:w-[min(24rem,100vw)] max-xl:border-l max-xl:shadow-xl xl:sticky xl:top-0 xl:max-h-[calc(100dvh-12rem)] xl:border-y xl:border-r">
+              // eslint-disable-next-line cubby/no-shadow-utility -- The below-xl inspector floats over the workbench; desktop stays docked.
+              <aside className="z-40 overflow-y-auto border-border bg-card max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:w-[min(24rem,100vw)] max-xl:border-l max-xl:shadow-[var(--brand-elevation-popover)] xl:sticky xl:top-0 xl:max-h-[calc(100dvh-12rem)] xl:border-y xl:border-r">
                 <EntitySchemaPanel
                   entity={selected}
                   onSelect={onSelect}

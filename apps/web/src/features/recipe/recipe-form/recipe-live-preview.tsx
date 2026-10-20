@@ -13,7 +13,7 @@ import {
   IngredientQuantities,
   ingredientRowGridNarrow,
 } from "../ingredient-quantities";
-import { SectionHeading } from "../section-heading";
+import { RecipePartHeading } from "../recipe-part-heading";
 import type { RecipeFormValues } from "./types";
 
 /** Safe quantity formatting over possibly-partial draft amounts. */
@@ -74,7 +74,7 @@ export const RecipeLivePreview: FC<{
           key={sectionIndex}
           gap="sm"
         >
-          <SectionHeading
+          <RecipePartHeading
             sectionName={section?.name}
             index={sectionIndex}
             total={sections.length}

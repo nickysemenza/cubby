@@ -449,7 +449,7 @@ describe("PhotoImportRunView", () => {
     // Progress tally derived from `run.targets`, not from the review fetch.
     const progress = screen
       .getByText("Progress")
-      .closest('[data-slot="card"]') as HTMLElement;
+      .closest("section") as HTMLElement;
     expect(
       within(progress).getByRole("progressbar", { name: "Photos reviewed" }),
     ).toHaveAttribute("aria-valuenow", "2");

@@ -15,6 +15,7 @@ import {
 } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -22,7 +23,6 @@ import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
-import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 import {
   Table,
   TableBody,
@@ -113,20 +113,32 @@ export function HouseholdContributionLedgerReport({
   const gapsHeadingId = `${id}-gaps`;
   return (
     <Stack gap="lg">
-      <StatGrid>
-        <StatTile label="Whole-group cost">
-          {formatCurrency(data.checks.expenseTotal)}
-        </StatTile>
-        <StatTile label="Attributed consumption">
-          {formatCurrency(data.checks.consumedTotal)}
-        </StatTile>
-        <StatTile label="Initial outlays">
-          {formatCurrency(data.checks.fundedTotal)}
-        </StatTile>
-        <StatTile label="Net position">
-          {formatCurrency(data.checks.positionNet)}
-        </StatTile>
-      </StatGrid>
+      <KeyNumbers
+        layout="strip"
+        label="Contribution totals"
+        items={[
+          {
+            label: "Whole-group cost",
+            value: formatCurrency(data.checks.expenseTotal),
+            money: true,
+          },
+          {
+            label: "Attributed consumption",
+            value: formatCurrency(data.checks.consumedTotal),
+            money: true,
+          },
+          {
+            label: "Initial outlays",
+            value: formatCurrency(data.checks.fundedTotal),
+            money: true,
+          },
+          {
+            label: "Net position",
+            value: formatCurrency(data.checks.positionNet),
+            money: true,
+          },
+        ]}
+      />
 
       <section aria-labelledby={partyHeadingId}>
         <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-foreground pb-1">

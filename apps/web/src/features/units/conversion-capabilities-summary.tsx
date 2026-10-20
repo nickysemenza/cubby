@@ -60,7 +60,7 @@ export function ConversionCapabilitiesSummary({
           {coverage && compact && showTier && mappings.length > 0 && (
             <StatusText
               tone={TIER_TONE[coverage.tier]}
-              className="font-mono text-2xs tracking-wide uppercase"
+              className="text-xs font-medium"
             >
               {TIER_LABEL[coverage.tier]}
             </StatusText>
@@ -80,7 +80,7 @@ export function ConversionCapabilitiesSummary({
           {coverage && !compact && (
             <StatusText
               tone={TIER_TONE[coverage.tier]}
-              className="font-mono text-2xs tracking-wide uppercase"
+              className="text-xs font-medium"
             >
               {TIER_LABEL[coverage.tier]}
             </StatusText>

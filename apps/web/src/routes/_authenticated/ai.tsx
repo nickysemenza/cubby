@@ -29,7 +29,7 @@ function AiRoute() {
     navigate({ to: ".", search: (previous) => ({ ...previous, tab: next }) }),
   );
   return (
-    <Page variant="list" title="AI" compact>
+    <Page variant="list" title="AI">
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
         <TabsList
           variant="line"

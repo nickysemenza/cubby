@@ -19,11 +19,12 @@ import {
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { Panel } from "~/ui/layout/panel";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
+import { Toolbar } from "~/ui/layout/toolbar";
 import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent, CardHeader } from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
@@ -259,18 +260,35 @@ export function NotionImport() {
       )}
 
       {items.length > 0 && (
-        <Card variant="panel" size="sm">
-          <CardHeader className="flex-row items-center gap-2 space-y-0">
-            <Checkbox
-              aria-label="Select all visible new and changed recipes"
-              checked={allVisibleActionableSelected}
-              disabled={visibleActionable.length === 0}
-              onCheckedChange={toggleAll}
-            />
-            <Row wrap align="center" gap="sm" className="min-w-0 flex-1">
-              <Description as="span">
-                Select visible new &amp; changed ({visibleActionable.length})
-              </Description>
+        <Panel tone="default">
+          <Toolbar
+            label="Notion recipe selection"
+            start={
+              <>
+                <Checkbox
+                  aria-label="Select all visible new and changed recipes"
+                  checked={allVisibleActionableSelected}
+                  disabled={visibleActionable.length === 0}
+                  onCheckedChange={toggleAll}
+                />
+                <Description as="span">
+                  Select visible new &amp; changed ({visibleActionable.length})
+                </Description>
+                <Picker
+                  mode="choose"
+                  label="Filter Notion recipes by status"
+                  options={filterOptions}
+                  value={filter}
+                  onValueChange={(next) => {
+                    const nextFilter = filterOptions.find(
+                      (option) => option.value === next,
+                    )?.value;
+                    if (nextFilter) setFilter(nextFilter);
+                  }}
+                />
+              </>
+            }
+            end={
               <div className="relative min-w-40 flex-1 sm:max-w-xs">
                 <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -281,35 +299,22 @@ export function NotionImport() {
                   className="pl-8"
                 />
               </div>
-              <Picker
-                mode="choose"
-                label="Filter Notion recipes by status"
-                options={filterOptions}
-                value={filter}
-                onValueChange={(next) => {
-                  const nextFilter = filterOptions.find(
-                    (option) => option.value === next,
-                  )?.value;
-                  if (nextFilter) setFilter(nextFilter);
-                }}
-              />
-            </Row>
-          </CardHeader>
-          <CardContent>
-            {filteredItems.length > 0 ? (
-              <NotionRecipeList
-                items={filteredItems}
-                selected={selected}
-                results={results}
-                onToggle={toggle}
-              />
-            ) : (
-              <Description className="py-4 text-center" size="xs">
-                No recipes match this search and status filter.
-              </Description>
-            )}
-          </CardContent>
-        </Card>
+            }
+            className="mb-2"
+          />
+          {filteredItems.length > 0 ? (
+            <NotionRecipeList
+              items={filteredItems}
+              selected={selected}
+              results={results}
+              onToggle={toggle}
+            />
+          ) : (
+            <Description className="py-4 text-center" size="xs">
+              No recipes match this search and status filter.
+            </Description>
+          )}
+        </Panel>
       )}
     </Stack>
   );

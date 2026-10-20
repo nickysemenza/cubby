@@ -16,6 +16,7 @@ import type {
   CubbyRow as Row,
   CubbyTable as Table,
 } from "~/ui/data-table/table-features";
+import { tableMoneyTotals } from "~/ui/data-table/table-money";
 import {
   type UseBulkActionsReturn,
   useBulkActions,
@@ -187,6 +188,10 @@ export function ListBulkActionBar<TData extends { id: string }>({
     <BulkActionBar
       selectedCount={state.selectedCount}
       selectedRows={selectedRows}
+      moneyTotals={tableMoneyTotals(
+        table.getVisibleLeafColumns(),
+        selectedRows,
+      )}
       actions={state.getAvailableActions(selectedRows)}
       onExecute={state.executeAction}
       onClearSelection={state.clearSelection}

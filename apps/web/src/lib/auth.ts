@@ -23,6 +23,9 @@ import {
 } from "./google-auth";
 import { GMAIL_READONLY_SCOPE } from "./google-auth-constants";
 
+const OAUTH_RESOURCE_SEED_RETRY_MESSAGE =
+  "oauth-provider: could not seed `resources` at startup; retrying on first resource access.";
+
 const isDev = process.env.NODE_ENV !== "production";
 
 const oauthResourceOptions = {
@@ -90,6 +93,18 @@ if (!isDev) {
 }
 
 export const auth = betterAuth({
+  logger: {
+    log(level, message, ...args) {
+      // Workers may initialize auth before a request-scoped database exists;
+      // the OAuth provider retries this resource seed on first access.
+      if (level === "error" && message === OAUTH_RESOURCE_SEED_RETRY_MESSAGE)
+        return;
+      if (level === "error") console.error(`[Better Auth] ${message}`, ...args);
+      else if (level === "warn")
+        console.warn(`[Better Auth] ${message}`, ...args);
+      else console.log(`[Better Auth] ${message}`, ...args);
+    },
+  },
   database: drizzleAdapter(drizzle, {
     provider: "pg",
     schema,

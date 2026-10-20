@@ -51,8 +51,7 @@ test("Product inspection keeps scalar edits accessible and persistent", async ({
   await expect(notes).toContainText("Synthetic inspector edit");
   await page.setViewportSize({ width: 1440, height: 900 });
   await inspector
-    .locator("summary")
-    .getByText("Relations", { exact: true })
+    .getByRole("button", { name: "Relations", exact: true })
     .click();
   await expect(notes).toContainText("Synthetic inspector edit");
   await inspector

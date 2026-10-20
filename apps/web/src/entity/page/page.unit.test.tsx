@@ -86,7 +86,9 @@ describe("Page workbench", () => {
     );
 
     const identity = screen.getByRole("heading", { name: "Products" });
-    expect(await screen.findByText("7 products")).toBeInTheDocument();
+    expect((await screen.findByText("7")).closest("p")).toHaveTextContent(
+      "7 products",
+    );
     expect(screen.getByRole("button", { name: "Table" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     expect(

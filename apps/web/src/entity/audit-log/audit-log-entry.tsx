@@ -9,7 +9,7 @@ import { formatCount } from "~/lib/number-format";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
-import type { Fact } from "~/ui/common/fact-list";
+import type { Fact } from "~/ui/common/facts";
 import {
   type RecordColumn,
   RecordDetail,
@@ -17,7 +17,7 @@ import {
   RecordRow,
 } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
-import { MutedBox } from "~/ui/layout/muted-box";
+import { Panel } from "~/ui/layout/panel";
 import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 
@@ -348,7 +348,7 @@ function AuditActor({ entry }: { entry: AuditLogEntry }) {
       {entry.user?.image ? <AvatarImage src={entry.user.image} alt="" /> : null}
       <AvatarFallback
         className={cn(
-          "text-[0.5625rem]",
+          "text-2xs",
           !entry.user && "bg-muted text-muted-foreground",
         )}
       >
@@ -451,9 +451,9 @@ export function AuditRecordRow({
                 : `${countLabel(changedCount, "field")} changed`
             }
           >
-            <MutedBox padding="sm">
+            <Panel tone="muted">
               <ChangesList changes={changes} />
-            </MutedBox>
+            </Panel>
           </RecordDetail>
         ) : null
       }

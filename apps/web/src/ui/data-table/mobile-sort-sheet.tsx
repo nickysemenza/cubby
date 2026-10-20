@@ -129,9 +129,7 @@ function SortOption({
       {/* `as="span"`: a <button>'s content model is phrasing content, and the
           primitives default to <div>. */}
       <Stack as="span" gap="tight" className="min-w-0">
-        <span className="truncate font-mono text-xs tracking-wider uppercase">
-          {label}
-        </span>
+        <span className="truncate text-xs font-medium">{label}</span>
         {detail && (
           <Eyebrow as="span" className="truncate">
             {detail}

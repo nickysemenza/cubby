@@ -179,7 +179,7 @@
 }
 /* Review grows beneath the proposal without moving its field identity or rail. */
 .ledger[data-ledger="facts"]
-  > .ledger-row:has(> [data-slot="basic-info-value"] .suggestion-review)
+  > .ledger-row:has(> [data-slot="fact-value"] .suggestion-review)
   > :is([data-ledger-slot="primary"], [data-ledger-slot="actions"]) {
   align-self: start;
 }
@@ -325,7 +325,7 @@
 }
 
 /* Columnar records: each row's facts align under one quiet header. Below
-   40rem the header hides and the same `FactList` wraps inline beneath the
+   40rem the header hides and the same inline `Facts` wraps inline beneath the
    identity with its labels visible, so no fact is lost on a phone. Columns
    are placed explicitly from inline custom properties set by `RecordList`
    (`--ledger-columns`, `--ledger-trailing-column`, `--ledger-actions-column`)
@@ -509,7 +509,7 @@
 .suggestion-disclosure {
   display: contents;
 }
-.suggestion-disclosure > summary {
+.suggestion-disclosure > button {
   align-self: center;
 }
 .suggestion-evidence {

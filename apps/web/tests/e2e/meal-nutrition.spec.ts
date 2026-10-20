@@ -111,9 +111,12 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(ingredientRow.getByText(/serving/)).toBeVisible();
   await expect(ingredientRow.getByText("Estimated weight 15 g")).toBeVisible();
 
-  const productDetails = productRow.locator("details").first();
-  if ((await productDetails.getAttribute("open")) !== null) {
-    await productRow.getByText("Details and editing", { exact: true }).click();
+  const productDetails = productRow.getByRole("button", {
+    name: "Details and editing",
+    exact: true,
+  });
+  if ((await productDetails.getAttribute("aria-expanded")) === "true") {
+    await productDetails.click();
   }
   await page.evaluate(() => window.scrollTo({ top: 0 }));
   await expect(page.getByText("Food updated", { exact: true })).toBeHidden({

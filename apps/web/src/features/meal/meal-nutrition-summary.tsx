@@ -22,6 +22,7 @@ import {
   formatEstimate,
 } from "~/lib/nutrition-format";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 
@@ -202,10 +203,10 @@ function NutritionPeople({
                         </span>
                       </Row>
                       <Macros totals={food.totals} />
-                      <details className="mt-2 text-xs">
-                        <summary className="flex min-h-11 cursor-pointer items-center text-muted-foreground">
-                          Details and editing
-                        </summary>
+                      <Disclosure
+                        summary="Details and editing"
+                        className="mt-2 text-xs"
+                      >
                         <Stack gap="md">
                           <Description size="xs">
                             {sourceEstimateDescription(food)}
@@ -258,16 +259,16 @@ function NutritionPeople({
                               )}
                           </Row>
                         </Stack>
-                      </details>
+                      </Disclosure>
                     </li>
                   ))}
                 </ol>
-                <details className="border-t text-xs">
-                  <summary className="flex min-h-11 cursor-pointer items-center text-muted-foreground">
-                    All nutrients for {person.eater.name}
-                  </summary>
+                <Disclosure
+                  summary={`All nutrients for ${person.eater.name}`}
+                  className="border-t pt-2 text-xs"
+                >
                   <MealNutritionEstimates totals={person.totals} />
-                </details>
+                </Disclosure>
               </>
             )}
           </section>

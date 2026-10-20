@@ -82,13 +82,11 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await expect(
     popover.getByRole("heading", { name: "Technical details" }),
   ).toBeVisible();
-  const technicalDisclosure = popover
-    .locator("details")
-    .filter({
-      has: page.getByRole("heading", { name: "Technical details" }),
-    })
-    .first();
-  await expect(technicalDisclosure).not.toHaveAttribute("open");
+  await expect(
+    popover
+      .getByRole("heading", { name: "Technical details" })
+      .getByRole("button"),
+  ).toHaveAttribute("aria-expanded", "false");
   await expect(
     popover
       .locator("[data-quality-check]")

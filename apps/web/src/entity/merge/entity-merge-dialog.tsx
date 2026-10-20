@@ -12,13 +12,15 @@ import {
 import { mergeConfigFor } from "~/entity/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entity/types";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
+import { Panel } from "~/ui/layout/panel";
 import { Overlay } from "~/ui/overlays/overlay";
+import { Alert } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
@@ -137,16 +139,15 @@ function ProductMergeDecisions({
       ) : (
         <>
           {data?.blockers.map((blocker) => (
-            <p
-              key={blocker}
-              className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive"
-            >
+            <Alert key={blocker} variant="destructive">
               {blocker}
-            </p>
+            </Alert>
           ))}
-          <div
+          <Panel
+            tone="default"
+            flush
             data-testid="product-merge-mobile-decisions"
-            className="divide-y divide-border rounded-md border border-border md:hidden"
+            className="divide-y divide-border md:hidden"
           >
             {visibleDecisions.map((decision) => (
               <div key={decision.field} className="space-y-1.5 p-2 text-xs">
@@ -166,8 +167,12 @@ function ProductMergeDecisions({
                 </div>
               </div>
             ))}
-          </div>
-          <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+          </Panel>
+          <Panel
+            tone="default"
+            flush
+            className="hidden overflow-x-auto md:block"
+          >
             <table className="w-full min-w-[42rem] table-fixed border-collapse text-left text-xs">
               <thead className="sticky top-0 bg-card text-muted-foreground">
                 <tr>
@@ -217,7 +222,7 @@ function ProductMergeDecisions({
                 ))}
               </tbody>
             </table>
-          </div>
+          </Panel>
           <p className="text-2xs text-muted-foreground">
             Only fields with a value are shown. Kept values win; empty fields
             are filled. Names become searchable aliases; images and tags are
@@ -444,14 +449,14 @@ function FixedMergeDialog<T extends MergeRow>({
       }}
     >
       {candidates.length === 0 ? (
-        <Empty variant="minimal" className="py-6">
-          <EmptyTitle>
-            {config.copy.emptyTitle ?? "Nothing to merge"}
-          </EmptyTitle>
-          <EmptyDescription>
-            {config.copy.emptyDescription ?? "No other rows are on file."}
-          </EmptyDescription>
-        </Empty>
+        <EmptyState
+          size="page"
+          description={
+            config.copy.emptyDescription ?? "No other rows are on file."
+          }
+        >
+          {config.copy.emptyTitle ?? "Nothing to merge"}
+        </EmptyState>
       ) : (
         <Stack gap="xs" className="max-h-64 overflow-y-auto">
           {candidates.map((candidate) => (

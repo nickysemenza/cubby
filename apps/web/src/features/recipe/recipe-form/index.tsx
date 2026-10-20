@@ -4,7 +4,6 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
-import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -19,7 +18,7 @@ import { recipe as recipeOperations } from "~/integrations/tanstack-query/genera
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useImageState } from "~/ui/hooks/use-image-state";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +30,6 @@ import {
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent } from "~/ui/primitives/card";
 
 import { PendingImageUpload } from "../../../entity/entity-media/pending-image-upload";
 import { FormFieldGroup } from "../../../ui/forms/form-field-group";
@@ -434,63 +432,54 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           />
 
           {/* Spec plate: the recipe's vitals in one chunky placard */}
-          <Card>
-            <CardContent className="space-y-2 px-4 py-1">
-              <EntityPrimitiveFields
-                entity="recipe"
-                mode={mode}
-                section="identity"
-                options={{ name: { placeholder: "Enter recipe name" } }}
-              />
-              {mode === "edit" && <RecipeCookbookField form={form} />}
-              <YieldServingsFields form={form} mode={mode} />
-              <Controller
-                control={form.control}
-                name="tags"
-                render={({ field }) => (
-                  <FormFieldGroup htmlFor={tagsId} label="Tags (Optional)">
-                    <TagInput
-                      id={tagsId}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormFieldGroup>
-                )}
-              />
-              <EntityPrimitiveFields
-                entity="recipe"
-                mode={mode}
-                section="main"
-                options={{
-                  notes: {
-                    placeholder:
-                      "Headnote, do-ahead tips, serving suggestions…",
-                    rows: 4,
-                  },
-                }}
-              />
-            </CardContent>
-          </Card>
+          <div className="space-y-2">
+            <EntityPrimitiveFields
+              entity="recipe"
+              mode={mode}
+              section="identity"
+              options={{ name: { placeholder: "Enter recipe name" } }}
+            />
+            {mode === "edit" && <RecipeCookbookField form={form} />}
+            <YieldServingsFields form={form} mode={mode} />
+            <Controller
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <FormFieldGroup htmlFor={tagsId} label="Tags (Optional)">
+                  <TagInput
+                    id={tagsId}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                </FormFieldGroup>
+              )}
+            />
+            <EntityPrimitiveFields
+              entity="recipe"
+              mode={mode}
+              section="main"
+              options={{
+                notes: {
+                  placeholder: "Headnote, do-ahead tips, serving suggestions…",
+                  rows: 4,
+                },
+              }}
+            />
+          </div>
 
           {/* Photos: a first-class field. Kept always-mounted so scraped
               images still auto-import via autoImportUrl. */}
-          <Card>
-            <CardContent className="space-y-2 px-4 py-4">
-              <h3 className="my-0 flex items-center gap-2 eyebrow font-medium">
-                <ImageIcon className="size-3.5" />
-                Photos
-              </h3>
-              <PendingImageUpload
-                entityKind="RECIPE"
-                onImagesChange={handlePendingImagesChange}
-                existingImages={
-                  mode === "edit" && recipe?.images ? recipe.images : []
-                }
-                onExistingImagesRemove={handleRemovedImagesChange}
-                autoImportUrl={scrapedImageUrl}
-              />
-            </CardContent>
-          </Card>
+          <Section headingAs="h2" title="Photos">
+            <PendingImageUpload
+              entityKind="RECIPE"
+              onImagesChange={handlePendingImagesChange}
+              existingImages={
+                mode === "edit" && recipe?.images ? recipe.images : []
+              }
+              onExistingImagesRemove={handleRemovedImagesChange}
+              autoImportUrl={scrapedImageUrl}
+            />
+          </Section>
 
           <Stack gap="sm">
             <Row align="center" justify="between">

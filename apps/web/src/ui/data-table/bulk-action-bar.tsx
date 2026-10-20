@@ -1,6 +1,7 @@
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
 
+import { CurrencyValue } from "~/ui/common/currency-value";
 import { Row as LayoutRow } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
@@ -10,9 +11,11 @@ import {
   resolveBulkActionAvailability,
 } from "./bulk-actions.types";
 import type { CubbyRow as Row } from "./table-features";
+import type { tableMoneyTotals } from "./table-money";
 
 export interface BulkActionBarProps<TData extends RowData> {
   selectedCount: number;
+  moneyTotals?: ReturnType<typeof tableMoneyTotals>;
   selectedRows: Row<TData>[];
   actions: BulkAction<TData>[];
   onExecute: (action: BulkAction<TData>, rows: Row<TData>[]) => Promise<void>;
@@ -44,6 +47,7 @@ export interface BulkActionBarProps<TData extends RowData> {
 export function BulkActionBar<TData extends RowData>({
   selectedCount,
   selectedRows,
+  moneyTotals,
   actions,
   onExecute,
   onClearSelection,
@@ -84,21 +88,34 @@ export function BulkActionBar<TData extends RowData>({
 
   return (
     <LayoutRow
+      as="section"
       data-bulk-action-bar
       align="center"
-      gap="sm"
+      gap="md"
       wrap
-      className="bg-card max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--app-chrome-bottom)] max-md:z-40 max-md:min-h-12 max-md:[scrollbar-width:none] max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-t max-md:border-foreground max-md:px-2 max-md:py-1 md:px-1 max-md:[&::-webkit-scrollbar]:hidden"
+      aria-label="Selected rows"
+      className="fixed bottom-[calc(var(--app-chrome-bottom,0px)+1rem)] left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 [scrollbar-width:none] flex-nowrap overflow-x-auto overscroll-x-contain rounded-lg bg-foreground py-1.5 pr-2 pl-3 text-background [&::-webkit-scrollbar]:hidden"
     >
-      <span className="shrink-0 font-mono text-xs font-medium uppercase tabular-nums">
+      <span className="shrink-0 text-sm tabular-nums">
         {selectedCount} selected
+        {moneyTotals?.map((total) => (
+          <span key={total.columnId}>
+            {" "}
+            · {moneyTotals.length > 1 ? `${total.label} ` : ""}
+            <CurrencyValue
+              value={total.value}
+              interactive={false}
+              tone={false}
+            />
+          </span>
+        ))}
       </span>
 
       {showSelectAll && selectAllMatching && (
         <Button
           variant="ghost"
           size="sm"
-          className="text-primary"
+          className="h-7.5 border-background/15 bg-background/10 text-sm text-background hover:bg-background/20 hover:text-background"
           onClick={() => void selectAllMatching.onSelectAll()}
           disabled={disabled || isExecuting || selectAllMatching.isSelectingAll}
         >
@@ -109,9 +126,8 @@ export function BulkActionBar<TData extends RowData>({
         </Button>
       )}
 
-      {/* Wraps because the action count is per-entity and open-ended — Tasks
-          already carries five before the shared Copy and Delete. */}
-      <LayoutRow align="center" gap="xs" wrap className="max-md:flex-nowrap">
+      {/* The horizontal rail accommodates each list's declared actions. */}
+      <LayoutRow align="center" gap="md" className="flex-nowrap">
         {orderedActions.map(({ action, availability }) => {
           const disabledReason =
             availability.status === "disabled"
@@ -120,7 +136,8 @@ export function BulkActionBar<TData extends RowData>({
           return (
             <Button
               key={action.id}
-              variant={action.tone === "destructive" ? "destructive" : "ghost"}
+              variant="outline"
+              className="h-7.5 border-background/15 bg-background/10 text-sm text-background hover:bg-background/20 hover:text-background"
               size="sm"
               onClick={() => handleActionClick(action)}
               disabled={disabled || isExecuting || disabledReason != null}
@@ -147,7 +164,7 @@ export function BulkActionBar<TData extends RowData>({
         size="sm"
         onClick={onClearSelection}
         disabled={disabled || isExecuting}
-        className="ml-auto max-md:sticky max-md:right-0 max-md:bg-card"
+        className="sticky right-0 ml-auto size-7.5 shrink-0 bg-foreground p-0 text-background hover:bg-background/20 hover:text-background"
       >
         <XIcon className="size-3" />
         <span className="sr-only">Clear selection</span>

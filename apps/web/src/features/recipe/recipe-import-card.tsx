@@ -14,10 +14,9 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent } from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
@@ -183,114 +182,136 @@ function RecipeImportCardImpl({
   const badge = STATUS_BADGE[status];
 
   return (
-    <Card variant="panel" size="sm">
-      <CardContent>
-        <Row align="center" gap="sm">
-          <Checkbox
-            checked={selected}
-            disabled={disabled}
-            onCheckedChange={onToggle}
-            aria-label={`Select ${recipe.meta.title}`}
-          />
-          <Row wrap align="center" gap="sm" className="flex-1">
-            <span
-              className={cn("font-medium", disabled && "text-muted-foreground")}
-            >
-              {recipe.meta.title || "(untitled)"}
-            </span>
-            {recipe.meta.recipe_yield && (
-              <Description as="span" size="xs">
-                {isRecipeYieldText(recipe.meta.recipe_yield)
-                  ? recipe.meta.recipe_yield
-                  : `${recipe.meta.recipe_yield.value} ${recipe.meta.recipe_yield.unit}`}
-              </Description>
-            )}
-            <Badge variant={badge.variant}>{badge.label}</Badge>
-            {existingId && (
-              <EntityRefLink
-                displayImage={
-                  existingId
-                    ? (existingRecipeImages[
-                        entityDisplayImageKey({
-                          entityKind: "recipe",
-                          entityId: existingId,
-                        })
-                      ] ?? null)
-                    : null
-                }
-                entity="recipe"
-                data={{
-                  id: existingId,
-                  name: recipe.meta.title,
-                }}
-                compact
-              />
-            )}
-          </Row>
-          {externalUrl && (
-            <a
-              href={externalUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted-foreground hover:text-foreground"
-              title="Open source"
-            >
-              <ArrowSquareOutIcon className="size-3.5" />
-            </a>
+    <Panel tone="default">
+      <Row align="center" gap="sm">
+        <Checkbox
+          checked={selected}
+          disabled={disabled}
+          onCheckedChange={onToggle}
+          aria-label={`Select ${recipe.meta.title}`}
+        />
+        <Row wrap align="center" gap="sm" className="flex-1">
+          <span
+            className={cn("font-medium", disabled && "text-muted-foreground")}
+          >
+            {recipe.meta.title || "(untitled)"}
+          </span>
+          {recipe.meta.recipe_yield && (
+            <Description as="span" size="xs">
+              {isRecipeYieldText(recipe.meta.recipe_yield)
+                ? recipe.meta.recipe_yield
+                : `${recipe.meta.recipe_yield.value} ${recipe.meta.recipe_yield.unit}`}
+            </Description>
           )}
-          <CopyImportRecipeParseButton recipe={recipe} />
-          <CopyJsonButton
-            value={recipe}
-            title="Copy the full extracted recipe as JSON (for an ingredient-parser session)"
-            toastLabel="Copied recipe JSON"
-          />
-          <ImportStatus result={result} />
+          <Badge variant={badge.variant}>{badge.label}</Badge>
+          {existingId && (
+            <EntityRefLink
+              displayImage={
+                existingId
+                  ? (existingRecipeImages[
+                      entityDisplayImageKey({
+                        entityKind: "recipe",
+                        entityId: existingId,
+                      })
+                    ] ?? null)
+                  : null
+              }
+              entity="recipe"
+              data={{
+                id: existingId,
+                name: recipe.meta.title,
+              }}
+              compact
+            />
+          )}
         </Row>
-
-        {reasons && reasons.length > 0 && (
-          <StatusText as="p" tone="destructive" className="mt-1 pl-6 text-xs">
-            {reasons.join(" ")}
-          </StatusText>
+        {externalUrl && (
+          <a
+            href={externalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground hover:text-foreground"
+            title="Open source"
+          >
+            <ArrowSquareOutIcon className="size-3.5" />
+          </a>
         )}
+        <CopyImportRecipeParseButton recipe={recipe} />
+        <CopyJsonButton
+          value={recipe}
+          title="Copy the full extracted recipe as JSON (for an ingredient-parser session)"
+          toastLabel="Copied recipe JSON"
+        />
+        <ImportStatus result={result} />
+      </Row>
 
-        {photo && (
-          <Row align="center" gap="sm" className="mt-2 pl-6 text-xs">
-            {photoPreviewUrl && (
-              <Image
-                src={photoPreviewUrl}
-                alt=""
-                displayWidth={40}
-                className="size-10 rounded object-cover"
-              />
+      {reasons && reasons.length > 0 && (
+        <StatusText as="p" tone="destructive" className="mt-1 pl-6 text-xs">
+          {reasons.join(" ")}
+        </StatusText>
+      )}
+
+      {photo && (
+        <Row align="center" gap="sm" className="mt-2 pl-6 text-xs">
+          {photoPreviewUrl && (
+            <Image
+              src={photoPreviewUrl}
+              alt=""
+              displayWidth={40}
+              className="size-10 rounded object-cover"
+            />
+          )}
+          <PhotoStatus result={photo} />
+          {(photo.status === "error" || photo.status === "missing-bytes") &&
+            onRetryPhoto && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onRetryPhoto}
+              >
+                <ArrowCounterClockwiseIcon className="mr-1 size-3" />
+                Retry photo
+              </Button>
             )}
-            <PhotoStatus result={photo} />
-            {(photo.status === "error" || photo.status === "missing-bytes") &&
-              onRetryPhoto && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onRetryPhoto}
-                >
-                  <ArrowCounterClockwiseIcon className="mr-1 size-3" />
-                  Retry photo
-                </Button>
+        </Row>
+      )}
+
+      {notesMarkdown && (
+        <MarkdownText className="mt-2 text-xs text-muted-foreground">
+          {notesMarkdown}
+        </MarkdownText>
+      )}
+
+      <div className="mt-2 grid gap-x-4 gap-y-2 md:grid-cols-2">
+        <Stack gap="sm">
+          {recipe.sections.map((section, sectionIndex) => (
+            <Stack
+              // oxlint-disable-next-line react/no-array-index-key -- Imported recipe sections are a fixed positional preview without stable ids.
+              key={sectionIndex}
+              gap="xs"
+            >
+              {section.name && (
+                <div className="text-xs font-medium text-muted-foreground">
+                  {section.name}
+                </div>
               )}
-          </Row>
-        )}
-
-        {notesMarkdown && (
-          <MarkdownText className="mt-2 text-xs text-muted-foreground">
-            {notesMarkdown}
-          </MarkdownText>
-        )}
-
-        <div className="mt-2 grid gap-x-4 gap-y-2 md:grid-cols-2">
-          <Stack gap="sm">
-            {recipe.sections.map((section, sectionIndex) => (
+              <ParsedIngredientTable
+                {...(parsedLines
+                  ? { rows: parsedLines[sectionIndex] ?? [] }
+                  : { lines: section.ingredients })}
+                matchMap={matchMap}
+                matchReady={matchReady}
+              />
+            </Stack>
+          ))}
+        </Stack>
+        <Stack gap="sm">
+          {recipe.sections.map((section, si) =>
+            section.instructions.length > 0 ? (
               <Stack
                 // oxlint-disable-next-line react/no-array-index-key -- Imported recipe sections are a fixed positional preview without stable ids.
-                key={sectionIndex}
+                key={si}
                 gap="xs"
               >
                 {section.name && (
@@ -298,46 +319,22 @@ function RecipeImportCardImpl({
                     {section.name}
                   </div>
                 )}
-                <ParsedIngredientTable
-                  {...(parsedLines
-                    ? { rows: parsedLines[sectionIndex] ?? [] }
-                    : { lines: section.ingredients })}
-                  matchMap={matchMap}
-                  matchReady={matchReady}
-                />
+                <ol className="list-decimal space-y-1 pl-4 text-xs leading-snug text-muted-foreground">
+                  {richBySection[si]?.map((rich, instructionIndex) => (
+                    <li
+                      // oxlint-disable-next-line react/no-array-index-key -- Instructions are a fixed positional preview, and duplicate lines are valid.
+                      key={instructionIndex}
+                    >
+                      {rich}
+                    </li>
+                  ))}
+                </ol>
               </Stack>
-            ))}
-          </Stack>
-          <Stack gap="sm">
-            {recipe.sections.map((section, si) =>
-              section.instructions.length > 0 ? (
-                <Stack
-                  // oxlint-disable-next-line react/no-array-index-key -- Imported recipe sections are a fixed positional preview without stable ids.
-                  key={si}
-                  gap="xs"
-                >
-                  {section.name && (
-                    <div className="text-xs font-medium text-muted-foreground">
-                      {section.name}
-                    </div>
-                  )}
-                  <ol className="list-decimal space-y-1 pl-4 text-xs leading-snug text-muted-foreground">
-                    {richBySection[si]?.map((rich, instructionIndex) => (
-                      <li
-                        // oxlint-disable-next-line react/no-array-index-key -- Instructions are a fixed positional preview, and duplicate lines are valid.
-                        key={instructionIndex}
-                      >
-                        {rich}
-                      </li>
-                    ))}
-                  </ol>
-                </Stack>
-              ) : null,
-            )}
-          </Stack>
-        </div>
-      </CardContent>
-    </Card>
+            ) : null,
+          )}
+        </Stack>
+      </div>
+    </Panel>
   );
 }
 

@@ -188,9 +188,7 @@ function UsageMetric({
 }) {
   return (
     <div className="border border-border bg-card p-4">
-      <div className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-        {label}
-      </div>
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
       {detail ? (
         <div className="text-xs text-muted-foreground">{detail}</div>
@@ -248,7 +246,7 @@ function UsageSection({
     >
       <h2
         id={headingId}
-        className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+        className="mb-2 text-xs font-semibold text-muted-foreground"
       >
         {title}
       </h2>

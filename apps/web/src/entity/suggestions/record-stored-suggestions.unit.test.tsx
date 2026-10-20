@@ -307,7 +307,7 @@ describe("stored suggestions in generic list cells", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(await screen.findByText("Review", { selector: "summary" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Use a different value…" }),
     );
@@ -374,7 +374,7 @@ describe("stored suggestions in generic list cells", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(await screen.findByText("Review", { selector: "summary" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Use a different value…" }),
     );
@@ -444,7 +444,7 @@ describe("stored suggestions in generic list cells", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(await screen.findByText("Review", { selector: "summary" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Use a different value…" }),
     );

@@ -60,7 +60,7 @@ import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/number-format";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { DateDisplay } from "~/ui/common/date-display";
-import type { Fact } from "~/ui/common/fact-list";
+import type { Fact } from "~/ui/common/facts";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";

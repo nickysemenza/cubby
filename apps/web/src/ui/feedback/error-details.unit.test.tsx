@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -62,9 +63,9 @@ describe("error details", () => {
     const error = makeError();
     render(<ErrorDisplay error={error} title="products" />);
     expect(screen.getByText("Couldn't load products.")).toBeVisible();
-    const summary = screen.getByText("Technical details");
-    expect(summary.closest("details")).not.toHaveAttribute("open");
-    fireEvent.click(summary);
+    const trigger = screen.getByRole("button", { name: "Technical details" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(trigger);
     expect(
       screen.getByRole("link", { name: "View in Sentry" }),
     ).toHaveAttribute("href", sentryEventUrl("sample-event"));
@@ -78,7 +79,7 @@ describe("error details", () => {
 });
 
 describe("error details dialog host", () => {
-  it("opens with the error's content and no inline <details>, then closes", async () => {
+  it("opens with the error's content and no inline disclosure, then closes", async () => {
     const error = makeError();
     render(<ErrorDetailsDialogHost />);
 
@@ -92,7 +93,9 @@ describe("error details dialog host", () => {
     expect(dialog).toHaveTextContent("entity.list / product / run");
     expect(screen.getByRole("link", { name: "View in Sentry" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Copy details" })).toBeVisible();
-    expect(dialog.querySelector("details")).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Technical details" }),
+    ).toBeNull();
 
     act(() => {
       closeErrorDetailsDialog();

@@ -1,13 +1,12 @@
 import type { CookbookRunReport } from "@cubby/schemas/cookbook";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useMemo } from "react";
 
 import { formatMinutesSeconds } from "~/lib/format-duration";
 import { AiCost, formatAiCostSubtotal } from "~/ui/common/ai-cost";
-import type { Fact } from "~/ui/common/fact-list";
+import type { Fact } from "~/ui/common/facts";
 import {
   type RecordColumn,
   RecordDetail,
@@ -16,12 +15,8 @@ import {
   RecordRow,
 } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
 import { Description } from "~/ui/primitives/description";
 import {
   Table,
@@ -217,127 +212,121 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
   const recall = report.crosscheck.recall;
 
   return (
-    <Collapsible>
-      <CollapsibleTrigger className="flex w-full items-center gap-1 text-left text-xs text-muted-foreground hover:text-foreground">
-        <CaretDownIcon className="size-3" />
-        Run report —{" "}
-        {formatAiCostSubtotal(
-          report.chargedCost,
-          report.chargedUnpricedCount,
-          report.count,
-          report.chargedComplete,
-        )}{" "}
-        charged · {formatMinutesSeconds(report.wall_ms)} ·{" "}
-        {countLabel(calls.length, "call")}
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <Stack gap="sm" className="mt-2 border border-border p-2">
+    <Disclosure
+      summary="Run report"
+      meta={`${formatAiCostSubtotal(
+        report.chargedCost,
+        report.chargedUnpricedCount,
+        report.count,
+        report.chargedComplete,
+      )} charged · ${formatMinutesSeconds(report.wall_ms)} · ${countLabel(calls.length, "call")}`}
+    >
+      <Stack gap="sm" className="border border-border p-2">
+        <Description size="xs">
+          {report.crosscheck.matched}/{report.crosscheck.nav_titles} contents
+          titles matched
+          {recall != null && ` · recall ${(recall * 100).toFixed(0)}%`}
+          {report.incomplete && " · incomplete"}
+          {report.cancelled && " · cancelled"}
+          {(report.chargedUnpricedCount > 0 ||
+            report.chargedComplete === false) &&
+            " · charge subtotal incomplete"}
+        </Description>
+
+        <AiCost cost={report} />
+        <Description size="xs">
+          {report.comparedCalls > 0
+            ? formatAiCostSubtotal(report.savings, 0)
+            : "Unavailable"}{" "}
+          savings · {report.comparedCalls} of {report.count} calls compared
+        </Description>
+        {report.usage_by_model.length > 0 && (
+          <ul className="space-y-0.5 text-2xs text-muted-foreground">
+            {report.usage_by_model.map((usage) => (
+              <li key={usage.model}>
+                <span className="font-mono">{usage.model}</span> ·{" "}
+                {countLabel(usage.calls, "call")}
+                <AiCost cost={usage} />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {escalation && (
           <Description size="xs">
-            {report.crosscheck.matched}/{report.crosscheck.nav_titles} contents
-            titles matched
-            {recall != null && ` · recall ${(recall * 100).toFixed(0)}%`}
-            {report.incomplete && " · incomplete"}
-            {report.cancelled && " · cancelled"}
-            {(report.chargedUnpricedCount > 0 ||
-              report.chargedComplete === false) &&
-              " · charge subtotal incomplete"}
+            Escalated {escalation.from_model} → {escalation.to_model}:{" "}
+            {escalation.reason}
+            {escalation.flagged_fraction != null &&
+              ` (${(escalation.flagged_fraction * 100).toFixed(0)}% flagged)`}
           </Description>
+        )}
 
-          <AiCost cost={report} />
+        {unresolved.length > 0 && (
           <Description size="xs">
-            {report.comparedCalls > 0
-              ? formatAiCostSubtotal(report.savings, 0)
-              : "Unavailable"}{" "}
-            savings · {report.comparedCalls} of {report.count} calls compared
+            {countLabel(unresolved.length, "unresolved reference")}:{" "}
+            {unresolved
+              .slice(0, 8)
+              .map((ref) => ref.text)
+              .join(", ")}
+            {unresolved.length > 8 ? `, +${unresolved.length - 8} more` : ""}
           </Description>
-          {report.usage_by_model.length > 0 && (
-            <ul className="space-y-0.5 text-2xs text-muted-foreground">
-              {report.usage_by_model.map((usage) => (
-                <li key={usage.model}>
-                  <span className="font-mono">{usage.model}</span> ·{" "}
-                  {countLabel(usage.calls, "call")}
-                  <AiCost cost={usage} />
-                </li>
-              ))}
-            </ul>
-          )}
+        )}
 
-          {escalation && (
-            <Description size="xs">
-              Escalated {escalation.from_model} → {escalation.to_model}:{" "}
-              {escalation.reason}
-              {escalation.flagged_fraction != null &&
-                ` (${(escalation.flagged_fraction * 100).toFixed(0)}% flagged)`}
-            </Description>
-          )}
-
-          {unresolved.length > 0 && (
-            <Description size="xs">
-              {countLabel(unresolved.length, "unresolved reference")}:{" "}
-              {unresolved
-                .slice(0, 8)
-                .map((ref) => ref.text)
-                .join(", ")}
-              {unresolved.length > 8 ? `, +${unresolved.length - 8} more` : ""}
-            </Description>
-          )}
-
-          {calls.length > 0 && (
-            <div className="max-h-64 overflow-auto">
-              <Table className="table-auto">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Model</TableHead>
-                    <TableHead>Purpose</TableHead>
-                    <TableHead>Chunk</TableHead>
-                    <TableHead className="text-right">Latency</TableHead>
-                    <TableHead className="text-right">Status</TableHead>
-                    <TableHead className="text-right">
-                      Charged / standard
-                    </TableHead>
-                    <TableHead>Outcome</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {calls.map((call, index) => (
-                    <TableRow key={`${call.chunk_id}:${call.seq ?? index}`}>
-                      <TableCell className="font-mono text-2xs">
-                        {call.model}
-                      </TableCell>
-                      <TableCell className="text-2xs">
-                        {call.purpose ?? ""}
-                        {call.attempt !== undefined && call.attempt > 1
-                          ? ` #${call.attempt}`
+        {calls.length > 0 && (
+          <div className="max-h-64 overflow-auto">
+            <Table className="table-auto">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Purpose</TableHead>
+                  <TableHead>Chunk</TableHead>
+                  <TableHead className="text-right">Latency</TableHead>
+                  <TableHead className="text-right">Status</TableHead>
+                  <TableHead className="text-right">
+                    Charged / standard
+                  </TableHead>
+                  <TableHead>Outcome</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {calls.map((call, index) => (
+                  <TableRow key={`${call.chunk_id}:${call.seq ?? index}`}>
+                    <TableCell className="font-mono text-2xs">
+                      {call.model}
+                    </TableCell>
+                    <TableCell className="text-2xs">
+                      {call.purpose ?? ""}
+                      {call.attempt !== undefined && call.attempt > 1
+                        ? ` #${call.attempt}`
+                        : ""}
+                    </TableCell>
+                    <TableCell className="font-mono text-2xs">
+                      {call.chunk_id}
+                    </TableCell>
+                    <TableCell className="text-right text-2xs tabular-nums">
+                      {call.cached
+                        ? "cached"
+                        : call.latency_ms !== undefined
+                          ? `${Math.round(call.latency_ms)}ms`
                           : ""}
-                      </TableCell>
-                      <TableCell className="font-mono text-2xs">
-                        {call.chunk_id}
-                      </TableCell>
-                      <TableCell className="text-right text-2xs tabular-nums">
-                        {call.cached
-                          ? "cached"
-                          : call.latency_ms !== undefined
-                            ? `${Math.round(call.latency_ms)}ms`
-                            : ""}
-                      </TableCell>
-                      <TableCell className="text-right text-2xs tabular-nums">
-                        {call.status ?? ""}
-                      </TableCell>
-                      <TableCell className="text-right text-2xs tabular-nums">
-                        <AiCost cost={call} />
-                      </TableCell>
-                      <TableCell className="text-2xs">
-                        {call.outcome?.outcome ?? ""}
-                        {call.truncated ? " · truncated" : ""}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </Stack>
-      </CollapsibleContent>
-    </Collapsible>
+                    </TableCell>
+                    <TableCell className="text-right text-2xs tabular-nums">
+                      {call.status ?? ""}
+                    </TableCell>
+                    <TableCell className="text-right text-2xs tabular-nums">
+                      <AiCost cost={call} />
+                    </TableCell>
+                    <TableCell className="text-2xs">
+                      {call.outcome?.outcome ?? ""}
+                      {call.truncated ? " · truncated" : ""}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Stack>
+    </Disclosure>
   );
 }

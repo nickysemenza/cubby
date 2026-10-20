@@ -37,10 +37,10 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Description } from "~/ui/primitives/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { StatusText } from "~/ui/primitives/status-text";
@@ -281,7 +281,7 @@ export function LinkExpensesDialog({
               info.row.original.filed ? (
                 <span className="text-muted-foreground">{info.getValue()}</span>
               ) : (
-                <span className="font-mono text-2xs tracking-wider text-slate uppercase">
+                <span className="text-xs font-medium text-slate">
                   {info.getValue()}
                 </span>
               ),
@@ -360,12 +360,14 @@ export function LinkExpensesDialog({
           mode="embedded"
           ariaLabel="Expenses available to attach"
           emptyState={
-            <Empty variant="minimal" className="py-6">
-              <EmptyTitle>No expenses to attach</EmptyTitle>
-              <EmptyDescription>
-                {candidatesQuery.data?.message ?? "Nothing to attach."}
-              </EmptyDescription>
-            </Empty>
+            <EmptyState
+              size="page"
+              description={
+                candidatesQuery.data?.message ?? "Nothing to attach."
+              }
+            >
+              No expenses to attach
+            </EmptyState>
           }
         />
       </div>

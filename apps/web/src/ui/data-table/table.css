@@ -1,0 +1,41 @@
+:root {
+  --text-pill: 0.6875rem;
+  --text-pill--line-height: 0.875rem;
+}
+
+@layer utilities {
+  .text-pill {
+    font-size: var(--text-pill);
+    line-height: var(--text-pill--line-height);
+  }
+}
+
+/* The table owns dense value geometry; other surfaces keep their context. */
+[data-slot="table"] [data-slot="pill"] {
+  font-size: var(--text-pill);
+}
+
+[data-slot="table"] [data-enum-role="category"] {
+  font-weight: 400;
+}
+[data-slot="table"] [data-quality-meter] {
+  gap: 0.25rem;
+}
+[data-slot="table"] [data-quality-meter] > span:first-child {
+  gap: 0.09375rem;
+}
+[data-slot="table"] [data-quality-meter] .bg-border {
+  background-color: color-mix(
+    in srgb,
+    var(--muted-foreground) 20%,
+    var(--background)
+  );
+}
+
+/* A painted hairline preserves the fixed cell frame's 32px height. */
+[data-slot="table"] tr[data-cell-row] > td {
+  background-image: linear-gradient(var(--hairline-soft), var(--hairline-soft));
+  background-size: 100% 1px;
+  background-position: bottom;
+  background-repeat: no-repeat;
+}

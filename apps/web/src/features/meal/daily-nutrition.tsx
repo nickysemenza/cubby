@@ -22,7 +22,7 @@ import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -232,18 +232,17 @@ function DailyAddFood({
 export function TodayNutrition({ initialDate }: { initialDate: string }) {
   const today = useHouseholdToday(initialDate) ?? initialDate;
   return (
-    <section aria-label="Today's nutrition">
-      <Row justify="between" gap="sm" className="mb-3">
-        <h2 className="text-base font-semibold">Today’s nutrition</h2>
-        <Link
-          to="/meals"
-          search={{ view: "nutrition", date: today }}
-          className="py-3 text-sm text-primary hover:underline"
-        >
+    <Section
+      aria-label="Today's nutrition"
+      title="Today’s nutrition"
+      headingAs="h2"
+      actions={
+        <Link to="/meals" search={{ view: "nutrition", date: today }}>
           View day
         </Link>
-      </Row>
+      }
+    >
       <NutritionSummary input={{ date: today }} compact />
-    </section>
+    </Section>
   );
 }

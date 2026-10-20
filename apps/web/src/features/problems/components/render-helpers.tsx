@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityLabel, isBrowserRoutedEntity } from "~/entity/entities";
 import { DateDisplay } from "~/ui/common/date-display";
-import type { Fact } from "~/ui/common/fact-list";
+import type { Fact } from "~/ui/common/facts";
 import { Row } from "~/ui/layout";
 
 type FactInput = Fact | null | undefined | false | "";

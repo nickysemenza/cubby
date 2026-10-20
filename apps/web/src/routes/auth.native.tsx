@@ -12,14 +12,8 @@ import {
   nativeAuthCallbackURLs,
 } from "~/lib/native-auth";
 import { pageTitle } from "~/lib/page-title";
+import { Panel } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 
 export const Route = createFileRoute("/auth/native")({
   validateSearch: nativeAuthSearch,
@@ -64,19 +58,16 @@ function NativeAuthCompletion({
   }, [authClient]);
 
   return (
-    <Card variant="panel">
-      <CardHeader>
-        <CardTitle>Returning to Cubby</CardTitle>
-        <CardDescription>
-          Google sign-in is complete. Cubby should reopen automatically.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          You can close this window after the app opens.
-        </p>
-      </CardContent>
-    </Card>
+    <Panel
+      tone="default"
+      headingAs="h1"
+      title="Returning to Cubby"
+      caption="Google sign-in is complete. Cubby should reopen automatically."
+    >
+      <p className="text-sm text-muted-foreground">
+        You can close this window after the app opens.
+      </p>
+    </Panel>
   );
 }
 
@@ -146,15 +137,13 @@ function NativeAuthStart({
   }, [googleError, signIn, validRequest]);
 
   return (
-    <Card variant="panel">
-      <CardHeader>
-        <CardTitle>Sign in to the Cubby app</CardTitle>
-        <CardDescription>
-          Continue with Google to sign in and grant read-only Gmail access for
-          matching orders and receipts.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <Panel
+      tone="default"
+      headingAs="h1"
+      title="Sign in to the Cubby app"
+      caption="Continue with Google to sign in and grant read-only Gmail access for matching orders and receipts."
+    >
+      <div className="space-y-3">
         {googleError ? (
           <p role="alert" className="text-sm text-destructive">
             Google sign-in requires read-only Gmail access. Try again and
@@ -183,7 +172,7 @@ function NativeAuthStart({
             {error}
           </p>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }

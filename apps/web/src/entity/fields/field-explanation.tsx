@@ -28,6 +28,12 @@ import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
 import { ExternalLinkText } from "~/ui/external-link";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
+import {
+  Disclosure,
+  DisclosureBody,
+  DisclosureRoot,
+  DisclosureTrigger,
+} from "~/ui/layout/disclosure";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -427,11 +433,8 @@ function QualityCalculation({
           {dataQualityStatusLabel(breakdown.status)}
         </Badge>
       </div>
-      <details>
-        <summary className="cursor-pointer text-xs text-muted-foreground">
-          Score arithmetic
-        </summary>
-        <p className="py-2 text-xs leading-5 tabular-nums">
+      <Disclosure summary="Score arithmetic">
+        <p className="pb-2 text-xs leading-5 tabular-nums">
           {breakdown.summary}
         </p>
         {breakdown.checks.map((check) => (
@@ -439,7 +442,7 @@ function QualityCalculation({
             {check.label} · {check.weightLabel}
           </p>
         ))}
-      </details>
+      </Disclosure>
       <Ledger>
         {breakdown.checks.map((check) => (
           <QualityCheckRow
@@ -696,12 +699,10 @@ export function FieldExplanationContents({
                   ))}
               </Ledger>
               {visibleSources(result.data).length > 6 ? (
-                <details className="grid gap-2">
-                  <summary className="cursor-pointer text-sm font-medium">
-                    Show {visibleSources(result.data).length - 6} more evidence
-                    entries
-                  </summary>
-                  <Ledger as="dl" variant="facts" className="pt-2">
+                <Disclosure
+                  summary={`Show ${visibleSources(result.data).length - 6} more evidence entries`}
+                >
+                  <Ledger as="dl" variant="facts">
                     {visibleSources(result.data)
                       .slice(6)
                       .map((source) => (
@@ -711,7 +712,7 @@ export function FieldExplanationContents({
                         />
                       ))}
                   </Ledger>
-                </details>
+                </Disclosure>
               ) : null}
             </section>
           ) : null}
@@ -737,18 +738,12 @@ export function FieldExplanationContents({
 }
 
 function RawExplanationEvidence({ data }: { data: FieldExplanationOutput }) {
-  const [open, setOpen] = useState(false);
   return (
-    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className="cursor-pointer text-xs font-medium">
-        Raw evidence and check identifiers
-      </summary>
-      {open ? (
-        <div className="max-h-64 max-w-full overflow-auto text-xs">
-          <JsonRenderer input={data} />
-        </div>
-      ) : null}
-    </details>
+    <Disclosure summary="Raw evidence and check identifiers">
+      <div className="max-h-64 max-w-full overflow-auto text-xs">
+        <JsonRenderer input={data} />
+      </div>
+    </Disclosure>
   );
 }
 
@@ -758,43 +753,47 @@ function ExplanationTechnicalDetails({
   data: FieldExplanationOutput;
 }) {
   return (
-    <details className="grid gap-2 border-t border-border pt-2">
-      <summary className="cursor-pointer">
-        <h3 className={`${sectionLabelClassName} inline`}>Technical details</h3>
-      </summary>
-      <p className="text-xs leading-5">{data.rule.description}</p>
-      <dl className="grid gap-1 text-xs text-muted-foreground">
-        <div>
-          <dt className="inline">Rule: </dt>
-          <dd className="inline font-mono break-all">
-            {data.rule.id} · r{data.rule.revision}
-          </dd>
-        </div>
-        {z.string().safeParse(data.value).success &&
-        data.interpretation?.result !== data.value ? (
+    // Parts, not `Disclosure`: the trigger keeps this popover's section-label
+    // heading, which `Disclosure`'s summary row cannot carry.
+    <DisclosureRoot state={{}} className="border-t border-border pt-2">
+      <h3 className={sectionLabelClassName}>
+        <DisclosureTrigger>Technical details</DisclosureTrigger>
+      </h3>
+      <DisclosureBody className="grid gap-2 pt-2">
+        <p className="text-xs leading-5">{data.rule.description}</p>
+        <dl className="grid gap-1 text-xs text-muted-foreground">
           <div>
-            <dt className="inline">Result code: </dt>
-            <dd className="inline font-mono">{String(data.value)}</dd>
+            <dt className="inline">Rule: </dt>
+            <dd className="inline font-mono break-all">
+              {data.rule.id} · r{data.rule.revision}
+            </dd>
           </div>
+          {z.string().safeParse(data.value).success &&
+          data.interpretation?.result !== data.value ? (
+            <div>
+              <dt className="inline">Result code: </dt>
+              <dd className="inline font-mono">{String(data.value)}</dd>
+            </div>
+          ) : null}
+          <div>
+            <dt className="inline">Evaluated: </dt>
+            <dd className="inline">
+              <DateDisplay timestamp={data.evaluatedAt} />
+            </dd>
+          </div>
+        </dl>
+        {data.qualityBreakdown ? (
+          <>
+            {data.interpretation?.caveats.map((caveat) => (
+              <p key={caveat} className="text-xs text-muted-foreground">
+                {caveat}
+              </p>
+            ))}
+          </>
         ) : null}
-        <div>
-          <dt className="inline">Evaluated: </dt>
-          <dd className="inline">
-            <DateDisplay timestamp={data.evaluatedAt} />
-          </dd>
-        </div>
-      </dl>
-      {data.qualityBreakdown ? (
-        <>
-          {data.interpretation?.caveats.map((caveat) => (
-            <p key={caveat} className="text-xs text-muted-foreground">
-              {caveat}
-            </p>
-          ))}
-        </>
-      ) : null}
-      <RawExplanationEvidence data={data} />
-    </details>
+        <RawExplanationEvidence data={data} />
+      </DisclosureBody>
+    </DisclosureRoot>
   );
 }
 

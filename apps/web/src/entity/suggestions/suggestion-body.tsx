@@ -7,6 +7,12 @@ import type { ReactNode } from "react";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
+import {
+  Disclosure,
+  DisclosureBody,
+  DisclosureRoot,
+  DisclosureTrigger,
+} from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 
@@ -166,11 +172,8 @@ export function SuggestionBody({
           </Button>
         ) : null}
       </Row>
-      <details>
-        <summary className="cursor-pointer text-xs text-muted-foreground">
-          Decision details
-        </summary>
-        <Stack gap="xs" className="pt-2">
+      <Disclosure summary="Decision details">
+        <Stack gap="xs">
           <ProvenanceCaption {...provenance} />
           {onUseDifferent ? (
             <Description size="xs">
@@ -179,7 +182,7 @@ export function SuggestionBody({
             </Description>
           ) : null}
         </Stack>
-      </details>
+      </Disclosure>
     </Stack>
   );
   return (
@@ -206,14 +209,14 @@ export function SuggestionBody({
         {accept}
       </div>
       {compact ? (
-        <details className="suggestion-disclosure">
-          <summary className="flex min-h-11 min-w-11 cursor-pointer items-center text-xs text-muted-foreground underline-offset-2 hover:underline md:min-h-0 md:min-w-0">
-            Review
-          </summary>
-          <div className="suggestion-evidence border-t border-border pt-2">
-            {evidenceBody}
-          </div>
-        </details>
+        // Parts, not `Disclosure`: the trigger sits on the proposal line and the
+        // evidence wraps to a full-width line beneath it (ledger.css).
+        <DisclosureRoot state={{}} className="suggestion-disclosure">
+          <DisclosureTrigger>Review</DisclosureTrigger>
+          <DisclosureBody className="suggestion-evidence">
+            <div className="border-t border-border pt-2">{evidenceBody}</div>
+          </DisclosureBody>
+        </DisclosureRoot>
       ) : (
         <div className="pt-2">{evidenceBody}</div>
       )}

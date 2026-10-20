@@ -25,13 +25,27 @@ const openFilter = async (page: Page, label: string) => {
  */
 const pickInline = async (page: Page, label: string, option: string) => {
   const search = page.getByRole("combobox", { name: `Filter ${label}` });
-  // A short roster's combobox is a read-only keyboard input, not a search.
-  if ((await search.count()) > 0 && (await search.isEditable()))
-    await search.fill(option);
-  await page
+  const choice = page
     .getByRole("option", { name: new RegExp(`^${escapeRegExp(option)}`) })
-    .first()
-    .click();
+    .first();
+  // A short roster's combobox is a read-only keyboard input, not a search.
+  // Wait until either the searchable input can accept a query or the choice
+  // is already in the short roster. A shared database can make the search
+  // input appear after the editor first renders.
+  let searchable = false;
+  await expect
+    .poll(async () => {
+      searchable = await search.isEditable().catch(() => false);
+      return searchable || (await choice.isVisible().catch(() => false));
+    })
+    .toBe(true);
+  if (searchable) {
+    await expect(search).toBeEditable();
+    await search.fill(option);
+    await expect(search).toHaveValue(option);
+  }
+  await expect(choice).toBeVisible();
+  await choice.click();
 };
 
 /**
@@ -270,7 +284,9 @@ test("editing Parent task after landing on its deep-link alias", async ({
 
   await expect(row(childB.name)).toBeVisible();
   await expect(row(childA.name)).toHaveCount(0);
-  expect(new URL(page.url()).searchParams.get("parentTask")).toBe(parentB.id);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("parentTask"))
+    .toBe(parentB.id);
 });
 
 // Failure modes: a declared number range with no presets (image upload age)
@@ -358,18 +374,25 @@ test("typing a bound after picking a preset keeps every digit", async ({
   await gotoAuthenticatedPage(page, "/vendors");
   await openFilter(page, "Purchase count");
   await page.getByRole("option", { name: /^5\+ purchases/ }).click();
-  // The strip's chip (the open panel row shares its name).
+  await expect.poll(param).toBe('"5"');
+  // The editor reflects the committed route value once the selected preset
+  // updates; wait for that controlled state before changing the bounds.
   await expect(
-    page
-      .getByRole("button", {
-        name: "Purchase count: 5+ purchases",
-        exact: true,
-      })
-      .first(),
-  ).toBeVisible();
+    page.getByRole("option", { name: /^5\+ purchases/ }),
+  ).toHaveAttribute("aria-selected", "true");
+  // The strip's chip (the open panel row shares its name).
+  const chip = page
+    .getByRole("button", {
+      name: "Purchase count: 5+ purchases",
+      exact: true,
+    })
+    .first();
+  await expect(chip).toBeVisible();
 
   const min = page.getByRole("textbox", { name: "Purchase count minimum" });
+  await expect(min).toBeVisible();
   await min.click();
+  await expect(min).toBeFocused();
   await min.pressSequentially("12");
   await expect(min).toHaveValue("12");
   await expect(min).toBeFocused();

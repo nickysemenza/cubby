@@ -251,8 +251,7 @@ describe("FilterBar", () => {
       ],
     });
     openPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "Archived" }));
-    fireEvent.click(screen.getByRole("button", { name: "No" }));
+    fireEvent.click(await screen.findByRole("button", { name: "No" }));
     expect(onChange).toHaveBeenLastCalledWith([
       expect.objectContaining({ field: "archived", values: ["false"] }),
     ]);
@@ -348,7 +347,8 @@ describe("FilterBar", () => {
       { searchKey: "name" },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    openPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
     expect(onChange).toHaveBeenLastCalledWith([]);
   });
 

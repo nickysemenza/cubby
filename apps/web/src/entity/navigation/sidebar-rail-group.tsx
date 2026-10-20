@@ -15,7 +15,6 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
-import { domainWayfinding } from "../../ui/navigation/domain-wayfinding";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 import {
   getSidebarGroupItems,
@@ -36,7 +35,6 @@ export function SidebarRailGroup({
   const children = getSidebarGroupItems(group);
   const active = children.some((item) => item.to === activeTo);
   const Icon = group.icon;
-  const domain = group.domain ? domainWayfinding(group.domain) : null;
 
   return (
     <DropdownMenu>
@@ -61,15 +59,12 @@ export function SidebarRailGroup({
             />
           }
         >
-          <span
-            style={domain ? { color: `var(${domain.accentToken})` } : undefined}
+          <Icon
+            className="size-3.5 text-foreground"
+            weight={active ? "bold" : "regular"}
             aria-hidden="true"
-          >
-            <Icon className="size-3.5" weight={active ? "bold" : "regular"} />
-          </span>
-          {expanded && (
-            <span className="truncate text-[0.8125rem]">{group.label}</span>
-          )}
+          />
+          {expanded && <span className="truncate text-sm">{group.label}</span>}
         </TooltipTrigger>
         {!expanded && (
           <TooltipContent side="right" role="tooltip">

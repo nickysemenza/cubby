@@ -43,13 +43,13 @@ import {
 } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import { FieldExplanation } from "~/entity/fields/field-explanation";
+import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { Page } from "~/entity/page/page";
-import type { DetailHeroActions } from "~/entity/page/page-hero";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
-import { FactsAddProvider } from "~/ui/common/basic-info";
-import { SectionHeading } from "~/ui/layout";
+import { FactsAddProvider } from "~/ui/common/facts";
+import { Section } from "~/ui/layout";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -738,17 +738,17 @@ function FullEntityDetail<E extends GenericDetailEntity>({
                   lead={
                     <>
                       {facts ? (
-                        <section
+                        <Section
                           id={facts.id}
-                          aria-label={facts.title}
+                          title={facts.title}
+                          headingAs="h2"
                           data-detail-group
                           tabIndex={-1}
-                          className="min-w-0 scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         >
-                          <SectionHeading title={facts.title} />
                           <QualitySectionChecks section={facts.id} />
                           {facts.content}
-                        </section>
+                        </Section>
                       ) : null}
                       <NeedsYou>
                         <RecordWorkQueue id={bag.id} variant="rows" />

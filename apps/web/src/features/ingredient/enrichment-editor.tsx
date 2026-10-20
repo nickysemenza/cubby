@@ -28,6 +28,7 @@ import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
@@ -196,9 +197,7 @@ function NaKindsField({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
-      <span className="text-2xs tracking-wide text-muted-foreground uppercase">
-        N/A
-      </span>
+      <span className="text-xs font-medium text-muted-foreground">N/A</span>
       {BASE_KINDS.map((kind) => {
         const off = naKinds.includes(kind);
         return (
@@ -218,11 +217,8 @@ function NaKindsField({
           </button>
         );
       })}
-      <details className="w-full">
-        <summary className="cursor-pointer text-xs text-muted-foreground">
-          Nutrient opt-outs
-        </summary>
-        <div className="flex flex-wrap gap-2 py-2">
+      <Disclosure summary="Nutrient opt-outs" className="w-full">
+        <div className="flex flex-wrap gap-2 pb-2">
           {TIER1_NUTRIENT_KEYS.map((key) => (
             <button
               key={key}
@@ -246,7 +242,7 @@ function NaKindsField({
           Opted-out nutrients stay unavailable; they are never counted as
           measured zero.
         </Description>
-      </details>
+      </Disclosure>
     </div>
   );
 }
@@ -293,13 +289,13 @@ function LivePanels({
         </Stack>
       )}
       <Stack gap="xs">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        <p className="text-xs font-medium text-muted-foreground">
           Unit graph (live)
         </p>
         <UnitMappingGraph mappings={previewMappings} />
       </Stack>
       <Stack gap="xs">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        <p className="text-xs font-medium text-muted-foreground">
           Coverage (live)
         </p>
         <div className="border border-[var(--border)] bg-background/60 p-2">

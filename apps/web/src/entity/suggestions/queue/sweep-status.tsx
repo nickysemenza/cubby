@@ -7,6 +7,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Panel } from "~/ui/layout/panel";
 
 const POLL_MS = 3000;
 const RUNNING_SWEEPS = compileEntityListInput(
@@ -69,8 +70,9 @@ export function SweepStatusLine({
   const current = currentIndex >= 0 ? steps[currentIndex] : undefined;
   const failed = steps.filter((step) => step.state?.kind === "failed").length;
   return (
-    <div
-      className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border bg-card px-2.5 py-1.5 text-xs"
+    <Panel
+      tone="default"
+      className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 py-1.5 text-xs"
       aria-live="polite"
       aria-label="Sweep status"
     >
@@ -101,6 +103,6 @@ export function SweepStatusLine({
           {failed ? ` · ${failed} failed` : ""}
         </span>
       )}
-    </div>
+    </Panel>
   );
 }

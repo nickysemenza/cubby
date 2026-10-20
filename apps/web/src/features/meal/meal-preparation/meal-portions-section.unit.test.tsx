@@ -93,7 +93,7 @@ describe("MealPortionsSection", () => {
       { wrapper: harness.wrapper },
     );
 
-    expect(await screen.findByText("No recipe portions yet")).toBeVisible();
+    expect(await screen.findByText(/^No recipe portions yet\./)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Add leftovers" }));
     expect(onAdd).toHaveBeenCalledOnce();
   });

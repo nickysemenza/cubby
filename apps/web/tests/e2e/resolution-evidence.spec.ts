@@ -66,14 +66,16 @@ test("explains allocated trades with expandable contributor precedence", async (
     panel.getByRole("heading", { name: "Resolution order", exact: true }),
   ).toBeVisible();
   const contributor = panel
-    .locator("details")
+    .locator("div")
     .filter({
       has: page
-        .locator("summary")
+        .locator(':scope > [data-slot="disclosure-summary"]')
         .filter({ hasText: "Synthetic evidence cable" }),
     })
     .first();
-  await contributor.locator(":scope > summary").click();
+  await contributor
+    .locator(':scope > [data-slot="disclosure-summary"] button')
+    .click();
   await expect(
     contributor.getByText("Evaluated · overridden").first(),
   ).toBeVisible();
@@ -111,7 +113,9 @@ test("explains allocated trades with expandable contributor precedence", async (
   const projects = await inlineExplanation(page, projectTrigger);
   await expect(projects.getByText("Allocated", { exact: true })).toBeVisible();
   await expect(
-    projects.locator("summary").filter({ hasText: "Synthetic evidence cable" }),
+    projects
+      .getByRole("button")
+      .filter({ hasText: "Synthetic evidence cable" }),
   ).toContainText("Synthetic evidence renovation");
 });
 
@@ -133,7 +137,7 @@ test("shows owner rollup evidence once without nested wire fields", async ({
   const panel = await inlineExplanation(page, trigger);
   await expect(
     panel
-      .locator("summary")
+      .getByRole("button")
       .filter({ hasText: "Synthetic owner evidence drawer" }),
   ).toBeVisible();
   await expect(
@@ -157,14 +161,16 @@ test("shows owner rollup evidence once without nested wire fields", async ({
     path: testInfo.outputPath("owner-evidence-phone.png"),
   });
   const ownerDetails = panel
-    .locator("details")
+    .locator("div")
     .filter({
       has: page
-        .locator("summary")
+        .locator(':scope > [data-slot="disclosure-summary"]')
         .filter({ hasText: "Synthetic owner evidence drawer" }),
     })
     .first();
-  await ownerDetails.locator(":scope > summary").click();
+  await ownerDetails
+    .locator(':scope > [data-slot="disclosure-summary"] button')
+    .click();
   await expect(
     ownerDetails.locator('[data-record-list="timeline"]').first(),
   ).toBeVisible();

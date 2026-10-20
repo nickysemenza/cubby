@@ -1,3 +1,4 @@
+import "./table.css";
 import {
   FILTER_ALL,
   FILTER_ANY,
@@ -22,7 +23,6 @@ import {
   UNRESOLVABLE_ENTITY_FILTER,
 } from "@cubby/shared";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import { HashIcon } from "@phosphor-icons/react/dist/csr/Hash";
@@ -49,9 +49,13 @@ import { householdLocalDate } from "~/lib/household-date";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
+import { pickerOptionItem } from "~/ui/combobox/picker-option";
+import { PickerVisual } from "~/ui/combobox/picker-visual";
+import { PersonAvatar } from "~/ui/common/person-avatar";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
+import { EnumPill } from "~/ui/primitives/enum-pill";
 import { Input } from "~/ui/primitives/input";
 import { Pill } from "~/ui/primitives/pill";
 import {
@@ -696,6 +700,7 @@ function ChecklistEditor({
     <Picker
       presentation="inline"
       multiple
+      checklist
       label={`Filter ${label}`}
       options={side === "is" ? roster : isNotRoster}
       values={sideValues(values, side)}
@@ -706,6 +711,37 @@ function ChecklistEditor({
       isLoading={field.isLoading}
       records={field.records}
       header={header}
+      renderItem={
+        roster.some((option) => option.glyph)
+          ? (item) => {
+              const option = roster.find(
+                (candidate) => candidate.value === item.id,
+              );
+              return (
+                <span className="flex min-w-0 items-center justify-between gap-2">
+                  {option?.glyph ? (
+                    <EnumPill
+                      optionRole="status"
+                      value={option.value}
+                      glyph={option.glyph}
+                      color={option.color}
+                      className="text-pill h-4.5"
+                    >
+                      {option.label}
+                    </EnumPill>
+                  ) : (
+                    <span>{item.name}</span>
+                  )}
+                  {option?.hint && (
+                    <span className="text-pill font-mono text-muted-foreground">
+                      {option.hint}
+                    </span>
+                  )}
+                </span>
+              );
+            }
+          : undefined
+      }
     />
   );
 }
@@ -813,7 +849,7 @@ function FieldValueEditor(props: FieldEditorProps) {
   return <SingleValueEditor {...props} />;
 }
 
-function FilterFieldEditor(props: FieldEditorProps) {
+export function FilterFieldEditor(props: FieldEditorProps) {
   return (
     <div className="flex flex-col gap-2">
       <FieldValueEditor {...props} />
@@ -878,8 +914,8 @@ function PanelSection({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col py-1">
-      <h3 className="px-2 pt-1 pb-0.5 text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+    <section className="flex flex-col border-t border-hairline-soft py-1 first:border-t-0">
+      <h3 className="text-pill px-2 pt-1 pb-1.5 font-medium text-muted-foreground">
         {title}
       </h3>
       {children}
@@ -891,6 +927,53 @@ function PanelSection({
  * One field in the panel: type glyph, label, and its value only while
  * active. Clicking expands its editor in place, one row at a time.
  */
+function filterTypeLabel(field: FilterBarField): string {
+  if (field.referenceEntity === "ledgerParty") return "person";
+  if (field.dateRange) return "date range";
+  if (field.numberRange) return "number range";
+  return {
+    entity: "record",
+    enum: "choice",
+    boolean: "yes / no",
+    presence: "yes / no",
+    date: "date",
+    number: "number",
+    text: "text",
+  }[field.valueType ?? "enum"];
+}
+
+function FilterMark({
+  field,
+  filter,
+  side = "is",
+}: {
+  field: FilterBarField;
+  filter?: Filter;
+  side?: FilterSide;
+}) {
+  const picked = sideValues(filter?.values ?? [], side);
+  const option = field.options?.find(
+    (candidate) => picked.includes(candidate.value) && !candidate.meta,
+  );
+  if (option && field.referenceEntity === "ledgerParty")
+    return <PersonAvatar id={option.value} name={option.label} />;
+  if (option?.color)
+    return (
+      <span
+        aria-hidden
+        className="size-2 shrink-0 rounded-full"
+        style={{ backgroundColor: option.color }}
+      />
+    );
+  if (option && (option.icon || option.color || option.glyph))
+    return <PickerVisual item={pickerOptionItem(option)} size={16} />;
+  return (
+    <span className="flex size-3 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-3">
+      <FilterTypeGlyph field={field} />
+    </span>
+  );
+}
+
 function PanelRow({
   field,
   filter,
@@ -907,39 +990,42 @@ function PanelRow({
   const label = labelOf(field);
   const summary = filterSummary(field, filter);
   const editorId = useId();
+  const triState = isTriState(field);
+  const Label = triState ? "span" : "button";
   return (
     <div className={cn("rounded-sm", open && "bg-muted/60")}>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={open ? editorId : undefined}
-        aria-label={summary ? `${label}: ${summary}` : label}
-        title={summary ? `${label}: ${summary}` : undefined}
-        className="flex min-h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-11"
-        onClick={onToggle}
-      >
-        <span className="flex shrink-0 text-muted-foreground">
+      <div className="flex min-h-6.5 items-center gap-2 rounded-sm px-2 hover:bg-muted max-sm:min-h-11">
+        <span className="flex size-4.5 shrink-0 items-center justify-center rounded-[4px] bg-muted text-muted-foreground [&_svg]:size-3">
           <FilterTypeGlyph field={field} />
         </span>
-        <span className={cn("shrink-0", summary && "font-medium")}>
-          {label}
-        </span>
-        {summary ? (
-          <span className="ml-auto min-w-0 truncate text-muted-foreground">
-            {summary}
+        <Label
+          type={triState ? undefined : "button"}
+          aria-expanded={triState ? undefined : open}
+          aria-controls={open && !triState ? editorId : undefined}
+          aria-label={summary ? `${label}: ${summary}` : label}
+          title={summary ? `${label}: ${summary}` : undefined}
+          className="flex min-h-6.5 min-w-0 flex-1 items-center gap-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-11"
+          onClick={triState ? undefined : onToggle}
+        >
+          <span className={cn("shrink-0", summary && "font-medium")}>
+            {label}
           </span>
-        ) : null}
-        <CaretDownIcon
-          aria-hidden
-          className={cn(
-            "size-3 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none",
-            !summary && "ml-auto",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-      {open ? (
-        <div id={editorId} className="pt-1 pr-2 pb-2 pl-7">
+          {!triState &&
+            (summary ? (
+              <span className="ml-auto flex min-w-0 items-center gap-1 font-medium">
+                <FilterMark field={field} filter={filter} />
+                <span className="truncate">{summary}</span>
+              </span>
+            ) : (
+              <span className="ml-auto shrink-0 rounded-[4px] border border-border px-1 text-2xs leading-4 text-muted-foreground">
+                {filterTypeLabel(field)}
+              </span>
+            ))}
+        </Label>
+        {triState && <div className="ml-auto">{children}</div>}
+      </div>
+      {open && !triState ? (
+        <div id={editorId} className="pt-1 pr-2 pb-2 pl-6.5">
           {children}
         </div>
       ) : null}
@@ -1011,8 +1097,9 @@ function FiltersPanel({
   const counted = resultCount ? resultLine(resultCount) : null;
   return (
     <div className="flex max-h-[min(36rem,var(--available-height,36rem))] min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border p-2">
-        <div className="relative flex flex-1 items-center">
+      <div className="flex shrink-0 items-center gap-2 border-b border-hairline-soft px-3 pt-2.5 pb-2">
+        <h2 className="shrink-0 text-sm font-semibold">Filters</h2>
+        <div className="relative flex min-w-0 flex-1 items-center">
           <MagnifyingGlassIcon
             aria-hidden
             className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground"
@@ -1023,19 +1110,17 @@ function FiltersPanel({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find a filter"
             aria-label="Find a filter"
-            className="h-7 pl-7 text-xs"
+            className="h-6 pl-7 text-xs"
           />
         </div>
         {activeCount > 0 && (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 shrink-0"
+            className="shrink-0 text-xs text-info hover:underline"
             onClick={() => onChange([])}
           >
             Clear all
-          </Button>
+          </button>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-0.5">
@@ -1055,12 +1140,14 @@ function FiltersPanel({
           </p>
         )}
       </div>
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
         <span className="tabular-nums" aria-live="polite">
-          {activeCount === 1 ? "1 filter" : `${activeCount} filters`}
+          <strong className="font-semibold text-foreground">
+            {activeCount === 1 ? "1 filter" : `${activeCount} filters`}
+          </strong>
           {counted ? ` · ${counted}` : ""}
         </span>
-        <span>Applies as you go</span>
+        <span>live</span>
       </div>
     </div>
   );
@@ -1100,7 +1187,7 @@ function FilterChip({
     else clear();
   };
   return (
-    <span className="inline-flex h-6 max-w-80 min-w-0 shrink-0 items-center rounded-sm border border-border bg-card text-xs">
+    <span className="text-pill inline-flex h-5 max-w-80 min-w-0 shrink-0 items-center rounded-[var(--brand-web-radius-chip)] border border-border bg-card">
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger
           render={
@@ -1108,10 +1195,11 @@ function FilterChip({
               type="button"
               aria-label={name}
               title={name}
-              className="flex h-full min-w-0 items-center gap-1 rounded-l-sm pr-1 pl-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-full min-w-0 items-center gap-1 rounded-l-[var(--brand-web-radius-chip)] pr-1 pl-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             />
           }
         >
+          <FilterMark field={field} filter={filter} side={side} />
           <span className="shrink-0 font-medium">{label}</span>
           {operator ? (
             <span className="shrink-0 text-muted-foreground">{operator}</span>
@@ -1135,7 +1223,7 @@ function FilterChip({
       <button
         type="button"
         aria-label={`Clear ${label} filter`}
-        className="flex h-full w-5 shrink-0 items-center justify-center rounded-r-sm text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex size-4 shrink-0 items-center justify-center border-l border-hairline-soft text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         onClick={clearSide}
       >
         <XIcon className="size-3" />
@@ -1235,7 +1323,7 @@ function ActiveFilterChips({
                 variant="ghost"
                 size="sm"
                 aria-label="Add filter"
-                className="h-6 shrink-0 px-1.5 text-xs text-muted-foreground"
+                className="text-pill h-5 shrink-0 rounded-[var(--brand-web-radius-chip)] border border-dashed border-border px-1.5 text-muted-foreground"
               />
             }
           >
@@ -1253,17 +1341,6 @@ function ActiveFilterChips({
             />
           </PopoverContent>
         </Popover>
-      )}
-      {active.length > 0 && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 shrink-0 px-1.5 text-xs"
-          onClick={() => onChange([])}
-        >
-          Clear
-        </Button>
       )}
       {counted ? (
         <span className="ml-auto text-xs text-muted-foreground tabular-nums">
@@ -1329,7 +1406,7 @@ function FilterSearchField({
     <div
       className={cn(
         "relative flex items-center",
-        dense ? "h-8 min-w-40 flex-1 md:max-w-sm" : "h-9 flex-1",
+        dense ? "h-7.5 min-w-40 flex-1" : "h-9 flex-1",
       )}
     >
       <MagnifyingGlassIcon
@@ -1348,7 +1425,9 @@ function FilterSearchField({
         placeholder={label}
         aria-label={label}
         aria-keyshortcuts={dense ? "/" : undefined}
-        className={dense ? "h-8 pr-7 pl-7 text-xs" : "h-9 pr-3 pl-8"}
+        className={
+          dense ? "h-7.5 pr-7 pl-7 text-sm md:text-sm" : "h-9 pr-3 pl-8"
+        }
       />
       {value && onClear ? (
         <button
@@ -1465,14 +1544,14 @@ export function FilterBar({
                 variant="outline"
                 size="sm"
                 aria-label="Filters"
-                className="h-8 shrink-0 gap-1.5"
+                className="h-7.5 shrink-0 gap-1.5 text-sm"
               />
             }
           >
             <FunnelIcon className="size-3.5" />
             Filter
             {activeCount > 0 && (
-              <span className="font-medium text-foreground tabular-nums">
+              <span className="flex size-4 items-center justify-center rounded-full bg-foreground font-mono text-2xs font-medium text-background tabular-nums">
                 {activeCount}
               </span>
             )}

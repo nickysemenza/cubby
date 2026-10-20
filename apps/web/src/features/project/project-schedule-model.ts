@@ -11,15 +11,15 @@ import { buildProjectTree } from "./project-tree";
 /** A schedule row plus the viewer's own expand state. */
 export type ProjectScheduleEntry = ProjectScheduleRow & { expanded?: boolean };
 
-const PLAN_COLOR = "var(--domain-plan)";
+const SCHEDULE_COLOR = "var(--category-1)";
 
-/** The grid's rows: the same segments, drawn in the plan domain colour. */
+/** The grid's rows use a neutral categorical tone for every project segment. */
 export function scheduleGridRows(rows: readonly ProjectScheduleEntry[]) {
   return rows.map((row) => ({
     ...row,
     segments: row.segments.map((segment) => ({
       ...segment,
-      color: PLAN_COLOR,
+      color: SCHEDULE_COLOR,
     })),
   }));
 }

@@ -21,7 +21,8 @@ import { meal as mealOperations } from "~/integrations/tanstack-query/generated/
 import { Picker } from "~/ui/combobox/picker";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -284,7 +285,7 @@ function RecipeRow({
   };
 
   return (
-    <div className="rounded-md border border-[var(--border)] px-3 py-2">
+    <Panel tone="default" className="py-2">
       <Row align="center" justify="between" gap="sm">
         <Link
           {...entityDetailLink("recipe", mr.recipe.id)}
@@ -305,10 +306,7 @@ function RecipeRow({
           </Button>
         ) : null}
       </Row>
-      <details className="text-xs">
-        <summary className="min-h-10 cursor-pointer content-center text-muted-foreground hover:text-foreground">
-          Planning details
-        </summary>
+      <Disclosure summary="Planning details" className="text-xs">
         <Row
           align="center"
           justify="between"
@@ -347,8 +345,8 @@ function RecipeRow({
             </Button>
           </Row>
         </Row>
-      </details>
-    </div>
+      </Disclosure>
+    </Panel>
   );
 }
 

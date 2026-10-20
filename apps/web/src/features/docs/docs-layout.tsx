@@ -3,6 +3,8 @@ import { groupBy } from "es-toolkit";
 import { useEffect, useState } from "react";
 
 import { Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { Panel } from "~/ui/layout/panel";
 
 import { docSections } from "./docs-registry";
 
@@ -77,17 +79,16 @@ export function DocsLayout() {
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-      <details className="rounded-md border border-border bg-card lg:hidden">
-        <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-medium">
-          Browse documentation
-        </summary>
-        <nav
-          aria-label="Documentation"
-          className="max-h-[60vh] overflow-y-auto border-t border-border px-2 py-2"
-        >
-          <DocsNavigation activeSlug={currentSlug} />
-        </nav>
-      </details>
+      <Panel tone="default" className="lg:hidden">
+        <Disclosure summary="Browse documentation">
+          <nav
+            aria-label="Documentation"
+            className="max-h-[60vh] overflow-y-auto"
+          >
+            <DocsNavigation activeSlug={currentSlug} />
+          </nav>
+        </Disclosure>
+      </Panel>
       <nav
         aria-label="Documentation"
         className="hidden lg:sticky lg:top-20 lg:block lg:max-h-[calc(100vh-6rem)] lg:w-56 lg:shrink-0 lg:overflow-y-auto"

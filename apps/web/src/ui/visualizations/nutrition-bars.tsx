@@ -8,7 +8,7 @@ import { useMemo } from "react";
 import { aggregateEstimates, scaleNutrition } from "~/lib/nutrition-estimates";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
-import { StatTile } from "~/ui/primitives/stat-tile";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 const SEGMENT_COLORS = [
@@ -154,11 +154,20 @@ export default function NutritionBars({
   return (
     <div className="space-y-4 p-1">
       <div>
-        <StatTile label={`Calories by ingredient, ${basisLabel}`}>
-          <span title={estimateStatusText(calorieTotal) ?? undefined}>
-            {formatKcal(calorieTotal)}
-          </span>
-        </StatTile>
+        <KeyNumbers
+          layout="strip"
+          label="Calories"
+          items={[
+            {
+              label: `Calories by ingredient, ${basisLabel}`,
+              value: (
+                <span title={estimateStatusText(calorieTotal) ?? undefined}>
+                  {formatKcal(calorieTotal)}
+                </span>
+              ),
+            },
+          ]}
+        />
 
         {geometryKcal > 0 ? (
           <>
@@ -228,7 +237,7 @@ export default function NutritionBars({
                 : null;
             return (
               <section key={macro.key} aria-label={macro.label}>
-                <div className="mb-1 flex justify-between font-mono text-2xs text-muted-foreground uppercase">
+                <div className="mb-1 flex justify-between text-xs font-medium text-muted-foreground">
                   <span>{macro.label}</span>
                   <span
                     className="tabular-nums"

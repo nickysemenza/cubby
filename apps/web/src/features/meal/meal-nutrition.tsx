@@ -7,6 +7,7 @@ import {
 } from "@cubby/usda";
 
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 const DEFAULT_NUTRIENTS = new Set<NutrientKey>(KEY_NUTRIENT_KEYS);
 
@@ -61,14 +62,11 @@ export function MealNutritionEstimates({
   return (
     <div className="space-y-2">
       <NutrientRows totals={totals} keys={KEY_NUTRIENT_KEYS} />
-      <details className="text-xs">
-        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-          More nutrients
-        </summary>
-        <div className="mt-2 border-t pt-2">
+      <Disclosure summary="More nutrients" className="text-xs">
+        <div className="border-t pt-2">
           <NutrientRows totals={totals} keys={more} />
         </div>
-      </details>
+      </Disclosure>
     </div>
   );
 }

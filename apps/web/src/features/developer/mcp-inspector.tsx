@@ -5,16 +5,9 @@ import { z } from "zod";
 
 import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
@@ -77,20 +70,15 @@ function SchemaPanel({
   schema?: CatalogTool["inputSchema"];
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {schema ? (
-          <pre className="max-h-[420px] overflow-auto rounded-md bg-muted p-2 text-xs leading-relaxed">
-            {JSON.stringify(schema, null, 2)}
-          </pre>
-        ) : (
-          <Description>Not defined</Description>
-        )}
-      </CardContent>
-    </Card>
+    <Section headingAs="h2" title={title}>
+      {schema ? (
+        <pre className="max-h-[420px] overflow-auto rounded-md bg-muted p-2 text-xs leading-relaxed">
+          {JSON.stringify(schema, null, 2)}
+        </pre>
+      ) : (
+        <Description>Not defined</Description>
+      )}
+    </Section>
   );
 }
 
@@ -149,28 +137,25 @@ function CatalogInspector() {
   return (
     <Stack gap="lg">
       {data?.instructions ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Server instructions</CardTitle>
-            <CardDescription>
-              Workflow guidance exposed to MCP clients via tools/list metadata.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <pre className="rounded-md bg-muted p-2 text-xs leading-relaxed whitespace-pre-wrap">
-              {data.instructions}
-            </pre>
-          </CardContent>
-        </Card>
+        <Section
+          headingAs="h2"
+          title="Server instructions"
+          caption="Workflow guidance exposed to MCP clients via tools/list metadata."
+        >
+          <pre className="rounded-md bg-muted p-2 text-xs leading-relaxed whitespace-pre-wrap">
+            {data.instructions}
+          </pre>
+        </Section>
       ) : null}
 
       <Row align="start" gap="lg" className="items-start">
-        <Card className="w-full max-w-sm shrink-0">
-          <CardHeader>
-            <CardTitle>Tools</CardTitle>
-            <CardDescription>{tools.length} registered tools</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
+        <Section
+          headingAs="h2"
+          title="Tools"
+          caption={<>{tools.length} registered tools</>}
+          className="w-full max-w-sm shrink-0"
+        >
+          <div className="space-y-2">
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -190,33 +175,29 @@ function CatalogInspector() {
                 </button>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </Section>
 
         {selected ? (
           <Stack className="min-w-0 flex-1" gap="md">
-            <Card>
-              <CardHeader>
-                <CardTitle>{selected.name}</CardTitle>
-                {selected.description ? (
-                  <CardDescription>{selected.description}</CardDescription>
-                ) : null}
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <AnnotationBadges tool={selected} />
-                {selected.inputSchema && schemaHasMock(selected.inputSchema) ? (
-                  <Badge variant="destructive">Contains mock metadata</Badge>
-                ) : null}
-                {selected.annotations ? (
-                  <pre className="rounded-md bg-muted p-2 text-xs leading-relaxed">
-                    {JSON.stringify(selected.annotations, null, 2)}
-                  </pre>
-                ) : null}
-              </CardContent>
-            </Card>
+            <Section
+              headingAs="h2"
+              title={selected.name}
+              caption={selected.description || undefined}
+            >
+              <AnnotationBadges tool={selected} />
+              {selected.inputSchema && schemaHasMock(selected.inputSchema) ? (
+                <Badge variant="destructive">Contains mock metadata</Badge>
+              ) : null}
+              {selected.annotations ? (
+                <pre className="rounded-md bg-muted p-2 text-xs leading-relaxed">
+                  {JSON.stringify(selected.annotations, null, 2)}
+                </pre>
+              ) : null}
+            </Section>
 
-            <SchemaPanel title="INPUT SCHEMA" schema={selected.inputSchema} />
-            <SchemaPanel title="OUTPUT SCHEMA" schema={selected.outputSchema} />
+            <SchemaPanel title="Input schema" schema={selected.inputSchema} />
+            <SchemaPanel title="Output schema" schema={selected.outputSchema} />
           </Stack>
         ) : (
           <Description>Select a tool to inspect its schemas.</Description>

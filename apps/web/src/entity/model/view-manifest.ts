@@ -72,6 +72,8 @@ interface ViewFlow {
 }
 
 export interface ViewDefinition {
+  /** Alarm count derived from the declared Problems classification. */
+  tone?: "destructive" | "warning";
   id: string;
   label: string;
   description: string;
@@ -124,8 +126,12 @@ const toViewDefinition = (view: DeclaredView): ViewDefinition => {
       columnSizing: {},
       columnVisibility: { ...view.layout.columnVisibility },
     };
-  if (view.problem)
-    definition.problem = { ...view.problem, key: problemKey(view.problem.key) };
+  if (view.problem) {
+    const key = problemKey(view.problem.key);
+    definition.problem = { ...view.problem, key };
+    definition.tone =
+      PROBLEM_CLASS[key] === "defect" ? "destructive" : "warning";
+  }
   if (view.view) definition.view = view.view;
   if (view.groupBy) definition.groupBy = view.groupBy;
   if (view.groupLevel) definition.groupLevel = view.groupLevel;

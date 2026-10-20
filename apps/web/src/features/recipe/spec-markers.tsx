@@ -39,7 +39,7 @@ export const StepNumberBadge = ({
 export const BasePill = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-2xs tracking-wide text-primary uppercase",
+      "ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle text-xs font-medium text-primary",
       className,
     )}
   >
@@ -51,7 +51,7 @@ export const BasePill = ({ className }: { className?: string }) => (
 export const NoWeightPill = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-2xs tracking-wide text-warning-ink uppercase",
+      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle text-xs font-medium text-warning-ink",
       className,
     )}
   >
@@ -79,12 +79,7 @@ export const StubWarning = ({
   children: ReactNode;
   className?: string;
 }) => (
-  <span
-    className={cn(
-      "font-mono text-2xs tracking-wide text-warning-ink uppercase",
-      className,
-    )}
-  >
+  <span className={cn("text-xs font-medium text-warning-ink", className)}>
     {children}
   </span>
 );

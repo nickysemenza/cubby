@@ -1,11 +1,4 @@
-import { entities } from "~/entity/entities";
-import { Grid, Row } from "~/ui/layout";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
+import { Grid, Section } from "~/ui/layout";
 
 import { Prose } from "../components/prose";
 import { EntityRelationshipsDiagram } from "./entity-relationships-diagram";
@@ -19,77 +12,46 @@ export function ConceptsSection() {
           and keep everything in its place.
         </p>
 
-        <h2>Core Concepts</h2>
+        <h2>Core concepts</h2>
         <p>cubby is built around five key entity types that work together:</p>
       </Prose>
 
       <Grid cols="cards3" className="my-6">
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.ingredient.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Ingredients</CardTitle>
-            </Row>
-            <CardDescription>
-              The building blocks of recipes. Generic items like "flour" or
-              "butter" that appear across multiple recipes.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Ingredients">
+          <p className="text-muted-foreground">
+            The building blocks of recipes. Generic items like "flour" or
+            "butter" that appear across multiple recipes.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.product.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Products</CardTitle>
-            </Row>
-            <CardDescription>
-              Specific purchasable items linked to ingredients. Products can
-              have unit mappings, UPC barcodes, and optional USDA nutrition
-              data.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Products">
+          <p className="text-muted-foreground">
+            Specific purchasable items linked to ingredients. Products can have
+            unit mappings, UPC barcodes, and optional USDA nutrition data.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.location.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Locations</CardTitle>
-            </Row>
-            <CardDescription>
-              Hierarchical storage areas (Kitchen → Pantry → Top Shelf).
-              Supports types like room, shelf, drawer, and CSV import/export
-              with parent references.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Locations">
+          <p className="text-muted-foreground">
+            Hierarchical storage areas (Kitchen → Pantry → Top Shelf). Supports
+            types like room, shelf, drawer, and CSV import/export with parent
+            references.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.recipe.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Recipes</CardTitle>
-            </Row>
-            <CardDescription>
-              Collections of ingredients with amounts, organized into sections
-              with step-by-step instructions.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Recipes">
+          <p className="text-muted-foreground">
+            Collections of ingredients with amounts, organized into sections
+            with step-by-step instructions.
+          </p>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <Row align="center" gap="sm">
-              <entities.inventory.phosphorIcon className="size-5 text-muted-foreground" />
-              <CardTitle>Inventory</CardTitle>
-            </Row>
-            <CardDescription>
-              Tracks what products you have and where. Links products to
-              locations with quantities.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <Section headingAs="h3" compact title="Inventory">
+          <p className="text-muted-foreground">
+            Tracks what products you have and where. Links products to locations
+            with quantities.
+          </p>
+        </Section>
       </Grid>
 
       <div className="my-6">

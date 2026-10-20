@@ -40,7 +40,10 @@ import { colorizeSelectOptions } from "~/lib/select-options";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
-import { STACKED_SECONDARY_CLASS } from "~/ui/common/stacked-value";
+import {
+  DenseCellContext,
+  STACKED_SECONDARY_CLASS,
+} from "~/ui/common/stacked-value";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -275,12 +278,12 @@ export function createNameColumn<T extends BaseRow>(
           <span className="block min-w-0">
             <span
               data-stacked-line=""
-              className="block truncate leading-[15px]"
+              className="block h-[15px] truncate leading-[15px]"
             >
               {nameEl}
             </span>
             <span data-stacked-line="" className={STACKED_SECONDARY_CLASS}>
-              {caption}
+              <DenseCellContext value={null}>{caption}</DenseCellContext>
             </span>
           </span>
         );
@@ -305,6 +308,9 @@ export function createNameColumn<T extends BaseRow>(
             to={link.to}
             params={link.params}
             tone="identity"
+            className={
+              caption == null ? undefined : "block truncate leading-[15px]"
+            }
           >
             {label}
           </EntityRefLink>
@@ -1085,6 +1091,7 @@ export function createCurrencyColumn<
     header: options?.header,
     meta: attachCubbyColumnMeta({
       numeric: true,
+      valueKind: "money",
       className: cn(options?.className ?? defaultClassName, "truncate"),
       mobile: options?.mobile,
       cellData,

@@ -13,6 +13,7 @@ import * as React from "react";
 import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { EnumPill } from "~/ui/primitives/enum-pill";
+import { popoverElevationClassName } from "~/ui/primitives/popover-elevation";
 import { Spinner } from "~/ui/primitives/spinner";
 import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
 
@@ -68,6 +69,8 @@ interface PickerCommonProps<TId extends string> {
    * filter editor already open inside a panel. Ignores `mode`.
    */
   presentation?: "field" | "inline";
+  /** Inline multi-value filters lead with their selection checkbox. */
+  checklist?: boolean;
   onSearchChange?: (query: string) => void;
   onOpenChange?: (open: boolean) => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
@@ -368,7 +371,8 @@ const fieldFrameClass = (compact: boolean | undefined) =>
  * a narrow inline editor. Fixed choices keep the field's compact width.
  */
 const popupClass = cn(
-  "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),28rem)] origin-(--transform-origin) flex-col overflow-hidden rounded-md border border-[var(--border)] bg-popover text-popover-foreground shadow-[var(--shadow-overlay)] outline-none",
+  popoverElevationClassName,
+  "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),28rem)] origin-(--transform-origin) flex-col overflow-hidden rounded-md border border-[var(--border)] bg-popover text-popover-foreground outline-none",
 );
 
 const popupWidthClass = (records: boolean, layout: PickerRowLayout) =>
@@ -403,8 +407,7 @@ const rowClass = (meta: boolean, custom: boolean) =>
     "relative flex min-h-7 cursor-default items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-sm outline-none select-none max-sm:min-h-11",
     "data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[selected]:bg-accent/60",
     "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground",
-    meta &&
-      "min-h-6 font-mono text-2xs tracking-wider text-slate uppercase max-sm:min-h-11",
+    meta && "min-h-6 text-xs font-medium text-slate max-sm:min-h-11",
     custom && "items-start py-1 whitespace-normal",
   );
 
@@ -529,7 +532,7 @@ function PickerRowPreamble({
       {showGroup ? (
         <div
           role="presentation"
-          className="px-1.5 pt-1 pb-0.5 text-2xs font-medium tracking-wide text-muted-foreground uppercase"
+          className="px-1.5 pt-1 pb-0.5 text-xs font-medium text-muted-foreground"
         >
           {group.label}
         </div>
@@ -1127,6 +1130,7 @@ function InlinePicker<TId extends string>({
   "aria-describedby": ariaDescribedBy,
   records,
   label,
+  checklist = false,
   multiple,
   items,
   values,
@@ -1226,25 +1230,44 @@ function InlinePicker<TId extends string>({
               value={item}
               disabled={item.presentation?.disabledReason != null}
               aria-label={rowAriaLabel(item)}
-              className={rowClass(
-                item.presentation?.meta === true,
-                renderItem != null,
+              className={cn(
+                rowClass(item.presentation?.meta === true, renderItem != null),
+                checklist && "min-h-6 py-0",
               )}
               style={rowStyle(item)}
             >
-              <span className="flex w-5 shrink-0 items-center justify-center">
-                <PickerVisual item={item} size={20} />
-              </span>
+              {checklist && (
+                <span
+                  aria-hidden
+                  className="flex size-3.5 shrink-0 items-center justify-center rounded-[3px] border border-hairline-strong in-aria-selected:border-foreground in-aria-selected:bg-foreground in-aria-selected:text-background"
+                >
+                  <ComboboxPrimitive.ItemIndicator>
+                    <CheckIcon className="size-3" />
+                  </ComboboxPrimitive.ItemIndicator>
+                </span>
+              )}
+              {(!checklist || !renderItem) && (
+                <span
+                  className={cn(
+                    "flex shrink-0 items-center justify-center",
+                    checklist ? "w-4" : "w-5",
+                  )}
+                >
+                  <PickerVisual item={item} size={checklist ? 16 : 20} />
+                </span>
+              )}
               <PickerRowContent
                 item={item}
                 renderItem={renderItem}
                 layout={layout}
               />
-              <span className="flex w-3.5 shrink-0 items-center justify-center">
-                <ComboboxPrimitive.ItemIndicator>
-                  <CheckIcon className="size-3.5" />
-                </ComboboxPrimitive.ItemIndicator>
-              </span>
+              {!checklist && (
+                <span className="flex w-3.5 shrink-0 items-center justify-center">
+                  <ComboboxPrimitive.ItemIndicator>
+                    <CheckIcon className="size-3.5" />
+                  </ComboboxPrimitive.ItemIndicator>
+                </span>
+              )}
             </ComboboxPrimitive.Item>
           </React.Fragment>
         ))}

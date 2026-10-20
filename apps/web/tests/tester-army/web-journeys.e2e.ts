@@ -73,7 +73,7 @@ for (const journey of selectedJourneys(journeys, "web"))
               });
               if (!target) throw new Error(`No labelled button: ${name}`);
               const field =
-                target.closest('[data-slot="basic-info-value"]') ?? target;
+                target.closest('[data-slot="fact-value"]') ?? target;
               field.scrollIntoView({ block: "center", behavior: "instant" });
               await new Promise<void>((resolve) =>
                 requestAnimationFrame(() => resolve()),

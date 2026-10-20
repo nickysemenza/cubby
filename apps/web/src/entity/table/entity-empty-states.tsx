@@ -4,21 +4,14 @@ import {
   type EntityPresentation,
   entitySummary,
 } from "@cubby/schemas/entity-summary";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 
 import { createActionFor } from "~/entity/actions/action-items";
-import { EntityIcon, entities, isBrowserRoutedEntity } from "~/entity/entities";
-import { IconPattern } from "~/ui/common/icon-pattern";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
+import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { EmptyState } from "~/ui/feedback/empty-state";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
 
@@ -65,24 +58,24 @@ export function EntityEmptyState({
   const createTarget = createActionFor(entity);
 
   return (
-    <Empty variant="warm" className="relative isolate overflow-hidden py-6">
-      <IconPattern className="-z-10" />
-      <Badge variant="secondary" className="mb-1">
-        Nothing on file
-      </Badge>
-      <EmptyMedia variant="icon">
-        <EntityIcon entity={entity} colored className="size-5" />
-      </EmptyMedia>
-      <EmptyTitle>{config.title}</EmptyTitle>
-      <EmptyDescription>{config.description}</EmptyDescription>
-      {config.actionLabel && createTarget && (
-        <EmptyActions>
-          <Link to={createTarget.to} search={createTarget.search}>
-            <Button size="sm">{config.actionLabel}</Button>
+    <EmptyState
+      size="page"
+      icon={entityDef.phosphorIcon}
+      description={config.description}
+      action={
+        config.actionLabel && createTarget ? (
+          <Link
+            to={createTarget.to}
+            search={createTarget.search}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            {config.actionLabel}
           </Link>
-        </EmptyActions>
-      )}
-    </Empty>
+        ) : undefined
+      }
+    >
+      {config.title}
+    </EmptyState>
   );
 }
 
@@ -94,23 +87,24 @@ function FilteredEmptyState({
   onClearFilters?: () => void;
 }) {
   return (
-    <Empty variant="minimal" className="py-6">
-      <EmptyTitle>
-        {isFiltered ? "Nothing matched" : "Nothing here yet"}
-      </EmptyTitle>
-      <EmptyDescription>
-        {isFiltered
+    <EmptyState
+      size="page"
+      description={
+        isFiltered
           ? "Try a different search, or clear the filters to see everything."
-          : "There's nothing to show yet."}
-      </EmptyDescription>
-      {isFiltered && onClearFilters && (
-        <EmptyActions>
+          : "There's nothing to show yet."
+      }
+      icon={MagnifyingGlassIcon}
+      action={
+        isFiltered && onClearFilters ? (
           <Button size="sm" variant="outline" onClick={onClearFilters}>
             Clear filters
           </Button>
-        </EmptyActions>
-      )}
-    </Empty>
+        ) : undefined
+      }
+    >
+      {isFiltered ? "Nothing matched" : "Nothing here yet"}
+    </EmptyState>
   );
 }
 

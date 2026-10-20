@@ -35,8 +35,6 @@
     "**/dist/**",
     "**/drizzle/**",
     "**/node_modules/**",
-    "apps/web/src/ui/reui/**",
-    "apps/web/src/ui/primitives/**",
     "apps/web/src/routeTree.gen.ts",
     "apps/web/wasm/**",
     "**/.cloudflare/**",
@@ -128,6 +126,41 @@
     "vitest/require-to-throw-message": "error"
   },
   "overrides": [
+    {
+      "files": ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.live-eval.ts"
+      ],
+      "rules": {
+        "cubby/no-uppercase-utility": "error",
+        "cubby/no-large-radius": "error",
+        "cubby/no-shadow-utility": "error",
+        "cubby/no-arbitrary-font-size": "error",
+        "cubby/no-dark-variant": "error",
+        "cubby/no-hand-rolled-panel": "error"
+      }
+    },
+    {
+      // Primitives, controls, overlays, CodeBlock and vendored ReUI own their frame;
+      // EmptyState's dashed slot is the one non-Panel content box.
+      // Home files are rewritten by the Home lane; drop them when it lands.
+      "files": [
+        "apps/web/src/ui/primitives/**",
+        "apps/web/src/ui/combobox/**",
+        "apps/web/src/ui/overlays/**",
+        "apps/web/src/ui/reui/**",
+        "apps/web/src/ui/date-picker-input.tsx",
+        "apps/web/src/ui/text/code-block.tsx",
+        "apps/web/src/ui/feedback/empty-state.tsx",
+        "apps/web/src/features/home/entitycount.tsx",
+        "apps/web/src/features/home/pinned-views.tsx"
+      ],
+      "rules": { "cubby/no-hand-rolled-panel": "off" }
+    },
     {
       // Exact-path specialized compositions; reasons live in apps/web/DESIGN.md.
       "files": [
@@ -506,6 +539,27 @@
       ],
       "rules": {
         "cubby/no-hand-rolled-record-list": "off"
+      }
+    },
+    {
+      // These sources were globally ignored; retain their other lint exclusions.
+      "files": ["apps/web/src/ui/primitives/**", "apps/web/src/ui/reui/**"],
+      "rules": {
+        "anti-slop/no-known-value-widening": "off",
+        "anti-slop/no-unsafe-dictionary-type": "off",
+        "anti-slop/require-safety-comment-for-type-assertion": "off",
+        "cubby/no-swallowed-catch": "off",
+        "eslint/no-unmodified-loop-condition": "off",
+        "jsx-a11y/click-events-have-key-events": "off",
+        "jsx-a11y/control-has-associated-label": "off",
+        "jsx-a11y/interactive-supports-focus": "off",
+        "jsx-a11y/label-has-associated-control": "off",
+        "jsx-a11y/no-noninteractive-element-interactions": "off",
+        "jsx-a11y/prefer-tag-over-role": "off",
+        "react/no-array-index-key": "off",
+        "react/exhaustive-deps": "off",
+        "typescript/no-explicit-any": "off",
+        "unicorn/no-new-array": "off"
       }
     }
   ]

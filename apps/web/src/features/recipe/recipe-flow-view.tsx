@@ -30,6 +30,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
@@ -318,12 +319,12 @@ function FlowPlan({
       )}
 
       {artifact.warnings.length > 0 && (
-        <details className="border-b px-4 py-2">
-          <summary className="cursor-pointer font-mono text-2xs tracking-wider text-warning-ink uppercase">
-            {artifact.warnings.length} flow{" "}
-            {artifact.warnings.length === 1 ? "warning" : "warnings"}
-          </summary>
-          <ul className="mt-2 list-disc pl-4 text-xs text-muted-foreground">
+        <Disclosure
+          summary="Flow warnings"
+          meta={artifact.warnings.length}
+          className="border-b px-4 py-2"
+        >
+          <ul className="list-disc pl-4 text-xs text-muted-foreground">
             {artifact.warnings.map((warning) => (
               <li
                 key={`${warning.code}:${warning.message}:${warning.nodeIds.join(",")}`}
@@ -332,7 +333,7 @@ function FlowPlan({
               </li>
             ))}
           </ul>
-        </details>
+        </Disclosure>
       )}
 
       <div className="p-4">

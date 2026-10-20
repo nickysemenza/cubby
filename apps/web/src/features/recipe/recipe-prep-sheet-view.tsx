@@ -1,7 +1,5 @@
 import { countLabel } from "@cubby/shared/pluralize";
-import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
-import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
@@ -9,7 +7,8 @@ import { MarkdownText } from "~/entity/prose/markdown";
 import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/number-format";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 import {
   formatMakes,
@@ -56,45 +55,44 @@ function ShoppingList({
 }) {
   if (needs.length === 0) return null;
   return (
-    <details className="border border-[var(--border)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
-      <summary className="cursor-pointer eyebrow marker:content-none">
-        <ShoppingCartIcon className="mr-2 inline size-3 align-[-2px]" />
-        Shopping list
-        <span className="ml-1 text-muted-foreground">· full batch</span>
-        {totalCost != null && (
-          <span className="ml-1 text-foreground">
-            · {formatCurrencyRange(totalCost, totalCostUpper ?? undefined)}
-          </span>
-        )}
-      </summary>
-      <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-        {needs.map((need) => (
-          <Row
-            align="baseline"
-            justify="between"
-            gap="sm"
-            key={need.ingredientId}
-            className="border-b border-dashed border-border/50 py-1"
-          >
-            <span className="truncate" title={need.name}>
-              <EntityRefLink
-                variant="preview"
-                displayImage={null}
-                entity="ingredient"
-                id={need.ingredientShortcode}
-                className={dottedEntityLink}
-              >
-                {need.name}
-              </EntityRefLink>
-            </span>
-            <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-              {need.grams != null ? gramText(need.grams) : "—"}
-              {need.estimated && <span className="text-warning"> ~</span>}
-            </span>
-          </Row>
-        ))}
-      </div>
-    </details>
+    <Panel tone="muted" className="print:bg-transparent print:p-0">
+      <Disclosure
+        summary="Shopping list"
+        meta={
+          totalCost != null
+            ? `full batch · ${formatCurrencyRange(totalCost, totalCostUpper ?? undefined)}`
+            : "full batch"
+        }
+      >
+        <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+          {needs.map((need) => (
+            <Row
+              align="baseline"
+              justify="between"
+              gap="sm"
+              key={need.ingredientId}
+              className="border-b border-dashed border-border/50 py-1"
+            >
+              <span className="truncate" title={need.name}>
+                <EntityRefLink
+                  variant="preview"
+                  displayImage={null}
+                  entity="ingredient"
+                  id={need.ingredientShortcode}
+                  className={dottedEntityLink}
+                >
+                  {need.name}
+                </EntityRefLink>
+              </span>
+              <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                {need.grams != null ? gramText(need.grams) : "—"}
+                {need.estimated && <span className="text-warning"> ~</span>}
+              </span>
+            </Row>
+          ))}
+        </div>
+      </Disclosure>
+    </Panel>
   );
 }
 
@@ -298,7 +296,6 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   const shoppingCost = useMemo(() => fullBatchCostByComponent(tree), [tree]);
   // The grid disclosure is collapsed by default; defer building/rendering it
   // (matrix walk + table) until the cook first opens it, then keep it mounted.
-  const [gridOpened, setGridOpened] = useState(false);
 
   return (
     <Stack gap="lg" className="border border-[var(--border)] bg-card px-6 py-6">
@@ -333,20 +330,11 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           the shopping list. Omitted on the print/export sheet (its own "matrix"
           format covers the pivot) and never printed. */}
       {!hideGrid && (
-        <details
-          onToggle={(e) => {
-            if (e.currentTarget.open) setGridOpened(true);
-          }}
-          className="border border-[var(--border)] bg-muted/30 px-4 py-2 print:hidden"
-        >
-          <summary className="cursor-pointer eyebrow marker:content-none">
-            <GridNineIcon className="mr-2 inline size-3 align-[-2px]" />
-            Ingredient × component grid
-          </summary>
-          <div className="mt-2">
-            {gridOpened && <IngredientComponentGrid tree={tree} showCost />}
-          </div>
-        </details>
+        <Panel tone="muted" className="print:hidden">
+          <Disclosure summary="Ingredient × component grid">
+            <IngredientComponentGrid tree={tree} showCost />
+          </Disclosure>
+        </Panel>
       )}
 
       <Stack gap="lg">

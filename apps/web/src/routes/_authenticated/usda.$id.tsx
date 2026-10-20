@@ -6,8 +6,8 @@ import { Page } from "~/entity/page/page";
 import { USDAFoodDetail } from "~/features/usda-food/usda-food-detail";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
   loader: async ({ params, context }) => {
@@ -20,13 +20,13 @@ export const Route = createFileRoute("/_authenticated/usda/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <Page variant="list" title="USDA food not found" entity="usda-food" compact>
-      <Empty>
-        <EmptyTitle>USDA food not found</EmptyTitle>
-        <EmptyDescription>
-          This USDA food record is not available in Cubby.
-        </EmptyDescription>
-      </Empty>
+    <Page variant="list" title="USDA food not found" entity="usda-food">
+      <EmptyState
+        size="page"
+        description="This USDA food record is not available in Cubby."
+      >
+        USDA food not found
+      </EmptyState>
     </Page>
   ),
   head: ({ params, loaderData }) => ({

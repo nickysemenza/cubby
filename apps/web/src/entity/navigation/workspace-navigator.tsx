@@ -9,11 +9,11 @@ import { AuthenticatedShellAccount } from "~/entity/navigation/authenticated-she
 import { cn } from "~/lib/utils";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
-import { domainWayfinding } from "../../ui/navigation/domain-wayfinding";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 import {
   completeNavLeaves,
@@ -110,34 +110,25 @@ function GroupDisclosure({
   onNavigate: () => void;
 }) {
   const Icon = group.icon;
-  const domain = group.domain ? domainWayfinding(group.domain) : null;
   return (
-    <details
-      className="border-b border-l border-border"
-      style={
-        domain ? { borderLeftColor: `var(${domain.accentToken})` } : undefined
-      }
-    >
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-2 text-sm font-medium hover:bg-muted [&::-webkit-details-marker]:hidden">
-        <span
-          style={domain ? { color: `var(${domain.accentToken})` } : undefined}
-          aria-hidden="true"
-        >
-          <Icon className="size-3.5" />
+    <Disclosure
+      summary={
+        <span className="inline-flex items-center gap-2">
+          <Icon className="size-3.5 text-foreground" aria-hidden="true" />
+          {group.label}
         </span>
-        {group.label}
-      </summary>
-      <div className="border-t border-border bg-background p-1">
-        {group.children.map((item) => (
-          <NavigatorLink
-            key={item.to}
-            item={item}
-            activeTo={activeTo}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </div>
-    </details>
+      }
+      className="border-b border-border px-2 py-2"
+    >
+      {group.children.map((item) => (
+        <NavigatorLink
+          key={item.to}
+          item={item}
+          activeTo={activeTo}
+          onNavigate={onNavigate}
+        />
+      ))}
+    </Disclosure>
   );
 }
 

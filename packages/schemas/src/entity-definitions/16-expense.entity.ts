@@ -89,6 +89,7 @@ export default defineEntity({
       ],
     },
     list: {
+      titleSubtitle: true,
       // A project page's embedded expense list: expenses with any allocation
       // share in a project its project filters select.
       scopes: {

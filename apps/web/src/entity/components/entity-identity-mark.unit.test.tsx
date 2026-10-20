@@ -11,9 +11,7 @@ describe("EntityIdentityMark", () => {
     const mark = container.firstElementChild;
     expect(mark).toHaveStyle({ width: "16px", height: "16px" });
     expect(screen.queryByRole("img")).toBeNull();
-    expect(container.querySelector("svg")).toHaveStyle({
-      color: "var(--domain-cook)",
-    });
+    expect(container.querySelector("svg")).toHaveClass("text-foreground");
   });
 
   it("uses contain for catalog-like identity assets", () => {

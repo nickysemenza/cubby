@@ -9,13 +9,13 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { DatePickerInput } from "~/ui/date-picker-input";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 
 import type { ShoppingListView } from "./meal-search";
 import { ShoppingCard } from "./shopping-card";
@@ -147,15 +147,17 @@ export function ShoppingListPage({
       ) : isError ? (
         // Distinct from the empty state — a network failure must never read as
         // "no meals planned" (that lie is worst mid-shop).
-        <Empty>
-          <EmptyTitle>Couldn't load your shopping list</EmptyTitle>
-          <EmptyDescription>
-            {error.message || "Something went wrong."}
-          </EmptyDescription>
-          <Button type="button" variant="outline" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </Empty>
+        <EmptyState
+          size="page"
+          description={error.message || "Something went wrong."}
+          action={
+            <Button type="button" variant="outline" onClick={() => refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          Couldn't load your shopping list
+        </EmptyState>
       ) : !data || data.meals.length === 0 ? (
         <Description>
           No meals planned in this range.{" "}

@@ -1,23 +1,8 @@
-import type { WorkflowRunPurpose } from "../../server/workflows/runs/contract";
+import type { WorkflowRunPurpose } from "../../server/workflows/runs/contract.ts";
+import workflowDefinitions from "./run-workflows.json" with { type: "json" };
 
-/** Deployment, dispatch and dashboard links share the same Workflow declaration. */
-export const RUN_WORKFLOWS = {
-  MAIL_DISCOVERY: {
-    name: "cubby-mail-discovery",
-    worker: "cubby",
-    exportName: "MailDiscoveryWorkflow",
-  },
-  AI_REFRESH: {
-    name: "cubby-ai-refresh",
-    worker: "cubby",
-    exportName: "AiRefreshWorkflow",
-  },
-  STEP_RUN: {
-    name: "cubby-step-run",
-    worker: "cubby",
-    exportName: "StepRunWorkflow",
-  },
-} as const;
+/** Worker and deployment config consume the same workflow declarations. */
+export const RUN_WORKFLOWS = workflowDefinitions;
 
 const bindingByPurpose = {
   mail_discovery: "MAIL_DISCOVERY",

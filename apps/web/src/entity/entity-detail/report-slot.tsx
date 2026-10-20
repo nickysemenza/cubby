@@ -23,7 +23,7 @@ import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
-import { FactList } from "~/ui/common/fact-list";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -96,13 +96,13 @@ const formatValue = (value: number, format: "money" | "count" | "text") =>
 
 function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
   return (
-    <FactList
-      emphasis="value"
-      className="gap-x-5 text-xs"
-      facts={block.figures.map((figure) => ({
+    <KeyNumbers
+      layout="inline"
+      label={block.title ?? "Figures"}
+      items={block.figures.map((figure) => ({
         label: figure.label,
         tone: figure.tone,
-        className: "font-mono text-sm tabular-nums",
+        money: figure.format === "money",
         value:
           figure.format === "text" ? (
             (figure.text ?? "—")

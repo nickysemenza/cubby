@@ -9,7 +9,7 @@ export const Route = createFileRoute("/docs")({
 
 function DocsLayoutRoute() {
   return (
-    <Page variant="list" title="Documentation" compact>
+    <Page variant="list" title="Documentation">
       <DocsLayout />
     </Page>
   );

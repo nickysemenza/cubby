@@ -353,7 +353,7 @@ test("purchase detail renders an attached HEIC instead of the empty image state"
     `Purchase HEIC ${Date.now()}`,
   );
   await page.goto(`/purchases/${fixture.purchase.id}`);
-  await expect(page.getByText("No images", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/^No images yet/)).toHaveCount(0);
   await expect(
     page.locator("#images").getByRole("img", { name: fixture.filename }),
   ).toHaveCount(1);

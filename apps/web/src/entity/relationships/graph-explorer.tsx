@@ -29,6 +29,8 @@ import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import {
@@ -356,8 +358,10 @@ export function GraphExplorer({
             />
           </div>
           {listing && (
-            <div
-              className="absolute inset-0 overflow-auto rounded-md border border-border bg-card"
+            <Panel
+              tone="default"
+              flush
+              className="absolute inset-0 overflow-auto"
               aria-label="Map records"
             >
               <div className="px-3 py-1">
@@ -393,7 +397,7 @@ export function GraphExplorer({
               {!matches.length && (
                 <p className="p-4 text-sm">No explored records match.</p>
               )}
-            </div>
+            </Panel>
           )}
         </div>
         {!isMobile && (
@@ -693,14 +697,12 @@ function GraphPathInspector({
     paths,
   } = search;
   return (
-    <details
+    <Disclosure
+      summary="Find a path"
       className="border-t border-border pt-3"
-      open={Boolean(destination)}
+      defaultOpen={Boolean(destination)}
     >
-      <summary className="cursor-pointer text-sm font-medium">
-        Find a path
-      </summary>
-      <Stack gap="sm" className="pt-3">
+      <Stack gap="sm" className="pt-2">
         <EntityGraphPicker
           label="Destination"
           placeholder="Find a destination record…"
@@ -750,7 +752,7 @@ function GraphPathInspector({
           </>
         )}
       </Stack>
-    </details>
+    </Disclosure>
   );
 }
 

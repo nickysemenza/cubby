@@ -60,7 +60,7 @@ function Fixture({
   useCellSpill(ref);
   return (
     <div ref={ref} style={{ width: 900 }}>
-      <Table className="table-fixed border-separate border-spacing-0 text-[0.8125rem]">
+      <Table className="table-fixed border-separate border-spacing-0 text-sm">
         <TableHeader>
           <TableRow>
             {cells.map((cell, index) => (
@@ -685,7 +685,7 @@ describe("table density", () => {
                 </span>
                 <span
                   data-stacked-line=""
-                  className="block truncate text-[0.6875rem] leading-[13px]"
+                  className="block truncate text-xs leading-[13px]"
                 >
                   <span className="sr-only"> · </span>1 each
                 </span>

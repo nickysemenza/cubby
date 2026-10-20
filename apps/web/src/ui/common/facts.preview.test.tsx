@@ -5,7 +5,7 @@ import { page } from "vitest/browser";
 
 import { Button } from "~/ui/primitives/button";
 
-import { BasicInfo } from "./basic-info";
+import { Facts } from "./facts";
 import { RecordList, RecordRow } from "./record-list";
 
 // Failure modes: captions always add height, actions drift with value lengths,
@@ -22,8 +22,9 @@ it("gives nested funding history the full fact value width", async () => {
   await page.viewport(1440, 900);
   render(
     <div style={{ width: 680 }}>
-      <BasicInfo
-        fields={[
+      <Facts
+        layout="list"
+        facts={[
           {
             label: "Funding periods",
             value: (
@@ -46,7 +47,7 @@ it("gives nested funding history the full fact value width", async () => {
     </div>,
   );
   const list = screen.getByTestId("funding-history");
-  const value = list.closest('[data-slot="basic-info-value"]')!;
+  const value = list.closest('[data-slot="fact-value"]')!;
   expect(list.getBoundingClientRect().width).toBeGreaterThanOrEqual(
     value.getBoundingClientRect().width - 1,
   );
@@ -59,8 +60,9 @@ it("keeps a short provenance caption inline and aligns fact actions", async () =
   await page.viewport(1440, 900);
   render(
     <div style={{ width: 680 }}>
-      <BasicInfo
-        fields={[
+      <Facts
+        layout="list"
+        facts={[
           {
             label: "Manufacturer",
             value: "Example Foods",
@@ -94,8 +96,9 @@ it("wraps a long fact within a narrow dossier without covering its actions", asy
   await page.viewport(402, 874);
   render(
     <div data-testid="dossier" style={{ width: 360 }}>
-      <BasicInfo
-        fields={[
+      <Facts
+        layout="list"
+        facts={[
           {
             label: "Manufacturer",
             value: (
@@ -132,8 +135,9 @@ it("centers short phone facts beside their touch controls", async () => {
   await page.viewport(402, 874);
   render(
     <div style={{ width: 360 }}>
-      <BasicInfo
-        fields={[
+      <Facts
+        layout="list"
+        facts={[
           {
             label: "Model",
             value: <span data-testid="phone-value">Example</span>,

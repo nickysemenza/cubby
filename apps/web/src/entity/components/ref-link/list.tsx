@@ -6,8 +6,8 @@ import {
   useEntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Stack } from "~/ui/layout";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { TruncatedList } from "~/ui/truncated-list";
 
@@ -65,14 +65,7 @@ export function ListRefLink(
     if (compact) {
       return <NoneValue />;
     }
-    return (
-      <Empty variant="minimal" className="py-2">
-        <EmptyTitle className="text-sm">None</EmptyTitle>
-        <EmptyDescription className="text-xs">
-          No items linked yet
-        </EmptyDescription>
-      </Empty>
-    );
+    return <EmptyState size="inline">No items linked yet.</EmptyState>;
   }
 
   const getKey = (item: (typeof items)[number], index: number) => {

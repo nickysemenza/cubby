@@ -4,6 +4,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { cn } from "~/lib/utils"
+import { popoverElevationClassName } from "~/ui/primitives/popover-elevation"
 
 function Popover<Payload = unknown>({
   ...props
@@ -42,7 +43,8 @@ function PopoverContent({
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 border-[var(--border)] flex flex-col gap-2 rounded-lg border p-3 text-xs shadow-[var(--shadow-overlay)] duration-150 z-50 w-72 origin-(--transform-origin) outline-hidden",
+            popoverElevationClassName,
+            "bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 border-[var(--border)] flex flex-col gap-2 rounded-lg border p-3 text-xs duration-150 z-50 w-72 origin-(--transform-origin) outline-hidden",
             className
           )}
           {...props}

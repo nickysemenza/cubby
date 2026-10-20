@@ -25,12 +25,12 @@ import { monthLabel } from "~/features/project/project-formatting";
 import { cashFlow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 import { Switch } from "~/ui/primitives/switch";
 import {
   Table,
@@ -407,25 +407,39 @@ export function CashFlowView({
       </Row>
 
       {data ? (
-        <StatGrid>
-          <StatTile label={`Outflow, next ${data.months.length} months`}>
-            {money(data.totals.horizonOutflow)}
-          </StatTile>
-          <StatTile label="Baseline per month">
-            {money(data.totals.baselineMonthly)}
-          </StatTile>
-          <StatTile label="Net after scenarios">
-            {money(data.totals.netAfterScenarios)}
-          </StatTile>
-          <StatTile label="Unscheduled remaining">
-            {money(data.totals.unscheduledTotal)}
-          </StatTile>
-          <StatTile label="Beyond horizon">
-            {money(
-              data.totals.beyondHorizon + data.totals.committedBeyondHorizon,
-            )}
-          </StatTile>
-        </StatGrid>
+        <KeyNumbers
+          layout="strip"
+          label="Cash flow totals"
+          items={[
+            {
+              label: `Outflow, next ${data.months.length} months`,
+              value: money(data.totals.horizonOutflow),
+              money: true,
+            },
+            {
+              label: "Baseline per month",
+              value: money(data.totals.baselineMonthly),
+              money: true,
+            },
+            {
+              label: "Net after scenarios",
+              value: money(data.totals.netAfterScenarios),
+              money: true,
+            },
+            {
+              label: "Unscheduled remaining",
+              value: money(data.totals.unscheduledTotal),
+              money: true,
+            },
+            {
+              label: "Beyond horizon",
+              value: money(
+                data.totals.beyondHorizon + data.totals.committedBeyondHorizon,
+              ),
+              money: true,
+            },
+          ]}
+        />
       ) : null}
 
       <IndexedSections

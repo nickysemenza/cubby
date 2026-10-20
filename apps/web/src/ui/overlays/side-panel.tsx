@@ -13,6 +13,11 @@ import {
 
 import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
+import {
+  DisclosureBody,
+  DisclosureRoot,
+  DisclosureTrigger,
+} from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
@@ -251,7 +256,7 @@ function stepCurrentTableRow(direction: -1 | 1): boolean {
 
 function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-[4px] border border-border bg-background px-1 font-mono text-2xs leading-4 text-muted-foreground shadow-[0_1px_0_var(--border)]">
+    <kbd className="rounded-[4px] border border-border bg-background px-1 font-mono text-2xs leading-4 text-muted-foreground">
       {children}
     </kbd>
   );
@@ -389,7 +394,8 @@ export function SidePanelIconTile({ children }: { children: ReactNode }) {
 
 /**
  * A hairline-topped section of a panel body. `open`/`onOpenChange` make it a
- * disclosure whose content mounts on first open.
+ * disclosure. Callers gate the first mount; a rendered body then stays mounted
+ * across closes so a visited view (and any draft in it) survives.
  */
 export function SidePanelSection({
   id,
@@ -419,23 +425,15 @@ export function SidePanelSection({
       </section>
     );
   return (
-    <details
-      id={id}
-      open={open}
-      onToggle={(event) => onOpenChange?.(event.currentTarget.open)}
-    >
-      <summary className={cn(heading, "cursor-pointer")}>
-        {action ? (
-          <>
-            <span className="min-w-0 flex-1">{title}</span>
-            {action}
-          </>
-        ) : (
-          title
-        )}
-      </summary>
-      {children}
-    </details>
+    <div id={id}>
+      <DisclosureRoot state={{ open, onOpenChange }}>
+        <h3 className={heading}>
+          <DisclosureTrigger className="flex-1">{title}</DisclosureTrigger>
+          {action}
+        </h3>
+        <DisclosureBody keepMounted>{children}</DisclosureBody>
+      </DisclosureRoot>
+    </div>
   );
 }
 

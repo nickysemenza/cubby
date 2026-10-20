@@ -34,7 +34,7 @@ import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
@@ -906,16 +906,18 @@ function EdgeInspector({
   onClose: () => void;
 }) {
   return (
-    <aside
-      className="rounded-md border border-border p-3"
+    <Panel
+      tone="default"
+      render={<aside />}
       aria-label="Connection details"
-    >
-      <Row gap="sm">
-        <h3 className="text-sm font-semibold">{edge.label}</h3>
+      headingAs="h3"
+      title={edge.label}
+      actions={
         <Button size="sm" variant="ghost" onClick={onClose}>
           Close
         </Button>
-      </Row>
+      }
+    >
       <p className="text-sm">
         {edge.source.entityId} → {edge.target.entityId}
       </p>
@@ -923,7 +925,7 @@ function EdgeInspector({
         Evidence: {graphSourceLabel(edge)}
         {edge.provenance.length ? ` · ${edge.provenance.join(" · ")}` : ""}
       </p>
-    </aside>
+    </Panel>
   );
 }
 function ExplorationCompletion({
@@ -971,10 +973,7 @@ function GraphPathPanel({
   "paths" | "destination" | "pathIndex" | "setPathIndex" | "change"
 >) {
   return (
-    <section
-      className="rounded-md border border-border p-3"
-      aria-label="Find a path"
-    >
+    <Panel tone="default" render={<section />} aria-label="Find a path">
       <Stack gap="sm">
         <EntityGraphPicker
           label="Destination"
@@ -1045,7 +1044,7 @@ function GraphPathPanel({
           </Button>
         )}
       </Stack>
-    </section>
+    </Panel>
   );
 }
 

@@ -754,7 +754,7 @@ export function CollectionAssignmentMatrix({
               <section aria-labelledby={mobileRowsHeadingId}>
                 <h2
                   id={mobileRowsHeadingId}
-                  className="border-b border-border bg-muted/30 px-2 py-2 font-mono text-2xs tracking-wider text-muted-foreground uppercase"
+                  className="border-b border-border bg-muted/30 px-2 py-2 text-xs font-medium text-muted-foreground"
                 >
                   {subjectLabel}
                 </h2>
@@ -886,7 +886,7 @@ export function CollectionAssignmentMatrix({
             caption="Collection assignment matrix"
             className="min-w-full"
             renderColumnHeader={(column) => (
-              <span className="block text-center font-mono text-2xs tracking-wider break-words uppercase">
+              <span className="block text-center text-xs font-medium break-words">
                 {formatCollectionLabel(column.data)}
               </span>
             )}

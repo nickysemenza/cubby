@@ -49,9 +49,7 @@ export function SectionHeader({
         className,
       )}
     >
-      <h3 className="min-w-0 truncate text-[0.8125rem] font-semibold">
-        {title}
-      </h3>
+      <h3 className="min-w-0 truncate text-sm font-semibold">{title}</h3>
       <span className="text-xs text-muted-foreground tabular-nums">
         {count}
       </span>

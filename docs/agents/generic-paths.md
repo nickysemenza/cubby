@@ -196,7 +196,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## Web UI
 
-- Headings and disclosures: `Section` (`ui/layout/section.tsx`).
+- Page building blocks: `PageHeader`, `Section`, `Panel`, `Toolbar` and
+  `Disclosure` (`ui/layout/`), `KeyNumbers` and `Facts` (`ui/common/`),
+  `EmptyState` (`ui/feedback/empty-state.tsx`); DESIGN.md says when to use each.
 - Chart, graph and tree states: `Visualization` (`ui/visualizations/visualization.tsx`).
 - Dialogs and workspace panels: `Overlay` (`ui/overlays/overlay.tsx`),
   `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
@@ -238,8 +240,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   rows, groups with "+N more", folded absences, the Activity/timeline
   variant, and shared trailing formats; `columns` + row `facts` align
   labelled values under one header (inline labels below 40rem). Inline
-  labelled values anywhere else: `FactList` (`ui/common/fact-list.tsx`);
-  stacked label/value grids stay `Ledger variant="facts"`. Detail-page connected records read
+  labelled values anywhere else: `Facts layout="inline"` (`ui/common/facts.tsx`);
+  stacked label/value lists use `Facts layout="list"`. Detail-page connected records read
   `entity.connectedRecordsPreview` once per record; `/connections` and
   relation-table evidence page `entity.connectedRecords` per view. Audit
   bursts fold through `foldAuditEntries` (`entity/audit-log/audit-log-fold.ts`).

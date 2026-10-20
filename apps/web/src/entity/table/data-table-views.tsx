@@ -210,6 +210,7 @@ export function SavedViewTabs<TData extends RowData>({
     active: boolean,
     onSelect: () => void,
     description?: string,
+    tone?: "destructive" | "warning",
   ) => (
     <button
       key={key}
@@ -218,15 +219,24 @@ export function SavedViewTabs<TData extends RowData>({
       title={description}
       onClick={onSelect}
       className={cn(
-        "-mb-px flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "-mb-px flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
-          ? "border-foreground font-medium text-foreground"
+          ? "border-foreground text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground",
       )}
     >
       {label}
       {count !== undefined && (
-        <span className="text-muted-foreground tabular-nums">
+        <span
+          className={cn(
+            "text-pill font-mono font-normal tabular-nums",
+            tone === "destructive"
+              ? "text-destructive"
+              : tone === "warning"
+                ? "text-warning"
+                : "text-muted-foreground",
+          )}
+        >
           {formatCount(count)}
         </span>
       )}
@@ -235,7 +245,7 @@ export function SavedViewTabs<TData extends RowData>({
   return (
     <nav
       aria-label="Saved views"
-      className="flex min-w-0 [scrollbar-width:none] items-end gap-4 overflow-x-auto overscroll-x-contain"
+      className="flex min-w-0 [scrollbar-width:none] items-end gap-0.5 overflow-x-auto overscroll-x-contain"
     >
       {tab("all", "All", total, allActive, () => {
         appliers.onApplyFilters([]);
@@ -249,6 +259,7 @@ export function SavedViewTabs<TData extends RowData>({
           view === activeView,
           () => applyView(view, appliers),
           view.description,
+          view.tone,
         ),
       )}
     </nav>

@@ -87,9 +87,7 @@ export function MacroChips({ mappings }: { mappings: UnitMapping[] }) {
   if (present.size === 0) return null;
   return (
     <Row gap="xs" wrap align="center">
-      <span className="text-2xs tracking-wide text-muted-foreground uppercase">
-        macros
-      </span>
+      <span className="text-xs font-medium text-muted-foreground">Macros</span>
       {MACRO_KEYS.map((key) => chip(key, key, present.has(key)))}
     </Row>
   );

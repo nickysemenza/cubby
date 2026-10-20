@@ -34,17 +34,11 @@ import {
 } from "~/features/work-queue/use-queue-pass";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
-import { Row, Stack } from "~/ui/layout";
+import { EmptyState } from "~/ui/feedback/empty-state";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { useProductViewSnapshot } from "../worklist/use-product-view-snapshot";
@@ -192,22 +186,27 @@ function TriagePass({
 
   if (rows.length === 0) {
     return (
-      <Empty className="min-h-80">
-        <EmptyTitle>Nothing is waiting on a shelf</EmptyTitle>
-        <EmptyDescription>
-          {run
+      <EmptyState
+        size="page"
+        className="min-h-80"
+        description={
+          run
             ? "That run's purchases have no product bought, never sold, and held nowhere."
-            : "Every product the ledger says you own is on a shelf, a bin, or inside a kit — or already reviewed."}
-        </EmptyDescription>
-        <EmptyActions>
-          <Link
-            to="/products"
-            className={buttonVariants({ variant: "outline" })}
-          >
-            Back to products
-          </Link>
-        </EmptyActions>
-      </Empty>
+            : "Every product the ledger says you own is on a shelf, a bin, or inside a kit — or already reviewed."
+        }
+        action={
+          <>
+            <Link
+              to="/products"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Back to products
+            </Link>
+          </>
+        }
+      >
+        Nothing is waiting on a shelf
+      </EmptyState>
     );
   }
 
@@ -241,48 +240,46 @@ function TriagePass({
 
   if (pass.complete) {
     return (
-      <Card variant="panel" className="mx-auto w-full max-w-2xl">
-        <CardHeader>
-          <Row align="center" gap="sm">
-            <CheckCircleIcon className="size-6 text-positive" />
-            <h2>
-              <CardTitle>Shelf triage complete</CardTitle>
-            </h2>
-          </Row>
-        </CardHeader>
-        <CardContent>
-          <Stack gap="md">
-            <p className="text-sm">
-              {pass.counts.completed} handled
-              {pass.counts.skipped > 0
-                ? ` · ${pass.counts.skipped} skipped`
-                : ""}
-            </p>
-            <Row gap="sm" wrap>
-              {pass.counts.skipped > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-12"
-                  onClick={pass.revisitSkipped}
-                >
-                  <ListChecksIcon />
-                  Revisit {pass.counts.skipped} skipped
-                </Button>
-              )}
-              <Link
-                to="/products"
-                className={buttonVariants({
-                  variant: "outline",
-                  className: "min-h-12",
-                })}
-              >
-                Back to products
-              </Link>
-            </Row>
-          </Stack>
-        </CardContent>
-      </Card>
+      <Panel
+        tone="default"
+        headingAs="h2"
+        title={
+          <span className="inline-flex items-center gap-2">
+            <CheckCircleIcon aria-hidden className="size-4 text-positive" />
+            Shelf triage complete
+          </span>
+        }
+        caption={
+          <>
+            {pass.counts.completed} handled
+            {pass.counts.skipped > 0 ? ` · ${pass.counts.skipped} skipped` : ""}
+          </>
+        }
+        className="mx-auto w-full max-w-2xl"
+      >
+        <Row gap="sm" wrap>
+          {pass.counts.skipped > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12"
+              onClick={pass.revisitSkipped}
+            >
+              <ListChecksIcon />
+              Revisit {pass.counts.skipped} skipped
+            </Button>
+          )}
+          <Link
+            to="/products"
+            className={buttonVariants({
+              variant: "outline",
+              className: "min-h-12",
+            })}
+          >
+            Back to products
+          </Link>
+        </Row>
+      </Panel>
     );
   }
 
@@ -302,11 +299,8 @@ function TriagePass({
             onSkip={() => pass.settle(current.id, "skipped")}
           />
         )}
-        <Card variant="panel" className="overflow-hidden">
-          <CardHeader className="border-b p-4">
-            <CardTitle>Queue</CardTitle>
-          </CardHeader>
-          <CardContent className="max-h-[60dvh] overflow-auto p-0">
+        <Panel tone="default" flush headingAs="h2" title="Queue">
+          <div className="max-h-[60dvh] overflow-auto border-t border-border">
             {pass.stops.map((stop) => {
               const settled = pass.settled.has(stop.id);
               return (
@@ -316,7 +310,7 @@ function TriagePass({
                   disabled={settled}
                   onClick={() => pass.jumpToId(stop.id)}
                   className={cn(
-                    "flex w-full items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-muted disabled:opacity-60",
+                    "flex w-full items-center justify-between gap-2 border-b border-border px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-muted disabled:opacity-60",
                     current?.id === stop.id && "bg-primary/5",
                   )}
                 >
@@ -329,8 +323,8 @@ function TriagePass({
                 </button>
               );
             })}
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
       </div>
     </Stack>
   );
@@ -354,19 +348,25 @@ function TriageLoadError({
   onRetry: () => void;
 }) {
   return (
-    <Empty role="alert" className="min-h-80">
-      <EmptyTitle>{title}</EmptyTitle>
-      <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
-      <EmptyActions>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-12 md:min-h-10"
-          onClick={onRetry}
-        >
-          Retry
-        </Button>
-      </EmptyActions>
-    </Empty>
+    <EmptyState
+      size="page"
+      role="alert"
+      className="min-h-80"
+      description={getErrorMessage(error)}
+      action={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12 md:min-h-10"
+            onClick={onRetry}
+          >
+            Retry
+          </Button>
+        </>
+      }
+    >
+      {title}
+    </EmptyState>
   );
 }

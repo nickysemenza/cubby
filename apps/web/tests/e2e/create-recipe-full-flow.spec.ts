@@ -81,9 +81,7 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(ingredientLink).toBeVisible();
     await expect(ingredientLink).toHaveAttribute("href", /\/ingredients\//);
 
-    const summary = page.locator('[data-slot="card"]').filter({
-      has: page.getByText("Recipe summary", { exact: true }),
-    });
+    const summary = page.getByRole("region", { name: "Recipe summary" });
     await expect(
       summary.getByText("Cost: $5.00", { exact: true }),
     ).toBeVisible();

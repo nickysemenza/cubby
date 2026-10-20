@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { copyText } from "~/lib/clipboard";
 import { getAppErrorDetails, type UnparsedError } from "~/lib/error-utils";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 
 import { openErrorDetailsDialog } from "./error-details-store";
@@ -18,7 +19,7 @@ function hasErrorDetails(error: UnparsedError): boolean {
 /**
  * The operation/entity/stage line, causes list, View in Sentry / Open Workers
  * Observability links, Copy details button, and Ray ID line — the content
- * shared by the inline `<details>` block and the technical-details dialog.
+ * shared by the inline disclosure and the technical-details dialog.
  * No border/background/max-height of its own: callers supply that chrome (the
  * inline block keeps its bordered scroll box; the dialog supplies its own).
  */
@@ -113,14 +114,11 @@ export function ErrorDetailsBody({ error }: { error: unknown }) {
 export function ErrorDetails({ error }: { error: unknown }) {
   if (!hasErrorDetails(error)) return null;
   return (
-    <details className="w-full min-w-0 text-xs">
-      <summary className="min-h-9 cursor-pointer py-2 text-muted-foreground focus-visible:outline-ring">
-        Technical details
-      </summary>
+    <Disclosure summary="Technical details" className="w-full text-xs">
       <div className="max-h-[60dvh] overflow-y-auto border border-border bg-muted/50 p-3">
         <ErrorDetailsBody error={error} />
       </div>
-    </details>
+    </Disclosure>
   );
 }
 

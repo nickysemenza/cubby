@@ -5,7 +5,7 @@ import {
   describeRecordedSpendChange,
   fillRecordedSpendMonths,
   getRecordedSpendWindow,
-} from "./recorded-spend-card";
+} from "./home-money";
 
 function month(
   key: string,

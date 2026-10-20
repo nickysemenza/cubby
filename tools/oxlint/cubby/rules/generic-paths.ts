@@ -296,26 +296,163 @@ export const noNativeSelectRule = defineRule({
   },
 });
 
-/** A static class string on a JSX attribute: `className="…"` or `className={"…"}`. */
-function classNameText(node: ESTree.JSXOpeningElement): string | undefined {
-  for (const attribute of node.attributes) {
-    if (
-      attribute.type !== "JSXAttribute" ||
-      attribute.name.type !== "JSXIdentifier" ||
-      attribute.name.name !== "className"
-    )
-      continue;
-    const value = attribute.value;
-    if (value?.type === "Literal" && typeof value.value === "string")
-      return value.value;
-    if (
-      value?.type === "JSXExpressionContainer" &&
-      value.expression.type === "Literal" &&
-      typeof value.expression.value === "string"
-    )
-      return value.expression.value;
-  }
+/** Class builders carry classes in their arguments, including standalone .ts recipes. */
+export function isClassBuilder(
+  node: ESTree.Node,
+): node is ESTree.CallExpression {
+  return (
+    node.type === "CallExpression" &&
+    node.callee.type === "Identifier" &&
+    ["cn", "clsx", "cva"].includes(node.callee.name)
+  );
+}
+
+function propertyName(
+  node: Extract<ESTree.Node, { type: "Property" }>,
+): string | undefined {
+  if (!node.computed && node.key.type === "Identifier") return node.key.name;
+  if (node.key.type === "Literal" && typeof node.key.value === "string")
+    return node.key.value;
   return undefined;
+}
+
+/** Named class recipes outside JSX, such as density.cellClass or MENU_CLASS. */
+export function isClassRecipe(node: ESTree.Node): boolean {
+  const name =
+    node.type === "Property"
+      ? propertyName(node)
+      : node.type === "VariableDeclarator" && node.id.type === "Identifier"
+        ? node.id.name
+        : undefined;
+  return (
+    name !== undefined &&
+    /(?:class(?:name|names|es)?|_class(?:_name)?)$/iu.test(name)
+  );
+}
+
+/** CVA's option/variant names are data; only variant values and compound classes are CSS. */
+function cvaClasses(node: ESTree.Node): string {
+  if (node.type !== "ObjectExpression") return "";
+  return node.properties
+    .flatMap((property) => {
+      if (property.type !== "Property") return [];
+      const name = propertyName(property);
+      if (name === "variants" && property.value.type === "ObjectExpression") {
+        return property.value.properties.flatMap((variant) =>
+          variant.type === "Property" &&
+          variant.value.type === "ObjectExpression"
+            ? variant.value.properties.flatMap((option) =>
+                option.type === "Property" ? [classNameText(option.value)] : [],
+              )
+            : [],
+        );
+      }
+      if (
+        name === "compoundVariants" &&
+        property.value.type === "ArrayExpression"
+      ) {
+        return property.value.elements.flatMap((entry) =>
+          entry?.type === "ObjectExpression"
+            ? entry.properties.flatMap((field) =>
+                field.type === "Property" &&
+                ["class", "className"].includes(propertyName(field) ?? "")
+                  ? [classNameText(field.value)]
+                  : [],
+              )
+            : [],
+        );
+      }
+      return [];
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
+ * Static classes in JSX, cn/clsx maps and arrays, CVA recipes, and templates.
+ * Conditions and variant metadata are excluded: they select classes, not CSS.
+ * Dynamic template holes stay separated so fragments cannot invent a utility.
+ */
+export function classNameText(node: ESTree.Node): string | undefined {
+  const join = (nodes: (ESTree.Node | null)[]) =>
+    nodes
+      .flatMap((child) => (child ? [classNameText(child)] : []))
+      .filter(Boolean)
+      .join(" ");
+  switch (node.type) {
+    case "Property":
+      return isClassRecipe(node) ? classNameText(node.value) : undefined;
+    case "VariableDeclarator":
+      return isClassRecipe(node) && node.init
+        ? classNameText(node.init)
+        : undefined;
+    case "JSXOpeningElement":
+      return join(
+        node.attributes.filter(
+          (attribute) =>
+            attribute.type === "JSXAttribute" &&
+            attribute.name.type === "JSXIdentifier" &&
+            attribute.name.name === "className",
+        ),
+      );
+    case "JSXAttribute":
+      return node.value ? classNameText(node.value) : undefined;
+    case "JSXExpressionContainer":
+      return classNameText(node.expression);
+    case "Literal":
+      return typeof node.value === "string" ? node.value : undefined;
+    case "TemplateLiteral":
+      return [
+        ...node.quasis.map((part, index) => {
+          let text = part.value.cooked ?? part.value.raw;
+          // A token touching a dynamic hole is incomplete, not a static utility.
+          if (index > 0) text = text.replace(/^\S+/u, "");
+          if (index < node.quasis.length - 1) text = text.replace(/\S+$/u, "");
+          return text;
+        }),
+        join(node.expressions),
+      ].join(" ");
+    case "ConditionalExpression":
+      return join([node.consequent, node.alternate]);
+    case "LogicalExpression":
+      return join(
+        node.operator === "&&" ? [node.right] : [node.left, node.right],
+      );
+    case "ArrayExpression":
+      return join(node.elements);
+    case "ObjectExpression":
+      return node.properties
+        .flatMap((property) => {
+          if (property.type !== "Property") return [];
+          const name = propertyName(property);
+          return name !== undefined
+            ? [name]
+            : property.computed
+              ? [classNameText(property.key)]
+              : [];
+        })
+        .filter(Boolean)
+        .join(" ");
+    case "CallExpression":
+      if (!isClassBuilder(node)) return;
+      if (node.callee.type === "Identifier" && node.callee.name === "cva") {
+        return [
+          node.arguments[0] ? classNameText(node.arguments[0]) : "",
+          node.arguments[1] ? cvaClasses(node.arguments[1]) : "",
+        ].join(" ");
+      }
+      return join(node.arguments);
+    case "ArrowFunctionExpression":
+      return classNameText(node.body);
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
+    case "TSTypeAssertion":
+    case "ParenthesizedExpression":
+      return classNameText(node.expression);
+    default:
+      return undefined;
+  }
 }
 
 /** `<ul className="divide-y …">`: a hand-rolled list of record rows. */

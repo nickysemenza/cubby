@@ -58,7 +58,7 @@ function WeekSummaryGrid({
             <div className="mb-2 flex items-baseline gap-1 border-b pb-1">
               <span
                 className={cn(
-                  "font-mono text-2xs tracking-wider uppercase",
+                  "text-xs font-medium",
                   isToday ? "text-primary" : "text-slate",
                 )}
               >

@@ -500,7 +500,9 @@ it("shows durable progress and diagnostics alongside photo group review", async 
     await screen.findByRole("heading", { name: "Photo review" }),
   ).toBeInTheDocument();
   expect(screen.queryByText("Run progress")).not.toBeInTheDocument();
-  expect(screen.getByText("Timeline and system log")).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Timeline and system log" }),
+  );
   expect(await screen.findByText("group-1")).toBeInTheDocument();
   expect(screen.getByText("System log")).toBeInTheDocument();
   expect(await screen.findByText("Work at a glance")).toBeInTheDocument();

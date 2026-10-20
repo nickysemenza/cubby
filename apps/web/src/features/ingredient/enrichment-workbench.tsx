@@ -45,12 +45,12 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Progress } from "~/ui/primitives/progress";
 
 import {
@@ -790,16 +790,16 @@ export function EnrichmentWorkbench({
   };
 
   const tableEmptyState = (
-    <Empty variant="minimal" className="py-6">
-      <EmptyTitle>
-        {rows.length === 0 ? "Nothing to enrich" : "No matching ingredients"}
-      </EmptyTitle>
-      <EmptyDescription>
-        {rows.length === 0
+    <EmptyState
+      size="page"
+      description={
+        rows.length === 0
           ? "Every recipe ingredient is fully costable."
-          : "Choose another workbench filter."}
-      </EmptyDescription>
-    </Empty>
+          : "Choose another workbench filter."
+      }
+    >
+      {rows.length === 0 ? "Nothing to enrich" : "No matching ingredients"}
+    </EmptyState>
   );
 
   const contextualStatus = error ? (

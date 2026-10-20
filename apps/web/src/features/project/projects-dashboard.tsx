@@ -39,30 +39,16 @@ import {
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
+import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
 import type { CubbyRow } from "~/ui/data-table/table-features";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
-import { Grid, Row, Section, Stack } from "~/ui/layout";
+import { Grid, Panel, Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyIcon,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
-import type { SummaryItem } from "~/ui/primitives/stat-tile";
-import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 
 import {
   defaultFilters,
@@ -329,15 +315,15 @@ function OverviewView({
   data: ProjectDashboardSummaryOut;
   coverImages: CoverImages | undefined;
 }) {
-  const summaryItems = useMemo<SummaryItem[]>(
+  const summaryItems = useMemo<KeyNumber[]>(
     () => [
-      { label: "Active Projects", value: data.summary.activeProjectCount },
-      { label: "Open Tasks", value: data.summary.openTaskCount },
+      { label: "Active projects", value: data.summary.activeProjectCount },
+      { label: "Open tasks", value: data.summary.openTaskCount },
       {
         label: "Spend",
-        value: data.summary.actualSpend,
-        formatter: (v) => formatCurrency(Number(v)),
-        caption:
+        value: formatCurrency(data.summary.actualSpend),
+        money: true,
+        context:
           data.summary.committedSpend > 0
             ? `+${formatCurrency(data.summary.committedSpend)} committed`
             : undefined,
@@ -355,7 +341,8 @@ function OverviewView({
           data.summary.estimateTotal != null
             ? formatCurrency(data.summary.estimateTotal)
             : "—",
-        caption:
+        money: true,
+        context:
           data.summary.estimateCoverage.projectsWithEstimate <
           data.summary.estimateCoverage.projectsInScope
             ? `across ${data.summary.estimateCoverage.projectsWithEstimate} of ${data.summary.estimateCoverage.projectsInScope} projects`
@@ -366,9 +353,9 @@ function OverviewView({
         // figure, split forward by day window (90d is the headline since it's
         // the widest — the sub-line breaks out how much of it lands sooner).
         label: "Committed (90d)",
-        value: data.summary.forwardCommittedSpend.in90Days,
-        formatter: (v) => formatCurrency(Number(v)),
-        subValue:
+        value: formatCurrency(data.summary.forwardCommittedSpend.in90Days),
+        money: true,
+        context:
           data.summary.forwardCommittedSpend.in90Days > 0
             ? `${formatCurrency(data.summary.forwardCommittedSpend.in30Days)} in 30d · ${formatCurrency(data.summary.forwardCommittedSpend.in60Days)} in 60d`
             : undefined,
@@ -383,16 +370,16 @@ function OverviewView({
 
       <NextWork tasks={data.nextTasks} />
 
-      <StatGrid>
-        {summaryItems.map((item) => (
-          <StatTile key={item.label} item={item} />
-        ))}
-      </StatGrid>
+      <KeyNumbers
+        layout="strip"
+        label="Portfolio summary"
+        items={summaryItems}
+      />
 
-      {/* "Projects", not "Active Projects" — the summary tile above already
+      {/* "Projects", not "Active projects" — the summary tile above already
           says that; identical text on both would be a strict-mode-locator
           collision in e2e tests and a redundant label for a real reader. */}
-      <Section title="Projects">
+      <Section headingAs="h2" title="Projects">
         <ProjectCards projects={data.projects} coverImages={coverImages} />
         {data.completedCount > 0 && (
           <Link
@@ -407,8 +394,9 @@ function OverviewView({
       </Section>
 
       <Section
-        title="Task Status"
-        description="Projects with the most open work first"
+        headingAs="h2"
+        title="Task status"
+        caption="Projects with the most open work first"
       >
         <Suspense fallback={<Skeleton className="h-48 w-full" />}>
           <TaskStatusBoard
@@ -436,8 +424,9 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
 
   return (
     <Section
-      title="Next Work"
-      description="Upcoming actionable tasks across your projects"
+      headingAs="h2"
+      title="Next work"
+      caption="Upcoming actionable tasks across your projects"
     >
       <Stack gap="xs">
         {tasks.map((task) => (
@@ -496,13 +485,13 @@ function ProjectCards({
 }) {
   if (projects.length === 0) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyIcon icon={HammerIcon} />
-          <EmptyTitle>No projects found</EmptyTitle>
-          <EmptyDescription>Adjust your filters.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <EmptyState
+        size="page"
+        icon={HammerIcon}
+        description="Adjust your filters."
+      >
+        No projects found
+      </EmptyState>
     );
   }
 
@@ -566,11 +555,42 @@ export function ProjectCard({
   };
 
   return (
-    <Card
-      size="sm"
+    <Panel
+      tone="default"
+      headingAs="h3"
+      media={
+        coverUrl ? (
+          <div className="relative aspect-[16/9] w-full overflow-hidden">
+            <Image
+              src={coverUrl}
+              alt=""
+              displayWidth={400}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+        ) : undefined
+      }
+      title={
+        <Link
+          to={entities.project.routes.detail}
+          params={entityDetailParams(project.id)}
+          aria-current={current ? "true" : undefined}
+          className="inline-flex max-w-full min-w-0 items-center gap-2"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <RecordMark entity="project" emoji={project.emoji} size={20} />
+          <span className="truncate">{project.name}</span>
+        </Link>
+      }
+      caption={
+        <span className="inline-flex items-center gap-2">
+          <StatusIcon status={project.status} />
+          {PROJECT_STATUS_LABELS[project.status]}
+        </span>
+      }
       data-current={current || undefined}
       className={cn(
-        "relative overflow-hidden py-0 transition-colors hover:bg-muted/50",
+        "relative transition-colors hover:bg-muted/50",
         current && "border-primary/50 bg-primary/[0.035]",
         selected && "ring-1 ring-primary/30",
       )}
@@ -604,83 +624,51 @@ export function ProjectCard({
           />
         </div>
       ) : null}
-      <div className={cn("flex flex-col gap-2 py-2.5", coverUrl && "pt-0")}>
-        {coverUrl && (
-          <div className="relative aspect-[16/9] w-full overflow-hidden">
-            <Image
-              src={coverUrl}
-              alt=""
-              displayWidth={400}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          </div>
+      <Row wrap gap="sm">
+        {project.kind && (
+          <Badge variant="secondary">{capitalize(project.kind)}</Badge>
         )}
-        <CardHeader>
-          <CardTitle>
-            <Link
-              to={entities.project.routes.detail}
-              params={entityDetailParams(project.id)}
-              aria-current={current ? "true" : undefined}
-              className="inline-flex min-w-0 items-center gap-2"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <RecordMark entity="project" emoji={project.emoji} size={20} />
-              <span className="truncate">{project.name}</span>
-            </Link>
-          </CardTitle>
-          <CardDescription className="flex items-center gap-2">
-            <StatusIcon status={project.status} />
-            {PROJECT_STATUS_LABELS[project.status]}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Row wrap gap="sm">
-            {project.kind && (
-              <Badge variant="secondary">{capitalize(project.kind)}</Badge>
-            )}
-            {project.locations.map((loc) => (
-              <Badge
-                key={loc}
-                variant="outline"
-                // Free-form location names — opt out of the mono-uppercase stamp.
-                className="font-sans tracking-normal normal-case"
-              >
-                {loc}
-              </Badge>
-            ))}
-            {hasEstimate && (
-              <Badge variant="outline">
-                <CurrencyDollarIcon className="size-3" />
-                {formatCurrency(estimate ?? 0)}
-              </Badge>
-            )}
-            {spent !== 0 && (
-              <Badge
-                variant={
-                  hasEstimate
-                    ? overBudget
-                      ? "destructive"
-                      : "positive"
-                    : "outline"
-                }
-              >
-                <WalletIcon className="size-3" />
-                {formatCurrency(spent)} spent
-              </Badge>
-            )}
-            {(project.dates.effectiveStart || project.dates.effectiveEnd) && (
-              <Badge variant="outline">
-                <CalendarIcon className="size-3" />
-                <DateDisplay
-                  start={project.dates.effectiveStart}
-                  end={project.dates.effectiveEnd}
-                />
-              </Badge>
-            )}
-          </Row>
-        </CardContent>
-      </div>
-    </Card>
+        {project.locations.map((loc) => (
+          <Badge
+            key={loc}
+            variant="outline"
+            // Free-form location names — opt out of the mono-uppercase stamp.
+            className="font-sans tracking-normal normal-case"
+          >
+            {loc}
+          </Badge>
+        ))}
+        {hasEstimate && (
+          <Badge variant="outline">
+            <CurrencyDollarIcon className="size-3" />
+            {formatCurrency(estimate ?? 0)}
+          </Badge>
+        )}
+        {spent !== 0 && (
+          <Badge
+            variant={
+              hasEstimate
+                ? overBudget
+                  ? "destructive"
+                  : "positive"
+                : "outline"
+            }
+          >
+            <WalletIcon className="size-3" />
+            {formatCurrency(spent)} spent
+          </Badge>
+        )}
+        {(project.dates.effectiveStart || project.dates.effectiveEnd) && (
+          <Badge variant="outline">
+            <CalendarIcon className="size-3" />
+            <DateDisplay
+              start={project.dates.effectiveStart}
+              end={project.dates.effectiveEnd}
+            />
+          </Badge>
+        )}
+      </Row>
+    </Panel>
   );
 }
 

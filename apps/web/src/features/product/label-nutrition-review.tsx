@@ -13,6 +13,7 @@ import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { imageProcessing } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
@@ -104,10 +105,9 @@ export function LabelNutritionReview({
               <ShortcodeProse>{proposal.source ?? ""}</ShortcodeProse>
             </Description>
             {current ? (
-              <details>
-                <summary>
-                  Current nutrition · {current.servingGrams} g per serving
-                </summary>
+              <Disclosure
+                summary={`Current nutrition · ${current.servingGrams} g per serving`}
+              >
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -140,7 +140,7 @@ export function LabelNutritionReview({
                       ))}
                   </TableBody>
                 </Table>
-              </details>
+              </Disclosure>
             ) : (
               <Description>No nutrition currently on file.</Description>
             )}

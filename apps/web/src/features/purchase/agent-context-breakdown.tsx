@@ -4,9 +4,10 @@ import type {
 } from "@cubby/schemas/agent-conversation";
 import type { AiRunUsage } from "@cubby/schemas/ai";
 import { agentUsageEvent } from "@cubby/schemas/purchase-agent-services";
-import { useId, useMemo } from "react";
+import { useMemo } from "react";
 
 import { formatCompactCount, formatCount } from "~/lib/number-format";
+import { Disclosure } from "~/ui/layout/disclosure";
 import {
   Table,
   TableBody,
@@ -43,7 +44,6 @@ export function AgentContextPerCall({
 }: {
   messages: readonly AgentConversationMessage[];
 }) {
-  const headingId = useId();
   const summary = useMemo(
     () => summarizeContextCalls(contextCallsFromMessages(messages)),
     [messages],
@@ -58,18 +58,12 @@ export function AgentContextPerCall({
   return (
     <section
       className="mt-3 border-t border-border pt-2"
-      aria-labelledby={headingId}
+      aria-label="Context per call"
     >
-      <details>
-        <summary
-          id={headingId}
-          className="min-h-11 cursor-pointer text-xs font-semibold md:min-h-0"
-        >
-          Context per call
-        </summary>
-        <div className="pt-1">
+      <Disclosure summary="Context per call">
+        <div>
           {topContributors.length ? (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {`Top contributors across the run: ${topContributors
                 .map(({ label, share }) => `${label} ${share}%`)
                 .join(" · ")}`}
@@ -150,7 +144,7 @@ export function AgentContextPerCall({
           </ul>
           <div
             aria-hidden="true"
-            className="mt-1 grid grid-cols-[3.25rem_minmax(0,1fr)_3.25rem] gap-2 text-[10px] leading-[14px] text-muted-foreground tabular-nums"
+            className="mt-1 grid grid-cols-[3.25rem_minmax(0,1fr)_3.25rem] gap-2 text-2xs leading-[14px] text-muted-foreground tabular-nums"
           >
             <span />
             <span className="flex justify-between border-t border-border pt-0.5">
@@ -165,10 +159,7 @@ export function AgentContextPerCall({
             tokens
             {anyEstimated ? "; ≈ marks calls without reported usage" : null}.
           </p>
-          <details className="mt-1 text-xs">
-            <summary className="cursor-pointer text-muted-foreground">
-              Show as table
-            </summary>
+          <Disclosure summary="Show as table" className="mt-1 text-xs">
             <Table
               aria-label="Context per call table"
               containerClassName="mt-1"
@@ -221,9 +212,9 @@ export function AgentContextPerCall({
                 ))}
               </TableBody>
             </Table>
-          </details>
+          </Disclosure>
         </div>
-      </details>
+      </Disclosure>
     </section>
   );
 }
@@ -253,7 +244,6 @@ export function AgentTokenAccounting({
   /** Whether usage was read after the Run ended, so a difference is real. */
   settled: boolean;
 }) {
-  const headingId = useId();
   const rows = useMemo(() => {
     if (!piUsage || !recorded) return [];
     const byModel = new Map<
@@ -288,17 +278,16 @@ export function AgentTokenAccounting({
   return (
     <section
       className="mt-3 border-t border-border pt-2"
-      aria-labelledby={headingId}
+      aria-label="Token accounting"
     >
-      <details open={flagged}>
-        <summary
-          id={headingId}
-          className="min-h-11 cursor-pointer text-xs font-semibold md:min-h-0"
-        >
-          Token accounting
-        </summary>
+      {/* Remounts so a difference that settles while mounted opens the body. */}
+      <Disclosure
+        key={flagged ? "flagged" : "quiet"}
+        summary="Token accounting"
+        defaultOpen={flagged}
+      >
         <p
-          className={`mt-1 text-xs ${flagged ? "text-destructive" : "text-muted-foreground"}`}
+          className={`text-xs ${flagged ? "text-destructive" : "text-muted-foreground"}`}
         >
           {!mismatched.length
             ? "Cubby's usage records match pi's ledger."
@@ -353,7 +342,7 @@ export function AgentTokenAccounting({
             })}
           </TableBody>
         </Table>
-      </details>
+      </Disclosure>
     </section>
   );
 }

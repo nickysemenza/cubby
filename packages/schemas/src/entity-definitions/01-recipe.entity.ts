@@ -66,7 +66,7 @@ export default defineEntity({
         { relation: "images", dateField: "capturedAt" },
         { relation: "meals", dateField: "date" },
       ],
-      hero: { stats: ["servings", "calories"] },
+      hero: { stats: ["servings", "cost", "calories"] },
       additionalSections: [
         {
           kind: "fields",

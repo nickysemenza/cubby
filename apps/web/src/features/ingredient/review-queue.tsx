@@ -12,9 +12,9 @@ import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { useQueuePass } from "~/features/work-queue/use-queue-pass";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Empty, EmptyActions, EmptyDescription } from "~/ui/primitives/empty";
 
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { type MergeOption, ReviewCard } from "./review-card";
@@ -257,35 +257,39 @@ export function ReviewQueue({
 
   if (queue.length === 0) {
     return (
-      <Empty>
-        <EmptyDescription>Nothing to review in this filter.</EmptyDescription>
-        <EmptyActions>
+      <EmptyState
+        size="page"
+        action={
           <Button variant="outline" size="sm" onClick={onExit}>
             Back to browse
           </Button>
-        </EmptyActions>
-      </Empty>
+        }
+      >
+        Nothing to review in this filter.
+      </EmptyState>
     );
   }
 
   if (pass.complete) {
     return (
-      <Empty>
-        <EmptyDescription>
-          Reviewed {reviewedThisSession} this session
-          {counts.skipped > 0 && `, skipped ${counts.skipped}`}.
-        </EmptyDescription>
-        <EmptyActions>
-          {counts.skipped > 0 && (
-            <Button variant="outline" size="sm" onClick={pass.revisitSkipped}>
-              Revisit skipped
+      <EmptyState
+        size="page"
+        action={
+          <Row gap="sm" wrap justify="center">
+            {counts.skipped > 0 && (
+              <Button variant="outline" size="sm" onClick={pass.revisitSkipped}>
+                Revisit skipped
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={onExit}>
+              Back to browse
             </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onExit}>
-            Back to browse
-          </Button>
-        </EmptyActions>
-      </Empty>
+          </Row>
+        }
+      >
+        Reviewed {reviewedThisSession} this session
+        {counts.skipped > 0 && `, skipped ${counts.skipped}`}.
+      </EmptyState>
     );
   }
 

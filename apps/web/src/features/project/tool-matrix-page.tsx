@@ -56,15 +56,10 @@ import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { cellMonoDense, stickyRowHeaderPage } from "~/ui/matrix/matrix-chrome";
 import { Badge } from "~/ui/primitives/badge";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -592,17 +587,17 @@ export function ToolMatrixPage({
         </Row>
 
         {data.rows.length === 0 || data.columns.length === 0 ? (
-          <Empty variant="minimal">
-            <EmptyHeader>
-              <WrenchIcon className="size-5" aria-hidden />
-              <EmptyTitle>Nothing to plot</EmptyTitle>
-            </EmptyHeader>
-            <EmptyDescription>
-              {data.rows.length === 0
+          <EmptyState
+            size="page"
+            icon={WrenchIcon}
+            description={
+              data.rows.length === 0
                 ? "No tools clear this cost floor. Lower it to include cheaper tools."
-                : "No projects match this scope. Clear the project filters to widen it."}
-            </EmptyDescription>
-          </Empty>
+                : "No projects match this scope. Clear the project filters to widen it."
+            }
+          >
+            Nothing to plot
+          </EmptyState>
         ) : (
           <ProductImageSummariesProvider productIds={productIds}>
             <div className="overflow-visible">

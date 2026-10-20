@@ -693,7 +693,7 @@ function SearchGroupItem({
             )}
           </div>
           <div className="max-w-28 shrink-0 self-start pt-1 text-right">
-            <span className="block truncate font-mono text-2xs tracking-wider text-slate uppercase">
+            <span className="block truncate text-xs font-medium text-slate">
               Product
             </span>
             <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
@@ -781,7 +781,7 @@ function SearchEntityResultItem({
         )}
       </div>
       <div className="max-w-28 shrink-0 self-start pt-1 text-right">
-        <span className="block truncate font-mono text-2xs tracking-wider text-slate uppercase">
+        <span className="block truncate text-xs font-medium text-slate">
           {entities[entityKindMap[item.entityKind]].label}
         </span>
         <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">

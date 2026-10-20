@@ -2,7 +2,6 @@ import { assessmentFamily } from "@cubby/schemas/assessment";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
 import type { AutomaticDecisionRow } from "@cubby/schemas/automatic-decision";
 import { humanize } from "@cubby/shared";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -19,6 +18,7 @@ import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack, Row } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 
 import { ScopedListPager } from "./scoped-list-pager";
@@ -201,18 +201,11 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
               Rule {row.automaticRule}
             </span>
           ) : null}
-          <details className="group text-xs">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-muted-foreground md:min-h-7 [&::-webkit-details-marker]:hidden">
-              <CaretRightIcon
-                aria-hidden
-                className="size-3.5 group-open:rotate-90"
-              />
-              Technical evidence
-            </summary>
+          <Disclosure summary="Technical evidence" className="text-xs">
             <pre className="break-words whitespace-pre-wrap">
               {JSON.stringify(row.decision, null, 2)}
             </pre>
-          </details>
+          </Disclosure>
           {correcting && row.correction ? (
             <Row gap="sm" className="flex-wrap">
               <Picker

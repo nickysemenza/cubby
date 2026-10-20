@@ -2,7 +2,6 @@ import {
   AVAILABILITY_STATUS_LABELS,
   type IngredientAvailabilityStatus,
 } from "@cubby/schemas/availability";
-import type { MealTotals } from "@cubby/schemas/meal";
 import {
   MEAL_TYPE_LABELS,
   type MealType,
@@ -14,7 +13,6 @@ import {
   tryFormatAmountShopper,
 } from "~/ui/text/format-amount";
 
-import { formatCostEstimate } from "./meal-nutrition";
 import type { ShoppingRow } from "./shopping-model";
 
 /**
@@ -73,11 +71,6 @@ export const mealListLabel = (meal: {
   (meal.recipes ?? []).map((r) => r.recipe.name).join(", ") ||
   (meal.mealType ? MEAL_TYPE_LABELS[meal.mealType] : "") ||
   mealDateLabel(meal);
-
-/** Meal/day cost rollup with range and confidence language intact. */
-export const formatMealCost = (totals: MealTotals): string => {
-  return formatCostEstimate(totals);
-};
 
 /** Text-color class per availability status (warm semantic tokens). */
 export const statusClass = (status: IngredientAvailabilityStatus): string => {

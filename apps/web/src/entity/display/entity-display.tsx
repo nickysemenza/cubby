@@ -41,14 +41,9 @@ import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
-import {
-  AddFactValue,
-  BasicInfo,
-  type BasicInfoField,
-  useFactsAdd,
-} from "~/ui/common/basic-info";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
+import { AddFactValue, type Fact, Facts, useFactsAdd } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import {
   NumberValue,
@@ -1130,7 +1125,7 @@ export const entitySectionFields = (
 
 export type DetailFieldRenderer<TRecord extends object> = (
   record: TRecord,
-) => Omit<BasicInfoField, "label"> & { label?: string };
+) => Omit<Fact, "label"> & { label?: string };
 
 export function EntityBasicInfo<TRecord extends object>({
   entity,
@@ -1152,7 +1147,7 @@ export function EntityBasicInfo<TRecord extends object>({
   cohortLinks?: boolean;
   /** Computed facts retain their domain renderer beside the declared field
    * they enrich. They do not become persisted entity fields. */
-  afterFields?: Readonly<Record<string, readonly BasicInfoField[]>>;
+  afterFields?: Readonly<Record<string, readonly Fact[]>>;
   actions?: ReactNode;
   header?: ReactNode;
   footer?: ReactNode;
@@ -1172,12 +1167,10 @@ export function EntityBasicInfo<TRecord extends object>({
   const mediaRefs = fields.flatMap((field) =>
     referenceMediaRefs(record, field),
   );
-  const info = (
-    <BasicInfo
-      actions={actions}
-      header={header}
-      footer={footer}
-      fields={fields.flatMap((field) => {
+  const facts = (
+    <Facts
+      layout="list"
+      facts={fields.flatMap((field) => {
         const checks = fieldQualityChecks(quality?.checks ?? [], field.key);
         const override = overrides[field.key]?.(record);
         const rendered = override ?? {
@@ -1207,7 +1200,7 @@ export function EntityBasicInfo<TRecord extends object>({
             />
           ) : undefined;
         const resolution = fieldResolutionFor(record, field.key);
-        // Keep suggestion and resolution with the value; BasicInfo's separate
+        // Keep suggestion and resolution with the value; the fact list's separate
         // action rail owns the controls regardless of caption wrapping.
         const decoratedValue = field.control?.suggest ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1">
@@ -1260,6 +1253,17 @@ export function EntityBasicInfo<TRecord extends object>({
       })}
     />
   );
+  const info =
+    header || footer || actions ? (
+      <div className="space-y-2">
+        {header}
+        {facts}
+        {footer}
+        {actions && <div className="pt-2">{actions}</div>}
+      </div>
+    ) : (
+      facts
+    );
   // Only a card that names references needs covers (and a QueryClient).
   return mediaRefs.length > 0 ? (
     <EntityDisplayImagesProvider refs={mediaRefs}>
@@ -1294,12 +1298,14 @@ const editableControlKinds = new Set([
   "checkbox",
 ]);
 
-function isMoneyField(field: EditableField): boolean {
+function isMoneyField(
+  field: Pick<DisplayField, "display" | "control">,
+): boolean {
   const format = field.display.format;
   return (
     format === "currency" ||
     format === "signedCurrency" ||
-    field.control.renderer === "money"
+    field.control?.renderer === "money"
   );
 }
 
@@ -1754,6 +1760,19 @@ export function createEntityDisplayColumns<TRecord extends object>(
       const headerForm = columnHeaderFor(field);
       const add: typeof addColumn = (column) => {
         const meta = { ...column.meta };
+        meta.valueKind = isMoneyField(field)
+          ? "money"
+          : field.reference?.entity === "ledgerParty"
+            ? "person"
+            : field.kind === "date"
+              ? "date"
+              : field.kind === "boolean"
+                ? "boolean"
+                : column.meta?.numeric
+                  ? "number"
+                  : field.control?.kind === "select"
+                    ? "enum"
+                    : "text";
         if (field.control?.suggest) meta.suggest = true;
         if (column.header === field.label) {
           if (headerForm.short !== field.label)

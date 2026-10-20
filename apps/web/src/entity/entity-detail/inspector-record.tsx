@@ -22,12 +22,13 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { PreviewQuery } from "~/entity/preview/preview-query";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
-import { FactsAddProvider, FactsLayoutProvider } from "~/ui/common/basic-info";
-import { SectionHeading, Stack } from "~/ui/layout";
+import { FactsAddProvider, FactsDensityProvider } from "~/ui/common/facts";
+import { KeyNumbers } from "~/ui/common/key-numbers";
+import { Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { detailEditOverrideFor } from "./detail-edit-overrides";
-import { detailHeroStats, KeyNumbersGrid } from "./detail-hero-stats";
+import { detailHeroStats } from "./detail-hero-stats";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
@@ -61,27 +62,29 @@ function InspectorCheckSections({
   return useQualityCheckSections()
     .filter((section) => !fieldSections.includes(section))
     .map((sectionId) => (
-      <section key={sectionId} className="min-w-0">
-        <SectionHeading
-          title={
-            sections.find((section) => section.id === sectionId)?.title ??
-            (sectionId === "images" ? "Images" : sectionId)
-          }
-          actions={
-            isBrowserRoutedEntity(entity) ? (
-              <Link
-                to={entities[entity].routes.detail}
-                params={entityDetailParams(id)}
-                hash={sectionId}
-                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              >
-                Open section
-              </Link>
-            ) : null
-          }
-        />
+      <Section
+        key={sectionId}
+        headingAs="h3"
+        compact
+        title={
+          sections.find((section) => section.id === sectionId)?.title ??
+          (sectionId === "images" ? "Images" : sectionId)
+        }
+        actions={
+          isBrowserRoutedEntity(entity) ? (
+            <Link
+              to={entities[entity].routes.detail}
+              params={entityDetailParams(id)}
+              hash={sectionId}
+              className="text-link hover:underline"
+            >
+              Open section
+            </Link>
+          ) : null
+        }
+      >
         <QualitySectionChecks section={sectionId} />
-      </section>
+      </Section>
     ));
 }
 
@@ -124,9 +127,13 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
     .map((field) => field.key);
   return (
     <>
-      <div className="-mx-4 -mt-3 mb-3">
-        <KeyNumbersGrid stats={detailHeroStats(entity, record)} />
-      </div>
+      <KeyNumbers
+        layout="inline"
+        label="Key numbers"
+        items={detailHeroStats(entity, record)}
+        className="mb-3"
+        data-testid="inspector-key-numbers"
+      />
       <RecordSuggestionsProvider
         entity={entity}
         records={[record]}
@@ -137,7 +144,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
           id={record.id}
           visibleFields={fields}
         >
-          <FactsLayoutProvider layout="compact">
+          <FactsDensityProvider density="compact">
             <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
               <Stack gap="md">
                 {editable ? (
@@ -153,15 +160,19 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
                 ) : null}
                 <RecordWorkQueue id={record.id} />
                 {fieldSections.map((section) => (
-                  <section key={section.id} className="min-w-0">
-                    <SectionHeading title={section.title} />
+                  <Section
+                    key={section.id}
+                    headingAs="h3"
+                    compact
+                    title={section.title}
+                  >
                     <QualitySectionChecks section={section.id} />
                     <EntityRecordFields
                       entity={entity}
                       record={record}
                       fields={section.fields}
                     />
-                  </section>
+                  </Section>
                 ))}
                 <InspectorCheckSections
                   entity={entity}
@@ -170,7 +181,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
                 />
               </Stack>
             </FactsAddProvider>
-          </FactsLayoutProvider>
+          </FactsDensityProvider>
           {EditOverride && editing ? (
             <EditOverride
               record={

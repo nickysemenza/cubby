@@ -102,9 +102,8 @@ export function CalendarAgenda({
     <div data-slot="calendar-agenda" className="border">
       {groups.map((group) => (
         <section key={group.day} data-day={group.day}>
-          {/* Sticky so the day you're scrolling through stays named. Mono
-              uppercase matches the month view's own weekday header. */}
-          <h3 className="sticky top-0 z-10 border-b bg-muted font-mono text-2xs tracking-wider uppercase">
+          {/* Keep the day named while scrolling through its events. */}
+          <h3 className="sticky top-0 z-10 border-b bg-muted text-xs font-medium">
             <button
               type="button"
               className="flex min-h-11 w-full items-center gap-2 px-2 py-1 text-left outline-none hover:bg-muted-foreground/5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"

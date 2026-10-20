@@ -27,6 +27,16 @@ import {
   LocationTreeSection,
   RecipeUnitsSection,
 } from "~/features/design/sections/household-section";
+import {
+  DisclosureSection,
+  EmptyStateSection,
+  FactsSection,
+  KeyNumbersSection,
+  PageHeaderSection,
+  PanelSection,
+  SectionSection,
+  ToolbarSection,
+} from "~/features/design/sections/library-section";
 import { PickerSection } from "~/features/design/sections/picker-section";
 import { RecordsSection } from "~/features/design/sections/records-section";
 import { RTableSection } from "~/features/design/sections/rtable-section";
@@ -51,6 +61,111 @@ const PROJECT_STATS = [
 
 /** The same contents index record details use; `#<section id>` and `#<group key>` link in. */
 const GROUPS: IndexedSectionGroup[] = [
+  {
+    id: "detail-group-library",
+    title: "Library",
+    sections: [
+      {
+        id: "page-header",
+        title: "PageHeader",
+        icon: ListBulletsIcon,
+        description: (
+          <ComponentsLine
+            components={["PageHeader", "DetailPageHeader", "ListPageHeader"]}
+            source={[
+              "ui/layout/page-header.tsx",
+              "entity/page/entity-page-header.tsx",
+            ]}
+          />
+        ),
+        content: <PageHeaderSection />,
+      },
+      {
+        id: "key-numbers",
+        title: "KeyNumbers",
+        icon: TableIcon,
+        description: (
+          <ComponentsLine
+            components={["KeyNumbers"]}
+            source={["ui/common/key-numbers.tsx"]}
+          />
+        ),
+        content: <KeyNumbersSection />,
+      },
+      {
+        id: "section",
+        title: "Section",
+        icon: ListBulletsIcon,
+        description: (
+          <ComponentsLine
+            components={["Section"]}
+            source={["ui/layout/section.tsx"]}
+          />
+        ),
+        content: <SectionSection />,
+      },
+      {
+        id: "panel",
+        title: "Panel",
+        icon: PaletteIcon,
+        description: (
+          <ComponentsLine
+            components={["Panel"]}
+            source={["ui/layout/panel.tsx"]}
+          />
+        ),
+        content: <PanelSection />,
+      },
+      {
+        id: "empty-state",
+        title: "EmptyState",
+        icon: ChatCircleTextIcon,
+        description: (
+          <ComponentsLine
+            components={["EmptyState"]}
+            source={["ui/feedback/empty-state.tsx"]}
+          />
+        ),
+        content: <EmptyStateSection />,
+      },
+      {
+        id: "toolbar",
+        title: "Toolbar",
+        icon: SlidersHorizontalIcon,
+        description: (
+          <ComponentsLine
+            components={["Toolbar"]}
+            source={["ui/layout/toolbar.tsx"]}
+          />
+        ),
+        content: <ToolbarSection />,
+      },
+      {
+        id: "disclosure",
+        title: "Disclosure",
+        icon: CaretUpDownIcon,
+        description: (
+          <ComponentsLine
+            components={["Disclosure"]}
+            source={["ui/layout/disclosure.tsx"]}
+          />
+        ),
+        content: <DisclosureSection />,
+      },
+      {
+        id: "facts",
+        title: "Facts",
+        icon: ClipboardTextIcon,
+        description: (
+          <ComponentsLine
+            components={["Facts", "AddFactValue"]}
+            source={["ui/common/facts.tsx"]}
+          />
+        ),
+        content: <FactsSection />,
+      },
+    ],
+  },
   {
     id: "detail-group-signature",
     title: "Signature components",
@@ -188,11 +303,8 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: ListBulletsIcon,
         description: (
           <ComponentsLine
-            components={["SectionHeading", "Section", "SectionActionLink"]}
-            source={[
-              "ui/layout/section.tsx",
-              "ui/layout/section-action-link.tsx",
-            ]}
+            components={["Section", "FormFieldGroup"]}
+            source={["ui/layout/section.tsx", "ui/forms/form-field-group.tsx"]}
           />
         ),
         content: <SectionCompositionsSection />,
@@ -285,7 +397,7 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: PaletteIcon,
         description: (
           <ComponentsLine
-            components={["Page", "Card", "Badge"]}
+            components={["Page", "Panel", "Badge"]}
             source={["styles.css", "entity/page/page.tsx"]}
           />
         ),
@@ -317,7 +429,7 @@ const GROUPS: IndexedSectionGroup[] = [
         icon: ChatCircleTextIcon,
         description: (
           <ComponentsLine
-            components={["Alert", "Skeleton", "Empty", "Overlay", "Tabs"]}
+            components={["Alert", "Skeleton", "EmptyState", "Overlay", "Tabs"]}
             source={["ui/primitives/", "ui/overlays/overlay.tsx"]}
           />
         ),

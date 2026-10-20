@@ -1,5 +1,4 @@
 import { isAutoFixProblemKey } from "@cubby/schemas/problems";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
@@ -19,11 +18,7 @@ import {
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { AutoFixButton } from "./components/auto-fix-button";
@@ -304,27 +299,21 @@ function Stat({
 function PassingChecks({ entries }: { entries: readonly Entry[] }) {
   if (entries.length === 0) return null;
   return (
-    <Collapsible className="border-t border-border pt-2">
-      <CollapsibleTrigger className="group flex min-h-7 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground max-md:min-h-11">
-        <CaretRightIcon
-          aria-hidden
-          className="size-3 transition-transform group-data-[panel-open]:rotate-90 motion-reduce:transition-none"
-        />
-        <CheckCircleIcon aria-hidden className="size-3.5" />
-        {entries.length} {entries.length === 1 ? "check" : "checks"} passing
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <RecordList aria-label="Passing checks" className="mt-1">
-          {entries.map((entry) => (
-            <RecordRow
-              key={entry.id}
-              leading={<RecordDot tone="positive" label="Passing" />}
-              primary={entry.title}
-              secondary={entry.emptyMessage}
-            />
-          ))}
-        </RecordList>
-      </CollapsibleContent>
-    </Collapsible>
+    <Disclosure
+      summary="Passing checks"
+      meta={entries.length}
+      className="border-t border-border pt-2"
+    >
+      <RecordList aria-label="Passing checks">
+        {entries.map((entry) => (
+          <RecordRow
+            key={entry.id}
+            leading={<RecordDot tone="positive" label="Passing" />}
+            primary={entry.title}
+            secondary={entry.emptyMessage}
+          />
+        ))}
+      </RecordList>
+    </Disclosure>
   );
 }
