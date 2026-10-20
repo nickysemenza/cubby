@@ -346,8 +346,7 @@ export async function withAiResponseCache<T>(args: {
     }
     if (claim.kind === "busy") {
       args.onWait?.();
-      // A durable page should wait for the holder, not burn pages on subsecond polls.
-      deferCooperativeAiWork(Date.now() + 15_000);
+      deferCooperativeAiWork(Date.now() + 250);
       force = false;
       await sleep(250);
       continue;

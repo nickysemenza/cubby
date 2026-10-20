@@ -23,6 +23,7 @@ import {
 import {
   buildChargeProposals,
   generateStatementSuggestionPage,
+  suggestionsNeedingLabels,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import * as labelCheckpointRepo from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
@@ -33,6 +34,7 @@ import {
   listAutomaticRules,
   setAutomaticRule,
 } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import * as automaticRuleRuntime from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
@@ -612,6 +614,64 @@ describe("Automatic rules", () => {
     },
   );
 
+  // A later round can exhaust its budget after an earlier rule changed evidence.
+  it("keeps moved later-round work queued across a decision-cap yield", async () => {
+    await createSystemUserFixture(ctx.db);
+    const { account } = await soleCandidateCharge(ctx);
+    await competingCharge(ctx);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    const original = automaticRuleRuntime.applyAutomaticRulesForCharge;
+    let inserted = false;
+    const rules = vi
+      .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
+      .mockImplementation(async (...args) => {
+        const result = await original(...args);
+        // Concurrent imported evidence arrives after the first rule commits.
+        if (!inserted && result.applied.length) {
+          inserted = true;
+          await createRepoEntity(ctx, "financialTransaction", {
+            accountId: account.id,
+            kind: "purchase",
+            status: "posted",
+            amount: 42.5,
+            postedDate: "2026-05-05",
+            rawDescription: "SYNTHETIC LATER RULE CANDIDATE",
+            sourceRefs: [],
+          });
+        }
+        return result;
+      });
+    try {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "background",
+      });
+      const page = await labelStatementSuggestions(ctx.db, {
+        runId,
+        port: sameCharge,
+        decisionLimit: 6,
+      });
+      expect(page.next).not.toBeNull();
+      expect(
+        await suggestionsNeedingLabels(ctx.db, 10, page.next),
+      ).toHaveLength(1);
+      const resumed = await labelStatementSuggestions(ctx.db, {
+        runId,
+        port: sameCharge,
+        after: page.next,
+      });
+      expect(resumed.failed).toEqual([]);
+      expect(resumed.stale).toBe(0);
+      expect(await suggestionsNeedingLabels(ctx.db, 10)).toEqual([]);
+    } finally {
+      rules.mockRestore();
+    }
+  });
+
   // A model publication supersedes the original row; later rule rounds must save to the active publication.
   it("checkpoints every label round against the active publication", async () => {
     await createSystemUserFixture(ctx.db);
@@ -624,7 +684,9 @@ describe("Automatic rules", () => {
       enabled: true,
     });
     const original = labelCheckpointRepo.recordStatementLabelCheckpoint;
-    const saved: boolean[] = [];
+    const saved: Awaited<
+      ReturnType<typeof labelCheckpointRepo.recordStatementLabelCheckpoint>
+    >[] = [];
     const checkpoint = vi
       .spyOn(labelCheckpointRepo, "recordStatementLabelCheckpoint")
       .mockImplementation(async (...args) => {
@@ -635,7 +697,7 @@ describe("Automatic rules", () => {
     try {
       await label(ctx);
       expect(saved.length).toBeGreaterThan(2);
-      expect(saved).not.toContain(false);
+      expect(saved).not.toContain("moved");
     } finally {
       checkpoint.mockRestore();
     }

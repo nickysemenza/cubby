@@ -47,7 +47,11 @@ it("yields Workflow admission after one attempt without polling", async () => {
       controls,
     ),
   );
-  await expect(pending).rejects.toBeInstanceOf(AiWorkDeferredError);
+  await expect(pending).rejects.toSatisfy(
+    (error: unknown) =>
+      error instanceof AiWorkDeferredError &&
+      error.until >= Date.now() + 15_000,
+  );
   expect(attempts).toBe(1);
 });
 

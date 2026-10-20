@@ -352,7 +352,9 @@ export async function labelStatementSuggestions(
         return [];
       }
       // After a rule, only a charge whose evidence moved is labelled again.
-      return current && (round === 0 || moved) ? [{ target, current }] : [];
+      return current && (round === 0 || moved)
+        ? [{ target, current, moved }]
+        : [];
     });
     const published = new Map<string, string>();
     log.info("Statement label round", {
@@ -387,7 +389,11 @@ export async function labelStatementSuggestions(
           evidenceFingerprint: target.expected,
           checkpoint: result.checkpoint,
         });
-        if (!saved)
+        if (saved === "settled") {
+          skipped.add(chargeId(current.charge));
+          continue;
+        }
+        if (saved === "moved")
           throw new Error(
             "Statement label checkpoint lost its active evidence fence",
           );
@@ -468,7 +474,13 @@ export async function labelStatementSuggestions(
     if (pauses[0] || unfinished) {
       // Without labels, a rule's moved evidence still republishes as rule
       // output, so the resumed pass labels it instead of skipping it as stale.
-      if (applied.size)
+      if (
+        applied.size ||
+        ready.some(
+          ({ current, moved }) =>
+            moved && !published.has(chargeId(current.charge)),
+        )
+      )
         await regenerateCharges(
           db,
           targets.map((target) => target.charge),

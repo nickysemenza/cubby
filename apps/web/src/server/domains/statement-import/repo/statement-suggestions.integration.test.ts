@@ -928,6 +928,26 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
+  // A member resolving listed work is a successful competing outcome, not a label failure.
+  it("skips a charge accepted by the member while its labels are in flight", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [pending] = await suggestions(ctx);
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let accepted = false;
+    const result = await label(ctx, async (input) => {
+      if (!accepted) {
+        accepted = true;
+        await accept(ctx, pending!);
+      }
+      return answer(input);
+    });
+    expect(result.failed).toEqual([]);
+    expect(result.labelled).toBe(0);
+    expect(await suggestions(ctx)).toEqual([]);
+  });
+
   // Publication failure must not discard a completely paid judgment before retry.
   it("retains completed decisions when model publication fails", async () => {
     await card(ctx);

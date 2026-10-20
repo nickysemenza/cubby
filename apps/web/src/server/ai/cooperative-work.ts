@@ -15,7 +15,9 @@ export class AiWorkDeferredError extends Error {
 }
 
 export function deferCooperativeAiWork(until: number) {
-  if (cooperative.getStore()) throw new AiWorkDeferredError(until);
+  // Durable retries need time to release shared capacity without exhausting page bounds.
+  if (cooperative.getStore())
+    throw new AiWorkDeferredError(Math.max(until, Date.now() + 15_000));
 }
 
 export function aiWorkDeferral(

@@ -1470,7 +1470,7 @@ export async function recordStatementLabelCheckpoint(
     evidenceFingerprint: string;
     checkpoint: StatementLabelCheckpoint;
   },
-) {
+): Promise<"saved" | "settled" | "moved"> {
   const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
     UPDATE "AssessmentState" s
@@ -1482,7 +1482,20 @@ export async function recordStatementLabelCheckpoint(
       AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
     RETURNING s.id
   `);
-  return rows.length > 0;
+  if (rows.length) return "saved";
+  const { rows: settled } = await unwrapDb(db).execute(sql`
+    SELECT 1 FROM "AssessmentState" s
+    WHERE s.family = ${assessmentFamily.enum.statement_transaction}
+      AND ${suggestionField("source")} = ${input.charge.source}
+      AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
+      AND s.suppression IS NOT NULL
+    UNION ALL
+    SELECT 1 FROM ${chargeStateOf(sql`r.source = ${input.charge.source} AND ${chargeKeyOf("r")} = ${input.charge.chargeKey}`)} cs
+    WHERE ${checkpoint.judgment.recommended !== statementTransactionAction.enum.void}
+      AND (cs.ignored OR cs.superseded OR cs.shortcode IS NOT NULL)
+    LIMIT 1
+  `);
+  return settled.length ? "settled" : "moved";
 }
 
 /**

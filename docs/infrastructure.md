@@ -69,9 +69,10 @@ up to 10 pages, each with at most 10 suggestions and 32 new decisions across all
 rule-driven rounds, with at most four model decisions in flight. A partial label
 page saves its unpublished judgment in the pending AssessmentState and resumes
 inclusively at that suggestion; compatible evidence re-exports retain paid
-labels. No candidate is truncated to fit a page. Cache/admission contention yields
+labels. A member-settled or suppressed charge is skipped; moved evidence remains
+queued when any rule round yields. No candidate is truncated to fit a page. Cache/admission contention yields
 Workflow label work before polling, then resumes after durable `step.sleep`
-(cache contention waits at least 15 seconds);
+(capacity contention waits at least 15 seconds);
 interactive callers retain their waiting behavior. Pages retain their 15-minute
 timeout. An instance requests handoff after ten minutes elapsed, checked after
 committed pages; unmeasured phases and waiting parents retain five-page bounds.
