@@ -310,6 +310,7 @@ export async function withAiResponseCache<T>(args: {
   const start = performance.now();
   const deadline = Date.now() + 5 * 60_000;
   let force = !!args.force;
+  let invalidEntries = 0;
   while (Date.now() < deadline) {
     let claim: Awaited<ReturnType<CacheStore["readOrClaim"]>>;
     try {
@@ -336,6 +337,9 @@ export async function withAiResponseCache<T>(args: {
           log.error("invalidation failed", { error });
           return args.compute("none", ignoreUsage);
         }
+        // Racing replacements cannot spend an unbounded number of cache RPCs
+        // inside one Workflow page; recover with an uncached model answer.
+        if (++invalidEntries >= 3) return args.compute("none", ignoreUsage);
         continue;
       }
       await args.onHit?.(

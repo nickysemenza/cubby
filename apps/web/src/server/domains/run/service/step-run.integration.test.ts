@@ -136,7 +136,7 @@ describe("step-ledger Runs", () => {
       .set({ cursor: { phase: "label", after: null } })
       .where(eq(runStep.runId, id));
     expect(await inspectStepRun(ctx.db, params)).toMatchObject({
-      name: "label p4 · suggestions 1–64",
+      name: "label p4 · suggestions 1–512",
     });
     // Generation's denominator must not be presented as a label phase total.
     await getDb(ctx.db)

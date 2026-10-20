@@ -40,7 +40,7 @@ import {
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
 
-import { aiWorkDeferral } from "./cooperative-work";
+import { aiWorkDeferral, withCooperativeAiWork } from "./cooperative-work";
 import {
   DECISION_CONTEXT_BYTE_LIMIT,
   type BatchedChoiceResponse,
@@ -328,26 +328,46 @@ export async function runDecisionChoice(
 export async function runDecisionChoices(
   args: readonly DecisionChoiceArgs[],
 ): Promise<DecisionChoiceResult[]> {
-  const batch = new DecisionRequestBatch(args.length);
-  const cache = new AiResponseCacheBatch(args.length);
-  const usages = new Map<AiRunContext, number>();
-  return Promise.all(
-    args.map((item, index) => {
-      if (!usages.has(item.usage)) usages.set(item.usage, usages.size);
-      return runDecisionChoiceInternal(item, {
-        batch,
-        cache,
-        index,
-        usageGroup: usages.get(item.usage)!,
-      }).finally(() => {
-        cache.ready(index);
-        batch.ready(index);
-      });
-    }),
+  const settled = await settleDecisionChoices(args, (question) => question);
+  const failure = settled.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+  return settled.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
   );
 }
 
-type DecisionChoiceArgs = {
+/** A finite set of independent work: retain ownership and settle every started request. */
+export async function settleDecisionChoices<T>(
+  items: readonly T[],
+  questionFor: (item: T) => DecisionChoiceArgs,
+  options: { cooperative?: boolean } = {},
+): Promise<(PromiseSettledResult<DecisionChoiceResult> & { item: T })[]> {
+  const args = items.map(questionFor);
+  const batch = new DecisionRequestBatch(args.length);
+  const cache = new AiResponseCacheBatch(args.length);
+  const usages = new Map<AiRunContext, number>();
+  const settle = () =>
+    Promise.allSettled(
+      args.map((item, index) => {
+        if (!usages.has(item.usage)) usages.set(item.usage, usages.size);
+        return runDecisionChoiceInternal(item, {
+          batch,
+          cache,
+          index,
+          usageGroup: usages.get(item.usage)!,
+        }).finally(() => {
+          cache.ready(index);
+          batch.ready(index);
+        });
+      }),
+    );
+  const settled = await (options.cooperative
+    ? withCooperativeAiWork(settle)
+    : settle());
+  return settled.map((result, index) => ({ ...result, item: items[index]! }));
+}
+
+export type DecisionChoiceArgs = {
   feature: AiDecisionFeature;
   subject: string;
   rules: string;

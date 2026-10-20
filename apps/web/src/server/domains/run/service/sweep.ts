@@ -11,6 +11,7 @@ import {
   type SweepFamilyScope,
 } from "@cubby/schemas/run-fields";
 import type { RunStepCounts, RunStepError } from "@cubby/schemas/run-step";
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
@@ -251,7 +252,10 @@ async function transferPairPage(
   }
   return {
     kind: "progress",
-    execution: { phase: "transfer_pair_label", pagesPerInstance: 2 },
+    execution: {
+      phase: "transfer_pair_label",
+      pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance,
+    },
     ...(after === null &&
       outcome.active && {
         found: Math.max(
@@ -330,7 +334,10 @@ async function statementPage(
     const previous = step.meta?.work?.current;
     return {
       kind: "progress",
-      execution: { phase: "statement_generate", pagesPerInstance: 100 },
+      execution: {
+        phase: "statement_generate",
+        pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.databasePagesPerInstance,
+      },
       work: {
         phase: "statement_generate",
         label: "Generating suggestions",
@@ -427,7 +434,10 @@ async function statementPage(
     ...checkpoint,
     kind: "progress",
     done: outcome.next === null,
-    execution: { phase: "statement_label", pagesPerInstance: 2 },
+    execution: {
+      phase: "statement_label",
+      pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance,
+    },
     ...(outcome.waitingUntil !== null && {
       waitSeconds: Math.max(
         1,

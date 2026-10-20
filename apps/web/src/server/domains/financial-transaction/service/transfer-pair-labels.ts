@@ -1,27 +1,20 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
-import type {
-  TransferPairLeg,
-  TransferPairMovementLabel,
-} from "@cubby/schemas/transfer-pair-suggestion";
+import type { TransferPairLeg } from "@cubby/schemas/transfer-pair-suggestion";
 import {
   selectDecisionModel,
   type SupportedDecisionModel,
 } from "@cubby/shared/ai/models";
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 
-import {
-  createConcurrencyLimiter,
-  forEachConcurrently,
-} from "~/lib/concurrency-limiter";
-import { AiBudgetExhaustedError, settleDecisions } from "~/server/ai/budget";
-import {
-  aiWorkDeferral,
-  withCooperativeAiWork,
-} from "~/server/ai/cooperative-work";
+import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import {
   decisionChoiceFitsContext,
   type DecisionPort,
-  runDecisionChoice,
+  settleDecisionChoices,
+  type DecisionChoiceArgs,
 } from "~/server/ai/decision-model";
 import { TRANSFER_PAIR_MOVEMENT_FEATURE } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
@@ -38,18 +31,19 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many pairs. */
-const TRANSFER_PAIR_LABEL_BATCH = 100;
+const TRANSFER_PAIR_LABEL_BATCH = WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage;
 /** Database work only; model calls never occupy this lane. */
 const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
-type Usage = Parameters<typeof runDecisionChoice>[0]["usage"];
+type Question = DecisionChoiceArgs;
+type Usage = Question["usage"];
 
 /** One leg's movement reading in its pair; only the leg and the opposite account's kind are evidence. */
-async function movementLabel(
+function movementQuestion(
   leg: TransferPairLeg,
   opposite: TransferPairLeg,
   context: { model: SupportedDecisionModel; port?: DecisionPort; usage: Usage },
-): Promise<TransferPairMovementLabel | null> {
+): Question | null {
   const prompt = TRANSFER_PAIR_MOVEMENT_FEATURE.prompt(
     JSON.stringify({
       account: { kind: leg.accountKind, name: leg.accountName },
@@ -63,18 +57,13 @@ async function movementLabel(
     }),
   );
   if (!decisionChoiceFitsContext(prompt)) return null;
-  const result = await runDecisionChoice({
+  return {
     ...prompt,
     feature: TRANSFER_PAIR_MOVEMENT_FEATURE,
     decisionModel: context.model,
     port: context.port,
     usage: context.usage,
-  });
-  const choice =
-    TRANSFER_PAIR_MOVEMENT_FEATURE.choices[result.selectedIndex ?? -1];
-  return choice
-    ? { choice, confidence: result.confidence, model: context.model }
-    : null;
+  };
 }
 
 /**
@@ -114,7 +103,10 @@ export async function labelTransferPairSuggestions(
   };
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled && !input.port) return { ...empty, active: false };
-  const limit = input.limit ?? TRANSFER_PAIR_LABEL_BATCH;
+  const limit = Math.min(
+    input.limit ?? TRANSFER_PAIR_LABEL_BATCH,
+    TRANSFER_PAIR_LABEL_BATCH,
+  );
   const rows = await transferPairsNeedingLabels(db, {
     limit: limit + 1,
     after: input.after,
@@ -134,79 +126,130 @@ export async function labelTransferPairSuggestions(
   let waitingUntil: number | null = null;
   const database = createConcurrencyLimiter(TRANSFER_PAIR_PUBLISH_CONCURRENCY);
   const signal = new AbortController().signal;
-  await forEachConcurrently(page, page.length, async (row) => {
-    if (pauses.length) return;
-    try {
-      const current = await database.run(
-        () => buildTransferPair(db, row.data.pairKey),
-        signal,
-      );
-      if (
-        !current ||
-        (await transferPairEvidenceFingerprint(current.judgment)) !==
-          row.data.evidenceFingerprint
-      ) {
-        stale++;
-        return;
-      }
-      const model = selectDecisionModel({ key: row.data.pairKey });
-      const { outflow, inflow } = current.judgment;
-      const context = { model, port: input.port, usage };
-      const compute = () =>
-        settleDecisions([
-          movementLabel(outflow, inflow, context),
-          movementLabel(inflow, outflow, context),
-        ]);
-      const [outflowLabel, inflowLabel] = await (input.cooperative
-        ? withCooperativeAiWork(compute)
-        : compute());
-      await database.run(async () => {
-        const outcome = await publishTransferPair(
-          db,
-          {
-            ...current,
-            judgment: labelTransferPair(current.judgment, {
-              outflow: outflowLabel ?? null,
-              inflow: inflowLabel ?? null,
-            }),
-          },
-          {
-            kind: "model",
-            model,
-            revision: TRANSFER_PAIR_MOVEMENT_FEATURE.promptVersion,
-            runId,
-            evaluationId: null,
-          },
-        );
-        if (outcome === "published") {
-          labelled++;
-          const charges = [outflow, inflow].flatMap((leg) =>
-            leg.charge ? [leg.charge] : [],
-          );
-          const { regenerateCharges } =
-            await import("~/server/domains/statement-import/repo/statement-suggestions");
-          await regenerateCharges(db, charges);
-        }
-      }, signal);
-    } catch (error) {
-      const deferred = aiWorkDeferral(error);
-      if (deferred) {
-        unfinished = Math.min(unfinished, page.indexOf(row));
-        waitingUntil = Math.min(waitingUntil ?? Infinity, deferred.until);
-        return;
-      }
-      // The budget pauses the whole pass; any other failure is this pair's.
-      if (error instanceof AiBudgetExhaustedError) pauses.push(error);
-      else
-        failed.push({
-          at: new Date().toISOString(),
-          message: runFailureText(
-            error instanceof Error ? error : String(error),
-          ),
-          ref: `transfer_pair:${row.data.pairKey}`,
-        });
+  const recordFailure = (index: number, error: unknown) => {
+    const row = page[index]!;
+
+    const deferred = aiWorkDeferral(error);
+    if (deferred) {
+      unfinished = Math.min(unfinished, index);
+      waitingUntil = Math.min(waitingUntil ?? Infinity, deferred.until);
+      return;
     }
+    // The budget pauses the whole pass; any other failure is this pair's.
+    if (error instanceof AiBudgetExhaustedError) pauses.push(error);
+    else
+      failed.push({
+        at: new Date().toISOString(),
+        message: runFailureText(error instanceof Error ? error : String(error)),
+        ref: `transfer_pair:${row.data.pairKey}`,
+      });
+  };
+  const prepared = await Promise.all(
+    page.map(async (row, index) => {
+      try {
+        const current = await database.run(
+          () => buildTransferPair(db, row.data.pairKey),
+          signal,
+        );
+        if (
+          !current ||
+          (await transferPairEvidenceFingerprint(current.judgment)) !==
+            row.data.evidenceFingerprint
+        ) {
+          stale++;
+          return null;
+        }
+        const model = selectDecisionModel({ key: row.data.pairKey });
+        return { current, model, index };
+      } catch (error) {
+        recordFailure(index, error);
+        return null;
+      }
+    }),
+  );
+  const ready = prepared
+    .filter((item) => item !== null)
+    .map((item) => {
+      const labels: Parameters<typeof labelTransferPair>[1] = {
+        outflow: null,
+        inflow: null,
+      };
+      const errors: unknown[] = [];
+      return { ...item, labels, errors };
+    });
+  const questions = ready.flatMap((pair) => {
+    const { outflow, inflow } = pair.current.judgment;
+    const context = { model: pair.model, port: input.port, usage };
+    return (["outflow", "inflow"] as const).flatMap((leg) => {
+      const args = movementQuestion(
+        leg === "outflow" ? outflow : inflow,
+        leg === "outflow" ? inflow : outflow,
+        context,
+      );
+      return args ? [{ pair, leg, args }] : [];
+    });
   });
+  const answers = await settleDecisionChoices(
+    questions,
+    (question) => question.args,
+    { cooperative: input.cooperative },
+  );
+  for (const answer of answers) {
+    const { pair, leg } = answer.item;
+    if (answer.status === "rejected") {
+      pair.errors.push(answer.reason);
+      continue;
+    }
+    const choice =
+      TRANSFER_PAIR_MOVEMENT_FEATURE.choices[answer.value.selectedIndex ?? -1];
+    pair.labels[leg] = choice
+      ? { choice, confidence: answer.value.confidence, model: pair.model }
+      : null;
+  }
+  await Promise.all(
+    ready.map(async (item) => {
+      const { current, model, index } = item;
+      try {
+        if (item.errors.length)
+          throw (
+            item.errors.find(
+              (error) => error instanceof AiBudgetExhaustedError,
+            ) ?? item.errors[0]
+          );
+        await database.run(async () => {
+          const outcome = await publishTransferPair(
+            db,
+            {
+              ...current,
+              judgment: labelTransferPair(current.judgment, {
+                outflow: item.labels.outflow,
+                inflow: item.labels.inflow,
+              }),
+            },
+            {
+              kind: "model",
+              model,
+              revision: TRANSFER_PAIR_MOVEMENT_FEATURE.promptVersion,
+              runId,
+              evaluationId: null,
+            },
+          );
+          if (outcome === "published") {
+            labelled++;
+            const charges = [
+              current.judgment.outflow,
+              current.judgment.inflow,
+            ].flatMap((leg) => (leg.charge ? [leg.charge] : []));
+            const { regenerateCharges } =
+              await import("~/server/domains/statement-import/repo/statement-suggestions");
+            await regenerateCharges(db, charges);
+          }
+        }, signal);
+      } catch (error) {
+        recordFailure(index, error);
+      }
+    }),
+  );
   if (pauses[0]) throw pauses[0];
   const last = page.at(-1);
   // Resume before the earliest deferred pair. A null cursor with a wake time

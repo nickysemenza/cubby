@@ -1,3 +1,4 @@
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { describe, expect, it } from "vitest";
 
 import { memoryDurableSteps } from "~/server/testing/durable-steps";
@@ -23,6 +24,90 @@ const work = (overrides: Partial<StepRunWork> = {}): StepRunWork => {
 };
 
 describe("step Run Workflow failure and invocation boundaries", () => {
+  // Cheap and partially filled label pages still use the driver's static budget.
+  it("keeps cheap label pages in one instance beyond the former two-page cap", async () => {
+    let advanced = 0;
+    let handedOff = false;
+    await runStepRunWorkflow(
+      memoryDurableSteps().steps,
+      work({
+        inspect: async () =>
+          advanced < 4
+            ? {
+                name: `labels p${advanced + 1}`,
+                scope: "synthetic",
+                nextInstanceId: "RUN-4K7M-2",
+                summary: null,
+              }
+            : null,
+        advance: async () => {
+          advanced++;
+          return {
+            kind: "continue",
+            execution: {
+              phase: "labels",
+              pagesPerInstance:
+                WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance,
+            },
+          };
+        },
+        boundary: async (_name, force) => {
+          handedOff ||= Boolean(force);
+          return Boolean(force);
+        },
+      }),
+    );
+    expect(advanced).toBe(4);
+    expect(handedOff).toBe(false);
+  });
+
+  // Cheap database pages must not spend a model-heavy page's whole share;
+  // their work still reduces the same allowance across a phase transition.
+  it("shares proportional page allowances across cheap and model-heavy phases", async () => {
+    let advanced = 0;
+    await runStepRunWorkflow(
+      memoryDurableSteps().steps,
+      work({
+        advance: async () => {
+          advanced++;
+          return {
+            kind: "continue",
+            execution:
+              advanced <= 5
+                ? { phase: "database", pagesPerInstance: 100 }
+                : { phase: "decisions", pagesPerInstance: 4 },
+          };
+        },
+        boundary: async (_name, force) => Boolean(force),
+      }),
+    );
+    expect(advanced).toBe(9);
+  });
+
+  // Changing phase must not replenish an instance's declared page allowance.
+  it("rotates at a global page allowance across phase changes", async () => {
+    let advanced = 0;
+    let handedOff = false;
+    await runStepRunWorkflow(
+      memoryDurableSteps().steps,
+      work({
+        advance: async () => {
+          advanced++;
+          return {
+            kind: "continue",
+            execution: { phase: `phase-${advanced}`, pagesPerInstance: 3 },
+          };
+        },
+        boundary: async (_name, force) => {
+          handedOff ||= Boolean(force);
+          return Boolean(force);
+        },
+      }),
+    );
+    expect(advanced).toBe(3);
+    expect(handedOff).toBe(true);
+  });
+
   // Different RunSteps may share a phase and position; one must never replay
   // the other's completed page instead of executing its own work.
   it("keeps identical phase/page labels in different durable scopes separate", async () => {

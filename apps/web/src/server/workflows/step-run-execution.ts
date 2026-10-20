@@ -1,4 +1,5 @@
 import { MAX_STEP_RUN_INSTANCE_PAGES } from "@cubby/schemas/run-step";
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type {
@@ -12,10 +13,6 @@ import {
   type DurableSteps,
 } from "~/server/workflows/runs/step";
 
-// The subrequest budget belongs to the instance, not to each step.do page.
-// Leave headroom for page retries, failure recording and successor dispatch.
-const DEFAULT_PAGES_PER_INSTANCE = 5;
-const INSTANCE_ELAPSED_MS = 10 * 60_000;
 const log = createLogger("step-run-workflow");
 
 /** Effects whose invocation/database ownership stays with the Cloudflare adapter. */
@@ -38,10 +35,10 @@ export async function runStepRunWorkflow(
   work: StepRunWork,
 ) {
   try {
-    const phasePages = new Map<string, number>();
     let dashboard:
       | { nextInstanceId: string; summary: StepPageSummary | null }
       | undefined;
+    let pageAllowanceUsed = 0;
     for (let page = 0; page < MAX_STEP_RUN_INSTANCE_PAGES; page++) {
       // Names are memoization keys. Inspect once inside step.do: only this saved
       // checkpoint (never live counts or wall time) may name the page on replay.
@@ -62,7 +59,11 @@ export async function runStepRunWorkflow(
         name,
         {
           timeout: "15 minutes",
-          retries: { limit: 2, delay: "5 seconds", backoff: "exponential" },
+          retries: {
+            limit: WORKFLOW_EXECUTION_LIMITS.pageAttempts - 1,
+            delay: "5 seconds",
+            backoff: "exponential",
+          },
         },
         () => work.advance(),
       );
@@ -70,22 +71,27 @@ export async function runStepRunWorkflow(
       if (advance.kind !== "continue" && advance.kind !== "wait") return;
       const execution =
         advance.kind === "continue" ? advance.execution : undefined;
-      const phase = execution?.phase ?? "default";
-      const pages = (phasePages.get(phase) ?? 0) + 1;
-      phasePages.set(phase, pages);
+      // Static page costs share one allowance across phases. Database-only
+      // pages consume a smaller share than a page of independent model calls.
+      pageAllowanceUsed +=
+        1 /
+        (execution?.pagesPerInstance ??
+          WORKFLOW_EXECUTION_LIMITS.fallbackPagesPerInstance);
       if (advance.kind === "continue" && advance.waitSeconds)
         await steps.sleep(`capacity:${page}`, advance.waitSeconds * 1_000);
       const elapsed = await steps.do(
         `instance budget · ${name}`,
         BOOKKEEPING_RETRIES,
         async () => ({
-          handoffDue: (work.elapsedMs?.() ?? 0) >= INSTANCE_ELAPSED_MS,
-          budgetMinutes: INSTANCE_ELAPSED_MS / 60_000,
+          handoffDue:
+            (work.elapsedMs?.() ?? 0) >= WORKFLOW_EXECUTION_LIMITS.elapsedMs,
+          budgetMinutes: WORKFLOW_EXECUTION_LIMITS.elapsedMs / 60_000,
         }),
       );
       if (
         elapsed.handoffDue ||
-        pages >= (execution?.pagesPerInstance ?? DEFAULT_PAGES_PER_INSTANCE)
+        // Tolerate accumulated floating-point error at an exact page bound.
+        pageAllowanceUsed >= 1 - Number.EPSILON * MAX_STEP_RUN_INSTANCE_PAGES
       ) {
         await work.boundary("continue", true, dashboard);
         return;

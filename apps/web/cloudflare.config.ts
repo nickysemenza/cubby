@@ -6,6 +6,7 @@ import {
   triggers,
 } from "cf/config";
 import { fileURLToPath } from "node:url";
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
 import { RUN_WORKFLOWS } from "./src/lib/workflows/run-workflows.ts";
@@ -25,6 +26,7 @@ export const productionWorker = defineWorker({
   },
   limits: {
     cpuMs: 45000,
+    subrequests: WORKFLOW_EXECUTION_LIMITS.subrequests,
   },
   observability: {
     enabled: true,

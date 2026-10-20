@@ -1,8 +1,10 @@
 import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
 import {
   statementTransactionJudgment,
+  statementCounterparty,
   type StatementTransactionJudgment,
   type StatementLabelCheckpoint,
   STATEMENT_LABEL_REVISION,
@@ -11,20 +13,24 @@ import {
   selectDecisionModel,
   type SupportedDecisionModel,
 } from "@cubby/shared/ai/models";
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
-import {
-  aiWorkDeferral,
-  withCooperativeAiWork,
-} from "~/server/ai/cooperative-work";
+import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import {
   decisionChoiceFitsContext,
   type DecisionPort,
-  runDecisionChoice,
+  settleDecisionChoices,
+  type DecisionChoiceResult,
+  type DecisionChoiceArgs,
 } from "~/server/ai/decision-model";
-import { STATEMENT_CHARGE_IDENTITY_FEATURE } from "~/server/ai/policy/features";
+import {
+  STATEMENT_CHARGE_IDENTITY_FEATURE,
+  STATEMENT_COUNTERPARTY_FEATURE,
+  STATEMENT_TRANSACTION_KIND_FEATURE,
+} from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -46,16 +52,12 @@ import {
   recordStatementLabelCheckpoint,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
-import { labelStatementKind } from "~/server/domains/statement-import/service/statement-kind-labels";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-/** One label page labels at most this many suggestions. */
-export const STATEMENT_LABEL_BATCH = 64;
-// A single page can spend the rolling minute's allowance; instance rotation
-// bounds total subrequests independently of model concurrency.
-const STATEMENT_LABEL_DECISIONS = 180;
+export const STATEMENT_LABEL_BATCH =
+  WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
@@ -67,7 +69,6 @@ const identityLabel = {
 } as const;
 
 type ChargeProposal = Awaited<ReturnType<typeof buildChargeProposals>>[number];
-type DecisionUsage = Parameters<typeof labelStatementKind>[1]["usage"];
 
 /**
  * A page's proposals in one build: per-charge builds repeat the same
@@ -103,11 +104,11 @@ async function buildPage(
 }
 
 /** Partial model answers are checkpointed independently of advisory publication. */
-async function labelledJudgment(
+function prepareLabelledJudgment(
   current: ChargeProposal,
   input: {
     port?: DecisionPort;
-    usage: DecisionUsage;
+    usage: DecisionChoiceArgs["usage"];
     checkpoint: StatementLabelCheckpoint | null;
     reserve(count: number): () => boolean;
   },
@@ -160,13 +161,6 @@ async function labelledJudgment(
     judgment.candidates.filter((entry) => entry.label !== null).length +
     Number(checkpoint.kind) +
     Number(checkpoint.counterparty);
-  // Reserve each charge's missing decisions before yielding, so a tiny page
-  // budget completes the earliest charge instead of scattering partial labels.
-  const reserve = input.reserve(
-    judgment.candidates.filter((entry) => entry.label === null).length +
-      Number(Boolean(judgment.create) && !checkpoint.kind) +
-      Number(Boolean(judgment.create) && !checkpoint.counterparty),
-  );
   const reused = countLabels();
   const errors: unknown[] = [];
   let waitingUntil: number | null = null;
@@ -176,35 +170,36 @@ async function labelledJudgment(
       waitingUntil = Math.min(waitingUntil ?? Infinity, deferred.until);
     else errors.push(error);
   };
+  const decisions: {
+    args: DecisionChoiceArgs;
+    apply(result: DecisionChoiceResult): void;
+  }[] = [];
   const statement = statementLabelSubject(judgment);
-  await forEachConcurrently(
-    judgment.candidates,
-    judgment.candidates.length,
-    async (candidate) => {
-      if (candidate.label !== null || waitingUntil !== null) return;
-      const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
-        JSON.stringify({
-          statement,
-          transaction: statementCandidateSubject(candidate),
-        }),
-      );
-      if (!decisionChoiceFitsContext(prompt)) {
-        candidate.label = {
-          same: "insufficient",
-          confidence: "low",
-          model: null,
-        };
-        return;
-      }
-      if (!reserve()) return;
-      try {
-        const result = await runDecisionChoice({
-          ...prompt,
-          feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
-          decisionModel: model,
-          port: input.port,
-          usage: input.usage,
-        });
+  for (const candidate of judgment.candidates) {
+    if (candidate.label !== null) continue;
+    const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
+      JSON.stringify({
+        statement,
+        transaction: statementCandidateSubject(candidate),
+      }),
+    );
+    if (!decisionChoiceFitsContext(prompt)) {
+      candidate.label = {
+        same: "insufficient",
+        confidence: "low",
+        model: null,
+      };
+      continue;
+    }
+    decisions.push({
+      args: {
+        ...prompt,
+        feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
+        decisionModel: model,
+        port: input.port,
+        usage: input.usage,
+      },
+      apply(result) {
         const choice =
           STATEMENT_CHARGE_IDENTITY_FEATURE.choices[result.selectedIndex ?? -1];
         candidate.label = {
@@ -212,44 +207,79 @@ async function labelledJudgment(
           confidence: result.confidence,
           model,
         };
-      } catch (error) {
-        retainError(error);
-      }
-    },
-  );
+      },
+    });
+  }
+  // Both votes use the original statement evidence, independently of identity
+  // answers and of each other. Enqueue them with the whole page's questions.
   for (const part of ["kind", "counterparty"] as const) {
-    if (
-      !judgment.create ||
-      checkpoint[part] ||
-      waitingUntil !== null ||
-      !reserve()
-    )
+    if (!judgment.create || checkpoint[part]) continue;
+    const feature =
+      part === "kind"
+        ? STATEMENT_TRANSACTION_KIND_FEATURE
+        : STATEMENT_COUNTERPARTY_FEATURE;
+    const prompt = feature.prompt(JSON.stringify(statement));
+    const apply = (choice: string | null) => {
+      if (!judgment.create) return;
+      if (part === "kind")
+        judgment.create.votes.label = financialTransactionKind
+          .nullable()
+          .catch(null)
+          .parse(choice);
+      else
+        judgment.create.counterparty.label = statementCounterparty.shape.label
+          .catch(null)
+          .parse(choice);
+      checkpoint[part] = true;
+    };
+    if (!decisionChoiceFitsContext(prompt)) {
+      apply(null);
       continue;
-    try {
-      judgment.create = await labelStatementKind(judgment.create, {
-        subject: JSON.stringify(statement),
-        transfer: judgment.transfer,
-        model,
+    }
+    decisions.push({
+      args: {
+        ...prompt,
+        feature,
+        decisionModel: model,
         port: input.port,
         usage: input.usage,
-        parts: [part],
-      });
-      checkpoint[part] = true;
-    } catch (error) {
-      retainError(error);
-    }
+      },
+      apply(result) {
+        const choice = feature.choices[result.selectedIndex ?? -1];
+        apply(choice && result.confidence === "high" ? choice : null);
+      },
+    });
   }
-  judgment.clean = isClean(judgment, current.canonical.amount);
-  checkpoint.judgment = statementTransactionJudgment.parse(judgment);
+  // Only context-fitting questions spend the page allowance. Reserve a whole
+  // charge synchronously, so a small allowance completes earlier charges first.
+  const reserved = input.reserve(decisions.length);
   return {
-    checkpoint,
-    labels: { reused, generated: Math.max(0, countLabels() - reused) },
-    model,
-    errors,
-    waitingUntil,
-    complete:
-      judgment.candidates.every((candidate) => candidate.label !== null) &&
-      (!judgment.create || (checkpoint.kind && checkpoint.counterparty)),
+    decisions: decisions.filter(() => reserved()),
+    retainError,
+    finish() {
+      if (judgment.create)
+        Object.assign(
+          judgment.create,
+          decideStatementKind({
+            amount: judgment.create.amount,
+            votes: judgment.create.votes,
+            counterparty: judgment.create.counterparty,
+            transfer: judgment.transfer,
+          }),
+        );
+      judgment.clean = isClean(judgment, current.canonical.amount);
+      checkpoint.judgment = statementTransactionJudgment.parse(judgment);
+      return {
+        checkpoint,
+        labels: { reused, generated: Math.max(0, countLabels() - reused) },
+        model,
+        errors,
+        waitingUntil,
+        complete:
+          judgment.candidates.every((candidate) => candidate.label !== null) &&
+          (!judgment.create || (checkpoint.kind && checkpoint.counterparty)),
+      };
+    },
   };
 }
 
@@ -300,7 +330,10 @@ export async function labelStatementSuggestions(
   };
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled && !input.port) return { ...empty, active: false };
-  const limit = input.limit ?? STATEMENT_LABEL_BATCH;
+  const limit = Math.min(
+    input.limit ?? STATEMENT_LABEL_BATCH,
+    STATEMENT_LABEL_BATCH,
+  );
   const rows = await suggestionsNeedingLabels(
     db,
     limit + 1,
@@ -330,7 +363,11 @@ export async function labelStatementSuggestions(
     });
   };
   const page = rows.slice(0, limit);
-  let decisionsLeft = input.decisionLimit ?? STATEMENT_LABEL_DECISIONS;
+  let decisionsLeft = Math.min(
+    input.decisionLimit ??
+      WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
+    WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
+  );
   const reserve = (count: number) => {
     let left = Math.min(decisionsLeft, count);
     decisionsLeft -= left;
@@ -403,18 +440,46 @@ export async function labelStatementSuggestions(
     });
     // Model work holds no publish transaction. All started decisions settle
     // before checkpoint/publication, whose separate DB fan-out stays at four.
-    const computed = await Promise.allSettled(
-      ready.map(({ current, target }) => {
-        const compute = () =>
-          labelledJudgment(current, {
+    const prepared = ready.map(({ current, target }) => {
+      try {
+        return {
+          status: "fulfilled" as const,
+          value: prepareLabelledJudgment(current, {
             port: input.port,
             usage,
             checkpoint: target.row.checkpoint,
             reserve,
-          });
-        return input.cooperative ? withCooperativeAiWork(compute) : compute();
-      }),
+          }),
+        };
+      } catch (reason) {
+        return { status: "rejected" as const, reason };
+      }
+    });
+    const decisions = prepared.flatMap((result) =>
+      result.status === "fulfilled"
+        ? result.value.decisions.map((decision) => ({
+            ...decision,
+            reject: result.value.retainError,
+          }))
+        : [],
     );
+    const answers = await settleDecisionChoices(
+      decisions,
+      (decision) => decision.args,
+      { cooperative: input.cooperative },
+    );
+    for (const answer of answers) {
+      if (answer.status === "fulfilled") answer.item.apply(answer.value);
+      else answer.item.reject(answer.reason);
+    }
+    const computed = prepared.map((result) => {
+      if (result.status === "rejected") return result;
+      try {
+        return { status: "fulfilled" as const, value: result.value.finish() };
+      } catch (reason) {
+        return { status: "rejected" as const, reason };
+      }
+    });
     await forEachConcurrently(
       ready.map((entry, index) => ({
         ...entry,

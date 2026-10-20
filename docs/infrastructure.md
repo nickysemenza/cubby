@@ -89,15 +89,25 @@ belongs to the Workflow instance, so a new `step.do` alone does not reset it
 Statement Sweeps also bound generation and label page sizes. The driver owns
 those executable bounds; continuation retains the RunStep cursors and the
 attempt/cancellation fences instead of starting generation over.
-Generation commits up to 100 pages of 20 charges per instance. Labelling commits
-up to two pages, each with at most 64 suggestions and 180 reserved new decisions
-across all rule-driven rounds. A charge reserves its missing decisions before
-model work yields, so a small decision budget finishes earlier charges instead
-of scattering partial labels. The page and each charge's complete candidate
-shortlist fan out to the egress DO; there is no caller-side model concurrency
-cap. Candidates are never truncated. Kind and counterparty decisions remain
-sequential within a charge, while 64 charges can supply 64 outstanding calls.
-At ten-second latency, 30 concurrent calls suffice for 180 starts/minute.
+The shared `WORKFLOW_EXECUTION_LIMITS` policy configures the Worker's one-million
+subrequest allowance, label page size (512 suggestions / 1,024 new questions),
+three page attempts, and the instance page bound. Each model-heavy page spends 1/16 of an instance allowance; a database-only
+generation page spends 1/100. The generic runner sums those shares across phase
+changes, with a separate 500-page hard ceiling; changing phase cannot replenish
+the allowance.
+Generation still commits 20 charges per page. A charge reserves its missing
+decisions before model work yields, so a small question budget finishes earlier
+charges instead of scattering partial labels. Candidates are never truncated.
+
+Both labelers submit a whole page's independent questions to the shared decision
+runner. Statement identity, kind and counterparty answers use their original
+per-question evidence; neither create vote depends on another model answer.
+Transfer pairs submit both legs together across the page. Feature, sampled
+Jev/Clef model, usage context, media, question count and serialized context bounds
+still determine actual request groups. The gateway's 180/minute limit counts
+requests, not questions or completed suggestions; batching can complete many
+suggestions per admitted request. Prompts, confidence thresholds, per-question
+cache keys and model selection remain unchanged.
 
 Model work holds no publication transaction. Statement checkpoint/publication
 runs at `STATEMENT_PUBLISH_CONCURRENCY = 4` against the twelve-connection
@@ -110,44 +120,48 @@ independently of completion order. Compatible evidence re-exports retain paid
 labels. A member-settled or suppressed charge is skipped; moved evidence remains
 queued when any rule round yields. Cache/admission contention yields Workflow
 label work after one admission attempt, checkpoints all started work, then
-resumes after durable `step.sleep` (at least 15 seconds for contention).
+requests a durable wake no sooner than fifteen seconds after contention.
+Checkpoint/publication time can consume part of that interval before `step.sleep`.
 Transfer-pair Workflow pages also return a durable wake time and resume before
 the earliest deferred pair, retaining completed publications; a null cursor
 with a wake time means retry from the start, never completion.
 Interactive callers retain their waiting behavior. Pages retain their 15-minute
 timeout. An instance requests handoff after ten minutes elapsed, checked after
-committed pages; unmeasured phases and waiting parents retain five-page bounds.
+committed pages; unmeasured drivers and waiting parents retain five-page bounds.
 Statement label-round logs retain charge and planned decision counts, including
 candidate fanout. These are logical workload counts, not measured subrequests.
 
-The synthetic egress load regression uses one cold decision per suggestion,
-64 suggestions/page, ten-second model latency, 25ms publications in groups of
-four, and a conservative ten-second queue handoff every two pages. It measures
-180 starts and 180 completed labels before 60 seconds; request 181 waits for
-the rolling window. The real label-service integration regression separately
-holds model answers outstanding to verify at least 30 concurrent decisions and
-no more than four publish transactions. These are synthetic capacity evidence,
-not production completion measurements. At the same request rate, two decisions
-per suggestion yield about 90 suggestions/minute; retries and shared gateway
-traffic consume the same allowance. Four publishers would bind first if each
-publication averaged over 1.33 seconds at three suggestions/second. Page and
-handoff overhead fit within the load regression's rate-limited idle time.
+The static application-path allowance assumes **no batching savings**:
+`16 model pages × 1,024 questions × 3 attempts × 16 transport operations = 786,432`,
+leaving over 200,000 operations for database-only generation, bookkeeping,
+successor dispatch and recovery. Mixed phases can end after the page crossing
+the summed allowance; they still cannot exceed sixteen model-heavy pages or
+one hundred database-only pages.
+Sixteen allows three cache claims, three invalidations, two lease renewals during
+the 30-second decision deadline, three provider attempts with DO/upstream
+transport, publication/release and telemetry. Repeated invalid-cache replacement
+races stop after three rejected entries and compute uncached. Busy Workflow
+cache/admission paths yield after one lookup rather than polling. A retry
+reserves the full page allowance again even when individual cache hits avoid it.
+This is conservative application-path sizing, not a platform usage meter; SQL
+over Hyperdrive is not one HTTP subrequest per query. Explicit caller limits
+cannot enlarge a label page or its new-question allowance.
 
-Two full label pages reserve at most 360 cold decisions: approximately 1,080
-transport calls (claim, gateway, publication), or 1,800 with three provider
-attempts per decision. Three attempts of every page make those 3,240 and 5,400,
-before lease renewals, one-shot admission deferrals and bookkeeping. These are
-application-path estimates, not Cloudflare internal accounting. SQL over
-Hyperdrive is not one HTTP subrequest per query. The DO forwards each admitted
-model call in one request/response round trip; rejection does not poll inside a
-Workflow page or increase RPC ancestry. The DO owns upstream completion and
-permit release. Cloudflare defaults to 10,000 subrequests and 10,000 steps per
-instance, 30 seconds active CPU per step, and unlimited platform step wall time;
-this deployment does not raise those defaults
-([Workflow limits](https://developers.cloudflare.com/workflows/reference/limits/)).
-Transfer-pair labels likewise rotate after two pages (at most 400 decisions,
-or about 6,000 calls under the same pessimistic retry estimate). The two-page
-bounds retain reserve; no runtime API exposes a remaining budget.
+The egress DO forwards each admitted model call in one request/response round
+trip and owns completion/permit release. Rejection does not poll inside a
+Workflow page or increase RPC ancestry. Cloudflare defaults to 10,000
+subrequests per instance and permits configuration up to ten million; Cubby
+configures one million. The separate step-count ceiling remains 10,000 by
+default. Page wall time is unlimited by the platform, while active CPU is
+bounded independently ([Workflow limits](https://developers.cloudflare.com/workflows/reference/limits/)).
+The real-DO regression verifies 180 admitted starts in a rolling minute with
+synthetic ten-second request lifetimes. The full synthetic Sweep regression
+measures completed suggestions through actual batching, PostgreSQL publication,
+page checkpoints and Workflow handoffs; its reported latency costs are simulated
+capacity evidence, not production measurements. The virtual clock charges model,
+label-publication and handoff latency, and waits for outstanding real SQL before
+advancing; host PostgreSQL/setup time is reported separately and excluded from
+that capacity estimate.
 
 Page failures are logged before database failure bookkeeping. If bookkeeping
 also fails, the original error and the complete recording-error chain survive
@@ -782,16 +796,20 @@ payloads and retry policies. Gateway cache verdicts describe upstream billing;
 application `cacheStatus` continues to describe the caller's own cache.
 
 Decision assignment, caching, request bounds and response envelopes belong to
-the shared decision runner. Independent decisions use `runDecisionChoices`:
-cache hits retain their individual keys, while owned cache misses share requests
+the shared decision runner. Independent all-or-fail decisions use
+`runDecisionChoices`; callers retaining partial answers use the generic
+`settleDecisionChoices(items, questionFor)`, whose outcomes carry their original
+typed work item. Its cooperative option owns the Workflow's yield scope. Both wait for every started request before returning, including
+when a sibling fails. Callers do not maintain parallel question-index arrays.
+Cache hits retain their individual keys, while owned cache misses share requests
 only within the same feature, sampled model, usage context, and embedded image
 content. Shared images are sent once per batch; different media and text-only
-questions stay in separate requests. Batches carry
-at most 64 independently scoped questions and stay within the runner's serialized
-text budget; larger sets split without dropping candidates. Waiting on another
-request's cache lease does not hold up owned misses. Each upstream batch records
-usage once and still passes through the gateway egress admission limits. Dependent
-decision phases wait for their required answers before starting another batch.
+questions stay in separate requests. Batches carry at most 64 independently
+scoped questions and stay within the runner's serialized text budget; larger
+sets split without dropping candidates. Waiting on another request's cache lease
+does not hold up owned misses. Each upstream batch records usage once and still
+passes through gateway egress admission. Dependent decision phases wait for their
+required answers before starting another batch.
 Product identity grounding batches source-literal questions before eligible
 relation questions; usage is attributed to the literal or relation phase, while
 individual dimension prompts, source literals, and fingerprints stay in receipts.
