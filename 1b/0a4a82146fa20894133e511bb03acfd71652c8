@@ -1,0 +1,171 @@
+apps/web/src/entity/audit-log/audit-log-entry.tsx
+  s_a14da84a78b0eb::t_a821f2caae6163 12
+apps/web/src/entity/components/entity-ref-link.unit.test.tsx
+  s_a14da84a78b0eb::t_251ca900e9414c 18,478-480
+apps/web/src/entity/display/entity-display.tsx
+  s_a14da84a78b0eb::t_a312475fc2f241 46,1128,1150,1170-1173,1203,1256-1266
+apps/web/src/entity/entity-detail/detail-activity.tsx
+  s_a14da84a78b0eb::t_98693d67888c11 21,68,71-72,75,164
+apps/web/src/entity/entity-detail/detail-hero-stats.tsx
+  s_a14da84a78b0eb::t_d6c85f425f3651 9,19
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_a14da84a78b0eb::t_8dca9fe6206b9f 46,51-52,741,743-744,747,751
+apps/web/src/entity/entity-detail/generic-entity-detail.unit.test.tsx
+  s_a14da84a78b0eb::t_cf106f37c6823c 365,397,407
+apps/web/src/entity/entity-detail/inspector-record.tsx
+  s_a14da84a78b0eb::t_40859ca58f52c9 25-27,31,65-85,87,130-136,147,163-168,175,184
+apps/web/src/entity/entity-detail/needs-you.tsx
+  s_a14da84a78b0eb::t_2916f902f574ed 11,65-68,70,72-76,80-81
+apps/web/src/entity/entity-detail/record-quality.tsx
+  s_a14da84a78b0eb::t_9295b1751babc8 27,366,368
+apps/web/src/entity/entity-detail/report-slot.tsx
+  s_a14da84a78b0eb::t_a26ef5e8cae8c5 26,67-70,73
+apps/web/src/entity/entity-list/list-total-summary.tsx
+  s_a14da84a78b0eb::t_eb588f9bb60abd 3,54
+apps/web/src/entity/navigation/nav-items.ts
+  s_a14da84a78b0eb::t_b129de0fe9a199 244
+apps/web/src/entity/page/entity-page-header.preview.test.tsx
+  s_a14da84a78b0eb::t_7cb6572691df7d 2,6,9,11,25,76,83-84,86-145
+apps/web/src/entity/page/page.tsx
+  s_a14da84a78b0eb::t_5c18ef64f7a5ee 15,17-18,20,156,169,175,205,210-211,268-279
+apps/web/src/entity/routing/detail-page.tsx
+  s_a14da84a78b0eb::t_2d406bf51f7f62 154
+apps/web/src/entity/suggestions/queue/automatic-rules.tsx
+  s_a14da84a78b0eb::t_4f50a47e5ff64c 79
+apps/web/src/entity/suggestions/queue/suggestion-evidence.tsx
+  s_a14da84a78b0eb::t_eeb837bc89fca5 21,65-66,68-76,133,260,399,492,567,679-680
+apps/web/src/entity/work-queue/record-work-queue.tsx
+  s_a14da84a78b0eb::t_3d464c3a9b6dbd 12,95-100,129
+apps/web/src/features/design/sections/compositions-section.tsx
+  s_a14da84a78b0eb::t_7f97c84ae9b678 16,280,317-318,320,330-332,336,341,344
+apps/web/src/features/design/sections/records-section.tsx
+  s_a14da84a78b0eb::t_cd620d95fff34a 5
+apps/web/src/features/home/home-insights.tsx
+  s_a14da84a78b0eb::t_5f83b42d175198 18,25,32,39
+apps/web/src/features/home/house-card.tsx
+  s_a14da84a78b0eb::t_be9179511e76d3 8,18,147-162,227
+apps/web/src/features/home/meals-card.tsx
+  s_a14da84a78b0eb::t_ebaddc096c38e3 10,41-56,134
+apps/web/src/features/home/pantry-value-card.tsx
+  s_a14da84a78b0eb::t_0fd31d42f9cf1d 7,38,46
+apps/web/src/features/home/pinned-views.tsx
+  s_a14da84a78b0eb::t_729477aa2b84f8 17,63-68,73
+apps/web/src/features/home/quick-actions-card.tsx
+  s_a14da84a78b0eb::t_1b8caa2782df7c 4,17-22,72
+apps/web/src/features/home/recorded-spend-card.tsx
+  s_a14da84a78b0eb::t_2fa9cd342deea6 3,9,72-73
+apps/web/src/features/problems/components/problem-section.tsx
+  s_a14da84a78b0eb::t_57e1dd75fab6b7 29
+apps/web/src/features/problems/components/problem-sections.tsx
+  s_a14da84a78b0eb::t_1efcba7c61350c 63
+apps/web/src/features/problems/components/render-helpers.tsx
+  s_a14da84a78b0eb::t_59dd25a14551f8 8
+apps/web/src/features/product/product-variant-evidence.tsx
+  s_a14da84a78b0eb::t_ccc3a8018eccc8 3,17-18
+apps/web/src/features/project/projects-dashboard.tsx
+  s_a14da84a78b0eb::t_ef16389d9e5bc7 391,406-408,436-438
+apps/web/src/features/purchase/purchase-import-run-detail.tsx
+  s_a14da84a78b0eb::t_e87af8cfec8720 644,715,936-939
+apps/web/src/features/recipe/cookbook-import/run-report-panel.tsx
+  s_a14da84a78b0eb::t_f74a7ee972dcb8 10
+apps/web/src/features/recipe/recipe-form/recipe-live-preview.tsx
+  s_a14da84a78b0eb::t_5708da0199dec5 16,77
+apps/web/src/features/recipe/recipe-instructions.tsx
+  s_a14da84a78b0eb::t_46983b44006e42 8,49,53
+apps/web/src/features/recipe/recipe-magazine-view.tsx
+  s_a14da84a78b0eb::t_07e65972a94a66 11,25,42,225,365-371,373-375
+apps/web/src/features/recipe/recipe-part-heading.tsx
+  s_a14da84a78b0eb::t_3e9257ecdbbe8d 4-6,8,20-24
+apps/web/src/features/run/photo-group-review.tsx
+  s_a14da84a78b0eb::t_61694b1a2154a1 63,1976-1977,2740-2745,3502,3505,3577,3579,3758,3760-3761
+apps/web/src/features/task/next-tasks.tsx
+  s_a14da84a78b0eb::t_564f6e2e38c503 246-250,272,274
+apps/web/src/features/usda-food/usda-alternate-id-redirect.tsx
+  s_a14da84a78b0eb::t_bb295e9c2ef42a 43,54,64
+apps/web/src/routes/_authenticated/$shortcode.tsx
+  s_a14da84a78b0eb::t_76c3184df0538b 53
+apps/web/src/routes/_authenticated/ai.tsx
+  s_a14da84a78b0eb::t_a141ee03bf4138 32
+apps/web/src/routes/_authenticated/entities.tsx
+  s_a14da84a78b0eb::t_1902a17cfcd694 157
+apps/web/src/routes/_authenticated/inventory.triage.tsx
+  s_a14da84a78b0eb::t_eac64ab741b334 50
+apps/web/src/routes/_authenticated/recipes.import.tsx
+  s_a14da84a78b0eb::t_8b699f52ac46a0 58
+apps/web/src/routes/_authenticated/recipes.new.tsx
+  s_a14da84a78b0eb::t_ec83f5d83cc23e 50
+apps/web/src/routes/_authenticated/search.debug.tsx
+  s_a14da84a78b0eb::t_38030ae425c253 14
+apps/web/src/routes/_authenticated/search.index.tsx
+  s_a14da84a78b0eb::t_c792e3f3519db1 27
+apps/web/src/routes/_authenticated/usda.$id.tsx
+  s_a14da84a78b0eb::t_2d3b6402e7898f 23
+apps/web/src/routes/docs.tsx
+  s_a14da84a78b0eb::t_59b190d973a852 12
+apps/web/src/routes/index.tsx
+  s_a14da84a78b0eb::t_1ab8296811525a 151,153,168,170,176,178,199-204
+apps/web/src/styles.css
+  s_a14da84a78b0eb::t_6e989b3d9ba2b5 194-195,401
+apps/web/src/ui/common/facts.preview.test.tsx
+  s_a14da84a78b0eb::t_6b8f744cdfa205 8,25-27,50,63-65,99-101,138-140
+apps/web/src/ui/common/facts.tsx
+  s_a14da84a78b0eb::t_4cc0ce70af6a63 4,11,15,17-20,23-28,30-32,34,36,38,40-48,51-57,59-61,63-64,66-67,70,73,96,109,116-127,129-150,153-188,190,192,196,200,203,205-214,216,220,222,225-226,231,242,249
+apps/web/src/ui/common/key-numbers.tsx
+  s_a14da84a78b0eb::t_9902267b15b9be 1,4,8-10,14-18,20-39,41,44-105,115-143,145,147-148,151-186
+apps/web/src/ui/common/ledger.css
+  s_a14da84a78b0eb::t_4bf0f82a507cb1 182,328
+apps/web/src/ui/common/record-list.tsx
+  s_a14da84a78b0eb::t_d72e38b6d45486 15,229-230
+apps/web/src/ui/data-table/cell-edit-trigger.tsx
+  s_a14da84a78b0eb::t_6717d2dee4bc28 143,177
+apps/web/src/ui/data-table/cell-frame.tsx
+  s_a14da84a78b0eb::t_3572a39952a4fb 144,147
+apps/web/src/ui/data-table/indexed-sections.tsx
+  s_a14da84a78b0eb::t_d55c3cd6cd079a 18,20,115,127-137,139-140
+apps/web/src/ui/feedback/empty-state.tsx
+  s_359d51740d6cee::t_27b9271b510a9b 1-2,6-30,33-49,51-53,55,59-70
+apps/web/src/ui/layout/disclosure.tsx
+  s_a14da84a78b0eb::t_805cd9c1470223 1-2,5,7-78,82-84,86-99,101-109,112-116,118-121
+apps/web/src/ui/layout/index.ts
+  s_a14da84a78b0eb::t_6ba3a6925a23a6 5,7,9,11
+apps/web/src/ui/layout/page-header.tsx
+  s_a14da84a78b0eb::t_22b0cea0a7bd6f 1-146
+apps/web/src/ui/layout/panel.tsx
+  s_a14da84a78b0eb::t_fc5daa4865b19e 1-49
+apps/web/src/ui/layout/section.tsx
+  s_a14da84a78b0eb::t_46286898f81d5d 1,4,6-10,14-20,22-36,39-41,45-47,49-50,58-97,99,102-104,110-115,118
+apps/web/src/ui/visualizations/dependency-graph-viewer.tsx
+  s_a14da84a78b0eb::t_f6dcb383627d69 5
+apps/web/src/ui/visualizations/visualization.tsx
+  s_a14da84a78b0eb::t_1ad0071c87e4d4 4,6,67-68,89-93,96-97,100-107
+apps/web/tests/tester-army/web-journeys.e2e.ts
+  s_a14da84a78b0eb::t_abf1bfe3e0091b 76
+apps/web/src/entity/page/entity-page-header.tsx
+  s_a14da84a78b0eb::t_33d4e32d9d9326 14-15,23,34-38,50-51,55-57,77,79,84,90,97-98,101,105,109,112-113,117,119-120,128-129,132,140,151-179,181-182,184-233,237,239,243-246,248-256,260-261,267-285,287-319,323-324,326-327,329-334
+apps/web/src/ui/layout/toolbar.tsx
+  s_a14da84a78b0eb::t_db42d03dffa702 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1b0a4a82146fa20894133e511bb03acfd71652c8",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_a14da84a78b0eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4251b55-9ed3-4f78-92dd-cdc1a554513c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
