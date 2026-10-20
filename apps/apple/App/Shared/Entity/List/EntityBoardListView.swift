@@ -142,6 +142,9 @@ struct EntityBoardListView: View {
                             ?? .init(id: option.value, label: option.label, count: 0, rows: [])
                     } + summaries.filter { group in !options.contains { $0.value == group.id } }
             }
+            if let choice = descriptor.groupChoice(captured.grouping) {
+                fetchedGroups = EntityBoardPlan.includingNoValueGroup(fetchedGroups, choice: choice)
+            }
             var fetchedRows: [EntityRow] = []
             if let selected = fetchedGroups.first(where: { $0.id == captured.selectedGroup })
                 ?? fetchedGroups.first,

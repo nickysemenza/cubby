@@ -20,6 +20,8 @@ iPhone keeps the Work, Capture, Library, and Find tabs with independent navigati
 
 `EntityCatalog` and the entity manifest own names, icons, domain, image, fields, sections, relationships, list views, and available actions. A generic renderer uses those declarations for every entity. Specialist import, photo, fieldwork, and editor screens remain in declared slots or their owned flows. `NativePresentationCoverage` prevents unsupported renderers and actions from appearing operational; their existing web disclosure remains visible where needed.
 
+Report record titles, related-record context links, and row commands are separate accessibility and interaction targets. Never wrap a row containing links or commands in another navigation link.
+
 Cached Mac lists and freshly opened lists select their initial layout from the same native coverage filter. If no declared layout can render natively, use the generic List presentation; retain the cached model when switching sidebar sections.
 
 Every entity offers List and Table alongside its declared shelf, timeline, or specialist views. Table uses the same manifest fields and display rules as web, with aligned column headers, column visibility controls, and server sorting only for declared sortable fields. Mac uses a native selectable table with resizable columns; iPhone keeps the columns in a horizontally scrolling table. Switching List and Table retains the loaded records, filters, search, and selection. A header sort restarts server pagination and replays an active search in the new order.

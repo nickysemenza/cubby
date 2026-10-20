@@ -19,16 +19,12 @@ struct RecordRowView: View {
     var model: ReportSlotModel?
 
     var body: some View {
-        if let entity = row.entity, let id = row.recordID {
-            NavigationLink(value: Route.entityDetail(entity, id: id)) { content }
-        } else {
-            content
-        }
-    }
-
-    private var content: some View {
         RecordListRow(
-            title: row.title, imageURL: row.imageURL,
+            title: row.title,
+            titleDestination: row.entity.flatMap { entity in
+                row.recordID.map { Route.entityDetail(entity, id: $0) }
+            },
+            imageURL: row.imageURL,
             symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "square.dashed",
             thumbnailSize: large ? 112 : 36
         ) {
@@ -48,7 +44,7 @@ struct RecordRowView: View {
         } supplement: {
             extras
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
     /// Toned badges, the raw block and commands a row carries beyond its title and lines.

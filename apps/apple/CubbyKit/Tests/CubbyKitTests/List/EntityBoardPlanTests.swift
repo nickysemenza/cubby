@@ -5,6 +5,19 @@ import Testing
 
 @Suite("Declared board paging")
 struct EntityBoardPlanTests {
+    // An empty Inbox must remain a destination for unassigning an existing task.
+    @Test func emptyClearableGroupRemainsAvailable() {
+        let choice = EntityCatalog[.task].groupChoice("projectId")!
+        let empty = EntityBoardPlan.includingNoValueGroup([], choice: choice)
+        #expect(empty.map(\.id) == [EntityListSection.noValueKey])
+        #expect(empty.first?.label == choice.noValueLabel)
+        let existing = [
+            EntityListSection(
+                id: EntityListSection.noValueKey, label: choice.noValueLabel, count: 3, rows: [])
+        ]
+        #expect(EntityBoardPlan.includingNoValueGroup(existing, choice: choice).first?.count == 3)
+        #expect(EntityBoardPlan.includingNoValueGroup(existing, choice: choice).count == 1)
+    }
     // A cap bounds cards, never the full-filter count. Every group starts its own page.
     @Test func completedCardsAreCappedWithoutChangingTheCount() throws {
         let view = EntityCatalog[.task].presentation.listViews.compactMap { view -> BoardListSpec? in

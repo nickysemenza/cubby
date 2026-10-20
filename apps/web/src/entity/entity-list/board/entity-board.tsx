@@ -8,6 +8,7 @@ import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import {
   DndContext,
   rectIntersection,
+  closestCenter,
   useDraggable,
   useDroppable,
   type DragEndEvent,
@@ -55,6 +56,7 @@ import { Button } from "~/ui/primitives/button";
 
 import type { ListSlotProps } from "../list-slot-types";
 import {
+  boardGroups,
   boardGroupPage,
   boardMoveRequest,
   boardDropBefore,
@@ -169,6 +171,7 @@ export function EntityBoard({
           (target?.destination?.before !== undefined ||
             target?.destination?.key !== active?.groupKey ||
             target?.end === true),
+        true,
       ),
     [view.id],
   );
@@ -181,21 +184,10 @@ export function EntityBoard({
   const summaries = query.data?.meta.groups ?? [];
   const roster =
     choice.value && "options" in choice.value ? choice.value.options : null;
-  const groups: ListGroupSummary[] = roster
-    ? [
-        ...roster.map(
-          (option) =>
-            summaries.find((group) => group.key === option.value) ?? {
-              key: option.value,
-              label: option.label,
-              count: 0,
-            },
-        ),
-        ...summaries.filter(
-          (group) => !roster.some((option) => option.value === group.key),
-        ),
-      ]
-    : summaries;
+  const groups = boardGroups(summaries, roster, {
+    noValue: choice.filter.noValue,
+    noValueLabel: choice.noValueLabel,
+  });
   const [groupPage, setGroupPage] = useState(0);
   const options = useMemo(
     () => choices.map((choice) => ({ value: choice.key, label: choice.label })),
@@ -322,17 +314,26 @@ export function EntityBoard({
         <DndContext
           sensors={sensors}
           onDragEnd={onDragEnd}
-          collisionDetection={(args) =>
-            rectIntersection({
+          collisionDetection={(args) => {
+            if (args.pointerCoordinates !== null) return rectIntersection(args);
+            // Keyboard targets share centers, so a tall card cannot obscure the end marker.
+            return closestCenter({
               ...args,
               droppableContainers: args.droppableContainers.filter(
-                (container) =>
-                  args.pointerCoordinates !== null ||
-                  container.data.current?.destination?.before !==
-                    args.active.id,
+                (container) => {
+                  const target = container.data.current;
+                  const active = args.active.data.current;
+                  return (
+                    target?.board === view.id &&
+                    target?.destination?.before !== active?.rowId &&
+                    (target?.destination?.before !== undefined ||
+                      target?.destination?.key !== active?.groupKey ||
+                      target?.end === true)
+                  );
+                },
               ),
-            })
-          }
+            });
+          }}
         >
           <div className="flex max-w-full items-start gap-3 overflow-x-auto pb-2">
             {groups.slice(groupPage * 12, (groupPage + 1) * 12).map((group) => (

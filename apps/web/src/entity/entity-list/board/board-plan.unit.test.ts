@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  boardGroups,
   boardGroupPage,
   boardMoveRequest,
   boardDropBefore,
@@ -9,6 +10,15 @@ import {
 // Failure modes: capped rows must not cap counts; group queries must retain scope,
 // use independent pages, and move+rank writes must be one command body.
 describe("declared board plan", () => {
+  it("keeps an empty clearable group available without duplicating its real count", () => {
+    const options = { noValue: true, noValueLabel: "Inbox" };
+    expect(boardGroups([], null, options)).toEqual([
+      { key: "__none__", label: "Inbox", count: 0 },
+    ]);
+    const present = [{ key: "__none__", label: "Inbox", count: 3 }];
+    expect(boardGroups(present, null, options)).toEqual(present);
+    expect(boardGroups([], null, { ...options, noValue: false })).toEqual([]);
+  });
   const view = {
     pageSize: 50,
     caps: [{ field: "status", value: "done", limit: 20 }],

@@ -2,6 +2,18 @@ import Foundation
 
 /// Board presentation uses ordinary list filters, pages and declared commands.
 public enum EntityBoardPlan {
+    /// Keep clearing a nullable grouping available even when its no-value group is empty.
+    public static func includingNoValueGroup(
+        _ groups: [EntityListSection], choice: GroupChoice
+    ) -> [EntityListSection] {
+        guard choice.filter?.noValue == true,
+            !groups.contains(where: { $0.id == EntityListSection.noValueKey })
+        else { return groups }
+        return groups + [
+            .init(id: EntityListSection.noValueKey, label: choice.noValueLabel, count: 0, rows: [])
+        ]
+    }
+
     public static func pageSize(_ spec: BoardListSpec, groupBy: String, key: String) -> Int {
         spec.caps.first { $0.field == groupBy && $0.value == key }?.limit ?? spec.pageSize
     }

@@ -1,5 +1,6 @@
 import type { EntityBoardListView } from "@cubby/schemas/entity-definitions/definition";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 
 import type {
   EntityListResultByEntity,
@@ -13,6 +14,32 @@ type RowValues<Row> = Row extends object ? Row[keyof Row] : never;
 export type BoardRow = { id: string } & Partial<
   Record<string, RowValues<ListRow>>
 >;
+
+/** Clearing a nullable grouping remains possible even when its no-value group is empty. */
+export function boardGroups(
+  summaries: ListGroupSummary[],
+  roster: readonly { value: string; label: string }[] | null,
+  choice: { noValue: boolean; noValueLabel: string },
+): ListGroupSummary[] {
+  const groups = roster
+    ? [
+        ...roster.map(
+          (option) =>
+            summaries.find((group) => group.key === option.value) ?? {
+              key: option.value,
+              label: option.label,
+              count: 0,
+            },
+        ),
+        ...summaries.filter(
+          (group) => !roster.some((option) => option.value === group.key),
+        ),
+      ]
+    : summaries;
+  return choice.noValue && !groups.some((group) => group.key === FILTER_NONE)
+    ? [...groups, { key: FILTER_NONE, label: choice.noValueLabel, count: 0 }]
+    : groups;
+}
 
 type BoardPageSpec = Pick<
   EntityBoardListView,

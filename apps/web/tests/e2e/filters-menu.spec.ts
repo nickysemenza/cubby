@@ -255,9 +255,17 @@ test("editing Parent task after landing on its deep-link alias", async ({
   await page
     .getByRole("button", { name: `Parent task: ${parentA.name}`, exact: true })
     .click();
-  // Unpicking A first empties the filter; the chip's editor stays open.
-  for (const parent of [parentA, parentB])
-    await pickInline(page, "Parent task", parent.name);
+  // Clearing the last value removes the chip and its editor. Reopen the inactive filter.
+  await pickInline(page, "Parent task", parentA.name);
+  await expect(
+    page.getByRole("button", {
+      name: `Parent task: ${parentA.name}`,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await closePopovers(page);
+  await openFilter(page, "Parent task");
+  await pickInline(page, "Parent task", parentB.name);
   await closePopovers(page);
 
   await expect(row(childB.name)).toBeVisible();
