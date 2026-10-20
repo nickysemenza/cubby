@@ -22,7 +22,13 @@ export function detailHeroStats<E extends GenericDetailEntity>(
   const fields: readonly DisplayField[] = entityFieldModels[entity].fields;
   return hero.stats.flatMap((key) => {
     const field = fields.find((candidate) => candidate.key === key);
-    return field
+    // A stat projected only on list reads (a list count) is absent from the
+    // detail record; skip it rather than paint an empty cell.
+    const absent =
+      field?.readKey != null &&
+      field.display.readPath === null &&
+      !(field.readKey in record);
+    return field && !absent
       ? [
           {
             label: field.label,

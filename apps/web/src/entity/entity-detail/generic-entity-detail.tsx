@@ -48,7 +48,7 @@ import type { DetailHeroActions } from "~/entity/page/page-hero";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
-import { FactsAddProvider, FactsLayoutProvider } from "~/ui/common/basic-info";
+import { FactsAddProvider } from "~/ui/common/basic-info";
 import { SectionHeading } from "~/ui/layout";
 import {
   Breadcrumb,
@@ -297,6 +297,10 @@ function declaredSections<E extends GenericDetailEntity>(
         return [
           {
             ...base,
+            // The index leads a relation with the records it lists.
+            icon: isBrowserRoutedEntity(plan.target)
+              ? entities[plan.target].phosphorIcon
+              : base.icon,
             title: section.title,
             overflowVisible: true,
             headerAction: (
@@ -542,8 +546,8 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const { images, documents } = detailFiles(entity, record, bag);
   const heroImages = detail.hero.images ? images : undefined;
   const sections = declaredSections(entity, record, bag, operations);
-  // The first fields section is the record's compact facts: the third
-  // column at full width, first in the stack when narrow.
+  // The first fields section is the record's headline facts, leading the
+  // content column ahead of Needs you and Activity.
   const factsId = detail.sections.find(
     (section) => section.kind === "fields",
   )?.id;
@@ -731,6 +735,17 @@ function FullEntityDetail<E extends GenericDetailEntity>({
                   omitActivity={timeline}
                   lead={
                     <>
+                      {facts ? (
+                        <section
+                          id={facts.id}
+                          aria-label={facts.title}
+                          className="min-w-0 scroll-mt-[var(--app-chrome-top)]"
+                        >
+                          <SectionHeading title={facts.title} />
+                          <QualitySectionChecks section={facts.id} />
+                          {facts.content}
+                        </section>
+                      ) : null}
                       <NeedsYou>
                         <RecordWorkQueue id={bag.id} variant="rows" />
                       </NeedsYou>
@@ -738,21 +753,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
                         <DetailActivity entity={entity} id={bag.id} />
                       ) : null}
                     </>
-                  }
-                  aside={
-                    facts ? (
-                      <section
-                        id={facts.id}
-                        aria-label={facts.title}
-                        className="min-w-0 scroll-mt-[var(--app-chrome-top)]"
-                      >
-                        <SectionHeading title={facts.title} />
-                        <FactsLayoutProvider layout="compact">
-                          <QualitySectionChecks section={facts.id} />
-                          {facts.content}
-                        </FactsLayoutProvider>
-                      </section>
-                    ) : undefined
                   }
                 />
               </RecordQualityProvider>

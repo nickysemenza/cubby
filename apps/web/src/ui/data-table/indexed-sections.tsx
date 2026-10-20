@@ -252,7 +252,7 @@ function SectionIndex({
     <div
       className={cn(
         "sticky top-[var(--app-chrome-top)] z-30 self-start",
-        wide ? "w-44 shrink-0" : "bg-card",
+        wide ? "w-52 shrink-0" : "bg-card",
       )}
     >
       <nav
@@ -264,12 +264,12 @@ function SectionIndex({
         )}
       >
         {groups.map((group) => (
-          <div key={group.id} className="mb-2.5 last:mb-0">
+          <div key={group.id} className="mb-3 last:mb-0">
             <a
               href={`#${hashForDetailTarget(group.id, groups)}`}
               {...entryState(group.id)}
               className={cn(
-                "relative block rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                "relative block rounded-lg px-2 py-1 text-xs font-semibold text-foreground-strong hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                 activeId === group.id && currentDetailAnchorClass,
               )}
               onClick={(event) => {
@@ -279,7 +279,8 @@ function SectionIndex({
             >
               {group.title}
             </a>
-            <ul>
+            {/* Sections hang off their group on a hairline guide. */}
+            <ul className="ml-3.5 border-l border-border pl-1.5">
               {group.sections
                 .filter((section) => section.includeInIndex !== false)
                 .map((section) => {
@@ -293,9 +294,9 @@ function SectionIndex({
                         aria-describedby={describedBy(section.id)}
                         title={section.title}
                         className={cn(
-                          "relative flex h-7 items-center gap-2 rounded-lg px-2 text-sm hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                          "relative flex h-7 items-center gap-2 rounded-lg px-1.5 text-sm hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                           state?.empty
-                            ? "text-muted-foreground"
+                            ? "text-muted-foreground/70"
                             : "text-foreground",
                           activeId === section.id && currentDetailAnchorClass,
                         )}
@@ -308,7 +309,17 @@ function SectionIndex({
                           <span className="shrink-0">
                             {section.indexLeading}
                           </span>
-                        ) : null}
+                        ) : (
+                          <section.icon
+                            aria-hidden
+                            className={cn(
+                              "size-3.5 shrink-0",
+                              state?.empty
+                                ? "text-muted-foreground/50"
+                                : "text-muted-foreground",
+                            )}
+                          />
+                        )}
                         <span className="min-w-0 flex-1 truncate">
                           {section.title}
                         </span>
@@ -440,16 +451,12 @@ export function IndexedSections({
   groups,
   footer,
   lead,
-  aside,
 }: {
   groups: IndexedSectionGroup[];
   /** Rendered after the last group, outside the index. */
   footer?: ReactNode;
   /** Leads the center column, above the first group (Needs you, Activity). */
   lead?: ReactNode;
-  /** A right-hand column beside the body at three-column width; narrower
-   * workspaces stack it after `lead`. */
-  aside?: ReactNode;
 }) {
   const [subsections, setSubsections] = useState<Map<string, IndexedSection[]>>(
     new Map(),
@@ -482,7 +489,6 @@ export function IndexedSections({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const wide = width >= 800;
-  const threeColumn = aside != null && width >= 1120;
   useLayoutEffect(() => {
     const element = workspaceRef.current;
     if (!element) return;
@@ -700,7 +706,6 @@ export function IndexedSections({
             />
             <div ref={bodyRef} className="min-w-0 flex-1 space-y-5 text-sm">
               {lead}
-              {!threeColumn && aside}
               {groups.map((group) => (
                 <div
                   key={group.id}
@@ -719,11 +724,6 @@ export function IndexedSections({
               ))}
               {footer}
             </div>
-            {threeColumn && (
-              <aside className="sticky top-[var(--app-chrome-top)] max-h-[calc(100dvh-var(--app-chrome-top)-1rem)] w-88 shrink-0 space-y-5 self-start overflow-y-auto overscroll-contain">
-                {aside}
-              </aside>
-            )}
           </SectionIndexRegistryContext.Provider>
         </ContinuousDetailContext.Provider>
       </SubsectionsContext.Provider>
