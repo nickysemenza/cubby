@@ -42,7 +42,10 @@ import {
   runOperation,
   photoRunImage,
 } from "~/server/db/schema";
-import { readMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import {
+  readMailRunSources,
+  releaseUnsettledMailRunSources,
+} from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
@@ -620,7 +623,7 @@ async function stopRunForReviewOnce(
           ]),
         ),
       );
-    await tx
+    const [stopped] = await tx
       .update(runTable)
       .set({
         status: "needs_review",
@@ -633,7 +636,12 @@ async function stopRunForReviewOnce(
           eq(runTable.id, runId),
           inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
         ),
-      );
+      )
+      .returning({ purpose: runTable.purpose, input: runTable.input });
+    // A Run without a roster (erased, or a legacy/manual Mail import) has no
+    // Email to return, and stopping it for review must never fail on parsing one.
+    if (stopped?.purpose === "mail_import" && stopped.input !== null)
+      await releaseUnsettledMailRunSources(tx, runId);
     return { findingId: finding?.id ?? existingFinding?.id ?? null };
   });
 }

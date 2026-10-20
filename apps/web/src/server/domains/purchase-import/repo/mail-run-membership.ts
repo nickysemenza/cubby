@@ -279,13 +279,15 @@ export async function transferMailRunSources(
 }
 
 /**
- * A Mail import Run that failed on its own returns its unsettled Emails to
- * Mail discovery; nothing else would ever admit them again. An Email a failed
- * Run already returned once stays with the failed Run instead, so a message
- * that keeps failing its import does not spend a coordinator every discovery
- * pass; a member's retry still transfers it.
+ * A Mail import Run that fails on its own, or whose coordinator stops for
+ * review before claiming every Email, returns its still-researching Emails to
+ * Mail discovery; nothing else would ever admit them again. Settled and
+ * `blocked` Emails (the review's subject) stay. An Email an earlier Run already
+ * left unsettled stays with this Run instead, so a message that keeps ending
+ * its import unsettled does not spend a coordinator every discovery pass; a
+ * member's retry still transfers it.
  */
-export async function releaseFailedMailRunSources(
+export async function releaseUnsettledMailRunSources(
   tx: DrizzleTransaction,
   runId: RunId,
 ) {
@@ -299,8 +301,13 @@ export async function releaseFailedMailRunSources(
     .where(
       and(
         eq(run.purpose, "mail_import"),
-        eq(run.status, "failed"),
-        inArray(run.failureCode, [...SELF_FAILURE_CODES]),
+        or(
+          and(
+            eq(run.status, "failed"),
+            inArray(run.failureCode, [...SELF_FAILURE_CODES]),
+          ),
+          eq(run.status, "needs_review"),
+        ),
         ne(run.id, runId),
         or(
           ...held.map(
@@ -322,7 +329,7 @@ export async function releaseFailedMailRunSources(
   );
   if (!released.length) return [];
   // The admission replay key names this Run's source set; readmitting the same
-  // released Emails would otherwise replay this failed Run instead of starting one.
+  // released Emails would otherwise replay this ended Run instead of starting one.
   await tx.update(run).set({ clientKey: null }).where(eq(run.id, runId));
   return tx
     .update(emailTable)

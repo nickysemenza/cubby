@@ -36,6 +36,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { readMailImportOutcomes, settleMail } from "../operations/mail-tool";
 import { retainedMailFixture } from "../operations/order-import.fixtures";
+import { reconcileSettledRun } from "../operations/run-review";
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import { writeOutcomeReceipts } from "../service/run-outcome.fixtures";
 import { importPendingEmails, startMailImport } from "./mail-import-run";
@@ -457,7 +458,7 @@ describe("mail research admission", () => {
     ).toContainEqual(
       expect.objectContaining({
         state: "unresolved",
-        warning: "Returned to Mail discovery after this Run failed.",
+        warning: "Returned to Mail discovery after this Run ended.",
       }),
     );
 
@@ -494,6 +495,59 @@ describe("mail research admission", () => {
       runId: againId,
       status: "researching",
     });
+  });
+
+  // A coordinator that stops before claiming every Email leaves the rest
+  // researching under a Run in review, which discovery never admits again.
+  it("returns unclaimed Emails to discovery when a Run stops for review, keeping its blocked ones", async () => {
+    const { party, mail } = await source();
+    const blocked = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-mailbox",
+      messageId: "synthetic-blocked",
+      checksum: "d".repeat(64),
+    });
+    const [admitted] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id, blocked.id],
+      },
+      { send: async () => {} },
+    );
+    if (!admitted) throw new Error("Synthetic Run missing");
+    const runId = parseEntityId("run", admitted.runId);
+    await settleMail(ctx.db, {
+      mail: blocked,
+      importRunId: runId,
+      status: "blocked",
+      detail: "Synthetic gap the member reviews",
+    });
+    const [owner] = await getDb(ctx.db)
+      .select({ generation: run.dispatchEventId })
+      .from(run)
+      .where(eq(run.id, runId));
+    await expect(
+      reconcileSettledRun(ctx.db, {
+        runId,
+        operationId: "settled:unfinished",
+        generation: owner!.generation!,
+        sequence: 1,
+      }),
+    ).resolves.toMatchObject({ status: "needs_review" });
+    const emailState = async (orderMailId: string) =>
+      (
+        await getDb(ctx.db)
+          .select({ runId: emailTable.runId, status: emailTable.status })
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, orderMailId))
+      )[0];
+    expect(await emailState(mail.id)).toEqual({
+      runId: null,
+      status: "pending",
+    });
+    expect(await emailState(blocked.id)).toEqual({ runId, status: "blocked" });
   });
 
   it("readmits a released Email under a new Run when its failed Run admitted only it", async () => {
