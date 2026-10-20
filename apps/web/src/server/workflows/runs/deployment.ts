@@ -7,7 +7,7 @@ import { workflowDeploymentBoundary } from "../deployment-boundary";
 import type { WorkflowRunParams } from "./contract";
 import type { DurableSteps } from "./step";
 
-/** The DO follows deploys; the Workflow's own version binding remains pinned. */
+/** The DO follows deploys eventually; Workflow metadata remains pinned. */
 export function runDeploymentBoundary(
   env: Env,
   steps: DurableSteps,

@@ -52,8 +52,10 @@ import { canonicalJson } from "~/server/lib/canonical-json";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many suggestions. */
-const STATEMENT_LABEL_BATCH = 10;
-const STATEMENT_LABEL_DECISIONS = 32;
+export const STATEMENT_LABEL_BATCH = 64;
+// A single page can spend the rolling minute's allowance; instance rotation
+// bounds total subrequests independently of model concurrency.
+const STATEMENT_LABEL_DECISIONS = 180;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
@@ -107,7 +109,7 @@ async function labelledJudgment(
     port?: DecisionPort;
     usage: DecisionUsage;
     checkpoint: StatementLabelCheckpoint | null;
-    reserve(): boolean;
+    reserve(count: number): () => boolean;
   },
 ) {
   const previous =
@@ -158,6 +160,13 @@ async function labelledJudgment(
     judgment.candidates.filter((entry) => entry.label !== null).length +
     Number(checkpoint.kind) +
     Number(checkpoint.counterparty);
+  // Reserve each charge's missing decisions before yielding, so a tiny page
+  // budget completes the earliest charge instead of scattering partial labels.
+  const reserve = input.reserve(
+    judgment.candidates.filter((entry) => entry.label === null).length +
+      Number(Boolean(judgment.create) && !checkpoint.kind) +
+      Number(Boolean(judgment.create) && !checkpoint.counterparty),
+  );
   const reused = countLabels();
   const errors: unknown[] = [];
   let waitingUntil: number | null = null;
@@ -168,48 +177,52 @@ async function labelledJudgment(
     else errors.push(error);
   };
   const statement = statementLabelSubject(judgment);
-  await forEachConcurrently(judgment.candidates, 4, async (candidate) => {
-    if (candidate.label !== null || waitingUntil !== null) return;
-    const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
-      JSON.stringify({
-        statement,
-        transaction: statementCandidateSubject(candidate),
-      }),
-    );
-    if (!decisionChoiceFitsContext(prompt)) {
-      candidate.label = {
-        same: "insufficient",
-        confidence: "low",
-        model: null,
-      };
-      return;
-    }
-    if (!input.reserve()) return;
-    try {
-      const result = await runDecisionChoice({
-        ...prompt,
-        feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
-        decisionModel: model,
-        port: input.port,
-        usage: input.usage,
-      });
-      const choice =
-        STATEMENT_CHARGE_IDENTITY_FEATURE.choices[result.selectedIndex ?? -1];
-      candidate.label = {
-        same: choice ? identityLabel[choice] : "insufficient",
-        confidence: result.confidence,
-        model,
-      };
-    } catch (error) {
-      retainError(error);
-    }
-  });
+  await forEachConcurrently(
+    judgment.candidates,
+    judgment.candidates.length,
+    async (candidate) => {
+      if (candidate.label !== null || waitingUntil !== null) return;
+      const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
+        JSON.stringify({
+          statement,
+          transaction: statementCandidateSubject(candidate),
+        }),
+      );
+      if (!decisionChoiceFitsContext(prompt)) {
+        candidate.label = {
+          same: "insufficient",
+          confidence: "low",
+          model: null,
+        };
+        return;
+      }
+      if (!reserve()) return;
+      try {
+        const result = await runDecisionChoice({
+          ...prompt,
+          feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
+          decisionModel: model,
+          port: input.port,
+          usage: input.usage,
+        });
+        const choice =
+          STATEMENT_CHARGE_IDENTITY_FEATURE.choices[result.selectedIndex ?? -1];
+        candidate.label = {
+          same: choice ? identityLabel[choice] : "insufficient",
+          confidence: result.confidence,
+          model,
+        };
+      } catch (error) {
+        retainError(error);
+      }
+    },
+  );
   for (const part of ["kind", "counterparty"] as const) {
     if (
       !judgment.create ||
       checkpoint[part] ||
       waitingUntil !== null ||
-      !input.reserve()
+      !reserve()
     )
       continue;
     try {
@@ -246,7 +259,7 @@ async function labelledJudgment(
  * Labels are advisory; they only decide whether a suggestion is
  * bulk-acceptable. Respects the automatic-work switch that gates AI refresh.
  *
- * A page builds once, bounds concurrent decisions within each charge, then applies
+ * A page builds once, fans model decisions out to egress admission, then applies
  * automatic rules one charge at a time. A rule that applied can take a
  * transaction another charge on the page proposed, so the page's remaining
  * charges are rebuilt and any whose evidence moved are labelled again.
@@ -318,12 +331,21 @@ export async function labelStatementSuggestions(
   };
   const page = rows.slice(0, limit);
   let decisionsLeft = input.decisionLimit ?? STATEMENT_LABEL_DECISIONS;
-  const reserve = () => {
-    if (decisionsLeft <= 0) return false;
-    decisionsLeft--;
-    return true;
+  const reserve = (count: number) => {
+    let left = Math.min(decisionsLeft, count);
+    decisionsLeft -= left;
+    return () => {
+      if (left <= 0) return false;
+      left--;
+      return true;
+    };
   };
   let unfinished: LabelCursor | null = null;
+  const retainUnfinished = (row: (typeof page)[number]) => {
+    const previous = page.findIndex((entry) => entry.id === unfinished?.id);
+    if (previous < 0 || page.indexOf(row) < previous)
+      unfinished = { createdAt: row.createdAt, id: row.id, inclusive: true };
+  };
   let waitingUntil: number | null = null;
   let targets = page.flatMap((row) => {
     const subject = assessmentSubjects.statement_transaction.safeParse(
@@ -379,9 +401,10 @@ export async function labelStatementSuggestions(
         0,
       ),
     });
-    for (const { current, target } of ready) {
-      if (pauses.length) break;
-      try {
+    // Model work holds no publish transaction. All started decisions settle
+    // before checkpoint/publication, whose separate DB fan-out stays at four.
+    const computed = await Promise.allSettled(
+      ready.map(({ current, target }) => {
         const compute = () =>
           labelledJudgment(current, {
             port: input.port,
@@ -389,80 +412,83 @@ export async function labelStatementSuggestions(
             checkpoint: target.row.checkpoint,
             reserve,
           });
-        const result = await (input.cooperative
-          ? withCooperativeAiWork(compute)
-          : compute());
-        labels.reused += result.labels.reused;
-        labels.generated += result.labels.generated;
-        target.row.checkpoint = result.checkpoint;
-        const saved = await recordStatementLabelCheckpoint(db, {
-          charge: current.charge,
-          evidenceFingerprint: target.expected,
-          checkpoint: result.checkpoint,
-        });
-        if (saved === "settled") {
-          skipped.add(chargeId(current.charge));
-          continue;
-        }
-        if (saved === "moved")
-          throw new Error(
-            "Statement label checkpoint lost its active evidence fence",
-          );
-        if (!result.complete || result.errors.length) {
-          if (result.errors.length) {
-            const pause = result.errors.find(
-              (error) => error instanceof AiBudgetExhaustedError,
-            );
-            if (pause instanceof AiBudgetExhaustedError) {
-              pauses.push(pause);
-              unfinished = {
-                createdAt: target.row.createdAt,
-                id: target.row.id,
-                inclusive: true,
-              };
-            } else
-              fail(
-                current.charge,
-                new Error(
-                  result.errors
-                    .map((error) =>
-                      runFailureText(
-                        error instanceof Error ? error : String(error),
-                      ),
-                    )
-                    .join("\n"),
-                ),
-              );
-            continue;
+        return input.cooperative ? withCooperativeAiWork(compute) : compute();
+      }),
+    );
+    await forEachConcurrently(
+      ready.map((entry, index) => ({
+        ...entry,
+        computed: computed[index]!,
+      })),
+      STATEMENT_PUBLISH_CONCURRENCY,
+      async ({ current, target, computed }) => {
+        try {
+          if (computed.status === "rejected") throw computed.reason;
+          const result = computed.value;
+          labels.reused += result.labels.reused;
+          labels.generated += result.labels.generated;
+          target.row.checkpoint = result.checkpoint;
+          const saved = await recordStatementLabelCheckpoint(db, {
+            charge: current.charge,
+            evidenceFingerprint: target.expected,
+            checkpoint: result.checkpoint,
+          });
+          if (saved === "settled") {
+            skipped.add(chargeId(current.charge));
+            return;
           }
-          unfinished = {
-            createdAt: target.row.createdAt,
-            id: target.row.id,
-            inclusive: true,
-          };
-          waitingUntil = result.waitingUntil;
-          break;
+          if (saved === "moved")
+            throw new Error(
+              "Statement label checkpoint lost its active evidence fence",
+            );
+          if (!result.complete || result.errors.length) {
+            if (result.errors.length) {
+              const pause = result.errors.find(
+                (error) => error instanceof AiBudgetExhaustedError,
+              );
+              if (pause instanceof AiBudgetExhaustedError) {
+                pauses.push(pause);
+                retainUnfinished(target.row);
+              } else
+                fail(
+                  current.charge,
+                  new Error(
+                    result.errors
+                      .map((error) =>
+                        runFailureText(
+                          error instanceof Error ? error : String(error),
+                        ),
+                      )
+                      .join("\n"),
+                  ),
+                );
+              return;
+            }
+            retainUnfinished(target.row);
+            if (result.waitingUntil !== null)
+              waitingUntil = Math.min(
+                waitingUntil ?? Infinity,
+                result.waitingUntil,
+              );
+            return;
+          }
+          const outcome = await publishChargeProposal(
+            db,
+            await labelledProposal(current, result.checkpoint.judgment),
+            producer(result.model),
+          );
+          if (outcome.outcome !== "published") return;
+          labelled.add(chargeId(current.charge));
+          published.set(chargeId(current.charge), current.evidenceFingerprint);
+        } catch (error) {
+          // The budget pauses the whole pass; any other failure is this charge's.
+          if (error instanceof AiBudgetExhaustedError) {
+            pauses.push(error);
+            retainUnfinished(target.row);
+          } else fail(current.charge, error);
         }
-        const outcome = await publishChargeProposal(
-          db,
-          await labelledProposal(current, result.checkpoint.judgment),
-          producer(result.model),
-        );
-        if (outcome.outcome !== "published") continue;
-        labelled.add(chargeId(current.charge));
-        published.set(chargeId(current.charge), current.evidenceFingerprint);
-      } catch (error) {
-        // The budget pauses the whole pass; any other failure is this charge's.
-        if (error instanceof AiBudgetExhaustedError) {
-          pauses.push(error);
-          unfinished = {
-            createdAt: target.row.createdAt,
-            id: target.row.id,
-            inclusive: true,
-          };
-        } else fail(current.charge, error);
-      }
-    }
+      },
+    );
     // Rules run even when a pause ends the page: a published charge has left
     // the label queue, so a skipped rule would never be applied.
     const applied = new Set<string>();

@@ -17,6 +17,7 @@ import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { AiWorkDeferredError } from "~/server/ai/cooperative-work";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { unwrapDb } from "~/server/db/helpers";
 import {
@@ -267,6 +268,86 @@ describe("transfer-pair suggestions", () => {
       expectedFingerprint: pair.fingerprint,
       ...(reviewed === undefined ? {} : { reviewed }),
     });
+
+  // A wide Workflow page must checkpoint accepted pairs and yield on the
+  // first admission refusal instead of polling inside the page invocation.
+  it("retains completed pairs when another pair waits for shared capacity", async () => {
+    const member = await owner("Synthetic Member");
+    const from = await account("Synthetic Checking", member, checking);
+    const to = await account("Synthetic Savings", member, savings);
+    for (const amount of [100, 200]) {
+      const rawDescription =
+        amount === 100 ? "ONLINE TRANSFER" : "BLOCKED TRANSFER";
+      await transaction(from, -amount, "2026-05-04", { rawDescription });
+      await transaction(to, amount, "2026-05-04", { rawDescription });
+    }
+    await generateTransferPairSuggestions(ctx.db, { runId: null });
+    const answer = movementPort(byDescriptor);
+    const until = Date.now() + 60_000;
+    const outcome = await labelTransferPairSuggestions(ctx.db, {
+      cooperative: true,
+      port: async (input) => {
+        if (input.state.includes("BLOCKED TRANSFER"))
+          throw new AiWorkDeferredError(until);
+        return answer(input);
+      },
+    });
+    expect(outcome).toMatchObject({
+      labelled: 1,
+      failed: [],
+      waitingUntil: until,
+    });
+    const resumed = await labelTransferPairSuggestions(ctx.db, {
+      cooperative: true,
+      after: outcome.next,
+      port: answer,
+    });
+    expect(resumed).toMatchObject({
+      labelled: 1,
+      failed: [],
+      next: null,
+      waitingUntil: null,
+    });
+  });
+
+  // Pending model calls must not occupy the four-slot DB publication lane.
+  it("fans out movement labels across every pair on the page", async () => {
+    const member = await owner("Synthetic Member");
+    const from = await account("Synthetic Checking", member, checking);
+    const to = await account("Synthetic Savings", member, savings);
+    for (let index = 0; index < 8; index++) {
+      await transaction(from, -100 - index, "2026-05-04");
+      await transaction(to, 100 + index, "2026-05-04");
+    }
+    await generateTransferPairSuggestions(ctx.db, { runId: null });
+    const release = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const answer = movementPort(byDescriptor);
+    let active = 0;
+    let peak = 0;
+    const pending = labelTransferPairSuggestions(ctx.db, {
+      port: async (input) => {
+        peak = Math.max(peak, ++active);
+        started.resolve();
+        await release.promise;
+        try {
+          return await answer(input);
+        } finally {
+          active--;
+        }
+      },
+    });
+    try {
+      await started.promise;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      release.resolve();
+      expect((await pending).labelled).toBe(8);
+      expect(peak).toBeGreaterThan(8);
+    } finally {
+      release.resolve();
+      await pending;
+    }
+  });
 
   it("pairs two same-owner statement legs clean only after both are labelled, then applies once", async () => {
     const member = await owner("Synthetic member");

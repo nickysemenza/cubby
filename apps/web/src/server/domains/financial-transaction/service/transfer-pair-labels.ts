@@ -9,8 +9,15 @@ import {
   type SupportedDecisionModel,
 } from "@cubby/shared/ai/models";
 
-import { forEachConcurrently } from "~/lib/concurrency-limiter";
+import {
+  createConcurrencyLimiter,
+  forEachConcurrently,
+} from "~/lib/concurrency-limiter";
 import { AiBudgetExhaustedError, settleDecisions } from "~/server/ai/budget";
+import {
+  aiWorkDeferral,
+  withCooperativeAiWork,
+} from "~/server/ai/cooperative-work";
 import {
   decisionChoiceFitsContext,
   type DecisionPort,
@@ -32,8 +39,8 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many pairs. */
 const TRANSFER_PAIR_LABEL_BATCH = 100;
-/** Pairs labelled at once; each holds a pooled connection to publish. */
-const TRANSFER_PAIR_LABEL_CONCURRENCY = 4;
+/** Database work only; model calls never occupy this lane. */
+const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
 type Usage = Parameters<typeof runDecisionChoice>[0]["usage"];
 
@@ -82,6 +89,7 @@ export async function labelTransferPairSuggestions(
   db: Database,
   input: {
     limit?: number;
+    cooperative?: boolean;
     port?: DecisionPort;
     /** The Run the model calls are accounted to, and whose pairs are labelled. */
     runId?: RunId | null;
@@ -95,8 +103,15 @@ export async function labelTransferPairSuggestions(
   next: TransferPairLabelCursor | null;
   /** False when the automatic-work switch is off, so nothing was asked. */
   active: boolean;
+  waitingUntil: number | null;
 }> {
-  const empty = { labelled: 0, stale: 0, failed: [], next: null };
+  const empty = {
+    labelled: 0,
+    stale: 0,
+    failed: [],
+    next: null,
+    waitingUntil: null,
+  };
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled && !input.port) return { ...empty, active: false };
   const limit = input.limit ?? TRANSFER_PAIR_LABEL_BATCH;
@@ -115,28 +130,37 @@ export async function labelTransferPairSuggestions(
   let labelled = 0;
   let stale = 0;
   const page = rows.slice(0, limit);
-  await forEachConcurrently(
-    page,
-    TRANSFER_PAIR_LABEL_CONCURRENCY,
-    async (row) => {
-      if (pauses.length) return;
-      try {
-        const current = await buildTransferPair(db, row.data.pairKey);
-        if (
-          !current ||
-          (await transferPairEvidenceFingerprint(current.judgment)) !==
-            row.data.evidenceFingerprint
-        ) {
-          stale++;
-          return;
-        }
-        const model = selectDecisionModel({ key: row.data.pairKey });
-        const { outflow, inflow } = current.judgment;
-        const context = { model, port: input.port, usage };
-        const [outflowLabel, inflowLabel] = await settleDecisions([
+  let unfinished = Infinity;
+  let waitingUntil: number | null = null;
+  const database = createConcurrencyLimiter(TRANSFER_PAIR_PUBLISH_CONCURRENCY);
+  const signal = new AbortController().signal;
+  await forEachConcurrently(page, page.length, async (row) => {
+    if (pauses.length) return;
+    try {
+      const current = await database.run(
+        () => buildTransferPair(db, row.data.pairKey),
+        signal,
+      );
+      if (
+        !current ||
+        (await transferPairEvidenceFingerprint(current.judgment)) !==
+          row.data.evidenceFingerprint
+      ) {
+        stale++;
+        return;
+      }
+      const model = selectDecisionModel({ key: row.data.pairKey });
+      const { outflow, inflow } = current.judgment;
+      const context = { model, port: input.port, usage };
+      const compute = () =>
+        settleDecisions([
           movementLabel(outflow, inflow, context),
           movementLabel(inflow, outflow, context),
         ]);
+      const [outflowLabel, inflowLabel] = await (input.cooperative
+        ? withCooperativeAiWork(compute)
+        : compute());
+      await database.run(async () => {
         const outcome = await publishTransferPair(
           db,
           {
@@ -163,30 +187,43 @@ export async function labelTransferPairSuggestions(
             await import("~/server/domains/statement-import/repo/statement-suggestions");
           await regenerateCharges(db, charges);
         }
-      } catch (error) {
-        // The budget pauses the whole pass; any other failure is this pair's.
-        if (error instanceof AiBudgetExhaustedError) pauses.push(error);
-        else
-          failed.push({
-            at: new Date().toISOString(),
-            message: runFailureText(
-              error instanceof Error ? error : String(error),
-            ),
-            ref: `transfer_pair:${row.data.pairKey}`,
-          });
+      }, signal);
+    } catch (error) {
+      const deferred = aiWorkDeferral(error);
+      if (deferred) {
+        unfinished = Math.min(unfinished, page.indexOf(row));
+        waitingUntil = Math.min(waitingUntil ?? Infinity, deferred.until);
+        return;
       }
-    },
-  );
+      // The budget pauses the whole pass; any other failure is this pair's.
+      if (error instanceof AiBudgetExhaustedError) pauses.push(error);
+      else
+        failed.push({
+          at: new Date().toISOString(),
+          message: runFailureText(
+            error instanceof Error ? error : String(error),
+          ),
+          ref: `transfer_pair:${row.data.pairKey}`,
+        });
+    }
+  });
   if (pauses[0]) throw pauses[0];
   const last = page.at(-1);
+  // Resume before the earliest deferred pair. A null cursor with a wake time
+  // means retry from the start, not completion; published pairs leave the queue.
+  const before = page[unfinished - 1];
   return {
     labelled,
     stale,
     failed,
-    next:
-      rows.length > limit && last
+    next: Number.isFinite(unfinished)
+      ? before
+        ? { createdAt: before.createdAt, id: before.id }
+        : (input.after ?? null)
+      : rows.length > limit && last
         ? { createdAt: last.createdAt, id: last.id }
         : null,
     active: true,
+    waitingUntil,
   };
 }
