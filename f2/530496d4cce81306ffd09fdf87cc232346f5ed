@@ -1,0 +1,27 @@
+apps/web/src/features/calendar/calendar-item-row.unit.test.tsx
+  s_9b829d577c7e4c::t_16c2c43e3a71f3 72,94-96,102,104
+apps/web/src/features/calendar/calendar-week-summary.unit.test.tsx
+  s_9b829d577c7e4c::t_7ad2292673dbaf 59-60,63
+apps/web/src/features/project/attention-presentation.unit.test.ts
+  s_9b829d577c7e4c::t_44b076f0374f9e 66,75
+apps/web/src/features/project/charts/trade-activity.unit.test.tsx
+  s_9b829d577c7e4c::t_7c99ea695fa780 23
+apps/web/tests/e2e/finance-synthesis.spec.ts
+  s_9b829d577c7e4c::t_da80409c5dc4d2 55,57,60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f2530496d4cce81306ffd09fdf87cc232346f5ed",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
