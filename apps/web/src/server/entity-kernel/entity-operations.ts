@@ -59,6 +59,7 @@ import {
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { currentAuditReceiptCount } from "~/server/generic/audit-log/repo/audit-receipts";
+import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
@@ -91,7 +92,6 @@ import {
   parseSorts,
 } from "./list-input";
 import { readMutationReceiptFields } from "./repo/mutation-receipt";
-import { captureMutationEvent } from "./repo/mutation-side-effects";
 
 type EntityListInput<TFilters = unknown> = {
   filters: TFilters;
@@ -347,13 +347,13 @@ const buildUpdateOperation = <
               validated.submittedFields.length > 0 &&
               currentAuditReceiptCount() === auditCount
             ) {
-              const event = sideEffectEventFor(
-                binding,
-                "updated",
-                updated.entityId,
-                `${binding.entity}.update`,
-              );
-              if (event) await captureMutationEvent(writeContext.db, event);
+              await captureDerivedRefresh(writeContext.db, [
+                {
+                  entityKind: binding.entity,
+                  entityId: updated.entityId,
+                  changedFields: validated.submittedFields,
+                },
+              ]);
             }
             await writeRecordEmoji(
               writeContext.db,

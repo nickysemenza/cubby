@@ -82,16 +82,20 @@ export async function fieldInputFingerprint(
         ),
       );
   // Own writes have a point revision. An unrelated row of the same kind must
-  // not invalidate adjacent review actions; inherited bases still need the
-  // kind epoch because their deciding ancestor can be a different row.
-  const inherited = keys.some((key) =>
-    entityFieldModels[kind].fields.some(
-      (field) => field.key === key && field.resolution,
-    ),
-  );
+  // not invalidate adjacent review actions. Inheritance and same-kind basis
+  // references still need the kind epoch for another row's effective value/label.
+  const sameKindInput =
+    keys.some((key) =>
+      entityFieldModels[kind].fields.some(
+        (field) =>
+          field.key === key &&
+          (field.resolution || field.reference?.entity === kind),
+      ),
+    ) ||
+    backings.some((backing) => "entity" in backing && backing.entity === kind);
   const revisionKeys = [
     ...refreshInputKeys(kind).filter(
-      (key) => inherited || key !== `kind:${kind}`,
+      (key) => sameKindInput || key !== `kind:${kind}`,
     ),
     `entity:${kind}:${recordId}`,
   ];

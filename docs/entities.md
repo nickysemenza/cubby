@@ -1281,7 +1281,8 @@ hash-based citations still compare against detail values. Explicit unchanged
 writes capture a durable root even when no audit diff exists, so background
 processing can retire pending advice for that write intent.
 Field advice fences use the target's point revision and shared input epochs.
-An inherited target or basis retains its own-kind epoch for ancestor changes;
+An inherited target/basis or same-kind basis reference retains its own-kind
+epoch for ancestor values and referenced labels;
 ordinary scalar advice does not become stale when an unrelated row of the same
 kind is accepted. Connection discovery keeps its broader corpus epochs.
 
