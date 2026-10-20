@@ -1,5 +1,6 @@
 import { DERIVED_REFRESH_PAGE } from "@cubby/schemas/derived-refresh";
 import type { Entity } from "@cubby/schemas/entity-core";
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { searchableEntities } from "@cubby/schemas/search";
 import { sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -131,6 +132,15 @@ const dependencies = {
     ),
   ],
   expense: [
+    // Adjustment project text is allocated from the purchase's principal lines.
+    {
+      entity: "expense",
+      select: (id) => sql`SELECT adjustment.id FROM "Expense" principal
+        JOIN "Expense" adjustment ON adjustment."purchaseId"=principal."purchaseId"
+        WHERE principal.id=${id}::uuid
+          AND adjustment."lineKind" NOT IN (${expenseLineKindSchema.enum.principal},${expenseLineKindSchema.enum.unclassified})
+          AND adjustment."deletedAt" IS NULL`,
+    },
     // Tombstoned rows retain the old price source for repair after removals.
     {
       entity: "product",

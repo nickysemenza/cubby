@@ -45,6 +45,62 @@ describe("bounded entity writes", () => {
   });
   afterEach(() => queue.restore());
 
+  it("refreshes adjustment project text when a principal Expense's Project is renamed", async () => {
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic Studio",
+      defaultTrade: "other",
+    });
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic adjustment vendor",
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      orderId: "SYNTHETIC-ADJUSTMENT",
+      defaultProjectId: null,
+    });
+    await createRepoEntity(ctx, "expense", {
+      name: "Synthetic principal",
+      lineKind: "principal",
+      trade: "other",
+      cost: 100,
+      purchaseId: purchase.output.id,
+      projectId: project.output.id,
+    });
+    const tax = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic tax",
+      lineKind: "tax",
+      trade: "other",
+      cost: 10,
+      purchaseId: purchase.output.id,
+      projectId: null,
+    });
+    const drain = async () => {
+      for (let page = 0; page < 500; page++) {
+        const result = await processDerivedRefreshPage(ctx.db);
+        expect(result.errors).toEqual([]);
+        if (result.done) return;
+      }
+      throw new Error("Synthetic adjustment refresh did not terminate");
+    };
+    await drain();
+    expect(
+      (await getSearchDocumentEmbeddingText(ctx.db, "expense", tax.entityId))
+        ?.embeddingText,
+    ).toContain("Synthetic Studio");
+    await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
+      action: "update",
+      entity: "project",
+      id: project.output.id,
+      data: { name: "Synthetic Workshop" },
+    });
+    await drain();
+    const text = (
+      await getSearchDocumentEmbeddingText(ctx.db, "expense", tax.entityId)
+    )?.embeddingText;
+    expect(text).toContain("Synthetic Workshop");
+    expect(text).not.toContain("Synthetic Studio");
+  });
+
   it("does not traverse from a Product rename through sibling purchase lines to another Product", async () => {
     const first = await createProductFixture(
       ctx.db,
