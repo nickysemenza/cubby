@@ -24,6 +24,7 @@ import {
   getDb,
   notDeleted,
   withTransactionDatabase,
+  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import {
   assessment,
@@ -439,19 +440,23 @@ export async function reviewAssessment(
     throw new Error("An Automatic rule only accepts an Assessment as is");
   const { assertAutomaticRuleOn } =
     await import("~/server/generic/assessment/repo/automatic-rule-runtime");
-  return withTransactionDatabase(db, async (transactionDb) => {
-    await assertAutomaticRuleOn(
-      transactionDb,
-      automatic.rule.key,
-      automatic.rule.stamp,
-    );
-    return settleReview(
-      transactionDb,
-      { ...context, db: transactionDb },
-      input,
-      automatic,
-    );
-  });
+  return withSnapshotWriteDatabase(
+    db,
+    async (transactionDb) => {
+      await assertAutomaticRuleOn(
+        transactionDb,
+        automatic.rule.key,
+        automatic.rule.stamp,
+      );
+      return settleReview(
+        transactionDb,
+        { ...context, db: transactionDb },
+        input,
+        automatic,
+      );
+    },
+    { isolationLevel: "serializable" },
+  );
 }
 
 function assertReviewAction(
@@ -656,117 +661,121 @@ async function settleReview(
       status: "applied",
       applied: true,
     };
-    return withTransactionDatabase(db, async (transactionDb) => {
-      // Serialize generic commands without taking projection locks ahead of the
-      // domain's parent locks. Receipt and mutation commit in the same boundary.
-      await getDb(transactionDb).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`assessment-review:${prediction.id}`},0))`,
-      );
-      const [receipt] = await getDb(transactionDb)
-        .select()
-        .from(feedback)
-        .where(
-          and(
-            eq(feedback.assessmentId, prediction.id),
-            eq(
-              feedback.operationId,
-              `command-application:${input.operationId}`,
-            ),
-          ),
-        )
-        .limit(1);
-      if (receipt) {
-        assertApplicationReceipt(receipt, event, "assessment_application");
-        const priorOutcome = assessmentReviewOut.parse(receipt.receipt);
-        if (
-          !isEqual(
-            { ...priorOutcome, applicationResult: undefined },
-            { ...outcome, applicationResult: undefined },
-          )
-        )
-          throw new Error(
-            "Application receipt does not match this command outcome",
-          );
-        return priorOutcome;
-      }
-      if (input.application?.kind === "saved_field") {
-        await acknowledgeSavedField(transactionDb, context, prediction, {
-          recordId: input.application.recordId,
-          operationId: input.operationId,
-          correction: input.correction,
-          commandFeedback: event,
-        });
-      } else {
-        if (prediction.family === "field") {
-          const { assertConnectionFieldFresh } =
-            await import("~/server/domains/connection/repo/field-connections");
-          await assertConnectionFieldFresh(transactionDb, prediction.id);
-        }
-        if ("lockForApply" in family && family.lockForApply)
-          await family.lockForApply(transactionDb, prediction);
-        const query = getDb(transactionDb)
-          .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, prediction.id))
-          .limit(1);
-        const [state] = family.transactionBound
-          ? await query.for("update")
-          : await query;
-        if (!state?.active || state.status === "superseded")
-          throw new Error(
-            "Assessment evidence is stale; request a fresh assessment before applying",
-          );
-        if (
-          state.status === "applied" ||
-          (prediction.family === "field" && state.status !== "pending")
-        )
-          throw new Error(
-            "Assessment already resolved by another command; request a fresh assessment",
-          );
-        if (
-          input.expectedFingerprint !== undefined &&
-          input.expectedFingerprint !==
-            ("currentFingerprint" in family && family.currentFingerprint
-              ? await family.currentFingerprint(transactionDb, state)
-              : state.fingerprint)
-        )
-          throw new Error("Assessment evidence fingerprint changed");
-        family.target.parse(state);
-        const applicationResult = await family.apply(
-          transactionDb,
-          { ...context, db: transactionDb },
-          state,
-          input,
-          automatic,
+    return withSnapshotWriteDatabase(
+      db,
+      async (transactionDb) => {
+        // Serialize generic commands without taking projection locks ahead of the
+        // domain's parent locks. Receipt and mutation commit in the same boundary.
+        await getDb(transactionDb).execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`assessment-review:${prediction.id}`},0))`,
         );
-        if (applicationResult) outcome.applicationResult = applicationResult;
-        if (!family.transactionBound)
-          await getDb(transactionDb)
-            .update(assessmentState)
-            .set({ status: "applied" })
-            .where(
-              and(
-                eq(assessmentState.id, state.id),
-                eq(assessmentState.active, true),
+        const [receipt] = await getDb(transactionDb)
+          .select()
+          .from(feedback)
+          .where(
+            and(
+              eq(feedback.assessmentId, prediction.id),
+              eq(
+                feedback.operationId,
+                `command-application:${input.operationId}`,
               ),
+            ),
+          )
+          .limit(1);
+        if (receipt) {
+          assertApplicationReceipt(receipt, event, "assessment_application");
+          const priorOutcome = assessmentReviewOut.parse(receipt.receipt);
+          if (
+            !isEqual(
+              { ...priorOutcome, applicationResult: undefined },
+              { ...outcome, applicationResult: undefined },
+            )
+          )
+            throw new Error(
+              "Application receipt does not match this command outcome",
             );
-      }
-      await recordFeedback(transactionDb, {
-        assessmentId: prediction.id,
-        operationId: `command-application:${input.operationId}`,
-        verdict: "ungraded",
-        intent: "apply",
-        authority,
-        actorUserId: context.actorContext.userId,
-        receipt: outcome,
-        metadata: {
-          kind: "assessment_application",
-          commandFeedbackId: event.id,
-          ...(automatic && { rule: automatic.rule }),
-        },
-      });
-      return outcome;
-    });
+          return priorOutcome;
+        }
+        if (input.application?.kind === "saved_field") {
+          await acknowledgeSavedField(transactionDb, context, prediction, {
+            recordId: input.application.recordId,
+            operationId: input.operationId,
+            correction: input.correction,
+            commandFeedback: event,
+          });
+        } else {
+          if (prediction.family === "field") {
+            const { assertConnectionFieldFresh } =
+              await import("~/server/domains/connection/repo/field-connections");
+            await assertConnectionFieldFresh(transactionDb, prediction.id);
+          }
+          if ("lockForApply" in family && family.lockForApply)
+            await family.lockForApply(transactionDb, prediction);
+          const query = getDb(transactionDb)
+            .select()
+            .from(assessmentState)
+            .where(eq(assessmentState.id, prediction.id))
+            .limit(1);
+          const [state] = family.transactionBound
+            ? await query.for("update")
+            : await query;
+          if (!state?.active || state.status === "superseded")
+            throw new Error(
+              "Assessment evidence is stale; request a fresh assessment before applying",
+            );
+          if (
+            state.status === "applied" ||
+            (prediction.family === "field" && state.status !== "pending")
+          )
+            throw new Error(
+              "Assessment already resolved by another command; request a fresh assessment",
+            );
+          if (
+            input.expectedFingerprint !== undefined &&
+            input.expectedFingerprint !==
+              ("currentFingerprint" in family && family.currentFingerprint
+                ? await family.currentFingerprint(transactionDb, state)
+                : state.fingerprint)
+          )
+            throw new Error("Assessment evidence fingerprint changed");
+          family.target.parse(state);
+          const applicationResult = await family.apply(
+            transactionDb,
+            { ...context, db: transactionDb },
+            state,
+            input,
+            automatic,
+          );
+          if (applicationResult) outcome.applicationResult = applicationResult;
+          if (!family.transactionBound)
+            await getDb(transactionDb)
+              .update(assessmentState)
+              .set({ status: "applied" })
+              .where(
+                and(
+                  eq(assessmentState.id, state.id),
+                  eq(assessmentState.active, true),
+                ),
+              );
+        }
+        await recordFeedback(transactionDb, {
+          assessmentId: prediction.id,
+          operationId: `command-application:${input.operationId}`,
+          verdict: "ungraded",
+          intent: "apply",
+          authority,
+          actorUserId: context.actorContext.userId,
+          receipt: outcome,
+          metadata: {
+            kind: "assessment_application",
+            commandFeedbackId: event.id,
+            ...(automatic && { rule: automatic.rule }),
+          },
+        });
+        return outcome;
+      },
+      { isolationLevel: "serializable" },
+    );
   }
   const status = await withTransactionDatabase(db, async (transactionDb) => {
     const [state] = await getDb(transactionDb)

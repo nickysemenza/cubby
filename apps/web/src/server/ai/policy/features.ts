@@ -34,6 +34,7 @@ import {
   mailFinancialEventModelOutput,
   type MailFinancialEventModelOutput,
 } from "@cubby/schemas/mailbox-research";
+import { merchantIdentityProposal } from "@cubby/schemas/merchant-identity";
 import {
   type ImportAuditModelOutput,
   type ImportExtractionModelOutput,
@@ -80,6 +81,7 @@ import {
   mailAttachmentPurposeChoices,
   mailAttachmentPurposePrompt,
 } from "./prompts/mail-attachment";
+import { merchantIdentityRequest } from "./prompts/merchant-identity";
 import {
   purchaseExtractionPrompt,
   purchaseAuditPrompt,
@@ -190,6 +192,30 @@ export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   cache: false,
   tier: "decision",
   collectPayload: false,
+});
+
+export const MERCHANT_IDENTITY_FEATURE = defineFeature({
+  request: merchantIdentityRequest,
+  feature: "merchant-identity",
+  promptVersion: "2026-10-20.1",
+  cache: true,
+  tier: "fast",
+  effort: "low",
+  maxTokens: 400,
+  schema: merchantIdentityProposal,
+});
+
+export const MERCHANT_IDENTITY_SUPPORT_FEATURE = defineFeature({
+  feature: "merchant-identity-support",
+  promptVersion: "2026-10-20.1",
+  cache: true,
+  tier: "decision",
+  choices: ["supported_business", "insufficient_evidence"] as const,
+  prompt: (subject: string) => ({
+    rules:
+      "Does the statement merchant evidence support the proposed canonical business identity? Formatting cleanup is allowed; invented identity is not. A processor-only descriptor or person is insufficient. Choose supported_business only for one unambiguous business.",
+    subject,
+  }),
 });
 
 export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
@@ -583,6 +609,8 @@ export const ENTITY_EMBEDDING_FEATURE = defineFeature({
  * Decision targets reuse the field/selection declarations rendered by decision-catalog.ts.
  * Embeddings have no authored prompt. */
 export const AI_FEATURES = [
+  MERCHANT_IDENTITY_FEATURE,
+  MERCHANT_IDENTITY_SUPPORT_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,

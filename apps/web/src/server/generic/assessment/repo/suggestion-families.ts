@@ -323,6 +323,7 @@ const statementImpact = {
     outcome("Pending hold retired"),
   ],
   void: [outcome("Statement charge matched"), outcome("Hold voided")],
+  book: [outcome("Spending booked")],
 } satisfies Record<StatementTransactionAction, SuggestionImpact[]>;
 
 const statementStrength = (key: {
@@ -368,6 +369,11 @@ function statementAcceptApplication(
 const STATEMENT_ENTITIES: readonly ShortcodeEntity[] = [
   "financialAccount",
   "financialTransaction",
+  "purchase",
+  "expense",
+  "vendor",
+  "spendingCategory",
+  "ledgerParty",
 ];
 
 const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"> =

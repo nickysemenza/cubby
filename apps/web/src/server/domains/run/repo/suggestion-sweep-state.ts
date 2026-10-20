@@ -1,7 +1,7 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
@@ -186,7 +186,19 @@ export async function saveSweepSuggestions(
             eq(suggestionTable.entity, input.entity),
             eq(suggestionTable.recordId, typedRecordId),
             eq(suggestionTable.field, input.field),
-            eq(suggestionTable.active, true),
+            eq(suggestionTable.family, "field"),
+            or(
+              eq(suggestionTable.active, true),
+              input.predecessorIds?.length
+                ? and(
+                    or(
+                      eq(suggestionTable.status, "applied"),
+                      isNotNull(suggestionTable.acceptanceReceipt),
+                    ),
+                    inArray(suggestionTable.id, input.predecessorIds),
+                  )
+                : undefined,
+            ),
           ),
         )
         .for("update");
@@ -197,7 +209,9 @@ export async function saveSweepSuggestions(
             !predecessors.some(
               (row) =>
                 row.id === id &&
-                (row.status === "pending" ||
+                (row.status === "applied" ||
+                  row.acceptanceReceipt !== null ||
+                  row.status === "pending" ||
                   (row.status === "superseded" &&
                     ["input_changed", "no_proposal"].includes(
                       row.supersessionReceipt?.reason ?? "",
@@ -343,7 +357,7 @@ export async function saveSweepSuggestions(
           .returning();
         if (row) created.push(row.id);
       }
-      // Proposals publish pending; a confident Addition then applies only
+      // Proposals publish pending; a confident assignment then applies only
       // through its Automatic rule, as automatic Feedback naming the rule.
       const { applied } = await applyAutomaticRules(tx, created, {
         context: txContext,

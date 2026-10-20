@@ -285,6 +285,7 @@ export function SuggestionActions({
                           run(() =>
                             statementApplyItem(statement, {
                               action: "attach",
+                              booking: rowDraft.booking,
                               transactionId: candidate.transactionId,
                               fields: [
                                 ...(rowDraft.fields[candidate.transactionId] ??
@@ -324,6 +325,7 @@ export function SuggestionActions({
                     run(() =>
                       statementApplyItem(statement, {
                         action: "create",
+                        booking: rowDraft.booking,
                         kindOverride: rowDraft.kind,
                       }),
                     )

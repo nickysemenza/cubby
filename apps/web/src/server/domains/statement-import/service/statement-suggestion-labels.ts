@@ -33,11 +33,16 @@ import {
 } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import {
+  adviseSpending,
+  type SpendingAdvicePort,
+} from "~/server/domains/financial-transaction/service/spending-advice";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   statementLabelSubject,
   statementCandidateSubject,
 } from "~/server/domains/statement-import/repo/statement-label-input";
+import { prepareStatementSpending } from "~/server/domains/statement-import/repo/statement-spending";
 import {
   buildChargeProposals,
   chargeId,
@@ -105,9 +110,11 @@ async function buildPage(
 
 /** Partial model answers are checkpointed independently of advisory publication. */
 function prepareLabelledJudgment(
+  db: Database,
   current: ChargeProposal,
   input: {
     port?: DecisionPort;
+    spendingAdvice?: SpendingAdvicePort;
     usage: DecisionChoiceArgs["usage"];
     checkpoint: StatementLabelCheckpoint | null;
     reserve(count: number): () => boolean;
@@ -156,11 +163,14 @@ function prepareLabelledJudgment(
     judgment,
     kind: previous?.kind ?? false,
     counterparty: previous?.counterparty ?? false,
+    spending: previous?.spending ?? false,
   };
   const countLabels = () =>
     judgment.candidates.filter((entry) => entry.label !== null).length +
     Number(checkpoint.kind) +
-    Number(checkpoint.counterparty);
+    Number(checkpoint.counterparty) +
+    Number(checkpoint.spending);
+
   const reused = countLabels();
   const errors: unknown[] = [];
   let waitingUntil: number | null = null;
@@ -252,11 +262,13 @@ function prepareLabelledJudgment(
   }
   // Only context-fitting questions spend the page allowance. Reserve a whole
   // charge synchronously, so a small allowance completes earlier charges first.
-  const reserved = input.reserve(decisions.length);
+  const reserved = input.reserve(
+    decisions.length + Number(!checkpoint.spending),
+  );
   return {
     decisions: decisions.filter(() => reserved()),
     retainError,
-    finish() {
+    async finish() {
       if (judgment.create)
         Object.assign(
           judgment.create,
@@ -267,6 +279,36 @@ function prepareLabelledJudgment(
             transfer: judgment.transfer,
           }),
         );
+      if (checkpoint.spending && previous)
+        judgment.spending = await prepareStatementSpending(
+          db,
+          judgment,
+          previous.judgment.spending?.request.advice ?? null,
+        );
+      if (
+        !checkpoint.spending &&
+        !errors.length &&
+        waitingUntil === null &&
+        reserved()
+      ) {
+        try {
+          const advice = await adviseSpending(db, {
+            judgment,
+            runId: input.usage!.runId,
+            model,
+            port: input.port,
+            spendingAdvice: input.spendingAdvice,
+          });
+          judgment.spending = await prepareStatementSpending(
+            db,
+            judgment,
+            advice,
+          );
+          checkpoint.spending = true;
+        } catch (error) {
+          retainError(error);
+        }
+      }
       judgment.clean = isClean(judgment, current.canonical.amount);
       checkpoint.judgment = statementTransactionJudgment.parse(judgment);
       return {
@@ -277,7 +319,8 @@ function prepareLabelledJudgment(
         waitingUntil,
         complete:
           judgment.candidates.every((candidate) => candidate.label !== null) &&
-          (!judgment.create || (checkpoint.kind && checkpoint.counterparty)),
+          (!judgment.create || (checkpoint.kind && checkpoint.counterparty)) &&
+          checkpoint.spending,
       };
     },
   };
@@ -301,6 +344,7 @@ export async function labelStatementSuggestions(
     decisionLimit?: number;
     cooperative?: boolean;
     port?: DecisionPort;
+    spendingAdvice?: SpendingAdvicePort;
     /** The Run the model calls are accounted to (a Sweep's step). */
     runId?: RunId | null;
     after?: LabelCursor | null;
@@ -434,7 +478,8 @@ export async function labelStatementSuggestions(
         (total, { current }) =>
           total +
           current.judgment.candidates.length +
-          (current.judgment.create ? 2 : 0),
+          (current.judgment.create ? 2 : 0) +
+          1,
         0,
       ),
     });
@@ -444,8 +489,9 @@ export async function labelStatementSuggestions(
       try {
         return {
           status: "fulfilled" as const,
-          value: prepareLabelledJudgment(current, {
+          value: prepareLabelledJudgment(db, current, {
             port: input.port,
+            spendingAdvice: input.spendingAdvice,
             usage,
             checkpoint: target.row.checkpoint,
             reserve,
@@ -472,14 +518,19 @@ export async function labelStatementSuggestions(
       if (answer.status === "fulfilled") answer.item.apply(answer.value);
       else answer.item.reject(answer.reason);
     }
-    const computed = prepared.map((result) => {
-      if (result.status === "rejected") return result;
-      try {
-        return { status: "fulfilled" as const, value: result.value.finish() };
-      } catch (reason) {
-        return { status: "rejected" as const, reason };
-      }
-    });
+    const computed = await Promise.all(
+      prepared.map(async (result) => {
+        if (result.status === "rejected") return result;
+        try {
+          return {
+            status: "fulfilled" as const,
+            value: await result.value.finish(),
+          };
+        } catch (reason) {
+          return { status: "rejected" as const, reason };
+        }
+      }),
+    );
     await forEachConcurrently(
       ready.map((entry, index) => ({
         ...entry,
@@ -561,7 +612,12 @@ export async function labelStatementSuggestions(
       const key = chargeId(current.charge);
       if (!published.has(key)) continue;
       try {
-        const outcome = await applyAutomaticRulesForCharge(db, current.charge);
+        if (input.importId) await regenerateCharges(db, [current.charge]);
+        const outcome = await applyAutomaticRulesForCharge(
+          db,
+          current.charge,
+          Boolean(input.importId),
+        );
         if (outcome.applied.length) applied.add(key);
       } catch (error) {
         fail(current.charge, error);

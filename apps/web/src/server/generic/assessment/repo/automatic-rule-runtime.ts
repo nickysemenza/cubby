@@ -137,6 +137,7 @@ async function storedRules(db: Database) {
 type StoredRule = typeof automaticRule.$inferSelect;
 /** On for the code's current revision; a missing row is off. */
 const isOn = (key: AutomaticRuleKey, row: StoredRule | undefined) =>
+  AUTOMATIC_RULES[key].execution === "import_clean" ||
   Boolean(row?.enabled && row.revision === AUTOMATIC_RULES[key].revision());
 
 /**
@@ -151,6 +152,11 @@ export async function assertAutomaticRuleOn(
   key: AutomaticRuleKey,
   stamp: string,
 ) {
+  if (AUTOMATIC_RULES[key].execution === "import_clean") {
+    if (stamp !== ruleBase(key))
+      throw new Error("Import booking policy changed; refresh the suggestion");
+    return;
+  }
   const [row] = await getDb(db)
     .select()
     .from(automaticRule)
@@ -207,7 +213,9 @@ export async function listAutomaticRules(db: Database) {
   const stored = await storedRules(db);
   return automaticRulesOut.parse({
     rules: await Promise.all(
-      AUTOMATIC_RULE_KEYS.map((key) => ruleSummary(db, key, stored.get(key))),
+      AUTOMATIC_RULE_KEYS.filter(
+        (key) => AUTOMATIC_RULES[key].execution === "measured",
+      ).map((key) => ruleSummary(db, key, stored.get(key))),
     ),
   });
 }
@@ -225,6 +233,11 @@ export async function setAutomaticRule(
       "Only a member turns an Automatic rule on or off",
     );
   const rule = AUTOMATIC_RULES[input.ruleKey];
+  if (rule.execution === "import_clean")
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Clean import booking is an execution policy, not an optional measured rule.",
+    );
   const stored = await storedRules(db);
   const before = await ruleSummary(
     db,
@@ -290,6 +303,7 @@ export async function recheckAutomaticRules(
   if (!stamps.length) return;
   const stored = await storedRules(db);
   for (const key of AUTOMATIC_RULE_KEYS) {
+    if (AUTOMATIC_RULES[key].execution !== "measured") continue;
     const base = ruleBase(key);
     if (
       !isOn(key, stored.get(key)) ||
@@ -381,6 +395,8 @@ export async function applyAutomaticRules(
     /** Kernel services for field writes; the actor is always the system's. */
     context?: EntityKernelContext;
     onFailure?: (assessmentId: string, message: string) => void;
+    /** An import explicitly authorizes every current clean spending plan. */
+    importClean?: boolean;
   } = {},
 ): Promise<AutomaticRuleOutcome> {
   const outcome: AutomaticRuleOutcome = {
@@ -413,11 +429,19 @@ export async function applyAutomaticRules(
     if (!row.active || row.status !== "pending" || !row.served) continue;
     const stamp = ruleStamps.safeParse(row.data).data;
     if (!stamp?.matchedRules.length) continue;
-    const matches = currentMatches(row, stamp.pinnedModel).filter(
-      (match) =>
-        stamp.matchedRules.includes(match.stamp) &&
-        isOn(match.key, stored.get(match.key)),
-    );
+    const matches = currentMatches(row, stamp.pinnedModel)
+      .filter(
+        (match) =>
+          stamp.matchedRules.includes(match.stamp) &&
+          (AUTOMATIC_RULES[match.key].execution !== "import_clean" ||
+            options.importClean === true) &&
+          isOn(match.key, stored.get(match.key)),
+      )
+      .sort(
+        (a, b) =>
+          Number(AUTOMATIC_RULES[b.key].execution === "import_clean") -
+          Number(AUTOMATIC_RULES[a.key].execution === "import_clean"),
+      );
     const eligible: AutomaticRuleMatch[] = [];
     for (const match of matches)
       if (
@@ -429,7 +453,10 @@ export async function applyAutomaticRules(
         eligible.push(match);
     const [match] = eligible;
     if (!match) continue;
-    if (stamp.auditSample) {
+    if (
+      stamp.auditSample &&
+      AUTOMATIC_RULES[match.key].execution === "measured"
+    ) {
       outcome.audited.push(row.id);
       continue;
     }
@@ -451,6 +478,15 @@ export async function applyAutomaticRules(
           action: "attach" as const,
           transactionId: codes[0].shortcode,
           // An automatic attach never copies statement fields onto the transaction.
+          fields: [],
+          rejectedCandidateIds: [],
+        };
+      }
+      if (!application && row.family === "statement_transaction") {
+        const judgment = statementTransactionJudgment.parse(row.judgment);
+        application = {
+          kind: "statement_transaction" as const,
+          action: judgment.recommended,
           fields: [],
           rejectedCandidateIds: [],
         };
@@ -516,6 +552,7 @@ export async function applyAutomaticRules(
 export async function applyAutomaticRulesForCharge(
   db: Database,
   charge: { source: string; chargeKey: string },
+  importClean = false,
 ) {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
     SELECT id FROM "AssessmentState"
@@ -527,5 +564,6 @@ export async function applyAutomaticRulesForCharge(
   return applyAutomaticRules(
     db,
     rows.map((row) => row.id),
+    { importClean },
   );
 }

@@ -10,6 +10,8 @@ import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-famil
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { entityExternalIdKind } from "@cubby/schemas/external-id";
+import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { mailboxClassificationStage } from "@cubby/schemas/mailbox-research";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
@@ -102,6 +104,28 @@ export const reviewFamilyDeclarations = {
     records: sql`jsonb_build_array(${ref(sql`${entities.financialAccount}`, sql`s.data->>'accountId'`)},
       ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${statementTransactionAction.enum.supersede}->>'pendingTransactionId'`)},
       ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${statementTransactionAction.enum.void}->>'transactionId'`)}) ||
+      jsonb_build_array(${ref(sql`${entities.financialTransaction}`, sql`a.judgment->>'matchedTransactionId'`)}) ||
+      jsonb_build_array(
+        ${ref(sql`${entities.vendor}`, sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode = a.judgment->'spending'->>'vendorId' AND v."deletedAt" IS NULL)`)},
+        ${ref(sql`${entities.spendingCategory}`, sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode = a.judgment->'spending'->>'spendingCategoryId' AND category."deletedAt" IS NULL)`)}) ||
+      COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
+        FROM "EntityExternalId" evidence
+        JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND settled."deletedAt" IS NULL
+        JOIN "FinancialAccount" account ON account.id=settled."accountId"
+        LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND allocation."deletedAt" IS NULL
+        LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND booked."deletedAt" IS NULL
+        LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND line."deletedAt" IS NULL
+        CROSS JOIN LATERAL (VALUES
+          (${entities.financialTransaction},settled.id::text), (${entities.purchase},booked.id::text),
+          (${entities.expense},line.id::text), (${entities.vendor},booked."vendorId"::text),
+          (${entities.ledgerParty},account."ledgerPartyId"::text)) related(kind,id)
+        WHERE evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND evidence."deletedAt" IS NULL
+          AND evidence.source=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>${financialTransactionSourceRef.keyof().enum.source}
+          AND evidence."externalId"=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>'externalId'
+          AND related.id IS NOT NULL), '[]'::jsonb) ||
+      COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
+        FROM jsonb_array_elements(COALESCE(a.judgment->'spending'->'candidates', '[]'::jsonb)) candidate
+        JOIN "Purchase" p ON p.shortcode = candidate->>'purchaseId' AND p."deletedAt" IS NULL), '[]'::jsonb) ||
       COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialTransaction}`, sql`c->>'transactionId'`)}) FROM jsonb_array_elements(a.judgment->'candidates') c), '[]'::jsonb)`,
     actionable: sql`true`,
     summarize: (value: unknown) => {

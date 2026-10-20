@@ -939,8 +939,19 @@ member edit returning the field to its earlier value still invalidates the
 outstanding result. Discovery refreshes the live Product catalog, uncertain
 unresolved Emails and pending Suggestions; it also revisits input-invalidated
 or no-proposal field work when the relevant fingerprint changes. Settled
-confident Emails, member resolutions, applied values and rejected history remain
-protected. Eligible unknown legacy provenance is evaluated once. Successful
+confident Emails and their member resolutions retain their domain authority.
+Applied field targets, including inactive saved-form applications and rejected
+member corrections with retained application receipts, are
+reevaluated against current values when evidence or policy changes. Automatic
+field assignments admit both additions and corrections on eligible declared
+fields, regardless of who wrote the old value. Declared review requirements,
+validation and inherited/derived resolution still apply; pruning and merging
+are separate actions. Historical receipts remain immutable. Current write and
+input fences reject edits during inference and later writes in the same
+application transaction, including ABA edits, before capturing the settled
+post-application fingerprint. These fingerprints avoid repeating unchanged
+work. Rejected proposals without application receipts stay resolved. Eligible
+unknown legacy provenance is evaluated once. Successful
 ambiguity or missing evidence is terminal for that fingerprint; transient or
 interrupted inference gets three attempts. Two independent refresh targets may
 run globally, with dependent calls sequential. An execution claim defers immediately

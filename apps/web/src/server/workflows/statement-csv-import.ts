@@ -302,9 +302,8 @@ export async function commitStatementCsv(
     previewRows,
     selected,
   );
-  // Rows left unmatched by this commit become Transaction suggestions.
-  if (evidence && importId)
-    await scheduleStatementSuggestions(db, importId, actor);
+  // Unchanged imports also revisit matched transactions whose spending is unbooked.
+  if (importId) await scheduleStatementSuggestions(db, importId, actor);
   return {
     transactions,
     attached,

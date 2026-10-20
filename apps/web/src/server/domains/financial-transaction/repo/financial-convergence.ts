@@ -55,6 +55,10 @@ import {
   loadFinancialBookingLineage,
   previewFinancialBooking,
 } from "./financial-booking";
+import {
+  previewFinancialSpending,
+  commitFinancialSpending,
+} from "./financial-spending";
 import { updateFinancialTransaction } from "./financial-transaction";
 import { findSettlementConflicts } from "./settlement-conflicts";
 
@@ -592,6 +596,30 @@ export async function convergeFinancialTransaction(
   actor: ActorContext,
   evidence?: PreparedMailFinancialEvent,
 ): Promise<Result> {
+  if (input.advice && !input.emailId && !evidence) {
+    return withSnapshotWrite(
+      db,
+      async (tx) => {
+        const txDb = databaseForTransaction(tx);
+        const plan = await previewFinancialSpending(txDb, {
+          transactionId: input.transactionId,
+          advice: input.advice,
+        });
+        if (plan.status === "review_required" || plan.status === "deferred")
+          return review(plan.reason);
+        const result = await commitFinancialSpending(txDb, plan, actor);
+        const purchaseId = result?.purchaseIds[0];
+        if (!result || !purchaseId)
+          return review("The spending plan established no Purchase.");
+        return financialConvergenceResult.parse({
+          status: result.replayed ? "already_recorded" : "applied",
+          purchaseId,
+          expenseId: null,
+        });
+      },
+      { isolationLevel: "serializable" },
+    );
+  }
   return financialConvergenceResult.parse(
     await runFinancialConvergence(db, input, actor, evidence),
   );

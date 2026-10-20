@@ -1,8 +1,10 @@
 import {
   aiRefreshManifest,
+  SUGGESTION_AUTO_APPLY_THRESHOLD,
   type AiRefreshManifest,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
+import { FIELD_ASSIGNMENT_REVISION } from "@cubby/schemas/automatic-rule";
 import { connectionRelation } from "@cubby/schemas/entity-connections";
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -25,6 +27,28 @@ const automaticFeatures = new Set([
 ]);
 export const fieldPolicyKey = (entity: string, field: string) =>
   `field:${entity}.${field}`;
+
+/** Field work depends on review and automatic assignment policy as well as inference. */
+export function fieldPolicyFingerprint(
+  row: ReturnType<typeof fieldDecisionRows>[number],
+) {
+  return sha256Hex(
+    JSON.stringify({
+      mode: row.mode,
+      reviewRequired: row.reviewRequired,
+      automaticAssignment: {
+        ruleKey: "field.addition",
+        revision: FIELD_ASSIGNMENT_REVISION,
+        threshold: SUGGESTION_AUTO_APPLY_THRESHOLD,
+      },
+      rules: row.rules,
+      options: row.options,
+      basis: row.basis,
+      prompt: row.prompt,
+      roster: row.roster,
+    }),
+  );
+}
 
 export async function compiledRefreshManifest(): Promise<AiRefreshManifest> {
   const entries: AiRefreshManifest = {};
@@ -85,16 +109,7 @@ export async function compiledRefreshManifest(): Promise<AiRefreshManifest> {
     entries[fieldPolicyKey(row.entity, row.field)] = {
       promptVersion: row.promptVersion,
       generation: 0,
-      policyFingerprint: await sha256Hex(
-        JSON.stringify({
-          mode: row.mode,
-          rules: row.rules,
-          options: row.options,
-          basis: row.basis,
-          prompt: row.prompt,
-          roster: row.roster,
-        }),
-      ),
+      policyFingerprint: await fieldPolicyFingerprint(row),
     };
   }
   return aiRefreshManifest.parse(entries);

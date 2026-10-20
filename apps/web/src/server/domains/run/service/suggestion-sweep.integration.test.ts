@@ -56,7 +56,7 @@ const savedRun = async (
 
 // Regression modes: an Addition above threshold publishes pending and then
 // applies only through the field.addition Automatic rule, as automatic
-// Feedback naming it, except its audit sample; Corrections and low confidence
+// Feedback naming it, except its audit sample; low-confidence assignments
 // remain pending; paired decisions share provenance and never apply;
 // pause/resume checkpoints by unprocessed record and field.
 describe("persisted Suggestion sweeps", () => {
@@ -77,7 +77,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(row?.acceptanceReceipt).toMatchObject({
       mode: "automatic",
       runId: started.id,
-      reason: "confident_addition",
+      reason: "confident_assignment",
     });
     const audits = await getDb(ctx.db)
       .select()
@@ -338,7 +338,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(await runSuggestions(ctx.db, started.id)).toHaveLength(2);
   });
 
-  it("keeps a high-confidence Correction and a low-confidence Addition pending", async () => {
+  it("applies a high-confidence Correction and keeps a low-confidence Addition pending", async () => {
     const context = kernelCtx(ctx);
     const correction = await productFixture(ctx, "Synthetic corrected item", {
       categoryId: taxonomyId("tools"),
@@ -355,12 +355,12 @@ describe("persisted Suggestion sweeps", () => {
     expect(await runSuggestions(ctx.db, highRun.id)).toEqual([
       expect.objectContaining({
         kind: "correction",
-        status: "pending",
+        status: "applied",
         confidence: 0.97,
       }),
     ]);
     expect(await productCategoryId(ctx.db, correction.id)).toBe(
-      taxonomyId("tools"),
+      taxonomyId(SUGGESTED_CATEGORY),
     );
 
     const lowRun = await sweep(addition.id, 0.6);

@@ -29,7 +29,7 @@ export const statementRowHandlers = implementOperationDomain(
         context.actorContext,
       );
       // New evidence may settle, or need, a transaction.
-      if (recorded.inserted && recorded.batchId)
+      if (recorded.batchId)
         await scheduleStatementSuggestions(
           context.db,
           recorded.batchId,

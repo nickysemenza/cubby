@@ -21,6 +21,7 @@ import {
   eq,
   gt,
   inArray,
+  isNotNull,
   isNull,
   notInArray,
   or,
@@ -354,12 +355,21 @@ export async function liveProductIdsAfter(
     .limit(limit);
 }
 
+// Applications identify logical targets even when inactive or rejected after
+// a member correction. Rejected proposals without a receipt stay resolved.
 const eligibleSuggestions = () =>
   or(
-    eq(suggestion.status, "pending"),
+    eq(suggestion.status, "applied"),
+    isNotNull(suggestion.acceptanceReceipt),
     and(
-      eq(suggestion.status, "superseded"),
-      sql`${suggestion.supersessionReceipt}->>'reason' IN (${suggestionSupersessionReceipt.shape.reason.enum.input_changed}, ${suggestionSupersessionReceipt.shape.reason.enum.no_proposal})`,
+      eq(suggestion.active, true),
+      or(
+        eq(suggestion.status, "pending"),
+        and(
+          eq(suggestion.status, "superseded"),
+          sql`${suggestion.supersessionReceipt}->>'reason' IN (${suggestionSupersessionReceipt.shape.reason.enum.input_changed}, ${suggestionSupersessionReceipt.shape.reason.enum.no_proposal})`,
+        ),
+      ),
     ),
   );
 
@@ -380,7 +390,6 @@ export async function pendingFieldRefreshes(
       and(
         eligibleSuggestions(),
         eq(suggestion.family, "field"),
-        eq(suggestion.active, true),
         after
           ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${after.entity}, ${after.recordId}::uuid, ${after.field})`
           : undefined,
@@ -404,6 +413,7 @@ export async function fieldRefreshHistory(
     .from(suggestion)
     .where(
       and(
+        eq(suggestion.family, "field"),
         eq(suggestion.entity, key.entity),
         eq(suggestion.recordId, key.recordId),
         eq(suggestion.field, key.field),

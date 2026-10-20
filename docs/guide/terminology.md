@@ -702,11 +702,14 @@ A classification or change already acted on without waiting for household
 review. The household can review it afterwards and mark it Wrong.
 
 **Transaction suggestion**:
-A Suggestion, computed from one unmatched statement charge, to create a
+A Suggestion, computed from one statement charge, to create a
 Financial Transaction, attach the charge to an existing one, supersede a
 recorded hold with its posted row, or void a hold a later export no longer
-contains. It is a Suggestion with the `statement_transaction` Assessment
-family; nothing is written until it is reviewed. A clean one is
+contains, or book spending on an already matched transaction. It uses the
+`statement_transaction` Assessment family and the shared review path. Posted
+spending also books or links Expenses; a transaction alone adds no spend.
+Import-clean booking and uncertainty follow
+[evidence convergence](../import-evidence-convergence.md). A clean one is
 bulk-acceptable: a create is clean only when at least two of the category
 rule, the decision label and merchant history agree on its kind, none
 disagrees, and the counterparty is not a person.

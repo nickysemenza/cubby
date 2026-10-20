@@ -15,6 +15,8 @@ import {
   LOCATION_INVENTORY_DETECTION_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
+  MERCHANT_IDENTITY_FEATURE,
+  MERCHANT_IDENTITY_SUPPORT_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   MAIL_ATTACHMENT_PURPOSE_FEATURE,
   MAIL_ATTRIBUTION_FEATURE,
@@ -52,6 +54,19 @@ type SmokeCase = {
 
 /** A scenario is one real caller shape, so a feature can have several. */
 export const AI_SMOKE_CASES = {
+  merchantIdentity: {
+    feature: MERCHANT_IDENTITY_FEATURE,
+    label: "Merchant identity",
+    description: "Propose a supported business name or abstain",
+    group: "Decisions",
+  },
+  merchantIdentitySupport: {
+    feature: MERCHANT_IDENTITY_SUPPORT_FEATURE,
+    label: "Merchant identity support",
+    description:
+      "Validate a proposed business against the literal merchant evidence",
+    group: "Decisions",
+  },
   upcOfferComparability: {
     feature: UPC_OFFER_COMPARABILITY_FEATURE,
     label: "UPC offer comparability",

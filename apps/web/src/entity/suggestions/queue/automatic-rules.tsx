@@ -27,8 +27,9 @@ import { Badge } from "~/ui/primitives/badge";
 import { Switch } from "~/ui/primitives/switch";
 
 const RULE_NAME = {
-  "field.addition": "Field Addition",
+  "field.addition": "Field assignment",
   "statement_transaction.attach": "Statement attach",
+  "statement_transaction.book_spending": "Statement spending",
 } satisfies Record<AutomaticRuleKey, string>;
 
 /** Floored to a tenth so a rule just under the bar never reads as at it. */

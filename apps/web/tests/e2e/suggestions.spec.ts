@@ -4,11 +4,12 @@ import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
-import {
-  recordStatementRowsOut,
-  type StatementRowInput,
-} from "@cubby/schemas/statement-row";
-import { eq } from "drizzle-orm";
+import { recordStatementRowsOut, recordStatementRowsInput, type StatementRowInput } from "@cubby/schemas/statement-row";
+import { eq, sql } from "drizzle-orm";
+import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
+import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
+import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
@@ -272,11 +273,29 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   page,
 }, testInfo) => {
   test.slow();
-  const { db } = await createEvidenceHarnessContext(page);
+  const { db, actor } = await createEvidenceHarnessContext(page);
   await ensureSystemUser(db);
   const alias = uniqueName(testInfo, "Statement card");
+  const owner = await ensureMemberParty(page, alias);
+  const category = await createEntityFixture(page, "spendingCategory", {
+    name: `${alias} spending`,
+  });
+  const labelSpending = () =>
+    labelStatementSuggestions(db, {
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      spendingAdvice: async ({ judgment }) =>
+        financialSpendingAdvice.parse({
+          spendingCategoryId: category.id,
+          categoryConfidence: "high",
+          vendorName: judgment.create?.rawDescription,
+          vendorConfidence: "high",
+          counterparty: "business",
+        }),
+    });
   const account = await createEntityFixture(page, "financialAccount", {
     name: alias,
+    ledgerPartyId: owner.shortcode,
+    provisional: false,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
   });
@@ -330,11 +349,20 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     page.getByRole("button", { name: "Accept 0 clean" }),
   ).toBeDisabled();
 
+  await labelSpending();
+  await gotoAuthenticatedPage(page, view);
   // The attach names its candidate in the review it sends.
   await rowFor(hardware).getByRole("button", { name: "Show evidence" }).click();
   await expect(
     page.getByRole("list", { name: "Candidate transactions" }),
   ).toContainText("61.07");
+  await expect(
+    page.getByText("One Purchase and one lump Expense", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("statement-spending-desktop.png"),
+    fullPage: true,
+  });
   const attach = page.waitForRequest((request) =>
     dispatchesOperation(
       request,
@@ -365,16 +393,35 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     .click();
   await expect(rowFor(hold)).toHaveCount(0);
 
-  const postedImportId = await record(`${alias}-posted`, [
-    {
-      statementDate: "2026-05-06",
-      providerAmount: -42.5,
-      rawDescription: `${alias} GROCER`,
-      sourceCategory: "Groceries",
-    },
-  ]);
-  // Settling the recorded hold at its exact amount is clean without labels.
-  await generateStatementSuggestions(db, postedImportId);
+  // Publish manual review work without scheduling import-clean execution,
+  // which would legitimately finish the same booking before the bulk click.
+  const posted = await recordStatementRows(
+    db,
+    recordStatementRowsInput.parse({
+      import: {
+        source: "monarch",
+        label: "synthetic-posted.csv",
+        fingerprint: `${alias}-posted`,
+        dateKind: "posted",
+      },
+      rows: [
+        {
+          accountDescriptor: alias,
+          statementDate: "2026-05-06",
+          providerAmount: -42.5,
+          rawDescription: `${alias} GROCER`,
+          sourceCategory: "Groceries",
+          providerStatus: "posted",
+          rowPosition: 1,
+        },
+      ],
+    }),
+    actor,
+  );
+  // Posting the hold books spending only after current category and identity advice.
+  if (!posted.batchId) throw new Error("Synthetic posted import was not saved");
+  await generateStatementSuggestions(db, posted.batchId);
+  await labelSpending();
   await gotoAuthenticatedPage(page, view);
   await page.getByRole("button", { name: "Accept 1 clean" }).click();
   await page
@@ -385,6 +432,14 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await expect(
     page.getByRole("list", { name: "Failed suggestions" }),
   ).toHaveCount(0);
+
+  const accountId = await resolveOrThrow(db, "financialAccount", account.id);
+  const spent = await getDb(db).execute<{ total: number }>(sql`
+    SELECT coalesce(sum(e.cost),0)::float8 AS total FROM "Expense" e WHERE e."deletedAt" IS NULL
+      AND e."purchaseId" IN (SELECT a."purchaseId" FROM "FinancialTransactionAllocation" a
+        JOIN "FinancialTransaction" f ON f.id=a."transactionId" WHERE f."accountId"=${accountId} AND a."deletedAt" IS NULL)
+  `);
+  expect(spent.rows[0]?.total).toBe(103.57);
 
   await rowFor(cafe)
     .getByRole("button", { name: "Dismiss", exact: true })

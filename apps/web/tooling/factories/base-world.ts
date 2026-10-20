@@ -38,8 +38,8 @@ type InsertClient = Pick<ReturnType<typeof drizzle>, "insert">;
  * import the rule declarations; `automatic-rules.unit.test.ts` keeps them equal.
  */
 export const SEEDED_RULE_REVISIONS = {
-  "field.addition": "2026-10-18.1",
-  "statement_transaction.attach": "2026-10-18.3/2026-10-17.1",
+  "field.addition": "2026-10-20.1",
+  "statement_transaction.attach": "2026-10-20.1/2026-10-17.1",
 } as const;
 
 export async function seedBaseWorld(db: InsertClient): Promise<void> {

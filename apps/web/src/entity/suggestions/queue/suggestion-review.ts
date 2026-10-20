@@ -25,6 +25,7 @@ export type StatementChoice = {
   transactionId?: FinancialTransactionShortcode;
   fields?: StatementTransactionField[];
   kindOverride?: FinancialTransactionKind;
+  booking?: StatementTransactionApplication["booking"];
 };
 
 /** Whether the server offers `verb` on this row (owner-only verbs included). */
@@ -59,6 +60,7 @@ function statementApplication(
       choice.action === "create"
         ? suggestion.candidates.map((candidate) => candidate.transactionId)
         : [],
+    ...(choice.booking && { booking: choice.booking }),
   };
 }
 
@@ -68,7 +70,12 @@ function isRecommendedAsIs(
   application: StatementTransactionApplication,
 ): boolean {
   if (application.action !== suggestion.recommended) return false;
-  if (application.kindOverride || application.fields.length) return false;
+  if (
+    application.kindOverride ||
+    application.fields.length ||
+    application.booking
+  )
+    return false;
   if (application.action === "attach")
     return (
       !application.transactionId ||

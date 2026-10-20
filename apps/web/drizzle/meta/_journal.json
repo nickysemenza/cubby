@@ -708,6 +708,20 @@
       "when": 1792513983308,
       "tag": "0100_research_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1792532127183,
+      "tag": "0101_spending_suggestions",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1792532135051,
+      "tag": "0102_assignment_policy",
+      "breakpoints": true
     }
   ]
 }

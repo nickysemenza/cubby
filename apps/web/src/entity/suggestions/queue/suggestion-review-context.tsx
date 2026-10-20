@@ -1,5 +1,6 @@
 import type { AssessmentReviewOut } from "@cubby/schemas/assessment";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
+import type { StatementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,6 +34,7 @@ type ReviewFailure = { row: SuggestionListRow; error: string };
 /** A statement row's draft alternatives, shared by its actions menu and its evidence. */
 type StatementDraft = {
   kind?: FinancialTransactionKind;
+  booking?: StatementTransactionApplication["booking"];
   /** Ticked "apply" fields per candidate transaction. */
   fields: Readonly<Record<string, readonly StatementTransactionField[]>>;
 };
@@ -188,8 +190,13 @@ export function SuggestionReviewProvider({
               action: "attach",
               transactionId: first,
               fields: first ? [...(current.fields[first] ?? [])] : [],
+              booking: current.booking,
             }
-          : { action: suggestion.recommended, kindOverride: current.kind };
+          : {
+              action: suggestion.recommended,
+              kindOverride: current.kind,
+              booking: current.booking,
+            };
       },
       isOpen: (id) => state.open.has(id),
       toggleOpen: (id, open) =>

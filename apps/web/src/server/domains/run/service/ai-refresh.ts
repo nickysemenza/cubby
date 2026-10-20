@@ -67,6 +67,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import {
   fenceDerivedInputsAtCommit,
@@ -385,10 +386,30 @@ export async function discoverAiRefresh(
         assessmentIds: rows.map((row) => row.id),
       });
       if (target.kind !== "field") continue;
+      const applied =
+        first.status === "applied" || first.acceptanceReceipt !== null;
+      // Applications retain history rather than protecting the old author's
+      // value. Skip only the exact evidence settled by this application.
+      if (
+        applied &&
+        first.provenance &&
+        dependenciesCurrent(first.provenance, activation.manifest) &&
+        first.acceptanceReceipt?.appliedInputFingerprint &&
+        first.acceptanceReceipt.appliedInputFingerprint ===
+          (await fieldInputFingerprint(
+            db,
+            target.entity,
+            target.recordId,
+            target.field,
+          ))
+      )
+        continue;
       const prepared = await prepareField(db, target, ports);
       if (
         !prepared ||
-        (prepared.lastWrite && prepared.lastWrite.createdAt > first.createdAt)
+        (!applied &&
+          prepared.lastWrite &&
+          prepared.lastWrite.createdAt > first.createdAt)
       )
         continue;
       if (
@@ -399,8 +420,9 @@ export async function discoverAiRefresh(
       )
         continue;
       if (
+        !applied &&
         canonicalJson(z.json().parse(first.currentValue ?? null)) !==
-        canonicalJson(prepared.snapshot.currentValue)
+          canonicalJson(prepared.snapshot.currentValue)
       )
         continue;
       const key = await sha256Hex(
@@ -830,7 +852,14 @@ export async function executeAiRefreshTarget(
       throw new Error("AI evaluation target changed during inference");
     const snapshot = fieldSnapshot.parse(claimed.snapshot);
     const previous = await assessmentStatesById(db, target.assessmentIds);
-    if (previous.some((row) => !["pending", "superseded"].includes(row.status)))
+    if (
+      previous.length !== target.assessmentIds.length ||
+      previous.some(
+        (row) =>
+          row.acceptanceReceipt === null &&
+          !["pending", "superseded", "applied"].includes(row.status),
+      )
+    )
       throw new Error("AI evaluation member decision is obsolete");
     let result = fieldResult.safeParse(claimed.result);
     if (!result.success) {

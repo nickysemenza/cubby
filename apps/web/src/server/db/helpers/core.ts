@@ -87,11 +87,11 @@ export const runBeforeCommit = async (
 // without granting authority to the request pool or later transactions.
 const transactionParents = new WeakMap<object, Database>();
 
-/** Final semantic checks run before the revision lock and metadata flush. */
+/** Enroll facade-based work in the outer commit phase. */
 export const runBeforeCommitDatabase = (
   db: Database,
   effect: (tx: Database) => Promise<void>,
-  phase: "validation" | "fence",
+  phase: "validation" | "fence" | "capture",
 ) => runBeforeCommit(db, (tx) => effect(databaseForTransaction(tx)), { phase });
 
 /**

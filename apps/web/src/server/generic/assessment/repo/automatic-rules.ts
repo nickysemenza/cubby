@@ -1,9 +1,11 @@
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import {
   AUTOMATIC_RULE_AUDIT_EVERY,
+  FIELD_ASSIGNMENT_REVISION,
   type AutomaticRuleFamily,
   type AutomaticRuleKey,
 } from "@cubby/schemas/automatic-rule";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
@@ -49,12 +51,11 @@ type Declaration<F extends AutomaticRuleFamily> = {
    * measured model never authorizes another.
    */
   perModel: boolean;
+  execution: "measured" | "import_clean";
   /** The match's model qualifier (null unless `perModel`), or undefined for no match. */
   match: (facts: FactsOf[F]) => { model: string | null } | undefined;
   application: (facts: FactsOf[F]) => RuleApplication;
 };
-
-const FIELD_ADDITION_REVISION = "2026-10-18.1";
 
 const soleCandidate = (judgment: StatementTransactionJudgment) =>
   judgment.candidates.length === 1 ? judgment.candidates[0] : undefined;
@@ -66,13 +67,16 @@ const soleCandidate = (judgment: StatementTransactionJudgment) =>
  */
 export const AUTOMATIC_RULES = {
   "field.addition": {
+    execution: "measured",
     family: "field",
     description:
-      "A confident Addition from the Sweep's pinned decision model to a field that does not require review.",
-    revision: () => FIELD_ADDITION_REVISION,
+      "A confident addition or correction from the Sweep's pinned decision model to a declared assignment field that does not require review.",
+    revision: () => FIELD_ASSIGNMENT_REVISION,
     perModel: false,
     match: (facts) =>
-      facts.kind === "addition" &&
+      (facts.kind === "addition" || facts.kind === "correction") &&
+      entityFieldByKey(facts.entity, facts.field)?.control?.suggest?.mode ===
+        "fill" &&
       !requiresSuggestionReview(facts.entity, facts.field) &&
       facts.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD &&
       facts.pinnedModel !== null &&
@@ -82,6 +86,7 @@ export const AUTOMATIC_RULES = {
     application: () => ({ kind: "accept_as_is" }),
   },
   "statement_transaction.attach": {
+    execution: "measured",
     family: "statement_transaction",
     description:
       "Attach a charge to its only candidate when no sibling could be the same money, no other charge already settles that candidate, the amounts match to the cent, and the decision model labels it the same charge with high confidence.",
@@ -91,6 +96,11 @@ export const AUTOMATIC_RULES = {
     match: (judgment) => {
       const only = soleCandidate(judgment);
       return judgment.recommended === "attach" &&
+        (!(
+          judgment.create?.status === "posted" &&
+          ["purchase", "refund", "fee"].includes(judgment.create.kind)
+        ) ||
+          judgment.clean) &&
         judgment.siblings.length === 0 &&
         only &&
         !only.claimed &&
@@ -106,6 +116,19 @@ export const AUTOMATIC_RULES = {
       kind: "statement_attach",
       transactionId: soleCandidate(judgment)!.transactionId,
     }),
+  },
+  "statement_transaction.book_spending": {
+    family: "statement_transaction",
+    execution: "import_clean",
+    description:
+      "Book every clean posted spending observation from an import through the shared reviewed booking path.",
+    revision: () => STATEMENT_SUGGESTION_REVISION,
+    perModel: false,
+    match: (judgment) =>
+      judgment.clean && judgment.spending?.status === "ready"
+        ? { model: null }
+        : undefined,
+    application: () => ({ kind: "accept_as_is" }),
   },
 } satisfies { [K in AutomaticRuleKey]: Declaration<FamilyOf<K>> };
 
@@ -143,12 +166,18 @@ export const matchFieldRules = (facts: FieldRuleFacts) =>
   evaluate("field.addition", AUTOMATIC_RULES["field.addition"], facts);
 
 /** The statement rules a published judgment matches now. */
-export const matchStatementRules = (judgment: StatementTransactionJudgment) =>
-  evaluate(
+export const matchStatementRules = (judgment: StatementTransactionJudgment) => [
+  ...evaluate(
     "statement_transaction.attach",
     AUTOMATIC_RULES["statement_transaction.attach"],
     judgment,
-  );
+  ),
+  ...evaluate(
+    "statement_transaction.book_spending",
+    AUTOMATIC_RULES["statement_transaction.book_spending"],
+    judgment,
+  ),
+];
 
 /** The deterministic 5% of a family's subjects held for review. */
 async function isAuditSample(family: string, subjectKey: string) {

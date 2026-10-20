@@ -210,6 +210,7 @@ const ACTION_OPTIONS = statementTransactionAction.options.map((action) => ({
   value: action,
   label: {
     create: "Create",
+    book: "Book spending",
     attach: "Attach",
     supersede: "Settle hold",
     void: "Void hold",

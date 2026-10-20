@@ -1,15 +1,21 @@
+import {
+  financialSpendingAdvice,
+  financialSpendingSource,
+} from "@cubby/schemas/financial-booking";
 import type {
   FinancialAccountId,
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
 import { and, eq, inArray } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   financialTransactionAllocation,
+  financialTransaction,
   inventoryEntry,
   merchantVendorRule,
   purchase,
@@ -18,6 +24,10 @@ import {
   runFinding,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import {
+  previewFinancialSpending,
+  commitFinancialSpending,
+} from "~/server/domains/financial-transaction/repo/financial-spending";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -25,7 +35,10 @@ import {
   preparePurchaseImport,
 } from "../operations/import-orders";
 import { startImportRunFixture } from "../service/import-run.fixtures";
-import { settleRetainedPaymentEvidence } from "./retained-settlement";
+import {
+  planPurchaseRetainedSettlement,
+  settleRetainedPaymentEvidence,
+} from "./retained-settlement";
 
 const checksum = (seed: number) => seed.toString(16).padStart(64, "0");
 
@@ -208,6 +221,235 @@ describe("settlement from retained order evidence", () => {
     await expect(settleRetainedPaymentEvidence(ctx.db)).resolves.toMatchObject({
       allocated: 0,
     });
+  });
+
+  // Pending authorization and a payment set smaller than the printed total are
+  // insufficient proof of a complete settlement, even when every line matches.
+  it("keeps a pending authorization unallocated until the charge posts", async () => {
+    const { card, run } = await world();
+    const pending = await charge(card.id, {
+      amount: 27,
+      postedDate: "2026-09-02",
+      status: "pending",
+    });
+    const purchaseId = await importOrder(run, {
+      orderId: "pending-order",
+      total: 27,
+      payments: [{ amount: 27, chargedAt: "2026-09-02T12:00:00.000Z" }],
+    });
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ status: "posted" })
+      .where(eq(financialTransaction.id, pending.id));
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([
+      { transactionId: pending.id, purchaseId, amount: 27 },
+    ]);
+  });
+
+  it("holds a completely matched payment subset that does not conserve the order total", async () => {
+    const { card, run } = await world();
+    await charge(card.id, { amount: 20, postedDate: "2026-09-02" });
+    const purchaseId = await importOrder(run, {
+      orderId: "partial-retained-set",
+      total: 40,
+      payments: [{ amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" }],
+    });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+  });
+
+  // Discovery must prove the entire retained set and the same combined group
+  // before a prospective charge exists; it cannot fabricate allocations.
+  it("plans a complete multi-charge set with a prospective charge without allocating", async () => {
+    const { card, run, party } = await world();
+    const purchaseId = await importOrder(run, {
+      orderId: "prospective-multi",
+      total: 50,
+      payments: [
+        { amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" },
+        { amount: 30, chargedAt: "2026-09-03T12:00:00.000Z" },
+      ],
+    });
+    await charge(card.id, { amount: 20, postedDate: "2026-09-02" });
+    const planned = await withTransaction(ctx.db, (tx) =>
+      planPurchaseRetainedSettlement(tx, {
+        purchaseId,
+        ledgerPartyId: party.id,
+        discovery: true,
+        additionalCharges: [
+          {
+            id: "prospective",
+            amount: 30,
+            kind: "purchase",
+            occurredAt: new Date("2026-09-03T12:00:00.000Z"),
+            cardLastFours: [],
+            storedValue: false,
+          },
+        ],
+      }),
+    );
+    expect(
+      Array.isArray(planned)
+        ? planned.map((entry) => entry.charge.amount).sort((a, b) => a - b)
+        : planned,
+    ).toEqual([20, 30]);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+  });
+
+  it("commits a prospective combined charge only once across the conserved retained group", async () => {
+    const { card, vendor, run } = await world();
+    const first = await importOrder(run, {
+      orderId: "prospective-combined-first",
+      total: 20,
+      payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
+    });
+    const second = await importOrder(run, {
+      orderId: "prospective-combined-second",
+      total: 30,
+      payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
+    });
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic retained group category",
+    });
+    const source = financialSpendingSource.parse({
+      accountId: card.shortcode,
+      kind: "purchase",
+      status: "posted",
+      amount: 50,
+      transactionDate: null,
+      postedDate: "2026-09-03",
+      merchant: vendor.name,
+      rawDescription: null,
+      sourceRefs: [
+        { source: "synthetic-bank", externalId: "retained-combined-source" },
+      ],
+    });
+    const advice = financialSpendingAdvice.parse({
+      vendorName: vendor.name,
+      counterparty: "business",
+      vendorConfidence: "high",
+      spendingCategoryId: category.shortcode,
+      categoryConfidence: "high",
+    });
+    const plan = await previewFinancialSpending(ctx.db, { source, advice });
+    expect(plan.status).toBe("ready");
+    const created = await createRepoEntity(ctx, "financialTransaction", source);
+    await commitFinancialSpending(ctx.db, plan, ctx.actor, created.output.id);
+    expect(
+      (await allocationsFor([first, second]))
+        .map((row) => row.amount)
+        .sort((a, b) => a - b),
+    ).toEqual([20, 30]);
+    expect(
+      await getDb(ctx.db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .orderBy(expense.cost),
+    ).toEqual([{ cost: 20 }, { cost: 30 }]);
+  });
+
+  it("discovers an old refund original from retained refund evidence despite its positive settlement", async () => {
+    const { card, vendor, run } = await world();
+    const purchaseId = await importOrder(run, {
+      orderId: "old-refund-original",
+      total: 80,
+      payments: [{ amount: 80, chargedAt: "2026-02-02T12:00:00.000Z" }],
+    });
+    await charge(card.id, { amount: 80, postedDate: "2026-02-02" });
+    await settleRetainedPaymentEvidence(ctx.db);
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ date: "2026-02-01" })
+      .where(eq(purchase.id, purchaseId));
+    const [retained] = await getDb(ctx.db)
+      .select()
+      .from(purchasePaymentEvidence)
+      .where(eq(purchasePaymentEvidence.purchaseId, purchaseId));
+    if (!retained) throw new Error("Expected retained source payment");
+    await getDb(ctx.db)
+      .insert(purchasePaymentEvidence)
+      .values({
+        purchaseId,
+        sourceClaimId: retained.sourceClaimId,
+        evidenceIndex: retained.evidenceIndex + 1,
+        amount: -15,
+        chargedAt: new Date("2026-09-03T12:00:00.000Z"),
+        tender: retained.tender,
+        cardLastFour: retained.cardLastFour,
+      });
+    const refund = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: card.shortcode,
+      kind: "refund",
+      status: "posted",
+      amount: -15,
+      postedDate: "2026-09-03",
+      merchant: vendor.name,
+      sourceRefs: [
+        { source: "synthetic-bank", externalId: "old-original-refund" },
+      ],
+    });
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic old refund category",
+    });
+    const advice = financialSpendingAdvice.parse({
+      vendorName: vendor.name,
+      counterparty: "business",
+      vendorConfidence: "high",
+      spendingCategoryId: category.shortcode,
+      categoryConfidence: "high",
+    });
+    const plan = await previewFinancialSpending(ctx.db, {
+      transactionId: refund.output.id,
+      advice,
+    });
+    expect(plan).toMatchObject({ status: "ready", effect: "create_aggregate" });
+    await commitFinancialSpending(ctx.db, plan, ctx.actor);
+    expect(
+      (await allocationsFor([purchaseId]))
+        .map((row) => row.amount)
+        .sort((a, b) => a - b),
+    ).toEqual([-15, 80]);
+    expect(
+      await getDb(ctx.db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .orderBy(expense.cost),
+    ).toEqual([{ cost: -15 }, { cost: 80 }]);
+    await getDb(ctx.db)
+      .insert(purchasePaymentEvidence)
+      .values({
+        purchaseId,
+        sourceClaimId: retained.sourceClaimId,
+        evidenceIndex: retained.evidenceIndex + 2,
+        amount: -5,
+        chargedAt: new Date("2026-09-10T12:00:00.000Z"),
+        tender: retained.tender,
+        cardLastFour: retained.cardLastFour,
+      });
+    const nextRefund = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: card.shortcode,
+      kind: "refund",
+      status: "posted",
+      amount: -5,
+      postedDate: "2026-09-10",
+      merchant: vendor.name,
+      sourceRefs: [
+        { source: "synthetic-bank", externalId: "second-old-original-refund" },
+      ],
+    });
+    const nextPlan = await previewFinancialSpending(ctx.db, {
+      transactionId: nextRefund.output.id,
+      advice,
+    });
+    expect(nextPlan.status).toBe("ready");
+    await commitFinancialSpending(ctx.db, nextPlan, ctx.actor);
+    expect(
+      (await allocationsFor([purchaseId]))
+        .map((row) => row.amount)
+        .sort((a, b) => a - b),
+    ).toEqual([-15, -5, 80]);
   });
 
   // Regression: a gift-card payment line has no card digits, and a missing

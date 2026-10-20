@@ -168,8 +168,9 @@ export function useAcceptClean(
               ?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirming?.label}. Each records or settles a transaction from
-              its statement row and books no spending. There is no undo.
+              {confirming?.label}. Posted spending is booked or linked to
+              existing Purchases. Pending holds and other transaction kinds
+              remain settlement-only. There is no undo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

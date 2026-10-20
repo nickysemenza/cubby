@@ -93,15 +93,15 @@ describe("AutomaticRulesSection", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    await screen.findByRole("listitem", { name: "Field Addition" });
-    const field = row("Field Addition");
+    await screen.findByRole("listitem", { name: "Field assignment" });
+    const field = row("Field assignment");
     expect(field).toHaveTextContent(
       "98.5% precision over 140 reviewed · 2 corrected automatic",
     );
     expect(within(field).getByText("On")).toBeVisible();
     expect(
       within(field).getByRole("switch", {
-        name: "Field Addition automatic rule",
+        name: "Field assignment automatic rule",
       }),
     ).not.toHaveAttribute("aria-disabled", "true");
 
@@ -160,7 +160,7 @@ describe("AutomaticRulesSection", () => {
     );
     fireEvent.click(
       await screen.findByRole("switch", {
-        name: "Field Addition automatic rule",
+        name: "Field assignment automatic rule",
       }),
     );
     expect(calls).toEqual([]);
