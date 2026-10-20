@@ -1,0 +1,25 @@
+apps/web/DESIGN.md
+  s_fd84d6d7bff4dc::t_b8716887fed134 272,274
+apps/web/src/entity/display/data-quality-value.tsx
+  s_fd84d6d7bff4dc::t_d9eaa4992bf803 20-21,43-49
+apps/web/src/entity/display/data-quality-value.unit.test.tsx
+  s_fd84d6d7bff4dc::t_fa6b4c16f6b0c9 4-5,11-25
+apps/web/src/ui/data-table/table-meta.ts
+  s_fd84d6d7bff4dc::t_876c7ed5d6407e 178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ff9b5a13dd91266963f5e71f515791851a08d9e6",
+  "prompts": {},
+  "sessions": {
+    "s_fd84d6d7bff4dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15bb3-2f4b-76d3-bd8f-ad153fc2c330",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
