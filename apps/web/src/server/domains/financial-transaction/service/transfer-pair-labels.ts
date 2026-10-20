@@ -31,7 +31,10 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many pairs. */
-const TRANSFER_PAIR_LABEL_BATCH = WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage;
+const TRANSFER_PAIR_LABEL_BATCH = Math.min(
+  WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+  Math.floor(WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage / 2),
+);
 /** Database work only; model calls never occupy this lane. */
 const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
