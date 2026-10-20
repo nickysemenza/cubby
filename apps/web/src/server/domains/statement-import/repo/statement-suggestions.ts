@@ -455,12 +455,29 @@ async function claimedCandidates(
       FROM p JOIN "EntityExternalId" fx ON fx."entityId" = p."transactionId"
         AND fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
         AND fx.source = p.source
-    )
-    SELECT DISTINCT refs.key, refs."transactionId"
-    FROM refs JOIN "StatementRow" r ON r.source = refs.source
-      AND r."deletedAt" IS NULL
-      AND (r."externalId" = refs."externalId" OR r."legacyExternalId" = refs."externalId")
-    WHERE ${chargeKeyOf("r")} <> refs."chargeKey"
+    ),
+    -- Two indexed probes rather than one OR join: a ref is either an
+    -- occurrence id or a charge key (a v1 hash stored as legacyExternalId).
+    hits AS MATERIALIZED (
+      SELECT refs.key, refs."transactionId", refs."chargeKey" AS own,
+        r.source, ${chargeKeyOf("r")} AS "claimKey"
+      FROM refs JOIN "StatementRow" r ON r.source = refs.source
+        AND r."externalId" = refs."externalId" AND r."deletedAt" IS NULL
+      UNION
+      SELECT refs.key, refs."transactionId", refs."chargeKey",
+        r.source, ${chargeKeyOf("r")}
+      FROM refs JOIN "StatementRow" r ON r.source = refs.source
+        AND ${chargeKeyOf("r")} = refs."externalId" AND r."deletedAt" IS NULL
+    ),
+    -- An ignored or superseded charge was set aside by the member, so it no
+    -- longer claims the transaction holding its ref.
+    cs AS MATERIALIZED ${chargeStateOf(
+      sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "claimKey" FROM hits)`,
+    )}
+    SELECT DISTINCT hits.key, hits."transactionId"
+    FROM hits JOIN cs ON cs.source = hits.source AND cs."chargeKey" = hits."claimKey"
+      AND NOT cs.ignored AND NOT cs.superseded
+    WHERE hits."claimKey" <> hits.own
   `);
   for (const row of rows) {
     const set = result.get(row.key) ?? new Set<string>();

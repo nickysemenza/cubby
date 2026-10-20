@@ -207,6 +207,11 @@ function StatementEvidence({ row }: { row: StatementRow }) {
                         ; advisory
                       </span>
                     ) : null}
+                    {candidate.claimed ? (
+                      <span className="text-warning-ink">
+                        Already settles another charge from this source
+                      </span>
+                    ) : null}
                   </div>
                   {candidate.diff.length && !settled ? (
                     <div className="flex flex-wrap items-center gap-3 text-xs">
