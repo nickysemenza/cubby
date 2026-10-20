@@ -3,7 +3,7 @@
 import type { Rpc } from "@cloudflare/workers-types";
 import type {
   SearchIndexRepairCounters,
-  SearchRepairWorkflowParams,
+  SearchRepairCheckpoint,
   SearchRepairContinuation,
 } from "@cubby/schemas/maintenance";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
@@ -33,7 +33,10 @@ export type PurchaseImportRunAgent = PurchaseImportRunAgentRpc &
 export type UsdaReleaseDurableObject = UsdaReleaseRpc &
   Rpc.DurableObjectBranded;
 
-export type SearchIndexRepairWorkflowParams = SearchRepairWorkflowParams;
+export interface SearchIndexRepairWorkflowParams {
+  readonly requestedAt: string;
+  readonly checkpoint?: SearchRepairCheckpoint;
+}
 
 /** The entrypoint shape the `SEARCH_INDEX_REPAIR` binding's params come from. */
 export interface SearchIndexRepairWorkflow {

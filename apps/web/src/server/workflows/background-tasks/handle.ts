@@ -86,12 +86,6 @@ export async function handleBackgroundTask(
   ports: BackgroundTaskPorts = productionBackgroundTaskPorts,
 ): Promise<BackgroundTaskOutcome> {
   switch (task.kind) {
-    case "search-repair.continue": {
-      await (
-        await import("../runs/search-repair")
-      ).continueSearchRepair(db, task);
-      return "succeeded";
-    }
     case "workflow.continue": {
       await ports.continueWorkflow(db, {
         runId: task.runId,

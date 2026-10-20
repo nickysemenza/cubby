@@ -75,36 +75,13 @@ page processed count, cumulative phase processed/total/failures across instances
 and supported reused/new label counts. The cursor is a RunStep id and checkpoint
 ordinal: private driver cursors remain in PostgreSQL. No observations, descriptors,
 model prompts or label values are copied into dashboard outputs.
-Deployment tooling activates a verified, single-100%-version provider deployment
-in a dedicated AppSettings row after deployment succeeds. Each new deployment,
-including rollback to a prior version, advances its epoch; repeating the same
-activation is idempotent. Version uploads, preview builds and a DO's running code
-are not release authority. Activation sends control events in checkpointed bounded
-pages; incomplete wake delivery is exposed and repairable through the common
-[deployment command](runbooks/production-migrations.md#deployment-activation-repair-and-rollback).
-
-Every current instance adopts a new release at the next bounded checkpoint.
-Fresh current instances do not sleep for deployment settling. Dispatch gates on
-activated code before incrementing an attempt, so a stale queue consumer cannot
-create a chain of obsolete successors. Each retried callback checks current
-authority; fresh effect transactions check cancellation, attempt and activation.
-An admitted transaction may finish. Unfinished computation may be repeated.
-Capacity/retry/child waits use one control-event wait with the actual due-time
-timeout; an early hint rechecks authority and cannot bypass a retry deadline.
-Capacity deadlines survive successor instances. A wait accepts at most 32
-buffered hints before continuing in a fresh instance, bounding durable step
-bookkeeping without polling; waiting pages spend the conservative instance share.
-All shared control waits also spend one instance-wide allowance across discovery,
-policy and target phases. Advancement names include the durable iteration, so an
-unchanged checkpoint after a wait executes again instead of replaying the wait.
-The healthy cutover target is one bounded decision batch, roughly 30 seconds;
-provider failure and legacy pinned code can delay it. Legacy RPC/event bridges
-remain until previously pinned instances drain. Queue acceptance does not prove
-successor launch; expected-attempt fencing preserves lost-ack recovery.
-Initial dispatch may retain attempt zero while activation propagates; consuming
-that continuation allocates the first attempt exactly once. Search repair also
-fences each retried effect transaction and carries pending embedding references
-through a handoff after projection commits.
+Deployment guards report pinned/current version ids and their handoff reason;
+handoffs report queue acceptance, the requested successor id and the last
+committed counts. Queue acceptance does not prove the successor has launched.
+Outputs stay constant-sized, far below the non-stream
+[step result limit](https://developers.cloudflare.com/workflows/reference/limits/).
+Pinned instances retain their old code and step names until their normal
+handoff. No Run checkpoint migration or restart is required.
 
 Step-ledger Runs hand off after bounded committed pages; the subrequest cap
 belongs to the Workflow instance, so a new `step.do` alone does not reset it
@@ -122,12 +99,13 @@ replenish the allowance. There is no elapsed-time rollover.
 
 Statement generation commits at most 512 charges per page. It overlaps the next
 generation page with bounded computation for already generated suggestions.
-Speculation retains per-question answers and evidence identities in existing
-checkpoints; it neither publishes conclusions nor applies rules. Its admission
+Speculation reads the generation's published judgment and retains per-question
+answers and evidence identities in existing checkpoints; it neither publishes conclusions nor applies rules. Its admission
 window is bounded by question count, encoded evidence bytes and preparation time.
 The generation write lane settles before speculative checkpoints publish. After
 all generation and separately paged vanished-hold checks, labels consume those
-answers in the original `(createdAt, id)` order, rebuilding stale evidence.
+answers in the original `(createdAt, id)` order, rebuilding fresh evidence before
+publication and discarding incompatible answers.
 Transfer discovery finishes before statement work. Its raw seed/pair cursor
 retains complete competitor pools and resumes oversized fanout; retirement starts
 only after discovery coverage and freshly verifies bounded stored-identity pages.
@@ -155,7 +133,7 @@ labels. A member-settled or suppressed charge is skipped; moved evidence remains
 queued when any rule round yields. Cache/admission contention yields Workflow
 label work after one admission attempt, checkpoints all started work, then
 requests a durable wake no sooner than fifteen seconds after contention.
-Checkpoint/publication time can consume part of that interval before the durable event wait.
+Checkpoint/publication time can consume part of that interval before `step.sleep`.
 Transfer-pair Workflow pages also return a durable wake time and resume before
 the earliest deferred pair, retaining completed publications; a null cursor
 with a wake time means retry from the start, never completion.
@@ -171,7 +149,7 @@ Statement label-round logs retain logical charge and question counts.
 
 The static application-path allowance assumes **no batching savings**:
 `65 model pages × 1,024 questions × 3 attempts × 16 transport operations = 3,194,880`,
-leaving over 800,000 operations for bookkeeping, control wakes, continuation and
+leaving over 800,000 operations for bookkeeping, continuation and
 recovery. The runner sums phase shares; database-only work permits at most 400
 pages before continuation. The separate 500-page ceiling still applies.
 
@@ -223,15 +201,43 @@ reports each instance's `versionId`; it does not document a hot migration of
 in-flight steps. Read-only provider inspection confirmed an older Workflow
 version still starting steps after newer versions were deployed.
 
-Deployment activation and effect admission are described above. Successor launch
-uses a fresh background-queue invocation rather than extending a predecessor's
-RPC ancestry. The old DO RPC remains an enqueue-only bridge for pinned versions.
-Cloudflare documents a separate 16-invocation Worker loop limit; it does not
-establish whether ancestry propagates across Workflow instances. Queue acceptance
-is the dispatch boundary. Lost deliveries retain the existing 30-minute quiet-Run
-reconciliation and bounded infrastructure-recovery allowance. Handoff decisions
-are durable before dispatch, so a lost reply followed by rollback cannot resume
-a predecessor that already transferred its checkpoint.
+Every Workflow checks deployment at a committed page or target-cycle boundary.
+The active page finishes first, including its publication and cursor checkpoint.
+The Workflow compares its own `CF_VERSION_METADATA.id` with the Gateway Durable
+Object's running version, not the stored AI-refresh activation `release` or
+observed-version marker. Durable Objects follow deployments
+([Cloudflare version guarantees](https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/with-durable-objects/));
+the DO accepts successor dispatch through the shared background queue. A fresh
+queue-consumer invocation creates the successor through current bindings, behind
+the persisted attempt and cancellation fences. Duplicate deliveries are harmless.
+The old DO RPC remains an enqueue-only bridge for pinned Workflow versions.
+The former synchronous Workflow → DO → Workflow creation path is confirmed in
+code; Cloudflare documents a separate 16-invocation Worker loop limit, but does
+not establish whether ancestry propagates across these Workflow instances.
+Queue dispatch removes that dependency without relying on a failed retry.
+Queue acceptance is the dispatch boundary. A lost delivery uses the existing
+30-minute quiet-Run reconciliation and cron/app-open recovery; a delivery later
+than that grace can be diagnosed as an ended attempt and consume the bounded
+infrastructure-recovery allowance.
+A rollback is a
+version change too. Version checks are durable steps: replay reuses each recorded
+decision instead of moving the handoff backwards over already-completed work.
+Persist that decision in its own step before dispatching the successor: a lost
+create reply followed by rollback must not let the predecessor resume the same
+checkpoint. Each RPC attempt acquires a fresh DO stub because an exception can
+leave the previous stub permanently broken
+([Cloudflare error handling](https://developers.cloudflare.com/durable-objects/best-practices/error-handling/)).
+At an instance's first boundary, allow one bounded page without a version RPC
+or settle sleep; forced instance-budget handoffs still apply. A fresh Workflow
+can reach a DO still running the preceding deployment in another location
+([DO lifecycle](https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/)).
+The next committed-page boundary compares versions normally, including rollback.
+This gives deployment propagation useful work to catch up and prevents
+zero-progress successor loops. Even a freshly created older pinned instance
+can run only that bounded page before rechecking; an in-flight page has the
+same committed-page cutover contract. The DO is a running-version observation,
+not an atomic global deployment authority; lag can still cause an unnecessary
+handoff at a later boundary.
 
 Run-backed Workflows reuse `claimWorkflowRun` and the `launchWorkflowRun`
 `expectedAttempt` fence. The same Run retains its cursors, receipts and cancellation;
@@ -242,8 +248,8 @@ cursor, counters and original request timestamp, and its progress subscription
 follows that successor without reporting a premature completion.
 Successor creation uses `createBatch`'s documented duplicate code rather than
 matching `create()` error text, so a lost response safely reuses the same instance.
-Instance resource bounds remain a fallback without a deploy. Idle AI waits use
-their actual due time and can wake early on activation or work-completion hints.
+Instance page bounds remain a fallback even without a deploy; idle AI waits recheck within a
+minute. An active page and its retries can delay cutover until its checkpoint.
 
 This rule first applies to instances created with the boundary check installed.
 Instances already executing older code cannot acquire that check from a deploy;

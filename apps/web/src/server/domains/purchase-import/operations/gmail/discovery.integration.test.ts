@@ -23,8 +23,6 @@ import {
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { activateWorkflowDeployment } from "~/server/workflows/runs/activation";
-import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import {
   launchWorkflowRun,
@@ -130,41 +128,6 @@ describe("scheduled Gmail discovery", () => {
     },
     research: async () => [],
   });
-  it("fences Gmail coverage when activation changes during provider ingestion", async () => {
-    const state = await seed();
-    await activateWorkflowDeployment(ctx.db, {
-      deploymentId: "synthetic-mail-a",
-      workerVersion: "synthetic-mail-version-a",
-      expectedEpoch: 0,
-    });
-    const provider = gmail({
-      getMessage: async (id) => {
-        await activateWorkflowDeployment(ctx.db, {
-          deploymentId: "synthetic-mail-b",
-          workerVersion: "synthetic-mail-version-b",
-          expectedEpoch: 1,
-        });
-        return gmail().getMessage(id);
-      },
-    });
-    const seam = ports(provider);
-    await listMailDiscovery(ctx.db, state.params, seam);
-    await expect(
-      withWorkflowExecution(
-        {
-          ...state.params,
-          version: "synthetic-mail-version-a",
-          epoch: 1,
-          database: ctx.db,
-        },
-        () => saveMailDiscoveryBatch(ctx.db, state.params, 0, seam),
-      ),
-    ).rejects.toMatchObject({ reason: "deployment" });
-    expect((await readRun(state.params.runId)).progress).toMatchObject({
-      pagesDone: 0,
-    });
-  });
-
   it("admits retained originals once through page replay and continuation", async () => {
     const state = await seed();
     const relevance = vi.fn(async () => ({

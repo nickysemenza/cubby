@@ -510,7 +510,7 @@ Keep build, migration and deployment as named steps in the existing action;
 avoid standalone wrappers and multi-operation command inputs.
 Migration failure blocks deployment. The migration and deploy share the existing
 non-cancelling production concurrency group. The required database credential is
-scoped to migration and post-deploy Workflow activation; the Cloudflare credential is scoped to deployment. The web deploy command verifies the serving version, commits activation, and resumes any incomplete control-event delivery.
+scoped to the migration step; the Cloudflare credential is scoped to deployment.
 
 Retry a failed release by manually dispatching `Deploy` on `main`; the runner
 verifies and skips the already-applied migration prefix. If schema application

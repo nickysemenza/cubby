@@ -8,7 +8,6 @@ import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { aiEvaluationRequest, run } from "~/server/db/schema";
 
-import { WORKFLOW_CONTROL_EVENT } from "./activation";
 import { workflowInstanceId } from "./contract";
 
 /** Durable state owns the result; a lost event is recovered at the due-time wait. */
@@ -39,17 +38,10 @@ export async function wakeAiEvaluationRequesters(
           typeof progress.attempt === "number"
             ? progress.attempt
             : 0;
-        if (attempt > 0) {
-          const instance = await binding.get(
-            workflowInstanceId(owner.shortcode, attempt),
-          );
-          await instance.sendEvent({
-            type: WORKFLOW_CONTROL_EVENT,
-            payload: {},
-          });
-          // Legacy pinned instances still wait on their original event type.
-          await instance.sendEvent({ type: "ai-work", payload: {} });
-        }
+        if (attempt > 0)
+          await (
+            await binding.get(workflowInstanceId(owner.shortcode, attempt))
+          ).sendEvent({ type: "ai-work", payload: {} });
       }),
     ).then(() => undefined),
   );
@@ -73,9 +65,9 @@ export async function wakeStepRunParent(db: Database, childRunId: RunId) {
   const instanceId = workflowInstanceId(parent.shortcode, attempt);
   await runAfterCommit(db, async () => {
     try {
-      const instance = await binding.get(instanceId);
-      await instance.sendEvent({ type: WORKFLOW_CONTROL_EVENT, payload: {} });
-      await instance.sendEvent({ type: "step-run", payload: {} });
+      await (
+        await binding.get(instanceId)
+      ).sendEvent({ type: "step-run", payload: {} });
     } catch {
       // SILENT: a lost wake is recovered by the parent's bounded wait.
     }

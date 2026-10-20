@@ -8,11 +8,9 @@ import {
 import { getAiGatewayEgress, setCfEnv } from "../cf-env";
 import { withInvocationDb } from "../db";
 import type { WorkflowRunParams } from "./runs/contract";
-import { workflowControlWait } from "./runs/control-wait";
 import { runDeploymentBoundary } from "./runs/deployment";
 import { assertWorkflowCurrent, withWorkflowExecution } from "./runs/execution";
 import { failWorkflowRun } from "./runs/lifecycle";
-import type { DurableSteps } from "./runs/step";
 import { runStepRunWorkflow } from "./step-run-execution";
 
 /**
@@ -37,50 +35,42 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
       withInvocationDb(this.env.HYPERDRIVE.connectionString, async () =>
         work((await import("../db")).db),
       );
-    const durable: DurableSteps = {
-      do: (name, config, callback) => step.do(name, config, callback),
-      sleep: (name, duration) => step.sleep(name, duration),
-    };
-    const boundary = runDeploymentBoundary(this.env, step, event.payload);
-    const waitUntil = workflowControlWait(step, boundary);
-    await runStepRunWorkflow(durable, {
-      inspect: () => withDb((db) => inspectStepRun(db, event.payload)),
-      boundary,
-      waitUntil,
-      advance: () =>
-        withWorkflowExecution(
-          {
-            ...event.payload,
-            version: this.env.CF_VERSION_METADATA.id,
-            epoch: event.payload.activationEpoch,
-          },
-          () =>
+    await runStepRunWorkflow(
+      {
+        do: (name, config, callback) => step.do(name, config, callback),
+        sleep: (name, duration) => step.sleep(name, duration),
+      },
+      {
+        inspect: () => withDb((db) => inspectStepRun(db, event.payload)),
+        boundary: runDeploymentBoundary(this.env, step, event.payload),
+        advance: () =>
+          withWorkflowExecution(event.payload, () =>
             withDb(async (db) => {
               await assertWorkflowCurrent();
               return advanceStepRun(db, event.payload);
             }),
-        ),
-      wait: async (page, seconds) => {
-        const dueAt = await step.do(
-          `child deadline:${page}`,
-          async () => Date.now() + seconds * 1000,
-        );
-        return waitUntil(`child:${page}`, dueAt, true);
+          ),
+        wait: async (page, seconds) => {
+          await step.waitForEvent(`child:${page}`, {
+            type: "step-run",
+            timeout: `${seconds} seconds`,
+          });
+        },
+        // Every retry opens a fresh awaited scope, including its database pool.
+        fail: (message) =>
+          withDb((db) =>
+            failWorkflowRun(db, event.payload, {
+              failureCode: "step_run_workflow_failed",
+              message,
+            }),
+          ),
+        recover: async () => {
+          await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleAiWorkRecovery(
+            event.payload.runId,
+          );
+        },
       },
-      // Every retry opens a fresh awaited scope, including its database pool.
-      fail: (message) =>
-        withDb((db) =>
-          failWorkflowRun(db, event.payload, {
-            failureCode: "step_run_workflow_failed",
-            message,
-          }),
-        ),
-      recover: async () => {
-        await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleAiWorkRecovery(
-          event.payload.runId,
-        );
-      },
-    });
+    );
     return { runId: event.payload.runId };
   }
 }

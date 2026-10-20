@@ -28,7 +28,12 @@ describe("step Run Workflow failure and invocation boundaries", () => {
     let calls = 0;
     const sleeps: number[] = [];
     await runStepRunWorkflow(
-      memoryDurableSteps().steps,
+      {
+        ...memoryDurableSteps().steps,
+        sleep: async (_name, duration) => {
+          sleeps.push(duration);
+        },
+      },
       work({
         inspect: async () => ({
           name: "same checkpoint",
@@ -40,10 +45,6 @@ describe("step Run Workflow failure and invocation boundaries", () => {
           ++calls === 1
             ? { kind: "continue", waitSeconds: 60 }
             : { kind: "finished" },
-        waitUntil: async (_name, dueAt) => {
-          sleeps.push(dueAt);
-          return false;
-        },
         boundary: async (_name, force) => Boolean(force),
       }),
     );

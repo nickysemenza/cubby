@@ -13,7 +13,6 @@ import {
 import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 /** Refresh does not transfer, repair or readmit an assigned import source. */
 async function classificationRefreshDisposition(
@@ -110,7 +109,6 @@ export async function publishGmailEvidence<T>(
   ) => Promise<T>,
 ): Promise<T | null> {
   const commitEvidence = async (tx: DrizzleTransaction) => {
-    await assertWorkflowEffect(databaseForTransaction(tx));
     const evaluation = input.evaluation;
     const guarded = evaluation
       ? await (
@@ -297,6 +295,8 @@ export async function publishGmailEvidence<T>(
       );
     return result;
   };
+  // Only refresh evaluations use the activation fence. Ordinary ingestion and
+  // member reclassification retain their existing isolation and retry contract.
   return withTransaction(
     db,
     commitEvidence,

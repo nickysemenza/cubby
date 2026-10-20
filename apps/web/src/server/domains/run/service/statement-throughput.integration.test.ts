@@ -18,11 +18,10 @@ import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import * as spending from "~/server/domains/financial-transaction/repo/financial-spending";
+import * as spendingAdvice from "~/server/domains/financial-transaction/service/spending-advice";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import * as publications from "~/server/domains/statement-import/repo/statement-suggestions";
-import * as labels from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { memoryDurableSteps } from "~/server/testing/durable-steps";
-import { activateWorkflowDeployment } from "~/server/workflows/runs/activation";
 import { continueWorkflowRun } from "~/server/workflows/runs/continuation";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
@@ -189,20 +188,15 @@ describe("statement Sweep throughput", () => {
     // Spending advice is an external seam; keep the full label service and
     // real spending preview without adding generative model work to this
     // closed-choice transport benchmark.
-    const label = labels.labelStatementSuggestions;
     const advice = vi
-      .spyOn(labels, "labelStatementSuggestions")
-      .mockImplementation((db, input) =>
-        label(db, {
-          ...input,
-          spendingAdvice: async ({ judgment }) =>
-            financialSpendingAdvice.parse({
-              spendingCategoryId: category.id,
-              categoryConfidence: "high",
-              vendorName: judgment.create?.merchant,
-              vendorConfidence: "high",
-              counterparty: "business",
-            }),
+      .spyOn(spendingAdvice, "adviseSpending")
+      .mockImplementation(async (_db, { judgment }) =>
+        financialSpendingAdvice.parse({
+          spendingCategoryId: category.id,
+          categoryConfidence: "high",
+          vendorName: judgment.create?.merchant,
+          vendorConfidence: "high",
+          counterparty: "business",
         }),
       );
     // Planner SQL is host work, just like publication SQL; it must not
@@ -311,11 +305,6 @@ describe("statement Sweep throughput", () => {
         acquireMs: number;
       }
     > = {};
-    await activateWorkflowDeployment(ctx.db, {
-      deploymentId: "synthetic-throughput-deployment",
-      workerVersion: "synthetic-throughput-version",
-      expectedEpoch: 0,
-    });
     const actualStart = performance.now();
     const cpuStart = process.cpuUsage();
     let peakRssBytes = process.memoryUsage().rss;
@@ -410,8 +399,6 @@ describe("statement Sweep throughput", () => {
                         withWorkflowExecution(
                           {
                             ...params,
-                            version: "synthetic-throughput-version",
-                            epoch: 1,
                             database: ctx.db,
                           },
                           () =>

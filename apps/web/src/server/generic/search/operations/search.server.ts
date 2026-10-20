@@ -8,7 +8,6 @@ import {
 } from "~/contracts/search.contract";
 import {
   getSearchIndexRepairWorkflow,
-  getWorkerVersion,
   isCloudflareRuntime,
 } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -27,7 +26,6 @@ import { getRequestId } from "~/server/observability/tracing";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
-import { activatedWorkflowIdentity } from "~/server/workflows/runs/launcher";
 import { SEARCH_INDEX_REPAIR_RETENTION } from "~/server/workflows/search-index-repair-retention";
 import { streamSearchIndexRepairWorkflow } from "~/server/workflows/search-index-repair-workflow-adapter";
 
@@ -120,13 +118,9 @@ export const searchStreamHandlers = implementSubscriptionDomain(
       }
 
       const requestedAt = new Date().toISOString();
-      const identity = await activatedWorkflowIdentity(
-        context.db,
-        getWorkerVersion(),
-      );
       const instance = await workflow.create({
         id: crypto.randomUUID(),
-        params: { requestedAt, activationEpoch: identity.activationEpoch },
+        params: { requestedAt },
         retention: SEARCH_INDEX_REPAIR_RETENTION,
       });
       log.info("Workflow started", {

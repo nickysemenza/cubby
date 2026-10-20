@@ -18,7 +18,10 @@ import { createLogger } from "@cubby/worker-tracing";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
-import { aiWorkDeferral } from "~/server/ai/cooperative-work";
+import {
+  aiWorkDeferral,
+  withCooperativeAiWork,
+} from "~/server/ai/cooperative-work";
 import {
   decisionChoiceFitsContext,
   type DecisionPort,
@@ -77,6 +80,10 @@ const identityLabel = {
 } as const;
 
 type ChargeProposal = Awaited<ReturnType<typeof buildChargeProposals>>[number];
+type LabelPreparation = Pick<
+  ChargeProposal,
+  "charge" | "judgment" | "evidenceFingerprint"
+> & { amount: number };
 
 /**
  * A page's proposals in one build: per-charge builds repeat the same
@@ -116,7 +123,7 @@ async function buildPage(
 /** Partial model answers are checkpointed independently of advisory publication. */
 function prepareLabelledJudgment(
   db: Database,
-  current: ChargeProposal,
+  current: LabelPreparation,
   input: {
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
@@ -325,7 +332,7 @@ function prepareLabelledJudgment(
           retainError(error);
         }
       }
-      judgment.clean = isClean(judgment, current.canonical.amount);
+      judgment.clean = isClean(judgment, current.amount);
       checkpoint.judgment = statementTransactionJudgment.parse(judgment);
       return {
         checkpoint,
@@ -380,6 +387,34 @@ async function publishStatementLabels(
     }
     throw publicationError;
   }
+}
+
+function statementLabelCursors(
+  page: ReadonlyArray<
+    Pick<
+      Awaited<ReturnType<typeof suggestionsNeedingLabels>>[number],
+      "createdAt" | "cursorId"
+    >
+  >,
+  unfinished: ReadonlySet<string>,
+  hasMore: boolean,
+) {
+  const last = page.at(-1);
+  const firstUnfinished = page.find((row) => unfinished.has(row.cursorId));
+  return {
+    through: last ? { createdAt: last.createdAt, id: last.cursorId } : null,
+    next:
+      (firstUnfinished
+        ? {
+            createdAt: firstUnfinished.createdAt,
+            id: firstUnfinished.cursorId,
+            inclusive: true,
+          }
+        : null) ??
+      (hasMore && last
+        ? { createdAt: last.createdAt, id: last.cursorId }
+        : null),
+  };
 }
 
 /**
@@ -497,7 +532,10 @@ async function runStatementLabelBatch(
       WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
     WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
   );
-  const reserve = (questions: readonly DecisionChoiceArgs[], additional = 0) => {
+  const reserve = (
+    questions: readonly DecisionChoiceArgs[],
+    additional = 0,
+  ) => {
     const admitted = questions.map((question) => {
       const bytes = encoder.encode(
         JSON.stringify({
@@ -558,23 +596,46 @@ async function runStatementLabelBatch(
   const computedCharges = new Set<string>();
   const labels = { reused: 0, generated: 0 };
   const pauses: AiBudgetExhaustedError[] = [];
+  type ReadyLabels = { target: (typeof targets)[number]; moved: boolean } & (
+    | { kind: "precompute"; current: LabelPreparation }
+    | { kind: "publish"; current: ChargeProposal & { amount: number } }
+  );
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
-    const proposals = await buildPage(
-      db,
-      targets
-        .filter(
-          (target) =>
-            !target.row.applicationPending &&
-            !failedCharges.has(chargeId(target.charge)),
-        )
-        .map((target) => target.charge),
-      fail,
-    );
-    const ready = targets.flatMap((target) => {
+    // Speculation uses generation's immutable judgment. Only the later normal
+    // pass rebuilds current ledger evidence before publication/application.
+    const proposals =
+      mode.kind === "precompute"
+        ? null
+        : await buildPage(
+            db,
+            targets
+              .filter(
+                (target) =>
+                  !target.row.applicationPending &&
+                  !failedCharges.has(chargeId(target.charge)),
+              )
+              .map((target) => target.charge),
+            fail,
+          );
+    const ready = targets.flatMap<ReadyLabels>((target) => {
       if (target.row.applicationPending) return [];
       const key = chargeId(target.charge);
-      const current = proposals.get(key);
       if (failedCharges.has(key)) return [];
+      if (mode.kind === "precompute")
+        return [
+          {
+            kind: "precompute",
+            target,
+            current: {
+              charge: target.charge,
+              judgment: target.row.judgment,
+              evidenceFingerprint: target.expected,
+              amount: target.row.amount,
+            },
+            moved: false,
+          },
+        ];
+      const current = proposals?.get(key);
       const moved = !current || current.evidenceFingerprint !== target.expected;
       // Stale evidence waits for the next generation pass to republish it.
       if (round === 0 && moved) {
@@ -585,7 +646,14 @@ async function runStatementLabelBatch(
       }
       // After a rule, only a charge whose evidence moved is labelled again.
       return current && (round === 0 || moved)
-        ? [{ target, current, moved }]
+        ? [
+            {
+              kind: "publish",
+              target,
+              current: { ...current, amount: current.canonical.amount },
+              moved,
+            },
+          ]
         : [];
     });
     const published = new Map(
@@ -665,19 +733,23 @@ async function runStatementLabelBatch(
       if (answer.status === "fulfilled") answer.item.apply(answer.value);
       else answer.item.reject(answer.reason);
     }
-    const computed = await Promise.all(
-      prepared.map(async (result) => {
-        if (result.status !== "fulfilled") return result;
-        try {
-          return {
-            status: "fulfilled" as const,
-            value: await result.value.finish(),
-          };
-        } catch (reason) {
-          return { status: "rejected" as const, reason };
-        }
-      }),
-    );
+    const finish = () =>
+      Promise.all(
+        prepared.map(async (result) => {
+          if (result.status !== "fulfilled") return result;
+          try {
+            return {
+              status: "fulfilled" as const,
+              value: await result.value.finish(),
+            };
+          } catch (reason) {
+            return { status: "rejected" as const, reason };
+          }
+        }),
+      );
+    const computed = await (input.cooperative
+      ? withCooperativeAiWork(finish)
+      : finish());
     if (mode.kind === "precompute") await input.beforeCheckpoint?.();
     await forEachConcurrently(
       ready.map((entry, index) => ({
@@ -685,7 +757,8 @@ async function runStatementLabelBatch(
         computed: computed[index]!,
       })),
       STATEMENT_PUBLISH_CONCURRENCY,
-      async ({ current, target, computed }) => {
+      async (entry) => {
+        const { current, target, computed } = entry;
         try {
           if (computed.status === "skipped") return;
           if (computed.status === "rejected") throw computed.reason;
@@ -755,9 +828,9 @@ async function runStatementLabelBatch(
             return;
           }
           computedCharges.add(chargeId(current.charge));
-          if (mode.kind === "precompute") return;
+          if (entry.kind === "precompute") return;
           const outcome = await publishStatementLabels(db, {
-            proposal: current,
+            proposal: entry.current,
             checkpoint: checkpointInput,
             producer: producer(result.model),
             retainProgress,
@@ -889,8 +962,6 @@ async function runStatementLabelBatch(
     }
     if (!applied.size && !rebuild.size) break;
   }
-  const last = page.at(-1);
-  const firstUnfinished = page.find((row) => unfinished.has(row.cursorId));
   return {
     labelled: labelled.size,
     completed: completed.size,
@@ -900,18 +971,7 @@ async function runStatementLabelBatch(
     stale,
     skippedIds,
     failed,
-    through: last ? { createdAt: last.createdAt, id: last.cursorId } : null,
-    next:
-      (firstUnfinished
-        ? {
-            createdAt: firstUnfinished.createdAt,
-            id: firstUnfinished.cursorId,
-            inclusive: true,
-          }
-        : null) ??
-      (rows.length > limit && last
-        ? { createdAt: last.createdAt, id: last.cursorId }
-        : null),
+    ...statementLabelCursors(page, unfinished, rows.length > limit),
     active: true,
     waitingUntil,
     paused: pauses[0]

@@ -10,13 +10,7 @@ import { z } from "zod";
 import { getAiGatewayEgress, setCfEnv } from "../cf-env";
 import { withInvocationDb } from "../db";
 import type { WorkflowRunParams } from "./runs/contract";
-import { workflowControlWait } from "./runs/control-wait";
 import { runDeploymentBoundary } from "./runs/deployment";
-import {
-  assertWorkflowCurrent,
-  withWorkflowExecution,
-  isWorkflowInterrupted,
-} from "./runs/execution";
 import {
   claimWorkflowRun,
   failWorkflowRun,
@@ -39,20 +33,11 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
     const withDb = async <T>(
       work: (db: typeof import("../db").db) => Promise<T>,
     ) =>
-      withWorkflowExecution(
-        {
-          ...event.payload,
-          version: this.env.CF_VERSION_METADATA.id,
-          epoch: event.payload.activationEpoch,
-        },
-        () =>
-          withInvocationDb(this.env.HYPERDRIVE.connectionString, async () =>
-            work((await import("../db")).db),
-          ),
+      withInvocationDb(this.env.HYPERDRIVE.connectionString, async () =>
+        work((await import("../db")).db),
       );
-    const boundary = runDeploymentBoundary(this.env, step, event.payload);
-    const wait = workflowControlWait(step, boundary);
     try {
+      const boundary = runDeploymentBoundary(this.env, step, event.payload);
       const discovery = await withDb(async (db) => {
         const owner = await claimWorkflowRun(db, event.payload);
         return owner?.purpose === "ai_refresh"
@@ -73,7 +58,6 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
             },
             (): Promise<boolean | null | "deferred"> =>
               withDb(async (db) => {
-                await assertWorkflowCurrent();
                 const { readAiRefreshActivation, readAiDiscoveryCursor } =
                   await import("../ai/repo/ai-refresh");
                 const current = await readAiRefreshActivation(db);
@@ -103,11 +87,8 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               }),
           );
           if (more === false) break;
-          if (
-            more === "deferred" &&
-            (await wait(`await-capacity:${page}`, Date.now() + 30_000))
-          )
-            return { runId: event.payload.runId };
+          if (more === "deferred")
+            await step.sleep(`await-capacity:${page}`, "30 seconds");
           if (more === null) {
             // Deploy overlap: the activation row matches this isolate once the
             // Gateway observation commits, or its revision bump ends this discovery.
@@ -115,8 +96,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               throw new Error(
                 "Discovery Workflow policy differs from activated policy",
               );
-            if (await wait(`await-policy:${page}`, Date.now() + 60_000))
-              return { runId: event.payload.runId };
+            await step.sleep(`await-policy:${page}`, "1 minute");
           }
           if (page === 127) {
             await boundary("continue-discovery", true);
@@ -127,10 +107,9 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
       for (let cycle = 0; cycle < 128; cycle++) {
         if (await boundary(`cycle:${cycle}`))
           return { runId: event.payload.runId };
-        const pending = await withDb(async (db) => {
-          await assertWorkflowCurrent();
-          return advanceAiWorkRun(db, event.payload);
-        });
+        const pending = await withDb((db) =>
+          advanceAiWorkRun(db, event.payload),
+        );
         if (pending === null || !pending.length) break;
         const now = Date.now();
         const due = pending.filter(
@@ -141,7 +120,7 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
             (["running", "result_ready"].includes(row.state) &&
               (row.deadlineAt?.getTime() ?? 0) <= now),
         );
-        const settled = await Promise.allSettled(
+        const attempts = await Promise.all(
           due.map(({ id }) =>
             step.do(
               `target:${cycle}:${id}`,
@@ -156,7 +135,6 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
               },
               () =>
                 withDb(async (db) => {
-                  await assertWorkflowCurrent();
                   const admitted = (await claimWorkflowRun(
                     db,
                     event.payload,
@@ -168,11 +146,6 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
                 }),
             ),
           ),
-        );
-        const rejected = settled.find((result) => result.status === "rejected");
-        if (rejected) throw rejected.reason;
-        const attempts = settled.flatMap((result) =>
-          result.status === "fulfilled" ? [result.value] : [],
         );
         if (
           z
@@ -194,15 +167,22 @@ export class AiRefreshWorkflow extends WorkflowEntrypoint<
           next > Date.now()
             ? Math.min(60, Math.max(1, Math.ceil((next - Date.now()) / 1_000)))
             : 30;
-        if (await wait(`wake:${cycle}`, Date.now() + seconds * 1000, true))
-          return { runId: event.payload.runId };
+        try {
+          await step.waitForEvent(`wake:${cycle}`, {
+            type: "ai-work",
+            timeout: `${seconds} seconds`,
+          });
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !/timeout|timed out/i.test(error.message)
+          )
+            throw error;
+          // SILENT: the expected due-time timeout rechecks durable state; event delivery is only a hint.
+        }
       }
       await boundary("continue", true);
     } catch (error) {
-      if (isWorkflowInterrupted(error)) {
-        await boundary("execution interrupted", true);
-        return { runId: event.payload.runId };
-      }
       await step.do(
         "fail",
         { retries: { limit: 2, delay: "5 seconds", backoff: "exponential" } },

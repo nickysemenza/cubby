@@ -25,6 +25,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
@@ -109,16 +110,16 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
   });
 };
 
-const precomputeStatementSuggestionLabels: typeof runStatementPrecompute = async (
-  db,
-  input,
-) =>
-  runStatementPrecompute(db, {
-    ...input,
-    spendingAdvice: await statementSpendingAdvice(db),
-  });
+const precomputeStatementSuggestionLabels: typeof runStatementPrecompute =
+  async (db, input) =>
+    runStatementPrecompute(db, {
+      ...input,
+      spendingAdvice: await statementSpendingAdvice(db),
+    });
 
-async function statementSpendingAdvice(db: Parameters<typeof runStatementLabels>[0]) {
+async function statementSpendingAdvice(
+  db: Parameters<typeof runStatementLabels>[0],
+) {
   const category = await getDb(db).query.spendingCategory.findFirst({
     where: eq(spendingCategory.name, "Synthetic statement spending"),
   });
@@ -1111,6 +1112,96 @@ describe("statement Transaction suggestions", () => {
     }
   });
 
+  it("durably defers cooperative spending finish after one gateway admission refusal", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const startedAt = Date.now();
+    let attempts = 0;
+    const first = await runStatementLabels(ctx.db, {
+      runId,
+      cooperative: true,
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      spendingAdvice: async () => {
+        vi.useFakeTimers();
+        try {
+          const pending = coordinatedGatewayRequest(
+            {
+              fetch: async () =>
+                ++attempts === 1
+                  ? new Response("Synthetic capacity refusal", {
+                      status: 429,
+                      headers: {
+                        "x-cubby-admission-wait": "true",
+                        "retry-after": "1",
+                      },
+                    })
+                  : new Response("Synthetic admitted advice"),
+            },
+            "workers-ai",
+            {
+              endpoint: "responses",
+              input: "https://gateway.internal/responses",
+              init: { method: "POST", body: "{}" },
+              headers: new Headers(),
+              signal: undefined,
+              query: async () => ({}),
+            },
+            {
+              metadata: {
+                environment: "production",
+                feature: "synthetic-spending-admission",
+                operation: "synthetic-spending-admission",
+              },
+            },
+          ).then(
+            (response) => ({ kind: "admitted" as const, response }),
+            (error: unknown) => ({ kind: "rejected" as const, error }),
+          );
+          await vi.runAllTimersAsync();
+          const outcome = await pending;
+          if (outcome.kind === "rejected") throw outcome.error;
+          await outcome.response.text();
+          return financialSpendingAdvice.parse({});
+        } finally {
+          vi.useRealTimers();
+        }
+      },
+    });
+    expect(first).toMatchObject({
+      labelled: 0,
+      completed: 0,
+      failed: [],
+      labels: { generated: 2 },
+    });
+    expect(attempts).toBe(1);
+    expect(first.waitingUntil).toBeGreaterThanOrEqual(startedAt + 15_000);
+    expect(first.next).toMatchObject({ inclusive: true });
+    const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      1,
+    );
+    expect(saved!.checkpoint).toMatchObject({
+      kind: true,
+      counterparty: true,
+      spending: false,
+    });
+    expect((await suggestions(ctx))[0]!.create!.votes.label).toBeNull();
+    const resumed = await label(ctx, async () => {
+      throw new Error(
+        "Completed kind and counterparty answers must survive deferral",
+      );
+    });
+    expect(resumed).toMatchObject({
+      labelled: 1,
+      completed: 1,
+      failed: [],
+      waitingUntil: null,
+      labels: { generated: 1, reused: 2 },
+    });
+  });
+
   // A page cap must preserve every candidate and every completed decision,
   // including a partial charge whose remaining labels need another page.
   it.each([false, true])(
@@ -1759,6 +1850,75 @@ describe("statement Transaction suggestions", () => {
       failed: [],
       labels: { generated: 0, reused: 6 },
     });
+  });
+
+  it("precomputes published evidence across a mutation window and rebuilds before normal publication", async () => {
+    await card(ctx);
+    const original = rowInput({ merchant: "Synthetic generated evidence" });
+    await record(ctx, [original]);
+    await generate(ctx);
+    const [before] = await suggestions(ctx);
+    await record(
+      ctx,
+      [{ ...original, merchant: "Synthetic changed evidence" }],
+      { fingerprint: "synthetic-speculation-mutation" },
+    );
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let speculativeQuestions = 0;
+    const computed = await precomputeStatementSuggestionLabels(ctx.db, {
+      limit: 1,
+      maxBytes: 64_000,
+      maxMs: 30_000,
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      port: async (request) => {
+        speculativeQuestions++;
+        expect(request.state).toContain("Synthetic generated evidence");
+        expect(request.state).not.toContain("Synthetic changed evidence");
+        return answer(request);
+      },
+    });
+    expect(computed).toMatchObject({
+      computed: 1,
+      failed: [],
+      labels: { generated: 3 },
+    });
+    expect(speculativeQuestions).toBe(2);
+    expect(await suggestions(ctx)).toEqual([before]);
+    const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      1,
+    );
+    expect(saved!.checkpoint?.judgment.create?.merchant).toBe(
+      "Synthetic generated evidence",
+    );
+    const stale = await label(ctx, async () => {
+      throw new Error("Fresh evidence must be regenerated before publication");
+    });
+    expect(stale).toMatchObject({
+      labelled: 0,
+      completed: 0,
+      stale: 1,
+      failed: [],
+      labels: { generated: 0 },
+    });
+    expect(await suggestions(ctx)).toEqual([before]);
+    await generate(ctx);
+    let freshQuestions = 0;
+    const published = await label(ctx, async (request) => {
+      freshQuestions++;
+      expect(request.state).toContain("Synthetic changed evidence");
+      return answer(request);
+    });
+    expect(published).toMatchObject({
+      labelled: 1,
+      completed: 1,
+      failed: [],
+      labels: { generated: 3, reused: 0 },
+    });
+    expect(freshQuestions).toBe(2);
+    expect((await suggestions(ctx))[0]!.create?.merchant).toBe(
+      "Synthetic changed evidence",
+    );
   });
 
   it.each([

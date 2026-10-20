@@ -1852,13 +1852,16 @@ export async function suggestionsNeedingLabels(
     id: string;
     createdAt: string;
     subject: unknown;
+    judgment: unknown;
+    amount: unknown;
     evidenceFingerprint: string;
     checkpoint: unknown;
     applicationPending: boolean;
     cursorId: string;
   }>(sql`
     SELECT s.id, to_char(${positionAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", ${positionId} AS "cursorId",
-      a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
+      a.subject, a.judgment, s.data->'amount' AS amount,
+      ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
       s.data->'labelCheckpoint' AS checkpoint,
       coalesce((s.data->>'applicationPending')::boolean, false) AS "applicationPending"
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
@@ -1871,6 +1874,8 @@ export async function suggestionsNeedingLabels(
   `);
   return rows.map((row) => ({
     ...row,
+    judgment: assessmentJudgments.statement_transaction.parse(row.judgment),
+    amount: z.number().finite().parse(row.amount),
     checkpoint: statementLabelCheckpoint.nullable().parse(row.checkpoint),
   }));
 }

@@ -1408,10 +1408,11 @@ export async function generateTransferPairSuggestionsPage(
             sql`, `,
           )}))`
       : sql``;
-    // eslint-disable-next-line cubby/no-raw-enum-literal-in-sql -- date is a TransferPairJudgment JSON property, not an enum value.
-    const sinceScope = scope.since
-      ? sql`AND s.data->>'date' >= ${scope.since}`
-      : sql``;
+    let sinceScope = sql``;
+    if (scope.since) {
+      // eslint-disable-next-line cubby/no-raw-enum-literal-in-sql -- date is a TransferPairJudgment JSON property, not an enum value.
+      sinceScope = sql`AND s.data->>'date' >= ${scope.since}`;
+    }
     // Include inactive history identities so a committed retirement cannot
     // shift this page's counts or continuation when its acknowledgement is lost.
     const { rows } = await unwrapDb(db).execute<{

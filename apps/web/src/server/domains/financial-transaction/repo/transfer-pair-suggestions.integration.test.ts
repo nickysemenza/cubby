@@ -39,7 +39,6 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
-import { activateWorkflowDeployment } from "~/server/workflows/runs/activation";
 import {
   isWorkflowInterrupted,
   withWorkflowExecution,
@@ -520,29 +519,22 @@ describe("transfer-pair suggestions", () => {
       },
     });
     await generateTransferPairSuggestions(ctx.db, { runId });
-    await activateWorkflowDeployment(ctx.db, {
-      deploymentId: "synthetic-transfer-deployment",
-      workerVersion: "synthetic-transfer-version",
-      expectedEpoch: 0,
-    });
     const answer = movementPort(byDescriptor);
     let interrupted: unknown;
     let computations = 0;
     try {
-      await withWorkflowExecution(
-        { runId, attempt: 1, version: "synthetic-transfer-version" },
-        () =>
-          labelTransferPairSuggestions(ctx.db, {
-            runId,
-            port: async (input) => {
-              computations++;
-              await unwrapDb(ctx.db)
-                .update(run)
-                .set({ status: "failed", failureCode: "user_cancelled" })
-                .where(eq(run.id, runId));
-              return answer(input);
-            },
-          }),
+      await withWorkflowExecution({ runId, attempt: 1 }, () =>
+        labelTransferPairSuggestions(ctx.db, {
+          runId,
+          port: async (input) => {
+            computations++;
+            await unwrapDb(ctx.db)
+              .update(run)
+              .set({ status: "failed", failureCode: "user_cancelled" })
+              .where(eq(run.id, runId));
+            return answer(input);
+          },
+        }),
       );
     } catch (error) {
       interrupted = error;

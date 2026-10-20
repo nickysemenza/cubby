@@ -1,11 +1,8 @@
 import type { UnparsedError } from "~/lib/error-utils";
 import { workflowForPurpose } from "~/lib/workflows/run-workflows.ts";
-import { getRunWorkflow, getWorkerVersion } from "~/server/cf-env";
-import type { Database } from "~/server/db";
+import { getRunWorkflow } from "~/server/cf-env";
 
-import { readWorkflowDeployment } from "./activation";
 import { type WorkflowRunParams, type WorkflowRunPurpose } from "./contract";
-import { WorkflowInterruptedError } from "./execution";
 
 /** The instance states Cloudflare reports, plus `missing` once retention ends. */
 export type WorkflowInstanceState =
@@ -35,12 +32,6 @@ export const ENDED_INSTANCE_STATES: ReadonlySet<WorkflowInstanceState> =
  * Integration tests inject a recording fake; the Worker uses the bindings.
  */
 export interface WorkflowLauncher {
-  /** Fresh invocations may dispatch only the activated Worker version. */
-  prepare?(
-    db: Database,
-  ): Promise<
-    { deploymentVersion: string; activationEpoch: number } | undefined
-  >;
   create(
     purpose: WorkflowRunPurpose,
     id: string,
@@ -73,23 +64,7 @@ const bindingFor = (purpose: WorkflowRunPurpose) => {
 const notFound = (error: UnparsedError) =>
   error instanceof Error && /not.?found/iu.test(error.message);
 
-export async function activatedWorkflowIdentity(
-  db: Database,
-  version: string | undefined,
-) {
-  if (!version) throw new Error("Worker version metadata is not configured");
-  const active = await readWorkflowDeployment(db);
-  if (!active || active.workerVersion !== version)
-    throw new WorkflowInterruptedError("activation_pending");
-  return { deploymentVersion: version, activationEpoch: active.epoch };
-}
-
 export const productionWorkflowLauncher: WorkflowLauncher = {
-  async prepare(db) {
-    const version = getWorkerVersion();
-    if (!version) return undefined;
-    return activatedWorkflowIdentity(db, version);
-  },
   async create(purpose, id, params) {
     await bindingFor(purpose).create({ id, params, retention: RETENTION });
   },

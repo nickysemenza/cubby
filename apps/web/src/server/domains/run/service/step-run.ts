@@ -186,7 +186,7 @@ export async function inspectStepRun(
   params: WorkflowRunParams,
   drivers?: StepRunDrivers,
 ): Promise<StepPagePlan | null> {
-  const owner = await claimWorkflowRun(db, params, "step");
+  const owner = await claimWorkflowRun(db, params);
   if (!owner || !isStepRunPurpose(owner.purpose)) return null;
   const list = await (drivers ?? (await registry[owner.purpose]()))(db, owner);
   let steps = await listRunSteps(db, owner.id);
@@ -530,7 +530,7 @@ export async function advanceStepRun(
   drivers?: StepRunDrivers,
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<StepAdvance> {
-  const owner = await claimWorkflowRun(db, params, "step");
+  const owner = await claimWorkflowRun(db, params);
   if (!owner || !isStepRunPurpose(owner.purpose)) return { kind: "lost" };
   const list = await (drivers ?? (await registry[owner.purpose]()))(db, owner);
   await ensureRunSteps(db, owner.id, list);

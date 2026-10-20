@@ -1,6 +1,5 @@
 /** Async discovery must yield to explicit admission; member locks follow owner order. */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { mailDiscoveryRunProgress } from "@cubby/schemas/run-fields";
 import { pollUntil } from "@cubby/shared/retry";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -18,19 +17,9 @@ import {
   orderMail,
   orderMailAttachment,
   emailCandidateObservation,
-  emailClassificationObservation,
-  aiEvaluation,
-  aiEvaluationRequest,
-  run,
 } from "~/server/db/schema";
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { activateWorkflowDeployment } from "~/server/workflows/runs/activation";
-import {
-  isWorkflowInterrupted,
-  withWorkflowExecution,
-} from "~/server/workflows/runs/execution";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
@@ -131,22 +120,21 @@ describe("Gmail final publication concurrency", () => {
         status: "pending",
       })
       .where(eq(emailTable.orderMailId, source.id));
-    const discovery = {
-      id: await ensureRun(ctx.db, ctx.actor, {
-        purpose: "mail_discovery",
-        trigger: "manual",
-        status: "running",
-        input: {
-          mailboxId,
-          scopedQueries: [],
-          executionPolicy: "classification_only",
-        },
-        progress: mailDiscoveryRunProgress.parse({
-          attempt: 1,
-          phase: "fetching",
-        }),
-      }),
-    };
+    const discovery = await insertWithShortcode(ctx.db, "run", {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "running",
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: party.name,
+      actorEmail: "publication@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+      input: {
+        mailboxId,
+        scopedQueries: [],
+        executionPolicy: "classification_only",
+      },
+    });
     const provider: GmailProvider = {
       getMessage: async () => message,
       getAttachment: vi.fn(async () => ({
@@ -179,152 +167,6 @@ describe("Gmail final publication concurrency", () => {
       attachments: await getDb(ctx.db).select().from(orderMailAttachment),
     };
   }
-  // Ordinary discovery has no AiEvaluation guard; ownership must be checked at
-  // evidence publication after classification, including a rollback to the same version.
-  async function interruptOrdinaryIngestion(
-    classification: "related" | "unrelated",
-    interruption: "deployment" | "cancelled",
-  ) {
-    const f = await fixture();
-    const runId = f.discovery.id;
-    const active = await activateWorkflowDeployment(ctx.db, {
-      deploymentId: "synthetic-ingestion-deployment-a",
-      workerVersion: "synthetic-ingestion-version-a",
-      expectedEpoch: 0,
-    });
-    const evidence = async () => ({
-      ...(await state()),
-      observations: await getDb(ctx.db)
-        .select()
-        .from(emailClassificationObservation),
-      candidates: await getDb(ctx.db).select().from(emailCandidateObservation),
-      evaluations: await getDb(ctx.db).select().from(aiEvaluation),
-      requests: await getDb(ctx.db).select().from(aiEvaluationRequest),
-    });
-    const before = await evidence();
-    const entered = signal<void>();
-    const release = signal<void>();
-    const input = {
-      ledgerPartyId: f.party.id,
-      mailboxId: f.mailboxId,
-      messageIds: [f.messageId],
-      runId,
-      storage: f.storage,
-      triage: async () => {
-        entered.resolve();
-        await release.promise;
-        return classification;
-      },
-    };
-    const pending = withWorkflowExecution(
-      { runId, attempt: 1, version: active.workerVersion, epoch: active.epoch },
-      () => ingestGmailMessages(ctx.db, f.provider, input),
-    );
-    // Observe rejection immediately so an interrupted publication cannot become
-    // an unhandled rejection while the fixture finishes changing authority.
-    const settled = pending.then(
-      (result) => ({ result, error: null }),
-      (error: unknown) => ({ result: null, error }),
-    );
-    try {
-      await entered.promise;
-      let current = active;
-      if (interruption === "deployment") {
-        await activateWorkflowDeployment(ctx.db, {
-          deploymentId: "synthetic-ingestion-deployment-b",
-          workerVersion: "synthetic-ingestion-version-b",
-          expectedEpoch: 1,
-        });
-        current = await activateWorkflowDeployment(ctx.db, {
-          deploymentId: "synthetic-ingestion-deployment-a-again",
-          workerVersion: active.workerVersion,
-          expectedEpoch: 2,
-        });
-      } else {
-        await getDb(ctx.db)
-          .update(run)
-          .set({
-            status: "failed",
-            failureCode: "user_cancelled",
-          })
-          .where(eq(run.id, runId));
-      }
-      release.resolve();
-      const interrupted = await settled;
-      return {
-        f,
-        runId,
-        current,
-        input,
-        evidence,
-        before,
-        observed: {
-          interrupted: isWorkflowInterrupted(interrupted.error),
-          result: interrupted.result,
-          evidence: await evidence(),
-        },
-      };
-    } finally {
-      release.resolve();
-      await settled;
-    }
-  }
-  it.each(["related", "unrelated"] as const)(
-    "fences ordinary %s ingestion after deployment during classification",
-    async (classification) => {
-      const { f, runId, current, input, evidence, before, observed } =
-        await interruptOrdinaryIngestion(classification, "deployment");
-      expect(observed.interrupted).toBe(true);
-      expect(observed.result).toBeNull();
-      expect(observed.evidence).toEqual(before);
-      expect(f.storage.put).not.toHaveBeenCalled();
-      expect(f.storage.delete).not.toHaveBeenCalled();
-      const replay = await withWorkflowExecution(
-        {
-          runId,
-          attempt: 1,
-          version: current.workerVersion,
-          epoch: current.epoch,
-        },
-        () => ingestGmailMessages(ctx.db, f.provider, input),
-      );
-      expect(
-        classification === "related" ? replay.saved : replay.unrelated,
-      ).toEqual([f.messageId]);
-      const after = await evidence();
-      expect(after.emails[0]?.classification).toBe(classification);
-      expect(
-        after.observations.filter((row) => row.runId === runId),
-      ).toMatchObject([{ classification, stage: "decision" }]);
-      expect(after.observations).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            runId: null,
-            classificationVersion: "synthetic-prior",
-            checksum: f.source.rawChecksum,
-            classification: "related",
-          }),
-        ]),
-      );
-      expect(after.evaluations).toHaveLength(1);
-      expect(after.requests).toHaveLength(1);
-    },
-  );
-  it.each(["related", "unrelated"] as const)(
-    "fences ordinary %s ingestion after cancellation during classification",
-    async (classification) => {
-      // Cancellation is final; only deployment interruption replays the message.
-      const { f, before, observed } = await interruptOrdinaryIngestion(
-        classification,
-        "cancelled",
-      );
-      expect(observed.interrupted).toBe(true);
-      expect(observed.result).toBeNull();
-      expect(observed.evidence).toEqual(before);
-      expect(f.storage.put).not.toHaveBeenCalled();
-      expect(f.storage.delete).not.toHaveBeenCalled();
-    },
-  );
   it.each(["related", "unrelated"] as const)(
     "preserves explicit admission that commits during %s triage without publishing saved work or preview",
     async (classification) => {

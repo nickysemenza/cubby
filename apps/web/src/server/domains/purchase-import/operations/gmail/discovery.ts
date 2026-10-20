@@ -82,9 +82,6 @@ export async function recordDeletedHistoryEvent(
   },
 ) {
   return withTransactionDatabase(db, async (tx) => {
-    await (
-      await import("~/server/workflows/runs/execution")
-    ).assertWorkflowEffect(tx);
     const [existing] = await getDb(tx)
       .select()
       .from(emailTable)
@@ -515,9 +512,6 @@ export async function saveMailDiscoveryBatch(
         );
     }
     return withTransactionDatabase(db, async (tx) => {
-      await (
-        await import("~/server/workflows/runs/execution")
-      ).assertWorkflowEffect(tx);
       const [locked] = await getDb(tx)
         .select({ id: runTable.id })
         .from(runTable)

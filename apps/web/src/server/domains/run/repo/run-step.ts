@@ -39,26 +39,7 @@ const MAINTENANCE = "maintenance";
 const ACTIVE_STATUSES = ["running", "paused_auth"] as const;
 
 export type RunStepRow = typeof runStep.$inferSelect;
-export const stepRunOwnerColumns = {
-  id: run.id,
-  purpose: run.purpose,
-  input: run.input,
-  shortcode: run.shortcode,
-  actorUserId: run.actorUserId,
-  channel: run.channel,
-  trigger: run.trigger,
-  status: run.status,
-  failureCode: run.failureCode,
-  startedAt: run.startedAt,
-  progress: run.progress,
-  createdAt: run.createdAt,
-  endedAt: run.endedAt,
-  dispatchError: run.dispatchError,
-};
-export type StepRunOwner = Pick<
-  typeof run.$inferSelect,
-  keyof typeof stepRunOwnerColumns
->;
+export type StepRunOwner = typeof run.$inferSelect;
 export type RunStepDefinition = { key: string; label: string };
 export type RunStepRead = RunStepRow & { left: number };
 

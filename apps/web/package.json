@@ -33,8 +33,7 @@
     "db:promote-historical-orders": "tsx tooling/historical-accepted-orders.ts",
     "types:check": "node tooling/checks/worker-type-imports.ts --check",
     "build:cf": "tsx tooling/build-cf.ts",
-    "deploy:cf": "pnpm run build:cf && pnpm run deploy:worker",
-    "deploy:worker": "tsx tooling/workflow-deploy.ts",
+    "deploy:cf": "pnpm run build:cf && cf deploy --prebuilt --mode production",
     "preview:cf": "tsx tooling/dev/index.ts preview",
     "test:calendar": "pnpm --dir ../web-worker-tests test:workers"
   },

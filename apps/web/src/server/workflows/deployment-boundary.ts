@@ -12,33 +12,36 @@ export async function workflowDeploymentBoundary(
   input: {
     name: string;
     version: string;
-    epoch?: number;
-    currentVersion(): Promise<{ version: string; epoch?: number }>;
+    currentVersion(): Promise<string>;
     continue(): Promise<void>;
     force?: boolean;
+    initial?: boolean;
     dashboard?: { nextInstanceId: string; summary: StepPageSummary | null };
   },
 ): Promise<boolean> {
   const handoff = await steps.do(
-    `deployment guard · ${input.name}${input.force ? " · forced" : ""}`,
+    `deployment guard · ${input.name}`,
     BOOKKEEPING_RETRIES,
     async () => {
-      const identity = input.force ? null : await input.currentVersion();
-      const currentVersion = identity?.version ?? null;
-      const changed =
-        currentVersion !== input.version ||
-        (input.epoch !== undefined && identity?.epoch !== input.epoch);
+      // The DO can still serve the preceding deployment at fresh startup.
+      // Commit one bounded page before comparing; never sleep or chain empty
+      // successors while propagation catches up. Forced budgets still win.
+      const starting = input.initial && !input.force;
+      const currentVersion =
+        input.force || starting ? null : await input.currentVersion();
       return {
-        handoff: Boolean(input.force) || changed,
+        handoff:
+          Boolean(input.force) ||
+          (!starting && currentVersion !== input.version),
         reason: input.force
           ? "instance budget"
-          : changed
-            ? "deployment changed"
-            : "deployment current",
+          : starting
+            ? "instance startup"
+            : currentVersion !== input.version
+              ? "deployment changed"
+              : "deployment current",
         pinnedVersion: input.version,
         currentVersion,
-        pinnedEpoch: input.epoch ?? null,
-        currentEpoch: identity?.epoch ?? null,
       };
     },
   );

@@ -163,30 +163,6 @@ export type SearchIndexRepairCounters = z.infer<
 >;
 
 export const searchIndexRepairPhases = ["orphans", "sources"] as const;
-const searchRepairCursor = z.object({
-  entityKind: searchableEntitySchema,
-  entityId: z.string(),
-});
-const searchRepairSourcePage = z.object({
-  refs: z.array(searchRepairCursor).max(250),
-  nextCursor: searchRepairCursor.nullable(),
-  delta: searchIndexRepairCountersSchema.pick({
-    scanned: true,
-    missing: true,
-    stale: true,
-  }),
-});
-const searchRepairPendingSource = z.discriminatedUnion("stage", [
-  z.object({ stage: z.literal("apply"), page: searchRepairSourcePage }),
-  z.object({
-    stage: z.literal("publish"),
-    page: searchRepairSourcePage,
-    rebuilt: z.number().int().nonnegative(),
-  }),
-]);
-export type SearchRepairPendingSource = z.infer<
-  typeof searchRepairPendingSource
->;
 
 /** A committed page's resume point; selection, mutation and publication stay together. */
 export const searchRepairCheckpoint = z.object({
@@ -195,18 +171,8 @@ export const searchRepairCheckpoint = z.object({
     .object({ entityKind: searchableEntitySchema, entityId: z.string() })
     .nullable(),
   counters: searchIndexRepairCountersSchema,
-  /** Retain the selected page even when an effect's commit acknowledgment is lost. */
-  pendingSource: searchRepairPendingSource.optional(),
 });
 export type SearchRepairCheckpoint = z.infer<typeof searchRepairCheckpoint>;
-export const searchRepairWorkflowParams = z.object({
-  requestedAt: z.iso.datetime(),
-  checkpoint: searchRepairCheckpoint.optional(),
-  activationEpoch: z.number().int().positive().optional(),
-});
-export type SearchRepairWorkflowParams = z.infer<
-  typeof searchRepairWorkflowParams
->;
 export const searchRepairContinuation = z.object({
   nextInstanceId: z.string().min(1),
 });

@@ -20,14 +20,13 @@ const log = createLogger("step-run-workflow");
 /** Effects whose invocation/database ownership stays with the Cloudflare adapter. */
 export interface StepRunWork {
   inspect(): Promise<StepPagePlan | null>;
-  waitUntil?(name: string, dueAt: number): Promise<boolean>;
   advance(): Promise<StepAdvance>;
   boundary(
     name: string,
     force?: boolean,
     dashboard?: { nextInstanceId: string; summary: StepPageSummary | null },
   ): Promise<boolean>;
-  wait(page: number, seconds: number): Promise<void | boolean>;
+  wait(page: number, seconds: number): Promise<void>;
   fail(message: string): Promise<boolean>;
   recover(): Promise<void>;
 }
@@ -87,15 +86,7 @@ export async function runStepRunWorkflow(
             )
           : pageBound);
       if (advance.kind === "continue" && advance.waitSeconds) {
-        const dueAt = await steps.do(
-          `capacity deadline:${page}`,
-          BOOKKEEPING_RETRIES,
-          async () => Date.now() + advance.waitSeconds! * 1000,
-        );
-        if (work.waitUntil) {
-          if (await work.waitUntil(`capacity:${page}`, dueAt)) return;
-        } else
-          await steps.sleep(`capacity:${page}`, advance.waitSeconds * 1_000);
+        await steps.sleep(`capacity:${page}`, advance.waitSeconds * 1_000);
       }
       if (
         // Tolerate accumulated floating-point error at an exact page bound.
@@ -107,17 +98,14 @@ export async function runStepRunWorkflow(
       }
       if (advance.kind === "wait")
         try {
-          if (await work.wait(page, advance.seconds)) return;
+          await work.wait(page, advance.seconds);
         } catch {
           // SILENT: the event is a hint; the next page re-reads the child.
         }
     }
     await work.boundary("continue", true, dashboard);
   } catch (error) {
-    if (isWorkflowInterrupted(error)) {
-      await work.boundary("execution interrupted", true);
-      return;
-    }
+    if (isWorkflowInterrupted(error)) return;
     let message = runFailureText(
       error instanceof Error ? error : String(error),
     );
