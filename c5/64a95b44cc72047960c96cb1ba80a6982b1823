@@ -1,0 +1,65 @@
+apps/web/src/entity/audit-log/audit-log-list.tsx
+  s_a14da84a78b0eb::t_32936d0aba3e5b 17,147-167,173-179
+apps/web/src/entity/components/entity-image-list.tsx
+  s_a14da84a78b0eb::t_bf0b4a1d0e9a95 5,41-43
+apps/web/src/entity/components/entity-ref-link.unit.test.tsx
+  s_a14da84a78b0eb::t_dd6b60a8ea5a44 280
+apps/web/src/entity/components/ref-link/list.tsx
+  s_a14da84a78b0eb::t_166e3686efc878 9,68
+apps/web/src/entity/merge/entity-merge-dialog.tsx
+  s_a14da84a78b0eb::t_d9935cc9d091e2 15,447-454
+apps/web/src/entity/routing/detail-page.tsx
+  s_a14da84a78b0eb::t_8d89049b7e204a 14,150-166
+apps/web/src/entity/table/entity-empty-states.tsx
+  s_a14da84a78b0eb::t_0e421561fab66b 11-13,60-71,73-77,89-92,94-97,101-105
+apps/web/src/features/design/sections/basics-section.tsx
+  s_a14da84a78b0eb::t_9e79e6a4171222 4,233,237-243
+apps/web/src/features/finance/linked-transactions.tsx
+  s_a14da84a78b0eb::t_7655587fc77ded 20,210-215
+apps/web/src/features/ingredient/enrichment-workbench.tsx
+  s_a14da84a78b0eb::t_78237f94611d6e 48,793-796,798-802
+apps/web/src/features/ingredient/review-queue.tsx
+  s_a14da84a78b0eb::t_d11b8bb9eec8c0 15,260-262,266-269,275-285,287-292
+apps/web/src/features/inventory/triage/shelf-triage-workbench.tsx
+  s_a14da84a78b0eb::t_52dfd4875d886c 37,189-193,195-209,351-370
+apps/web/src/features/meal/shopping-list-page.tsx
+  s_a14da84a78b0eb::t_f19493cd0a0ea2 12,150-160
+apps/web/src/features/project/projects-dashboard.tsx
+  s_a14da84a78b0eb::t_69777057c89021 43,484-490
+apps/web/src/features/project/tool-matrix-page.tsx
+  s_a14da84a78b0eb::t_708a5d04146d50 59,590-594,596-600
+apps/web/src/features/purchase/link-expenses-dialog.tsx
+  s_a14da84a78b0eb::t_8e503058cece43 40,363-370
+apps/web/src/features/purchase/link-products-dialog.tsx
+  s_a14da84a78b0eb::t_a3a77eed8a6eda 36,217-222
+apps/web/src/features/tools/tool-gallery-page.tsx
+  s_a14da84a78b0eb::t_84607f1ab6e5c8 40,312-324,328-332
+apps/web/src/features/usda-food/usda-alternate-id-redirect.tsx
+  s_a14da84a78b0eb::t_4afaa0f4e11956 7,55-57
+apps/web/src/routes/_authenticated/$shortcode.tsx
+  s_a14da84a78b0eb::t_f717cfc5158cb6 29,49-65
+apps/web/src/routes/_authenticated/usda.$id.tsx
+  s_a14da84a78b0eb::t_77fdab979b9156 9,24-29
+apps/web/src/ui/feedback/empty-state.tsx
+  s_a14da84a78b0eb::t_6ab4e200b96949 55
+apps/web/tests/e2e/declared-record-lists.spec.ts
+  s_a14da84a78b0eb::t_165df059d93fdb 362
+apps/web/tests/e2e/dev-preview.hmr.ts
+  s_a14da84a78b0eb::t_91e9237e21d495 43,74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c564a95b44cc72047960c96cb1ba80a6982b1823",
+  "prompts": {},
+  "sessions": {
+    "s_a14da84a78b0eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4251b55-9ed3-4f78-92dd-cdc1a554513c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
