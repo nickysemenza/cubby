@@ -34,6 +34,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 
+import { foldDerivedRefreshCaptures } from "./capture";
 import { reconcileDerivedRefreshPage } from "./reconcile";
 
 const launcher: WorkflowLauncher = {
@@ -68,6 +69,7 @@ describe("discovery epoch recovery", () => {
       },
       ctx.actor,
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     await getDb(ctx.db).update(derivedRefreshWork).set({ publishing: true });
     await getDb(ctx.db)
       .update(derivedRefreshWork)
@@ -373,6 +375,7 @@ describe("discovery epoch recovery", () => {
       makeProductInput({ name: "Synthetic new discovery input" }),
       ctx.actor,
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     // This test isolates admission epochs; projection convergence has its own real drain regression.
     await getDb(ctx.db)
       .update(derivedRefreshWork)

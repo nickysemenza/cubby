@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, runAfterCommit } from "~/server/db/helpers";
-import { derivedRefreshWork, recipe } from "~/server/db/schema";
+import { derivedRefreshRevision, recipe } from "~/server/db/schema";
 import {
   deleteRecipes,
   RECIPE_DELETE_EDGE_POLICY,
@@ -139,9 +139,9 @@ describe("delete effect snapshot contention", () => {
       if (!interrupted && metadata?.source === "recipe.delete") {
         interrupted = true;
         await getDb(ctx.db)
-          .update(derivedRefreshWork)
-          .set({ availableAt: new Date(0) })
-          .where(eq(derivedRefreshWork.entityId, subject.entityId));
+          .update(derivedRefreshRevision)
+          .set({ revision: sql`${derivedRefreshRevision.revision} + 1` })
+          .where(eq(derivedRefreshRevision.key, "all"));
       }
       return result;
     });

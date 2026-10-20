@@ -11,6 +11,7 @@ import {
   type derivedRefreshCursorState,
   embeddingArtifactState,
   type derivedRefreshOwners,
+  type DerivedRefreshCapture,
 } from "@cubby/schemas/derived-refresh";
 import {
   type EntityAttachmentRole,
@@ -749,7 +750,25 @@ export const derivedRefreshRevision = pgTable("DerivedRefreshRevision", {
   revision: integer("revision").notNull().default(0),
 });
 
-/** Durable work retains the immutable audit delta, including removed edges. */
+/** Append-only save evidence; background progress never rewrites these rows. */
+export const derivedRefreshCaptureInbox = pgTable(
+  "DerivedRefreshCaptureInbox",
+  {
+    id: pkUuid(),
+    ...entityRef<Entity>({ nullable: false }),
+    change: jsonb("change").$type<DerivedRefreshCapture>().notNull(),
+    inputFingerprint: text("inputFingerprint").notNull(),
+    force: boolean("force").notNull().default(true),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    entityRefFk("DerivedRefreshCaptureInbox_entity_fk", table),
+    index("DerivedRefreshCaptureInbox_order_idx").on(table.createdAt, table.id),
+    index("DerivedRefreshCaptureInbox_kind_idx").on(table.entityKind),
+  ],
+);
+
+/** Mutable background progress is separate from authoritative save capture. */
 export const derivedRefreshWork = pgTable(
   "DerivedRefreshWork",
   {

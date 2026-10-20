@@ -21,6 +21,7 @@ import {
   derivedRefreshScope,
   derivedRefreshWork,
   derivedRefreshFailure,
+  derivedRefreshCaptureInbox,
 } from "~/server/db/schema";
 import { markProductConversionCoverageStale } from "~/server/domains/product/repo/conversion-coverage";
 import {
@@ -38,6 +39,7 @@ import {
   prepareAssessmentRetirement,
   publishAssessmentRetirement,
 } from "./assessment-retirement";
+import { foldDerivedRefreshCaptures } from "./capture";
 import {
   readRefreshDependencyPage,
   refreshDependencyRoutes,
@@ -102,6 +104,15 @@ export async function nextDerivedRefreshWork(
 
 /** A future retry retains its existing Run owner instead of creating new Runs. */
 export async function nextDerivedRefreshWake(db: Database) {
+  const [capture] = await getDb(db)
+    .select({ createdAt: derivedRefreshCaptureInbox.createdAt })
+    .from(derivedRefreshCaptureInbox)
+    .orderBy(
+      asc(derivedRefreshCaptureInbox.createdAt),
+      asc(derivedRefreshCaptureInbox.id),
+    )
+    .limit(1);
+  if (capture) return capture.createdAt;
   const [row] = await getDb(db)
     .select({ availableAt: derivedRefreshWork.availableAt })
     .from(derivedRefreshWork)
@@ -163,6 +174,8 @@ export async function processDerivedRefreshPage(
   ports: DerivedRefreshPorts,
   options: { frontierOnly?: boolean } = {},
 ): Promise<{ done: boolean; processed: number; errors: string[] }> {
+  const folded = await foldDerivedRefreshCaptures(db);
+  if (folded > 0) return { done: false, processed: folded, errors: [] };
   const candidate = await nextDerivedRefreshWork(db, options);
   if (!candidate) return { done: true, processed: 0, errors: [] };
   const [work] = await getDb(db)

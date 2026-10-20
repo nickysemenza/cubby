@@ -64,8 +64,19 @@ it("preserves populated write data through derived-refresh expansion and contrac
     await client.query(`INSERT INTO "Product" (shortcode,name,manufacturer)
       VALUES ('PRD-7M4K','Synthetic predecessor write','Synthetic maker')`);
     const expanded = await snapshot();
+    await client.query(`INSERT INTO "DerivedRefreshCaptureInbox" ("entityId","entityKind","change","inputFingerprint")
+      SELECT id,'product',jsonb_build_object('entityKind','product','entityId',id,'changedFields',jsonb_build_array('name')),'synthetic-input'
+      FROM "Product" WHERE shortcode='PRD-7M4K'`);
+    const captures = async () =>
+      (
+        await client.query(
+          `SELECT * FROM "DerivedRefreshCaptureInbox" ORDER BY id`,
+        )
+      ).rows;
+    const captured = await captures();
     await migrateDatabase(drizzle(client), { through: tags[contract]! });
     expect(await snapshot()).toEqual(expanded);
+    expect(await captures()).toEqual(captured);
     expect(await legacyTrigger()).toEqual([]);
     // Identity/liveness enforcement survives removal of derived fanout triggers.
     expect(

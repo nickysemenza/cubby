@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
+  derivedRefreshCaptureInbox,
   derivedRefreshCursor,
   derivedRefreshScope,
   derivedRefreshWork,
@@ -21,7 +22,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { captureDerivedRefresh } from "./capture";
+import { captureDerivedRefresh, foldDerivedRefreshCaptures } from "./capture";
 import { reconcileDerivedRefreshPage } from "./reconcile";
 
 async function drain(db: Parameters<typeof processDerivedRefreshPage>[0]) {
@@ -77,6 +78,7 @@ describe("durable derived refresh", () => {
     await reconcileDerivedRefreshPage(ctx.db, {
       embeddingConfig: getSemanticEmbeddingConfig(),
     });
+    await foldDerivedRefreshCaptures(ctx.db);
     const [pending] = await getDb(ctx.db)
       .select()
       .from(derivedRefreshWork)
@@ -108,6 +110,12 @@ describe("durable derived refresh", () => {
       .from(derivedRefreshWork)
       .where(eq(derivedRefreshWork.entityId, subject.entityId));
     expect(after).toEqual(before);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(derivedRefreshCaptureInbox)
+        .where(eq(derivedRefreshCaptureInbox.entityId, subject.entityId)),
+    ).toEqual([]);
     expect(queue.tasks).toEqual([]);
   });
 
@@ -145,6 +153,13 @@ describe("durable derived refresh", () => {
         .where(eq(derivedRefreshWork.entityId, subject.entityId));
       expect(during?.version).toBe(before?.version);
     });
+    const captures = await getDb(ctx.db)
+      .select()
+      .from(derivedRefreshCaptureInbox)
+      .where(eq(derivedRefreshCaptureInbox.entityId, subject.entityId));
+    expect(captures).toHaveLength(1);
+    expect(captures[0]?.change.changedFields).toEqual(["name"]);
+    await foldDerivedRefreshCaptures(ctx.db);
     const [after] = await getDb(ctx.db)
       .select()
       .from(derivedRefreshWork)
@@ -216,6 +231,7 @@ describe("durable derived refresh", () => {
       [{ entityKind: "product", entityId: subject.entityId }],
       { invalidate: false },
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     const [failed] = await getDb(ctx.db)
       .select()
       .from(derivedRefreshWork)

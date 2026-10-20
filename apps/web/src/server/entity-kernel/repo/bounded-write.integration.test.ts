@@ -25,6 +25,7 @@ import { writeProductConversionCoverageProjection } from "~/server/domains/produ
 import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
 import { createTask } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
+import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocuments,
@@ -207,6 +208,7 @@ describe("bounded entity writes", () => {
       id: first.id,
       data: { name: "Synthetic renamed purchase product" },
     });
+    await foldDerivedRefreshCaptures(ctx.db);
     const [work] = await getDb(ctx.db)
       .select()
       .from(derivedRefreshWork)
@@ -441,6 +443,7 @@ describe("bounded entity writes", () => {
       id: product.id,
       data: { name: "Synthetic third name" },
     });
+    await foldDerivedRefreshCaptures(ctx.db);
     const work = await getDb(ctx.db)
       .select()
       .from(derivedRefreshWork)

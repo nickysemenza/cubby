@@ -15,7 +15,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { captureDerivedRefresh } from "./capture";
+import { captureDerivedRefresh, foldDerivedRefreshCaptures } from "./capture";
 
 // Scheduling epochs can change without changing a failed materialization's inputs.
 describe("semantic phase failure budget", () => {
@@ -35,6 +35,7 @@ describe("semantic phase failure budget", () => {
       makeProductInput({ name: "Synthetic failed projection" }),
       ctx.actor,
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     const publication = vi
       .spyOn(search, "publishPreparedSearchDocuments")
       .mockRejectedValue(new Error("Synthetic projection failure"));
@@ -51,6 +52,7 @@ describe("semantic phase failure budget", () => {
       makeProductInput({ name: "Synthetic unrelated product" }),
       ctx.actor,
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     await getDb(ctx.db)
       .update(derivedRefreshWork)
       .set({ availableAt: new Date(Date.now() + 60_000) })
@@ -60,6 +62,7 @@ describe("semantic phase failure budget", () => {
       [{ entityKind: "product", entityId: subject.entityId }],
       { invalidate: false },
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     expect((await processDerivedRefreshPage(ctx.db)).errors).toEqual([]);
     expect(publication).toHaveBeenCalledTimes(3);
     await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
@@ -68,6 +71,7 @@ describe("semantic phase failure budget", () => {
       id: subject.id,
       data: { name: "Synthetic changed projection" },
     });
+    await foldDerivedRefreshCaptures(ctx.db);
     expect((await processDerivedRefreshPage(ctx.db)).errors).toHaveLength(1);
     expect(publication).toHaveBeenCalledTimes(4);
   });

@@ -3,7 +3,11 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { image, searchDocument, derivedRefreshWork } from "~/server/db/schema";
+import {
+  image,
+  searchDocument,
+  derivedRefreshCaptureInbox,
+} from "~/server/db/schema";
 import { backfillImageSearchDocuments } from "~/server/domains/image/service/image-search-backfill.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -73,8 +77,9 @@ describe("backfillImageSearchDocuments", () => {
       expect(
         await getDb(ctx.db)
           .select()
-          .from(derivedRefreshWork)
-          .where(eq(derivedRefreshWork.entityId, row.id)),
+          .from(derivedRefreshCaptureInbox)
+          .where(eq(derivedRefreshCaptureInbox.entityId, row.id))
+          .limit(1),
       ).toHaveLength(1);
     }
     await drainDerivedRefreshFrontier(ctx.db);

@@ -1,12 +1,16 @@
 import {
+  DERIVED_REFRESH_ROOT_PAGE,
+  derivedRefreshCapture,
   derivedRefreshState,
   derivedRefreshPhase,
   type DerivedRefreshCapture,
 } from "@cubby/schemas/derived-refresh";
 import type { Entity } from "@cubby/schemas/entity-core";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
+import type { Database } from "~/server/db";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import {
   repositoryQueries as unwrapDb,
   repositoryAfterCommit,
@@ -14,6 +18,7 @@ import {
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import {
+  derivedRefreshCaptureInbox,
   derivedRefreshRevision,
   derivedRefreshScope,
   derivedRefreshWork,
@@ -132,154 +137,22 @@ async function flushDerivedRefresh(
     ),
   );
   const values = await Promise.all(
-    entries.map(async ({ entityKind, entityId, auditId, changedFields }) => ({
-      entityKind,
-      entityId,
-      auditId,
-      changedFields: changedFields
-        ? Object.fromEntries(changedFields.map((field) => [field, true]))
-        : null,
+    entries.map(async (change) => ({
+      entityKind: change.entityKind,
+      entityId: change.entityId,
+      change,
       inputFingerprint: await sha256Hex(
         JSON.stringify(
-          refreshInputKeys(entityKind).map((key) => [
+          refreshInputKeys(change.entityKind).map((key) => [
             key,
             revisions.get(key) ?? 0,
           ]),
         ),
       ),
+      force: options.invalidate !== false,
     })),
   );
-  let scheduled = false;
-  // A worker publishes output, then scopes, then its Work acknowledgement.
-  // An existing root must therefore receive new scopes before its Work changes.
-  for (const value of values.sort((a, b) =>
-    `${a.entityKind}:${a.entityId}`.localeCompare(
-      `${b.entityKind}:${b.entityId}`,
-    ),
-  )) {
-    const [created] = await client
-      .insert(derivedRefreshWork)
-      .values(value)
-      .onConflictDoNothing({
-        target: [derivedRefreshWork.entityKind, derivedRefreshWork.entityId],
-      })
-      .returning({ id: derivedRefreshWork.id });
-    const [existing] = created
-      ? []
-      : await client
-          .select({ id: derivedRefreshWork.id })
-          .from(derivedRefreshWork)
-          .where(
-            and(
-              eq(derivedRefreshWork.entityKind, value.entityKind),
-              eq(derivedRefreshWork.entityId, value.entityId),
-            ),
-          )
-          .limit(1);
-    const owner = created ?? existing;
-    if (!owner)
-      throw new Error("Derived refresh root disappeared during capture");
-    const capture = byRoot.get(`${value.entityKind}:${value.entityId}`);
-    const endpointScopes = new Map(
-      (capture?.scopes ?? [])
-        .filter(
-          (scope) =>
-            scope.entityKind !== value.entityKind ||
-            scope.entityId !== value.entityId,
-        )
-        .map((scope) => [`${scope.entityKind}:${scope.entityId}`, scope]),
-    );
-    const scopes = [
-      {
-        entityKind: value.entityKind,
-        entityId: value.entityId,
-        traverse: true,
-      },
-      ...[...endpointScopes.values()].map((scope) => ({
-        ...scope,
-        // Endpoint identity changed; the endpoint's own inputs did not.
-        // Only declared reverse dependencies (for example Product pricing)
-        // or a narrower saved-endpoint frontier may continue through its graph.
-        traverse:
-          refreshEndpointDependencyRoutes(
-            value.entityKind,
-            scope.entityKind,
-          ) !== undefined ||
-          refreshDependencyRoutes(value.entityKind).some(
-            (route) => route.entity === scope.entityKind && route.transitive,
-          ),
-      })),
-    ]
-      .sort((a, b) =>
-        `${a.entityKind}:${a.entityId}`.localeCompare(
-          `${b.entityKind}:${b.entityId}`,
-        ),
-      )
-      .map((scope) => ({ workId: owner.id, ...scope }));
-    await client
-      .insert(derivedRefreshScope)
-      .values(scopes)
-      .onConflictDoUpdate({
-        target: [
-          derivedRefreshScope.workId,
-          derivedRefreshScope.entityKind,
-          derivedRefreshScope.entityId,
-        ],
-        set: {
-          traverse: true,
-          phase: sql`CASE WHEN ${derivedRefreshScope.done} THEN ${derivedRefreshPhase.enum.dependencies} ELSE ${derivedRefreshScope.phase} END`,
-          route: sql`CASE WHEN ${derivedRefreshScope.done} THEN 0 ELSE ${derivedRefreshScope.route} END`,
-          after: sql`CASE WHEN ${derivedRefreshScope.done} THEN NULL ELSE ${derivedRefreshScope.after} END`,
-          done: false,
-        },
-        setWhere: sql`NOT ${derivedRefreshScope.traverse} AND excluded.traverse`,
-      });
-    if (created) {
-      scheduled = true;
-      continue;
-    }
-    const changedFields =
-      value.changedFields === null
-        ? sql`NULL`
-        : sql`${JSON.stringify(value.changedFields)}::jsonb`;
-    const changed = await client
-      .update(derivedRefreshWork)
-      .set({
-        version: sql`${derivedRefreshWork.version}+1`,
-        inputFingerprint: value.inputFingerprint,
-        auditId: value.auditId,
-        changedFields: sql`CASE WHEN ${derivedRefreshWork.state}=${derivedRefreshState.enum.completed} THEN ${changedFields}
-        WHEN ${derivedRefreshWork.changedFields} IS NULL OR ${changedFields} IS NULL THEN NULL
-        ELSE ${derivedRefreshWork.changedFields} || ${changedFields} END`,
-        state: "pending",
-        attempts: 0,
-        hasFailures: false,
-        lastError: null,
-        availableAt: sql`now()`,
-        publishing: false,
-        publishAfter: null,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(derivedRefreshWork.id, owner.id),
-          options.invalidate === false
-            ? or(
-                eq(
-                  derivedRefreshWork.state,
-                  derivedRefreshState.enum.completed,
-                ),
-                sql`${derivedRefreshWork.inputFingerprint} IS DISTINCT FROM ${value.inputFingerprint}`,
-              )
-            : undefined,
-        ),
-      )
-      .returning({ id: derivedRefreshWork.id });
-    scheduled ||= changed.length > 0;
-  }
-  if (!scheduled) return;
+  await client.insert(derivedRefreshCaptureInbox).values(values);
   await repositoryAfterCommit(db, (committedDb) =>
     publishInBackground(
       committedDb,
@@ -292,4 +165,179 @@ async function flushDerivedRefresh(
       { source: "derived-refresh.capture" },
     ),
   );
+}
+
+/** Fold and acknowledge exactly one locked page; rollback retains every capture. */
+export async function foldDerivedRefreshCaptures(
+  db: Database,
+): Promise<number> {
+  return withTransactionDatabase(db, async (tx) => {
+    const client = unwrapDb(tx);
+    const page = await client
+      .select()
+      .from(derivedRefreshCaptureInbox)
+      .orderBy(
+        asc(derivedRefreshCaptureInbox.createdAt),
+        asc(derivedRefreshCaptureInbox.id),
+      )
+      .limit(DERIVED_REFRESH_ROOT_PAGE)
+      .for("update", { skipLocked: true });
+    // Match Work/Scope lock order across concurrent folders.
+    for (const row of page.sort((a, b) =>
+      `${a.entityKind}:${a.entityId}`.localeCompare(
+        `${b.entityKind}:${b.entityId}`,
+      ),
+    )) {
+      const capture = derivedRefreshCapture.parse(row.change);
+      const value = {
+        entityKind: capture.entityKind,
+        entityId: capture.entityId,
+        auditId: capture.auditId,
+        changedFields: capture.changedFields
+          ? Object.fromEntries(
+              capture.changedFields.map((field) => [field, true]),
+            )
+          : null,
+        inputFingerprint: row.inputFingerprint,
+      };
+      await materializeCapture(tx, capture, value, row.force);
+    }
+    if (page.length)
+      await client.delete(derivedRefreshCaptureInbox).where(
+        inArray(
+          derivedRefreshCaptureInbox.id,
+          page.map((row) => row.id),
+        ),
+      );
+    return page.length;
+  });
+}
+
+async function materializeCapture(
+  db: RepositoryQueryInput,
+  capture: RefreshCapture,
+  input: {
+    entityKind: Entity;
+    entityId: string;
+    auditId?: string;
+    changedFields: Record<string, boolean> | null;
+    inputFingerprint: string;
+  },
+  force: boolean,
+) {
+  const client = unwrapDb(db);
+  const value = input;
+  // A worker publishes output, then scopes, then its Work acknowledgement.
+  // An existing root must therefore receive new scopes before its Work changes.
+  const [created] = await client
+    .insert(derivedRefreshWork)
+    .values(value)
+    .onConflictDoNothing({
+      target: [derivedRefreshWork.entityKind, derivedRefreshWork.entityId],
+    })
+    .returning({ id: derivedRefreshWork.id });
+  const [existing] = created
+    ? []
+    : await client
+        .select({ id: derivedRefreshWork.id })
+        .from(derivedRefreshWork)
+        .where(
+          and(
+            eq(derivedRefreshWork.entityKind, value.entityKind),
+            eq(derivedRefreshWork.entityId, value.entityId),
+          ),
+        )
+        .limit(1);
+  const owner = created ?? existing;
+  if (!owner)
+    throw new Error("Derived refresh root disappeared during capture");
+  const endpointScopes = new Map(
+    (capture.scopes ?? [])
+      .filter(
+        (scope) =>
+          scope.entityKind !== value.entityKind ||
+          scope.entityId !== value.entityId,
+      )
+      .map((scope) => [`${scope.entityKind}:${scope.entityId}`, scope]),
+  );
+  const scopes = [
+    {
+      entityKind: value.entityKind,
+      entityId: value.entityId,
+      traverse: true,
+    },
+    ...[...endpointScopes.values()].map((scope) => ({
+      ...scope,
+      // Endpoint identity changed; the endpoint's own inputs did not.
+      // Only declared reverse dependencies (for example Product pricing)
+      // or a narrower saved-endpoint frontier may continue through its graph.
+      traverse:
+        refreshEndpointDependencyRoutes(value.entityKind, scope.entityKind) !==
+          undefined ||
+        refreshDependencyRoutes(value.entityKind).some(
+          (route) => route.entity === scope.entityKind && route.transitive,
+        ),
+    })),
+  ]
+    .sort((a, b) =>
+      `${a.entityKind}:${a.entityId}`.localeCompare(
+        `${b.entityKind}:${b.entityId}`,
+      ),
+    )
+    .map((scope) => ({ workId: owner.id, ...scope }));
+  await client
+    .insert(derivedRefreshScope)
+    .values(scopes)
+    .onConflictDoUpdate({
+      target: [
+        derivedRefreshScope.workId,
+        derivedRefreshScope.entityKind,
+        derivedRefreshScope.entityId,
+      ],
+      set: {
+        traverse: true,
+        phase: sql`CASE WHEN ${derivedRefreshScope.done} THEN ${derivedRefreshPhase.enum.dependencies} ELSE ${derivedRefreshScope.phase} END`,
+        route: sql`CASE WHEN ${derivedRefreshScope.done} THEN 0 ELSE ${derivedRefreshScope.route} END`,
+        after: sql`CASE WHEN ${derivedRefreshScope.done} THEN NULL ELSE ${derivedRefreshScope.after} END`,
+        done: false,
+      },
+      setWhere: sql`NOT ${derivedRefreshScope.traverse} AND excluded.traverse`,
+    });
+  if (created) return;
+  const changedFields =
+    value.changedFields === null
+      ? sql`NULL`
+      : sql`${JSON.stringify(value.changedFields)}::jsonb`;
+  await client
+    .update(derivedRefreshWork)
+    .set({
+      version: sql`${derivedRefreshWork.version}+1`,
+      inputFingerprint: value.inputFingerprint,
+      auditId: value.auditId,
+      changedFields: sql`CASE WHEN ${derivedRefreshWork.state}=${derivedRefreshState.enum.completed} THEN ${changedFields}
+        WHEN ${derivedRefreshWork.changedFields} IS NULL OR ${changedFields} IS NULL THEN NULL
+        ELSE ${derivedRefreshWork.changedFields} || ${changedFields} END`,
+      state: "pending",
+      attempts: 0,
+      hasFailures: false,
+      lastError: null,
+      availableAt: sql`now()`,
+      publishing: false,
+      publishAfter: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(derivedRefreshWork.id, owner.id),
+        !force
+          ? or(
+              eq(derivedRefreshWork.state, derivedRefreshState.enum.completed),
+              sql`${derivedRefreshWork.inputFingerprint} IS DISTINCT FROM ${value.inputFingerprint}`,
+            )
+          : undefined,
+      ),
+    )
+    .returning({ id: derivedRefreshWork.id });
 }

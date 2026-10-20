@@ -8,7 +8,11 @@ import {
   runBeforeCommitDatabase,
   pendingTransactionChanges,
 } from "~/server/db/helpers";
-import { derivedRefreshRevision, derivedRefreshWork } from "~/server/db/schema";
+import {
+  derivedRefreshCaptureInbox,
+  derivedRefreshRevision,
+  derivedRefreshWork,
+} from "~/server/db/schema";
 import { DerivedInputsChanged } from "~/server/generic/derived-refresh/repo/revisions";
 
 import { refreshDependencyRoutes } from "./dependencies";
@@ -64,6 +68,17 @@ export async function hasUnmaterializedInputs(
           ? undefined
           : sql`(${derivedRefreshWork.hasFailures} OR NOT ${derivedRefreshWork.publishing})`,
       ),
+    )
+    .unionAll(
+      unwrapDb(db)
+        .select({ id: derivedRefreshCaptureInbox.id })
+        .from(derivedRefreshCaptureInbox)
+        .where(
+          inArray(
+            derivedRefreshCaptureInbox.entityKind,
+            entityKinds.filter((kind) => kinds.includes(kind)),
+          ),
+        ),
     )
     .limit(1);
   return row !== undefined;

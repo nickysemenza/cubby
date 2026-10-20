@@ -21996,6 +21996,117 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.DerivedRefreshCaptureInbox": {
+      "name": "DerivedRefreshCaptureInbox",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "entityId": {
+          "name": "entityId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change": {
+          "name": "change",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inputFingerprint": {
+          "name": "inputFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "force": {
+          "name": "force",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "DerivedRefreshCaptureInbox_order_idx": {
+          "name": "DerivedRefreshCaptureInbox_order_idx",
+          "columns": [
+            {
+              "expression": "createdAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "DerivedRefreshCaptureInbox_kind_idx": {
+          "name": "DerivedRefreshCaptureInbox_kind_idx",
+          "columns": [
+            {
+              "expression": "entityKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "DerivedRefreshCaptureInbox_entity_fk": {
+          "name": "DerivedRefreshCaptureInbox_entity_fk",
+          "tableFrom": "DerivedRefreshCaptureInbox",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {},

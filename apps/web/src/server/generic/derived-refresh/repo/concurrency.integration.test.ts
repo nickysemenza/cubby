@@ -20,7 +20,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { captureDerivedRefresh } from "./capture";
+import { captureDerivedRefresh, foldDerivedRefreshCaptures } from "./capture";
 import { assertInputRevision, currentInputRevision } from "./freshness";
 
 // Each barrier controls a real PostgreSQL interleaving; no timing assertions.
@@ -65,6 +65,7 @@ describe("derived refresh publication ownership", () => {
 
   it("rolls back prepared output when a newer source edit replaces ownership", async () => {
     const subject = await fixture();
+    await foldDerivedRefreshCaptures(ctx.db);
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const prepare = search.prepareSearchDocuments;
@@ -98,6 +99,7 @@ describe("derived refresh publication ownership", () => {
         .from(searchDocument)
         .where(eq(searchDocument.entityId, subject.entityId)),
     ).toEqual([]);
+    await foldDerivedRefreshCaptures(ctx.db);
     expect((await processDerivedRefreshPage(ctx.db)).processed).toBe(1);
     const [document] = await getDb(ctx.db)
       .select()
@@ -108,6 +110,7 @@ describe("derived refresh publication ownership", () => {
 
   it("cannot rewind a frontier after its lease expires and another page completes", async () => {
     const subject = await fixture();
+    await foldDerivedRefreshCaptures(ctx.db);
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const prepare = search.prepareSearchDocuments;
@@ -140,6 +143,7 @@ describe("derived refresh publication ownership", () => {
 
   it("yields publication contention without consuming the failure budget", async () => {
     const subject = await fixture();
+    await foldDerivedRefreshCaptures(ctx.db);
     await search.refreshSearchDocuments(ctx.db, [
       { entityKind: "product", entityId: subject.entityId },
     ]);

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { derivedRefreshWork } from "~/server/db/schema";
+import { derivedRefreshCaptureInbox } from "~/server/db/schema";
 import {
   createLocation,
   getLocationById,
@@ -112,11 +112,22 @@ describe("repository writes publish after their commit", () => {
         values.every((value) => value === "no"),
       ),
     ).toBe(true);
-    const work = await getDb(ctx.db)
-      .select({ entityId: derivedRefreshWork.entityId })
-      .from(derivedRefreshWork)
-      .where(inArray(derivedRefreshWork.entityId, ids));
-    expect(work.map((row) => row.entityId).sort()).toEqual([...ids].sort());
+    const captures = await getDb(ctx.db)
+      .select({
+        entityId: derivedRefreshCaptureInbox.entityId,
+        change: derivedRefreshCaptureInbox.change,
+      })
+      .from(derivedRefreshCaptureInbox)
+      .where(inArray(derivedRefreshCaptureInbox.entityId, ids));
+    expect(
+      [
+        ...new Set(
+          captures
+            .filter((row) => row.change.changedFields?.includes("verdict"))
+            .map((row) => row.entityId),
+        ),
+      ].sort(),
+    ).toEqual([...ids].sort());
   });
 
   it("clears a location's AI description with its last image before the vision refresh is published", async () => {

@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { searchDocument, derivedRefreshWork } from "~/server/db/schema";
+import { searchDocument, derivedRefreshCaptureInbox } from "~/server/db/schema";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   captureBackgroundQueue,
@@ -71,9 +71,10 @@ describe("image create paths project and enqueue embedding", () => {
     (
       await getDb(ctx.db)
         .select()
-        .from(derivedRefreshWork)
-        .where(eq(derivedRefreshWork.entityId, imageId))
-    ).length === 1;
+        .from(derivedRefreshCaptureInbox)
+        .where(eq(derivedRefreshCaptureInbox.entityId, imageId))
+        .limit(1)
+    ).length > 0;
 
   it("createPendingImageRecord", async () => {
     const row = await createPendingImageRecord(ctx.db, {

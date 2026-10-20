@@ -81,6 +81,8 @@ const NON_ENTITY_FK_TARGETS = {
   BackgroundBatch: "operational bookkeeping, not a domain entity",
   AuditLog: "immutable row-change evidence retained by derived refresh work",
   DerivedRefreshWork: "a resumable derived-data wave, not a domain entity",
+  DerivedRefreshCaptureInbox:
+    "immutable save evidence awaiting background folding",
   // Better-Auth / OAuth-provider tables (auth.schema.ts) — infrastructure for
   // sign-in and MCP OAuth 2.1, not app-domain entities. Referenced (directly
   // or transitively) by AuditLog.userId and the oauth_* tables' own edges.

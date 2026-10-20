@@ -120,3 +120,17 @@ CREATE INDEX "EntityEmbedding_recovery_idx" ON "EntityEmbedding" USING btree ("a
 CREATE UNIQUE INDEX "Run_one_active_derived_refresh" ON "Run" USING btree ("purpose") WHERE "Run"."purpose" = 'derived_refresh' AND "Run"."status" IN ('running', 'paused_auth', 'paused');--> statement-breakpoint
 ALTER TABLE "EntitySource" ADD CONSTRAINT "EntitySource_field_fingerprint_check" CHECK ("EntitySource"."fieldPath" IS NOT NULL OR "EntitySource"."valueFingerprint" IS NULL);--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_purpose_check" CHECK ("Run"."purpose" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'suggestion_sweep', 'ai_refresh', 'background', 'file_import', 'mail_search', 'mail_discovery', 'mail_reclassify', 'maintenance', 'derived_refresh', 'sweep'));
+--> statement-breakpoint
+CREATE TABLE "DerivedRefreshCaptureInbox" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"entityId" uuid NOT NULL,
+	"entityKind" text NOT NULL,
+	"change" jsonb NOT NULL,
+	"inputFingerprint" text NOT NULL,
+	"force" boolean DEFAULT true NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "DerivedRefreshCaptureInbox" ADD CONSTRAINT "DerivedRefreshCaptureInbox_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "DerivedRefreshCaptureInbox_order_idx" ON "DerivedRefreshCaptureInbox" USING btree ("createdAt","id");--> statement-breakpoint
+CREATE INDEX "DerivedRefreshCaptureInbox_kind_idx" ON "DerivedRefreshCaptureInbox" USING btree ("entityKind");

@@ -1932,8 +1932,14 @@ field inputs directly.
 Each page has a single-use lease and acknowledges its exact Work version and
 owner token. Expensive preparation and provider calls happen outside the
 transaction. Short output transactions validate the captured input revision,
-then update frontier metadata. Authoritative capture takes its metadata locks
-only after business writes. Lock contention reschedules without spending the
+then update frontier metadata. Authoritative saves advance input revisions and
+append immutable roots, field deltas and known old/new endpoints to
+`DerivedRefreshCaptureInbox` after business writes. They never read or update
+worker-owned Work/Scope progress. A bounded background transaction folds a
+locked inbox page into Work/Scope and deletes exactly those captures atomically;
+rollback retains the captures. Folding does not advance input revisions again.
+Pending captures count as unmaterialized inputs until that fold commits, so
+search/discovery cannot mistake the interval before folding for freshness. Lock contention reschedules without spending the
 failure budget. Failures are bounded per phase and actual input fingerprint,
 survive transport retries and new Runs, and retain raw credential-scrubbed
 diagnostics for explicit retry in existing Run/maintenance surfaces. A derived
