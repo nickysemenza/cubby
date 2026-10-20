@@ -1,0 +1,49 @@
+apps/web/src/contracts/define.ts
+  s_359d51740d6cee::t_5187a993edf7e3 1-5,220-252
+apps/web/src/entity/display/compact-field-renderers.tsx
+  s_359d51740d6cee::t_d15cdcf81df181 1,15-16,40-44,88-95
+apps/web/src/entity/manifest-registries.unit.test.tsx
+  s_359d51740d6cee::t_5f3956aecdf897 97
+apps/web/src/server/domains/purchase-import/repo/run-service.integration.test.ts
+  s_359d51740d6cee::t_dc5dec60d83319 509-513,515-522
+apps/web/src/server/generic/entity-report/repo/email.ts
+  s_359d51740d6cee::t_da08bc88a7373e 30
+apps/web/src/server/generic/entity-report/repo/meal.ts
+  s_359d51740d6cee::t_316a848453a34c 16
+apps/web/src/server/generic/entity-report/repo/recipe-walkthrough.ts
+  s_359d51740d6cee::t_c021ace24a02ab 4
+apps/web/src/server/generic/entity-report/repo/records.ts
+  s_359d51740d6cee::t_4466c8acf668d8 24
+apps/web/src/server/generic/entity-report/repo/run.ts
+  s_359d51740d6cee::t_edbc3d6b6237e5 21
+apps/web/src/ui/feedback/error-details.tsx
+  s_359d51740d6cee::t_2c80f08d5cdf81 151
+apps/web/tests/e2e/gmail.input-first-import.spec.ts
+  s_359d51740d6cee::t_0d62413185a846 489-496
+apps/web/tests/e2e/gmail.input-first-settlement.spec.ts
+  s_359d51740d6cee::t_5f05746ffd4b2c 223-230,232
+apps/web/tests/e2e/section-navigation.spec.ts
+  s_359d51740d6cee::t_fdc3fa13244f9e 65,67-72,74
+apps/web/tests/e2e/shelf-triage.spec.ts
+  s_359d51740d6cee::t_4a72bf3403bb66 52
+docs/entities.md
+  s_359d51740d6cee::t_63e640972ca881 2221-2222
+packages/schemas/src/common.ts
+  s_359d51740d6cee::t_232a3a0f5d83a7 4-5,84-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "df013bf309df0d83ff3f1eaf47c49b6cf2d0233d",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
