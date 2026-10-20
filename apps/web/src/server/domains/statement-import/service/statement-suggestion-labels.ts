@@ -154,6 +154,11 @@ async function labelledJudgment(
     kind: previous?.kind ?? false,
     counterparty: previous?.counterparty ?? false,
   };
+  const countLabels = () =>
+    judgment.candidates.filter((entry) => entry.label !== null).length +
+    Number(checkpoint.kind) +
+    Number(checkpoint.counterparty);
+  const reused = countLabels();
   const errors: unknown[] = [];
   let waitingUntil: number | null = null;
   const retainError = (error: unknown) => {
@@ -225,6 +230,7 @@ async function labelledJudgment(
   checkpoint.judgment = statementTransactionJudgment.parse(judgment);
   return {
     checkpoint,
+    labels: { reused, generated: Math.max(0, countLabels() - reused) },
     model,
     errors,
     waitingUntil,
@@ -260,6 +266,7 @@ export async function labelStatementSuggestions(
   } = {},
 ): Promise<{
   labelled: number;
+  labels: { reused: number; generated: number };
   /** Suggestions whose evidence moved since publication; regeneration relabels them. */
   stale: number;
   failed: RunStepError[];
@@ -271,6 +278,7 @@ export async function labelStatementSuggestions(
 }> {
   const empty = {
     labelled: 0,
+    labels: { reused: 0, generated: 0 },
     stale: 0,
     failed: [],
     next: null,
@@ -333,6 +341,7 @@ export async function labelStatementSuggestions(
   let stale = 0;
   const skipped = new Set<string>();
   const labelled = new Set<string>();
+  const labels = { reused: 0, generated: 0 };
   const pauses: AiBudgetExhaustedError[] = [];
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
     const proposals = await buildPage(
@@ -383,6 +392,8 @@ export async function labelStatementSuggestions(
         const result = await (input.cooperative
           ? withCooperativeAiWork(compute)
           : compute());
+        labels.reused += result.labels.reused;
+        labels.generated += result.labels.generated;
         target.row.checkpoint = result.checkpoint;
         const saved = await recordStatementLabelCheckpoint(db, {
           charge: current.charge,
@@ -437,7 +448,7 @@ export async function labelStatementSuggestions(
           await labelledProposal(current, result.checkpoint.judgment),
           producer(result.model),
         );
-        if (outcome !== "published") continue;
+        if (outcome.outcome !== "published") continue;
         labelled.add(chargeId(current.charge));
         published.set(chargeId(current.charge), current.evidenceFingerprint);
       } catch (error) {
@@ -493,6 +504,7 @@ export async function labelStatementSuggestions(
   const last = page.at(-1);
   return {
     labelled: labelled.size,
+    labels,
     stale,
     failed,
     next:

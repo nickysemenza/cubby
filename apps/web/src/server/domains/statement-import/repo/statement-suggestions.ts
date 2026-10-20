@@ -1178,8 +1178,15 @@ export async function publishChargeProposal(
   db: Database,
   proposal: ChargeProposal,
   producer: AssessmentProducer,
-): Promise<PublishOutcome> {
+): Promise<{ outcome: PublishOutcome; labelsReused: number }> {
   const { charge } = proposal;
+  const ruleGeneration = producer.kind === "rule";
+  const countLabels = (value: typeof proposal.judgment) =>
+    value.candidates.filter((entry) => entry.label !== null).length +
+    (value.create
+      ? Number(value.create.votes.label !== null) +
+        Number(value.create.counterparty.label !== null)
+      : 0);
   return withTransactionDatabase(db, async (tx) => {
     const client = getDb(tx);
     await client.execute(
@@ -1212,7 +1219,8 @@ export async function publishChargeProposal(
       producer: assessmentProducer.nullable().parse(row.producer),
       checkpoint: statementLabelCheckpoint.nullable().parse(row.checkpoint),
     }));
-    if (prior.some((row) => row.suppression !== null)) return "suppressed";
+    if (prior.some((row) => row.suppression !== null))
+      return { outcome: "suppressed", labelsReused: 0 };
     // A charge matched, ignored or superseded after it was listed (an accept or
     // an import-page attach in between) needs no suggestion; a ref inserted
     // before publication never reaches the retiring trigger. Holds are the
@@ -1224,24 +1232,33 @@ export async function publishChargeProposal(
         )} cs
         WHERE cs.ignored OR cs.superseded OR cs.shortcode IS NOT NULL
       `);
-      if (settled.length) return "settled";
+      if (settled.length) return { outcome: "settled", labelsReused: 0 };
     }
     // A rule re-run never displaces labels a model added to the same evidence.
-    if (
-      prior.some(
-        (row) =>
-          row.active &&
-          !(
-            producer.kind === "rule" &&
-            row.producer?.kind === "model" &&
-            row.producer.revision !== STATEMENT_LABEL_REVISION
-          ) &&
-          (row.fingerprint === proposal.fingerprint ||
-            (producer.kind === "rule" &&
-              row.evidenceFingerprint === proposal.evidenceFingerprint)),
-      )
-    )
-      return "unchanged";
+    const unchanged = prior.find(
+      (row) =>
+        row.active &&
+        !(
+          producer.kind === "rule" &&
+          row.producer?.kind === "model" &&
+          row.producer.revision !== STATEMENT_LABEL_REVISION
+        ) &&
+        (row.fingerprint === proposal.fingerprint ||
+          (producer.kind === "rule" &&
+            row.evidenceFingerprint === proposal.evidenceFingerprint)),
+    );
+    if (unchanged)
+      return {
+        outcome: "unchanged",
+        labelsReused:
+          ruleGeneration && unchanged.producer?.kind === "model"
+            ? countLabels(
+                assessmentJudgments.statement_transaction.parse(
+                  unchanged.judgment,
+                ),
+              )
+            : 0,
+      };
     if (producer.kind === "rule" && proposal.judgment.create) {
       // Retain the paid votes, not their old rule/history conclusions. Evidence
       // still gets a fresh fingerprint and current apply-time validation.
@@ -1376,7 +1393,11 @@ export async function publishChargeProposal(
           )
           .then(() => undefined),
       );
-    return "published";
+    return {
+      outcome: "published",
+      labelsReused:
+        ruleGeneration && producer.kind === "model" ? countLabels(judgment) : 0,
+    };
   });
 }
 
@@ -1408,6 +1429,8 @@ export async function generateStatementSuggestionPage(
   },
 ): Promise<{
   published: number;
+  processed: number;
+  labelsReused: number;
   unchanged: number;
   /** Charges read but resolved to an account outside the scope. */
   outOfScope: number;
@@ -1420,6 +1443,7 @@ export async function generateStatementSuggestionPage(
     scope: input.scope ?? {},
   });
   let published = 0;
+  let labelsReused = 0;
   let unchanged = 0;
   const accountIds = input.scope?.accountIds;
   const built = await buildChargeProposals(db, charges);
@@ -1443,12 +1467,15 @@ export async function generateStatementSuggestionPage(
         proposal,
         ruleProducer(input.runId),
       );
-      if (outcome === "published") published++;
+      labelsReused += outcome.labelsReused;
+      if (outcome.outcome === "published") published++;
       else unchanged++;
     },
   );
   return {
     published,
+    processed: charges.length,
+    labelsReused,
     unchanged,
     outOfScope,
     next: charges.length === limit ? charges.at(-1)! : null,

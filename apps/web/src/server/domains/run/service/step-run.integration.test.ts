@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { run, runOperation } from "~/server/db/schema";
+import { run, runOperation, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
@@ -20,6 +20,7 @@ import {
 import { readRunSteps } from "../repo/run-step";
 import {
   advanceStepRun,
+  inspectStepRun,
   recoverStepRuns,
   retryRunStep,
   type StepDriver,
@@ -85,6 +86,85 @@ describe("step-ledger Runs", () => {
 
   const readRun = async (id: RunId) =>
     (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0];
+
+  // Scope is the durable ledger position, not private charge keys or a new
+  // live count. Old generation work must survive a later phase-sampling deploy.
+  it("describes resumed Sweep pages without executing work or exposing source cursors", async () => {
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "sweep",
+      trigger: "manual",
+      status: "running",
+      input: {
+        kind: "sweep",
+        families: [{ family: "statement_transaction", scope: {} }],
+      },
+    });
+    const launched = await launchWorkflowRun(
+      ctx.db,
+      { runId: id, purpose: "sweep" },
+      launcher,
+    );
+    const params = { runId: id, attempt: launched.attempt };
+    await inspectStepRun(ctx.db, params);
+    await getDb(ctx.db)
+      .update(runStep)
+      .set({
+        pages: 3,
+        done: 60,
+        found: 200,
+        cursor: {
+          phase: "generate",
+          after: {
+            source: "synthetic-private-source",
+            chargeKey: "synthetic-private-key",
+          },
+        },
+      })
+      .where(eq(runStep.runId, id));
+    const plan = await inspectStepRun(ctx.db, params);
+    expect(plan).toMatchObject({
+      name: "generate p4 · charges 61–80",
+      summary: { cumulative: { processed: 60, total: 200 } },
+    });
+    expect(JSON.stringify(plan)).not.toContain("synthetic-private");
+    const owner = (await readRun(id))!;
+    expect(plan?.nextInstanceId).toBe(
+      `${owner.shortcode}-${params.attempt + 1}`,
+    );
+    await getDb(ctx.db)
+      .update(runStep)
+      .set({ cursor: { phase: "label", after: null } })
+      .where(eq(runStep.runId, id));
+    expect(await inspectStepRun(ctx.db, params)).toMatchObject({
+      name: "label p4 · suggestions 1–10",
+    });
+    // Generation's denominator must not be presented as a label phase total.
+    await getDb(ctx.db)
+      .update(runStep)
+      .set({
+        meta: {
+          work: {
+            completed: [],
+            current: {
+              phase: "statement_label",
+              label: "Labelling suggestions",
+              unit: "suggestions",
+              processed: 2,
+              total: null,
+              failures: 0,
+              sampledAt: new Date().toISOString(),
+              ratePerSecond: null,
+              finished: false,
+            },
+          },
+        },
+      })
+      .where(eq(runStep.runId, id));
+    expect(
+      (await getRunLiveProgress(ctx.db, owner.shortcode, launcher))
+        ?.workProgress?.current,
+    ).toMatchObject({ processed: 2, total: null });
+  });
 
   // A changed outcome is another receipt for the same target, not another processed item.
   it("counts a target once after its outcome changes", async () => {
@@ -307,7 +387,54 @@ describe("step-ledger Runs", () => {
         done: false,
       },
     ]);
-    await advanceStepRun(ctx.db, params, async () => [pages.driver], launcher);
+    const advance = await advanceStepRun(
+      ctx.db,
+      params,
+      async () => [pages.driver],
+      launcher,
+    );
+    expect(advance).toMatchObject({
+      summary: {
+        phase: "synthetic-items",
+        unit: "items",
+        pageProcessed: 5,
+        cumulative: { processed: 5, total: 10, failures: 1 },
+        labels: null,
+        cursor: { page: 2 },
+      },
+    });
+    // Runs already in flight may have phase samples only for work since a deploy.
+    // Read the pre-existing ledger counts; never rewrite the active checkpoint.
+    await getDb(ctx.db)
+      .update(runStep)
+      .set({
+        meta: {
+          work: {
+            current: {
+              phase: "synthetic-items",
+              label: "Synthetic synthetic-items",
+              unit: "items",
+              processed: 2,
+              total: null,
+              failures: 1,
+              sampledAt: new Date().toISOString(),
+              ratePerSecond: 1,
+              finished: false,
+            },
+            completed: [],
+          },
+        },
+      })
+      .where(eq(runStep.runId, id));
+    expect(
+      (
+        await getRunLiveProgress(
+          ctx.db,
+          (await readRun(id))!.shortcode,
+          launcher,
+        )
+      )?.workProgress?.current,
+    ).toMatchObject({ processed: 5, total: 10 });
     const owner = (await readRun(id))!;
     expect(
       await getRunLiveProgress(ctx.db, owner.shortcode, launcher),
@@ -580,6 +707,16 @@ describe("step-ledger Runs", () => {
     const next = scripted("next", [
       { kind: "progress", found: 1, delta: { done: 1 }, done: true },
     ]);
+    expect(
+      await advanceStepRun(
+        ctx.db,
+        params,
+        async () => [broken.driver, next.driver],
+        launcher,
+      ),
+    ).toMatchObject({
+      summary: { phase: "broken", pageProcessed: 0, pageFailures: 1 },
+    });
     await drive(params, async () => [broken.driver, next.driver]);
     const steps = await readRunSteps(ctx.db, id);
     expect(steps.map((step) => step.state)).toEqual(["failed", "done"]);

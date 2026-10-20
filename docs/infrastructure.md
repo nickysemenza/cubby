@@ -58,6 +58,31 @@ persisted progress without depending on provider retention. Instance diagnostics
 expire independently of Run history. The Run's Cloudflare dashboard link requires
 provider sign-in and can outlive the instance.
 
+Deployment configuration, dispatch and Run dashboard links use the shared
+Workflow declarations in `lib/workflows/run-workflows.ts`; a purpose
+selects its binding there, including every purpose sharing the step runtime.
+
+The step runtime memoizes a checkpoint inspection before naming each page.
+Names show its declared phase and scope, for example `generate p4 · charges
+61–80 · statement_transaction`; the range is a planned bound, not a promise that
+the last page is full. The ledger step key keeps identical phase/page labels
+from different steps from sharing a replay result.
+Only persisted checkpoint counts and declaration constants enter names, because
+[step names are replay cache keys](https://developers.cloudflare.com/workflows/build/rules-of-workflows/).
+Inspection adds two reads per page (and initializes a missing ledger once),
+never a live candidate count or a model call. Page outputs retain phase, unit,
+page processed count, cumulative phase processed/total/failures across instances,
+and supported reused/new label counts. The cursor is a RunStep id and checkpoint
+ordinal: private driver cursors remain in PostgreSQL. No observations, descriptors,
+model prompts or label values are copied into dashboard outputs.
+Deployment guards report pinned/current version ids and their handoff reason;
+handoffs report queue acceptance, the requested successor id and the last
+committed counts. Queue acceptance does not prove the successor has launched.
+Outputs stay constant-sized, far below the non-stream
+[step result limit](https://developers.cloudflare.com/workflows/reference/limits/).
+Pinned instances retain their old code and step names until their normal
+handoff. No Run checkpoint migration or restart is required.
+
 Step-ledger Runs hand off after bounded committed pages; the subrequest cap
 belongs to the Workflow instance, so a new `step.do` alone does not reset it
 ([Cloudflare limits](https://developers.cloudflare.com/workflows/reference/limits/)).

@@ -477,6 +477,26 @@
     background: var(--brand-paper-alt);
   }
 
+  @keyframes progress-travel {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+
+  .progress-indeterminate {
+    animation: progress-travel 1.5s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-indeterminate {
+      animation: none;
+      transform: translateX(100%);
+    }
+  }
+
   /*
     ---break---
     Field Guide surfaces
