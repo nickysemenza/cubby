@@ -1,0 +1,319 @@
+apps/web/generator/http-api/entity-kernel.ts
+  s_359d51740d6cee::t_d499db379162af 287
+apps/web/src/server/generic/entity-report/repo/records.ts
+  s_359d51740d6cee::t_161df59843809b 24-25,229,232
+apps/web/generator/entities/render/relations.ts
+  s_359d51740d6cee::t_30ab1ee6ad6658 19,49,115,117,121,123,127,130,134,138,140,142,144-145,148,153,194
+apps/web/src/entity/entity-detail/mail-report-commands.unit.test.tsx
+  s_359d51740d6cee::t_b6f566b04b75f4 22-24,74-76
+apps/web/src/entity/entity-list/generic-entity-list.unit.test.tsx
+  s_359d51740d6cee::t_c1e9f768293821 197-204
+apps/web/src/contracts/entity-graph.contract.ts
+  s_359d51740d6cee::t_9a3987481a8da0 100
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/ClientQueryTests.swift
+  s_359d51740d6cee::t_e891a68f368977 92-153
+apps/web/tests/e2e/dnd-interactions.spec.ts
+  s_359d51740d6cee::t_24ea0a85123bff 14,25,28
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportCommandForm.swift
+  s_359d51740d6cee::t_f4cd55e391cc05 120-182
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_359d51740d6cee::t_9622de85a3c352 131,502,542-546
+apps/web/src/contracts/product.contract.ts
+  s_359d51740d6cee::t_212b83127ca870 199-204
+apps/apple/CubbyKit/Sources/CubbyKit/Manifest/EntityKernel.swift
+  s_359d51740d6cee::t_d0011f1cef65da 162-178
+apps/web/src/features/project/dashboard-filter-state.ts
+  s_359d51740d6cee::t_593269895473ad 198-199
+apps/web/src/server/db/helpers/crud.ts
+  s_359d51740d6cee::t_f343a14968ec8d 526,529,562,568,584-585
+apps/web/src/contracts/problems.contract.ts
+  s_359d51740d6cee::t_1fb8baf861cfb5 111
+apps/web/src/server/generic/entity-report/repo/index.ts
+  s_359d51740d6cee::t_cf3f807f11667f 246,258-263,266,296-298,303
+apps/web/src/features/project/projects-dashboard.tsx
+  s_359d51740d6cee::t_16696ba3c03bbf 37,240-243
+apps/web/src/features/home/house-card.tsx
+  s_359d51740d6cee::t_a26840a619692d 4-5,10-27,29
+apps/apple/App/Shared/Capture/CaptureModel.swift
+  s_359d51740d6cee::t_83ca7f4542c341 108-110
+packages/schemas/src/inventory.ts
+  s_359d51740d6cee::t_e32f28c7b181ea 64
+packages/schemas/package.json
+  s_359d51740d6cee::t_d10af9aacacf57 25
+apps/web/generator/entities/compile.ts
+  s_359d51740d6cee::t_f2a1e69551291c 2320-2332,2379,3020-3050
+apps/web/src/contracts/ai.contract.ts
+  s_359d51740d6cee::t_243819d6cd796e 188,195
+apps/web/src/server/generic/entity-report/repo/email.ts
+  s_359d51740d6cee::t_f71f32fcb20ab2 30-31,667-677,728-732,827-831,917-923,1218-1222,1403-1407
+apps/web/src/server/generic/entity-report/repo/recipe.integration.test.ts
+  s_359d51740d6cee::t_2d5591f3a25324 72,148-151,165-167,236-239,285-288
+apps/apple/CubbyKit/Tests/CubbyKitTests/Report/ReportSlotModelTests.swift
+  s_359d51740d6cee::t_48dce4358a75e3 31,60-85,169,174,180,186,194,200,209,218,223,229,240,246,277,284,293,310,334,395,413,432,435,462,484,506,510-528,534,546,550,561
+apps/web/src/features/home/house-card-project-icon.unit.test.tsx
+  s_359d51740d6cee::t_4f21447231cf3b 1,3,7-8,29-57,59,77-79
+apps/web/src/server/db/read-policy.unit.test.ts
+  s_359d51740d6cee::t_e1643c859c479f 34
+packages/schemas/src/workflow-command.ts
+  s_359d51740d6cee::t_a075d5ab486c16 1,3-35,37-53,55-63,65-82,84-91
+apps/apple/DESIGN.md
+  s_359d51740d6cee::t_e6f0b986a40c8e 64,66
+apps/web/src/entity/entity-detail/entity-relation-table.tsx
+  s_359d51740d6cee::t_c17f4d82db71c4 709-711
+apps/web/src/server/domains/project/repo/portfolio-analytics.ts
+  s_359d51740d6cee::t_f1e6932f517971 28,61,78-81
+apps/web/src/server/generic/entity-report/repo/run-steps.unit.test.ts
+  s_359d51740d6cee::t_b9ff7afd063528 75-77
+apps/web/src/entity/entity-list-ssr.ts
+  s_359d51740d6cee::t_842ac40d78f7e8 42
+apps/web/src/integrations/tanstack-query/operation-overrides.ts
+  s_359d51740d6cee::t_0b791cb32d8bb5 155
+apps/web/src/features/location/arrange/use-arrange-mutations.ts
+  s_359d51740d6cee::t_831f81840520b9 7,11,36-38,42-43,52,54,94-100
+apps/web/src/server/generic/entity-report/repo/cookbook.integration.test.ts
+  s_359d51740d6cee::t_ba5731a8ea5a16 73-76,142-145
+apps/web/src/entity/suggestions/queue/sweep-status.tsx
+  s_359d51740d6cee::t_855548b9821896 44-47
+apps/web/src/features/location/bulk-reparent-locations-dialog.tsx
+  s_359d51740d6cee::t_28bb3b66a709aa 16,60-65,83-85,87,129
+packages/schemas/src/entity-report.ts
+  s_359d51740d6cee::t_b21e9f5d93c145 2,9,11-13,24,96,233,235,255,406-412
+apps/web/src/server/generic/entity-report/repo/run.integration.test.ts
+  s_359d51740d6cee::t_283d024c200ac3 67,78,82,92,123-126,204,225-230,306-309,312,346,349-352,358-361
+apps/web/src/server/generic/entity-report/repo/recipe-walkthrough.ts
+  s_359d51740d6cee::t_6c73c0235a62be 4-5,35-38
+apps/web/src/server/domains/task/repo/crud.ts
+  s_359d51740d6cee::t_8a6a00ad0b7ead 5,21,23,78,749-763,816-892
+apps/apple/CubbyKit/Sources/CubbyKit/API/JSONRead.swift
+  s_359d51740d6cee::t_e1f4c31cccc73c 21-40
+apps/web/src/server/domains/product/repo/crud.ts
+  s_359d51740d6cee::t_10ed381fb44fd7 1,818-848
+apps/apple/CubbyKit/Tests/CubbyKitTests/PurchaseImport/RunSnapshotTests.swift
+  s_359d51740d6cee::t_edffce9dd1e745 65
+docs/entities.md
+  s_359d51740d6cee::t_6bc8b3ad4533b6 19-30,414-420,441-453,2545-2551
+apps/web/src/server/generic/entity-report/repo/collection.ts
+  s_359d51740d6cee::t_289a5ae6839909 1-8,11-13,15,17-27,29-54,56-60,62-162
+apps/web/tooling/checks/apple-preview-fixtures.ts
+  s_359d51740d6cee::t_debc372e275f70 39,176,490-501
+packages/schemas/src/project.ts
+  s_359d51740d6cee::t_63011e9e0ac4da 222-256
+packages/schemas/src/entity-definitions/definition.ts
+  s_359d51740d6cee::t_eeb6a0562df8ac 177-178,222,227,230,1206-1239,1241,2541-2547,2552
+apps/web/src/routes/index.tsx
+  s_359d51740d6cee::t_e4df05fbb33bee 16,21,55-60
+apps/apple/App/Tests/Previews/PreviewFixturesDecodingTests.swift
+  s_359d51740d6cee::t_bb62be5bf5acd3 20
+apps/web/src/contracts/run.contract.ts
+  s_359d51740d6cee::t_a6f195ae05d0b7 423-427,439
+apps/web/src/entity/entity-detail/connected-records-table.tsx
+  s_359d51740d6cee::t_f7322a0afc5189 290
+apps/web/src/features/expense/charts/trade-cost-aggregate.tsx
+  s_359d51740d6cee::t_b5087ab5076e02 22
+apps/web/src/server/generic/entity-report/repo/task.ts
+  s_359d51740d6cee::t_bc602259dd2111 1-52
+apps/web/generator/entities/render/index.ts
+  s_359d51740d6cee::t_64656c6745e1db 361,395
+apps/web/src/server/generic/entity-report/repo/finance-report.integration.test.ts
+  s_359d51740d6cee::t_e1a93dd7da0279 71-76
+apps/web/src/entity/entity-detail/relationship-movement.tsx
+  s_359d51740d6cee::t_cc3861979d53bc 4,6,8-9,18,84-113,115-120,123-126,129-149,151,153-155,157
+apps/web/generator/start-operations/collect.ts
+  s_359d51740d6cee::t_b0b67404ce53c3 38
+apps/apple/App/Shared/Report/RecordsBlockView.swift
+  s_359d51740d6cee::t_08baff0332a6c7 36-41,105,133,236,247
+apps/web/src/server/domains/task/repo/task-reorder.integration.test.ts
+  s_359d51740d6cee::t_cc09cd555a6ed2 1-3,6-7,9,11-54,56-71,73-89
+apps/apple/App/Shared/Entity/List/EntityBoardListView.swift
+  s_359d51740d6cee::t_4d6575236fa0fa 1-2,4-27,29-32,34-108,111-160,162-182,184-193,195-210
+apps/apple/CubbyKit/Tests/CubbyKitTests/Report/ReportPresentationTests.swift
+  s_359d51740d6cee::t_decd226ff3f064 12-16,18-39,42-47,49,138
+apps/web/generator/entities/declarations.ts
+  s_359d51740d6cee::t_eaf5d7a720e834 178-181,476
+apps/web/src/contracts/suggestions.contract.ts
+  s_359d51740d6cee::t_de361d9d89bee6 72,104
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_359d51740d6cee::t_3368a125113147 3175-3184
+apps/web/tests/e2e/quality-explanations.spec.ts
+  s_359d51740d6cee::t_4b6288b59bfa5f 603,606-607
+apps/web/src/server/generic/entity-report/repo/records.integration.test.ts
+  s_359d51740d6cee::t_9f3e3afa359544 76,114,173
+apps/web/src/server/domains/purchase/repo/purchase.integration.test.ts
+  s_359d51740d6cee::t_d73f85cc1f546c 59,183-188,203-208,212-217
+apps/apple/CubbyKit/Tests/CubbyKitTests/List/EntityBoardPlanTests.swift
+  s_359d51740d6cee::t_fa6c9677796059 6-16,18-36
+apps/web/src/server/ai/enrichment/location-vision.integration.test.ts
+  s_359d51740d6cee::t_2460190179bc69 81-84
+apps/web/src/server/generic/entity-report/repo/meal.integration.test.ts
+  s_359d51740d6cee::t_da1a96b4ff8de1 75,102-106,111-115,127-134,163-181,187-198,262-266
+apps/web/src/server/domains/task/repo/task-assignee.integration.test.ts
+  s_359d51740d6cee::t_526267fdfa7bc1 1
+apps/web/src/server/entity-kernel/repo/relation-mutation-adapter.ts
+  s_359d51740d6cee::t_e9137edfe62b4f 1-4,30-35,40-44,79-84,148-159
+apps/web/tests/e2e/shelf-triage.spec.ts
+  s_359d51740d6cee::t_edeca72e719ac4 93-154
+apps/web/src/contracts/mcp-tools.ts
+  s_359d51740d6cee::t_976dce07d4e98d 160
+apps/web/src/features/registry.tsx
+  s_359d51740d6cee::t_be8ce08deccb01 402
+apps/web/src/server/generic/entity-report/repo/meal.ts
+  s_359d51740d6cee::t_6435a3d35acfa4 16-17,162-163,165,172-174,215,220,305-328,335-344,389-409,427-432
+apps/apple/CubbyKit/Sources/CubbyKit/Manifest/EntityManifest.swift
+  s_359d51740d6cee::t_29a1ac63bf81ae 27,36
+packages/schemas/src/manifest-wire.ts
+  s_359d51740d6cee::t_9b0895f896650e 208-228,234
+packages/schemas/src/common.ts
+  s_359d51740d6cee::t_3add43f8a3d035 80-88
+apps/apple/App/Shared/Today/TodayView.swift
+  s_359d51740d6cee::t_201c1c79a3e79c 290,355,589,720
+apps/web/src/features/project/project-schedule.tsx
+  s_359d51740d6cee::t_4ae871e7691a03 332
+apps/web/src/contracts/meal.contract.ts
+  s_359d51740d6cee::t_f4e843261e0807 121,130,164-172,180-192,199,207,216,225,244
+apps/web/src/contracts/recipe.contract.ts
+  s_359d51740d6cee::t_1a346f221182eb 190,247,334
+apps/apple/CubbyKit/Sources/CubbyKit/Actions/HeroActionRunner.swift
+  s_359d51740d6cee::t_24825aaebad5cb 120-122,274-283
+apps/web/src/entity/entity-detail/report-slot.unit.test.tsx
+  s_359d51740d6cee::t_7463aa3a36686f 6-12,258-266,449,557-564
+apps/web/src/lib/http-api/openapi-document.unit.test.ts
+  s_359d51740d6cee::t_572522f1bb88fa 152
+apps/web/src/server/generic/entity-report/repo/email.integration.test.ts
+  s_359d51740d6cee::t_3ba8fdfca11e04 197,348-352,376-378,384-386
+apps/web/src/entity/entity-list/board/board-plan.unit.test.ts
+  s_359d51740d6cee::t_160faa65527735 3-7,9-44,46-70,72-104,106-107,109,111-116,118-127
+apps/apple/App/Shared/Entity/Detail/DetailSectionViews.swift
+  s_359d51740d6cee::t_73561b8e7171cc 1042,1086-1089,1103-1117,1120-1133,1150-1151,1153
+apps/web/src/server/domains/project/repo/project-tools.integration.test.ts
+  s_359d51740d6cee::t_153e8d38f84e06 72-73
+apps/web/src/features/project/project-portfolio-analytics-view.unit.test.tsx
+  s_359d51740d6cee::t_4f74cf3f8591f3 1,17-26
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_359d51740d6cee::t_6ac0a8df3ace1b 1,857-887
+apps/web/src/entity/entity-list/board/board-plan.ts
+  s_359d51740d6cee::t_f2c405bd4cc530 1-77
+apps/web/src/entity/actions/email-entity-actions.tsx
+  s_359d51740d6cee::t_5b0e96a77f0c69 34
+apps/web/src/server/domains/email/repo/email-purchase-links.integration.test.ts
+  s_359d51740d6cee::t_bff8e8dbb194a7 1158,1251,1840
+packages/schemas/src/entity-report-scope.ts
+  s_359d51740d6cee::t_3e31ca614d038b 1,3,5-19
+apps/web/src/entity/entity-detail/report-choices.tsx
+  s_359d51740d6cee::t_39cbee1d1613d3 22,290-292,308-333,358-361
+apps/web/src/entity/entity-detail/entity-relation-table.unit.test.tsx
+  s_359d51740d6cee::t_86d1c1b5d2741e 28,209-218,229-231,237,273-278,289,295
+packages/shared/src/apple-client-version.ts
+  s_359d51740d6cee::t_62fc43f3797daf 8
+apps/web/src/contracts/project.contract.ts
+  s_359d51740d6cee::t_b85b27da8aa030 112,159
+apps/web/src/features/product/product-bulk-add-to-inventory-dialog.tsx
+  s_359d51740d6cee::t_4277fad5d0d045 30,35-36,40,55-56,153-154,162-202,266-270,276-286,338
+apps/web/src/features/meal/meal-preparation/meal-portions-section.tsx
+  s_359d51740d6cee::t_0028b7384c40cf 36-39
+apps/web/src/entity/entity-detail/report-slot.tsx
+  s_359d51740d6cee::t_709c4192ec5540 49-80,433,451-455,507,574
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_359d51740d6cee::t_2c489c350e4d69 194-202,305-329,727-732,734-735,737-747,840-849,851-853
+apps/apple/CubbyKit/Sources/CubbyKit/List/EntityBoardPlan.swift
+  s_359d51740d6cee::t_032bddd81021e3 3-6,9-10,13-19,22-29,31,33,36-54
+apps/apple/CubbyKit/Sources/CubbyKit/Audit/AuditService.swift
+  s_359d51740d6cee::t_c18301deb545f2 36-38
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_359d51740d6cee::t_422381ddfc3be7 167,170-194,844,856
+apps/web/src/features/project/project-portfolio-analytics-view.tsx
+  s_359d51740d6cee::t_6790a351f20167 1,4,12,35,41-48,52
+apps/web/generator/http-api/swift-operations.ts
+  s_359d51740d6cee::t_6ca0c1f41d8892 2-3,346-437,446-447
+apps/web/generator/entities/render/swift-catalog.ts
+  s_359d51740d6cee::t_ec08b06d091254 1,449-459
+apps/web/src/entity/routing/list-page.tsx
+  s_359d51740d6cee::t_1dfcdc036f621a 116-120
+apps/web/src/server/domains/recipe/operations/recipe-line-reparse.integration.test.ts
+  s_359d51740d6cee::t_7dfeb6997aa406 67-70,94-96
+apps/web/src/server/domains/purchase/repo/purchase-payment-accounts.ts
+  s_359d51740d6cee::t_8035b9f7efaf52 63,78,290
+apps/web/src/entity/entity-detail/report-commands.tsx
+  s_359d51740d6cee::t_7674b19139776d 12-13,23,28,34,38,40-79,94-109,111,126,173-184,198,218-237,240-268,284,286-289
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_359d51740d6cee::t_bc6c816ba8c855 87-91,278-289
+apps/web/src/contracts/entity-report.contract.ts
+  s_359d51740d6cee::t_022e180e927935 16
+apps/apple/App/Shared/Today/TodayModel.swift
+  s_359d51740d6cee::t_5fad3a48f59105 16,152
+apps/apple/AGENTS.md
+  s_359d51740d6cee::t_ce95a7057aea43 74-77
+apps/web/src/entity/entity-detail/report-commands.unit.test.tsx
+  s_359d51740d6cee::t_5930d463a366c4 2,26-28,48-95
+docs/agents/generic-paths.md
+  s_359d51740d6cee::t_5b56bb314f3419 59-63
+apps/web/src/contracts/inventory.contract.ts
+  s_359d51740d6cee::t_c43adb0918b8c7 35,53-61,63-64,72,81,92,132,144
+apps/web/src/server/domains/email/repo/email.integration.test.ts
+  s_359d51740d6cee::t_c196e5e78517dd 658-662
+apps/web/src/features/location/arrange/arrange-types.unit.test.ts
+  s_359d51740d6cee::t_a46b9351161863 4,10
+apps/apple/App/Tests/Today/TodayModelTests.swift
+  s_359d51740d6cee::t_50490c7027738b 76,95-101,115,148,154,156-159
+apps/apple/App/Shared/Previews/PreviewFixtures.swift
+  s_359d51740d6cee::t_261c10660bb7b5 105-106
+apps/web/src/contracts/purchase.contract.ts
+  s_359d51740d6cee::t_129c325087483d 96,103,157,171
+apps/web/src/server/domains/project/repo/tools.ts
+  s_359d51740d6cee::t_4505bd54a4fb33 440,876
+apps/web/src/entity/entity-detail/records-ledger.tsx
+  s_359d51740d6cee::t_0246c5ea9a666b 142-151
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportPresentation.swift
+  s_359d51740d6cee::t_15c3d88fc4ad4b 254,477-479
+apps/web/src/server/domains/purchase/repo/purchase-products.ts
+  s_359d51740d6cee::t_c13ec73d78b9cb 41-44,46-50,210,239,259-264,278-282,307,341-345,364-369,383-387,401-502,746-747
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportSlotModel.swift
+  s_359d51740d6cee::t_e67b4bce1c8514 11,17,22,269,342-367
+apps/web/src/server/generic/entity-report/repo/run.ts
+  s_359d51740d6cee::t_365e94abd841e8 21-22,24,404-412,422-425,811,814,824,827,991,994
+apps/web/src/server/generic/entity-report/repo/run.unit.test.ts
+  s_359d51740d6cee::t_e1746c69560936 394-396,405-407,442-448,975-977,992-994
+apps/web/src/contracts/finance.contract.ts
+  s_359d51740d6cee::t_f08d4afa8ff297 86,96,109,132,157
+apps/web/src/server/generic/entity-report/repo/entity-report.integration.test.ts
+  s_359d51740d6cee::t_2fc52a2100ad9b 6,40-179,186,332,382,429-434,753-756
+apps/web/tests/e2e/product-clarity.spec.ts
+  s_359d51740d6cee::t_5a2daa72930aa8 401
+apps/web/src/contracts/define.ts
+  s_359d51740d6cee::t_f78a9de4711105 1,134-135
+apps/web/generator/start-operations/client-catalog.ts
+  s_359d51740d6cee::t_863208af2121f9 248-249,274-295
+apps/web/src/contracts/task.contract.ts
+  s_359d51740d6cee::t_776a80541a333b 26
+apps/apple/App/Shared/Entity/List/SpecialistListViews.swift
+  s_359d51740d6cee::t_8443028f84fa4f 314
+apps/web/src/server/http/http-api.unit.test.ts
+  s_359d51740d6cee::t_9461b66d9b2b9b 347-348,350-351,353-355,360-361
+apps/web/src/entity/entity-list/board/entity-board.tsx
+  s_359d51740d6cee::t_25c6424457e7d6 1-6,9-11,13-15,17-21,23-25,27-29,31-38,40-43,45-52,54-61,63-64,66-78,81-95,97-160,163-168,176-197,199-200,202-215,217-231,233-243,246-260,263-305,307-328,330-426,429-522,526-590
+apps/apple/App/Shared/Report/ReportSlotView.swift
+  s_359d51740d6cee::t_f03e32397a5c2f 110
+apps/web/src/contracts/workflow-command.ts
+  s_359d51740d6cee::t_e89bc4d917c77f 1-3,5,7-15,17-37
+apps/web/src/server/domains/product/repo/product-components.ts
+  s_359d51740d6cee::t_dca4b2d3ff7c6b 259,765
+apps/web/src/server/domains/purchase/repo/purchase-products.integration.test.ts
+  s_359d51740d6cee::t_0455f3a0f8d0c3 20,30,36,43-44,106-110,173,197-241,313-325
+apps/web/src/contracts/purchase-import.contract.ts
+  s_359d51740d6cee::t_b4bf8525eff95b 60,94,101-105,113,122-126,133-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cb1a882dd565502b23e42d7350ef6c296e793ff8",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
