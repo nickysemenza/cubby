@@ -172,6 +172,9 @@ export async function guardAiEvaluation(
   id: string,
   token: string,
 ) {
+  await (
+    await import("~/server/workflows/runs/execution")
+  ).assertWorkflowEffect(tx);
   const [read] = await getDb(tx)
     .select()
     .from(aiEvaluation)

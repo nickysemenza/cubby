@@ -89,15 +89,27 @@ belongs to the Workflow instance, so a new `step.do` alone does not reset it
 Statement Sweeps also bound generation and label page sizes. The driver owns
 those executable bounds; continuation retains the RunStep cursors and the
 attempt/cancellation fences instead of starting generation over.
-The shared `WORKFLOW_EXECUTION_LIMITS` policy configures the Worker's one-million
-subrequest allowance, label page size (512 suggestions / 1,024 new questions),
-three page attempts, and the instance page bound. Each model-heavy page spends 1/16 of an instance allowance; a database-only
-generation page spends 1/100. The generic runner sums those shares across phase
-changes, with a separate 500-page hard ceiling; changing phase cannot replenish
-the allowance.
-Generation still commits 20 charges per page. A charge reserves its missing
-decisions before model work yields, so a small question budget finishes earlier
-charges instead of scattering partial labels. Candidates are never truncated.
+The shared `WORKFLOW_EXECUTION_LIMITS` policy configures a four-million
+subrequest allowance, 512 suggestions / 1,024 new questions per model page,
+three batch attempts and a 500-page hard ceiling. Model pages spend 1/65 and
+database-only pages 1/400 of one shared allowance across all phases. Generation
+that also speculates on model answers spends the model share. Unknown drivers
+and child waits use the conservative fallback share; changing phase does not
+replenish the allowance. There is no elapsed-time rollover.
+
+Statement generation commits at most 512 charges per page. It overlaps the next
+generation page with bounded computation for already generated suggestions.
+Speculation reads the generation's published judgment and retains per-question
+answers and evidence identities in existing checkpoints; it neither publishes conclusions nor applies rules. Its admission
+window is bounded by question count, encoded evidence bytes and preparation time.
+The generation write lane settles before speculative checkpoints publish. After
+all generation and separately paged vanished-hold checks, labels consume those
+answers in the original `(createdAt, id)` order, rebuilding fresh evidence before
+publication and discarding incompatible answers.
+Transfer discovery finishes before statement work. Its raw seed/pair cursor
+retains complete competitor pools and resumes oversized fanout; retirement starts
+only after discovery coverage and freshly verifies bounded stored-identity pages.
+A charge reserves missing decisions before inference; candidates are never truncated.
 
 Both labelers submit a whole page's independent questions to the shared decision
 runner. Statement identity, kind and counterparty answers use their original
@@ -125,18 +137,22 @@ Checkpoint/publication time can consume part of that interval before `step.sleep
 Transfer-pair Workflow pages also return a durable wake time and resume before
 the earliest deferred pair, retaining completed publications; a null cursor
 with a wake time means retry from the start, never completion.
-Interactive callers retain their waiting behavior. Pages retain their 15-minute
-timeout. An instance requests handoff after ten minutes elapsed, checked after
-committed pages; unmeasured drivers and waiting parents retain five-page bounds.
-Statement label-round logs retain charge and planned decision counts, including
-candidate fanout. These are logical workload counts, not measured subrequests.
+Interactive callers retain their waiting behavior. Pages retain a 15-minute
+platform timeout; decision requests retain their 30-second deadline. Temporary
+item failures retain completed answers/effects, persist a bounded retry deadline,
+and retry the input checkpoint before advancing. Exhausted items remain visible
+and skipped identities are deduplicated within that bounded retry batch,
+while independent work continues. Cancellation is final. Model publication saves
+an application-pending receipt atomically; dependent application or statement
+refresh clears it only after completion, so a crash cannot silently drop that stage.
+Statement label-round logs retain logical charge and question counts.
 
 The static application-path allowance assumes **no batching savings**:
-`16 model pages × 1,024 questions × 3 attempts × 16 transport operations = 786,432`,
-leaving over 200,000 operations for database-only generation, bookkeeping,
-successor dispatch and recovery. Mixed phases can end after the page crossing
-the summed allowance; they still cannot exceed sixteen model-heavy pages or
-one hundred database-only pages.
+`65 model pages × 1,024 questions × 3 attempts × 16 transport operations = 3,194,880`,
+leaving over 800,000 operations for bookkeeping, continuation and
+recovery. The runner sums phase shares; database-only work permits at most 400
+pages before continuation. The separate 500-page ceiling still applies.
+
 Sixteen allows three cache claims, three invalidations, two lease renewals during
 the 30-second decision deadline, three provider attempts with DO/upstream
 transport, publication/release and telemetry. Repeated invalid-cache replacement
@@ -151,7 +167,7 @@ The egress DO forwards each admitted model call in one request/response round
 trip and owns completion/permit release. Rejection does not poll inside a
 Workflow page or increase RPC ancestry. Cloudflare defaults to 10,000
 subrequests per instance and permits configuration up to ten million; Cubby
-configures one million. The separate step-count ceiling remains 10,000 by
+configures four million. The separate step-count ceiling remains 10,000 by
 default. Page wall time is unlimited by the platform, while active CPU is
 bounded independently ([Workflow limits](https://developers.cloudflare.com/workflows/reference/limits/)).
 The real-DO regression verifies 180 admitted starts in a rolling minute with
@@ -202,8 +218,7 @@ Queue dispatch removes that dependency without relying on a failed retry.
 Queue acceptance is the dispatch boundary. A lost delivery uses the existing
 30-minute quiet-Run reconciliation and cron/app-open recovery; a delivery later
 than that grace can be diagnosed as an ended attempt and consume the bounded
-infrastructure-recovery allowance. The elapsed fence includes the instance's
-platform queue age, conservatively shortening work after a delayed start.
+infrastructure-recovery allowance.
 A rollback is a
 version change too. Version checks are durable steps: replay reuses each recorded
 decision instead of moving the handoff backwards over already-completed work.

@@ -13,12 +13,13 @@ import {
   type DurableSteps,
 } from "~/server/workflows/runs/step";
 
+import { isWorkflowInterrupted } from "./runs/execution";
+
 const log = createLogger("step-run-workflow");
 
 /** Effects whose invocation/database ownership stays with the Cloudflare adapter. */
 export interface StepRunWork {
   inspect(): Promise<StepPagePlan | null>;
-  elapsedMs?(): number;
   advance(): Promise<StepAdvance>;
   boundary(
     name: string,
@@ -49,7 +50,7 @@ export async function runStepRunWorkflow(
       );
       if (!plan) return;
       // Different ledger steps can share a phase and page ordinal.
-      const name = `${plan.name} · ${plan.scope}`;
+      const name = `${plan.name} · ${plan.scope} · iteration ${page + 1}`;
       dashboard = {
         nextInstanceId: plan.nextInstanceId,
         summary: plan.summary,
@@ -73,25 +74,24 @@ export async function runStepRunWorkflow(
         advance.kind === "continue" ? advance.execution : undefined;
       // Static page costs share one allowance across phases. Database-only
       // pages consume a smaller share than a page of independent model calls.
+      const pageBound =
+        execution?.pagesPerInstance ??
+        WORKFLOW_EXECUTION_LIMITS.fallbackPagesPerInstance;
       pageAllowanceUsed +=
         1 /
-        (execution?.pagesPerInstance ??
-          WORKFLOW_EXECUTION_LIMITS.fallbackPagesPerInstance);
-      if (advance.kind === "continue" && advance.waitSeconds)
+        (advance.kind === "wait" || advance.waitSeconds
+          ? Math.min(
+              pageBound,
+              WORKFLOW_EXECUTION_LIMITS.fallbackPagesPerInstance,
+            )
+          : pageBound);
+      if (advance.kind === "continue" && advance.waitSeconds) {
         await steps.sleep(`capacity:${page}`, advance.waitSeconds * 1_000);
-      const elapsed = await steps.do(
-        `instance budget · ${name}`,
-        BOOKKEEPING_RETRIES,
-        async () => ({
-          handoffDue:
-            (work.elapsedMs?.() ?? 0) >= WORKFLOW_EXECUTION_LIMITS.elapsedMs,
-          budgetMinutes: WORKFLOW_EXECUTION_LIMITS.elapsedMs / 60_000,
-        }),
-      );
+      }
       if (
-        elapsed.handoffDue ||
         // Tolerate accumulated floating-point error at an exact page bound.
-        pageAllowanceUsed >= 1 - Number.EPSILON * MAX_STEP_RUN_INSTANCE_PAGES
+        pageAllowanceUsed >=
+        1 - Number.EPSILON * MAX_STEP_RUN_INSTANCE_PAGES
       ) {
         await work.boundary("continue", true, dashboard);
         return;
@@ -105,6 +105,7 @@ export async function runStepRunWorkflow(
     }
     await work.boundary("continue", true, dashboard);
   } catch (error) {
+    if (isWorkflowInterrupted(error)) return;
     let message = runFailureText(
       error instanceof Error ? error : String(error),
     );

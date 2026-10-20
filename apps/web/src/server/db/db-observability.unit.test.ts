@@ -37,6 +37,19 @@ describe("database operation metrics", () => {
     });
   });
 
+  it("reports quiescence only after every outstanding database operation settles", async () => {
+    await withDatabaseOperationMetrics(async (metrics) => {
+      expect(metrics.isIdle()).toBe(true);
+      const query = beginDatabaseQuery();
+      const acquire = beginDatabaseAcquire();
+      expect(metrics.isIdle()).toBe(false);
+      query();
+      expect(metrics.isIdle()).toBe(false);
+      acquire();
+      expect(metrics.isIdle()).toBe(true);
+    });
+  });
+
   it("distinguishes summed work from overlapping active wall time", async () => {
     await withDatabaseOperationMetrics(async (metrics) => {
       const finishQueryA = beginDatabaseQuery(10);

@@ -48,6 +48,19 @@ export const runStepErrors = z.array(runStepError).max(RUN_STEP_ERROR_SAMPLE);
  * details (a phase split, a budget note) shown beside the step.
  */
 export const runStepMeta = z.object({
+  capacityUntil: z.iso.datetime().nullable().optional(),
+  batchRetry: z
+    .object({
+      attempt: z.number().int().positive(),
+      dueAt: z.iso.datetime(),
+      skippedIds: z.array(z.string()).optional(),
+      delta: z.object({
+        done: z.number().int().nonnegative().optional(),
+        skipped: z.number().int().nonnegative().optional(),
+      }),
+    })
+    .nullable()
+    .optional(),
   work: runWorkSamples.optional(),
   /**
    * Every failed item ref (`image:<id>`), uncapped: `errors` keeps only a

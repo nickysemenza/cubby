@@ -19,6 +19,7 @@ import {
   parseShortcodeFor,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
+import type { RunStepError } from "@cubby/schemas/run-step";
 import {
   transferPairJudgment,
   type StatementTransferPairRef,
@@ -33,6 +34,7 @@ import { type SQL, eq, sql } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
+import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
@@ -59,6 +61,11 @@ import { createAppError } from "~/server/errors/app-error";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { canonicalJson } from "~/server/lib/canonical-json";
+import {
+  assertWorkflowEffect,
+  isWorkflowInterrupted,
+} from "~/server/workflows/runs/execution";
+import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
 const TRANSFER_PAIR_REVISION = "2026-10-19.1";
@@ -71,6 +78,9 @@ const OVERLAP_WINDOW_DAYS = 3;
 /** Pool reach around the seeds: a candidate's competitors and overlaps included. */
 const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
 const PREVIEW_CHUNK = 500;
+const TRANSFER_PAIR_GENERATION_PAGE = 32;
+const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
+const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
 
 /** Kinds that move money between accounts; they retrieve a leg, never prove it. */
 const MONEY_MOVES = new Set<FinancialTransactionKind>([
@@ -889,7 +899,7 @@ export type TransferPairScope = {
 
 type Seeds =
   | { kind: "ledger"; since: string | null }
-  | { kind: "legs"; keys: readonly string[] };
+  | { kind: "legs"; keys: readonly string[]; seedOnly?: boolean };
 
 const parseLegKey = (key: string) => {
   if (key.startsWith("ftx:")) return { code: key.slice(4) };
@@ -908,8 +918,12 @@ const parseLegKey = (key: string) => {
   return null;
 };
 
-async function discover(db: Database, seeds: Seeds): Promise<Pair[]> {
-  const accounts = await loadAccounts(db);
+async function discover(
+  db: Database,
+  seeds: Seeds,
+  loadedAccounts?: Accounts,
+): Promise<Pair[]> {
+  const accounts = loadedAccounts ?? (await loadAccounts(db));
   let seedLegs: LegFacts[];
   if (seeds.kind === "ledger") {
     const filter = { seedOnly: true, since: seeds.since };
@@ -923,10 +937,16 @@ async function discover(db: Database, seeds: Seeds): Promise<Pair[]> {
     const charges = parsed.flatMap((leg) => (leg?.charge ? [leg.charge] : []));
     seedLegs = [
       ...(codes.length
-        ? await loadTransactionLegs(db, accounts, { codes })
+        ? await loadTransactionLegs(db, accounts, {
+            codes,
+            seedOnly: seeds.seedOnly,
+          })
         : []),
       ...(charges.length
-        ? await loadStatementLegs(db, accounts, { charges })
+        ? await loadStatementLegs(db, accounts, {
+            charges,
+            seedOnly: seeds.seedOnly,
+          })
         : []),
     ];
   }
@@ -1048,6 +1068,8 @@ export const transferPairStateData = z.object({
   amount: z.number(),
   evidenceFingerprint: z.string(),
   needsLabel: z.boolean(),
+  /** Model publication committed; dependent statement publications still need to finish. */
+  statementRefreshPending: z.boolean().default(false),
 });
 type TransferPairStateData = z.infer<typeof transferPairStateData>;
 
@@ -1095,6 +1117,7 @@ export async function publishTransferPair(
   const fingerprint = await fingerprintTransferPair(judgment);
   const evidenceFingerprint = await transferPairEvidenceFingerprint(judgment);
   return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
     const client = getDb(tx);
     await client.execute(pairLock(judgment.key));
     const { rows: prior } = await client.execute<{
@@ -1161,6 +1184,9 @@ export async function publishTransferPair(
       amount: judgment.amount,
       evidenceFingerprint,
       needsLabel: isRule(producer) && transferPairNeedsLabels(judgment),
+      statementRefreshPending:
+        !isRule(producer) &&
+        [judgment.outflow, judgment.inflow].some((leg) => leg.charge !== null),
     };
     await publishAssessment(
       tx,
@@ -1189,6 +1215,63 @@ export async function publishTransferPair(
   });
 }
 
+/**
+ * Resume the dependent statement refresh after a model publication, without
+ * another model call. Matching prepares outside the transaction; dependent
+ * publications and receipt completion commit together under the effect fence.
+ */
+export async function refreshTransferPairStatements(
+  db: Database,
+  pairKey: string,
+) {
+  const pending = sql`family = ${assessmentFamily.enum.transfer_pair}
+    AND data->>'pairKey' = ${pairKey} AND coalesce((data->>'statementRefreshPending')::boolean, false)`;
+  const { rows } = await unwrapDb(db).execute(sql`
+    SELECT 1 FROM "AssessmentState" WHERE ${pending} LIMIT 1
+  `);
+  if (!rows.length) return false;
+  const charges = pairKey.split("~").flatMap((key) => {
+    const parsed = parseLegKey(key);
+    return parsed?.charge ? [parsed.charge] : [];
+  });
+  const {
+    buildChargeProposals,
+    publishChargeProposal,
+    STATEMENT_SUGGESTION_REVISION,
+  } =
+    await import("~/server/domains/statement-import/repo/statement-suggestions");
+  const proposals = await buildChargeProposals(db, charges);
+  proposals.sort((a, b) =>
+    chargeId(a.charge).localeCompare(chargeId(b.charge)),
+  );
+  return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
+    const client = getDb(tx);
+    await client.execute(pairLock(pairKey));
+    const { rows: receipts } = await client.execute<{ id: string }>(sql`
+      SELECT id FROM "AssessmentState" WHERE ${pending} FOR UPDATE
+    `);
+    if (!receipts.length) return false;
+    for (const proposal of proposals)
+      await publishChargeProposal(tx, proposal, {
+        kind: "rule",
+        model: null,
+        revision: STATEMENT_SUGGESTION_REVISION,
+        runId: null,
+        evaluationId: null,
+      });
+    await client.execute(sql`
+      UPDATE "AssessmentState"
+      SET data = jsonb_set(data, '{statementRefreshPending}', 'false'::jsonb), "updatedAt" = now()
+      WHERE id IN (${sql.join(
+        receipts.map((receipt) => sql`${receipt.id}::uuid`),
+        sql`, `,
+      )})
+    `);
+    return true;
+  });
+}
+
 const ruleProducer = (runId: string | null): AssessmentProducer => ({
   kind: "rule",
   model: null,
@@ -1196,6 +1279,288 @@ const ruleProducer = (runId: string | null): AssessmentProducer => ({
   runId,
   evaluationId: null,
 });
+
+export const transferPairGenerationCursor = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("discover"),
+    afterSeed: z.string().nullable(),
+    seed: z.string().nullable(),
+    afterPair: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("retire"),
+    after: z.object({ createdAt: z.string(), id: z.string() }).nullable(),
+  }),
+]);
+export type TransferPairGenerationCursor = z.infer<
+  typeof transferPairGenerationCursor
+>;
+
+type TransferPairGenerationPage = {
+  found: number;
+  published: number;
+  unchanged: number;
+  retired: number;
+  processed: number;
+  bytes: number;
+  failed: RunStepError[];
+  next: TransferPairGenerationCursor | null;
+};
+
+/** Raw identities are paged before hydration; each seed still reads its complete competing pool. */
+async function nextTransferPairSeeds(
+  db: Database,
+  input: { after: string | null; limit: number; since: string | null },
+) {
+  const { rows } = await unwrapDb(db).execute<{ key: string }>(sql`
+    SELECT key FROM (
+      SELECT 'ftx:' || ft.shortcode AS key FROM "FinancialTransaction" ft
+      WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.posted}
+        AND ft."ledgerTransferId" IS NULL
+        AND COALESCE(ft."postedDate", ft."transactionDate") IS NOT NULL
+        AND (ft.kind IN (${sql.join(
+          [...MONEY_MOVES].map((kind) => sql`${kind}`),
+          sql`, `,
+        )}) OR ft."sourceCategory" IS NOT NULL)
+        ${input.since ? sql`AND COALESCE(ft."postedDate", ft."transactionDate") >= ${input.since}::date` : sql``}
+      UNION
+      SELECT 'stmt:' || r.source || ':' || ${chargeKeyOf("r")} AS key
+      FROM "StatementRow" r
+      WHERE r."deletedAt" IS NULL AND r."sourceCategory" IS NOT NULL
+        ${input.since ? sql`AND r."statementDate" >= ${input.since}::date` : sql``}
+    ) seeds
+    ${input.after ? sql`WHERE key COLLATE "C" > ${input.after} COLLATE "C"` : sql``}
+    ORDER BY key COLLATE "C" LIMIT ${input.limit}
+  `);
+  return rows.map((row) => row.key);
+}
+
+/** A pair belongs to the first eligible seed, independent of seed page boundaries. */
+const pairSeedKeys = (pair: Pair, scope: TransferPairScope) =>
+  [pair.judgment.outflow, pair.judgment.inflow]
+    .filter(
+      (leg) =>
+        leg.origin !== "cash" &&
+        (!scope.since || leg.date >= scope.since) &&
+        isSeed({
+          recordedKind: leg.origin === "transaction" ? leg.signals.kind : null,
+          ...categorySignals(leg.signals.providerCategory, leg.amount),
+        }),
+    )
+    .map((leg) => leg.key)
+    .sort();
+
+const transferPairFailure = (ref: string, error: unknown): RunStepError => ({
+  at: new Date().toISOString(),
+  ref,
+  message: runFailureText(error instanceof Error ? error : String(error)),
+});
+
+/**
+ * Count and byte bounds determine the same logical page on replay. One
+ * oversized judgment is admitted alone: evidence is never truncated. The
+ * cursor carries only a seed/pair position, never the Sweep's whole key set.
+ */
+export async function generateTransferPairSuggestionsPage(
+  db: Database,
+  input: {
+    runId: string | null;
+    scope?: TransferPairScope;
+    after?: TransferPairGenerationCursor | null;
+    limit?: number;
+    maxBytes?: number;
+  },
+): Promise<TransferPairGenerationPage> {
+  const scope = input.scope ?? {};
+  const limit = Math.max(
+    1,
+    Math.min(input.limit ?? TRANSFER_PAIR_GENERATION_PAGE, 128),
+  );
+  const maxBytes = Math.max(
+    1,
+    input.maxBytes ?? TRANSFER_PAIR_GENERATION_BYTES,
+  );
+  const encoder = new TextEncoder();
+  const page: TransferPairGenerationPage = {
+    found: 0,
+    published: 0,
+    unchanged: 0,
+    retired: 0,
+    failed: [],
+    processed: 0,
+    bytes: 0,
+    next: null,
+  };
+  const after: TransferPairGenerationCursor = input.after ?? {
+    kind: "discover",
+    afterSeed: null,
+    seed: null,
+    afterPair: null,
+  };
+  if (after.kind === "retire") {
+    const accountScope = scope.accountIds?.length
+      ? sql`AND (s.data->>'outflowAccountId' IN (${sql.join(
+          scope.accountIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+          OR s.data->>'inflowAccountId' IN (${sql.join(
+            scope.accountIds.map((id) => sql`${id}`),
+            sql`, `,
+          )}))`
+      : sql``;
+    let sinceScope = sql``;
+    if (scope.since) {
+      // eslint-disable-next-line cubby/no-raw-enum-literal-in-sql -- date is a TransferPairJudgment JSON property, not an enum value.
+      sinceScope = sql`AND s.data->>'date' >= ${scope.since}`;
+    }
+    // Include inactive history identities so a committed retirement cannot
+    // shift this page's counts or continuation when its acknowledgement is lost.
+    const { rows } = await unwrapDb(db).execute<{
+      id: string;
+      createdAt: string;
+      pairKey: string;
+      active: boolean;
+      status: string;
+    }>(sql`
+      SELECT s.id::text AS id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
+        s.data->>'pairKey' AS "pairKey", s.active, s.status
+      FROM "AssessmentState" s
+      WHERE s.family = ${assessmentFamily.enum.transfer_pair}
+        ${accountScope} ${sinceScope}
+        ${after.after ? sql`AND (s."createdAt", s.id) > (${after.after.createdAt}::timestamp, ${after.after.id}::uuid)` : sql``}
+      ORDER BY s."createdAt", s.id LIMIT ${limit + 1}
+    `);
+    const selected: typeof rows = [];
+    for (const row of rows.slice(0, limit)) {
+      const bytes = encoder.encode(
+        JSON.stringify({ id: row.id, pairKey: row.pairKey }),
+      ).byteLength;
+      if (selected.length && page.bytes + bytes > maxBytes) break;
+      selected.push(row);
+      page.bytes += bytes;
+    }
+    page.processed = selected.length;
+    const last = selected.at(-1);
+    page.next =
+      rows.length > selected.length && last
+        ? { kind: "retire", after: { createdAt: last.createdAt, id: last.id } }
+        : null;
+    await forEachConcurrently(
+      selected,
+      TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
+      async (row) => {
+        if (!row.active || row.status !== suggestionStatus.enum.pending) return;
+        try {
+          // Absence is verified now, not inferred from an earlier seed page.
+          // Matching preparation holds no publication transaction open.
+          const current = await buildTransferPair(db, row.pairKey);
+          if (
+            current &&
+            inScope(current, scope) &&
+            pairSeedKeys(current, scope).length
+          )
+            return;
+          const retired = await withTransactionDatabase(db, async (tx) => {
+            await assertWorkflowEffect(tx);
+            await getDb(tx).execute(pairLock(row.pairKey));
+            const { rowCount } = await unwrapDb(tx).execute(sql`
+            UPDATE "AssessmentState" SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
+            WHERE id = ${row.id}::uuid AND active AND status = ${suggestionStatus.enum.pending}
+          `);
+            return rowCount ?? 0;
+          });
+          page.retired += retired;
+        } catch (error) {
+          if (isWorkflowInterrupted(error)) throw error;
+          page.failed.push(
+            transferPairFailure(`transfer_pair:${row.pairKey}`, error),
+          );
+        }
+      },
+    );
+    return page;
+  }
+
+  const following = await nextTransferPairSeeds(db, {
+    after: after.seed ?? after.afterSeed,
+    limit: limit + 1,
+    since: scope.since ?? null,
+  });
+  const seeds = after.seed ? [after.seed, ...following] : following;
+  const publications: Pair[] = [];
+  let afterSeed = after.afterSeed;
+  page.next = { kind: "retire", after: null };
+  if (!seeds.length) return page;
+  const accounts = await loadAccounts(db);
+  for (const [index, seed] of seeds.entries()) {
+    if (index >= limit || page.found >= limit) {
+      page.next = { kind: "discover", afterSeed, seed: null, afterPair: null };
+      break;
+    }
+    page.processed++;
+    let pairs: Pair[];
+    try {
+      pairs = (
+        await discover(
+          db,
+          { kind: "legs", keys: [seed], seedOnly: true },
+          accounts,
+        )
+      ).filter(
+        (pair) => inScope(pair, scope) && pairSeedKeys(pair, scope)[0] === seed,
+      );
+    } catch (error) {
+      if (isWorkflowInterrupted(error)) throw error;
+      page.failed.push(
+        transferPairFailure(`transfer_pair_seed:${seed}`, error),
+      );
+      afterSeed = seed;
+      continue;
+    }
+    let afterPair = seed === after.seed ? after.afterPair : null;
+    let unfinished = false;
+    for (const pair of pairs) {
+      if (afterPair && pair.judgment.key.localeCompare(afterPair) <= 0)
+        continue;
+      const bytes = encoder.encode(JSON.stringify(pair.judgment)).byteLength;
+      if (
+        page.found >= limit ||
+        (page.found > 0 && page.bytes + bytes > maxBytes)
+      ) {
+        page.next = { kind: "discover", afterSeed, seed, afterPair };
+        unfinished = true;
+        break;
+      }
+      publications.push(pair);
+      page.found++;
+      page.bytes += bytes;
+      afterPair = pair.judgment.key;
+    }
+    if (unfinished) break;
+    afterSeed = seed;
+  }
+  await forEachConcurrently(
+    publications,
+    TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
+    async (pair) => {
+      try {
+        const outcome = await publishTransferPair(
+          db,
+          pair,
+          ruleProducer(input.runId),
+        );
+        if (outcome === "published") page.published++;
+        else page.unchanged++;
+      } catch (error) {
+        if (isWorkflowInterrupted(error)) throw error;
+        page.failed.push(
+          transferPairFailure(`transfer_pair:${pair.judgment.key}`, error),
+        );
+      }
+    },
+  );
+  return page;
+}
 
 /**
  * Publish every current pair in scope and retire pending pairs in scope that
@@ -1210,47 +1575,22 @@ export async function generateTransferPairSuggestions(
   unchanged: number;
   retired: number;
 }> {
-  const scope = input.scope ?? {};
-  const pairs = await discoverPairs(db, scope);
-  let published = 0;
-  let unchanged = 0;
-  for (const pair of pairs) {
-    const outcome = await publishTransferPair(
-      db,
-      pair,
-      ruleProducer(input.runId),
-    );
-    if (outcome === "published") published++;
-    else unchanged++;
-  }
-  const keys = pairs.map((pair) => pair.judgment.key);
-  const accountScope = scope.accountIds?.length
-    ? sql`AND (data->>'outflowAccountId' IN (${sql.join(
-        scope.accountIds.map((id) => sql`${id}`),
-        sql`, `,
-      )}) OR data->>'inflowAccountId' IN (${sql.join(
-        scope.accountIds.map((id) => sql`${id}`),
-        sql`, `,
-      )}))`
-    : sql``;
-  // A pair dated from `since` has both legs in the pass, so it was rediscovered if live.
-  const sinceScope = scope.since
-    ? sql`AND data->>${"date"} >= ${scope.since}`
-    : sql``;
-  const { rowCount } = await unwrapDb(db).execute(sql`
-    UPDATE "AssessmentState" SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
-    WHERE family = ${assessmentFamily.enum.transfer_pair} AND active AND status = ${suggestionStatus.enum.pending}
-      ${
-        keys.length
-          ? sql`AND NOT (data->>'pairKey' IN (${sql.join(
-              keys.map((key) => sql`${key}`),
-              sql`, `,
-            )}))`
-          : sql``
-      }
-      ${accountScope} ${sinceScope}
-  `);
-  return { found: pairs.length, published, unchanged, retired: rowCount ?? 0 };
+  const total = { found: 0, published: 0, unchanged: 0, retired: 0 };
+  let after: TransferPairGenerationCursor | null = null;
+  do {
+    const page = await generateTransferPairSuggestionsPage(db, {
+      ...input,
+      after,
+    });
+    total.found += page.found;
+    total.published += page.published;
+    total.unchanged += page.unchanged;
+    total.retired += page.retired;
+    if (page.failed.length)
+      throw new Error(page.failed.map((failure) => failure.message).join("\n"));
+    after = page.next;
+  } while (after);
+  return total;
 }
 
 const runScope = (runId: string | null | undefined) =>
@@ -1259,7 +1599,7 @@ const runScope = (runId: string | null | undefined) =>
 /** A label pass's position in `(createdAt, id)` order. */
 export type TransferPairLabelCursor = { createdAt: string; id: string };
 
-/** Pending rule pairs awaiting movement labels, optionally one Run's. */
+/** Rule pairs awaiting movement labels or committed model publications awaiting their statement refresh. */
 export async function transferPairsNeedingLabels(
   db: Database,
   input: {
@@ -1275,8 +1615,9 @@ export async function transferPairsNeedingLabels(
   }>(sql`
     SELECT s.id::text AS id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.data
     FROM "AssessmentState" s
-    WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active AND s.status = ${suggestionStatus.enum.pending}
-      AND (s.data->>'needsLabel')::boolean ${runScope(input.runId)}
+    WHERE s.family = ${assessmentFamily.enum.transfer_pair}
+      AND ((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
+        OR coalesce((s.data->>'statementRefreshPending')::boolean, false)) ${runScope(input.runId)}
       ${input.after ? sql`AND (s."createdAt", s.id) > (${input.after.createdAt}::timestamp, ${input.after.id}::uuid)` : sql``}
     ORDER BY s."createdAt", s.id
     LIMIT ${input.limit}
@@ -1288,15 +1629,16 @@ export async function transferPairsNeedingLabels(
   }));
 }
 
-/** How many pending pairs still need labels, for a Sweep's estimate. */
+/** Remaining movement-label or dependent-refresh work, for a Sweep's estimate. */
 export async function countTransferPairsNeedingLabels(
   db: Database,
   input: { runId?: string | null } = {},
 ) {
   const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
     SELECT count(*)::int AS count FROM "AssessmentState" s
-    WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active AND s.status = ${suggestionStatus.enum.pending}
-      AND (s.data->>'needsLabel')::boolean ${runScope(input.runId)}
+    WHERE s.family = ${assessmentFamily.enum.transfer_pair}
+      AND ((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
+        OR coalesce((s.data->>'statementRefreshPending')::boolean, false)) ${runScope(input.runId)}
   `);
   return rows[0]?.count ?? 0;
 }
@@ -1428,6 +1770,7 @@ export async function applyTransferPair(
   const actor = context.actorContext;
   return withTransaction(db, async (tx) => {
     const txDb = databaseForTransaction(tx);
+    await assertWorkflowEffect(txDb);
     const legKeys = input.key.split("~");
     // Leg locks serialize every apply naming a leg, so a racing or replayed
     // accept rereads after the winner commits and finds the leg taken.
@@ -1540,24 +1883,27 @@ export async function applyTransferPairSuggestion(
   state: typeof assessmentState.$inferSelect,
   input: Pick<z.infer<typeof assessmentReviewInput>, "expectedFingerprint">,
 ) {
-  const [prediction] = await getDb(db)
-    .select()
-    .from(assessment)
-    .where(eq(assessment.id, state.id))
-    .limit(1);
-  const subject = assessmentSubjects.transfer_pair.parse(prediction?.subject);
-  const published = transferPairJudgment.parse(prediction?.judgment);
-  if (state.status !== "pending" || !state.fingerprint)
-    throw refused("This transfer pair suggestion is no longer pending.");
-  await getDb(db)
-    .update(assessmentState)
-    .set({ status: "applied" })
-    .where(eq(assessmentState.id, state.id));
-  await applyTransferPair(db, context, {
-    key: subject.pairKey,
-    expectedFingerprint: input.expectedFingerprint ?? state.fingerprint,
-    // Accepting a clean pair still holds it to today's clean rule.
-    reviewed: !published.clean,
-    stateId: state.id,
+  return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
+    const [prediction] = await getDb(tx)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, state.id))
+      .limit(1);
+    const subject = assessmentSubjects.transfer_pair.parse(prediction?.subject);
+    const published = transferPairJudgment.parse(prediction?.judgment);
+    if (state.status !== "pending" || !state.fingerprint)
+      throw refused("This transfer pair suggestion is no longer pending.");
+    await getDb(tx)
+      .update(assessmentState)
+      .set({ status: "applied" })
+      .where(eq(assessmentState.id, state.id));
+    await applyTransferPair(tx, context, {
+      key: subject.pairKey,
+      expectedFingerprint: input.expectedFingerprint ?? state.fingerprint,
+      // Accepting a clean pair still holds it to today's clean rule.
+      reviewed: !published.clean,
+      stateId: state.id,
+    });
   });
 }

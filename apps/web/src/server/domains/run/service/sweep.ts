@@ -20,12 +20,14 @@ import {
   countTransferPairsNeedingLabels,
   discoverTransferPairs,
   transferPairNeedsLabels,
-  generateTransferPairSuggestions,
+  generateTransferPairSuggestionsPage,
+  transferPairGenerationCursor,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   countSuggestionsNeedingLabels,
   countUnmatchedCharges,
   generateStatementSuggestionPage,
+  generateStatementHoldVoidPage,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { STATEMENT_LABEL_BATCH } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { buildCrudServices } from "~/server/http/request-context";
@@ -170,11 +172,15 @@ export const sweepDrivers: StepRunDrivers = async (_db, owner) =>
             describe: (step) => {
               const parsed = statementCursor.safeParse(step.cursor);
               const generating =
-                !parsed.success || parsed.data.phase === "generate";
+                !parsed.success ||
+                parsed.data.phase === "generate" ||
+                parsed.data.phase === "holds";
               return {
                 phase: generating ? "generate" : "label",
                 unit: generating ? "charges" : "suggestions",
-                limit: generating ? 20 : STATEMENT_LABEL_BATCH,
+                limit: generating
+                  ? WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage
+                  : STATEMENT_LABEL_BATCH,
                 processed: generating
                   ? step.done + step.skipped + step.failed
                   : step.meta?.work?.current.phase === "statement_label"
@@ -201,6 +207,10 @@ type PageContext = Parameters<StepDriver["page"]>[0];
 
 const transferPairCursor = z.discriminatedUnion("phase", [
   z.object({
+    phase: z.literal("generate"),
+    after: transferPairGenerationCursor.nullable(),
+  }),
+  z.object({
     phase: z.literal("label"),
     after: z.object({ createdAt: z.string(), id: z.string() }).nullable(),
   }),
@@ -212,16 +222,32 @@ async function transferPairPage(
   scope: Extract<SweepFamilyScope, { family: "transfer_pair" }>["scope"],
 ): Promise<StepPage> {
   const parsed = transferPairCursor.safeParse(step.cursor);
-  if (!parsed.success) {
-    const { found } = await generateTransferPairSuggestions(db, {
+  if (!parsed.success || parsed.data.phase === "generate") {
+    const page = await generateTransferPairSuggestionsPage(db, {
       runId: run.id,
       scope,
+      after:
+        parsed.success && parsed.data.phase === "generate"
+          ? parsed.data.after
+          : null,
     });
     return {
       kind: "progress",
-      found,
-      delta: { done: found },
-      cursor: { phase: "label", after: null },
+      retryable: true,
+      retryAccounting: "replace",
+      execution: {
+        phase: "transfer_pair_generate",
+        pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.databasePagesPerInstance,
+      },
+      found: step.found + page.found,
+      delta: {
+        done: Math.max(0, page.found - page.failed.length),
+        failed: page.failed.length,
+      },
+      errors: page.failed,
+      cursor: page.next
+        ? { phase: "generate", after: page.next }
+        : { phase: "label", after: null },
       done: false,
     };
   }
@@ -252,6 +278,8 @@ async function transferPairPage(
   }
   return {
     kind: "progress",
+    retryable: true,
+    skippedIds: outcome.skippedIds,
     execution: {
       phase: "transfer_pair_label",
       pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance,
@@ -264,7 +292,7 @@ async function transferPairPage(
         ),
       }),
     delta: {
-      done: outcome.labelled,
+      done: outcome.completed,
       skipped: outcome.stale,
       failed: outcome.failed.length,
     },
@@ -292,7 +320,17 @@ const statementCursor = z.union([
   z.object({
     phase: z.literal("generate"),
     after: z.object({ source: z.string(), chargeKey: z.string() }).nullable(),
+    precomputedAfter: z
+      .object({
+        createdAt: z.string(),
+        id: z.string(),
+        inclusive: z.boolean().optional(),
+      })
+      .nullable()
+      .optional(),
+    speculativeUntil: z.number().nullable().optional(),
   }),
+  z.object({ phase: z.literal("holds"), after: z.string().nullable() }),
   z.object({
     phase: z.literal("label"),
     after: z
@@ -306,61 +344,163 @@ const statementCursor = z.union([
   z.object({ phase: z.literal("finished") }),
 ]);
 
+type StatementScope = Extract<
+  SweepFamilyScope,
+  { family: "statement_transaction" }
+>["scope"];
+
+async function statementGenerationPage(
+  { db, run, step }: PageContext,
+  scope: StatementScope,
+  cursor: Extract<z.infer<typeof statementCursor>, { phase: "generate" }>,
+  initial: boolean,
+): Promise<StepPage> {
+  const found =
+    cursor.after === null && initial
+      ? await countUnmatchedCharges(db, scope)
+      : undefined;
+  const generation = generateStatementSuggestionPage(db, {
+    limit: WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+    after: cursor.after,
+    runId: run.id,
+    scope,
+  });
+  const { precomputeStatementSuggestionLabels } =
+    await import("~/server/domains/statement-import/service/statement-suggestion-labels");
+  const speculative =
+    (cursor.speculativeUntil ?? 0) > Date.now()
+      ? Promise.resolve(null)
+      : precomputeStatementSuggestionLabels(db, {
+          runId: run.id,
+          importId: scope.importId ?? null,
+          cooperative: true,
+          after: cursor.precomputedAfter ?? null,
+          maxBytes: 2 * 1024 * 1024,
+          maxMs: 5_000,
+          beforeCheckpoint: async () => {
+            await generation;
+          },
+        });
+  const [generated, computed] = await Promise.allSettled([
+    generation,
+    speculative,
+  ]);
+  if (generated.status === "rejected") throw generated.reason;
+  if (
+    computed.status === "rejected" &&
+    (await import("~/server/workflows/runs/execution")).isWorkflowInterrupted(
+      computed.reason,
+    )
+  )
+    throw computed.reason;
+  const page = generated.value;
+  const precompute = computed.status === "fulfilled" ? computed.value : null;
+  const previous = step.meta?.work?.current;
+  return {
+    kind: "progress",
+    retryable: true,
+    retryAccounting: "replace",
+    execution: {
+      phase: "statement_generate",
+      pagesPerInstance: precompute
+        ? WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance
+        : WORKFLOW_EXECUTION_LIMITS.databasePagesPerInstance,
+    },
+    work: {
+      phase: "statement_generate",
+      label: "Generating suggestions",
+      unit: "charges",
+      // Generation is the first phase: ledger counts carry work done before
+      // phase sampling was deployed, so a handoff cannot restart at zero.
+      processed: step.done + step.skipped + step.failed + page.processed,
+      total:
+        found ??
+        (previous?.phase === "statement_generate" ? previous.total : null) ??
+        (step.found > 0 ? step.found : null),
+      failures:
+        (previous?.phase === "statement_generate" ? previous.failures : 0) +
+        page.failed.length,
+      finished: page.next === null,
+    },
+    labels: { reused: page.labelsReused, generated: 0 },
+    pageProcessed: page.processed,
+    ...(found !== undefined && { found }),
+    delta: {
+      done: Math.max(0, page.processed - page.outOfScope - page.failed.length),
+      skipped: page.outOfScope,
+      failed: page.failed.length,
+    },
+    errors: page.failed,
+    cursor: page.next
+      ? {
+          phase: "generate",
+          after: page.next,
+          precomputedAfter:
+            precompute?.next ??
+            precompute?.through ??
+            cursor.precomputedAfter ??
+            null,
+          speculativeUntil:
+            precompute?.waitingUntil ?? cursor.speculativeUntil ?? null,
+        }
+      : { phase: "holds", after: null },
+    done: false,
+  };
+}
+
 async function statementPage(
-  { db, run, step, retrying }: PageContext,
+  context: PageContext,
   scope: Extract<
     SweepFamilyScope,
     { family: "statement_transaction" }
   >["scope"],
 ): Promise<StepPage> {
+  const { db, run, step, retrying } = context;
   const parsed = statementCursor.safeParse(step.cursor);
   // A retried step re-runs its labels; generation already covered its charges.
-  const cursor = !parsed.success
+  const cursor: z.infer<typeof statementCursor> = !parsed.success
     ? ({ phase: "generate", after: null } as const)
     : parsed.data.phase === "finished"
       ? ({ phase: "label", after: null } as const)
       : parsed.data;
-  if (cursor.phase === "generate") {
-    const found =
-      cursor.after === null && !parsed.success
-        ? await countUnmatchedCharges(db, scope)
-        : undefined;
-    const page = await generateStatementSuggestionPage(db, {
-      limit: 20,
+  if (cursor.phase === "generate")
+    return statementGenerationPage(context, scope, cursor, !parsed.success);
+  if (cursor.phase === "holds") {
+    const page = await generateStatementHoldVoidPage(db, {
       after: cursor.after,
       runId: run.id,
       scope,
+      limit: WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
     });
     const previous = step.meta?.work?.current;
     return {
       kind: "progress",
+      retryable: true,
+      retryAccounting: "replace",
       execution: {
-        phase: "statement_generate",
+        phase: "statement_holds",
         pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.databasePagesPerInstance,
       },
+      delta: {
+        done: Math.max(0, page.processed - page.failed.length),
+        failed: page.failed.length,
+      },
+      errors: page.failed,
       work: {
-        phase: "statement_generate",
-        label: "Generating suggestions",
-        unit: "charges",
-        // Generation is the first phase: ledger counts carry work done before
-        // phase sampling was deployed, so a handoff cannot restart at zero.
-        processed: step.done + step.skipped + step.failed + page.processed,
-        total:
-          found ??
-          (previous?.phase === "statement_generate" ? previous.total : null) ??
-          (step.found > 0 ? step.found : null),
-        failures: 0,
+        phase: "statement_holds",
+        label: "Checking vanished holds",
+        unit: "holds",
+        processed:
+          (previous?.phase === "statement_holds" ? previous.processed : 0) +
+          page.processed,
+        total: null,
+        failures:
+          (previous?.phase === "statement_holds" ? previous.failures : 0) +
+          page.failed.length,
         finished: page.next === null,
       },
-      labels: { reused: page.labelsReused, generated: 0 },
-      pageProcessed: page.processed,
-      ...(found !== undefined && { found }),
-      delta: {
-        done: page.processed - page.outOfScope,
-        skipped: page.outOfScope,
-      },
       cursor: page.next
-        ? { phase: "generate", after: page.next }
+        ? { phase: "holds", after: page.next }
         : { phase: "label", after: null },
       done: false,
     };
@@ -391,6 +531,7 @@ async function statementPage(
   const previous = step.meta?.work?.current;
   const samePhase = previous?.phase === "statement_label";
   const checkpoint = {
+    skippedIds: outcome.skippedIds,
     labels: outcome.labels,
     work: {
       phase: "statement_label",
@@ -400,7 +541,7 @@ async function statementPage(
         (samePhase
           ? Math.max(0, previous.processed - (retrying ? previous.failures : 0))
           : 0) +
-        outcome.labelled +
+        outcome.completed +
         outcome.stale +
         outcome.failed.length,
       total: samePhase ? previous.total : outcome.active ? labelsAhead : null,
@@ -410,7 +551,7 @@ async function statementPage(
       finished: outcome.next === null && !outcome.paused,
     },
     delta: {
-      done: outcome.labelled,
+      done: outcome.completed,
       skipped: outcome.stale,
       failed: outcome.failed.length,
     },
@@ -433,6 +574,7 @@ async function statementPage(
   return {
     ...checkpoint,
     kind: "progress",
+    retryable: true,
     done: outcome.next === null,
     execution: {
       phase: "statement_label",

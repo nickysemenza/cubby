@@ -207,8 +207,18 @@ export function gatewayFetch(
     chatGpt: chatGptInference,
     subscriptionRequired: opts.subscriptionRequired,
     subscriptionFallback: opts.subscriptionFallback,
-    beforePaidRequest: opts.beforePaidRequest,
-    beforeFreeRequest: opts.beforeFreeRequest,
+    beforePaidRequest: async (request) => {
+      await (
+        await import("~/server/workflows/runs/execution")
+      ).assertWorkflowCurrent();
+      await opts.beforePaidRequest?.(request);
+    },
+    beforeFreeRequest: async (request, funding) => {
+      await (
+        await import("~/server/workflows/runs/execution")
+      ).assertWorkflowCurrent();
+      return (await opts.beforeFreeRequest?.(request, funding)) ?? null;
+    },
     testPeer: () => {
       const testGateway = getTestAiGateway();
       if (!testGateway) return undefined;

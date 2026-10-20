@@ -28,8 +28,12 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
+import {
+  assertWorkflowEffect,
+  hasWorkflowExecution,
+} from "~/server/workflows/runs/execution";
 
 const MAINTENANCE = "maintenance";
 const ACTIVE_STATUSES = ["running", "paused_auth"] as const;
@@ -75,6 +79,19 @@ export const isTerminalStep = (state: RunStepState) => TERMINAL.includes(state);
  * page is recorded once per committed write, errors keep the newest sample.
  */
 export async function recordRunStepPage(
+  db: Database,
+  runId: RunId,
+  key: string,
+  page: Parameters<typeof writeRunStepPage>[3],
+) {
+  if (!hasWorkflowExecution()) return writeRunStepPage(db, runId, key, page);
+  return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
+    return writeRunStepPage(tx, runId, key, page);
+  });
+}
+
+async function writeRunStepPage(
   db: Database,
   runId: RunId,
   key: string,
@@ -171,7 +188,7 @@ export async function reopenRunStep(
       endedAt: null,
       pausedReason: null,
       pausedUntil: null,
-      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb), 'failedRefs', '[]'::jsonb) || ${retryWork}`,
+      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('batchRetry', null, 'capacityUntil', null, 'retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb), 'failedRefs', '[]'::jsonb) || ${retryWork}`,
       errors: sql`'[]'::jsonb`,
     })
     .where(

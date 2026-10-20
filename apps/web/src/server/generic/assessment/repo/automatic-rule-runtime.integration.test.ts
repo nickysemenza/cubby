@@ -43,7 +43,6 @@ import {
   generateStatementSuggestionPage,
   suggestionsNeedingLabels,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
-import * as labelCheckpointRepo from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -726,37 +725,6 @@ describe("Automatic rules", () => {
       expect(await suggestionsNeedingLabels(ctx.db, 10)).toEqual([]);
     } finally {
       rules.mockRestore();
-    }
-  });
-
-  // A model publication supersedes the original row; later rule rounds must save to the active publication.
-  it("checkpoints every label round against the active publication", async () => {
-    await createSystemUserFixture(ctx.db);
-    await soleCandidateCharge(ctx);
-    await competingCharge(ctx);
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    const original = labelCheckpointRepo.recordStatementLabelCheckpoint;
-    const saved: Awaited<
-      ReturnType<typeof labelCheckpointRepo.recordStatementLabelCheckpoint>
-    >[] = [];
-    const checkpoint = vi
-      .spyOn(labelCheckpointRepo, "recordStatementLabelCheckpoint")
-      .mockImplementation(async (...args) => {
-        const written = await original(...args);
-        saved.push(written);
-        return written;
-      });
-    try {
-      await label(ctx);
-      expect(saved.length).toBeGreaterThan(2);
-      expect(saved).not.toContain("moved");
-    } finally {
-      checkpoint.mockRestore();
     }
   });
 

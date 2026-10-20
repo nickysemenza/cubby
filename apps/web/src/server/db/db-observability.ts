@@ -3,6 +3,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { AppSpan } from "../observability/tracing";
 
 export type DatabaseOperationMetrics = {
+  /** All started SQL, pool acquisition and client-queue work has settled. */
+  isIdle(): boolean;
   queryCount: number;
   queryDurationSumMs: number;
   queryActiveWallMs: number;
@@ -40,30 +42,35 @@ const operationMetricsStore = new AsyncLocalStorage<
   StoredDatabaseOperationMetrics[]
 >();
 
-const emptyMetrics = (): StoredDatabaseOperationMetrics => ({
-  acquireStartedCount: 0,
-  operations: [],
-  queryCount: 0,
-  queryDurationSumMs: 0,
-  queryActiveWallMs: 0,
-  queryMaxDurationMs: 0,
-  queryMaxConcurrency: 0,
-  clientQueueCount: 0,
-  clientQueueDurationSumMs: 0,
-  clientQueueActiveWallMs: 0,
-  clientQueueMaxDurationMs: 0,
-  clientQueueMaxConcurrency: 0,
-  acquireCount: 0,
-  acquireDurationSumMs: 0,
-  acquireActiveWallMs: 0,
-  acquireMaxDurationMs: 0,
-  acquireMaxConcurrency: 0,
-  activity: {
+const emptyMetrics = (): StoredDatabaseOperationMetrics => {
+  const activity = {
     query: { activeCount: 0 },
     acquire: { activeCount: 0 },
     clientQueue: { activeCount: 0 },
-  },
-});
+  };
+  return {
+    isIdle: () =>
+      Object.values(activity).every((state) => state.activeCount === 0),
+    acquireStartedCount: 0,
+    operations: [],
+    queryCount: 0,
+    queryDurationSumMs: 0,
+    queryActiveWallMs: 0,
+    queryMaxDurationMs: 0,
+    queryMaxConcurrency: 0,
+    clientQueueCount: 0,
+    clientQueueDurationSumMs: 0,
+    clientQueueActiveWallMs: 0,
+    clientQueueMaxDurationMs: 0,
+    clientQueueMaxConcurrency: 0,
+    acquireCount: 0,
+    acquireDurationSumMs: 0,
+    acquireActiveWallMs: 0,
+    acquireMaxDurationMs: 0,
+    acquireMaxConcurrency: 0,
+    activity,
+  };
+};
 
 /**
  * Collect a request operation's database work without turning an unbounded

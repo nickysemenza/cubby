@@ -470,6 +470,9 @@ target outcomes, operations, images, model calls, or its typed checkpoint.
 Exploratory populations have `total: null`, never an invented zero. Step drivers
 can declare phase and units; the runtime persists absolute samples in RunStep
 metadata, preserving completed phases across pages and Workflow attempts.
+The shared report labels the current-phase ETA explicitly. Capacity and retry
+waits identify their activity and mark a reused rate as stale; later phases do
+not acquire an overall ETA from the current phase's throughput.
 Other Run checkpoints and progress events retain samples in live-progress
 metadata; samples use the checkpoint write time, while heartbeat-only events
 do not refresh a work sample. Timeline history

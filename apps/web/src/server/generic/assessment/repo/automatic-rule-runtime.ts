@@ -531,6 +531,12 @@ export async function applyAutomaticRules(
       );
       outcome.applied.push(row.id);
     } catch (error) {
+      if (
+        (
+          await import("~/server/workflows/runs/execution")
+        ).isWorkflowInterrupted(error)
+      )
+        throw error;
       // A refusal leaves the suggestion pending for review, which is the
       // rule's safe outcome; the raw reason is returned and logged.
       const message = scrubErrorMessage(

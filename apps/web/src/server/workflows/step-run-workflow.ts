@@ -9,6 +9,7 @@ import { getAiGatewayEgress, setCfEnv } from "../cf-env";
 import { withInvocationDb } from "../db";
 import type { WorkflowRunParams } from "./runs/contract";
 import { runDeploymentBoundary } from "./runs/deployment";
+import { assertWorkflowCurrent, withWorkflowExecution } from "./runs/execution";
 import { failWorkflowRun } from "./runs/lifecycle";
 import { runStepRunWorkflow } from "./step-run-execution";
 
@@ -41,9 +42,14 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
       },
       {
         inspect: () => withDb((db) => inspectStepRun(db, event.payload)),
-        elapsedMs: () => Math.max(0, Date.now() - event.timestamp.getTime()),
         boundary: runDeploymentBoundary(this.env, step, event.payload),
-        advance: () => withDb((db) => advanceStepRun(db, event.payload)),
+        advance: () =>
+          withWorkflowExecution(event.payload, () =>
+            withDb(async (db) => {
+              await assertWorkflowCurrent();
+              return advanceStepRun(db, event.payload);
+            }),
+          ),
         wait: async (page, seconds) => {
           await step.waitForEvent(`child:${page}`, {
             type: "step-run",

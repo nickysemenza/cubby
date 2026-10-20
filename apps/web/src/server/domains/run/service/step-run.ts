@@ -7,12 +7,19 @@ import type {
   RunStepExecution,
 } from "@cubby/schemas/run-step";
 import type { RunWorkItems } from "@cubby/schemas/run-work-progress";
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { createLogger } from "@cubby/worker-tracing";
 import { pick } from "es-toolkit";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
+import {
+  isTransientConnectionError,
+  isSerializationFailure,
+  isStatementTimeout,
+} from "~/server/errors/db-errors";
 import {
   isStepRunPurpose,
   STEP_RUN_PURPOSES,
@@ -20,6 +27,7 @@ import {
   type WorkflowRunParams,
   workflowInstanceId,
 } from "~/server/workflows/runs/contract";
+import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import {
   type WorkflowLauncher,
   productionWorkflowLauncher,
@@ -57,6 +65,12 @@ const log = createLogger("step-run");
 export type StepPage = (
   | {
       kind: "progress";
+      /** Retry failed items durably before advancing this input checkpoint. */
+      retryable?: boolean;
+      /** Identity pages recount successes on replay; draining queues add fresh completions. */
+      retryAccounting?: "replace" | "add";
+      /** Stable skipped identities in a draining queue, retained only during retries. */
+      skippedIds?: readonly string[];
       execution?: RunStepExecution;
       waitSeconds?: number;
       delta?: Partial<RunStepCounts>;
@@ -330,6 +344,181 @@ function failedPageSummary(step: RunStepRow): StepPageSummary {
   };
 }
 
+function remainingStepWaitSeconds(step: RunStepRow): number | null {
+  const retry = step.meta?.batchRetry;
+  const nextAt = Math.max(
+    retry ? Date.parse(retry.dueAt) : 0,
+    step.meta?.capacityUntil ? Date.parse(step.meta.capacityUntil) : 0,
+  );
+  return nextAt > Date.now()
+    ? Math.max(1, Math.ceil((nextAt - Date.now()) / 1000))
+    : null;
+}
+
+async function handleStepPageFailure(
+  context: StepContext,
+  error: UnparsedError,
+): Promise<StepAdvance> {
+  const {
+    db,
+    run: owner,
+    step: current,
+    launcher,
+    attempt: runAttempt,
+  } = context;
+  const params = { runId: owner.id, attempt: runAttempt };
+  const stamp = stampOf(runAttempt);
+  const pendingRetry = current.meta?.batchRetry;
+  if (isWorkflowInterrupted(error)) throw error;
+  if (
+    (isTransientConnectionError(error) ||
+      isSerializationFailure(error) ||
+      isStatementTimeout(error)) &&
+    (pendingRetry?.attempt ?? 0) + 1 < WORKFLOW_EXECUTION_LIMITS.pageAttempts
+  ) {
+    const attempt = (pendingRetry?.attempt ?? 0) + 1;
+    const waitSeconds = 5 * 2 ** (attempt - 1);
+    if (!(await claimWorkflowRun(db, params, "id")))
+      return lostAfterPage(db, owner, launcher);
+    await recordRunStepPage(db, owner.id, current.key, {
+      meta: {
+        batchRetry: {
+          attempt,
+          dueAt: new Date(Date.now() + waitSeconds * 1000).toISOString(),
+          delta: pendingRetry?.delta ?? {},
+          skippedIds: pendingRetry?.skippedIds,
+        },
+        detail: {
+          retry: runFailureText(error instanceof Error ? error : String(error)),
+        },
+        ...(current.meta?.work && {
+          work: {
+            ...current.meta.work,
+            current: { ...current.meta.work.current, activity: "retry" },
+          },
+        }),
+      },
+    });
+    return { kind: "continue", waitSeconds };
+  }
+  // A thrown page ends this step only; the Run moves on to the next one.
+  // The causes carry the Postgres SQLSTATE a driver's "Failed query" hides.
+  const message =
+    error instanceof Error
+      ? [runFailureText(error), scrubErrorMessage(error.stack ?? "")]
+          .filter(Boolean)
+          .join("\n")
+      : runFailureText(String(error));
+  log.error("Step page failed", {
+    runId: owner.id,
+    step: current.key,
+    error: message,
+  });
+  try {
+    if (!(await claimWorkflowRun(db, params, "id")))
+      return lostAfterPage(db, owner, launcher);
+    await recordRunStepPage(db, owner.id, current.key, {
+      state: "failed",
+      errors: [failure(message)],
+    });
+    await recordRunProgress(
+      db,
+      owner.id,
+      "step_failed",
+      `${current.label}: ${message.split("\n", 1)[0]}`,
+      stamp,
+    );
+  } catch (recordingError) {
+    const combined = `${message}\n${runFailureText(new Error("Failure recording failed", { cause: recordingError }))}`;
+    log.error("Step failure checkpoint failed", {
+      runId: owner.id,
+      step: current.key,
+      error: combined,
+    });
+    throw new Error(combined, { cause: recordingError });
+  }
+  return { kind: "continue", summary: failedPageSummary(current) };
+}
+
+async function settleStepPageRetry(
+  db: Database,
+  owner: RunRow,
+  current: RunStepRow,
+  page: StepPage,
+): Promise<
+  | { kind: "waiting"; advance: StepAdvance }
+  | { kind: "settled"; page: StepPage }
+> {
+  const pendingRetry = current.meta?.batchRetry;
+  if (pendingRetry && page.kind === "progress" && !page.retryable)
+    page = { ...page, meta: { ...page.meta, batchRetry: null } };
+  if (page.kind === "progress" && page.retryable) {
+    const previousSkipped = new Set(pendingRetry?.skippedIds);
+    const skippedIds = [
+      ...new Set([...previousSkipped, ...(page.skippedIds ?? [])]),
+    ];
+    const repeatedSkips = new Set(
+      page.skippedIds?.filter((id) => previousSkipped.has(id)),
+    ).size;
+    const delta = {
+      done:
+        (page.delta?.done ?? 0) +
+        (page.retryAccounting === "replace"
+          ? 0
+          : (pendingRetry?.delta.done ?? 0)),
+      skipped:
+        (page.delta?.skipped ?? 0) +
+        (page.retryAccounting === "replace"
+          ? 0
+          : (pendingRetry?.delta.skipped ?? 0) - repeatedSkips),
+    };
+    if (
+      page.errors?.length &&
+      (pendingRetry?.attempt ?? 0) + 1 < WORKFLOW_EXECUTION_LIMITS.pageAttempts
+    ) {
+      const attempt = (pendingRetry?.attempt ?? 0) + 1;
+      const waitSeconds = Math.max(
+        5 * 2 ** (attempt - 1),
+        page.waitSeconds ?? 0,
+      );
+      await recordRunStepPage(db, owner.id, current.key, {
+        meta: {
+          batchRetry: {
+            attempt,
+            dueAt: new Date(Date.now() + waitSeconds * 1000).toISOString(),
+            delta,
+            skippedIds,
+          },
+          ...(current.meta?.work && {
+            work: {
+              ...current.meta.work,
+              current: { ...current.meta.work.current, activity: "retry" },
+            },
+          }),
+        },
+      });
+      return {
+        kind: "waiting",
+        advance: { kind: "continue", waitSeconds, execution: page.execution },
+      };
+    }
+    const extra =
+      delta.done +
+      delta.skipped -
+      (page.delta?.done ?? 0) -
+      (page.delta?.skipped ?? 0);
+    page = {
+      ...page,
+      delta: { ...page.delta, ...delta },
+      ...(page.work && {
+        work: { ...page.work, processed: page.work.processed + extra },
+      }),
+      meta: { ...page.meta, batchRetry: null },
+    };
+  }
+  return { kind: "settled", page };
+}
+
 /**
  * Runs one page of the first unfinished step. Ledger writes happen only while
  * this attempt still owns the Run; a replayed page re-reads the cursor and
@@ -360,6 +549,8 @@ export async function advanceStepRun(
     return { kind: "continue", summary: failedPageSummary(current) };
   }
   const stamp = stampOf(params.attempt);
+  const waitSeconds = remainingStepWaitSeconds(current);
+  if (waitSeconds !== null) return { kind: "continue", waitSeconds };
   // Only a reopened step is queued after it has already run pages.
   const retrying = current.state === "queued" && current.pages > 0;
   if (current.state === "queued" || current.state === "paused") {
@@ -376,62 +567,36 @@ export async function advanceStepRun(
       stamp,
     );
   }
+  const context: StepContext = {
+    db,
+    run: owner,
+    step: current,
+    attempt: params.attempt,
+    launcher,
+    retrying,
+  };
   let page: StepPage;
   const started = Date.now();
   try {
-    page = await driver.page({
-      db,
-      run: owner,
-      step: current,
-      attempt: params.attempt,
-      launcher,
-      retrying,
-    });
+    page = await driver.page(context);
   } catch (error) {
-    // A thrown page ends this step only; the Run moves on to the next one.
-    // The causes carry the Postgres SQLSTATE a driver's "Failed query" hides.
-    const message =
-      error instanceof Error
-        ? [runFailureText(error), scrubErrorMessage(error.stack ?? "")]
-            .filter(Boolean)
-            .join("\n")
-        : runFailureText(String(error));
-    log.error("Step page failed", {
-      runId: owner.id,
-      step: current.key,
-      error: message,
-    });
-    try {
-      if (!(await claimWorkflowRun(db, params, "id")))
-        return lostAfterPage(db, owner, launcher);
-      await recordRunStepPage(db, owner.id, current.key, {
-        state: "failed",
-        errors: [failure(message)],
-      });
-      await recordRunProgress(
-        db,
-        owner.id,
-        "step_failed",
-        `${current.label}: ${message.split("\n", 1)[0]}`,
-        stamp,
-      );
-    } catch (recordingError) {
-      const combined = `${message}\n${runFailureText(new Error("Failure recording failed", { cause: recordingError }))}`;
-      log.error("Step failure checkpoint failed", {
-        runId: owner.id,
-        step: current.key,
-        error: combined,
-      });
-      throw new Error(combined, { cause: recordingError });
-    }
-    return { kind: "continue", summary: failedPageSummary(current) };
+    return handleStepPageFailure(context, error);
   }
   if (!(await claimWorkflowRun(db, params, "id")))
     return lostAfterPage(db, owner, launcher);
+  const settlement = await settleStepPageRetry(db, owner, current, page);
+  if (settlement.kind === "waiting") return settlement.advance;
+  page = settlement.page;
   const elapsed = Date.now() - started;
   const sampledWork = pageWork(current, page, started, retrying);
+  sampledWork.work.current.activity =
+    page.kind === "progress" && page.waitSeconds ? "capacity" : "publishing";
   const summary = summarizePage(current, page, sampledWork.work.current);
   const timing = {
+    capacityUntil:
+      page.kind === "progress" && page.waitSeconds
+        ? new Date(Date.now() + page.waitSeconds * 1000).toISOString()
+        : null,
     timing: {
       lastPageMs: elapsed,
       totalMs: (current.meta?.timing?.totalMs ?? 0) + elapsed,

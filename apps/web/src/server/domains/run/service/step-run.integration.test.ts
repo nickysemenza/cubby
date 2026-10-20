@@ -9,6 +9,7 @@ import { getDb } from "~/server/db/helpers";
 import { run, runOperation, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { continueWorkflowRun } from "~/server/workflows/runs/continuation";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
@@ -87,6 +88,206 @@ describe("step-ledger Runs", () => {
   const readRun = async (id: RunId) =>
     (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0];
 
+  // Successful sibling effects survive durable backoff and a successor attempt.
+  it("durably retries a partial batch before advancing and retains independent successes", async () => {
+    const { id, params } = await startRun();
+    const batch = scripted("synthetic-retry", [
+      {
+        kind: "progress",
+        retryable: true,
+        delta: { done: 1, failed: 1 },
+        errors: [
+          {
+            at: new Date().toISOString(),
+            ref: "synthetic:item-b",
+            message: "Synthetic temporary failure",
+          },
+        ],
+        cursor: { after: "synthetic-end" },
+        done: true,
+      },
+      {
+        kind: "progress",
+        retryable: true,
+        delta: { done: 1 },
+        cursor: { after: "synthetic-end" },
+        done: true,
+      },
+    ]);
+    const drivers = async () => [batch.driver];
+    const first = await advanceStepRun(ctx.db, params, drivers, launcher);
+    expect(first).toMatchObject({ kind: "continue", waitSeconds: 5 });
+    const pending = (await readRunSteps(ctx.db, id))[0];
+    expect(pending).toMatchObject({
+      done: 0,
+      failed: 0,
+      cursor: null,
+      meta: { batchRetry: { attempt: 1, delta: { done: 1 } } },
+    });
+    expect(
+      await advanceStepRun(ctx.db, params, drivers, launcher),
+    ).toMatchObject({ kind: "continue" });
+    expect(batch.seen).toHaveLength(1);
+    await getDb(ctx.db).execute(sql`UPDATE "RunStep" SET meta = jsonb_set(meta,
+      '{batchRetry,dueAt}', to_jsonb('2000-01-01T00:00:00.000Z'::text)) WHERE "runId" = ${id}`);
+    await advanceStepRun(ctx.db, params, drivers, launcher);
+    expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
+      done: 2,
+      failed: 0,
+      state: "done",
+    });
+    expect(batch.seen.map((x) => x.cursor)).toEqual([null, null]);
+  });
+
+  it.each([
+    { nextSkipped: "synthetic-stale-a", skipped: 1 },
+    { nextSkipped: "synthetic-stale-c", skipped: 2 },
+  ])(
+    "counts distinct skipped work across a durable partial retry ($nextSkipped)",
+    async ({ nextSkipped, skipped }) => {
+      const { id, params } = await startRun();
+      const batch = scripted("synthetic-skipped-retry", [
+        {
+          kind: "progress",
+          retryable: true,
+          skippedIds: ["synthetic-stale-a"],
+          delta: { skipped: 1, failed: 1 },
+          errors: [
+            {
+              at: new Date().toISOString(),
+              ref: "synthetic-item-b",
+              message: "Synthetic temporary failure",
+            },
+          ],
+          done: true,
+        },
+        {
+          kind: "progress",
+          retryable: true,
+          skippedIds: [nextSkipped],
+          delta: { done: 1, skipped: 1 },
+          done: true,
+        },
+      ]);
+      const drivers = async () => [batch.driver];
+      await advanceStepRun(ctx.db, params, drivers, launcher);
+      await getDb(ctx.db)
+        .execute(sql`UPDATE "RunStep" SET meta = jsonb_set(meta,
+      '{batchRetry,dueAt}', to_jsonb('2000-01-01T00:00:00.000Z'::text)) WHERE "runId" = ${id}`);
+      await advanceStepRun(ctx.db, params, drivers, launcher);
+      expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
+        state: "done",
+        done: 1,
+        skipped,
+        failed: 0,
+      });
+    },
+  );
+
+  it("durably retries a thrown temporary page failure without ending independent work", async () => {
+    const { id, params } = await startRun();
+    let attempts = 0;
+    const drivers: StepRunDrivers = async () => [
+      {
+        key: "temporary",
+        label: "Synthetic temporary page",
+        page: async () => {
+          if (++attempts === 1)
+            throw Object.assign(
+              new Error("Synthetic transient connection failure"),
+              { code: "08006" },
+            );
+          return { kind: "progress", delta: { done: 1 }, done: true };
+        },
+      },
+    ];
+    expect(
+      await advanceStepRun(ctx.db, params, drivers, launcher),
+    ).toMatchObject({ kind: "continue", waitSeconds: 5 });
+    expect((await readRunSteps(ctx.db, id))[0]?.state).toBe("running");
+    await getDb(ctx.db).execute(sql`UPDATE "RunStep" SET meta = jsonb_set(meta,
+      '{batchRetry,dueAt}', to_jsonb('2000-01-01T00:00:00.000Z'::text)) WHERE "runId" = ${id}`);
+    await advanceStepRun(ctx.db, params, drivers, launcher);
+    expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
+      state: "done",
+      done: 1,
+      failed: 0,
+    });
+  });
+
+  it("resets durable retries for the next checkpoint and identifies thrown-error waits", async () => {
+    const { id, params } = await startRun();
+    let call = 0;
+    const drivers: StepRunDrivers = async () => [
+      {
+        key: "repeated",
+        label: "Synthetic repeated page",
+        page: async () => {
+          call++;
+          if ([2, 3, 5].includes(call))
+            throw Object.assign(
+              new Error("Synthetic transient connection failure"),
+              { code: "08006" },
+            );
+          return {
+            kind: "progress",
+            cursor: { after: call },
+            delta: { done: 1 },
+            done: false,
+          };
+        },
+      },
+    ];
+    await advanceStepRun(ctx.db, params, drivers, launcher);
+    for (const seconds of [5, 10]) {
+      expect(
+        await advanceStepRun(ctx.db, params, drivers, launcher),
+      ).toMatchObject({ kind: "continue", waitSeconds: seconds });
+      expect(
+        (await readRunSteps(ctx.db, id))[0]?.meta?.work?.current.activity,
+      ).toBe("retry");
+      await getDb(ctx.db)
+        .execute(sql`UPDATE "RunStep" SET meta = jsonb_set(meta,
+        '{batchRetry,dueAt}', to_jsonb('2000-01-01T00:00:00.000Z'::text)) WHERE "runId" = ${id}`);
+    }
+    await advanceStepRun(ctx.db, params, drivers, launcher);
+    expect((await readRunSteps(ctx.db, id))[0]?.meta?.batchRetry).toBeNull();
+    expect(
+      await advanceStepRun(ctx.db, params, drivers, launcher),
+    ).toMatchObject({ kind: "continue", waitSeconds: 5 });
+  });
+
+  it("retains a capacity deadline across a successor instead of re-admitting early", async () => {
+    const { id, params } = await startRun();
+    const batch = scripted("capacity", [
+      {
+        kind: "progress",
+        waitSeconds: 60,
+        cursor: { after: 1 },
+        delta: { done: 1 },
+        done: false,
+      },
+      { kind: "progress", delta: { done: 1 }, done: true },
+    ]);
+    const drivers = async () => [batch.driver];
+    expect(
+      await advanceStepRun(ctx.db, params, drivers, launcher),
+    ).toMatchObject({ kind: "continue", waitSeconds: 60 });
+    await continueWorkflowRun(ctx.db, params, launcher);
+    const successor = { runId: id, attempt: attemptOf(await readRun(id)) };
+    expect(
+      await advanceStepRun(ctx.db, successor, drivers, launcher),
+    ).toMatchObject({ kind: "continue", waitSeconds: 60 });
+    expect(batch.seen).toHaveLength(1);
+    await getDb(ctx.db).execute(sql`UPDATE "RunStep" SET meta = jsonb_set(meta,
+      '{capacityUntil}', to_jsonb('2000-01-01T00:00:00.000Z'::text)) WHERE "runId" = ${id}`);
+    await advanceStepRun(ctx.db, successor, drivers, launcher);
+    expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
+      done: 2,
+      state: "done",
+    });
+  });
+
   // Scope is the durable ledger position, not private charge keys or a new
   // live count. Old generation work must survive a later phase-sampling deploy.
   it("describes resumed Sweep pages without executing work or exposing source cursors", async () => {
@@ -123,7 +324,7 @@ describe("step-ledger Runs", () => {
       .where(eq(runStep.runId, id));
     const plan = await inspectStepRun(ctx.db, params);
     expect(plan).toMatchObject({
-      name: "generate p4 · charges 61–80",
+      name: "generate p4 · charges 61–572",
       summary: { cumulative: { processed: 60, total: 200 } },
     });
     expect(JSON.stringify(plan)).not.toContain("synthetic-private");

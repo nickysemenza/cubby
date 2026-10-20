@@ -7,6 +7,9 @@ export const runWorkItems = z.object({
   processed: z.number().int().nonnegative(),
   total: z.number().int().nonnegative().nullable(),
   failures: z.number().int().nonnegative(),
+  activity: z
+    .enum(["computing", "publishing", "capacity", "retry", "handoff"])
+    .optional(),
 });
 export type RunWorkItems = z.infer<typeof runWorkItems>;
 
