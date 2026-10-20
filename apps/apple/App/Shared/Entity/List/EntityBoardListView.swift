@@ -80,10 +80,12 @@ struct EntityBoardListView: View {
                                             Task { await move(row, to: destination) }
                                         }
                                     }
-                                    Button("Move earlier") { Task { await reorder(index, offset: -1) } }
-                                        .disabled(index == 0)
-                                    Button("Move later") { Task { await reorder(index, offset: 1) } }
-                                        .disabled(index == rows.count - 1)
+                                    if !EntityBoardPlan.isCapped(spec, groupBy: groupBy, key: current.id) {
+                                        Button("Move earlier") { Task { await reorder(index, offset: -1) } }
+                                            .disabled(index == 0)
+                                        Button("Move later") { Task { await reorder(index, offset: 1) } }
+                                            .disabled(index == rows.count - 1)
+                                    }
                                 }
                                 .accessibilityLabel("Move \(row.title)")
                                 .disabled(writing)

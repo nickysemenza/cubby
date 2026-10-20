@@ -235,7 +235,7 @@ export const taskBulkReorderInput = z
           .strictObject({
             status: taskStatusSchema.optional(),
             projectId: projectShortcode.nullable().optional(),
-            trade: tradeSchema.nullable().optional(),
+            trade: tradeSchema.optional(),
           })
           .refine(
             (group) => Object.keys(group).length === 1,

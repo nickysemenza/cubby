@@ -2,7 +2,6 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type {
   ProductId,
   ProductShortcode,
@@ -753,10 +752,11 @@ export const reorderTasks = async (
         taskFiltersSchema.parse({
           topLevelOnly: true,
           ...Object.fromEntries(
-            Object.entries(position.group).map(([key, value]) => [
-              key,
-              [value ?? FILTER_NONE],
-            ]),
+            Object.entries(position.group).map(([key, value]) =>
+              value === null
+                ? [`${key}PresenceFilter`, "none"]
+                : [key, [value]],
+            ),
           ),
         }),
       )
@@ -799,6 +799,7 @@ export const reorderTasks = async (
           where: and(eq(task.id, moveId), notDeleted(task)),
         });
         const updated = await updateLiveAndReturn(tx, task, axisValues, moveId);
+        await assertEffectiveTaskTrade(tx, moveId);
         const changes = before
           ? computeChanges(before, updated, ["status", "projectId", "trade"])
           : undefined;

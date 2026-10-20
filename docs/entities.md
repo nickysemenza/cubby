@@ -26,7 +26,10 @@ group. A cap limits cards, never the header count. Move and reorder submit one d
 workflow command body to the domain transaction. Clients send neighbor anchors and the
 destination group; `task.bulkReorder` calculates sparse ranks over the complete thin group,
 rebalancing it only when no rank fits. Rebalancing preserves unseen rows and their timestamps.
-Clients do not number a partial page or split a move into writes.
+Clients do not number a partial page or split a move into writes. Capped recency groups
+allow moves between groups but do not offer manual ordering. Task trade grouping uses
+the required effective trade; clearing an inherited source must still leave a resolvable
+trade. No-project placement uses the canonical reference-presence filter.
 
 ## Generic by default
 

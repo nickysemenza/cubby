@@ -163,7 +163,9 @@ export function EntityBoard({
       createValidTargetKeyboardCoordinates(
         (active, target) =>
           target?.board === view.id &&
-          target?.destination?.before !== active?.rowId,
+          target?.destination?.before !== active?.rowId &&
+          (target?.destination?.before !== undefined ||
+            target?.destination?.key !== active?.groupKey),
       ),
     [view.id],
   );
@@ -247,6 +249,7 @@ export function EntityBoard({
     const target = over?.data.current;
     if (typeof active.id !== "string" || target?.board !== view.id) return;
     const destination: Destination = target.destination;
+    if (destination.before === active.id) return;
     const rect = active.rect.current.translated;
     if (destination.before && rect && over) {
       const side =
@@ -437,10 +440,11 @@ function BoardGroup({
             row={row}
             destination={{ ...destination, before: row.id }}
             disabled={pending}
+            manualOrder={!capped}
           >
             {view.reorder && (
               <div className="flex flex-wrap gap-1">
-                {index > 0 && (
+                {!capped && index > 0 && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -455,7 +459,7 @@ function BoardGroup({
                     Earlier
                   </Button>
                 )}
-                {index < rows.length - 1 && (
+                {!capped && index < rows.length - 1 && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -529,6 +533,7 @@ function BoardCard({
   row,
   destination,
   disabled,
+  manualOrder,
   children,
 }: {
   entity: BoardEntity;
@@ -536,17 +541,18 @@ function BoardCard({
   row: BoardRow;
   destination: Destination;
   disabled: boolean;
+  manualOrder: boolean;
   children: ReactNode;
 }) {
   const drag = useDraggable({
     id: row.id,
-    data: { rowId: row.id },
-    disabled: disabled || !view.reorder,
+    data: { rowId: row.id, groupKey: destination.key },
+    disabled: disabled || !view.reorder || !manualOrder,
   });
   const drop = useDroppable({
     id: `card:${row.id}`,
     data: { board: view.id, destination },
-    disabled,
+    disabled: disabled || !manualOrder,
   });
   return (
     <article
@@ -557,7 +563,7 @@ function BoardCard({
       className="space-y-2 border-b p-2 text-sm"
     >
       <div className="flex items-start gap-2">
-        {view.reorder && (
+        {view.reorder && manualOrder && (
           <button
             type="button"
             ref={drag.setActivatorNodeRef}

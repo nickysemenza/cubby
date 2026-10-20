@@ -88,4 +88,48 @@ describe("server-owned task placement", () => {
     ).rejects.toThrow(/anchor/iu);
     expect((await readTask(moved.id)).status).toBe(moved.status);
   });
+  it("moves into No project and rolls back when clearing the only trade source", async () => {
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Placement project",
+      defaultTrade: "building",
+    });
+    const explicit = await createRepoEntity(ctx, "task", {
+      name: "Explicit trade",
+      projectId: project.output.id,
+      trade: "building",
+    });
+    await reorderTasks(
+      ctx.db,
+      {
+        ranks: [],
+        position: { id: explicit.output.id, group: { projectId: null } },
+        move: { id: explicit.output.id, patch: { projectId: null } },
+      },
+      ctx.actor,
+    );
+    expect(
+      (await getTaskByShortcode(ctx.db, explicit.output.id))?.projectId,
+    ).toBeNull();
+    const inherited = await createRepoEntity(ctx, "task", {
+      name: "Inherited trade",
+      projectId: project.output.id,
+      trade: null,
+    });
+    await expect(
+      reorderTasks(
+        ctx.db,
+        {
+          ranks: [],
+          position: { id: inherited.output.id, group: { projectId: null } },
+          move: { id: inherited.output.id, patch: { projectId: null } },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/trade/iu);
+    const stored = await getDb(ctx.db).query.task.findFirst({
+      where: eq(task.shortcode, inherited.output.id),
+    });
+    expect(stored?.projectId).not.toBeNull();
+    expect(stored?.trade).toBeNull();
+  });
 });

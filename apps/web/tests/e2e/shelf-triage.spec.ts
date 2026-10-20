@@ -147,9 +147,7 @@ test("bulk stocking previews each selected product at the chosen location", asyn
   await expect(dialog.getByText(/already 7 each here/)).toHaveCount(0);
   await dialog.getByRole("button", { name: `Remove ${prefix} oil` }).click();
   await expect(dialog.getByText(/already 2 l here/)).toHaveCount(0);
-  await expect(
-    dialog.getByText(`${prefix} fasteners`, { exact: true }),
-  ).toBeVisible();
+  await expect(dialog.getByText(second.name, { exact: true })).toBeVisible();
 });
 
 test("shelf triage bounds the pass by spend and by category", async ({
