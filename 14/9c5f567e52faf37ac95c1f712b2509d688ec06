@@ -1,0 +1,71 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_a9a7640b9c0a23 260-262
+apps/web/src/entity/display/entity-display.tsx
+  s_9b829d577c7e4c::t_70a88df6109c05 1301-1303,1308,1763-1775
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_9b829d577c7e4c::t_6dd18450b611d3 95,98-99,108,111-112,116,421,437
+apps/web/src/entity/hooks/use-list-bulk-actions.tsx
+  s_9b829d577c7e4c::t_540a48366decd5 19,191-194
+apps/web/src/entity/model/view-manifest.ts
+  s_9b829d577c7e4c::t_d05fa187ae5700 75-76,129-134
+apps/web/src/entity/routing/list-page.tsx
+  s_9b829d577c7e4c::t_418815170112b3 19,155,240,242,421-422,431,440-444
+apps/web/src/entity/suggestions/find-suggestions-dialog.tsx
+  s_9b829d577c7e4c::t_e984f556704971 143,147-148,155-164
+apps/web/src/entity/table/column-helpers.tsx
+  s_9b829d577c7e4c::t_6bd82c6fdb3554 43-46,281,286,311-313,1094
+apps/web/src/entity/table/data-table-toolbar.tsx
+  s_9b829d577c7e4c::t_32f2abd1408ffe 8,18,55,113-114,139-143,195,202,205,215-217,283-321,378,404,499-500,503,507-517
+apps/web/src/entity/table/data-table-views.tsx
+  s_9b829d577c7e4c::t_553d51e67236dc 213,222,224,230-239,248,262
+apps/web/src/entity/table/entity-empty-states.tsx
+  s_9b829d577c7e4c::t_4b9af99fef1c01 7,97
+apps/web/src/entity/table/ledger-filters.tsx
+  s_9b829d577c7e4c::t_9fb9a28d620347 14,155-165
+apps/web/src/entity/table/table-header-layout.tsx
+  s_9b829d577c7e4c::t_288c7ec073f27d 50,145,193,216-219,249,303-306,382,531,605-610,693-694
+apps/web/src/entity/table/table.tsx
+  s_9b829d577c7e4c::t_2573bfea5f5a5f 1,21,30,58,284,456-457,466-473,495,555-581,587,594,790,810,887,1141,1169-1200,1396
+apps/web/src/ui/combobox/picker.tsx
+  s_9b829d577c7e4c::t_2cabada5a4707f 72-73,1133,1233-1235,1239-1258,1264-1270
+apps/web/src/ui/data-table/bulk-action-bar.tsx
+  s_9b829d577c7e4c::t_ceb725c5ad3f7c 4,14,18,50,91,94,96-97,99,101-111,118,129-130,139-140,167
+apps/web/src/ui/data-table/column-filter-editor.tsx
+  s_9b829d577c7e4c::t_9571a3f60f04c3 1-106
+apps/web/src/ui/data-table/data-table-view-options.tsx
+  s_9b829d577c7e4c::t_32f931b20ae5d3 77,111
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_9b829d577c7e4c::t_3d6c1e43764dcd 1,52-54,58,703,714-744,852,917-918,930-976,993-994,997-998,1001-1011,1013-1028,1100-1102,1113,1117,1119,1123,1143,1145-1147,1150,1190,1198,1202,1226,1326,1409,1428-1430,1547,1554
+apps/web/src/ui/data-table/filter-bar.unit.test.tsx
+  s_9b829d577c7e4c::t_c461e224fb8fca 254,350-351
+apps/web/src/ui/data-table/table-money.ts
+  s_9b829d577c7e4c::t_0b72a33d1aaa20 1-35
+apps/web/src/ui/data-table/table.css
+  s_9b829d577c7e4c::t_f59fe8b18876e6 1-41
+apps/web/src/ui/data-table/use-data-table-controller.ts
+  s_9b829d577c7e4c::t_af8e16205f5374 151,159
+docs/entities.md
+  s_9b829d577c7e4c::t_085991de0338d6 655,659-661
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_9b829d577c7e4c::t_2d6b21af4a76a8 173
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_9b829d577c7e4c::t_61110d0447332b 59
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_9b829d577c7e4c::t_6c5b2368c15b11 92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "149c5f567e52faf37ac95c1f712b2509d688ec06",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
