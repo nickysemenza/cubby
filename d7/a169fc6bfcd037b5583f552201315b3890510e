@@ -1,0 +1,99 @@
+apps/apple/CubbyKit/Sources/CubbyKit/PurchaseImport/RunSnapshot.swift
+  s_359d51740d6cee::t_c231a6491681ba 31-34
+apps/apple/CubbyKit/Tests/CubbyKitTests/PurchaseImport/RunSnapshotTests.swift
+  s_359d51740d6cee::t_f590c96186efdc 47-54
+apps/web/generator/http-api/openapi.ts
+  s_359d51740d6cee::t_d60a43b95347e3 369,470
+apps/web/src/lib/http-api/openapi-document.unit.test.ts
+  s_359d51740d6cee::t_565ddce8ab09a0 18,141
+docs/development.md
+  s_359d51740d6cee::t_44b78d2e266511 22-26
+packages/schemas/src/ai.ts
+  s_c3ccc4e3c4dc72::t_83a5544ea8b3de 26,469
+packages/schemas/src/cookbook-fields.ts
+  s_c3ccc4e3c4dc72::t_a6f46afd5f193b 1,8
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_c3ccc4e3c4dc72::t_16a541bf098970 2,137
+packages/schemas/src/entity-recommendations.ts
+  s_c3ccc4e3c4dc72::t_8a27ddf7012c4c 2-3,21,53
+packages/schemas/src/image-processing.ts
+  s_c3ccc4e3c4dc72::t_e93bb38e6177c1 92-97,100,102
+packages/schemas/src/image-sighting-fields.ts
+  s_c3ccc4e3c4dc72::t_d47e19ce44833f 2,19
+packages/schemas/src/import-recipe.ts
+  s_c3ccc4e3c4dc72::t_d9594cc93d0612 2,289,338-345,347,364,397,414
+packages/schemas/src/ingredient-cooccurrence.ts
+  s_c3ccc4e3c4dc72::t_53c0f4dd66f832 2-3,15
+packages/schemas/src/ingredient.ts
+  s_c3ccc4e3c4dc72::t_5e965b067ce7ed 2,315
+packages/schemas/src/inventory.ts
+  s_c3ccc4e3c4dc72::t_faf8de9b4d246e 24-25,150
+packages/schemas/src/mail-import-settings.ts
+  s_c3ccc4e3c4dc72::t_6092186cb4b70a 98
+packages/schemas/src/mcp.ts
+  s_c3ccc4e3c4dc72::t_f391ab2ad11a40 2,120
+packages/schemas/src/meal-nutrition.ts
+  s_c3ccc4e3c4dc72::t_eb04e396bc1abd 2,56,106
+packages/schemas/src/meal.ts
+  s_c3ccc4e3c4dc72::t_7080ebf0047d60 15,32,203,238
+packages/schemas/src/product-category-fields.ts
+  s_c3ccc4e3c4dc72::t_dccea332c4e64f 45-53
+packages/schemas/src/product-workflow.ts
+  s_c3ccc4e3c4dc72::t_ceb17647979cd8 2,80
+packages/schemas/src/project-output-fields.ts
+  s_359d51740d6cee::t_a7111e5a45203e 18-33,37-40
+packages/schemas/src/recipe-dependency-graph.ts
+  s_c3ccc4e3c4dc72::t_6cb3a064400d33 3,5
+packages/schemas/src/recipe-fields.ts
+  s_c3ccc4e3c4dc72::t_98d33e2c5816ae 59-60,63,70,73,79,86-87,89,92,94-96
+packages/schemas/src/recipe-shared.ts
+  s_c3ccc4e3c4dc72::t_cd478452d877c6 16-18,63-66,69,79
+packages/schemas/src/recommendations.ts
+  s_c3ccc4e3c4dc72::t_9ba11a717a40fe 6-7,78-79,104
+packages/schemas/src/scan.ts
+  s_c3ccc4e3c4dc72::t_13bb37d05b1d25 11,50
+packages/schemas/src/transfer-pair-suggestion.ts
+  s_359d51740d6cee::t_34270e6daeae61 2,5,54,77,97
+packages/schemas/src/work-queue.ts
+  s_c3ccc4e3c4dc72::t_eb3d24f26d4d41 2,26
+packages/schemas/src/batch.ts
+  s_9b829d577c7e4c::t_85462239db0a5d 3-9
+packages/schemas/src/entity-definitions/22-productCategory.entity.ts
+  s_c3ccc4e3c4dc72::t_ea8b8ea26cc9be 12,491
+packages/schemas/src/image.ts
+  s_9b829d577c7e4c::t_b1348dd765dfc1 543-547,550,553
+packages/schemas/src/location.ts
+  s_9b829d577c7e4c::t_b765b46bf98f3f 20,159,167-168,171-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d7a169fc6bfcd037b5583f552201315b3890510e",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c3ccc4e3c4dc72": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a6c-5433-77a1-b433-8ff39793f2bf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

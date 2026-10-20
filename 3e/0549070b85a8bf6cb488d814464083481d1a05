@@ -1,0 +1,23 @@
+apps/apple/App/Shared/Run/RunConsoleView.swift
+  s_359d51740d6cee::t_32f32324d459ce 46,134,141
+apps/apple/CubbyKit/Sources/CubbyKit/PurchaseImport/RunReviewSession.swift
+  s_359d51740d6cee::t_65f2d46b491822 178
+apps/apple/CubbyKit/Sources/CubbyKit/PurchaseImport/RunSnapshot.swift
+  s_359d51740d6cee::t_179dd6fa1abfbf 8,16-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3e0549070b85a8bf6cb488d814464083481d1a05",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

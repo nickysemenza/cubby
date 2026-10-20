@@ -1,0 +1,19 @@
+apps/web/tooling/openapi-document-passes.unit.test.ts
+  s_359d51740d6cee::t_baea74d352a376 4,22,32,54,74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9cd748e22e0db770d577d907bc12dbce6ebdef9a",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

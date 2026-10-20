@@ -1,0 +1,19 @@
+packages/schemas/src/financial-transaction.ts
+  s_359d51740d6cee::t_51c0c78e9243bb 33,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3c39927b0e9b9bb403f7e7903e3f48c33985f9e9",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

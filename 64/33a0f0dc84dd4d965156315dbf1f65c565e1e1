@@ -1,0 +1,33 @@
+apps/apple/AGENTS.md
+  s_359d51740d6cee::t_cb600e2f3bf085 41-44
+apps/web/generator/http-api/openapi.ts
+  s_359d51740d6cee::t_bebbe128826c0a 470
+apps/web/src/lib/http-api/openapi-document.unit.test.ts
+  s_359d51740d6cee::t_cdfe174fa6447e 140-147
+packages/schemas/src/location.ts
+  s_359d51740d6cee::t_d181517545f926 20,109,185,201
+packages/schemas/src/mail-import-settings.ts
+  s_359d51740d6cee::t_4da7da0ceb3504 98
+packages/schemas/src/meal-nutrition.ts
+  s_359d51740d6cee::t_60848c7ac81d52 56-59
+packages/schemas/src/product.ts
+  s_359d51740d6cee::t_055b8e00e1db6a 129,132,143
+packages/schemas/src/project.unit.test.ts
+  s_359d51740d6cee::t_e5955d23f5ebba 8-9,16-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6433a0f0dc84dd4d965156315dbf1f65c565e1e1",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

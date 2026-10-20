@@ -1,0 +1,19 @@
+apps/apple/App/Tests/Today/TodayModelTests.swift
+  s_359d51740d6cee::t_4b0db81450463b 128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5165d4271ac3b2c32ca56efabed05a5450d250e6",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
