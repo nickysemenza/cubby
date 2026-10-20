@@ -456,7 +456,7 @@ public struct ReportPresentation: Hashable, Sendable {
                     id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
                     recordID: row.id, title: row.title,
                     trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
-                    at: row.at.flatMap(instant),
+                    at: row.at.flatMap(DatePresentation.parse),
                     listLink: row.listLink.flatMap { link in
                         EntityKey(rawValue: link.entity).map {
                             ListLink(entity: $0, filters: link.filters.additionalProperties)
@@ -536,10 +536,6 @@ public struct ReportPresentation: Hashable, Sendable {
     private static func text(_ value: Double?, money: Bool) -> String {
         guard let value else { return "—" }
         return money ? DisplayFormat.currency(value) : DisplayFormat.number(value)
-    }
-
-    private static func instant(_ text: String) -> Date? {
-        try? LenientISO8601DateTranscoder().decode(text)
     }
 
     /// A household calendar day (`yyyy-MM-dd`) as the start of that day in UTC.
