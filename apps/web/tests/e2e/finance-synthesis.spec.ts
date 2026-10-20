@@ -52,12 +52,12 @@ test("expense analytics breaks spend down by root Spending Category and charts m
     name: /Net spend by root Spending Category/,
   });
   await expect(breakdown).toHaveAccessibleName(
-    new RegExp(`${escapeRegExp(`${name} home`)} \\$76(,|$)`),
+    new RegExp(`${escapeRegExp(`${name} home`)} \\$75\\.75(,|$)`),
   );
-  await expect(breakdown).toHaveAccessibleName(/Uncategorized \$25(,|$)/);
+  await expect(breakdown).toHaveAccessibleName(/Uncategorized \$25\.10(,|$)/);
 
   const flow = page.getByRole("figure", { name: /^Money flow of/ });
-  await expect(flow).toHaveAccessibleName(/\$101/);
+  await expect(flow).toHaveAccessibleName(/\$100\.85/);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: /^Jump to:/ }).click();
   await page

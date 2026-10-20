@@ -69,7 +69,7 @@ describe("CalendarItemPresentation", () => {
       screen.getByText("Target · Souper Cubes · Kitchen · Other"),
     ).toBeInTheDocument();
     expect(screen.getByRole("presentation")).toHaveClass("object-contain");
-    expect(screen.getByText("$79")).toBeInTheDocument();
+    expect(screen.getByText("$79.00")).toBeInTheDocument();
   });
 
   it("keeps the detail variant's thumbnail down to one line of text", () => {
@@ -91,15 +91,17 @@ describe("CalendarItemPresentation", () => {
     // so detail sends the number down to the mono data line.
     const titleLine = (element: HTMLElement) =>
       element.closest("div")?.textContent;
-    expect(titleLine(screen.getByTitle(plannedExpense.title))).toContain("$79");
+    expect(titleLine(screen.getByTitle(plannedExpense.title))).toContain(
+      "$79.00",
+    );
 
     rerender(
       <CalendarItemPresentation item={plannedExpense} variant="detail" />,
     );
     expect(titleLine(screen.getByTitle(plannedExpense.title))).not.toContain(
-      "$79",
+      "$79.00",
     );
-    expect(screen.getByText("$79")).toBeInTheDocument();
+    expect(screen.getByText("$79.00")).toBeInTheDocument();
   });
 
   it("drops the detail thumbnail entirely when the item has no cover", () => {

@@ -63,7 +63,7 @@ describe("attentionEvidence", () => {
         daysPastDue: 78,
         cost: 2400,
       }),
-      "Planned for Jun 4, 2026 · 78 days past due · $2,400 not logged",
+      "Planned for Jun 4, 2026 · 78 days past due · $2,400.00 not logged",
     ],
     [
       "missing_budget",
@@ -72,7 +72,7 @@ describe("attentionEvidence", () => {
         actualSpend: 34120,
         committedSpend: 2171,
       }),
-      "$36,291 in spend · no cost estimate",
+      "$36,291.00 in spend · no cost estimate",
     ],
     [
       "unclassified_expense",
