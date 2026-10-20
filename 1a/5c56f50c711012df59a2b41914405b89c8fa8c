@@ -1,0 +1,21 @@
+apps/web/src/entity/entity-detail/detail-activity.tsx
+  s_9b829d577c7e4c::t_169b79a2505e76 13-15,129
+apps/web/src/entity/entity-detail/spend-chart.tsx
+  s_9b829d577c7e4c::t_36edde6b5e91fa 98-100,114-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1a5c56f50c711012df59a2b41914405b89c8fa8c",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
