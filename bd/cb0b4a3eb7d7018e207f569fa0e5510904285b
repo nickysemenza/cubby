@@ -1,0 +1,19 @@
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_89f5879f3c3263::t_b8c9cb1b6b1ec8 1092-1094,1108-1116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bdcb0b4a3eb7d7018e207f569fa0e5510904285b",
+  "prompts": {},
+  "sessions": {
+    "s_89f5879f3c3263": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c23e8c35-b127-4de4-adab-ab6c272d16e1",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
