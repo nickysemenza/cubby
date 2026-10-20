@@ -195,19 +195,34 @@ export async function advanceStepRun(
             .filter(Boolean)
             .join("\n")
         : runFailureText(String(error));
-    if (!(await claimWorkflowRun(db, params, "id")))
-      return lostAfterPage(db, owner, launcher);
-    await recordRunStepPage(db, owner.id, current.key, {
-      state: "failed",
-      errors: [failure(message)],
+    log.error("Step page failed", {
+      runId: owner.id,
+      step: current.key,
+      error: message,
     });
-    await recordRunProgress(
-      db,
-      owner.id,
-      "step_failed",
-      `${current.label}: ${message.split("\n", 1)[0]}`,
-      stamp,
-    );
+    try {
+      if (!(await claimWorkflowRun(db, params, "id")))
+        return lostAfterPage(db, owner, launcher);
+      await recordRunStepPage(db, owner.id, current.key, {
+        state: "failed",
+        errors: [failure(message)],
+      });
+      await recordRunProgress(
+        db,
+        owner.id,
+        "step_failed",
+        `${current.label}: ${message.split("\n", 1)[0]}`,
+        stamp,
+      );
+    } catch (recordingError) {
+      const combined = `${message}\n${runFailureText(new Error("Failure recording failed", { cause: recordingError }))}`;
+      log.error("Step failure checkpoint failed", {
+        runId: owner.id,
+        step: current.key,
+        error: combined,
+      });
+      throw new Error(combined, { cause: recordingError });
+    }
     return { kind: "continue" };
   }
   if (!(await claimWorkflowRun(db, params, "id")))

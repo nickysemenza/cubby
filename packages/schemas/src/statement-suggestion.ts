@@ -16,6 +16,9 @@ import { statementTransferPairRef } from "./transfer-pair-suggestion";
 const kind = z.enum(generatedFinancialTransactionKindValues);
 const status = z.enum(generatedFinancialTransactionStatusValues);
 
+/** Bump with any statement label prompt/model-policy change; retained votes carry this revision. */
+export const STATEMENT_LABEL_REVISION = "2026-10-17.1";
+
 export const statementTransactionAction = z.enum([
   "create",
   "attach",

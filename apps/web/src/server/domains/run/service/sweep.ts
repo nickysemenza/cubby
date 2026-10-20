@@ -282,6 +282,7 @@ async function statementPage(
         ? await countUnmatchedCharges(db, scope)
         : undefined;
     const page = await generateStatementSuggestionPage(db, {
+      limit: 20,
       after: cursor.after,
       runId: run.id,
       scope,

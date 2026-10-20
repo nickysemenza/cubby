@@ -14,6 +14,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -36,6 +37,8 @@ import {
 import {
   buildChargeProposals,
   generateStatementSuggestionPage,
+  labelledProposal,
+  publishChargeProposal,
   pendingPostedMatch,
 } from "./statement-suggestions";
 
@@ -626,6 +629,218 @@ describe("statement Transaction suggestions", () => {
     expect((await listStatementRows(ctx.db, {})).data[0]).toMatchObject({
       matchState: "matched",
     });
+  });
+
+  // Observation-only evidence churn must not discard paid labels or ask the
+  // model again; the rebuilt judgment still uses the current evidence fence.
+  it("keeps labels across a re-Sweep with unchanged model inputs", async () => {
+    await card(ctx);
+    const observed = rowInput();
+    await record(ctx, [observed]);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    const [before] = await suggestions(ctx);
+    expect(before).toMatchObject({
+      clean: true,
+      create: {
+        votes: { label: "purchase" },
+        counterparty: { label: "business" },
+      },
+    });
+    await record(
+      ctx,
+      [{ ...observed, rowPosition: 10, providerNotes: "Synthetic memo" }],
+      {
+        fingerprint: "synthetic-reexport",
+      },
+    );
+    await generate(ctx);
+    let calls = 0;
+    const outcome = await label(ctx, async () => {
+      calls++;
+      throw new Error("Unchanged model inputs must not be labelled again");
+    });
+    expect(calls).toBe(0);
+    expect(outcome).toMatchObject({ labelled: 0, failed: [] });
+    const [after] = await suggestions(ctx);
+    expect(after).toMatchObject({
+      clean: true,
+      create: {
+        votes: { label: "purchase" },
+        counterparty: { label: "business" },
+        notes: "Synthetic memo",
+      },
+      model: before!.model,
+    });
+    await accept(ctx, after!);
+    expect(
+      (await listStatementRows(ctx.db, {})).data.every(
+        (row) => row.matchState === "matched",
+      ),
+    ).toBe(true);
+  });
+
+  // Prompt instructions are model inputs too; an obsolete producer revision
+  // cannot be kept merely because the charge's evidence fingerprint matches.
+  it("relabels an obsolete prompt revision even when evidence is unchanged", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [existing] = await suggestions(ctx);
+    const [proposal] = await buildChargeProposals(ctx.db, [
+      { source: existing!.source, chargeKey: existing!.chargeKey },
+    ]);
+    const judgment = structuredClone(proposal!.judgment);
+    judgment.create!.votes.label = "purchase";
+    judgment.create!.counterparty.label = "business";
+    judgment.clean = true;
+    await publishChargeProposal(
+      ctx.db,
+      await labelledProposal(proposal!, judgment),
+      {
+        kind: "model",
+        model: "synthetic-decision-model",
+        revision: "synthetic-obsolete-prompt",
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+        evaluationId: null,
+      },
+    );
+    await generate(ctx);
+    const [rebuilt] = await suggestions(ctx);
+    expect(rebuilt).toMatchObject({
+      model: null,
+      clean: false,
+      create: { votes: { label: null }, counterparty: { label: null } },
+    });
+    expect(
+      await label(
+        ctx,
+        answering({ kind: "purchase", counterparty: "business" }),
+      ),
+    ).toMatchObject({ labelled: 1 });
+  });
+
+  // Both statement inputs and the candidate identity set participate in label
+  // validity; retaining a previous clean result would permit stale bulk advice.
+  it.each(["statement", "candidates"] as const)(
+    "retires labels when %s model inputs change",
+    async (changed) => {
+      const account = (await card(ctx)).output;
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 42.5,
+        postedDate: "2026-05-05",
+        rawDescription: "SYNTHETIC PREVIOUS CANDIDATE",
+        sourceRefs: [],
+      });
+      const observed = rowInput();
+      await record(ctx, [observed]);
+      await generate(ctx);
+      await label(
+        ctx,
+        answering({ kind: "purchase", counterparty: "business" }),
+      );
+      if (changed === "statement") {
+        await record(
+          ctx,
+          [
+            {
+              ...observed,
+              rowPosition: 10,
+              merchant: "Example Changed Merchant",
+            },
+          ],
+          { fingerprint: "synthetic-changed-subject" },
+        );
+      } else {
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId: account.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 42.5,
+          postedDate: "2026-05-05",
+          rawDescription: "SYNTHETIC ADDITIONAL CANDIDATE",
+          sourceRefs: [],
+        });
+      }
+      await generate(ctx);
+      const [rebuilt] = await suggestions(ctx);
+      expect(rebuilt).toMatchObject({
+        model: null,
+        clean: false,
+        create: { votes: { label: null }, counterparty: { label: null } },
+      });
+      expect(
+        rebuilt!.candidates.every((candidate) => candidate.label === null),
+      ).toBe(true);
+      expect(
+        await label(
+          ctx,
+          answering({ kind: "purchase", counterparty: "business" }),
+        ),
+      ).toMatchObject({ labelled: 1 });
+    },
+  );
+
+  // A pause after generation must preserve earlier paid labels while new
+  // charges remain unlabelled; retrying asks only for those unfinished charges.
+  it("keeps existing labels when a re-Sweep is interrupted mid-label", async () => {
+    await card(ctx);
+    const original = rowInput();
+    await record(ctx, [original]);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    const [before] = await suggestions(ctx);
+    await record(
+      ctx,
+      [
+        { ...original, rowPosition: 10, providerNotes: "Synthetic new memo" },
+        rowInput({
+          rawDescription: "EXAMPLE NEW CHARGE",
+          merchant: "Example Cafe",
+          providerAmount: -12,
+        }),
+      ],
+      { fingerprint: "synthetic-interrupted-export" },
+    );
+    await generate(ctx);
+    const paused = new AiBudgetExhaustedError(
+      {
+        windowStart: "2026-05-04T00:00:00Z",
+        windowEnd: "2026-05-04T06:00:00Z",
+        credit: { limitUsd: 1, spentUsd: 0 },
+        plan: { limitUsd: 1, spentUsd: 0 },
+        paid: { limitUsd: 1, spentUsd: 1 },
+      },
+      "Synthetic interruption",
+    );
+    await expect(
+      label(ctx, async () => {
+        throw paused;
+      }),
+    ).rejects.toBe(paused);
+    const retained = (await suggestions(ctx)).find(
+      (row) => row.chargeKey === before!.chargeKey,
+    );
+    expect(retained).toMatchObject({
+      clean: true,
+      create: {
+        votes: { label: "purchase" },
+        counterparty: { label: "business" },
+      },
+    });
+    const seen: string[] = [];
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    await label(ctx, async (input) => {
+      seen.push(input.state);
+      return answer(input);
+    });
+    expect(
+      seen.every((subject) => subject.includes("EXAMPLE NEW CHARGE")),
+    ).toBe(true);
+    expect((await suggestions(ctx)).every((row) => row.clean)).toBe(true);
   });
 
   // Failure mode: the model picks `interest` for interest earned, which the

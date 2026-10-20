@@ -2,6 +2,7 @@ import { suggestionStatus } from "@cubby/schemas/ai";
 import {
   assessmentFamily,
   assessmentJudgments,
+  assessmentProducer,
   type AssessmentProducer,
   feedbackEvent,
   feedbackVerdict,
@@ -23,6 +24,7 @@ import {
   type StatementTransactionCandidate,
   statementTransactionAction,
   type StatementTransactionJudgment,
+  STATEMENT_LABEL_REVISION,
 } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -49,6 +51,7 @@ import {
   suggestionRefKey,
 } from "~/server/domains/statement-import/repo/statement-charge";
 import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
+import { statementLabelInputs } from "~/server/domains/statement-import/repo/statement-label-input";
 import {
   decideStatementKind,
   kindAgreed,
@@ -1094,21 +1097,31 @@ export async function publishChargeProposal(
     await client.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`}, 0))`,
     );
-    const { rows: prior } = await client.execute<{
+    const { rows: stored } = await client.execute<{
       id: string;
       status: string;
       fingerprint: string | null;
       evidenceFingerprint: string | null;
       suppression: unknown;
       active: boolean;
+      judgment: unknown;
+      producer: unknown;
+      needsLabel: string | null;
     }>(sql`
-      SELECT id, status, fingerprint, ${suggestionField("evidenceFingerprint", "AssessmentState")} AS "evidenceFingerprint",
-        suppression, active FROM "AssessmentState"
-      WHERE family = ${assessmentFamily.enum.statement_transaction}
-        AND ${suggestionField("source", "AssessmentState")} = ${charge.source}
-        AND ${suggestionField("chargeKey", "AssessmentState")} = ${charge.chargeKey}
-      FOR UPDATE
+      SELECT s.id, s.status, s.fingerprint, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
+        s.suppression, s.active, a.judgment, a.producer,
+        ${suggestionField("needsLabel")} AS "needsLabel"
+      FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+      WHERE s.family = ${assessmentFamily.enum.statement_transaction}
+        AND ${suggestionField("source")} = ${charge.source}
+        AND ${suggestionField("chargeKey")} = ${charge.chargeKey}
+      ORDER BY s."createdAt" DESC, s.id DESC
+      FOR UPDATE OF s
     `);
+    const prior = stored.map((row) => ({
+      ...row,
+      producer: assessmentProducer.nullable().parse(row.producer),
+    }));
     if (prior.some((row) => row.suppression !== null)) return "suppressed";
     // A charge matched, ignored or superseded after it was listed (an accept or
     // an import-page attach in between) needs no suggestion; a ref inserted
@@ -1128,12 +1141,64 @@ export async function publishChargeProposal(
       prior.some(
         (row) =>
           row.active &&
+          !(
+            producer.kind === "rule" &&
+            row.producer?.kind === "model" &&
+            row.producer.revision !== STATEMENT_LABEL_REVISION
+          ) &&
           (row.fingerprint === proposal.fingerprint ||
             (producer.kind === "rule" &&
               row.evidenceFingerprint === proposal.evidenceFingerprint)),
       )
     )
       return "unchanged";
+    if (producer.kind === "rule" && proposal.judgment.create) {
+      // Retain the paid votes, not their old rule/history conclusions. Evidence
+      // still gets a fresh fingerprint and current apply-time validation.
+      const inputs = canonicalJson(statementLabelInputs(proposal.judgment));
+      const reusable = prior.find((row) => {
+        if (
+          row.needsLabel !== "false" ||
+          row.producer?.kind !== "model" ||
+          row.producer.revision !== STATEMENT_LABEL_REVISION ||
+          !["pending", "superseded"].includes(row.status)
+        )
+          return false;
+        const previous = assessmentJudgments.statement_transaction.parse(
+          row.judgment,
+        );
+        return canonicalJson(statementLabelInputs(previous)) === inputs;
+      });
+      if (reusable) {
+        const previous = assessmentJudgments.statement_transaction.parse(
+          reusable.judgment,
+        );
+        const previousProducer = reusable.producer;
+        if (previous.create && previousProducer?.kind === "model") {
+          const judgment = structuredClone(proposal.judgment);
+          const create = judgment.create!;
+          Object.assign(
+            create,
+            decideStatementKind({
+              amount: create.amount,
+              votes: { ...create.votes, label: previous.create.votes.label },
+              counterparty: {
+                ...create.counterparty,
+                label: previous.create.counterparty.label,
+              },
+              transfer: judgment.transfer,
+            }),
+          );
+          for (const candidate of judgment.candidates)
+            candidate.label = previous.candidates.find(
+              (entry) => entry.transactionId === candidate.transactionId,
+            )!.label;
+          judgment.clean = isClean(judgment, proposal.canonical.amount);
+          proposal = await labelledProposal(proposal, judgment);
+          producer = previousProducer;
+        }
+      }
+    }
     const retire = prior.filter((row) => row.active).map((row) => row.id);
     if (retire.length)
       await client.execute(sql`
