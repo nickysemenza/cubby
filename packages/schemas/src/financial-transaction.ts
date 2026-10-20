@@ -51,7 +51,11 @@ export {
   type FinancialTransactionSourceRef,
 } from "./financial-transaction-fields";
 
-export const financialTransactionKind = z.enum();
+export {
+  financialTransactionKind,
+  financialTransactionStatus,
+  type FinancialTransactionStatus,
+} from "./financial-transaction-fields";
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
 
 /** The same bounded candidate set reaches retrieval and declared ranking. */

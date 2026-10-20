@@ -5,7 +5,6 @@ import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
 import { wholeCentAmount } from "./money";
 import { plainDate } from "./base-entity";
 
-/** Posting state reported by the source, independent of Cubby classification. */
 const financialTransactionKindValues = [
   "purchase",
   "refund",
@@ -32,6 +31,7 @@ export type FinancialTransactionStatus = z.infer<
   typeof financialTransactionStatus
 >;
 
+/** Posting state reported by the source, independent of Cubby classification. */
 export const financialTransactionProviderStatus = z.enum(["posted", "pending"]);
 
 export const financialTransactionNonZeroAmount = wholeCentAmount.refine(
