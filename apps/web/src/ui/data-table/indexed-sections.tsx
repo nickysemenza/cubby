@@ -720,7 +720,7 @@ export function IndexedSections({
               {footer}
             </div>
             {threeColumn && (
-              <aside className="sticky top-[var(--app-chrome-top)] max-h-[calc(100dvh-var(--app-chrome-top)-1rem)] w-80 shrink-0 space-y-5 self-start overflow-y-auto overscroll-contain">
+              <aside className="sticky top-[var(--app-chrome-top)] max-h-[calc(100dvh-var(--app-chrome-top)-1rem)] w-88 shrink-0 space-y-5 self-start overflow-y-auto overscroll-contain">
                 {aside}
               </aside>
             )}

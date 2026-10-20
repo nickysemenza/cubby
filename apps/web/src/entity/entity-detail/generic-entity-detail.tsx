@@ -747,7 +747,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
                         className="min-w-0 scroll-mt-[var(--app-chrome-top)]"
                       >
                         <SectionHeading title={facts.title} />
-                        <FactsLayoutProvider layout="leader">
+                        <FactsLayoutProvider layout="compact">
                           <QualitySectionChecks section={facts.id} />
                           {facts.content}
                         </FactsLayoutProvider>

@@ -30,10 +30,10 @@ export interface BasicInfoField {
 
 /**
  * How fact rows lay out: `grid` (label column, reflowing to two columns on a
- * wide container) or `leader` (label, dotted leader, right-aligned value) for
- * narrow surfaces such as the detail aside and the inspector.
+ * wide container) or `compact` (a fixed label share, values on one left edge)
+ * for narrow surfaces such as the detail aside and the inspector.
  */
-type FactsLayout = "grid" | "leader";
+type FactsLayout = "grid" | "compact";
 const FactsLayoutContext = createContext<FactsLayout>("grid");
 
 export function FactsLayoutProvider({

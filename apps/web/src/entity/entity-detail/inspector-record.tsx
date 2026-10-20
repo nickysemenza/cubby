@@ -137,7 +137,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
           id={record.id}
           visibleFields={fields}
         >
-          <FactsLayoutProvider layout="leader">
+          <FactsLayoutProvider layout="compact">
             <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
               <Stack gap="md">
                 {editable ? (

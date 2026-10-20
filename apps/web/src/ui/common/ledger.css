@@ -113,69 +113,45 @@
   }
 }
 
-/* Narrow surfaces: label, dotted leader, right-aligned value. A leader list
+/* Narrow surfaces (the facts aside, the inspector): a property list. Labels
+   take a fixed share so every value starts on one left edge; captions sit
+   under their value and row actions stay on the first line. A compact list
    that lands somewhere wide reflows like any other fact list. */
 @container ledger (max-width: 39.99rem) {
-  .ledger[data-ledger="facts"][data-facts-layout="leader"] {
+  .ledger[data-ledger="facts"][data-facts-layout="compact"] {
     display: block;
   }
-  .ledger[data-ledger="facts"][data-facts-layout="leader"] > .ledger-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    column-gap: var(--brand-space-2);
+  .ledger[data-ledger="facts"][data-facts-layout="compact"] > .ledger-row {
+    grid-template-columns: minmax(5.5rem, 38%) minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: var(--brand-space-3);
+    padding-block: 0.375rem;
   }
-  .ledger[data-ledger="facts"][data-facts-layout="leader"]
-    > .ledger-row::before {
-    content: "";
-    order: 2;
-    flex: 1 1 0.75rem;
-    min-width: 0.75rem;
-    align-self: center;
-    margin-top: 0.4rem;
-    border-bottom: 1.5px dotted color-mix(in oklab, var(--border) 85%, black);
-  }
-  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
     > .ledger-row
     > [data-ledger-slot="primary"] {
-    order: 1;
-    flex: 0 1 auto;
+    grid-column: 1;
+    grid-row: 1;
     min-width: 0;
-    max-width: 55%;
+    padding-top: 0.125rem;
   }
-  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
     > .ledger-row
     > [data-ledger-slot="secondary"] {
-    order: 3;
-    flex: 0 1 auto;
+    grid-column: 2;
+    grid-row: 1;
     min-width: 0;
-    max-width: 65%;
-    text-align: end;
   }
-  .ledger[data-ledger="facts"][data-facts-layout="leader"]
-    > .ledger-row
-    > [data-ledger-slot="secondary"]
-    > div {
-    justify-content: flex-end;
-  }
-  /* The edit trigger's negative start margin aligns its text in a left-aligned
-     grid; here it trimmed the value's max-content, so short values wrapped. */
-  .ledger[data-ledger="facts"][data-facts-layout="leader"]
-    [data-slot="basic-info-value"]
-    [data-cell-edit-trigger] {
-    margin-inline-start: 0;
-  }
-  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
     > .ledger-row
     > [data-ledger-slot="actions"] {
-    order: 4;
-    flex: none;
+    grid-column: 3;
+    grid-row: 1;
   }
-  .ledger[data-ledger="facts"][data-facts-layout="leader"]
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
     > .ledger-row
     > [data-ledger-slot="detail"] {
-    order: 5;
-    flex-basis: 100%;
+    grid-column: 1 / -1;
   }
 }
 
