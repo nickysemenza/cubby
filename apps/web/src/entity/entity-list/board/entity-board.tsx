@@ -549,12 +549,18 @@ function BoardCard({
     disabled,
   });
   return (
-    <article ref={drop.setNodeRef} className="space-y-2 border-b p-2 text-sm">
+    <article
+      ref={(node) => {
+        drop.setNodeRef(node);
+        drag.setNodeRef(node);
+      }}
+      className="space-y-2 border-b p-2 text-sm"
+    >
       <div className="flex items-start gap-2">
         {view.reorder && (
           <button
             type="button"
-            ref={drag.setNodeRef}
+            ref={drag.setActivatorNodeRef}
             {...drag.listeners}
             {...drag.attributes}
             aria-label={`Drag ${String(row[entitySummary[entity].titleField] ?? row.id)}`}

@@ -361,6 +361,7 @@ export const ProductBulkAddToInventoryDialog: FC<
                   </Stack>
                   <div className="w-full sm:w-44 sm:shrink-0">
                     <AmountFieldGroup
+                      compact
                       form={form}
                       valuePath={`items.${index}.amount.value`}
                       unitPath={`items.${index}.amount.unit`}
