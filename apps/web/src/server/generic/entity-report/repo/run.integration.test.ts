@@ -91,7 +91,15 @@ describe("Run detail reports", () => {
       slot: "run.live-progress",
       id,
     });
-    expect(report.blocks[0]).toMatchObject({ kind: "note", text: "Working…" });
+    expect(report.blocks[0]).toMatchObject({
+      kind: "progress",
+      label: "Importing",
+      processed: 0,
+      total: null,
+    });
+    expect(report.blocks).toContainEqual(
+      expect.objectContaining({ kind: "note", text: "Working…" }),
+    );
   });
 
   it("lists the audit entries the run wrote with a link to each record", async () => {

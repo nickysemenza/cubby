@@ -1,3 +1,4 @@
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,6 +14,10 @@ import {
 import { memoryDurableSteps } from "~/server/testing/durable-steps";
 import { workflowDeploymentBoundary } from "~/server/workflows/deployment-boundary";
 
+import {
+  handleBackgroundTask,
+  productionBackgroundTaskPorts,
+} from "../background-tasks/handle";
 import { continueWorkflowRun } from "./continuation";
 import type { WorkflowRunParams } from "./contract";
 import type { WorkflowLauncher } from "./launcher";
@@ -23,6 +28,21 @@ import { launchWorkflowRun } from "./lifecycle";
 // another successor after the first handoff's result was retained.
 describe("Workflow deployment continuation", () => {
   const ctx = withTestDb();
+  const deliver = (params: WorkflowRunParams, launcher: WorkflowLauncher) =>
+    handleBackgroundTask(
+      ctx.db,
+      {
+        kind: "workflow.continue",
+        ...params,
+        runId: runEntityId.parse(params.runId),
+        requestedAt: new Date().toISOString(),
+      },
+      {
+        ...productionBackgroundTaskPorts,
+        continueWorkflow: (db, input) =>
+          continueWorkflowRun(db, input, launcher),
+      },
+    );
 
   it("hands off at the next boundary and resumes the committed cursor exactly once", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {
@@ -51,7 +71,9 @@ describe("Workflow deployment continuation", () => {
         name,
         version: "synthetic-version-a",
         currentVersion: async () => deployed,
-        continue: () => continueWorkflowRun(ctx.db, params, launcher),
+        continue: async () => {
+          await deliver(params, launcher);
+        },
       });
     const published: unknown[] = [];
     const drivers: StepRunDrivers = async () => [
@@ -75,6 +97,7 @@ describe("Workflow deployment continuation", () => {
       kind: "continue",
     });
     expect(await boundary("page:1")).toBe(true);
+    await deliver(params, launcher);
     expect(await boundary("page:1")).toBe(true);
     expect(launches).toEqual([params, { runId: id, attempt: 2 }]);
     expect(await advanceStepRun(ctx.db, params, drivers, launcher)).toEqual({
@@ -92,7 +115,7 @@ describe("Workflow deployment continuation", () => {
     expect(await readRunSteps(ctx.db, id)).toMatchObject([
       { done: 2, cursor: "finished" },
     ]);
-    await continueWorkflowRun(ctx.db, params, launcher);
+    await deliver(params, launcher);
     expect(launches).toHaveLength(2);
   });
 
@@ -128,8 +151,9 @@ describe("Workflow deployment continuation", () => {
         name: "cancelled",
         version: "synthetic-version-a",
         currentVersion: async () => "synthetic-version-b",
-        continue: () =>
-          continueWorkflowRun(ctx.db, { runId: id, attempt: 1 }, launcher),
+        continue: async () => {
+          await deliver({ runId: id, attempt: 1 }, launcher);
+        },
       }),
     ).toBe(true);
     expect(launches).toBe(1);

@@ -7,6 +7,7 @@ import { sleep } from "@cubby/shared/retry";
 
 import type { UnparsedError } from "~/lib/error-utils";
 
+import { deferCooperativeAiWork } from "./cooperative-work";
 import type { AiGatewayEgressRpc } from "./gateway-egress-contract";
 
 export class GatewayAdmissionWaitError extends Error {
@@ -57,6 +58,7 @@ export async function coordinatedGatewayRequest(
       Number(response.headers.get("retry-after") ?? 1) * 1_000,
     );
     const retryAt = Date.now() + delay;
+    deferCooperativeAiWork(retryAt);
     if (retryAt >= deadline) throw new GatewayAdmissionWaitError(retryAt);
     await sleep(delay, request.signal);
   }

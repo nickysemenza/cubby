@@ -1,5 +1,6 @@
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 
+import { enqueueBackgroundTask } from "../background-tasks/publish";
 import { workflowDeploymentBoundary } from "../deployment-boundary";
 import type { WorkflowRunParams } from "./contract";
 import type { DurableSteps } from "./step";
@@ -19,7 +20,16 @@ export function runDeploymentBoundary(
       name,
       version: env.CF_VERSION_METADATA.id,
       currentVersion: () => current().currentDeploymentVersion(),
-      continue: () => current().continueWorkflowRun(params),
+      continue: async () => {
+        await enqueueBackgroundTask(
+          {
+            kind: "workflow.continue",
+            ...params,
+            requestedAt: new Date().toISOString(),
+          },
+          { source: "workflow.continue", queue: env.BACKGROUND_QUEUE },
+        );
+      },
       force,
       initial: first,
     });

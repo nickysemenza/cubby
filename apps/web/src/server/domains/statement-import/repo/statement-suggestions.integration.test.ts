@@ -12,7 +12,7 @@ import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -20,6 +20,7 @@ import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
+import * as statementSuggestionsRepo from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import {
@@ -28,6 +29,7 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { processStatementRetirementPage } from "~/server/generic/derived-refresh/repo/statement-retirement";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import {
   getStatementRowSummary,
@@ -640,6 +642,101 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
+  // A page cap must preserve every candidate and every completed decision,
+  // including a partial charge whose remaining labels need another page.
+  it.each([false, true])(
+    "checkpoints high-fanout work across a changed candidate roster: %s",
+    async (addCandidate) => {
+      const queue = captureBackgroundQueue();
+      try {
+        const account = (await card(ctx)).output;
+        for (let index = 0; index < 5; index++)
+          await createRepoEntity(ctx, "financialTransaction", {
+            accountId: account.id,
+            kind: "purchase",
+            status: "posted",
+            amount: 42.5,
+            postedDate: "2026-05-05",
+            rawDescription: `SYNTHETIC FANOUT CANDIDATE ${index}`,
+            sourceRefs: [],
+          });
+        const observed = rowInput();
+        await record(ctx, [observed]);
+        await generate(ctx);
+        const runId = await ensureRun(ctx.db, ctx.actor, {
+          purpose: "background",
+        });
+        const seen: string[] = [];
+        const answer = answering({
+          kind: "purchase",
+          counterparty: "business",
+        });
+        let pageCalls = 0;
+        const port: DecisionPort = async (input) => {
+          pageCalls++;
+          seen.push(JSON.stringify(input));
+          return answer(input);
+        };
+        let outcome = await labelStatementSuggestions(ctx.db, {
+          runId,
+          port,
+          decisionLimit: 3,
+        });
+        expect(pageCalls).toBeLessThanOrEqual(3);
+        expect(outcome.next).not.toBeNull();
+        expect(outcome.labelled).toBe(0);
+        if (addCandidate)
+          await createRepoEntity(ctx, "financialTransaction", {
+            accountId: account.id,
+            kind: "purchase",
+            status: "posted",
+            amount: 42.5,
+            postedDate: "2026-05-05",
+            rawDescription: "SYNTHETIC LATER CANDIDATE",
+            sourceRefs: [],
+          });
+        await record(
+          ctx,
+          [
+            {
+              ...observed,
+              rowPosition: 20,
+              providerNotes: "Synthetic checkpoint memo",
+            },
+          ],
+          { fingerprint: "synthetic-checkpoint-reexport" },
+        );
+        await generate(ctx);
+        for (let page = 0; page < 10 && outcome.next !== null; page++) {
+          pageCalls = 0;
+          outcome = await labelStatementSuggestions(ctx.db, {
+            runId,
+            port,
+            after: outcome.next,
+            decisionLimit: 3,
+          });
+          expect(pageCalls).toBeLessThanOrEqual(3);
+          expect(outcome.failed).toEqual([]);
+        }
+        expect(outcome.next).toBeNull();
+        const candidates = addCandidate ? 6 : 5;
+        expect(seen).toHaveLength(candidates + 2);
+        expect(new Set(seen).size).toBe(candidates + 2);
+        const [complete] = await suggestions(ctx);
+        expect(complete!.candidates).toHaveLength(candidates);
+        expect(
+          complete!.candidates.every((candidate) => candidate.label !== null),
+        ).toBe(true);
+        expect(complete!.create).toMatchObject({
+          votes: { label: "purchase" },
+          counterparty: { label: "business" },
+        });
+      } finally {
+        queue.restore();
+      }
+    },
+  );
+
   // Observation-only evidence churn must not discard paid labels or ask the
   // model again; the rebuilt judgment still uses the current evidence fence.
   it("keeps labels across a re-Sweep with unchanged model inputs", async () => {
@@ -792,6 +889,87 @@ describe("statement Transaction suggestions", () => {
       ).toMatchObject({ labelled: 1 });
     },
   );
+
+  it("returns committed label counts when a cooperative page pauses mid-page", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput(),
+      rowInput({
+        rawDescription: "SYNTHETIC SECOND CHARGE",
+        merchant: "Example Cafe",
+        providerAmount: -12,
+      }),
+    ]);
+    await generate(ctx);
+    const paused = new AiBudgetExhaustedError(
+      {
+        windowStart: "2026-05-04T00:00:00Z",
+        windowEnd: "2026-05-04T06:00:00Z",
+        credit: { limitUsd: 1, spentUsd: 0 },
+        plan: { limitUsd: 1, spentUsd: 0 },
+        paid: { limitUsd: 1, spentUsd: 1 },
+      },
+      "Synthetic pause",
+    );
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let calls = 0;
+    expect(
+      await labelStatementSuggestions(ctx.db, {
+        cooperative: true,
+        port: async (input) => {
+          if (++calls > 2) throw paused;
+          return answer(input);
+        },
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      }),
+    ).toMatchObject({
+      labelled: 1,
+      paused: { reason: paused.message, until: paused.resumeAt },
+    });
+  });
+
+  // A member resolving listed work is a successful competing outcome, not a label failure.
+  it("skips a charge accepted by the member while its labels are in flight", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [pending] = await suggestions(ctx);
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let accepted = false;
+    const result = await label(ctx, async (input) => {
+      if (!accepted) {
+        accepted = true;
+        await accept(ctx, pending!);
+      }
+      return answer(input);
+    });
+    expect(result.failed).toEqual([]);
+    expect(result.labelled).toBe(0);
+    expect(await suggestions(ctx)).toEqual([]);
+  });
+
+  // Publication failure must not discard a completely paid judgment before retry.
+  it("retains completed decisions when model publication fails", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let calls = 0;
+    const port: DecisionPort = async (input) => {
+      calls++;
+      return answer(input);
+    };
+    const publish = vi
+      .spyOn(statementSuggestionsRepo, "publishChargeProposal")
+      .mockRejectedValueOnce(new Error("Synthetic publication failure"));
+    try {
+      expect((await label(ctx, port)).failed).toHaveLength(1);
+      expect((await label(ctx, port)).labelled).toBe(1);
+      expect(calls).toBe(2);
+    } finally {
+      publish.mockRestore();
+    }
+  });
 
   // A pause after generation must preserve earlier paid labels while new
   // charges remain unlabelled; retrying asks only for those unfinished charges.

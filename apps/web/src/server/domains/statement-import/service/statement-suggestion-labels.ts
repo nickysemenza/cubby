@@ -4,6 +4,8 @@ import type { RunStepError } from "@cubby/schemas/run-step";
 import {
   statementTransactionJudgment,
   type StatementTransactionJudgment,
+  type StatementLabelCheckpoint,
+  STATEMENT_LABEL_REVISION,
 } from "@cubby/schemas/statement-suggestion";
 import {
   selectDecisionModel,
@@ -12,7 +14,11 @@ import {
 import { createLogger } from "@cubby/worker-tracing";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
-import { AiBudgetExhaustedError, settleDecisions } from "~/server/ai/budget";
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import {
+  aiWorkDeferral,
+  withCooperativeAiWork,
+} from "~/server/ai/cooperative-work";
 import {
   decisionChoiceFitsContext,
   type DecisionPort,
@@ -37,13 +43,17 @@ import {
   STATEMENT_PUBLISH_CONCURRENCY,
   suggestionsNeedingLabels,
   type LabelCursor,
+  recordStatementLabelCheckpoint,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { decideStatementKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { labelStatementKind } from "~/server/domains/statement-import/service/statement-kind-labels";
+import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many suggestions. */
 const STATEMENT_LABEL_BATCH = 10;
+const STATEMENT_LABEL_DECISIONS = 32;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
@@ -90,26 +100,87 @@ async function buildPage(
   return byCharge;
 }
 
-/** The proposal's judgment with every decision-model label, asked at once. */
+/** Partial model answers are checkpointed independently of advisory publication. */
 async function labelledJudgment(
   current: ChargeProposal,
-  input: { port?: DecisionPort; usage: DecisionUsage },
+  input: {
+    port?: DecisionPort;
+    usage: DecisionUsage;
+    checkpoint: StatementLabelCheckpoint | null;
+    reserve(): boolean;
+  },
 ) {
-  const model = selectDecisionModel({ key: current.charge.chargeKey });
+  const previous =
+    input.checkpoint?.revision === STATEMENT_LABEL_REVISION &&
+    canonicalJson(statementLabelSubject(input.checkpoint.judgment)) ===
+      canonicalJson(statementLabelSubject(current.judgment))
+      ? input.checkpoint
+      : null;
+  const model =
+    previous?.model ?? selectDecisionModel({ key: current.charge.chargeKey });
   const judgment: StatementTransactionJudgment = structuredClone(
     current.judgment,
   );
-  const statement = statementLabelSubject(judgment);
-  const create = judgment.create;
-  await settleDecisions([
-    ...judgment.candidates.map(async (candidate) => {
-      const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
-        JSON.stringify({
-          statement,
-          transaction: statementCandidateSubject(candidate),
+  if (previous) {
+    for (const candidate of judgment.candidates)
+      candidate.label =
+        previous.judgment.candidates.find(
+          (saved) =>
+            saved.transactionId === candidate.transactionId &&
+            canonicalJson(statementCandidateSubject(saved)) ===
+              canonicalJson(statementCandidateSubject(candidate)),
+        )?.label ?? null;
+    if (judgment.create && previous.judgment.create)
+      Object.assign(
+        judgment.create,
+        decideStatementKind({
+          amount: judgment.create.amount,
+          votes: {
+            ...judgment.create.votes,
+            label: previous.judgment.create.votes.label,
+          },
+          counterparty: {
+            ...judgment.create.counterparty,
+            label: previous.judgment.create.counterparty.label,
+          },
+          transfer: judgment.transfer,
         }),
       );
-      if (!decisionChoiceFitsContext(prompt)) return;
+  }
+  const checkpoint: StatementLabelCheckpoint = {
+    revision: STATEMENT_LABEL_REVISION,
+    model,
+    judgment,
+    kind: previous?.kind ?? false,
+    counterparty: previous?.counterparty ?? false,
+  };
+  const errors: unknown[] = [];
+  let waitingUntil: number | null = null;
+  const retainError = (error: unknown) => {
+    const deferred = aiWorkDeferral(error);
+    if (deferred)
+      waitingUntil = Math.min(waitingUntil ?? Infinity, deferred.until);
+    else errors.push(error);
+  };
+  const statement = statementLabelSubject(judgment);
+  await forEachConcurrently(judgment.candidates, 4, async (candidate) => {
+    if (candidate.label !== null || waitingUntil !== null) return;
+    const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
+      JSON.stringify({
+        statement,
+        transaction: statementCandidateSubject(candidate),
+      }),
+    );
+    if (!decisionChoiceFitsContext(prompt)) {
+      candidate.label = {
+        same: "insufficient",
+        confidence: "low",
+        model: null,
+      };
+      return;
+    }
+    if (!input.reserve()) return;
+    try {
       const result = await runDecisionChoice({
         ...prompt,
         feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
@@ -124,23 +195,43 @@ async function labelledJudgment(
         confidence: result.confidence,
         model,
       };
-    }),
-    ...(create
-      ? [
-          labelStatementKind(create, {
-            subject: JSON.stringify(statement),
-            transfer: judgment.transfer,
-            model,
-            port: input.port,
-            usage: input.usage,
-          }).then((labelled) => {
-            judgment.create = labelled;
-          }),
-        ]
-      : []),
-  ]);
+    } catch (error) {
+      retainError(error);
+    }
+  });
+  for (const part of ["kind", "counterparty"] as const) {
+    if (
+      !judgment.create ||
+      checkpoint[part] ||
+      waitingUntil !== null ||
+      !input.reserve()
+    )
+      continue;
+    try {
+      judgment.create = await labelStatementKind(judgment.create, {
+        subject: JSON.stringify(statement),
+        transfer: judgment.transfer,
+        model,
+        port: input.port,
+        usage: input.usage,
+        parts: [part],
+      });
+      checkpoint[part] = true;
+    } catch (error) {
+      retainError(error);
+    }
+  }
   judgment.clean = isClean(judgment, current.canonical.amount);
-  return { judgment: statementTransactionJudgment.parse(judgment), model };
+  checkpoint.judgment = statementTransactionJudgment.parse(judgment);
+  return {
+    checkpoint,
+    model,
+    errors,
+    waitingUntil,
+    complete:
+      judgment.candidates.every((candidate) => candidate.label !== null) &&
+      (!judgment.create || (checkpoint.kind && checkpoint.counterparty)),
+  };
 }
 
 /**
@@ -149,7 +240,7 @@ async function labelledJudgment(
  * Labels are advisory; they only decide whether a suggestion is
  * bulk-acceptable. Respects the automatic-work switch that gates AI refresh.
  *
- * A page builds once, labels and publishes charges concurrently, then applies
+ * A page builds once, bounds concurrent decisions within each charge, then applies
  * automatic rules one charge at a time. A rule that applied can take a
  * transaction another charge on the page proposed, so the page's remaining
  * charges are rebuilt and any whose evidence moved are labelled again.
@@ -158,6 +249,8 @@ export async function labelStatementSuggestions(
   db: Database,
   input: {
     limit?: number;
+    decisionLimit?: number;
+    cooperative?: boolean;
     port?: DecisionPort;
     /** The Run the model calls are accounted to (a Sweep's step). */
     runId?: RunId | null;
@@ -173,8 +266,17 @@ export async function labelStatementSuggestions(
   next: LabelCursor | null;
   /** False when the automatic-work switch is off, so nothing was asked. */
   active: boolean;
+  waitingUntil: number | null;
+  paused: { reason: string; until: string } | null;
 }> {
-  const empty = { labelled: 0, stale: 0, failed: [], next: null };
+  const empty = {
+    labelled: 0,
+    stale: 0,
+    failed: [],
+    next: null,
+    waitingUntil: null,
+    paused: null,
+  };
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled && !input.port) return { ...empty, active: false };
   const limit = input.limit ?? STATEMENT_LABEL_BATCH;
@@ -207,6 +309,14 @@ export async function labelStatementSuggestions(
     });
   };
   const page = rows.slice(0, limit);
+  let decisionsLeft = input.decisionLimit ?? STATEMENT_LABEL_DECISIONS;
+  const reserve = () => {
+    if (decisionsLeft <= 0) return false;
+    decisionsLeft--;
+    return true;
+  };
+  let unfinished: LabelCursor | null = null;
+  let waitingUntil: number | null = null;
   let targets = page.flatMap((row) => {
     const subject = assessmentSubjects.statement_transaction.safeParse(
       row.subject,
@@ -217,7 +327,7 @@ export async function labelStatementSuggestions(
     }
     const { source, chargeKey } = subject.data;
     return [
-      { charge: { source, chargeKey }, expected: row.evidenceFingerprint },
+      { charge: { source, chargeKey }, expected: row.evidenceFingerprint, row },
     ];
   });
   let stale = 0;
@@ -242,7 +352,9 @@ export async function labelStatementSuggestions(
         return [];
       }
       // After a rule, only a charge whose evidence moved is labelled again.
-      return current && (round === 0 || moved) ? [{ target, current }] : [];
+      return current && (round === 0 || moved)
+        ? [{ target, current, moved }]
+        : [];
     });
     const published = new Map<string, string>();
     log.info("Statement label round", {
@@ -258,31 +370,88 @@ export async function labelStatementSuggestions(
         0,
       ),
     });
-    await forEachConcurrently(
-      ready,
-      STATEMENT_PUBLISH_CONCURRENCY,
-      async ({ current }) => {
-        if (pauses.length) return;
-        try {
-          const { judgment, model } = await labelledJudgment(current, {
+    for (const { current, target } of ready) {
+      if (pauses.length) break;
+      try {
+        const compute = () =>
+          labelledJudgment(current, {
             port: input.port,
             usage,
+            checkpoint: target.row.checkpoint,
+            reserve,
           });
-          const outcome = await publishChargeProposal(
-            db,
-            await labelledProposal(current, judgment),
-            producer(model),
-          );
-          if (outcome !== "published") return;
-          labelled.add(chargeId(current.charge));
-          published.set(chargeId(current.charge), current.evidenceFingerprint);
-        } catch (error) {
-          // The budget pauses the whole pass; any other failure is this charge's.
-          if (error instanceof AiBudgetExhaustedError) pauses.push(error);
-          else fail(current.charge, error);
+        const result = await (input.cooperative
+          ? withCooperativeAiWork(compute)
+          : compute());
+        target.row.checkpoint = result.checkpoint;
+        const saved = await recordStatementLabelCheckpoint(db, {
+          charge: current.charge,
+          evidenceFingerprint: target.expected,
+          checkpoint: result.checkpoint,
+        });
+        if (saved === "settled") {
+          skipped.add(chargeId(current.charge));
+          continue;
         }
-      },
-    );
+        if (saved === "moved")
+          throw new Error(
+            "Statement label checkpoint lost its active evidence fence",
+          );
+        if (!result.complete || result.errors.length) {
+          if (result.errors.length) {
+            const pause = result.errors.find(
+              (error) => error instanceof AiBudgetExhaustedError,
+            );
+            if (pause instanceof AiBudgetExhaustedError) {
+              pauses.push(pause);
+              unfinished = {
+                createdAt: target.row.createdAt,
+                id: target.row.id,
+                inclusive: true,
+              };
+            } else
+              fail(
+                current.charge,
+                new Error(
+                  result.errors
+                    .map((error) =>
+                      runFailureText(
+                        error instanceof Error ? error : String(error),
+                      ),
+                    )
+                    .join("\n"),
+                ),
+              );
+            continue;
+          }
+          unfinished = {
+            createdAt: target.row.createdAt,
+            id: target.row.id,
+            inclusive: true,
+          };
+          waitingUntil = result.waitingUntil;
+          break;
+        }
+        const outcome = await publishChargeProposal(
+          db,
+          await labelledProposal(current, result.checkpoint.judgment),
+          producer(result.model),
+        );
+        if (outcome !== "published") continue;
+        labelled.add(chargeId(current.charge));
+        published.set(chargeId(current.charge), current.evidenceFingerprint);
+      } catch (error) {
+        // The budget pauses the whole pass; any other failure is this charge's.
+        if (error instanceof AiBudgetExhaustedError) {
+          pauses.push(error);
+          unfinished = {
+            createdAt: target.row.createdAt,
+            id: target.row.id,
+            inclusive: true,
+          };
+        } else fail(current.charge, error);
+      }
+    }
     // Rules run even when a pause ends the page: a published charge has left
     // the label queue, so a skipped rule would never be applied.
     const applied = new Set<string>();
@@ -302,15 +471,22 @@ export async function labelStatementSuggestions(
         return [];
       return [{ ...target, expected: published.get(key) ?? target.expected }];
     });
-    if (pauses[0]) {
+    if (pauses[0] || unfinished) {
       // Without labels, a rule's moved evidence still republishes as rule
       // output, so the resumed pass labels it instead of skipping it as stale.
-      if (applied.size)
+      if (
+        applied.size ||
+        ready.some(
+          ({ current, moved }) =>
+            moved && !published.has(chargeId(current.charge)),
+        )
+      )
         await regenerateCharges(
           db,
           targets.map((target) => target.charge),
         );
-      throw pauses[0];
+      if (pauses[0] && !input.cooperative) throw pauses[0];
+      break;
     }
     if (!applied.size) break;
   }
@@ -320,9 +496,14 @@ export async function labelStatementSuggestions(
     stale,
     failed,
     next:
-      rows.length > limit && last
+      unfinished ??
+      (rows.length > limit && last
         ? { createdAt: last.createdAt, id: last.id }
-        : null,
+        : null),
     active: true,
+    waitingUntil,
+    paused: pauses[0]
+      ? { reason: pauses[0].message, until: pauses[0].resumeAt }
+      : null,
   };
 }

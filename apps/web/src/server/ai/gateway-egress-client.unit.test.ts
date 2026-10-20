@@ -4,6 +4,7 @@ import type {
 } from "@cubby/shared/ai/gateway-request";
 import { afterEach, expect, it, vi } from "vitest";
 
+import { AiWorkDeferredError, withCooperativeAiWork } from "./cooperative-work";
 import {
   coordinatedGatewayRequest,
   GatewayAdmissionWaitError,
@@ -24,6 +25,34 @@ const syntheticRequest = (): GatewayFetchRequest => ({
   headers: new Headers(),
   signal: undefined,
   query: async () => ({}),
+});
+
+// A Workflow's wait must release its invocation instead of spending calls on admission polling.
+it("yields Workflow admission after one attempt without polling", async () => {
+  vi.useFakeTimers();
+  let attempts = 0;
+  const pending = withCooperativeAiWork(() =>
+    coordinatedGatewayRequest(
+      {
+        fetch: async () => {
+          attempts++;
+          return new Response("wait", {
+            status: 429,
+            headers: { "x-cubby-admission-wait": "true", "retry-after": "1" },
+          });
+        },
+      },
+      "workers-ai",
+      syntheticRequest(),
+      controls,
+    ),
+  );
+  await expect(pending).rejects.toSatisfy(
+    (error: unknown) =>
+      error instanceof AiWorkDeferredError &&
+      error.until >= Date.now() + 15_000,
+  );
+  expect(attempts).toBe(1);
 });
 
 it("waits for shared admission without returning a provider failure or spending another request body", async () => {

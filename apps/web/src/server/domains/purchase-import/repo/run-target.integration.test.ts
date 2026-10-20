@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, auditLog, photoRunImage } from "~/server/db/schema";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
+import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -272,5 +273,8 @@ describe("run.reportDeviceWork", () => {
     expect(row?.deviceWorkState).toBe("failed");
     expect(row?.deviceWorkAttempts).toBe(1);
     expect(row?.deviceWorkError).toBe("device offline");
+    expect(await getRunWorkProgress(ctx.db, runShortcode)).toMatchObject({
+      current: { total: 1, processed: 1, failures: 1, unit: "images" },
+    });
   });
 });

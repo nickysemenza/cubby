@@ -64,11 +64,32 @@ belongs to the Workflow instance, so a new `step.do` alone does not reset it
 Statement Sweeps also bound generation and label page sizes. The driver owns
 those executable bounds; continuation retains the RunStep cursors and the
 attempt/cancellation fences instead of starting generation over.
-The shared bound also increases handoff frequency for maintenance and parent
-Runs waiting on children; waiting parents normally hand off after five waits.
+Generation commits up to 100 pages of 20 charges per instance. Labelling commits
+up to 10 pages, each with at most 10 suggestions and 32 new decisions across all
+rule-driven rounds, with at most four model decisions in flight. A partial label
+page saves its unpublished judgment in the pending AssessmentState and resumes
+inclusively at that suggestion; compatible evidence re-exports retain paid
+labels. A member-settled or suppressed charge is skipped; moved evidence remains
+queued when any rule round yields. No candidate is truncated to fit a page. Cache/admission contention yields
+Workflow label work before polling, then resumes after durable `step.sleep`
+(capacity contention waits at least 15 seconds);
+interactive callers retain their waiting behavior. Pages retain their 15-minute
+timeout. An instance requests handoff after ten minutes elapsed, checked after
+committed pages; unmeasured phases and waiting parents retain five-page bounds.
 Statement label-round logs retain charge and planned decision counts, including
 candidate fanout. These are logical workload counts, not measured subrequests
 or a production-scale completion guarantee.
+
+The initial synthetic transport estimate for 320 cold decisions is 960 calls
+(claim, gateway, publication), or 1,600 with three provider attempts per decision.
+Three attempts of every page make those 2,880 and 4,800, before lease renewals
+and bookkeeping. These are application-path estimates, not Cloudflare internal
+accounting. SQL over Hyperdrive is not counted as one HTTP subrequest per query.
+Cloudflare defaults to 10,000 subrequests and 10,000 steps per instance, 30 seconds
+active CPU per step, and unlimited platform step wall time; this deployment does
+not raise those defaults. Local synthetic SQL timings do not predict production
+network/model latency. The limits retain reserve rather than promise a remaining
+platform budget that the runtime API does not expose.
 
 Page failures are logged before database failure bookkeeping. If bookkeeping
 also fails, the original error and the complete recording-error chain survive
@@ -98,10 +119,23 @@ The Workflow compares its own `CF_VERSION_METADATA.id` with the Gateway Durable
 Object's running version, not the stored AI-refresh activation `release` or
 observed-version marker. Durable Objects follow deployments
 ([Cloudflare version guarantees](https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/with-durable-objects/));
-the DO also creates successors through its current bindings. A rollback is a
+the DO accepts successor dispatch through the shared background queue. A fresh
+queue-consumer invocation creates the successor through current bindings, behind
+the persisted attempt and cancellation fences. Duplicate deliveries are harmless.
+The old DO RPC remains an enqueue-only bridge for pinned Workflow versions.
+The former synchronous Workflow → DO → Workflow creation path is confirmed in
+code; Cloudflare documents a separate 16-invocation Worker loop limit, but does
+not establish whether ancestry propagates across these Workflow instances.
+Queue dispatch removes that dependency without relying on a failed retry.
+Queue acceptance is the dispatch boundary. A lost delivery uses the existing
+30-minute quiet-Run reconciliation and cron/app-open recovery; a delivery later
+than that grace can be diagnosed as an ended attempt and consume the bounded
+infrastructure-recovery allowance. The elapsed fence includes the instance's
+platform queue age, conservatively shortening work after a delayed start.
+A rollback is a
 version change too. Version checks are durable steps: replay reuses each recorded
 decision instead of moving the handoff backwards over already-completed work.
-Persist that decision in its own step before creating the successor: a lost
+Persist that decision in its own step before dispatching the successor: a lost
 create reply followed by rollback must not let the predecessor resume the same
 checkpoint. Each RPC attempt acquires a fresh DO stub because an exception can
 leave the previous stub permanently broken

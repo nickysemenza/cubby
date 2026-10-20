@@ -1,16 +1,22 @@
+import { MAX_STEP_RUN_INSTANCE_PAGES } from "@cubby/schemas/run-step";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { StepAdvance } from "~/server/domains/run/service/step-run";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
-import type { DurableSteps } from "~/server/workflows/runs/step";
+import {
+  BOOKKEEPING_RETRIES,
+  type DurableSteps,
+} from "~/server/workflows/runs/step";
 
 // The subrequest budget belongs to the instance, not to each step.do page.
 // Leave headroom for page retries, failure recording and successor dispatch.
-const STEP_RUN_PAGES_PER_INSTANCE = 5;
+const DEFAULT_PAGES_PER_INSTANCE = 5;
+const INSTANCE_ELAPSED_MS = 10 * 60_000;
 const log = createLogger("step-run-workflow");
 
 /** Effects whose invocation/database ownership stays with the Cloudflare adapter. */
 export interface StepRunWork {
+  elapsedMs?(): number;
   advance(): Promise<StepAdvance>;
   boundary(name: string, force?: boolean): Promise<boolean>;
   wait(page: number, seconds: number): Promise<void>;
@@ -23,7 +29,8 @@ export async function runStepRunWorkflow(
   work: StepRunWork,
 ) {
   try {
-    for (let page = 0; page < STEP_RUN_PAGES_PER_INSTANCE; page++) {
+    const phasePages = new Map<string, number>();
+    for (let page = 0; page < MAX_STEP_RUN_INSTANCE_PAGES; page++) {
       if (await work.boundary(`page:${page}`)) return;
       const advance = await steps.do(
         `page:${page}`,
@@ -31,6 +38,25 @@ export async function runStepRunWorkflow(
         () => work.advance(),
       );
       if (advance.kind !== "continue" && advance.kind !== "wait") return;
+      const execution =
+        advance.kind === "continue" ? advance.execution : undefined;
+      const phase = execution?.phase ?? "default";
+      const pages = (phasePages.get(phase) ?? 0) + 1;
+      phasePages.set(phase, pages);
+      if (advance.kind === "continue" && advance.waitSeconds)
+        await steps.sleep(`capacity:${page}`, advance.waitSeconds * 1_000);
+      const elapsed = await steps.do(
+        `elapsed:${page}`,
+        BOOKKEEPING_RETRIES,
+        async () => (work.elapsedMs?.() ?? 0) >= INSTANCE_ELAPSED_MS,
+      );
+      if (
+        elapsed ||
+        pages >= (execution?.pagesPerInstance ?? DEFAULT_PAGES_PER_INSTANCE)
+      ) {
+        await work.boundary("continue", true);
+        return;
+      }
       if (advance.kind === "wait")
         try {
           await work.wait(page, advance.seconds);

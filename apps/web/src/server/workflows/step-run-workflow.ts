@@ -47,6 +47,7 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
         sleep: (name, duration) => step.sleep(name, duration),
       },
       {
+        elapsedMs: () => Math.max(0, Date.now() - event.timestamp.getTime()),
         boundary: runDeploymentBoundary(this.env, step, event.payload),
         advance: () => withDb((db) => advanceStepRun(db, event.payload)),
         wait: async (page, seconds) => {

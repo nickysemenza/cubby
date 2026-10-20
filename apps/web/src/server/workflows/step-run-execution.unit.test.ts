@@ -14,6 +14,53 @@ const work = (overrides: Partial<StepRunWork> = {}): StepRunWork => ({
 });
 
 describe("step Run Workflow failure and invocation boundaries", () => {
+  // A capacity deferral at the final page must not become an immediate successor retry.
+  it("retains durable capacity backoff before a bounded handoff", async () => {
+    const durable = memoryDurableSteps();
+    let sleepsAtHandoff: typeof durable.sleeps = [];
+    await runStepRunWorkflow(
+      durable.steps,
+      work({
+        advance: async () => ({
+          kind: "continue",
+          execution: { phase: "labels", pagesPerInstance: 1 },
+          waitSeconds: 60,
+        }),
+        boundary: async (_name, force) => {
+          if (force) sleepsAtHandoff = [...durable.sleeps];
+          return Boolean(force);
+        },
+      }),
+    );
+    expect(sleepsAtHandoff).toEqual([
+      { name: "capacity:0", durationMs: 60_000 },
+    ]);
+  });
+  // A slow committed page must yield before the next page, even below its page cap.
+  it("hands off after a committed page reaches the elapsed-time bound", async () => {
+    let committed = false;
+    let handedOff = false;
+    await expect(
+      runStepRunWorkflow(
+        memoryDurableSteps().steps,
+        work({
+          elapsedMs: () => (committed ? 600_001 : 0),
+          advance: async () => {
+            if (committed)
+              throw new Error("Synthetic page started after elapsed bound");
+            committed = true;
+            return { kind: "continue" };
+          },
+          boundary: async (_name, force) => {
+            handedOff = Boolean(force);
+            return handedOff;
+          },
+        }),
+      ),
+    ).resolves.toBeUndefined();
+    expect(handedOff).toBe(true);
+  });
+
   // The SQL wrapper must not replace the original error, or hide the
   // Postgres cause when a fresh failure-recording attempt succeeds.
   it("records both errors after a failure write fails", async () => {

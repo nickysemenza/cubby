@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { reconcileSettledRun } from "~/server/domains/purchase-import/operations/run-review";
+import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { resumeAuthorizedRuns, updateAgentProgress } from "../repo/run-service";
@@ -32,6 +33,25 @@ describe("Run-owned progress delivery fences", () => {
     if (!row) throw new Error("Missing synthetic Run");
     return row;
   }
+  // Source-free predecessor/control-plane Runs cannot invent a frozen population or block progress delivery.
+  it("records progress with an unknown total when a Mail Run has no frozen roster", async () => {
+    const owned = await start();
+    expect((await stored(owned.id)).input).toBeNull();
+    await expect(
+      updateAgentProgress(ctx.db, {
+        runId: owned.id,
+        eventId: "synthetic:unknown-roster",
+        phase: "investigating",
+        generation: owned.generation,
+        sequence: 1,
+      }),
+    ).resolves.toEqual({ recorded: true });
+    expect(
+      (await getRunWorkProgress(ctx.db, owned.publicId))!.current,
+    ).toMatchObject({ processed: 0, total: null, failures: 0 });
+    expect((await stored(owned.id)).input).toBeNull();
+  });
+
   it("rejects old dispatch deliveries and older sequence without regressing resumed approval or heartbeat", async () => {
     const owned = await start();
     await updateAgentProgress(ctx.db, {

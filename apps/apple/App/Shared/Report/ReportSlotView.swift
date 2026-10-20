@@ -131,6 +131,22 @@ struct ReportBlocksView: View {
             }
             ForEach(Array(report.blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
+                case .progress(let progress):
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                        Text(progress.label).font(.subheadline.weight(.medium))
+                        Text(progress.summary).font(.caption).monospacedDigit()
+                        if let total = progress.total {
+                            ProgressView(value: progress.processed, total: max(1, total))
+                                .accessibilityLabel(progress.label)
+                                .accessibilityValue(progress.summary)
+                        } else {
+                            ProgressView().progressViewStyle(.linear)
+                                .accessibilityLabel(progress.label)
+                                .accessibilityValue(progress.summary)
+                        }
+                        Text(progress.detail).font(.footnote).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 case .stats(let title, let figures): ReportStatsView(title: title, figures: figures)
                 case .chart(let chart): ReportChartView(chart: chart)
                 case .table(let table): ReportTableView(table: table)
@@ -158,6 +174,21 @@ extension ReportPresentation.Tone {
         }
     }
 }
+
+#if DEBUG
+    #Preview("Run work progress") {
+        let json = #"""
+            {"blocks":[
+              {"kind":"progress","label":"Labelling suggestions","processed":40,"total":100,
+               "summary":"40 / 100 suggestions · 2 failed","detail":"Paused · 120 suggestions/min · About 30s remaining · Using paused rate"},
+              {"kind":"progress","label":"Discovering mail","processed":7,"total":null,
+               "summary":"7 / unknown emails · 0 failed","detail":"Running · 12 emails/min · Total unknown"}
+            ]}
+            """#
+        let report = try! JSONDecoder.cubby().decode(EntityReportOut.self, from: Data(json.utf8))
+        ReportBlocksView(report: ReportPresentation(report)).padding()
+    }
+#endif
 
 private func routeTarget(_ ref: ReportPresentation.Ref?) -> Route? {
     guard let ref, let key = EntityKey(rawValue: ref.entity) else { return nil }

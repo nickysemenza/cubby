@@ -1,6 +1,8 @@
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { eq } from "drizzle-orm";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
+import { run, runStep } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { getDb } from "~/server/db/helpers";
 
 import {
@@ -8,7 +10,11 @@ import {
   gotoAuthenticatedPage,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { fixtureUserId, getFixtureDb } from "./fixtures/core";
+import {
+  fixtureUserId,
+  getFixtureDb,
+  createEvidenceHarnessContext,
+} from "./fixtures/core";
 import { seedActivityHistory } from "./fixtures/photos";
 
 // A successful image result must not look queued; skipped work must explain the actual outcome.
@@ -100,4 +106,145 @@ test("related Runs show account labels and shared quality", async ({
     .getByRole("row")
     .filter({ hasText: "Synthetic reference vendor" });
   await expect(listRow.getByText("Complete", { exact: true })).toBeAttached();
+});
+
+// Phase work must survive target-free Runs; handoff grouping must leave errors readable.
+test("Run work shows phase progress, unknown totals, and expandable handoffs", async ({
+  page,
+}, testInfo) => {
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const runId = await ensureRun(db, actor, {
+    purpose: "maintenance",
+    trigger: "manual",
+  });
+  const at = new Date(Date.now() - 180_000).toISOString();
+  const [owner] = await getDb(db)
+    .update(run)
+    .set({
+      status: "paused_auth",
+      startedAt: new Date(Date.now() - 300_000),
+      progressHistory: [
+        {
+          eventId: "synthetic-start-1",
+          phase: "attempt_started",
+          detail: "Started Workflow instance RUN-4K7M-1",
+          createdAt: at,
+        },
+        {
+          eventId: "synthetic-start-2",
+          phase: "attempt_started",
+          detail: "Started Workflow instance RUN-4K7M-2",
+          createdAt: at,
+        },
+        {
+          eventId: "synthetic-failure",
+          phase: "failed",
+          detail: "Synthetic upstream failure",
+          createdAt: at,
+        },
+      ].map((event, sequence) => ({
+        ...event,
+        generation: "synthetic",
+        sequence,
+        currentItem: null,
+        awaitingApproval: false,
+      })),
+    })
+    .where(eq(run.id, runId))
+    .returning({ id: run.id, shortcode: run.shortcode });
+  if (!owner) throw new Error("Synthetic Run was not created");
+  await getDb(db)
+    .insert(runStep)
+    .values({
+      runId: owner.id,
+      key: "synthetic",
+      label: "Synthetic work",
+      position: 0,
+      state: "paused",
+      found: 100,
+      done: 35,
+      skipped: 3,
+      failed: 2,
+      meta: {
+        work: {
+          current: {
+            phase: "labels",
+            label: "Labelling suggestions",
+            unit: "suggestions",
+            processed: 40,
+            total: 100,
+            failures: 2,
+            sampledAt: at,
+            ratePerSecond: 2,
+            finished: false,
+          },
+          completed: [
+            {
+              phase: "generate",
+              label: "Generating suggestions",
+              unit: "charges",
+              processed: 120,
+              total: 120,
+              failures: 0,
+              sampledAt: at,
+              ratePerSecond: 2,
+              finished: true,
+            },
+          ],
+        },
+      },
+    });
+  await gotoAuthenticatedPage(page, `/runs/${owner.shortcode}`);
+  const bar = page.getByRole("progressbar", { name: "Labelling suggestions" });
+  await expect(bar).toHaveAttribute("aria-valuenow", "40");
+  await expect(bar).toHaveAttribute("aria-valuemax", "100");
+  await expect(
+    page.getByText("40 / 100 suggestions · 2 failed", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Using paused rate/)).toBeVisible();
+  await expect(
+    page.getByText("120 / 120 charges · 0 failed", { exact: true }),
+  ).toBeVisible();
+  await page.getByText("Show Workflow handoffs", { exact: true }).click();
+  await expect(page.getByText(/RUN-4K7M-1/)).toBeVisible();
+  await expect(
+    page.getByText("Synthetic upstream failure", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("run-phase-progress.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(bar).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("run-phase-progress-mobile.png"),
+    fullPage: true,
+  });
+  await getDb(db)
+    .update(runStep)
+    .set({
+      meta: {
+        work: {
+          current: {
+            phase: "discover",
+            label: "Discovering",
+            unit: "items",
+            processed: 7,
+            total: null,
+            failures: 0,
+            sampledAt: at,
+            ratePerSecond: 1,
+            finished: false,
+          },
+          completed: [],
+        },
+      },
+    })
+    .where(eq(runStep.runId, owner.id));
+  await page.reload();
+  const unknown = page.getByRole("progressbar", { name: "Discovering" });
+  await expect(unknown).not.toHaveAttribute("aria-valuenow");
+  await expect(
+    page.getByText("7 / unknown items · 0 failed", { exact: true }),
+  ).toBeVisible();
 });

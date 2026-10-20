@@ -40,6 +40,19 @@ struct ReportPresentationTests {
         ]}
         """#
 
+    @Test func decodesStructuredWorkWithUnknownTotal() throws {
+        let json =
+            #"{"blocks":[{"kind":"progress","label":"Discovering","processed":7,"total":null,"summary":"7 / unknown emails · 0 failed","detail":"Running · 12 emails/min · Total unknown"}]}"#
+        let report = try JSONDecoder.cubby().decode(EntityReportOut.self, from: Data(json.utf8))
+        guard case .progress(let progress) = ReportPresentation(report).blocks.first else {
+            Issue.record("expected progress")
+            return
+        }
+        #expect(progress.total == nil)
+        #expect(progress.processed == 7)
+        #expect(progress.summary == "7 / unknown emails · 0 failed")
+    }
+
     private func presentation() throws -> ReportPresentation {
         ReportPresentation(try JSONDecoder.cubby().decode(EntityReportOut.self, from: Data(Self.json.utf8)))
     }
@@ -47,6 +60,7 @@ struct ReportPresentationTests {
     @Test func rendersEveryBlockKindInOrder() throws {
         let kinds = try presentation().blocks.map { block -> String in
             switch block {
+            case .progress: "progress"
             case .stats: "stats"
             case .chart: "chart"
             case .table: "table"

@@ -24,6 +24,7 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -80,6 +81,28 @@ describe("mail research admission", () => {
     if (!mail) throw new Error("Synthetic mail fixture did not persist");
     return { party, mail };
   }
+  // Admission freezes the Mail population before any of its targets finish.
+  it("reports the known Mail import total while its roster is active", async () => {
+    const { party, mail } = await source();
+    const [admitted] = await startMailImport(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+      },
+      { send: async () => {} },
+    );
+    if (!admitted) throw new Error("Synthetic Mail Run missing");
+    const [owner] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", admitted.runId)));
+    expect(
+      (await getRunWorkProgress(ctx.db, owner!.shortcode))!.current,
+    ).toMatchObject({ total: 1, processed: 0 });
+  });
+
   // Previously classified Email must progress without a member import click;
   // disabled mailboxes, excluded sources, and existing ownership stay respected.
   it("automatically admits retained related Email once its mailbox is enabled and replays without duplicate Runs", async () => {

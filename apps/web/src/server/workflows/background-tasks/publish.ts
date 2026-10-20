@@ -111,9 +111,11 @@ function requireBackgroundQueue(source: string): BackgroundQueueProducer {
 /** Enqueue from a caller without a Database; missing bindings and failed sends reject. */
 export async function enqueueBackgroundTask(
   task: BackgroundTaskInput,
-  options: PublishOptions,
+  options: PublishOptions & { queue?: BackgroundQueueProducer },
 ): Promise<boolean> {
-  await sendToQueue(requireBackgroundQueue(options.source), [task]);
+  await sendToQueue(options.queue ?? requireBackgroundQueue(options.source), [
+    task,
+  ]);
   log.info(`published count=1 source=${options.source}`);
   return true;
 }

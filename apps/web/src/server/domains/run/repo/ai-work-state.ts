@@ -2,6 +2,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { guardAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
@@ -15,7 +16,7 @@ import { aiEvaluation, run } from "~/server/db/schema";
 
 export type RunRow = typeof run.$inferSelect;
 export type AiEvaluationRow = typeof aiEvaluation.$inferSelect;
-type RunUpdate = Partial<typeof run.$inferInsert>;
+type RunUpdate = PgUpdateSetSource<typeof run>;
 
 export async function readRun(
   db: Database,
@@ -71,10 +72,13 @@ export async function writeRunningAttemptProgress(
             : undefined,
         ),
       )
-      .returning({ id: run.id });
+      .returning({ id: run.id, shortcode: run.shortcode });
+    if (written[0])
+      await (
+        await import("./work-progress")
+      ).checkpointRunWorkProgress(target, written[0].shortcode);
     return written.length > 0;
   };
-  if (!options.requireNoOwnedPendingWork) return write(db);
   return withTransactionDatabase(db, async (tx) => {
     // Under READ COMMITTED an UPDATE that waits on the Run row rechecks only that
     // row, not its NOT EXISTS subquery. Taking the lock first gives the guarded

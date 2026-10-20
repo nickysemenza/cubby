@@ -218,10 +218,16 @@ member's entity brand.
 
 Drizzle raw-`sql` traps: a nullable timestamp `CASE` must cast its bound
 instant to `timestamp`; an unconstrained parameter beside `NULL` otherwise
-infers `text` and fails the update. An interpolated column renders **unqualified** on a
+infers `text` and fails the update. Bound `jsonb_build_object` keys need `::text`
+when no typed expression constrains their parameters. An interpolated column renders **unqualified** on a
 single-table select, including inside a nested projection. A correlated
 subquery can silently compare its own columns instead of the outer row;
-use explicit table aliases and literal qualified names for that correlation.
+use explicit table aliases and qualified identifier fragments for that correlation:
+combine `sql.identifier("Run")`, a literal dot, and `sql.identifier("id")`
+to retain `"Run"."id"`;
+interpolating `${run.id}` can become the inner table's unqualified `"id"`.
+Verify a correlated count with nonzero rows and another owner's rows, rather
+than an empty population that hides a broken correlation.
 Keep a `PgTable` object when passing a plain table to `.from()`: raw SQL
 interpolation of an aliased table emits only its alias, losing the underlying
 table declaration. Derived SQL sources must not convert plain-table fallbacks

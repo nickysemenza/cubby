@@ -11,6 +11,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { afterResponse, getAiResponseCacheNamespace } from "~/server/cf-env";
 
+import { deferCooperativeAiWork } from "./cooperative-work";
 import {
   AI_RESPONSE_CACHE_BATCH_SIZE,
   type CacheClaim,
@@ -345,6 +346,7 @@ export async function withAiResponseCache<T>(args: {
     }
     if (claim.kind === "busy") {
       args.onWait?.();
+      deferCooperativeAiWork(Date.now() + 250);
       force = false;
       await sleep(250);
       continue;

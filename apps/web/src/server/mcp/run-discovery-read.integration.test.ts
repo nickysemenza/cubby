@@ -217,6 +217,16 @@ describe("member discovery readiness through MCP", () => {
     const status = await read("run_status");
     expect(status.isError).not.toBe(true);
     expect(status.structuredContent).toMatchObject({
+      workProgress: {
+        current: {
+          phase: "listing",
+          unit: "pages",
+          processed: 3,
+          total: null,
+          failures: 0,
+          etaSeconds: null,
+        },
+      },
       mailDiscovery: {
         scope: {
           mailboxId,

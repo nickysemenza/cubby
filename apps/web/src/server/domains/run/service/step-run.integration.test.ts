@@ -1,15 +1,22 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
+import { run, runOperation } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
+import { writeRunningAttemptProgress } from "../repo/ai-work-state";
+import {
+  getRunLiveProgress,
+  recordRunProgress as recordRunEvent,
+} from "../repo/run-progress";
 import { readRunSteps } from "../repo/run-step";
 import {
   advanceStepRun,
@@ -78,6 +85,277 @@ describe("step-ledger Runs", () => {
 
   const readRun = async (id: RunId) =>
     (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0];
+
+  // A changed outcome is another receipt for the same target, not another processed item.
+  it("counts a target once after its outcome changes", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic progress member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "product_enrichment",
+      trigger: "manual",
+      status: "running",
+    });
+    for (const [index, state] of ["completed", "skipped"].entries())
+      await getDb(ctx.db)
+        .insert(runOperation)
+        .values({
+          runId: id,
+          operationId: `synthetic-outcome-${index}`,
+          kind: "target_outcome",
+          state: "completed",
+          inputFingerprint: `synthetic-outcome-${index}`,
+          result: {
+            target: {
+              entityKind: "run",
+              entityId: id,
+              workKey: "synthetic-target",
+              state,
+              outcome: null,
+              warning: null,
+              diff: null,
+              completedAt: new Date(Date.now() + index * 1_000).toISOString(),
+              targetFingerprint: "synthetic-evidence",
+            },
+          },
+        });
+    const owner = (await readRun(id))!;
+    expect(
+      await getRunLiveProgress(ctx.db, owner.shortcode, launcher),
+    ).toMatchObject({ workProgress: { current: { processed: 1 } } });
+  });
+
+  // Phase history and sampling must survive checkpoint reads; heartbeats are not completed work.
+  it("persists non-step phase samples without refreshing an unchanged rate", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic phase member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "running",
+      progress: mailboxDiscoveryProgress.parse({
+        attempt: 1,
+        phase: "listing",
+        pagesDone: 1,
+        saved: 7,
+      }),
+    });
+    const owner = (await readRun(id))!;
+    const at = Date.now() + 1_000;
+    const event = (sequence: number) =>
+      recordRunEvent(
+        ctx.db,
+        {
+          runId: id,
+          eventId: `synthetic:${sequence}`,
+          generation: "workflow:1",
+          sequence,
+          phase: "synthetic-progress",
+        },
+        new Date(at + sequence * 1_000),
+      );
+    await event(0);
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        progress: mailboxDiscoveryProgress.parse({
+          attempt: 1,
+          phase: "fetching",
+          pagesDone: 1,
+          saved: 7,
+        }),
+      })
+      .where(eq(run.id, id));
+    await event(1);
+    const before = (await getRunLiveProgress(
+      ctx.db,
+      owner.shortcode,
+      launcher,
+    ))!.workProgress!;
+    expect(before.completed).toContainEqual(
+      expect.objectContaining({ phase: "listing" }),
+    );
+    await event(2);
+    expect(
+      (await getRunLiveProgress(ctx.db, owner.shortcode, launcher))!
+        .workProgress!.current.sampledAt,
+    ).toBe(before.current.sampledAt);
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        progress: mailboxDiscoveryProgress.parse({
+          attempt: 1,
+          phase: "fetching",
+          pagesDone: 1,
+          saved: 10,
+        }),
+      })
+      .where(eq(run.id, id));
+    await event(3);
+    const moving = (await getRunLiveProgress(
+      ctx.db,
+      owner.shortcode,
+      launcher,
+    ))!.workProgress!.current;
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "paused_auth",
+        progress: mailboxDiscoveryProgress.parse({
+          attempt: 1,
+          phase: "paused",
+          pagesDone: 1,
+          saved: 10,
+        }),
+      })
+      .where(eq(run.id, id));
+    expect(
+      (await getRunLiveProgress(ctx.db, owner.shortcode, launcher))!
+        .workProgress!.current,
+    ).toMatchObject({
+      phase: "fetching",
+      state: "paused",
+      ratePerSecond: moving.ratePerSecond,
+      sampledAt: moving.sampledAt,
+    });
+  });
+
+  // A checkpoint advances completed work even when its heartbeat has not moved.
+  it("samples checkpoint progress at its commit time", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic sampling member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const earlier = new Date(Date.now() - 60_000);
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "running",
+      progress: mailboxDiscoveryProgress.parse({
+        attempt: 1,
+        phase: "listing",
+        pagesDone: 1,
+      }),
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ heartbeatAt: earlier })
+      .where(eq(run.id, id));
+    const owner = (await readRun(id))!;
+    await recordRunEvent(
+      ctx.db,
+      {
+        runId: id,
+        eventId: "synthetic:sample",
+        generation: "workflow:1",
+        sequence: 0,
+        phase: "listing",
+      },
+      earlier,
+    );
+    await writeRunningAttemptProgress(ctx.db, id, 1, {
+      progress: mailboxDiscoveryProgress.parse({
+        attempt: 1,
+        phase: "listing",
+        pagesDone: 2,
+      }),
+    });
+    const current = (await getRunLiveProgress(
+      ctx.db,
+      owner.shortcode,
+      launcher,
+    ))!.workProgress!.current;
+    expect(Date.parse(current.sampledAt)).toBeGreaterThan(earlier.getTime());
+    expect(current.ratePerSecond).toBeGreaterThan(0);
+  });
+
+  // Reopening a failed pass must stop presenting its terminal sample before its next page.
+  it("resets the active progress sample immediately on a step retry", async () => {
+    const { id, params } = await startRun();
+    const pages = scripted("synthetic-retry", [
+      { kind: "progress", found: 2, delta: { done: 1, failed: 1 }, done: true },
+    ]);
+    await drive(params, async () => [pages.driver]);
+    await retryRunStep(ctx.db, id, "synthetic-retry", launcher);
+    const owner = (await readRun(id))!;
+    expect(
+      (await getRunLiveProgress(ctx.db, owner.shortcode, launcher))!
+        .workProgress!.current,
+    ).toMatchObject({
+      state: "running",
+      finished: false,
+      processed: 1,
+      failures: 0,
+    });
+  });
+
+  // Step-ledger work has no RunTargets; the shared progress read must still expose real counts.
+  it("reports processed items and failures for a Run without targets", async () => {
+    const { id, params } = await startRun();
+    const pages = scripted("synthetic-items", [
+      {
+        kind: "progress",
+        found: 10,
+        delta: { done: 3, skipped: 1, failed: 1 },
+        cursor: "synthetic-next",
+        done: false,
+      },
+    ]);
+    await advanceStepRun(ctx.db, params, async () => [pages.driver], launcher);
+    const owner = (await readRun(id))!;
+    expect(
+      await getRunLiveProgress(ctx.db, owner.shortcode, launcher),
+    ).toMatchObject({
+      workProgress: {
+        current: {
+          phase: "synthetic-items",
+          label: "Synthetic synthetic-items",
+          unit: "items",
+          processed: 5,
+          total: 10,
+          failures: 1,
+        },
+      },
+    });
+  });
+
+  // Exploratory work must show counts without inventing a zero-sized completed population.
+  it("reports an authoritative failed step after an earlier successful sample", async () => {
+    const { id, params } = await startRun();
+    const pages = scripted("synthetic-failure", [
+      { kind: "progress", found: 10, delta: { done: 1 }, done: false },
+    ]);
+    const drivers: StepRunDrivers = async () => [pages.driver];
+    await drive(params, drivers);
+    const owner = (await readRun(id))!;
+    expect(
+      await getRunLiveProgress(ctx.db, owner.shortcode, launcher),
+    ).toMatchObject({
+      workProgress: { current: { state: "failed", finished: true } },
+    });
+  });
+
+  it("reports an unknown total for exploratory work with no targets", async () => {
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      trigger: "manual",
+      status: "running",
+    });
+    const owner = (await readRun(id))!;
+    expect(
+      await getRunLiveProgress(ctx.db, owner.shortcode, launcher),
+    ).toMatchObject({
+      workProgress: {
+        current: { processed: 0, total: null, failures: 0, etaSeconds: null },
+      },
+    });
+  });
 
   // A second database error during the step's failure checkpoint must not
   // hide the original page failure from the outer Workflow recorder.

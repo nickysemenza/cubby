@@ -60,15 +60,17 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     return this.env.CF_VERSION_METADATA.id;
   }
 
-  /** Launch through the current deployment's bindings, including after rollback. */
+  /** Pinned Workflow versions still call this RPC; they also cross the queue boundary. */
   async continueWorkflowRun(params: WorkflowRunParams): Promise<void> {
-    const { setCfEnv } = await import("~/server/cf-env");
-    const { withInvocationDb, db } = await import("~/server/db");
-    const { continueWorkflowRun } =
-      await import("~/server/workflows/runs/continuation");
-    setCfEnv(this.env);
-    await withInvocationDb(this.env.HYPERDRIVE.connectionString, () =>
-      continueWorkflowRun(db, params),
+    const { enqueueBackgroundTask } =
+      await import("~/server/workflows/background-tasks/publish");
+    await enqueueBackgroundTask(
+      {
+        kind: "workflow.continue",
+        ...params,
+        requestedAt: new Date().toISOString(),
+      },
+      { source: "workflow.continue", queue: this.env.BACKGROUND_QUEUE },
     );
   }
 

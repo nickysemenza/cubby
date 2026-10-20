@@ -140,6 +140,15 @@ const reportRef = z.object({
   id: z.string(),
 });
 
+const reportProgress = z.object({
+  kind: z.literal("progress"),
+  label: z.string(),
+  processed: z.number().nonnegative(),
+  total: z.number().nonnegative().nullable(),
+  summary: z.string(),
+  detail: z.string(),
+});
+
 const reportStats = z.object({
   kind: z.literal("stats"),
   title: z.string().optional(),
@@ -600,6 +609,7 @@ export const reportRecordsBlock = z.object({
 });
 
 export const reportBlock = z.discriminatedUnion("kind", [
+  reportProgress,
   reportStats,
   reportChart,
   reportTable,

@@ -8,6 +8,10 @@ import {
   type RunStepMeta,
   type RunStepState,
 } from "@cubby/schemas/run-step";
+import {
+  runWorkSamples,
+  runWorkSample,
+} from "@cubby/schemas/run-work-progress";
 import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import {
@@ -151,6 +155,14 @@ export async function reopenRunStep(
   runId: RunId,
   key: string,
 ): Promise<RunStepRow | null> {
+  const workKey = runWorkSamples.keyof().enum;
+  const itemKey = runWorkSample.keyof().enum;
+  const currentWork = sql`${runStep.meta}->'work'->${workKey.current}`;
+  const retryWork = sql`CASE WHEN ${currentWork} IS NULL THEN '{}'::jsonb ELSE
+    jsonb_build_object('work', (${runStep.meta}->'work') || jsonb_build_object(${workKey.current}::text, ${currentWork} ||
+      jsonb_build_object(${itemKey.finished}::text, false, 'failures', 0,
+        'processed', greatest(0, (${currentWork}->>'processed')::int - (${currentWork}->>'failures')::int),
+        'sampledAt', ${new Date().toISOString()}::text))) END`;
   const [row] = await getDb(db)
     .update(runStep)
     .set({
@@ -159,7 +171,7 @@ export async function reopenRunStep(
       endedAt: null,
       pausedReason: null,
       pausedUntil: null,
-      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb), 'failedRefs', '[]'::jsonb)`,
+      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb), 'failedRefs', '[]'::jsonb) || ${retryWork}`,
       errors: sql`'[]'::jsonb`,
     })
     .where(

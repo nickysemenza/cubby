@@ -4,8 +4,11 @@ import type {
   RunStepCounts,
   RunStepError,
   RunStepMeta,
+  RunStepExecution,
 } from "@cubby/schemas/run-step";
+import type { RunWorkItems } from "@cubby/schemas/run-work-progress";
 import { createLogger } from "@cubby/worker-tracing";
+import { pick } from "es-toolkit";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
@@ -42,15 +45,18 @@ import {
   type RunStepRow,
   type StepRunOwner,
 } from "../repo/run-step";
+import { sampleRunWork } from "../repo/work-progress";
 
 type RunRow = StepRunOwner;
 
 const log = createLogger("step-run");
 
 /** What one page of a step reported. */
-export type StepPage =
+export type StepPage = (
   | {
       kind: "progress";
+      execution?: RunStepExecution;
+      waitSeconds?: number;
       delta?: Partial<RunStepCounts>;
       /** The backlog size when the driver knows it. */
       found?: number;
@@ -83,7 +89,8 @@ export type StepPage =
       delta?: Partial<RunStepCounts>;
       errors?: readonly RunStepError[];
       cursor?: unknown;
-    };
+    }
+) & { work?: RunWorkItems & { finished?: boolean } };
 
 export type StepContext = {
   db: Database;
@@ -117,7 +124,7 @@ const registry = {
 } satisfies Record<StepRunPurpose, () => Promise<StepRunDrivers>>;
 
 export type StepAdvance =
-  | { kind: "continue" }
+  | { kind: "continue"; execution?: RunStepExecution; waitSeconds?: number }
   | { kind: "wait"; seconds: number }
   | { kind: "paused" }
   | { kind: "finished" }
@@ -131,6 +138,53 @@ const stampOf = (attempt: number) => ({
   attempt,
   sequence: Date.now() * 1_000 + (progressSequence++ % 1_000),
 });
+
+function pageWork(
+  step: RunStepRow,
+  page: StepPage,
+  started: number,
+  reset: boolean,
+): Pick<RunStepMeta, "work"> {
+  const counts =
+    page.kind === "child"
+      ? page.counts
+      : {
+          done: step.done + (page.delta?.done ?? 0),
+          skipped: step.skipped + (page.delta?.skipped ?? 0),
+          failed: step.failed + (page.delta?.failed ?? 0),
+        };
+  const total =
+    page.kind === "child"
+      ? page.counts.found
+      : page.kind === "progress" && page.found !== undefined
+        ? page.found
+        : (step.meta?.work?.current.total ??
+          (step.found > 0 ? step.found : null));
+  const finished =
+    page.kind === "progress"
+      ? page.done
+      : page.kind === "child" &&
+        (page.state === "done" || page.state === "failed");
+  const items = page.work ?? {
+    phase: step.key,
+    label: step.label,
+    unit: "items",
+    processed: counts.done + counts.skipped + counts.failed,
+    total,
+    failures: counts.failed,
+  };
+  return {
+    work: sampleRunWork(step.meta?.work, items, {
+      startedAt: new Date(started),
+      sampledAt: new Date(),
+      finished: page.work?.finished ?? finished,
+      reset,
+      baselineProcessed: reset
+        ? step.done + step.skipped + step.failed
+        : undefined,
+    }),
+  };
+}
 
 /**
  * Runs one page of the first unfinished step. Ledger writes happen only while
@@ -238,12 +292,12 @@ export async function advanceStepRun(
     },
   };
   if (page.kind === "paused") {
-    if (page.delta || page.errors || page.cursor !== undefined)
+    if (["delta", "errors", "cursor", "work"].some((key) => key in page))
       await recordRunStepPage(db, owner.id, current.key, {
         ...(page.delta && { delta: page.delta }),
         ...(page.errors && { errors: page.errors }),
         ...(page.cursor !== undefined && { cursor: page.cursor }),
-        meta: timing,
+        meta: { ...timing, ...pageWork(current, page, started, retrying) },
       });
     await pauseStep(
       db,
@@ -262,7 +316,11 @@ export async function advanceStepRun(
       childRunId: page.childRunId,
       ...(page.errors?.length && { errors: page.errors }),
       ...(page.cursor !== undefined && { cursor: page.cursor }),
-      meta: { ...page.meta, ...timing },
+      meta: {
+        ...page.meta,
+        ...timing,
+        ...pageWork(current, page, started, retrying),
+      },
       state: ended
         ? page.state === "failed" || page.counts.failed > 0
           ? "failed"
@@ -294,7 +352,11 @@ export async function advanceStepRun(
     ...(page.found !== undefined && { found: page.found }),
     ...(page.errors && { errors: page.errors }),
     ...(page.cursor !== undefined && { cursor: page.cursor }),
-    meta: { ...page.meta, ...timing },
+    meta: {
+      ...page.meta,
+      ...timing,
+      ...pageWork(current, page, started, retrying),
+    },
     ...(page.done && { state: failed > 0 ? "failed" : "done" }),
   });
   if (page.done) {
@@ -303,7 +365,10 @@ export async function advanceStepRun(
     );
     if (after) await stepEnded(db, owner, current, after, stamp);
   }
-  return { kind: "continue" };
+  return {
+    kind: "continue",
+    ...pick(page, ["execution", "waitSeconds"]),
+  };
 }
 
 /**

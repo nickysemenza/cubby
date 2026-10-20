@@ -46,6 +46,7 @@ import {
   loadMailDiscoveryRead,
 } from "~/server/domains/run/repo/run-discovery-read";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
+import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { assertPaidOverride } from "~/server/domains/run/service/paid-override";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -270,6 +271,8 @@ export const runHandlers = implementOperationDomain(runContract, {
       party ? { userId: context.auth.userId, ledgerPartyId: party.id } : null,
     );
     const run = await loadRunDetail(context.db, input.runId);
+    const workProgress = await getRunWorkProgress(context.db, input.runId);
+    if (!workProgress) throw new Error("Run progress was not found");
     return {
       runId: input.runId,
       purpose: runPurpose.parse(run.purpose),
@@ -288,6 +291,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       targetsCompleted: run.targets.filter(
         (target) => target.state === "completed" || target.state === "skipped",
       ).length,
+      workProgress,
       targets: run.targets.map((target) => ({
         targetType: target.targetType,
         targetShortcode: target.targetShortcode,

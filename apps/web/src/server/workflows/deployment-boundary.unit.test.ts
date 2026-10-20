@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { memoryDurableSteps } from "~/server/testing/durable-steps";
 
+import type { BackgroundQueueProducer } from "./background-queue-types";
 import { workflowDeploymentBoundary } from "./deployment-boundary";
 import { runDeploymentBoundary } from "./runs/deployment";
 
@@ -10,6 +11,53 @@ import { runDeploymentBoundary } from "./runs/deployment";
 // rollback; only a new boundary observes the replacement deployment. A lookup
 // failure must not silently authorize another page of pinned code.
 describe("Workflow deployment boundaries", () => {
+  // Creating a successor in the predecessor's RPC ancestry can carry the
+  // Worker loop depth forward. Queue acceptance must precede a fresh launch.
+  it("queues successor launch without creating it in the predecessor invocation", async () => {
+    let inlineLaunches = 0;
+    const accepted: unknown[] = [];
+    const env = fromPartial<Env>({
+      CF_VERSION_METADATA: { id: "synthetic-a" },
+      BACKGROUND_QUEUE: {
+        sendBatch: async (
+          messages: Parameters<BackgroundQueueProducer["sendBatch"]>[0],
+        ) => {
+          accepted.push(...[...messages].map((message) => message.body));
+        },
+      },
+      AI_GATEWAY_EGRESS: {
+        getByName: () =>
+          fromPartial<ReturnType<Env["AI_GATEWAY_EGRESS"]["getByName"]>>({
+            currentDeploymentVersion: async () => "synthetic-a",
+            continueWorkflowRun: async () => {
+              inlineLaunches += 1;
+            },
+          }),
+      },
+    });
+    const params = {
+      runId: "00000000-0000-4000-8000-000000000001",
+      attempt: 1,
+    };
+    const boundary = runDeploymentBoundary(
+      env,
+      memoryDurableSteps().steps,
+      params,
+    );
+    await expect(boundary("continue", true)).resolves.toBe(true);
+    expect(inlineLaunches).toBe(0);
+    expect(accepted).toEqual([
+      expect.objectContaining({
+        queueType: "background",
+        task: expect.objectContaining({
+          kind: "workflow.continue",
+          runId: params.runId,
+          attempt: params.attempt,
+        }),
+      }),
+    ]);
+  });
+
   // A fresh instance may briefly lag the current DO during deploy propagation;
   // it must wait and recheck before allocating another zero-progress successor.
   it("waits for propagation at startup and rechecks before handing off", async () => {
@@ -62,6 +110,11 @@ describe("Workflow deployment boundaries", () => {
     let launches = 0;
     const env = fromPartial<Env>({
       CF_VERSION_METADATA: { id: "synthetic-a" },
+      BACKGROUND_QUEUE: {
+        sendBatch: async () => {
+          launches += 1;
+        },
+      },
       AI_GATEWAY_EGRESS: {
         getByName: () => {
           let broken = false;

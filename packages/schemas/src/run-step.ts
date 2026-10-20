@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runWorkSamples } from "./run-work-progress";
 
 /**
  * One ordered unit of a step-ledger Run (a maintenance backlog, a Sweep's
@@ -17,6 +18,18 @@ export const runStepState = z.enum([
 export type RunStepState = z.infer<typeof runStepState>;
 
 export const RUN_STEP_ERROR_SAMPLE = 20;
+export const MAX_STEP_RUN_INSTANCE_PAGES = 500;
+
+/** A driver declares its phase budget; the Workflow owns the instance boundary. */
+export const runStepExecution = z.object({
+  phase: z.string(),
+  pagesPerInstance: z
+    .number()
+    .int()
+    .positive()
+    .max(MAX_STEP_RUN_INSTANCE_PAGES),
+});
+export type RunStepExecution = z.infer<typeof runStepExecution>;
 
 /** A raw failure as the step saw it; only `scrubErrorMessage` redacts it. */
 export const runStepError = z.object({
@@ -33,6 +46,7 @@ export const runStepErrors = z.array(runStepError).max(RUN_STEP_ERROR_SAMPLE);
  * details (a phase split, a budget note) shown beside the step.
  */
 export const runStepMeta = z.object({
+  work: runWorkSamples.optional(),
   /**
    * Every failed item ref (`image:<id>`), uncapped: `errors` keeps only a
    * sample for display, so a retry re-admits from this set.

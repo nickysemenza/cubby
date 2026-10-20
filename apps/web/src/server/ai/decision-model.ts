@@ -40,6 +40,7 @@ import {
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
 
+import { aiWorkDeferral } from "./cooperative-work";
 import {
   DECISION_CONTEXT_BYTE_LIMIT,
   type BatchedChoiceResponse,
@@ -255,7 +256,8 @@ async function requestDecision(
     );
     return parsed;
   } catch (error) {
-    admissionWait = isGatewayAdmissionWait(error);
+    admissionWait =
+      isGatewayAdmissionWait(error) || aiWorkDeferral(error) !== null;
     throw wrapAiGatewayError(error, {
       model: feature.model,
       provider: providerFor(feature.model),
