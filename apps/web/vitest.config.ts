@@ -121,6 +121,7 @@ const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 // an ordinary integration step can inherit a browser-built bundle when paired,
 // so CI's refusal to rebuild a missing/stale bundle does not enforce membership.
 const workerdIntegrationTests = [
+  "src/server/domains/run/service/workflow-deployment.integration.test.ts",
   "tooling/database-socket-lifecycle.integration.test.ts",
   "src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts",
   "src/server/domains/purchase-import/repo/run-retirement.integration.test.ts",
