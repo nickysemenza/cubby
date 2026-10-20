@@ -3,10 +3,11 @@ import Foundation
 extension JSONValue {
     /// Evaluates a manifest `display.labelPath` / `readPath` against this row: dotted keys, `[n]`
     /// indexing, and a `[]` projection that maps the rest of the path over an array. Mirrors
-    /// `apps/web/src/entity/read-path.ts`; a missing link anywhere reads as `nil`.
-    public func pathValue(_ path: String) -> JSONValue? {
+    /// `apps/web/src/entity/read-path.ts`; a missing link anywhere reads as `nil`. Required wire
+    /// readers set `preservingNull` to distinguish an explicitly unknown value from a missing key.
+    public func pathValue(_ path: String, preservingNull: Bool = false) -> JSONValue? {
         var steps = Self.pathSteps(path)[...]
-        return walk(&steps)
+        return walk(&steps, preservingNull: preservingNull)
     }
 
     /// The text a row carries at `path`: a string as is, a number or boolean spelled plainly, and
@@ -58,22 +59,22 @@ extension JSONValue {
         return steps
     }
 
-    private func walk(_ steps: inout ArraySlice<PathStep>) -> JSONValue? {
+    private func walk(_ steps: inout ArraySlice<PathStep>, preservingNull: Bool) -> JSONValue? {
         guard let step = steps.popFirst() else { return self }
         switch step {
         case .key(let key):
-            guard let next = self[key], next != .null else { return nil }
-            return next.walk(&steps)
+            guard let next = self[key], preservingNull || next != .null else { return nil }
+            return next.walk(&steps, preservingNull: preservingNull)
         case .index(let index):
-            guard let next = self[index], next != .null else { return nil }
-            return next.walk(&steps)
+            guard let next = self[index], preservingNull || next != .null else { return nil }
+            return next.walk(&steps, preservingNull: preservingNull)
         case .each:
             guard let items = arrayValue else { return nil }
             let rest = steps
             return .array(
                 items.compactMap { item in
                     var remaining = rest
-                    return item.walk(&remaining)
+                    return item.walk(&remaining, preservingNull: preservingNull)
                 })
         }
     }

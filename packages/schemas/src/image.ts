@@ -1,4 +1,5 @@
 import { IMAGE_FIELD_KEYS } from "./image-field-keys";
+import { productImagePurpose } from "./image-summary";
 import {
   imageOut,
   imageAnalysisSummarySchema,
@@ -292,7 +293,7 @@ export const attachableImageEntity = z.enum(
 );
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 
-export const productImagePurpose = z.enum(["item", "label"]);
+export { productImagePurpose } from "./image-summary";
 export type ProductImagePurpose = z.infer<typeof productImagePurpose>;
 
 const attachableImageEntities = nonEmptyTuple<ShortcodeEntity>(

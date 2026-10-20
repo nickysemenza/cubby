@@ -1,5 +1,16 @@
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
+import {
+  purchaseExpenseStatus,
+  purchaseReconciliation,
+  purchaseDocumentKind,
+} from "./purchase-fields";
+export {
+  purchaseExpenseStatus,
+  purchaseReconciliation,
+  purchaseDocumentKind,
+  purchaseDocumentKindValues,
+} from "./purchase-fields";
 import { productMovementKind } from "./product-movement-kind";
 import {
   financialTransactionOut,
@@ -255,33 +266,10 @@ export const purchaseUpdateInput = z.object({
 });
 export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 
-export const purchaseExpenseStatus = z.enum(["empty", "unpriced", "priced"]);
 export type PurchaseExpenseStatus = z.infer<typeof purchaseExpenseStatus>;
 
-export const purchaseReconciliation = z.enum([
-  "unknown",
-  "match",
-  "refund_adjusted",
-  "mismatch",
-]);
 export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
 
-export const purchaseDocumentKindValues = [
-  "order_confirmation",
-  "sales_order",
-  "invoice",
-  "receipt",
-  "payment_receipt",
-  "credit_memo",
-  "return_authorization",
-  "quote",
-  "estimate",
-  "contract",
-  "statement",
-  "specification",
-  "other",
-] as const;
-export const purchaseDocumentKind = z.enum(purchaseDocumentKindValues);
 export type PurchaseDocumentKind = z.infer<typeof purchaseDocumentKind>;
 
 export const primaryPurchaseDocumentKinds = [

@@ -5,7 +5,10 @@ import {
   generatedFinancialTransactionKindValues,
   generatedFinancialTransactionStatusValues,
 } from "./generated/entity-field-schemas.financialTransaction.gen";
-import { financialTransactionSourceRef } from "./financial-transaction-fields";
+import {
+  financialTransactionSourceRef,
+  financialTransactionProviderStatus,
+} from "./financial-transaction-fields";
 import {
   financialAccountShortcode,
   ledgerPartyShortcode,
@@ -115,7 +118,7 @@ export const statementTransactionCreate = z.object({
     history: null,
     storedValue: false,
   }),
-  status: z.enum(["posted", "pending"]),
+  status: financialTransactionProviderStatus,
   amount: z.number(),
   transactionDate: plainDate.nullable(),
   postedDate: plainDate.nullable(),
@@ -130,7 +133,7 @@ export const statementTransactionJudgment = z.object({
   recommended: statementTransactionAction,
   accountId: z.uuid(),
   statementDate: plainDate,
-  providerStatus: z.enum(["posted", "pending"]),
+  providerStatus: financialTransactionProviderStatus,
   create: statementTransactionCreate.nullable(),
   candidates: z.array(statementTransactionCandidate),
   supersede: z
@@ -209,7 +212,7 @@ export const statementSuggestionOut = z.object({
   merchant: z.string().nullable(),
   rawDescription: z.string(),
   sourceCategory: z.string().nullable(),
-  providerStatus: z.enum(["posted", "pending"]),
+  providerStatus: financialTransactionProviderStatus,
   recommended: statementTransactionAction,
   clean: z.boolean(),
   create: statementTransactionCreate.omit({ sourceRef: true }).nullable(),

@@ -5,6 +5,9 @@ import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
 import { wholeCentAmount } from "./money";
 import { plainDate } from "./base-entity";
 
+/** Posting state reported by the source, independent of Cubby classification. */
+export const financialTransactionProviderStatus = z.enum(["posted", "pending"]);
+
 export const financialTransactionNonZeroAmount = wholeCentAmount.refine(
   (amount) => amount !== 0,
   "amount must be non-zero",

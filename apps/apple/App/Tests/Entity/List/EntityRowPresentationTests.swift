@@ -6,6 +6,24 @@ import Testing
 
 @Suite("Entity row presentation")
 struct EntityRowPresentationTests {
+    // Today no longer decodes a second meal model; the manifest adapter must retain the
+    // recipe context, meal type, navigation identity and display image that its old row showed.
+    @Test func todayMealUsesManifestFactsAndDisplayImage() throws {
+        let raw: JSONValue = [
+            "id": "MEL-2345", "displayName": "Fixture supper", "mealType": "dinner",
+            "recipeNames": ["Fixture stew"],
+            "displayImages": [["url": "https://example.invalid/meal.jpg"]],
+        ]
+        let row = try #require(EntityCatalog[.meal].row(from: raw))
+        let presentation = EntityRowPresentation.resolve(
+            descriptor: EntityCatalog[.meal], row: row, columns: ["mealType", "recipeNames"])
+        #expect(presentation.title == "Fixture supper")
+        #expect(row.id == "MEL-2345")
+        #expect(presentation.facts.contains { $0.id == "mealType" && $0.value == "Dinner" })
+        #expect(presentation.facts.contains { $0.id == "recipeNames" && $0.value.contains("Fixture stew") })
+        #expect(presentation.imageURL?.absoluteString == "https://example.invalid/meal.jpg")
+    }
+
     @Test func qualityLeadsSupportingFactsAndDistinguishesUnassessed() {
         let row = EntityRow(
             id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,

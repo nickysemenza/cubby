@@ -4,16 +4,58 @@ import Observation
 /// A frozen review, including proposal revisions and the backend's finding fingerprint.
 public struct RunReviewDocument: Codable, Sendable {
     public let runID: String
-    public let snapshot: RunWorkSnapshotOutput?
+    public let snapshot: RunSnapshot?
     public let review: PhotoRunReviewResponse?
 
     public init(
-        runID: String, snapshot: RunWorkSnapshotOutput?, review: PhotoRunReviewResponse?
+        runID: String, snapshot: RunSnapshot?, review: PhotoRunReviewResponse?
     ) {
         self.runID = runID
         self.snapshot = snapshot
         self.review = review
     }
+
+    func photoGroups(runID: String, keys: [String]) throws -> [PhotoGroupProposal] {
+        try requireMatchingRun(runID)
+        guard let review, review.review.runId == runID, !keys.isEmpty,
+            Set(keys).count == keys.count
+        else { throw ReviewRequired("Select the exact photo groups you reviewed.") }
+        return try keys.map { key in
+            guard let group = review.review.proposals.first(where: { $0.groupKey == key }),
+                group.state == .proposed
+            else { throw ReviewRequired("The selected group is absent from the reviewed proposals.") }
+            if let blocker = group.blockedReason { throw ReviewRequired(blocker) }
+            return group
+        }
+    }
+
+    func findingInput(runID: String, id: String, apply: Bool, reviewedFingerprint: String?) throws
+        -> ResolveRunFindingInput
+    {
+        try requireMatchingRun(runID)
+        guard let finding = snapshot?.finding(id: id) else {
+            throw ReviewRequired("The finding is absent from the reviewed run.")
+        }
+        if apply {
+            let shown = finding["proposedFix"]?["reviewSnapshot"]?["fingerprint"]?.stringValue
+            guard let reviewedFingerprint, !reviewedFingerprint.isEmpty, reviewedFingerprint == shown else {
+                throw ReviewRequired("Confirm the exact finding fingerprint shown in the review.")
+            }
+        }
+        return .init(reviewedFingerprint: reviewedFingerprint, id: id, action: apply ? .apply : .dismiss)
+    }
+
+    private func requireMatchingRun(_ runID: String) throws {
+        guard self.runID == runID, snapshot?.runID == runID else {
+            throw ReviewRequired("Review this run before submitting its proposals or findings.")
+        }
+    }
+}
+
+private struct ReviewRequired: LocalizedError {
+    let message: String
+    init(_ message: String) { self.message = message }
+    var errorDescription: String? { message }
 }
 
 /// Mutating commands are explicit; refreshing a review never approves its proposals.
@@ -27,7 +69,7 @@ public enum RunReviewAction: Sendable {
 
 @MainActor @Observable
 public final class RunReviewSession {
-    public private(set) var snapshot: RunWorkSnapshotOutput?
+    public private(set) var snapshot: RunSnapshot?
     public private(set) var review: PhotoRunReviewResponse?
     public private(set) var error: String?
     public private(set) var actionError: String?
@@ -37,6 +79,7 @@ public final class RunReviewSession {
     public private(set) var candidateGroups: [String: PhotoCandidateGroupResult] = [:]
     public private(set) var candidatesError: String?
     public private(set) var checkingCandidates = false
+    @ObservationIgnored private var refreshGeneration = 0
     @ObservationIgnored private var candidateKey: String?
     @ObservationIgnored private var activeCandidateKey: String?
     @ObservationIgnored private var candidateTask: Task<Void, Never>?
@@ -102,7 +145,7 @@ public final class RunReviewSession {
     @ObservationIgnored private let reportDiagnostic: @MainActor (any Error, String) -> Void
 
     public init(
-        snapshot: RunWorkSnapshotOutput? = nil, review: PhotoRunReviewResponse? = nil,
+        snapshot: RunSnapshot? = nil, review: PhotoRunReviewResponse? = nil,
         reportDiagnostic: @escaping @MainActor (any Error, String) -> Void = { _, _ in }
     ) {
         self.snapshot = snapshot
@@ -115,14 +158,36 @@ public final class RunReviewSession {
     }
 
     public func refresh(runID: String, client: CubbyClient) async {
+        await refresh(
+            runID: runID,
+            loadSnapshot: { try await client.runSnapshot(runID: runID) },
+            loadReview: { try await client.photoRunReview(.init(runId: runID)) })
+    }
+
+    func refresh(
+        runID: String, loadSnapshot: @MainActor () async throws -> RunSnapshot,
+        loadReview: @MainActor () async throws -> PhotoRunReviewResponse?
+    ) async {
+        refreshGeneration += 1
+        let generation = refreshGeneration
         do {
-            let next = try await client.runWorkSnapshot(.init(runId: runID))
-            snapshot = next
-            error = nil
-            if next.purpose == .photoInventory {
-                review = try await client.photoRunReview(.init(runId: runID))
+            let next = try await loadSnapshot()
+            try Task.checkCancellation()
+            guard generation == refreshGeneration else { return }
+            guard next.runID == runID else { throw ReviewRequired("The snapshot belongs to another Run.") }
+            let nextReview = next.purpose == "photo_inventory" ? try await loadReview() : nil
+            try Task.checkCancellation()
+            guard generation == refreshGeneration else { return }
+            if let nextReview, nextReview.review.runId != runID {
+                throw ReviewRequired("The photo review belongs to another Run.")
             }
+            snapshot = next
+            review = nextReview
+            error = nil
+        } catch is CancellationError {
+            // Dismissal and newer refreshes retain the review already visible.
         } catch {
+            guard generation == refreshGeneration else { return }
             reportDiagnostic(error, "Load import run review")
             self.error = error.localizedDescription
         }
@@ -144,33 +209,12 @@ public final class RunReviewSession {
             case .discardPhotoGroup(let groupKey):
                 _ = try await client.discardPhotoGroup(.init(runId: runID, groupKey: groupKey))
             case .approvePhotoGroups(let reviewed, let groupKeys):
-                try requireMatchingRun(reviewed, runID: runID)
-                guard let photoReview = reviewed.review, !groupKeys.isEmpty,
-                    Set(groupKeys).count == groupKeys.count
-                else { throw ReviewRequired("Select the exact photo groups you reviewed.") }
-                let groups = try groupKeys.map { key in
-                    guard let group = photoReview.review.proposals.first(where: { $0.groupKey == key }),
-                        group.state == .proposed
-                    else { throw ReviewRequired("The selected group is absent from the reviewed proposals.") }
-                    if let blocker = group.blockedReason {
-                        throw ReviewRequired(blocker)
-                    }
-                    return group
-                }
+                let groups = try reviewed.photoGroups(runID: runID, keys: groupKeys)
                 _ = try await client.approvePhotoGroups(runID: runID, groups: groups)
             case .resolveFinding(let reviewed, let id, let apply, let fingerprint):
-                try requireMatchingRun(reviewed, runID: runID)
-                let findings = try reviewed.snapshot.map { try JSONValue(encoding: $0.findings) }
-                guard let finding = findings?.arrayValue?.first(where: { $0["id"]?.stringValue == id })
-                else { throw ReviewRequired("The finding is absent from the reviewed run.") }
-                if apply {
-                    let shown = finding["proposedFix"]?["reviewSnapshot"]?["fingerprint"]?.stringValue
-                    guard let fingerprint, !fingerprint.isEmpty, fingerprint == shown else {
-                        throw ReviewRequired("Confirm the exact finding fingerprint shown in the review.")
-                    }
-                }
                 _ = try await client.resolveRunFinding(
-                    .init(reviewedFingerprint: fingerprint, id: id, action: apply ? .apply : .dismiss))
+                    reviewed.findingInput(
+                        runID: runID, id: id, apply: apply, reviewedFingerprint: fingerprint))
             }
             await refresh(runID: runID, client: client)
             actionRevision += 1
@@ -182,15 +226,4 @@ public final class RunReviewSession {
         }
     }
 
-    private func requireMatchingRun(_ reviewed: RunReviewDocument, runID: String) throws {
-        guard reviewed.runID == runID, reviewed.snapshot?.runId == runID else {
-            throw ReviewRequired("Review this run before submitting its proposals or findings.")
-        }
-    }
-
-    private struct ReviewRequired: LocalizedError {
-        let message: String
-        init(_ message: String) { self.message = message }
-        var errorDescription: String? { message }
-    }
 }

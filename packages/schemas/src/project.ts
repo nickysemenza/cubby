@@ -1,5 +1,12 @@
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
+import { projectDateSourceSchema } from "./project-output-fields";
+export {
+  projectDateSourceSchema,
+  projectDateWindow,
+  type ProjectDateSource,
+  type ProjectDateWindow,
+} from "./project-output-fields";
 import { spendingCategoryShortcode } from "./identifiers";
 import {
   hasValidExpenseDate,
@@ -180,19 +187,6 @@ const projectScope = projectFiltersSchema
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
 
 export type ProjectSortField = GeneratedEntitySortField<"project">;
-
-export const projectDateSourceSchema = z.enum(["explicit", "derived", "none"]);
-export type ProjectDateSource = z.infer<typeof projectDateSourceSchema>;
-
-export const projectDateWindow = z.object({
-  derivedStart: plainDate.nullable(),
-  derivedEnd: plainDate.nullable(),
-  effectiveStart: plainDate.nullable(),
-  effectiveEnd: plainDate.nullable(),
-  startSource: projectDateSourceSchema,
-  endSource: projectDateSourceSchema,
-});
-export type ProjectDateWindow = z.infer<typeof projectDateWindow>;
 
 export const projectRollup = z.object({
   spent: money.describe(

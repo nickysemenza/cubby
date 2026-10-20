@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** The ProductImage join's purpose, shared by attachment reads and edits. */
+export const productImagePurpose = z.enum(["item", "label"]);
+
 export const imageRepresentations = z.object({
   original: z.url(),
   transparent: z.url().nullable(),

@@ -288,7 +288,7 @@ struct TodayView: View {
 struct TodayContent: View {
     let dateText: String
     let tasks: TodaySectionState<TaskTodayBriefingOut>
-    let meals: TodaySectionState<[MealListItem]>
+    let meals: TodaySectionState<[EntityRow]>
     let problems: TodaySectionState<ProblemsCount>
     var nutrition: TodaySectionState<MealNutritionOut> = .loading
     var nutritionDay = HouseholdDay.string(for: .now)
@@ -716,20 +716,8 @@ struct TodayContent: View {
         }
     }
 
-    private func mealRow(_ meal: MealListItem) -> some View {
-        RecordListRow(
-            title: meal.displayName,
-            imageURL: meal.displayImages.first.flatMap {
-                URL(string: $0.representations?.preferred ?? $0.url)
-            },
-            symbol: EntityCatalog[.meal].sfSymbol
-        ) {
-            if !meal.recipeNames.isEmpty { Text(meal.recipeNames.joined(separator: ", ")) }
-        } rail: {
-            if let type = meal.mealType { Text(type.rawValue.capitalized) }
-        } supplement: {
-            EmptyView()
-        }
+    private func mealRow(_ meal: EntityRow) -> some View {
+        EntityRowView(key: .meal, row: meal, columns: ["mealType", "recipeNames"])
     }
 
     /// One consistently-styled empty/summary line for "Next up" instead of two differently-sized

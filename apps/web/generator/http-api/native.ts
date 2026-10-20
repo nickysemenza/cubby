@@ -24,7 +24,59 @@ import {
   swiftList,
   swiftString,
 } from "./swift-routes.ts";
-import { ADDITIONAL_IMPORTS, TYPE_OVERRIDES } from "./type-overrides.ts";
+import {
+  ADDITIONAL_IMPORTS,
+  MUTATION_RESULT_SCHEMAS,
+  TYPE_OVERRIDES,
+} from "./type-overrides.ts";
+
+/** Bind the shared codec to the actual references; changed wrapper shapes must be reviewed. */
+const mutationResultOverrides = (
+  components: Record<string, JsonSchema>,
+): Record<string, string> => {
+  const reference = (schema: JsonSchema | boolean | undefined): string => {
+    const name =
+      schema !== undefined && isObjectSchema(schema)
+        ? schema.$ref?.split("/").at(-1)
+        : undefined;
+    if (name === undefined || !/^[A-Z][A-Za-z0-9]*$/u.test(name))
+      throw new Error(
+        "A native mutation result requires named item and side-effect schemas",
+      );
+    return name;
+  };
+  return Object.fromEntries(
+    MUTATION_RESULT_SCHEMAS.map((name) => {
+      const schema = components[name];
+      const properties = schema?.properties;
+      if (
+        schema?.type !== "object" ||
+        properties === undefined ||
+        Object.keys(properties).length !== 2 ||
+        !schema.required?.includes("items") ||
+        !schema.required.includes("sideEffects")
+      )
+        throw new Error(
+          `${name}: a shared mutation result must require exactly items and sideEffects`,
+        );
+      const items = properties.items;
+      const array =
+        items !== undefined && isObjectSchema(items) && items.$ref === undefined
+          ? items
+          : components[reference(items)];
+      if (array === undefined || !isObjectSchema(array))
+        throw new Error(`${name}: items must be an array`);
+      if (array?.type !== "array")
+        throw new Error(`${name}: items must be an array`);
+      if (Array.isArray(array.items))
+        throw new Error(`${name}: tuple results cannot use the shared carrier`);
+      return [
+        name,
+        `CubbyAPISupport.MutationResult<Components.Schemas.${reference(array.items)}, Components.Schemas.${reference(properties.sideEffects)}>`,
+      ];
+    }),
+  );
+};
 
 // The native client's route table is derived from the same document so the
 // Swift side never hand-maintains (method, path) pairs. It is committed next
@@ -52,10 +104,13 @@ ${swiftRoutes
 `,
 });
 
-const renderGeneratorConfig = (): EntityArtifacts => {
-  const overrides = Object.entries(TYPE_OVERRIDES).sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
+const renderGeneratorConfig = (
+  components: Record<string, JsonSchema>,
+): EntityArtifacts => {
+  const overrides = Object.entries({
+    ...TYPE_OVERRIDES,
+    ...mutationResultOverrides(components),
+  }).sort(([a], [b]) => a.localeCompare(b));
   const optional = [
     ...(ADDITIONAL_IMPORTS.length > 0
       ? [
@@ -255,7 +310,7 @@ export const renderNativeArtifacts = (
   });
   return [
     renderOperationRoutes(swiftRoutes),
-    renderGeneratorConfig(),
+    renderGeneratorConfig(components),
     renderClientOperations(document, swiftRoutes, generatedOperationIds),
     renderApiTypes(components, entityOutputs),
   ];

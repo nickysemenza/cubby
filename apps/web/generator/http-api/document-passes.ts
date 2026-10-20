@@ -201,6 +201,73 @@ export function foldPositionalDuplicates(components: Components): Components {
   }
 }
 
+const isAnonymous = (name: string): boolean =>
+  isPositional(name) || /^(?:Input|Output)Shared[0-9A-F]{16}$/u.test(name);
+
+/**
+ * Run after shape normalization, before structural naming. Also accepts already
+ * hashed anonymous names so a later normalization can use the same pass. Named
+ * domain types survive even when their bodies coincide. Keep validation keywords
+ * (especially additionalProperties) in the identity; only annotations are ignored.
+ * Self-recursion is compared symbolically without expanding reference graphs.
+ */
+export function foldAnonymousDuplicates(components: Components): Components {
+  let current = components;
+  for (;;) {
+    const survivors = new Map<string, string>();
+    const folded = new Map<string, string>();
+    const ordered = Object.entries(current).sort(
+      ([a], [b]) =>
+        Number(isAnonymous(a)) - Number(isAnonymous(b)) || a.localeCompare(b),
+    );
+    for (const [name, schema] of ordered) {
+      const normalized = mapSchemas(schema, (node) => {
+        const {
+          description: _description,
+          $id: _id,
+          $schema: _schema,
+          ...body
+        } = node;
+        return body.$ref === `${COMPONENT_PREFIX}${name}`
+          ? { ...body, $ref: "#self" }
+          : body;
+      });
+      const key = JSON.stringify(stable(z.json().parse(normalized)));
+      const target = survivors.get(key);
+      if (target !== undefined && isAnonymous(name)) folded.set(name, target);
+      else if (target === undefined) survivors.set(key, name);
+    }
+    if (folded.size === 0) return current;
+    const rewriteRef = (ref: string): string => {
+      const target = folded.get(componentName(ref) ?? "");
+      return target === undefined ? ref : `${COMPONENT_PREFIX}${target}`;
+    };
+    current = Object.fromEntries(
+      Object.entries(current)
+        .filter(([name]) => !folded.has(name))
+        .map(([name, schema]) => [
+          name,
+          mapSchemas(schema, (node) => ({
+            ...node,
+            ...(node.$ref === undefined ? {} : { $ref: rewriteRef(node.$ref) }),
+            ...(node.discriminator?.mapping === undefined
+              ? {}
+              : {
+                  discriminator: {
+                    ...node.discriminator,
+                    mapping: Object.fromEntries(
+                      Object.entries(node.discriminator.mapping).map(
+                        ([tag, ref]) => [tag, rewriteRef(ref)],
+                      ),
+                    ),
+                  },
+                }),
+          })),
+        ]),
+    );
+  }
+}
+
 const isNull = (schema: JsonSchema | boolean): boolean =>
   isObjectSchema(schema) && schema.type === "null";
 
@@ -513,6 +580,21 @@ export function nameStructuralComponents(components: Components): Components {
       const referenced = componentName(body.$ref);
       if (referenced !== undefined && isPositional(referenced))
         body.$ref = `${COMPONENT_PREFIX}${fingerprint(referenced)}`;
+      if (body.discriminator?.mapping !== undefined)
+        body.discriminator = {
+          ...body.discriminator,
+          mapping: Object.fromEntries(
+            Object.entries(body.discriminator.mapping).map(([tag, ref]) => {
+              const target = componentName(ref);
+              return [
+                tag,
+                target !== undefined && isPositional(target)
+                  ? `${COMPONENT_PREFIX}${fingerprint(target)}`
+                  : ref,
+              ];
+            }),
+          ),
+        };
       return body;
     });
     active.delete(name);
@@ -535,9 +617,26 @@ export function nameStructuralComponents(components: Components): Components {
       const referenced = componentName(node.$ref);
       const renamed =
         referenced === undefined ? undefined : fingerprints.get(referenced);
-      return renamed === undefined
-        ? node
-        : { ...node, $ref: `${COMPONENT_PREFIX}${renamed}` };
+      const rewritten =
+        renamed === undefined
+          ? node
+          : { ...node, $ref: `${COMPONENT_PREFIX}${renamed}` };
+      if (node.discriminator?.mapping === undefined) return rewritten;
+      return {
+        ...rewritten,
+        discriminator: {
+          ...node.discriminator,
+          mapping: Object.fromEntries(
+            Object.entries(node.discriminator.mapping).map(([tag, ref]) => {
+              const target = fingerprints.get(componentName(ref) ?? "");
+              return [
+                tag,
+                target === undefined ? ref : `${COMPONENT_PREFIX}${target}`,
+              ];
+            }),
+          ),
+        },
+      };
     });
   const result = new Map<string, JsonSchema>();
   const owners = new Map<string, boolean>();

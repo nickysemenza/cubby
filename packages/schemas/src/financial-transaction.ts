@@ -35,6 +35,7 @@ import {
 } from "./generated/entity-field-schemas.financialTransaction.gen";
 import {
   descriptorProcessor,
+  financialTransactionProviderStatus,
   financialTransactionAllocation,
   financialTransactionItemization,
   financialTransactionNonZeroAmount as nonZeroAmount,
@@ -433,7 +434,7 @@ export const financialStatementImportRow = z.strictObject({
   importFingerprint: z.string().min(1).optional(),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
-  providerStatus: z.enum(["pending", "posted"]).optional(),
+  providerStatus: financialTransactionProviderStatus.optional(),
   key: z.string().min(1),
   source: externalIdSource
     .default("monarch")

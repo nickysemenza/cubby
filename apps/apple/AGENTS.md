@@ -35,10 +35,13 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   target, `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code
   does not recompile the generated client; `import CubbyAPI` appears only inside CubbyKit
   (`API/*.swift`, `Generated/*.swift`, and the model files that extend a generated type), never
-  in the App or the CLI. There is no hand-written mapping layer: a screen reads the generated
-  type, and the few derived values it needs (`stableKey`, `manufacturerOrNil`, `MacroSummary`,
-  …) live as extensions in `API/GeneratedTypeExtensions.swift`. A wire type the generator gets
-  wrong is fixed in the generator (`apps/web/generator/http-api/`), not re-typed by hand. The
+  in the App or the CLI. Entity screens use manifest rows and shared reports. Consumers that
+  need typed domain logic read generated types; their derived values (`stableKey`,
+  `manufacturerOrNil`, `MacroSummary`, …) live in `API/GeneratedTypeExtensions.swift`.
+  An erased response uses one consumer adapter for its required fields (`RunSnapshot` for
+  review authorization, `ReportPresentation.projectAnalytics` for portfolio figures), retaining
+  raw JSON and diagnostics. A wire type the generator gets wrong is fixed in the generator
+  (`apps/web/generator/http-api/`), not re-typed by hand. The
   branded codes (`ProductCode`, `LocationCode`, `InventoryEntryCode`, `ImageCode`), `PlainDate`,
   and `EntityKey` live in `CubbyKit/Sources/CubbyAPISupport/` and are the generated client's own
   types for those schemas (`typeOverrides` in `Sources/CubbyAPI/openapi-generator-config.yaml`).

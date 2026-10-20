@@ -32,7 +32,11 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { imageOut, imageAnalysisSummarySchema } from "./image";
+import {
+  imageOut,
+  imageAnalysisSummarySchema,
+  productImagePurpose,
+} from "./image";
 import { displayImagesField } from "./display-images";
 import { imageUrlSummary } from "./image-summary";
 import {
@@ -1159,7 +1163,7 @@ export const productMcpImageOut = imageOut
   })
   .extend({
     /** The ProductImage join role; null is distinct from an explicit item role. */
-    purpose: z.enum(["item", "label"]).nullable(),
+    purpose: productImagePurpose.nullable(),
     displayPosition: z.number().int().positive().nullable(),
     isCover: z.boolean(),
     // Populated only on a Product detail/get read, not list, to keep list cost

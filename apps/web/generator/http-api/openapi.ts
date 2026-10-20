@@ -22,6 +22,7 @@ import {
   fillDiscriminatorMappings,
   flattenNestedNullables,
   foldPositionalDuplicates,
+  foldAnonymousDuplicates,
   inlineNullableComponents,
   integerLiterals,
   inlinePrimitiveComponents,
@@ -378,6 +379,7 @@ const buildOpenApiDocument = async (): Promise<{
     fillDiscriminatorMappings,
     integerLiterals,
     openTupleItems,
+    foldAnonymousDuplicates,
     nameStructuralComponents,
   ];
   const components = pruneUnreachableComponents(
@@ -462,9 +464,9 @@ const refsIn = (value: OpenApiDocument["paths"] | JsonSchema | undefined) =>
   );
 
 /**
- * Lists render from the entity manifest: the Apple client reads these bodies
- * as `JSONValue` and the server parses each with the entity's own schema, so
- * their per-entity variants (~170 generated types) were compile cost only.
+ * Native presentation reads these objects through the manifest or a shared
+ * consumer adapter. The server still validates their complete domain schemas;
+ * the Apple document need not compile unused domain graphs into the client.
  */
 const JSON_VALUE_COMPONENTS = [
   "EntityListBaseOutput",
@@ -472,6 +474,11 @@ const JSON_VALUE_COMPONENTS = [
   "EntityListEnrichmentOutput",
   "EntityListInput",
   "EntityListSummaryOutput",
+  "ProjectDashboardSummaryOut",
+  "ProjectPortfolioAnalyticsOut",
+  "RunWorkSnapshotOutput",
+  "RunWorkOutput",
+  "RunControlOutput",
 ] as const;
 
 const untypeJsonValueComponents = (components: Record<string, JsonSchema>) => {

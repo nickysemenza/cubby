@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sortDirection } from "./pagination";
 import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
@@ -314,7 +315,7 @@ export type SuggestionListFilters = z.output<typeof suggestionListFilters>;
 /** `ready`: clean, then Strength, then newest. `impact`: checks restored, then `ready`. */
 export const suggestionOrder = z.object({
   by: z.string().min(1),
-  direction: z.enum(["asc", "desc"]).default("desc"),
+  direction: sortDirection.default("desc"),
 });
 export type SuggestionOrder = z.output<typeof suggestionOrder>;
 

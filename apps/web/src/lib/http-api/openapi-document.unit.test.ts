@@ -1,3 +1,9 @@
+import {
+  evidenceCoverageStatus,
+  coverageStatus,
+  purchaseEvidenceCoverage,
+  financialTransactionCoverage,
+} from "@cubby/schemas/purchase-evidence-policy";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -5,6 +11,7 @@ import { httpContract } from "~/lib/generated/http-contract.gen";
 
 import document from "../../../../apple/CubbyKit/Sources/CubbyAPI/openapi.json";
 import {
+  foldAnonymousDuplicates,
   nameStructuralComponents,
   type JsonSchema,
 } from "../../../generator/http-api/document-passes";
@@ -129,6 +136,21 @@ const POST_QUERIES = httpRoutes(httpContract)
   .map((route) => route.path.replace(":id", "{id}"));
 
 describe("generated HTTP OpenAPI document", () => {
+  it("keeps shared native presentation open without its unused typed graphs", () => {
+    for (const name of [
+      "ProjectDashboardSummaryOut",
+      "ProjectPortfolioAnalyticsOut",
+      "RunWorkSnapshotOutput",
+      "RunWorkOutput",
+      "RunControlOutput",
+    ]) {
+      expect(schemas[name]).toEqual({
+        type: "object",
+        additionalProperties: true,
+      });
+    }
+  });
+
   it("is OpenAPI 3.1 without 3.0 keywords or JSON Schema plumbing", () => {
     expect(document.openapi).toBe("3.1.0");
     for (const keyword of ['"nullable"', '"$defs"', '"$id"', '"$schema"'])
@@ -412,6 +434,141 @@ describe("generated HTTP OpenAPI document", () => {
         },
       }),
     ).toThrow(/name this schema explicitly/u);
+  });
+
+  it("folds normalized anonymous references to a fixed point and rewrites discriminator mappings", () => {
+    // Late normalization can equalize leaves after structural names were minted.
+    // Leaving parent references or discriminator mappings behind creates dangling refs.
+    const leaf = { type: "object", properties: { kind: { const: "row" } } };
+    const result = foldAnonymousDuplicates({
+      Row: leaf,
+      OtherDomainRow: leaf,
+      OutputShared0000000000000001: leaf,
+      output_schema2: {
+        type: "array",
+        items: { $ref: `${COMPONENT}OutputShared0000000000000001` },
+      },
+      Rows: { type: "array", items: { $ref: `${COMPONENT}OtherDomainRow` } },
+      Union: {
+        oneOf: [{ $ref: `${COMPONENT}OutputShared0000000000000001` }],
+        discriminator: {
+          propertyName: "kind",
+          mapping: { row: `${COMPONENT}OutputShared0000000000000001` },
+        },
+      },
+    });
+    expect(result.OutputShared0000000000000001).toBeUndefined();
+    expect(result.output_schema2).toBeUndefined();
+    expect(result.Row).toEqual(leaf);
+    expect(result.OtherDomainRow).toEqual(leaf);
+    expect(result.Union).toMatchObject({
+      oneOf: [{ $ref: `${COMPONENT}OtherDomainRow` }],
+      discriminator: { mapping: { row: `${COMPONENT}OtherDomainRow` } },
+    });
+  });
+
+  it("emits shared coverage statuses without widening single-purchase evidence", () => {
+    // Inline enum copies generate a separate Swift type for every field. The
+    // aggregate partial state must still be rejected for one Purchase's document.
+    const registry = z.registry<{ id: string }>();
+    registry.add(evidenceCoverageStatus, { id: "EvidenceCoverageStatus" });
+    registry.add(coverageStatus, { id: "CoverageStatus" });
+    registry.add(purchaseEvidenceCoverage, { id: "PurchaseCoverage" });
+    registry.add(financialTransactionCoverage, { id: "TransactionCoverage" });
+    const emitted = z.toJSONSchema(registry).schemas;
+    expect(emitted.PurchaseCoverage?.properties?.document).toMatchObject({
+      $ref: "EvidenceCoverageStatus",
+    });
+    expect(emitted.PurchaseCoverage?.properties?.itemization).toMatchObject({
+      $ref: "EvidenceCoverageStatus",
+    });
+    expect(emitted.TransactionCoverage?.properties?.document).toMatchObject({
+      $ref: "CoverageStatus",
+    });
+    expect(emitted.TransactionCoverage?.properties?.itemization).toMatchObject({
+      $ref: "CoverageStatus",
+    });
+    for (const name of ["PurchaseCoverage", "TransactionCoverage"])
+      expect(emitted[name]?.properties?.products).toMatchObject({
+        $ref: "CoverageStatus",
+      });
+    expect(
+      purchaseEvidenceCoverage.shape.document.safeParse("partial").success,
+    ).toBe(false);
+    expect(financialTransactionCoverage.shape.document.parse("partial")).toBe(
+      "partial",
+    );
+  });
+
+  it("preserves unknown-key semantics and recursive anonymous identities", () => {
+    // Open output objects must never adopt a closed input contract. Recursive
+    // comparison must terminate and keep the survivor's self-reference intact.
+    const recursive = (name: string): JsonSchema => ({
+      type: "array",
+      items: { $ref: `${COMPONENT}${name}` },
+    });
+    const result = foldAnonymousDuplicates({
+      InputShared0000000000000001: {
+        type: "object",
+        additionalProperties: false,
+      },
+      OutputShared0000000000000002: { type: "object" },
+      output_schema3: recursive("output_schema3"),
+      output_schema4: recursive("output_schema4"),
+    });
+    expect(result.InputShared0000000000000001?.additionalProperties).toBe(
+      false,
+    );
+    expect(result.OutputShared0000000000000002).toEqual({ type: "object" });
+    expect(result.output_schema3).toEqual(recursive("output_schema3"));
+    expect(result.output_schema4).toBeUndefined();
+  });
+
+  it("keeps discriminator mappings aligned when anonymous survivors receive structural names", () => {
+    const result = nameStructuralComponents(
+      foldAnonymousDuplicates({
+        output_schema1: {
+          type: "object",
+          properties: { kind: { const: "row" } },
+        },
+        Union: {
+          oneOf: [{ $ref: `${COMPONENT}output_schema1` }],
+          discriminator: {
+            propertyName: "kind",
+            mapping: { row: `${COMPONENT}output_schema1` },
+          },
+        },
+      }),
+    );
+    const member = result.Union?.oneOf?.[0];
+    if (typeof member !== "object")
+      throw new Error("Expected a union reference");
+    expect(result.Union?.discriminator?.mapping?.row).toBe(member.$ref);
+    expect(result[componentName(member.$ref) ?? ""]).toMatchObject({
+      type: "object",
+    });
+    const union = (memberName: string): JsonSchema => ({
+      oneOf: [{ $ref: `${COMPONENT}${memberName}` }],
+      discriminator: {
+        propertyName: "kind",
+        mapping: { row: `${COMPONENT}${memberName}` },
+      },
+    });
+    const row: JsonSchema = {
+      type: "object",
+      properties: { kind: { const: "row" } },
+    };
+    expect(
+      nameStructuralComponents({
+        output_schema9: row,
+        output_schema10: union("output_schema9"),
+      }),
+    ).toEqual(
+      nameStructuralComponents({
+        output_schema1: row,
+        output_schema2: union("output_schema1"),
+      }),
+    );
   });
 
   it("refuses a structural name already claimed by a named component", () => {

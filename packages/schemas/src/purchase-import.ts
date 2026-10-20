@@ -12,6 +12,7 @@ import { mailAdmissionPath, mailEvent } from "./mailbox-research";
 import { importSourceIdentity, importSourceKind } from "./import-source";
 export { importSourceIdentity, importSourceKind } from "./import-source";
 import { money } from "./money";
+import { contributionRole } from "./ledger-party-fields";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { costTypeSchema } from "./expense-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
@@ -28,11 +29,7 @@ import {
   financialTransactionShortcode,
 } from "./identifier-fields";
 
-export const vendorOrderEvidence = z.enum([
-  "online_account",
-  "receipt_only",
-  "not_expected",
-]);
+export { vendorOrderEvidence } from "./vendor-import-fields";
 /** The Source of a Distinct-from decision: its url and quoted difference. */
 export const distinctFromSource = z.object({
   url: z.url().max(DISTINCT_FROM_URL_MAX),
@@ -402,7 +399,7 @@ export const replacementLineIdentity = z.object({
 
 export const replacementLineAttribution = z.object({
   lineIndex: z.number().int().nonnegative(),
-  role: z.enum(["beneficiary", "funder"]),
+  role: contributionRole,
   partyId: z.uuid().nullable(),
   partyCode: z.string(),
   amount: money,
@@ -459,7 +456,7 @@ export const sourceOrderReconciliationResolution = z.discriminatedUnion(
       attributionTargets: z
         .array(
           z.object({
-            role: z.enum(["beneficiary", "funder"]),
+            role: contributionRole,
             partyId: ledgerPartyShortcode.nullable(),
             amount: money,
           }),
@@ -515,7 +512,7 @@ export const sourceOrderReconciliationReview = z.object({
   originalAttributions: z.array(
     z.object({
       expenseId: expenseShortcode,
-      role: z.enum(["beneficiary", "funder"]),
+      role: contributionRole,
       partyId: ledgerPartyShortcode.nullable(),
       amount: money,
     }),

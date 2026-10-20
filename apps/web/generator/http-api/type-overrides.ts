@@ -1,3 +1,9 @@
+/** These outputs share a carrier; its concrete arguments come from their schema references. */
+export const MUTATION_RESULT_SCHEMAS = [
+  "InventoryWithLocationAndProductListAndSideEffectsOut",
+  "TaskBulkMutationOut",
+] as const;
+
 /**
  * Generated schema types replaced by hand-written Swift types
  * (`typeOverrides.schemas` in swift-openapi-generator's config): component
@@ -31,8 +37,6 @@ export const ADDITIONAL_IMPORTS: readonly string[] = ["CubbyAPISupport"];
  */
 export const NATIVE_TYPED_RECORDS = [
   "ImageOut",
-  "InventoryDetail",
   "InventoryWithLocationAndProductOut",
-  "MealListItem",
   "ProductDetail",
 ] as const;

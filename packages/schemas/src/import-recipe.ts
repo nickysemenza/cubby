@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
 import { amount } from "./codec";
+import { ingredientUsage } from "./recipe-shared";
 import {
   cookbookShortcode,
   imageShortcode,
@@ -160,15 +161,7 @@ const importedParsedIngredient = z.object({
   ),
   modifier: z.string().optional(),
   optional: z.boolean().optional(),
-  usage: z.enum([
-    "normal",
-    "frying_medium",
-    "pan_grease",
-    "seasoning",
-    "dredging",
-    "garnish",
-    "marinade",
-  ]),
+  usage: ingredientUsage,
   parse_notes: z.object({
     confidence: z.enum(["high", "medium", "low"]),
     fell_back: z.boolean(),

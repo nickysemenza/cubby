@@ -362,6 +362,45 @@ public struct ReportPresentation: Hashable, Sendable {
         self.nextCursor = nextCursor
     }
 
+    /// The portfolio endpoints carry much richer records than this surface needs. Read its
+    /// required figures once here and use the same accessible report presentation as details.
+    public static func projectAnalytics(summary: JSONValue, analytics: JSONValue) throws -> Self {
+        let summary = JSONRead(value: summary, context: "Project dashboard")
+        let analytics = JSONRead(value: analytics, context: "Project portfolio")
+        let figures = try [
+            Figure(
+                key: nil, label: "Active projects",
+                text: ValueFormat.number(summary.number("summary.activeProjectCount")),
+                value: nil, tone: nil),
+            Figure(
+                key: nil, label: "Open tasks",
+                text: ValueFormat.number(summary.number("summary.openTaskCount")),
+                value: nil, tone: nil),
+            Figure(
+                key: nil, label: "Actual spend", text: summary.number("summary.actualSpend").usd,
+                value: nil, tone: nil),
+        ]
+        let rows = try analytics.array("costVsEstimate").map { row in
+            let id = try row.string("projectId")
+            return try Table.Row(
+                id: id,
+                cells: [
+                    row.string("projectName"), row.number("actual").usd,
+                    row.number("committed").usd, row.nullableNumber("estimate")?.usd ?? "—",
+                ],
+                ref: Ref(entity: "project", id: id))
+        }
+        return Self(
+            blocks: [
+                .stats(title: "Portfolio", figures: figures),
+                .table(
+                    Table(
+                        title: "Cost against estimate",
+                        columns: ["Project", "Actual", "Committed", "Estimate"],
+                        rows: rows, empty: "No projects in this scope", truncated: false)),
+            ], live: false, status: nil, nextCursor: nil)
+    }
+
     /// The report with `page` (the next cursor's read) stacked under it: records blocks with the
     /// same title gain the page's rows, and everything else stays as the first page had it.
     public func appending(_ page: ReportPresentation) -> ReportPresentation {

@@ -5,12 +5,38 @@ import {
   recipeFlowAiPlanSchema,
   recipeFlowGenerateInputSchema,
   recipeFlowPlanSchema,
+  recipeFlowAnnotationSchema,
 } from "./recipe-flow";
 
 const sectionId = "00000000-0000-4000-8000-000000000001";
 const usageId = "00000000-0000-4000-8000-000000000002";
 
 describe("recipeFlowPlanSchema", () => {
+  it("keeps annotation bounds and unknown-key stripping when sharing annotation kinds", () => {
+    // Sharing the provider's enum must not loosen the canonical annotation
+    // object to the provider's unconstrained text contract.
+    expect(
+      recipeFlowAnnotationSchema.parse({
+        kind: "cue",
+        text: "Golden",
+        extra: true,
+      }),
+    ).toEqual({ kind: "cue", text: "Golden" });
+    expect(
+      recipeFlowAnnotationSchema.safeParse({ kind: "cue", text: "" }).success,
+    ).toBe(false);
+    expect(
+      recipeFlowAnnotationSchema.safeParse({
+        kind: "cue",
+        text: "x".repeat(161),
+      }).success,
+    ).toBe(false);
+    expect(
+      recipeFlowAnnotationSchema.safeParse({ kind: "unknown", text: "Golden" })
+        .success,
+    ).toBe(false);
+  });
+
   it("parses the versioned provider output shape", () => {
     const result = recipeFlowPlanSchema.parse({
       schemaVersion: 1,

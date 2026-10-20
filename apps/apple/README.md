@@ -240,7 +240,7 @@ paste their values into workflow YAML.
 
 ## Debugging on device
 
-Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white screen on
+Launching under LLDB indexes the generated client and shows a 10-30s white screen on
 device. Use the `Cubby-iOS-NoDebugger` / `Cubby-macOS-NoDebugger` schemes for fast UI iteration
 when you don't need breakpoints. When you do need the debugger, copy
 `apps/apple/lldbinit-Xcode.example` to `~/.lldbinit-Xcode` first — it enables LLDB's on-demand

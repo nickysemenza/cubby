@@ -27,9 +27,11 @@ export {
 } from "./ledger-party-fields";
 import { ledgerPartyKind } from "./ledger-party-fields";
 
-export const contributionRoleValues = ["beneficiary", "funder"] as const;
-export const contributionRole = z.enum(contributionRoleValues);
-export type ContributionRole = z.infer<typeof contributionRole>;
+export {
+  contributionRoleValues,
+  contributionRole,
+  type ContributionRole,
+} from "./ledger-party-fields";
 
 export type LedgerPartySortField = GeneratedEntitySortField<"ledgerParty">;
 

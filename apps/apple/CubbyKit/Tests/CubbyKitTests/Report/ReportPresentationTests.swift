@@ -9,6 +9,52 @@ import Testing
 /// timeline's date domain.
 @Suite("ReportPresentation")
 struct ReportPresentationTests {
+    // A reduced analytics carrier must preserve project navigation and unknown estimates;
+    // required spend must fail with diagnostics instead of becoming a plausible zero.
+    @Test func projectAnalyticsKeepsLinksAndUnknownEstimate() throws {
+        let summary: JSONValue = [
+            "summary": [
+                "activeProjectCount": 2, "openTaskCount": 3, "actualSpend": 125,
+            ]
+        ]
+        let analytics: JSONValue = [
+            "costVsEstimate": [
+                [
+                    "projectId": "PRJ-2345", "projectName": "Fixture renovation",
+                    "actual": 125, "committed": 25, "estimate": nil,
+                ]
+            ]
+        ]
+        let report = try ReportPresentation.projectAnalytics(summary: summary, analytics: analytics)
+        guard case .table(let table) = report.blocks.last else {
+            Issue.record("Expected navigable cost comparison")
+            return
+        }
+        #expect(table.rows.first?.ref == .init(entity: "project", id: "PRJ-2345"))
+        #expect(table.rows.first?.cells.last == "—")
+        #expect(throws: (any Error).self) {
+            try ReportPresentation.projectAnalytics(
+                summary: ["summary": ["activeProjectCount": 2, "openTaskCount": 3]], analytics: analytics)
+        }
+        #expect(throws: (any Error).self) {
+            try ReportPresentation.projectAnalytics(
+                summary: summary,
+                analytics: ["costVsEstimate": [["projectId": "PRJ-2345", "actual": "unknown"]]])
+        }
+        #expect(throws: (any Error).self) {
+            try ReportPresentation.projectAnalytics(
+                summary: summary,
+                analytics: [
+                    "costVsEstimate": [
+                        [
+                            "projectId": "PRJ-2345", "projectName": "Fixture renovation",
+                            "actual": 125, "committed": 25,
+                        ]
+                    ]
+                ])
+        }
+    }
+
     private static let json = #"""
         {"blocks":[
           {"kind":"stats","figures":[

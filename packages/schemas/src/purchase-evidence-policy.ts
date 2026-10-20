@@ -21,18 +21,23 @@ export const productExpectationValues = fieldPolicyValues;
 export const productExpectation = z.enum(productExpectationValues);
 export type ProductExpectation = z.infer<typeof productExpectation>;
 
+/** Completeness of evidence or Product links, including partial coverage of an owner. */
+export const coverageStatus = z.enum([
+  "missing",
+  "partial",
+  "present",
+  "not_expected",
+  "unknown",
+]);
+/** One Purchase's document and itemization evidence cannot be partially present. */
+export const evidenceCoverageStatus = coverageStatus.exclude(["partial"]);
+
 export const purchaseEvidenceCoverage = z.object({
   expectation: itemizationExpectation,
   booking: z.enum(["missing", "partial", "recorded"]),
-  document: z.enum(["missing", "present", "not_expected", "unknown"]),
-  itemization: z.enum(["missing", "present", "not_expected", "unknown"]),
-  products: z.enum([
-    "missing",
-    "partial",
-    "present",
-    "not_expected",
-    "unknown",
-  ]),
+  document: evidenceCoverageStatus,
+  itemization: evidenceCoverageStatus,
+  products: coverageStatus,
 });
 export type PurchaseEvidenceCoverage = z.infer<typeof purchaseEvidenceCoverage>;
 
@@ -45,27 +50,9 @@ export const financialTransactionCoverage = z.object({
     "not_applicable",
     "unclassified",
   ]),
-  document: z.enum([
-    "missing",
-    "partial",
-    "present",
-    "not_expected",
-    "unknown",
-  ]),
-  itemization: z.enum([
-    "missing",
-    "partial",
-    "present",
-    "not_expected",
-    "unknown",
-  ]),
-  products: z.enum([
-    "missing",
-    "partial",
-    "present",
-    "not_expected",
-    "unknown",
-  ]),
+  document: coverageStatus,
+  itemization: coverageStatus,
+  products: coverageStatus,
 });
 export type FinancialTransactionCoverage = z.infer<
   typeof financialTransactionCoverage

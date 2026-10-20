@@ -1,5 +1,6 @@
 import { enumRoles } from "@cubby/shared/enum-palette";
 import { z } from "zod";
+import { sortDirection } from "../pagination";
 import {
   dataQualityCheckKind,
   dataQualityFacetName,
@@ -845,7 +846,7 @@ const buildMetadataSchemas = () => {
       /** Defaults to `createdAt` when sortable, otherwise the first field. */
       defaultOverride: nonEmptyString().optional(),
       /** Text and enum defaults open ascending; other fields open descending. */
-      directionOverride: z.enum(["asc", "desc"]).optional(),
+      directionOverride: sortDirection.optional(),
     })
     .strict()
     .transform(({ defaultOverride, directionOverride, ...sort }) => ({
@@ -1147,7 +1148,7 @@ const buildMetadataSchemas = () => {
         sort: z
           .object({
             field: nonEmptyString(),
-            direction: z.enum(["asc", "desc"]),
+            direction: sortDirection,
           })
           .strict()
           .nullable()

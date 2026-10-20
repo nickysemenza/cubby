@@ -9,10 +9,20 @@ and `apps/apple/scripts/prepare-project.sh` run. The document is the whole
 HTTP API, which carries only the contract members flagged `native:`, so the
 generator config has no operation filter. The entity kernel operations and the
 `entity.listBase`, `entity.listEnrichment`, and `entity.listSummary` lists are
-untyped JSON objects here (`JSON_VALUE_COMPONENTS` in `openapi.ts`): native
-reads them as `JSONValue` through the entity manifest, so per-entity variants
-would be compile cost only. A few records hand-written Swift decodes by name
+untyped JSON objects here (`JSON_VALUE_COMPONENTS` in `openapi.ts`). Project
+analytics use shared report presentation, and Run responses use the validated
+`RunSnapshot` consumer adapter over `JSONValue`; their unused generated graphs
+are also erased from this native document. The server still validates the full
+schemas. Entity rows use the manifest; records with remaining typed consumers
 stay typed through `NATIVE_TYPED_RECORDS` (`type-overrides.ts`).
+
+Reusable domain schemas keep semantic enums shared. After normalization the
+emitter folds anonymous schemas with identical validation constraints, while
+retaining distinct named domain types. Inventory and task mutation results use
+Apple's supported `typeOverrides.schemas` to alias their concrete outputs to
+`CubbyAPISupport.MutationResult<Item, Effects>`. Its required keys and open
+response decoding match the generated result contract; changes to the wrapper
+shape fail generation rather than silently dropping a new field.
 
 Positional `_schemaNN` names are assigned at schema registration and can
 renumber when a new schema is added; `apps/apple/AGENTS.md` forbids naming
