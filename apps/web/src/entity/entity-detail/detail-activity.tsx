@@ -1,20 +1,26 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { DetailActivityEvent } from "@cubby/schemas/entity-detail-data";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import {
+  type AuditableEntity,
+  isAuditableEntity,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 
 import {
   entityDetailLink,
   EntityIcon,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { formatInstant } from "~/lib/date-format";
+import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { RecordList, RecordMore, RecordRow } from "~/ui/common/record-list";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { SectionHeading } from "~/ui/layout";
 
+import { AuditLogList } from "../audit-log/audit-log-list";
 import { useDetailActivity } from "./use-detail-data";
 
 function linkOf(event: DetailActivityEvent) {
@@ -58,17 +64,20 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
     hydrated,
   );
   const events = activity.data?.pages.flatMap((page) => page.items) ?? [];
-  if (activity.isSuccess && events.length === 0) return null;
   return (
     <section
-      id="activity"
+      // The page's established activity anchor: `#history` links keep working.
+      id="history"
       aria-label="Activity"
-      className="min-w-0 scroll-mt-[var(--app-chrome-top)]"
+      data-detail-group
+      tabIndex={-1}
+      className="min-w-0 scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       data-testid="detail-activity"
     >
       <SectionHeading title="Activity" />
       <RecordList
         aria-label="Recent changes and spend"
+        empty="No activity yet."
         state={
           activity.isError
             ? { status: "error", error: activity.error, title: "activity" }
@@ -88,14 +97,18 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
               key={event.id}
               leading={
                 <time
-                  dateTime={event.date}
-                  title={formatInstant(event.date, "dateShortTime")}
+                  dateTime={event.allDay ? event.date.slice(0, 10) : event.date}
+                  title={
+                    event.allDay
+                      ? formatCalendarDay(event.date.slice(0, 10), "dateShort")
+                      : formatInstant(event.date, "dateShortTime")
+                  }
                   className="inline-block w-12 font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums"
                 >
-                  {formatInstant(event.date, "dateShort").replace(
-                    /, \d{4}$/,
-                    "",
-                  )}
+                  {(event.allDay
+                    ? formatCalendarDay(event.date.slice(0, 10), "dateShort")
+                    : formatInstant(event.date, "dateShort")
+                  ).replace(/, \d{4}$/, "")}
                 </time>
               }
               primary={
@@ -145,6 +158,40 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
           />
         ) : null}
       </RecordList>
+      {isAuditableEntity(entity) ? (
+        <ChangeDetails entity={entity} id={id} />
+      ) : null}
     </section>
+  );
+}
+
+/** The full audit trail behind the summarized change rows: previous and
+ * applied values, actor, and Run provenance. Queried only once opened. */
+function ChangeDetails({
+  entity,
+  id,
+}: {
+  entity: AuditableEntity;
+  id: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      className="mt-2 text-sm"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="w-fit cursor-pointer rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground-strong focus-visible:ring-2 focus-visible:ring-ring">
+        Change details
+      </summary>
+      {open ? (
+        <div className="mt-2">
+          <AuditLogList
+            entityKind={entity}
+            entityId={id}
+            showEntityLink={false}
+          />
+        </div>
+      ) : null}
+    </details>
   );
 }

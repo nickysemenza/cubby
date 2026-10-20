@@ -10,6 +10,7 @@ import {
   type MonthlyExpenseSpend,
   type MonthlyExpenseSpendInput,
 } from "@cubby/schemas/entity-detail-data";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { decodeBase64UrlText, encodeBase64Url } from "@cubby/shared/base64";
@@ -34,6 +35,7 @@ const activityRowSchema = z.object({
   title: z.string(),
   subtitle: z.string().nullable(),
   date: z.string().datetime(),
+  allDay: z.boolean(),
   amountCents: z.coerce.number().int().nullable(),
 });
 
@@ -108,6 +110,12 @@ export async function getDetailActivity(
     const target = viewTarget(entityKind, `relation:${entry.relation}`);
     if (input.entity && input.entity !== target) continue;
     const date = sql`t.${sql.identifier(entry.dateField)}`;
+    // A calendar-date field reads back as UTC midnight; flag it so clients
+    // format the day without a zone shift.
+    const fields: readonly { key: string; kind: string }[] =
+      entityFieldModels[target].fields;
+    const allDay =
+      fields.find((field) => field.key === entry.dateField)?.kind === "date";
     for (const route of compiledConnectedRoutes(
       entityKind,
       `relation:${entry.relation}`,
@@ -116,6 +124,7 @@ export async function getDetailActivity(
         SELECT DISTINCT ${`record:${target}:`} || t."shortcode" AS id, ${detailActivityEventSchema.shape.kind.enum.record}::text AS kind,
           ${target}::text AS entity, t."shortcode", ${labelSql(target, "t")} AS title,
           NULL::text AS subtitle, ${date}::timestamp AS date,
+          ${allDay}::boolean AS "allDay",
           ${target === "expense" ? sql`round(t."cost"::numeric * 100)::float` : sql`NULL::float`} AS "amountCents"
         FROM ${source.from} ${route.traversal.joins}
         WHERE ${source.where} AND ${date} IS NOT NULL
@@ -127,7 +136,7 @@ export async function getDetailActivity(
       SELECT 'change:' || a."id"::text AS id, ${detailActivityEventSchema.shape.kind.enum.change}::text AS kind,
         ${entityKind}::text AS entity, s."shortcode", a."action" AS title,
         (SELECT string_agg(key, ', ' ORDER BY key) FROM jsonb_object_keys(a."changes") key) AS subtitle,
-        a."createdAt" AS date, NULL::float AS "amountCents"
+        a."createdAt" AS date, false AS "allDay", NULL::float AS "amountCents"
       FROM ${source.from} JOIN "AuditLog" a ON a."entityId" = s."id" AND a."entityKind" = ${entityKind}
       WHERE ${source.where}
     `);
@@ -138,7 +147,7 @@ export async function getDetailActivity(
     : null;
   const result = await unwrapDb(db).execute(sql`
     WITH events AS (${sql.join(queries, sql` UNION `)})
-    SELECT id, kind, entity, shortcode, title, subtitle, "amountCents",
+    SELECT id, kind, entity, shortcode, title, subtitle, "allDay", "amountCents",
       to_char(date, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS date FROM events
     ${cursor ? sql`WHERE (date, id) < (${cursor.date}::timestamptz AT TIME ZONE 'UTC', ${cursor.id})` : sql``}
     ORDER BY date DESC, id DESC LIMIT ${input.limit + 1}

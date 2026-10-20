@@ -193,6 +193,10 @@ describe("declared detail data", () => {
       "change",
       purchase.output.id,
     ]);
+    // Calendar-date records keep their day; audit instants stay zoned.
+    expect(
+      all.items.every((event) => event.allDay === (event.kind === "record")),
+    ).toBe(true);
     expect(
       all.items
         .filter((event) => event.entity === "expense")

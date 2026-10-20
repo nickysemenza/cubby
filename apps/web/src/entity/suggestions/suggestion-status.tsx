@@ -147,7 +147,8 @@ export function SuggestionStatus({
       size="xs"
       as="output"
       className="flex min-w-0 items-center gap-1"
-      data-needs-row
+      // "Needs you" collapses when every row is settled and clean.
+      data-needs-row={checking || count > 0 || failures > 0 ? "" : undefined}
     >
       <Popover>
         <PopoverTrigger

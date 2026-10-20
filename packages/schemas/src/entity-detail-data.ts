@@ -28,6 +28,8 @@ export const detailActivityEventSchema = z.object({
   title: z.string(),
   subtitle: z.string().optional(),
   date: z.string().datetime(),
+  /** A calendar-date field: `date` is UTC midnight and must not shift zones. */
+  allDay: z.boolean(),
   /** Present only for Expense records; dollars converted to integer cents. */
   amountCents: z.number().int().optional(),
 });

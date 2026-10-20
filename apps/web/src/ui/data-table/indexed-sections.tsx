@@ -280,7 +280,7 @@ function SectionIndex({
               {group.title}
             </a>
             {/* Sections hang off their group on a hairline guide. */}
-            <ul className="ml-3.5 border-l border-border pl-1.5">
+            <ul className="ml-3.5 border-l border-border pl-1.5 empty:hidden">
               {group.sections
                 .filter((section) => section.includeInIndex !== false)
                 .map((section) => {
@@ -451,12 +451,16 @@ export function IndexedSections({
   groups,
   footer,
   lead,
+  leadIndex = [],
 }: {
   groups: IndexedSectionGroup[];
   /** Rendered after the last group, outside the index. */
   footer?: ReactNode;
   /** Leads the center column, above the first group (Needs you, Activity). */
   lead?: ReactNode;
+  /** Top-level index entries for blocks inside `lead`. Each target carries the
+   * id, `data-detail-group` and `tabIndex={-1}` so jumps focus it. */
+  leadIndex?: ReadonlyArray<{ id: string; title: string }>;
 }) {
   const [subsections, setSubsections] = useState<Map<string, IndexedSection[]>>(
     new Map(),
@@ -474,15 +478,17 @@ export function IndexedSections({
     [],
   );
   const indexGroups = useMemo(
-    () =>
-      groups.map((group) => ({
+    () => [
+      ...leadIndex.map((entry) => ({ ...entry, sections: [] })),
+      ...groups.map((group) => ({
         ...group,
         sections: group.sections.flatMap((section) => [
           section,
           ...(subsections.get(section.id) ?? []),
         ]),
       })),
-    [groups, subsections],
+    ],
+    [groups, leadIndex, subsections],
   );
   const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);

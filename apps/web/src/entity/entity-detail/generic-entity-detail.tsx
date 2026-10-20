@@ -733,13 +733,19 @@ function FullEntityDetail<E extends GenericDetailEntity>({
                     }))}
                   rawData={record}
                   omitActivity={timeline}
+                  leadIndex={[
+                    ...(facts ? [{ id: facts.id, title: facts.title }] : []),
+                    ...(timeline ? [{ id: "history", title: "Activity" }] : []),
+                  ]}
                   lead={
                     <>
                       {facts ? (
                         <section
                           id={facts.id}
                           aria-label={facts.title}
-                          className="min-w-0 scroll-mt-[var(--app-chrome-top)]"
+                          data-detail-group
+                          tabIndex={-1}
+                          className="min-w-0 scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         >
                           <SectionHeading title={facts.title} />
                           <QualitySectionChecks section={facts.id} />

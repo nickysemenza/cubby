@@ -12,7 +12,7 @@ const monthLabel = (month: string) =>
 /**
  * Twelve months of `SUM(Expense.cost)` reached through the entity's declared
  * relation, as bars closing the key-numbers strip. Credits net into their
- * month; a month that nets below zero draws as empty.
+ * month; a month that nets below zero draws below the zero baseline.
  */
 export function MonthlySpendChart({
   entity,
@@ -28,7 +28,13 @@ export function MonthlySpendChart({
     return <ErrorDisplay error={spend.error} title="monthly spend" />;
   const months = spend.data ?? [];
   const total = months.reduce((sum, month) => sum + month.cents, 0);
-  const peak = Math.max(1, ...months.map((month) => month.cents));
+  const peak = Math.max(0, ...months.map((month) => month.cents));
+  const trough = Math.max(0, ...months.map((month) => -month.cents));
+  const range = Math.max(1, peak + trough);
+  // Share of the plot above the zero baseline; all of it without credits.
+  const zero = trough === 0 ? 100 : (peak / range) * 100;
+  const extent = (cents: number) =>
+    `${Math.max(6, (Math.abs(cents) / range) * 100)}%`;
   const first = months.at(0);
   const last = months.at(-1);
   return (
@@ -41,10 +47,11 @@ export function MonthlySpendChart({
           {spend.isPending ? "…" : formatCurrency(total / 100)}
         </span>
       </figcaption>
-      <div
-        aria-hidden
-        className="mt-1.5 flex h-9 items-end gap-[3px] border-b border-border"
-      >
+      <div aria-hidden className="relative mt-1.5 flex h-9 gap-[3px]">
+        <div
+          className="pointer-events-none absolute inset-x-0 border-b border-border"
+          style={{ top: `${zero}%` }}
+        />
         {(spend.isPending
           ? Array.from({ length: 12 }, () => null)
           : months
@@ -57,21 +64,23 @@ export function MonthlySpendChart({
                 ? `${monthLabel(month.month)} · ${formatCurrency(month.cents / 100)}`
                 : undefined
             }
-            className="flex h-full min-w-0 flex-1 items-end"
+            className="relative h-full min-w-0 flex-1"
           >
-            <div
-              className={
-                month && month.cents > 0
-                  ? "w-full rounded-t-[2px] bg-foreground-strong/75 hover:bg-foreground-strong"
-                  : "w-full"
-              }
-              style={{
-                height:
-                  month && month.cents > 0
-                    ? `${Math.max(6, (month.cents / peak) * 100)}%`
-                    : 0,
-              }}
-            />
+            {month && month.cents > 0 ? (
+              <div
+                className="absolute inset-x-0 rounded-t-[2px] bg-foreground-strong/75 hover:bg-foreground-strong"
+                style={{
+                  bottom: `${100 - zero}%`,
+                  height: extent(month.cents),
+                }}
+              />
+            ) : null}
+            {month && month.cents < 0 ? (
+              <div
+                className="absolute inset-x-0 rounded-b-[2px] bg-muted-foreground/45 hover:bg-muted-foreground/70"
+                style={{ top: `${zero}%`, height: extent(month.cents) }}
+              />
+            ) : null}
           </div>
         ))}
       </div>

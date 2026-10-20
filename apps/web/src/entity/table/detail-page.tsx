@@ -70,6 +70,8 @@ interface DetailSectionsProps {
   rawData: unknown;
   /** Above the section groups: the Needs-you block. */
   lead?: ReactNode;
+  /** Index entries for the blocks inside `lead`. */
+  leadIndex?: ReadonlyArray<{ id: string; title: string }>;
   /** The caller renders its own activity timeline; skip generic History. */
   omitActivity?: boolean;
 }
@@ -167,6 +169,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   sections,
   rawData,
   lead,
+  leadIndex,
   omitActivity = false,
 }) => {
   const hydrated = useHydrated();
@@ -270,6 +273,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     <IndexedSections
       groups={groups}
       lead={lead}
+      leadIndex={leadIndex}
       footer={
         isDebugEnabled && (
           <Card>
