@@ -376,8 +376,8 @@ public final class EntityRelationshipsModel {
                     throw CancellationError()
                 }
                 guard snapshot.runID == runID else { throw ConnectionReviewError.discoveryRunMismatch }
-                discoveryRunStatus = snapshot.status
-                if snapshot.status != "running" {
+                discoveryRunStatus = snapshot.status.rawValue
+                if snapshot.status != .running {
                     let document = try await client.storedConnections(source.graphRootInput)
                     try Task.checkCancellation()
                     guard generation == requestGeneration, self.source == source else {
@@ -387,10 +387,10 @@ public final class EntityRelationshipsModel {
                         throw ConnectionReviewError.sourceMismatch
                     }
                     connectionDocument = document
-                    guard snapshot.status == "completed" else {
+                    guard snapshot.status == .completed else {
                         let errors = snapshot.operationErrors
                         throw ConnectionReviewError.discoveryStopped(
-                            (["Discovery Run \(runID) stopped with status \(snapshot.status)."]
+                            (["Discovery Run \(runID) stopped with status \(snapshot.status.rawValue)."]
                                 + errors)
                                 .joined(separator: "\n"))
                     }

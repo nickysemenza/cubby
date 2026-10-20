@@ -45,7 +45,7 @@ struct RunConsoleView: View {
             "id": .string(runID),
             "purpose": .string(snapshot.purpose),
             // The batch's poll is the live status; the snapshot only seeds it.
-            "status": .string(batch?.status ?? snapshot.status),
+            "status": .string(batch?.status ?? snapshot.status.rawValue),
         ])
         let title = descriptor.field("purpose").flatMap {
             EntityFieldValue.text(in: raw, field: $0, surface: "detail")
