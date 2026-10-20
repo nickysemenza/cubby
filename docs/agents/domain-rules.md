@@ -137,8 +137,9 @@ DB-only snapshot writers may opt into `withSnapshotWrite` or
 evidence and creates its own transaction-local state and deferred publication
 buffers. Enroll buffer flushing through that transaction's `runAfterCommit`;
 an outer buffer survives rollback and leaks abandoned-attempt tasks. Only an
-aborted owned boundary retries; caller-owned transactions and committed effect
-failures never replay. Provider/storage calls and unrestricted callbacks are
+aborted owned boundary retries, with at most three attempts and 200/400 ms
+pauses so retries do not immediately collide with the same background page.
+Caller-owned transactions and committed effect failures never replay. Provider/storage calls and unrestricted callbacks are
 not replay-safe merely because they occur inside a transaction.
 Background Queue invocations, Durable Object work and Workflow steps use
 `withInvocationDb`: the bounded pools lease independent transaction clients and

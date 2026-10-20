@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -230,6 +231,8 @@ const withTransactionAttempts = async <T>(
       });
     } catch (error) {
       if (attempt >= limit || !isSerializationFailure(error)) throw error;
+      // Immediate retries can collide with the same background publication page.
+      await sleep(200 * attempt);
       continue;
     }
     // Commit succeeded: effect failures must never enter the replay catch.
