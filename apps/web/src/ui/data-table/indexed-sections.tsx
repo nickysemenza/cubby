@@ -145,7 +145,7 @@ function SectionCard({
             description={section.description}
             actions={section.headerAction}
           />
-          <div className="mt-1.5 min-w-0 px-2">
+          <div className="mt-2 min-w-0">
             {section.content ?? (
               <p className="text-sm text-muted-foreground">No items.</p>
             )}
@@ -165,15 +165,18 @@ export function SectionStack({ sections }: { sections: IndexedSection[] }) {
 
 function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
   const alias = id.replace("detail-group-", "");
-  return groups.some((group) =>
-    group.sections.some((section) => section.id === alias),
+  // A lead entry is a group whose id is its own anchor (e.g. facts `overview`).
+  return groups.some(
+    (group) =>
+      (group.id === alias && group.id !== id) ||
+      group.sections.some((section) => section.id === alias),
   )
     ? id
     : alias;
 }
 
 const currentDetailAnchorClass =
-  "font-medium text-foreground before:absolute before:inset-y-1.5 before:start-0.5 before:w-0.5 before:rounded-full before:bg-foreground";
+  "bg-row-current font-medium text-foreground-strong hover:bg-row-current";
 
 /** A list section shows its row count, 0 included; an empty non-list section
  * is marked only for assistive tech, since its muted title already says so. */
@@ -252,14 +255,14 @@ function SectionIndex({
     <div
       className={cn(
         "sticky top-[var(--app-chrome-top)] z-30 self-start",
-        wide ? "w-40 shrink-0" : "bg-card",
+        wide ? "w-52 shrink-0" : "bg-card",
       )}
     >
       <nav
         ref={navigationRef}
         aria-label="Section index"
         className={cn(
-          "max-h-[calc(100dvh-var(--app-chrome-top)-1rem)] overflow-y-auto overscroll-contain py-2 pr-3 text-xs",
+          "max-h-[calc(100dvh-var(--app-chrome-top)-1rem)] overflow-y-auto overscroll-contain py-1",
           !wide && "hidden",
         )}
       >
@@ -269,7 +272,7 @@ function SectionIndex({
               href={`#${hashForDetailTarget(group.id, groups)}`}
               {...entryState(group.id)}
               className={cn(
-                "relative block rounded-md px-2 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                "relative block rounded-lg px-2 py-1 text-xs font-semibold text-foreground-strong hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                 activeId === group.id && currentDetailAnchorClass,
               )}
               onClick={(event) => {
@@ -279,7 +282,8 @@ function SectionIndex({
             >
               {group.title}
             </a>
-            <ul>
+            {/* Sections hang off their group on a hairline guide. */}
+            <ul className="ml-3.5 border-l border-border pl-1.5 empty:hidden">
               {group.sections
                 .filter((section) => section.includeInIndex !== false)
                 .map((section) => {
@@ -293,9 +297,9 @@ function SectionIndex({
                         aria-describedby={describedBy(section.id)}
                         title={section.title}
                         className={cn(
-                          "relative flex h-7 items-center gap-2 rounded-md pr-2 pl-3 hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                          "relative flex h-7 items-center gap-2 rounded-lg px-1.5 text-sm hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                           state?.empty
-                            ? "text-muted-foreground"
+                            ? "text-muted-foreground/70"
                             : "text-foreground",
                           activeId === section.id && currentDetailAnchorClass,
                         )}
@@ -308,14 +312,24 @@ function SectionIndex({
                           <span className="shrink-0">
                             {section.indexLeading}
                           </span>
-                        ) : null}
+                        ) : (
+                          <section.icon
+                            aria-hidden
+                            className={cn(
+                              "size-3.5 shrink-0",
+                              state?.empty
+                                ? "text-muted-foreground/50"
+                                : "text-muted-foreground",
+                            )}
+                          />
+                        )}
                         <span className="min-w-0 flex-1 truncate">
                           {section.title}
                         </span>
                         {state?.count !== undefined && (
                           <span
                             aria-hidden
-                            className="shrink-0 text-[11px] font-normal text-muted-foreground tabular-nums"
+                            className="shrink-0 font-mono text-xs font-normal text-muted-foreground/80 tabular-nums"
                           >
                             {formatCount(state.count)}
                           </span>
@@ -439,10 +453,17 @@ function SectionIndex({
 export function IndexedSections({
   groups,
   footer,
+  lead,
+  leadIndex = [],
 }: {
   groups: IndexedSectionGroup[];
   /** Rendered after the last group, outside the index. */
   footer?: ReactNode;
+  /** Leads the center column, above the first group (Needs you, Activity). */
+  lead?: ReactNode;
+  /** Top-level index entries for blocks inside `lead`. Each target carries the
+   * id, `data-detail-group` and `tabIndex={-1}` so jumps focus it. */
+  leadIndex?: ReadonlyArray<{ id: string; title: string }>;
 }) {
   const [subsections, setSubsections] = useState<Map<string, IndexedSection[]>>(
     new Map(),
@@ -460,27 +481,30 @@ export function IndexedSections({
     [],
   );
   const indexGroups = useMemo(
-    () =>
-      groups.map((group) => ({
+    () => [
+      ...leadIndex.map((entry) => ({ ...entry, sections: [] })),
+      ...groups.map((group) => ({
         ...group,
         sections: group.sections.flatMap((section) => [
           section,
           ...(subsections.get(section.id) ?? []),
         ]),
       })),
-    [groups, subsections],
+    ],
+    [groups, leadIndex, subsections],
   );
   const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [wide, setWide] = useState(false);
+  const [width, setWidth] = useState(0);
+  const wide = width >= 800;
   useLayoutEffect(() => {
     const element = workspaceRef.current;
     if (!element) return;
-    setWide(element.getBoundingClientRect().width >= 800);
+    setWidth(element.getBoundingClientRect().width);
     if (!("ResizeObserver" in window)) return;
     const observer = new ResizeObserver((entries) =>
-      setWide((entries[0]?.contentRect.width ?? 0) >= 800),
+      setWidth(entries[0]?.contentRect.width ?? 0),
     );
     observer.observe(element);
     return () => observer.disconnect();
@@ -541,7 +565,7 @@ export function IndexedSections({
     void navigate({
       to: ".",
       search: true,
-      hash: hashForDetailTarget(id, groups),
+      hash: hashForDetailTarget(id, indexGroups),
       replace: false,
       resetScroll: false,
       hashScrollIntoView: false,
@@ -676,7 +700,7 @@ export function IndexedSections({
   return (
     <div
       ref={workspaceRef}
-      className={cn("min-w-0", wide ? "flex items-start gap-4" : "space-y-2")}
+      className={cn("min-w-0", wide ? "flex items-start gap-6" : "space-y-3")}
     >
       <SubsectionsContext.Provider value={registerSubsections}>
         <ContinuousDetailContext.Provider value>
@@ -689,10 +713,8 @@ export function IndexedSections({
               onSelect={selectSection}
               onFocusTarget={focusTarget}
             />
-            <div
-              ref={bodyRef}
-              className="min-w-0 flex-1 space-y-4 text-[0.8125rem]/5"
-            >
+            <div ref={bodyRef} className="min-w-0 flex-1 space-y-5 text-sm">
+              {lead}
               {groups.map((group) => (
                 <div
                   key={group.id}
@@ -701,8 +723,10 @@ export function IndexedSections({
                   tabIndex={-1}
                   className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] space-y-2 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
-                  <h2 className="text-sm font-semibold">{group.title}</h2>
-                  <div className="space-y-3">
+                  <h2 className="text-xs font-medium text-muted-foreground">
+                    {group.title}
+                  </h2>
+                  <div className="space-y-5">
                     <SectionStack sections={group.sections} />
                   </div>
                 </div>

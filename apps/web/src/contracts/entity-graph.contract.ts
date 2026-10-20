@@ -10,6 +10,12 @@ import {
   entityConnectionsOut,
 } from "@cubby/schemas/entity-connections";
 import {
+  monthlyExpenseSpendInputSchema,
+  monthlyExpenseSpendOutputSchema,
+  detailActivityInputSchema,
+  detailActivityOutputSchema,
+} from "@cubby/schemas/entity-detail-data";
+import {
   entityGraphExploreInputSchema,
   entityGraphExploreOutputSchema,
   entityGraphInputSchema,
@@ -34,6 +40,18 @@ import {
 } from "./entity-records.schema";
 
 export const entityGraphContract = defineContract("entity", {
+  monthlyExpenseSpend: query({
+    mcp: { omit: "client_view" },
+    input: monthlyExpenseSpendInputSchema,
+    output: monthlyExpenseSpendOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
+  }),
+  detailActivity: query({
+    mcp: { omit: "client_view" },
+    input: detailActivityInputSchema,
+    output: detailActivityOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
+  }),
   records: query({
     mcp: {
       omit: "client_view",

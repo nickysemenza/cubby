@@ -59,7 +59,7 @@ export function renderBrandCss(
     ...Object.entries(values).map(([name, value]) => {
       const declaration = `  --brand-${name}: ${value};`;
       return declaration.length > 80
-        ? `  --brand-${name}:\n    ${value};`
+        ? `  --brand-${name}:\n${wrapList(`${value};`)}`
         : declaration;
     }),
     "  --positive: var(--brand-positive);",
@@ -84,6 +84,26 @@ export function renderBrandCss(
     "}",
     "",
   ];
+  return lines.join("\n");
+}
+
+// Matches oxfmt's fill wrapping of long comma lists so `--check` agrees with
+// the committed (formatted) file.
+function wrapList(value: string) {
+  const lines: string[] = [];
+  let line = "";
+  const items = value.split(", ");
+  for (const [index, item] of items.entries()) {
+    const terminator = index === items.length - 1 ? "" : ",";
+    const candidate = line ? `${line} ${item}` : `    ${item}`;
+    if (line && `${candidate}${terminator}`.length > 80) {
+      lines.push(line);
+      line = `    ${item}${terminator}`;
+    } else {
+      line = `${candidate}${terminator}`;
+    }
+  }
+  lines.push(line);
   return lines.join("\n");
 }
 

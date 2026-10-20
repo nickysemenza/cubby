@@ -162,7 +162,7 @@ for (const width of [1440, 390]) {
         contents.getByRole("link", { name: "Plantings", exact: true }),
       ).toContainText("0");
       await contents
-        .getByRole("link", { name: "History", exact: true })
+        .getByRole("link", { name: "Activity", exact: true })
         .click();
     } else {
       await page.getByRole("button", { name: /Jump to:/ }).click();
@@ -170,7 +170,7 @@ for (const width of [1440, 390]) {
         page.getByRole("menuitem", { name: "Plantings", exact: true }),
       ).toHaveAccessibleDescription("0");
       await page
-        .getByRole("menuitem", { name: "History", exact: true })
+        .getByRole("menuitem", { name: "Activity", exact: true })
         .click();
     }
     await expect(page).toHaveURL(/#history$/u);
@@ -181,11 +181,11 @@ for (const width of [1440, 390]) {
       await expect(
         page
           .getByRole("navigation", { name: "Section index" })
-          .getByRole("link", { name: "History", exact: true }),
+          .getByRole("link", { name: "Activity", exact: true }),
       ).toHaveAttribute("aria-current", "location");
     } else {
       await expect(
-        page.getByRole("button", { name: "Jump to: History" }),
+        page.getByRole("button", { name: "Jump to: Activity" }),
       ).toBeVisible();
     }
     await expect(

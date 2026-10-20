@@ -11,10 +11,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import {
-  domainForEntity,
-  domainWayfinding,
-} from "~/ui/navigation/domain-wayfinding";
-import {
   SidePanel,
   SidePanelIconTile,
   SidePanelSection,
@@ -49,11 +45,6 @@ function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
     </Button>
   );
 }
-
-const domainColor = (entity: Entity) => {
-  const domain = domainForEntity(entity);
-  return domain ? `var(${domainWayfinding(domain).accentToken})` : undefined;
-};
 
 /** Shared chrome for every responsive canonical-row inspector. */
 export function EntityInspectorFrame({
@@ -120,7 +111,7 @@ export function EntityInspectorFrame({
       eyebrow={eyebrow ?? label}
       icon={
         leading ?? (
-          <SidePanelIconTile color={domainColor(entity)}>
+          <SidePanelIconTile>
             <EntityIcon entity={entity} />
           </SidePanelIconTile>
         )

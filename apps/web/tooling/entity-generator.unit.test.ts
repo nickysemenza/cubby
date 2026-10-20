@@ -1673,6 +1673,7 @@ describe("typed entity compiler", () => {
     ).toEqual({
       chip: null,
       stats: [],
+      chart: null,
       breadcrumb: null,
       when: null,
       images: false,

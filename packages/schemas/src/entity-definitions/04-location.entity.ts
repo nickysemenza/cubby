@@ -37,13 +37,21 @@ export default defineEntity({
     },
     icons: { phosphor: "MapPin", sfSymbol: "mappin.and.ellipse", emoji: "📍" },
     detail: {
+      activityRelations: [
+        { relation: "images", dateField: "capturedAt" },
+        { relation: "plantings", dateField: "sowedOn" },
+        { relation: "garden-entries", dateField: "observedOn" },
+      ],
       omitRelations: {
         ingredients:
           "Derived through inventory, then product, then ingredient; the Contents table already lists what is stocked here.",
       },
       // The generic "No locations yet." reads oddly under "Sub-locations" —
       // a self-relation whose target label doesn't match the section title.
-      hero: { breadcrumb: "parentId" },
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
+        breadcrumb: "parentId",
+      },
       additionalSections: [
         {
           kind: "slot",

@@ -69,7 +69,8 @@ export function CurrencyValue({
   /** Sign tone (credit positive, zero muted); off for totals and prose. */
   tone?: boolean;
 }) {
-  const className = cn(tone && moneyToneClass(value), callerClassName);
+  // `money` lets table cells set amounts in mono (styles.css).
+  const className = cn("money", tone && moneyToneClass(value), callerClassName);
   const displayed = formatCurrency(value, decimals);
   const exact = formatExactCurrency(value);
   if (displayed === exact)

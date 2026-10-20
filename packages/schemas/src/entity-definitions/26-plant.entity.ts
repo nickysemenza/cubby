@@ -67,7 +67,17 @@ export default defineEntity({
       actionLabel: "New Plant",
     },
     icons: { phosphor: "Leaf", sfSymbol: "leaf.circle", emoji: "🌿" },
-    detail: {},
+    detail: {
+      activityRelations: [{ relation: "plantings", dateField: "sowedOn" }],
+      hero: {
+        stats: [
+          "daysFromSowMin",
+          "daysFromSowMax",
+          "daysFromTransplantMin",
+          "daysFromTransplantMax",
+        ],
+      },
+    },
     list: {
       read: {
         relations: ["ingredientId", "ingredientName"],

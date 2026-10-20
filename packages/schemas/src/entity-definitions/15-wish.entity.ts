@@ -34,7 +34,7 @@ export default defineEntity({
         candidates:
           "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
-      hero: { extraActions: ["markPurchased"] },
+      hero: { stats: ["candidateCount"], extraActions: ["markPurchased"] },
       additionalSections: [
         {
           kind: "fields",

@@ -162,9 +162,10 @@ describe("GenericEntityDetail", () => {
         const element = container.querySelector(`section#${section.id}`);
         if (!(element instanceof HTMLElement))
           throw new Error(`${entity} did not render section ${section.id}`);
-        expect(
-          within(element).getByRole("heading", { level: 3 }),
-        ).toHaveTextContent(section.title ?? "");
+        // The facts section is the aside's own h2; the rest sit under a group.
+        expect(within(element).getAllByRole("heading")[0]).toHaveTextContent(
+          section.title ?? "",
+        );
       }
     },
   );
@@ -357,8 +358,10 @@ describe("GenericEntityDetail", () => {
     if (!(overview instanceof HTMLElement) || !(work instanceof HTMLElement)) {
       throw new Error("Record Overview and Work groups must render");
     }
+    // The first fields section is the record's facts aside, ahead of the
+    // groups when the columns stack.
     for (const label of ["Name", "Manufacturer", "Category"]) {
-      const fact = within(overview).getByText(label, {
+      const fact = within(container).getByText(label, {
         selector: '[data-slot="basic-info-label"]',
       });
       expect(

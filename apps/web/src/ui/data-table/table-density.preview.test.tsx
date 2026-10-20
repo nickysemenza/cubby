@@ -35,7 +35,7 @@ import { useCellSpill } from "./use-cell-spill";
 //   spot so one control is unreachable;
 // - a value wrapped in its own in-flow frame (a suggestion mark) spills over
 //   the outer ⓘ without copying it;
-// - a two-line name or header clamps away its end with no way to read it;
+// - a two-line name or a truncated header loses its end with no way to read it;
 // - a copied rail glyph swallows the click meant for its cell (a header's
 //   sort), or screen-reader text makes a fitting value spill;
 // - tall chips overflow two lines without counting toward "+N";
@@ -613,7 +613,7 @@ describe("table density", () => {
     );
   });
 
-  it("spills a name clamped to two lines and a clamped header", async () => {
+  it("spills a name clamped to two lines and a truncated header", async () => {
     await page.viewport(1440, 900);
     const header = "Synthetic itemization coverage across purchases";
     const view = render(
@@ -805,12 +805,12 @@ describe("table density", () => {
     expect(view.queryByText("…")).toBeNull();
   });
 
-  it("wraps a long header to two lines inside a narrow column", async () => {
+  it("keeps a long header on one truncated line inside a narrow column", async () => {
     await page.viewport(1440, 900);
     const view = render(
       <Fixture
         header="Itemization coverage"
-        cells={[{ id: "c7", width: 104, content: "" }]}
+        cells={[{ id: "c7", width: 72, content: "" }]}
       />,
     );
     const label = view
@@ -818,7 +818,8 @@ describe("table density", () => {
       .querySelector("[data-header-label]");
     if (!(label instanceof HTMLElement)) throw new Error("missing label");
     const lineHeight = Number.parseFloat(getComputedStyle(label).lineHeight);
-    expect(Math.round(rect(label).height / lineHeight)).toBe(2);
-    expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+    expect(Math.round(rect(label).height / lineHeight)).toBe(1);
+    expect(label.scrollWidth).toBeGreaterThan(label.clientWidth);
+    expect(label.title).toBe("Itemization coverage");
   });
 });

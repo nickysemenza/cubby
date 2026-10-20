@@ -34,7 +34,12 @@ export default defineEntity({
       sfSymbol: "text.badge.plus",
       emoji: "📓",
     },
-    detail: {},
+    detail: {
+      activityRelations: [
+        { relation: "plantings", dateField: "sowedOn" },
+        { relation: "images", dateField: "capturedAt" },
+      ],
+    },
     list: {
       read: {
         relations: ["locationId", "plantingIds", "locationName", "plantings"],

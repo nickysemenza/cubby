@@ -565,8 +565,15 @@ const presentationJSON = (
     heroWhen: detail.hero.when
       ? { field: detail.hero.when.field, label: detail.hero.when.label ?? null }
       : null,
+    heroChart: detail.hero.chart
+      ? { kind: detail.hero.chart.kind, viewKey: detail.hero.chart.viewKey }
+      : null,
     heroImages: detail.hero.images,
     heroActions: [...detail.hero.actions],
+    activityRelations: detail.activityRelations.map((entry) => ({
+      relation: entry.relation,
+      dateField: entry.dateField,
+    })),
     detailSections: detail.sections.map((section) =>
       detailSectionJSON(entity, section),
     ),
@@ -584,6 +591,7 @@ const presentationJSON = (
       format: total.format,
     })),
     shelfSubtitle: [...(list.shelf?.subtitle ?? [])],
+    titleSubtitle: list.titleSubtitle,
     listActions: [...list.actions],
     timelineFields: [...(list.timeline?.fields ?? [])],
     lifecycle:

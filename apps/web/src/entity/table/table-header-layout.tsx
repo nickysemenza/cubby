@@ -94,8 +94,8 @@ function sortableHeaderLabel<TData extends RowData>(
 }
 
 /**
- * A header label that wraps to two lines, then clamps. `data-header-label`
- * lets column fitting measure it at its two-line width.
+ * A header label on one line, truncated past the column's width with the full
+ * label in its title. Column fitting sizes headers to their label, capped.
  */
 export function HeaderLabel({
   label,
@@ -105,11 +105,7 @@ export function HeaderLabel({
   children: ReactNode;
 }) {
   return (
-    <span
-      data-header-label=""
-      className="line-clamp-2 min-w-0 leading-[14px] break-words whitespace-normal"
-      title={label}
-    >
+    <span data-header-label="" className="block min-w-0 truncate" title={label}>
       {children}
     </span>
   );

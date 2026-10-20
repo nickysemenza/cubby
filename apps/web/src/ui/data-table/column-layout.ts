@@ -642,18 +642,12 @@ function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
 }
 
 /**
- * The width a header label needs, estimated from the 12px medium header face
- * (~6.5px per character) plus cell padding; the sort arrow and source icon
- * overlay the header until it is sorted or hovered. Labels wrap to two
- * lines, so the widest line is the longest word or about half the label:
- * "Itemization coverage" no longer sets the width of its pill column.
+ * The width a one-line header label needs, estimated at ~6px per character
+ * plus cell padding and capped; past the cap it truncates. The sort arrow
+ * and source icon overlay the header until it is sorted or hovered.
  */
 function headerFitWidth(label: string) {
-  const longestWord = Math.max(
-    ...label.split(/\s+/).map((word) => word.length),
-  );
-  const line = Math.max(longestWord, Math.ceil(label.length * 0.55));
-  return Math.min(Math.ceil(line * 6.5) + 8, HEADER_FIT_MAX);
+  return Math.min(Math.ceil(label.length * 6) + 8, HEADER_FIT_MAX);
 }
 
 /**

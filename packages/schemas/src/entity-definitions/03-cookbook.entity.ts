@@ -27,6 +27,7 @@ export default defineEntity({
     },
     icons: { phosphor: "BookOpen", sfSymbol: "book.closed", emoji: "📖" },
     detail: {
+      hero: { stats: ["recipeCount", "sourceRecipeCount"] },
       additionalSections: [
         {
           kind: "fields",

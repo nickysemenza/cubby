@@ -104,7 +104,7 @@ function EntityWorkbenchInspectorContent({
       overview={
         <div>
           {overviewSupplement}
-          <div className="px-3 py-3">
+          <div className="px-4 py-3">
             {isDetailEntity(entity) ? (
               <InspectorRecord
                 entity={entity}
@@ -132,7 +132,7 @@ function EntityWorkbenchInspectorContent({
             />
           ) : null}
           {resolvedRecord ? (
-            <div className="flex flex-wrap gap-2 px-3 pb-3">
+            <div className="flex flex-wrap gap-2 px-4 pb-3">
               <EntityActionButtons
                 entity={entity}
                 record={resolvedRecord}
@@ -144,14 +144,14 @@ function EntityWorkbenchInspectorContent({
       }
       relations={
         hasRelations ? (
-          <div className="px-3 py-3">
+          <div className="px-4 py-3">
             <EntityRelations entity={entity} sourceId={id} />
           </div>
         ) : undefined
       }
       activity={
         hasActivity ? (
-          <div className="px-3 py-3">
+          <div className="px-4 py-3">
             <AuditLogList
               entityKind={entity}
               entityId={id}

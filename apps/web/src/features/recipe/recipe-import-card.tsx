@@ -183,7 +183,7 @@ function RecipeImportCardImpl({
   const badge = STATUS_BADGE[status];
 
   return (
-    <Card size="sm">
+    <Card variant="panel" size="sm">
       <CardContent>
         <Row align="center" gap="sm">
           <Checkbox

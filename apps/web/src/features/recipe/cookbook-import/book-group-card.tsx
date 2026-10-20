@@ -139,7 +139,7 @@ export function BookGroupCard({
   const allSelected = flat.length > 0 && book.selected.size === flat.length;
 
   return (
-    <Card size="sm">
+    <Card variant="panel" size="sm">
       <CardHeader className="flex-row items-center gap-2 space-y-0">
         {ready && flat.length > 0 ? (
           <Checkbox

@@ -213,8 +213,7 @@ describe("column sizing defaults", () => {
   // half its length plus padding; a long header still stops at a fixed cap.
   it.each([
     { header: "Kind", size: 104 },
-    { header: "Itemization coverage", size: 104 },
-    { header: "Refrigeration requirements", size: Math.ceil(15 * 6.5) + 8 },
+    { header: "Itemization coverage", size: 20 * 6 + 8 },
     { header: "A very long header that would otherwise dominate", size: 160 },
   ])("fits the $header header", ({ header, size }) => {
     const columns = createCubbyColumnCollection<Row>((add) => {

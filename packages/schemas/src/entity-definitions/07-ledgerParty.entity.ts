@@ -21,6 +21,18 @@ export default defineEntity({
     },
     icons: { phosphor: "Users", sfSymbol: "person.2", emoji: "👤" },
     detail: {
+      activityRelations: [
+        { relation: "expenses", dateField: "date" },
+        { relation: "outgoing-transfers", dateField: "date" },
+        { relation: "incoming-transfers", dateField: "date" },
+        { relation: "meals", dateField: "date" },
+        { relation: "tasks", dateField: "dueDate" },
+        { relation: "images", dateField: "capturedAt" },
+        { relation: "emails", dateField: "receivedAt" },
+      ],
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+      },
       omitRelations: {
         "recipes-eaten":
           "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",

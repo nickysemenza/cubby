@@ -60,7 +60,10 @@ export default defineEntity({
       emoji: "🔁",
     },
     detail: {
-      hero: { when: { field: "date", label: "Transferred" } },
+      hero: {
+        stats: ["amount"],
+        when: { field: "date", label: "Transferred" },
+      },
       additionalSections: [
         {
           kind: "fields",

@@ -26,7 +26,15 @@ export default defineEntity({
       actionLabel: "Add spending category",
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
-    detail: {},
+    detail: {
+      activityRelations: [
+        { relation: "purchases", dateField: "date" },
+        { relation: "expenses", dateField: "date" },
+      ],
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+      },
+    },
     list: {
       read: {
         relations: ["parentId", "productCategories"],

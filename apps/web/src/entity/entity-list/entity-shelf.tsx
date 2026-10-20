@@ -1,10 +1,8 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { renderCompactFieldValue } from "~/entity/display/entity-display";
 import { entities, entityDetailParams } from "~/entity/entities";
 import type { ListGroupState } from "~/entity/hooks/progressive-list";
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
@@ -13,6 +11,7 @@ import { ShelfCard, ShelfGrid } from "~/entity/table/shelf";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 
 import { DeferredListValue } from "./deferred-list-value";
+import { recordCaption } from "./record-caption";
 
 /**
  * A list row as the shelf reads it: its id, its server-resolved cover
@@ -56,42 +55,6 @@ function shelfImages(entity: BrowserRoutedEntity, row: ShelfRow) {
     }));
   const image = imageBrowserMedia.safeParse(row);
   return image.success ? [image.data] : [];
-}
-
-/**
- * The caption is the first declared `shelf.subtitle` field with a value,
- * rendered through its declared format — a price reads as money, a category
- * as its label.
- */
-function shelfSubtitle(
-  entity: BrowserRoutedEntity,
-  row: ShelfRow,
-  enrichmentState?: (id: string, field: string) => ListGroupState | undefined,
-): ReactNode {
-  const subtitle = entitySummary[entity].list.shelf?.subtitle ?? [];
-  const fields = entityFieldModels[entity].fields;
-  for (const key of subtitle) {
-    const field = fields.find((candidate) => candidate.key === key);
-    if (!field) continue;
-    const state = enrichmentState?.(row.id, field.readKey ?? field.key);
-    if (state && state.state !== "ready")
-      return (
-        <span className="block h-4 leading-4">
-          <DeferredListValue state={state} />
-        </span>
-      );
-    const value = row[field.readKey ?? field.key];
-    if (
-      value == null ||
-      value === "" ||
-      (Array.isArray(value) && value.length === 0)
-    )
-      continue;
-    return renderCompactFieldValue(entity, row, field);
-  }
-  return enrichmentState && subtitle.length > 0 ? (
-    <span className="block h-4" />
-  ) : undefined;
 }
 
 /**
@@ -178,7 +141,7 @@ export function EntityShelf<TRow extends { id: string }>({
             }
             extraCount={images.length - 1}
             title={shelfTitle(entity, row)}
-            subtitle={shelfSubtitle(entity, row, enrichmentState)}
+            subtitle={recordCaption(entity, row, enrichmentState)}
             entity={entity}
             compact={compact}
             onInspect={onInspect ? () => onInspect(record) : undefined}

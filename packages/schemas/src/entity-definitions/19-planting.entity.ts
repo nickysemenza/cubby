@@ -32,10 +32,9 @@ export default defineEntity({
     icons: { phosphor: "Plant", sfSymbol: "leaf", emoji: "🌱" },
     spans: [{ start: "sowedOn", end: "finishedOn", label: "Season" }],
     detail: {
+      activityRelations: [{ relation: "entries", dateField: "observedOn" }],
       variantOverride: "journal",
-      hero: {
-        chip: "status",
-      },
+      hero: { stats: ["quantity"], chip: "status" },
       sectionOverrides: [
         {
           kind: "relation",

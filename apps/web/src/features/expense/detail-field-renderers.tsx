@@ -18,10 +18,12 @@ const projectField = entityFieldModels.expense.fields.find(
 
 /** Allocated projects retain their per-share amounts; proposals use the shared queue. */
 function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
+  // Regression: without min-w-0, a share's project link did not truncate and
+  // pushed its amount past the two-column facts.
   return (
-    <Stack gap="xs">
+    <Stack gap="xs" className="min-w-0">
       {expense.fieldResolutions?.projectId?.mode === "allocated" ? (
-        <Stack gap="xs">
+        <Stack gap="xs" className="min-w-0">
           {(expense.projectAllocations ?? []).map((share) => (
             <div
               key={share.projectId ?? "unassigned"}

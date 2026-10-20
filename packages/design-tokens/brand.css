@@ -51,9 +51,9 @@
   --brand-radius-panel: 12px;
   --brand-radius-chip: 7px;
   --brand-radius-pill: 999px;
-  --brand-web-radius-control: 4px;
-  --brand-web-radius-panel: 8px;
-  --brand-web-radius-chip: 4px;
+  --brand-web-radius-control: 8px;
+  --brand-web-radius-panel: 12px;
+  --brand-web-radius-chip: 6px;
   --brand-space-1: 4px;
   --brand-space-2: 8px;
   --brand-space-3: 12px;
@@ -64,11 +64,17 @@
   --brand-motion-standard: 180ms;
   --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);
   --brand-font-display:
-    system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
   --brand-font-heading:
-    system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --brand-font-sans: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --brand-font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+  --brand-font-sans:
+    "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+  --brand-font-mono:
+    "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo,
+    monospace;
   --positive: var(--brand-positive);
   --warning: var(--brand-warning);
   --warning-ink: var(--brand-warning-ink);

@@ -1,5 +1,12 @@
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
-import { type FC, type ReactNode, useId, useState } from "react";
+import {
+  createContext,
+  type FC,
+  type ReactNode,
+  useContext,
+  useId,
+  useState,
+} from "react";
 
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -21,6 +28,64 @@ export interface BasicInfoField {
   fullWidth?: boolean;
 }
 
+/**
+ * How fact rows lay out: `grid` (label column, reflowing to two columns on a
+ * wide container) or `compact` (a fixed label share, values on one left edge)
+ * for narrow surfaces such as the detail aside and the inspector.
+ */
+type FactsLayout = "grid" | "compact";
+const FactsLayoutContext = createContext<FactsLayout>("grid");
+
+export function FactsLayoutProvider({
+  layout,
+  children,
+}: {
+  layout: FactsLayout;
+  children: ReactNode;
+}) {
+  return <FactsLayoutContext value={layout}>{children}</FactsLayoutContext>;
+}
+
+const FactsAddContext = createContext<(() => void) | null>(null);
+
+/**
+ * Where an empty editable fact goes to be filled in (the record's edit
+ * dialog). Without one, empty facts read as a quiet dash.
+ */
+export function FactsAddProvider({
+  onAdd,
+  children,
+}: {
+  onAdd: (() => void) | null;
+  children: ReactNode;
+}) {
+  return <FactsAddContext value={onAdd}>{children}</FactsAddContext>;
+}
+
+export function useFactsAdd() {
+  return useContext(FactsAddContext);
+}
+
+/** The quiet value an empty editable fact shows on the full detail page. */
+export function AddFactValue({
+  label,
+  onAdd,
+}: {
+  label: string;
+  onAdd: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Add ${label}`}
+      onClick={onAdd}
+      className="rounded-sm text-muted-foreground/70 outline-none hover:text-foreground-strong hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      Add…
+    </button>
+  );
+}
+
 interface BasicInfoProps {
   fields: BasicInfoField[];
   header?: ReactNode;
@@ -35,11 +100,12 @@ export const BasicInfo: FC<BasicInfoProps> = ({
   actions,
 }) => {
   const visibleFields = fields.filter((f) => !f.hide && f.value !== undefined);
+  const layout = useContext(FactsLayoutContext);
 
   return (
     <Stack gap="sm">
       {header}
-      <Ledger as="dl" variant="facts">
+      <Ledger as="dl" variant="facts" data-facts-layout={layout}>
         {visibleFields.map((field) => (
           <BasicInfoRow key={field.label} field={field} />
         ))}
@@ -82,6 +148,7 @@ function BasicInfoRow({ field }: { field: BasicInfoField }) {
               <Button
                 variant="ghost"
                 size="icon-xs"
+                data-slot="fact-explain"
                 aria-label={`How ${field.label.toLowerCase()} is determined`}
                 aria-expanded={open}
                 aria-controls={panelId}

@@ -856,7 +856,7 @@ function DesktopTableView<TItem extends RowData>({
             <Table
               aria-label={ariaLabel}
               aria-busy={isTransitioning}
-              className={cn(styles.table, "table-grid-lines")}
+              className={styles.table}
               containerClassName="overflow-visible"
               style={columnSizeVars}
             >

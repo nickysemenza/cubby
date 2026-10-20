@@ -75,6 +75,10 @@ export default defineEntity({
     },
     icons: { phosphor: "Receipt", sfSymbol: "cart", emoji: "🧾" },
     detail: {
+      activityRelations: [
+        { relation: "images", dateField: "capturedAt" },
+        { relation: "expenses", dateField: "date" },
+      ],
       omitRelations: {
         projects:
           "The project-allocation slot renders the split for each project.",
@@ -82,7 +86,14 @@ export default defineEntity({
           "The financial-settlement slot renders the allocations with their amounts.",
       },
       hero: {
-        stats: ["statedTotal", "expenseTotal"],
+        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+        stats: [
+          "expenseTotal",
+          "expenseCount",
+          "unpricedExpenseCount",
+          "documentCount",
+        ],
+
         when: { field: "date", label: "Ordered" },
       },
       additionalSections: [
@@ -131,6 +142,8 @@ export default defineEntity({
       ],
     },
     list: {
+      titleSubtitle: true,
+      shelfSubtitleOverride: ["vendorId", "displayLabel"],
       savedViews: [
         {
           id: "research-queue",

@@ -60,6 +60,12 @@ export default defineEntity({
     icons: { phosphor: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
     spans: [{ start: "dueDate", end: "dueEndDate", label: "Due" }],
     detail: {
+      activityRelations: [
+        { relation: "subtasks", dateField: "dueDate" },
+        { relation: "blocked-by", dateField: "dueDate" },
+        { relation: "images", dateField: "capturedAt" },
+        { relation: "plantings", dateField: "sowedOn" },
+      ],
       relationFilterOverrides: {
         subtasks: { descriptor: "parentTaskId" },
       },
@@ -68,6 +74,7 @@ export default defineEntity({
           "The Dependencies section edits Blocked by and Blocking in place.",
       },
       hero: {
+        stats: ["subtaskCount", "doneSubtaskCount"],
         chip: "status",
         extraActions: ["bulkEdit", "delete"],
       },

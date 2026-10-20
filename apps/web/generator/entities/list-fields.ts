@@ -14,7 +14,7 @@ const relationshipPathStep = z.object({
   direction: z.enum(["incoming", "outgoing"]),
 });
 type RelationshipPathStep = z.infer<typeof relationshipPathStep>;
-const relationshipProvenanceSchema = z.object({
+export const relationshipProvenanceSchema = z.object({
   kind: z.string(),
   steps: z.array(relationshipPathStep).optional(),
 });

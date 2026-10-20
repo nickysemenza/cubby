@@ -41,7 +41,12 @@ import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
-import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
+import {
+  AddFactValue,
+  BasicInfo,
+  type BasicInfoField,
+  useFactsAdd,
+} from "~/ui/common/basic-info";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
@@ -427,6 +432,22 @@ function pathScalarValue(
   return field.display.valueOptions
     ? enumDisplayValue(entity, field, scalar.raw)
     : scalar;
+}
+
+/** An editable stored field with nothing in it: the detail page offers "Add…". */
+function isAddableEmpty<TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  field: DisplayField,
+) {
+  if (!field.control || (!field.readKey && field.display.readPath === null))
+    return false;
+  const value = readScalarField(entity, record, field);
+  return (
+    value.kind === "empty" ||
+    (value.kind === "text" && value.raw.trim() === "") ||
+    (value.kind === "list" && value.raw.length === 0)
+  );
 }
 
 function readScalarField<TRecord extends object>(
@@ -1147,6 +1168,7 @@ export function EntityBasicInfo<TRecord extends object>({
       throw new Error(`Undeclared detail renderer for ${entity}.${key}`);
     }
   }
+  const onAdd = useFactsAdd();
   const mediaRefs = fields.flatMap((field) =>
     referenceMediaRefs(record, field),
   );
@@ -1157,8 +1179,14 @@ export function EntityBasicInfo<TRecord extends object>({
       footer={footer}
       fields={fields.flatMap((field) => {
         const checks = fieldQualityChecks(quality?.checks ?? [], field.key);
-        const rendered = overrides[field.key]?.(record) ?? {
-          value: renderDetailFieldValue(entity, record, field),
+        const override = overrides[field.key]?.(record);
+        const rendered = override ?? {
+          value:
+            onAdd && isAddableEmpty(entity, record, field) ? (
+              <AddFactValue label={field.label} onAdd={onAdd} />
+            ) : (
+              renderDetailFieldValue(entity, record, field)
+            ),
         };
         // A renderer that names `filterAction` (even as null) owns the
         // cohort affordance; otherwise the manifest's descriptor supplies it.

@@ -495,7 +495,10 @@ function EntityDetailPanel({
 }) {
   if (!entity || !row) {
     return (
-      <Card className="flex h-[420px] items-center justify-center">
+      <Card
+        variant="panel"
+        className="flex h-[420px] items-center justify-center"
+      >
         <p className="text-sm text-muted-foreground">
           Select an entity in the graph to inspect it.
         </p>
@@ -508,7 +511,7 @@ function EntityDetailPanel({
   const label = entityLabel(entity);
 
   return (
-    <Card className="h-[420px] overflow-y-auto">
+    <Card variant="panel" className="h-[420px] overflow-y-auto">
       <CardHeader>
         <CardTitle icon={Icon}>{label}</CardTitle>
         <CardDescription>

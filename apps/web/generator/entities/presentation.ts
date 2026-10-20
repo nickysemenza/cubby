@@ -1,3 +1,5 @@
+import { relationshipProvenanceSchema } from "./list-fields.ts";
+import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
 import { listViewId } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import type {
   CompiledEditSection,
@@ -596,6 +598,7 @@ export const compilePresentation = (
         ...section,
         overview: detailSectionInOverview(detail.overviewSections, section.id),
       })),
+      activityRelations: detail.activityRelations,
       overviewSections: detail.overviewSections,
       preview,
       omitRelations: detail.omitRelations,
@@ -617,6 +620,7 @@ export const compilePresentation = (
       totals: list.totals,
       read: list.read,
       shelf: { subtitle: shelfSubtitle },
+      titleSubtitle: list.titleSubtitle,
       initialFilter: list.initialFilter,
       savedViews: list.savedViews,
       primarySearch: list.primarySearch,
@@ -741,6 +745,59 @@ export const validateRelationSections = (
 ) => {
   const byKey = new Map(entities.map((entity) => [entity.key, entity]));
   for (const entity of entities) {
+    const chart = entity.inspector.detail.hero.chart;
+    if (chart) {
+      const routes = chart.viewKey.startsWith("relation:")
+        ? [[chart.viewKey.slice(9)]]
+        : Object.entries(connectedViews)
+            .find(([key]) => key === entity.key)?.[1]
+            .find((view) => view.key === chart.viewKey)?.routes;
+      if (!routes?.length)
+        throw new EntityDeclarationError(
+          `${entity.key}.detail.hero.chart names an unknown connection view ${chart.viewKey}`,
+        );
+      for (const route of routes) {
+        let target: CompiledEntity | undefined = entity;
+        for (const key of route) {
+          const relation: CompiledEntity["relations"][number] | undefined =
+            target?.relations.find((candidate) => candidate.key === key);
+          target =
+            relation &&
+            relationshipProvenanceSchema.parse(relation.provenance).kind ===
+              "local-path"
+              ? byKey.get(relation.target)
+              : undefined;
+        }
+        if (target?.key !== "expense")
+          throw new EntityDeclarationError(
+            `${entity.key}.detail.hero.chart must traverse local relations to Expense`,
+          );
+      }
+    }
+    for (const entry of entity.inspector.detail.activityRelations) {
+      const relation = entity.relations.find(
+        (candidate) => candidate.key === entry.relation,
+      );
+      const target = relation && byKey.get(relation.target);
+      const field = target?.fieldModel.fields.find(
+        (candidate) => candidate.key === entry.dateField,
+      );
+      if (
+        !relation ||
+        relation.cardinality !== "many" ||
+        relationshipProvenanceSchema.parse(relation.provenance).kind ===
+          "derived" ||
+        !field ||
+        !["date", "timestamp"].includes(field.kind) ||
+        !target?.fieldModel.storage.some(
+          (candidate) => candidate.key === entry.dateField,
+        )
+      ) {
+        throw new EntityDeclarationError(
+          `${entity.key}.detail.activityRelations requires a stored date on a traversable many relation: ${entry.relation}.${entry.dateField}`,
+        );
+      }
+    }
     for (const section of entity.inspector.detail.sections) {
       if (section.kind !== "relation") continue;
       const context = `${entity.key}.presentation.detail.sections[${section.id}]`;

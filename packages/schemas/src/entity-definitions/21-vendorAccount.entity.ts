@@ -40,6 +40,11 @@ export default defineEntity({
     },
     icons: { phosphor: "Key", sfSymbol: "person.badge.key", emoji: "🔑" },
     detail: {
+      activityRelations: [{ relation: "purchases", dateField: "date" }],
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
+        stats: ["purchaseCount"],
+      },
       additionalSections: [
         {
           kind: "relation",

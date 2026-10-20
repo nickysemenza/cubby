@@ -62,7 +62,11 @@ export default defineEntity({
     },
     icons: { phosphor: "ChefHat", sfSymbol: "fork.knife", emoji: "🍳" },
     detail: {
-      hero: {},
+      activityRelations: [
+        { relation: "images", dateField: "capturedAt" },
+        { relation: "meals", dateField: "date" },
+      ],
+      hero: { stats: ["servings", "calories"] },
       additionalSections: [
         {
           kind: "fields",

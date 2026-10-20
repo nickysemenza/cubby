@@ -22,10 +22,10 @@
   grid-template-columns: subgrid;
   align-items: center;
   min-width: 0;
-  min-height: 1.75rem;
+  min-height: 2rem;
   row-gap: var(--brand-space-1);
   padding-block: 0.125rem;
-  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-top: 1px solid var(--hairline-soft);
 }
 
 .ledger-row:first-child {
@@ -78,7 +78,81 @@
 }
 
 .ledger[data-ledger="facts"] {
-  grid-template-columns: minmax(6.5rem, 7.5rem) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(7rem, 9.5rem) minmax(0, 1fr) auto;
+}
+.ledger[data-ledger="facts"] > .ledger-row:first-child {
+  border-top: 0;
+}
+
+/* Field explanations stay one hover or focus away; an open explanation, a
+   touch screen, or keyboard focus keeps its button visible. */
+@media (hover: hover) {
+  .ledger[data-ledger="facts"]
+    > .ledger-row:not(:hover, :focus-within)
+    [data-slot="fact-explain"]:not([aria-expanded="true"]) {
+    opacity: 0;
+  }
+}
+
+/* A wide fact list reflows into two columns read top-to-bottom; each row keeps
+   its own label track, so labels still align within a column. */
+@container ledger (min-width: 40rem) {
+  .ledger[data-ledger="facts"] {
+    display: block;
+    columns: 2;
+    column-gap: 2rem;
+  }
+  .ledger[data-ledger="facts"] > .ledger-row {
+    grid-template-columns: minmax(7rem, 9.5rem) minmax(0, 1fr) auto;
+    break-inside: avoid;
+    border-top: 0;
+    border-bottom: 1px solid var(--hairline-soft);
+  }
+  .ledger[data-ledger="facts"] > .ledger-row[data-full-width="true"] {
+    column-span: all;
+  }
+}
+
+/* Narrow surfaces (the facts aside, the inspector): a property list. Labels
+   take a fixed share so every value starts on one left edge; captions sit
+   under their value and row actions stay on the first line. A compact list
+   that lands somewhere wide reflows like any other fact list. */
+@container ledger (max-width: 39.99rem) {
+  .ledger[data-ledger="facts"][data-facts-layout="compact"] {
+    display: block;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="compact"] > .ledger-row {
+    grid-template-columns: minmax(5.5rem, 38%) minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: var(--brand-space-3);
+    padding-block: 0.375rem;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
+    > .ledger-row
+    > [data-ledger-slot="primary"] {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    padding-top: 0.125rem;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
+    > .ledger-row
+    > [data-ledger-slot="secondary"] {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
+    > .ledger-row
+    > [data-ledger-slot="actions"] {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .ledger[data-ledger="facts"][data-facts-layout="compact"]
+    > .ledger-row
+    > [data-ledger-slot="detail"] {
+    grid-column: 1 / -1;
+  }
 }
 
 .ledger[data-ledger="facts"] > .ledger-row {
@@ -96,6 +170,12 @@
   grid-row: 1;
   justify-self: end;
   align-self: center;
+}
+/* Regression: in the two-column reflow, an explanation confined to the value
+ * track overflowed the viewport. It takes the whole row, as in compact facts. */
+.ledger[data-ledger="facts"] > .ledger-row > [data-ledger-slot="detail"] {
+  grid-column: 1 / -1;
+  min-width: 0;
 }
 /* Review grows beneath the proposal without moving its field identity or rail. */
 .ledger[data-ledger="facts"]

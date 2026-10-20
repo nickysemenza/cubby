@@ -35,7 +35,7 @@ export function NavigationCountBadge({
   const count = navigationCount(query.data, entity);
   if (count === undefined) return null;
   return (
-    <span className="ml-auto shrink-0 pl-1 text-xs text-muted-foreground tabular-nums">
+    <span className="ml-auto shrink-0 pl-1 font-mono text-xs text-muted-foreground/80 tabular-nums">
       <span aria-hidden="true">{formatCount(count)}</span>
       <span className="sr-only">{formatCount(count)} records</span>
     </span>

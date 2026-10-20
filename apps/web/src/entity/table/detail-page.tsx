@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { type FC, useEffect, useMemo } from "react";
+import { type FC, type ReactNode, useEffect, useMemo } from "react";
 import { z } from "zod";
 
 import { usePageDetailContext } from "~/entity/page/page";
@@ -68,6 +68,12 @@ interface DetailSectionsProps {
   onlyWorkspace?: "evidence";
   sections: DetailSection[];
   rawData: unknown;
+  /** Above the section groups: the Needs-you block. */
+  lead?: ReactNode;
+  /** Index entries for the blocks inside `lead`. */
+  leadIndex?: ReadonlyArray<{ id: string; title: string }>;
+  /** The caller renders its own activity timeline; skip generic History. */
+  omitActivity?: boolean;
 }
 
 function resolveRelationshipDetail(
@@ -162,6 +168,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   onlyWorkspace,
   sections,
   rawData,
+  lead,
+  leadIndex,
+  omitActivity = false,
 }) => {
   const hydrated = useHydrated();
   const locationHash = useLocation({ select: (location) => location.hash });
@@ -180,8 +189,11 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     [pageDetail, sourceId, sections],
   );
   const activity = useMemo(
-    () => resolveActivityDetail(pageDetail, sourceId, sections),
-    [pageDetail, sourceId, sections],
+    () =>
+      omitActivity
+        ? { ownSection: undefined, section: undefined }
+        : resolveActivityDetail(pageDetail, sourceId, sections),
+    [omitActivity, pageDetail, sourceId, sections],
   );
   validateDetailSectionIds(sections, relationship, activity);
   const groups = useMemo(() => {
@@ -260,6 +272,8 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   return (
     <IndexedSections
       groups={groups}
+      lead={lead}
+      leadIndex={leadIndex}
       footer={
         isDebugEnabled && (
           <Card>

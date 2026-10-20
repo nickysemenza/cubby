@@ -984,6 +984,7 @@ function useSettledQuestions(
   };
 }
 
+/** `undefined` renders in place; `null` waits for the portal slot to mount. */
 function SuggestionStatusPlacement({
   target,
   children,
@@ -991,7 +992,8 @@ function SuggestionStatusPlacement({
   target?: HTMLElement | null;
   children: ReactNode;
 }) {
-  return target ? createPortal(children, target) : children;
+  if (target === undefined) return children;
+  return target ? createPortal(children, target) : null;
 }
 
 function BoundRecordSuggestions({
@@ -1468,11 +1470,13 @@ function BoundRecordSuggestions({
         unasked={unasked}
       />
       {storedQuery?.error ? (
-        <ErrorDisplay
-          error={storedQuery.error}
-          title="stored suggestions"
-          onRetry={() => void storedQuery.refetch()}
-        />
+        <div data-needs-row>
+          <ErrorDisplay
+            error={storedQuery.error}
+            title="stored suggestions"
+            onRetry={() => void storedQuery.refetch()}
+          />
+        </div>
       ) : null}
     </>
   );

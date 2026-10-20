@@ -6,6 +6,8 @@
    semantic tones, type stacks) are generated from the shared design tokens.
    Imported first; everything below only references these vars. */
 @import "@cubby/design-tokens/brand.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/geist-mono";
 /*
   ---break---
 */
@@ -16,6 +18,13 @@
   --font-heading: var(--brand-font-heading);
   --font-sans: var(--brand-font-sans);
   --font-mono: var(--brand-font-mono);
+
+  /* Workspace density: 13px body (text-sm) and 15px section titles
+     (text-base); captions stay 12px. */
+  --text-sm: 0.8125rem; /* 13px */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem; /* 15px */
+  --text-base--line-height: 1.375rem;
 
   /* Sub-xs caption sizes - a home for what used to be arbitrary text-[10px]/[8px] */
   --text-2xs: 0.625rem; /* 10px */
@@ -56,11 +65,18 @@
   }
   /* The editorial face belongs to page and record identity only. */
   h1 {
-    @apply scroll-m-20 font-display text-2xl font-semibold tracking-tight lg:text-3xl;
+    @apply scroll-m-20 font-display text-xl font-semibold tracking-[-0.015em] text-foreground-strong;
   }
+  h2,
   h3,
   h4 {
-    @apply font-heading;
+    @apply font-heading text-foreground-strong;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--link) 22%, white);
+  }
+  a {
+    text-underline-offset: 3px;
   }
   code {
     @apply bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;
@@ -71,7 +87,8 @@
   body {
     /* font-sans must be explicit: Tailwind v4 preflight doesn't wire --font-sans
        to the document, so without this the app silently runs on system fonts. */
-    @apply bg-background font-sans text-foreground;
+    @apply bg-background font-sans text-sm text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
     /* iOS PWA target: suppress the default gray tap-highlight box; shared
        active states provide press feedback. */
     -webkit-tap-highlight-color: transparent;
@@ -143,6 +160,39 @@
   Cubby Theme - Field Guide
 */
 :root {
+  /* Web workspace palette. The native app keeps tokens.json colors; the web
+     runs flat: a white working surface, a #FAFAFA sidebar, 1px dividers, ink
+     controls, blue only for links and focus, and tinted status pills whose
+     ink clears 4.5:1 on its own surface. */
+  --brand-foreground: #333333;
+  --brand-graphite-secondary: #737373;
+  --brand-canvas: #ffffff;
+  --brand-surface: #ffffff;
+  --brand-inset: #f5f5f5;
+  --brand-hairline: #ebebeb;
+  --brand-interaction: #202020;
+  --brand-interaction-hover: #3a3a3a;
+  --brand-slate: #737373;
+  --brand-neutral-status: #737373;
+  --brand-positive: #12733a;
+  --brand-positive-surface: #dcf7e3;
+  --brand-warning: #8f5a00;
+  --brand-warning-ink: #75500d;
+  --brand-warning-surface: #fff1cc;
+  --brand-destructive: #c4291c;
+  --brand-destructive-surface: #ffe7e4;
+  --brand-info: #0067c7;
+  --brand-info-surface: #e3efff;
+  --brand-action-create: #0067c7;
+  --brand-action-create-surface: #e3efff;
+  --brand-elevation-popover:
+    0 12px 32px -8px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.06);
+  --brand-focus-ring: 0 0 0 2px var(--brand-surface), 0 0 0 4px var(--link);
+  --foreground-strong: #202020;
+  --link: #0077e6;
+  --hairline-soft: #f2f2f2;
+  --row-current: #ededed;
+
   /* The docked side panel's width; the panel's resize handle overrides it. */
   --side-panel-width: 25rem;
   --action-create: var(--brand-action-create);
@@ -200,18 +250,14 @@
 
   /* Borders and inputs use a cool, low-contrast hairline. */
   --border: var(--brand-hairline);
-  --input: var(--brand-paper-alt);
+  --input: var(--brand-hairline);
   /* Checkbox border - a visible ink-leaning hairline so unchecked boxes read as
      empty controls against the paper surfaces */
   --checkbox-border: oklch(0.6 0.01 80);
-  --ring: var(--brand-ultramarine);
+  --ring: var(--link);
 
-  /* A selected row carries a faint signal wash, never a condition color. */
-  --row-selected: color-mix(
-    in oklab,
-    var(--brand-signal) 18%,
-    var(--brand-paper)
-  );
+  /* A batch-selected row carries a faint link wash; the inspected row is grey. */
+  --row-selected: color-mix(in oklab, var(--link) 7%, var(--brand-surface));
 
   /* Extended palette */
   --highlight: var(--brand-ultramarine);
@@ -321,15 +367,15 @@
   );
 
   /* Sidebar */
-  --sidebar: var(--brand-canvas);
+  --sidebar: #fafafa;
   --sidebar-foreground: var(--brand-foreground);
   --sidebar-primary: var(--brand-ultramarine);
   --sidebar-primary-foreground: var(--brand-on-accent);
-  --sidebar-accent: var(--brand-paper-alt);
+  --sidebar-accent: var(--row-current);
   --sidebar-accent-foreground: var(--brand-foreground);
   --sidebar-border: var(--brand-hairline);
-  --sidebar-ring: var(--brand-ultramarine);
-  --app-sidebar-expanded-width: 11rem;
+  --sidebar-ring: var(--link);
+  --app-sidebar-expanded-width: 12.5rem;
   --app-sidebar-collapsed-width: 2.5rem;
   --app-sidebar-header-height: 2.5rem;
 }
@@ -347,6 +393,10 @@
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-foreground-strong: var(--foreground-strong);
+  --color-link: var(--link);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-row-current: var(--row-current);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -508,7 +558,6 @@
   }
   .table-row-hover:hover {
     background: var(--brand-paper-alt);
-    box-shadow: inset 1px 0 0 var(--row-accent, var(--brand-ultramarine));
   }
 
   /* Record states stay distinct, including the opaque parked cells. */
@@ -522,11 +571,8 @@
     box-shadow: none;
   }
   .table-record-row[data-current="true"] {
-    --table-row-surface: color-mix(in oklab, var(--primary) 5%, var(--card));
+    --table-row-surface: var(--row-current);
     background: var(--table-row-surface);
-  }
-  .table-record-row[data-current="true"] > td:first-child {
-    box-shadow: inset 2px 0 0 var(--primary);
   }
   .table-record-row[data-state="selected"] {
     --table-row-surface: var(--row-selected);
@@ -543,11 +589,10 @@
     );
   }
 
-  /* Full-height column rules stay quieter than the header boundary. */
-  .table-grid-lines th:not(:last-child):not(.table-pinned-boundary-start),
-  .table-grid-lines td:not(:last-child):not(.table-pinned-boundary-start) {
-    border-right: 1px solid
-      color-mix(in oklab, var(--brand-hairline) 40%, transparent);
+  /* Amounts in table cells read in mono so columns of money align by digit. */
+  [data-slot="table-cell"] .money {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
   }
 
   /* Pinned boundaries are functional depth cues, not table dividers: a single
@@ -561,16 +606,6 @@
   .table-pinned-boundary-end {
     border-inline-start: 1px solid var(--brand-hairline);
     box-shadow: -4px 0 8px -8px rgb(23 26 33 / 0.32);
-  }
-
-  /* Trailing gutter cell. It renders AFTER the actions column, so the content
-     block ends with the actions column's own border-right as the terminating
-     grid rule. The header copy is pinned to `w-0` (see Table.tsx) — left
-     unsized it's the only auto cell under table-fixed and swallows the table's
-     entire surplus width, leaving dead space beside clipping columns. */
-  .table-grid-lines th[data-spacer],
-  .table-grid-lines td[data-spacer] {
-    border-right: 0;
   }
 
   /* Active nav gets a crisp cobalt route line. */

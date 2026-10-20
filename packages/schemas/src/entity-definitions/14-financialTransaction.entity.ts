@@ -132,11 +132,18 @@ export default defineEntity({
       emoji: "💳",
     },
     detail: {
+      activityRelations: [
+        { relation: "purchase", dateField: "date" },
+        { relation: "expenses", dateField: "date" },
+      ],
       omitRelations: {
         products:
           "Reached through the Purchases table on this page; the product path is three joins deep.",
       },
-      hero: { stats: ["amount", "status"] },
+      hero: {
+        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+        stats: ["amount"],
+      },
     },
   },
   model: {

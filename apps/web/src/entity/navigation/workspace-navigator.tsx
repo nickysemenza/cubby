@@ -92,7 +92,7 @@ function NavigatorLink({
       <span className="min-w-0 flex-1 break-words">{item.label}</span>
       {item.entity && <NavigationCountBadge entity={item.entity} />}
       {section && (
-        <span className="shrink-0 font-mono text-2xs text-slate uppercase">
+        <span className="shrink-0 text-xs text-muted-foreground">
           {section}
         </span>
       )}

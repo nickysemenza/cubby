@@ -251,7 +251,7 @@ function stepCurrentTableRow(direction: -1 | 1): boolean {
 
 function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-sm border border-border bg-background px-1 font-mono text-2xs leading-4 text-muted-foreground">
+    <kbd className="rounded-[4px] border border-border bg-background px-1 font-mono text-2xs leading-4 text-muted-foreground shadow-[0_1px_0_var(--border)]">
       {children}
     </kbd>
   );
@@ -260,7 +260,7 @@ function Kbd({ children }: { children: ReactNode }) {
 /**
  * One chrome for every row detail: a sticky identity header (icon tile,
  * eyebrow, title, mono key, actions and close in the same row), a scrolling
- * body of banded sections, and a keyboard footer. Docked and modeless beside
+ * body of hairline-divided sections, and a keyboard footer. Docked and modeless beside
  * a list at xl; hosts present it in a sheet below that. Forms stay in
  * `Overlay`.
  */
@@ -306,29 +306,29 @@ export function SidePanel({
       aria-label={label}
       data-side-panel=""
       className={cn(
-        "relative flex h-full w-full max-w-full min-w-0 flex-col bg-card text-xs text-foreground",
+        "relative flex h-full w-full max-w-full min-w-0 flex-col bg-background text-sm text-foreground",
         className,
       )}
     >
       {resizable ? <SidePanelResizeHandle /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <header className="sticky top-0 z-20 border-b border-border bg-card px-3 py-2.5">
-          <div className="flex items-start gap-2">
+        <header className="sticky top-0 z-20 border-b border-border bg-background px-4 py-3">
+          <div className="flex items-start gap-2.5">
             {icon ? <div className="shrink-0">{icon}</div> : null}
             <div className="min-w-0 flex-1">
               {eyebrow ? (
-                <div className="truncate text-2xs text-muted-foreground">
+                <div className="truncate text-xs text-muted-foreground">
                   {eyebrow}
                 </div>
               ) : null}
-              <h2 className="text-[0.8125rem] leading-snug font-semibold break-words text-foreground">
+              <h2 className="text-base leading-5 font-semibold tracking-[-0.01em] break-words text-foreground-strong">
                 {title}
               </h2>
               {code ? (
                 <p className="mt-0.5 truncate">
                   <CopyableShortcode
                     code={code}
-                    className="rounded-sm bg-muted px-1 font-mono text-2xs text-muted-foreground"
+                    className="font-mono text-xs text-muted-foreground"
                   />
                 </p>
               ) : null}
@@ -354,7 +354,7 @@ export function SidePanel({
       {stepping || onClose ? (
         <footer
           aria-hidden
-          className="hidden shrink-0 items-center gap-3 border-t border-border bg-muted/40 px-3 py-1.5 text-2xs text-muted-foreground md:flex"
+          className="hidden shrink-0 items-center gap-3 border-t border-border bg-sidebar px-4 py-1.5 text-xs text-muted-foreground md:flex"
         >
           {stepping ? (
             <span className="inline-flex items-center gap-1">
@@ -375,27 +375,12 @@ export function SidePanel({
   );
 }
 
-/** The 28px tinted tile a panel header leads with. */
-export function SidePanelIconTile({
-  children,
-  color,
-}: {
-  children: ReactNode;
-  /** Domain color for the glyph; the tile takes a faint wash of it. */
-  color?: string;
-}) {
+/** The 28px neutral tile a panel header leads with. */
+export function SidePanelIconTile({ children }: { children: ReactNode }) {
   return (
     <span
       aria-hidden
-      className="flex size-7 items-center justify-center rounded-md bg-muted [&_svg]:size-3.5"
-      style={
-        color
-          ? {
-              color,
-              backgroundColor: `color-mix(in srgb, ${color} 12%, var(--card))`,
-            }
-          : undefined
-      }
+      className="flex size-7 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-3.5"
     >
       {children}
     </span>
@@ -403,7 +388,7 @@ export function SidePanelIconTile({
 }
 
 /**
- * A banded section of a panel body. `open`/`onOpenChange` make it a
+ * A hairline-topped section of a panel body. `open`/`onOpenChange` make it a
  * disclosure whose content mounts on first open.
  */
 export function SidePanelSection({
@@ -422,7 +407,7 @@ export function SidePanelSection({
   children?: ReactNode;
 }) {
   const heading =
-    "flex items-center gap-2 bg-muted px-3 py-1.5 text-xs font-semibold text-foreground";
+    "flex min-h-9 items-center gap-2 border-t border-border px-4 py-2 text-sm font-semibold text-foreground-strong";
   if (open === undefined)
     return (
       <section id={id}>
@@ -512,7 +497,7 @@ export function SidePanelLayout({
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="!w-[25rem] !max-w-[calc(100vw-2rem)] p-0"
+          className="!w-[25rem] !max-w-[calc(100vw-2rem)] p-0 max-md:!w-screen max-md:!max-w-none"
         >
           <SheetTitle className="sr-only">{title}</SheetTitle>
           {panel}
