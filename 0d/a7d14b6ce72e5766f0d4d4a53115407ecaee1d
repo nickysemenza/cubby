@@ -1,0 +1,21 @@
+apps/web/generator/entities/list-fields.ts
+  s_9b829d577c7e4c::t_14d76f24449190 17
+apps/web/generator/entities/presentation.ts
+  s_9b829d577c7e4c::t_70f8f4f3d9ecc5 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0da7d14b6ce72e5766f0d4d4a53115407ecaee1d",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
