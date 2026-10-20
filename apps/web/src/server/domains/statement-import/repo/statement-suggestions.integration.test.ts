@@ -894,6 +894,121 @@ describe("statement Transaction suggestions", () => {
     },
   );
 
+  // A single charge's identity shortlist must not keep its own four-call cap.
+  it("fans out every candidate identity decision in one charge", async () => {
+    const account = (await card(ctx)).output;
+    for (let index = 0; index < 8; index++)
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 42.5,
+        postedDate: "2026-05-05",
+        merchant: `Example Candidate ${index}`,
+        rawDescription: `SYNTHETIC CANDIDATE ${index}`,
+        sourceRefs: [],
+      });
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const release = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let active = 0;
+    let peak = 0;
+    const pending = labelStatementSuggestions(ctx.db, {
+      port: async (input) => {
+        peak = Math.max(peak, ++active);
+        started.resolve();
+        await release.promise;
+        try {
+          return await answer(input);
+        } finally {
+          active--;
+        }
+      },
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    try {
+      await started.promise;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      release.resolve();
+      expect((await pending).failed).toEqual([]);
+      expect(peak).toBeGreaterThan(4);
+    } finally {
+      release.resolve();
+      await pending;
+    }
+  });
+
+  // Model fan-out must fill the gateway independently of pooled publishing.
+  // An unresolved model answer must not hold a transaction, and a burst of
+  // returned answers must still open at most four publish transactions.
+  it("fans out a label page while bounding DB publication independently", async () => {
+    await card(ctx);
+    await record(
+      ctx,
+      Array.from({ length: 40 }, (_, index) =>
+        rowInput({
+          merchant: `Example Merchant ${index}`,
+          rawDescription: `SYNTHETIC CHARGE ${index}`,
+          providerAmount: -100 - index,
+        }),
+      ),
+    );
+    await generate(ctx);
+    const release = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let modelActive = 0;
+    let modelPeak = 0;
+    let publishActive = 0;
+    let publishPeak = 0;
+    const publish = statementSuggestionsRepo.publishChargeProposal;
+    const spy = vi
+      .spyOn(statementSuggestionsRepo, "publishChargeProposal")
+      .mockImplementation(async (...args) => {
+        publishPeak = Math.max(publishPeak, ++publishActive);
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return await publish(...args);
+        } finally {
+          publishActive--;
+        }
+      });
+    const pending = labelStatementSuggestions(ctx.db, {
+      port: async (input) => {
+        modelPeak = Math.max(modelPeak, ++modelActive);
+        started.resolve();
+        await release.promise;
+        try {
+          return await answer(input);
+        } finally {
+          modelActive--;
+        }
+      },
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    try {
+      await started.promise;
+      // Model answers remain outstanding while the complete page fans out.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(publishActive).toBe(0);
+      release.resolve();
+      const outcome = await pending;
+      expect(modelPeak).toBeGreaterThanOrEqual(30);
+      expect(outcome).toMatchObject({
+        labelled: 40,
+        labels: { generated: 80 },
+      });
+      expect(publishPeak).toBeGreaterThan(1);
+      expect(publishPeak).toBeLessThanOrEqual(4);
+    } finally {
+      release.resolve();
+      await pending;
+      spy.mockRestore();
+    }
+  });
+
   it("returns committed label counts when a cooperative page pauses mid-page", async () => {
     await card(ctx);
     await record(ctx, [
@@ -916,12 +1031,11 @@ describe("statement Transaction suggestions", () => {
       "Synthetic pause",
     );
     const answer = answering({ kind: "purchase", counterparty: "business" });
-    let calls = 0;
     expect(
       await labelStatementSuggestions(ctx.db, {
         cooperative: true,
         port: async (input) => {
-          if (++calls > 2) throw paused;
+          if (input.state.includes("SYNTHETIC SECOND CHARGE")) throw paused;
           return answer(input);
         },
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),

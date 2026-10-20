@@ -26,6 +26,7 @@ import {
   countUnmatchedCharges,
   generateStatementSuggestionPage,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { STATEMENT_LABEL_BATCH } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { buildCrudServices } from "~/server/http/request-context";
 import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
 import {
@@ -172,7 +173,7 @@ export const sweepDrivers: StepRunDrivers = async (_db, owner) =>
               return {
                 phase: generating ? "generate" : "label",
                 unit: generating ? "charges" : "suggestions",
-                limit: generating ? 20 : 10,
+                limit: generating ? 20 : STATEMENT_LABEL_BATCH,
                 processed: generating
                   ? step.done + step.skipped + step.failed
                   : step.meta?.work?.current.phase === "statement_label"
@@ -234,7 +235,11 @@ async function transferPairPage(
     await import("~/server/domains/financial-transaction/service/transfer-pair-labels");
   let outcome: Awaited<ReturnType<typeof labelTransferPairSuggestions>>;
   try {
-    outcome = await labelTransferPairSuggestions(db, { runId: run.id, after });
+    outcome = await labelTransferPairSuggestions(db, {
+      runId: run.id,
+      after,
+      cooperative: true,
+    });
   } catch (error) {
     if (error instanceof AiBudgetExhaustedError)
       return {
@@ -246,8 +251,14 @@ async function transferPairPage(
   }
   return {
     kind: "progress",
+    execution: { phase: "transfer_pair_label", pagesPerInstance: 2 },
     ...(after === null &&
-      outcome.active && { found: step.found + labelsAhead }),
+      outcome.active && {
+        found: Math.max(
+          step.found,
+          step.done + step.skipped + step.failed + labelsAhead,
+        ),
+      }),
     delta: {
       done: outcome.labelled,
       skipped: outcome.stale,
@@ -257,10 +268,17 @@ async function transferPairPage(
     ...(!outcome.active && {
       meta: { detail: { labels: "off: automatic AI work is disabled" } },
     }),
-    cursor: outcome.next
-      ? { phase: "label", after: outcome.next }
-      : { phase: "finished" },
-    done: outcome.next === null,
+    cursor:
+      outcome.next || outcome.waitingUntil !== null
+        ? { phase: "label", after: outcome.next }
+        : { phase: "finished" },
+    done: outcome.next === null && outcome.waitingUntil === null,
+    ...(outcome.waitingUntil !== null && {
+      waitSeconds: Math.max(
+        1,
+        Math.ceil((outcome.waitingUntil - Date.now()) / 1_000),
+      ),
+    }),
   };
 }
 
@@ -409,7 +427,7 @@ async function statementPage(
     ...checkpoint,
     kind: "progress",
     done: outcome.next === null,
-    execution: { phase: "statement_label", pagesPerInstance: 10 },
+    execution: { phase: "statement_label", pagesPerInstance: 2 },
     ...(outcome.waitingUntil !== null && {
       waitSeconds: Math.max(
         1,

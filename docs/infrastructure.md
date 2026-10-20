@@ -90,31 +90,64 @@ Statement Sweeps also bound generation and label page sizes. The driver owns
 those executable bounds; continuation retains the RunStep cursors and the
 attempt/cancellation fences instead of starting generation over.
 Generation commits up to 100 pages of 20 charges per instance. Labelling commits
-up to 10 pages, each with at most 10 suggestions and 32 new decisions across all
-rule-driven rounds, with at most four model decisions in flight. A partial label
-page saves its unpublished judgment in the pending AssessmentState and resumes
-inclusively at that suggestion; compatible evidence re-exports retain paid
+up to two pages, each with at most 64 suggestions and 180 reserved new decisions
+across all rule-driven rounds. A charge reserves its missing decisions before
+model work yields, so a small decision budget finishes earlier charges instead
+of scattering partial labels. The page and each charge's complete candidate
+shortlist fan out to the egress DO; there is no caller-side model concurrency
+cap. Candidates are never truncated. Kind and counterparty decisions remain
+sequential within a charge, while 64 charges can supply 64 outstanding calls.
+At ten-second latency, 30 concurrent calls suffice for 180 starts/minute.
+
+Model work holds no publication transaction. Statement checkpoint/publication
+runs at `STATEMENT_PUBLISH_CONCURRENCY = 4` against the twelve-connection
+Hyperdrive pool. Transfer-pair builds and publications share a separate
+four-slot DB lane; movement decisions run outside it. Pool connections are
+leased for database operations, never across model latency.
+A partial label page saves its unpublished judgment in the pending
+AssessmentState and resumes inclusively at the earliest unfinished suggestion,
+independently of completion order. Compatible evidence re-exports retain paid
 labels. A member-settled or suppressed charge is skipped; moved evidence remains
-queued when any rule round yields. No candidate is truncated to fit a page. Cache/admission contention yields
-Workflow label work before polling, then resumes after durable `step.sleep`
-(capacity contention waits at least 15 seconds);
-interactive callers retain their waiting behavior. Pages retain their 15-minute
+queued when any rule round yields. Cache/admission contention yields Workflow
+label work after one admission attempt, checkpoints all started work, then
+resumes after durable `step.sleep` (at least 15 seconds for contention).
+Transfer-pair Workflow pages also return a durable wake time and resume before
+the earliest deferred pair, retaining completed publications; a null cursor
+with a wake time means retry from the start, never completion.
+Interactive callers retain their waiting behavior. Pages retain their 15-minute
 timeout. An instance requests handoff after ten minutes elapsed, checked after
 committed pages; unmeasured phases and waiting parents retain five-page bounds.
 Statement label-round logs retain charge and planned decision counts, including
-candidate fanout. These are logical workload counts, not measured subrequests
-or a production-scale completion guarantee.
+candidate fanout. These are logical workload counts, not measured subrequests.
 
-The initial synthetic transport estimate for 320 cold decisions is 960 calls
-(claim, gateway, publication), or 1,600 with three provider attempts per decision.
-Three attempts of every page make those 2,880 and 4,800, before lease renewals
-and bookkeeping. These are application-path estimates, not Cloudflare internal
-accounting. SQL over Hyperdrive is not counted as one HTTP subrequest per query.
-Cloudflare defaults to 10,000 subrequests and 10,000 steps per instance, 30 seconds
-active CPU per step, and unlimited platform step wall time; this deployment does
-not raise those defaults. Local synthetic SQL timings do not predict production
-network/model latency. The limits retain reserve rather than promise a remaining
-platform budget that the runtime API does not expose.
+The synthetic egress load regression uses one cold decision per suggestion,
+64 suggestions/page, ten-second model latency, 25ms publications in groups of
+four, and a conservative ten-second queue handoff every two pages. It measures
+180 starts and 180 completed labels before 60 seconds; request 181 waits for
+the rolling window. The real label-service integration regression separately
+holds model answers outstanding to verify at least 30 concurrent decisions and
+no more than four publish transactions. These are synthetic capacity evidence,
+not production completion measurements. At the same request rate, two decisions
+per suggestion yield about 90 suggestions/minute; retries and shared gateway
+traffic consume the same allowance. Four publishers would bind first if each
+publication averaged over 1.33 seconds at three suggestions/second. Page and
+handoff overhead fit within the load regression's rate-limited idle time.
+
+Two full label pages reserve at most 360 cold decisions: approximately 1,080
+transport calls (claim, gateway, publication), or 1,800 with three provider
+attempts per decision. Three attempts of every page make those 3,240 and 5,400,
+before lease renewals, one-shot admission deferrals and bookkeeping. These are
+application-path estimates, not Cloudflare internal accounting. SQL over
+Hyperdrive is not one HTTP subrequest per query. The DO forwards each admitted
+model call in one request/response round trip; rejection does not poll inside a
+Workflow page or increase RPC ancestry. The DO owns upstream completion and
+permit release. Cloudflare defaults to 10,000 subrequests and 10,000 steps per
+instance, 30 seconds active CPU per step, and unlimited platform step wall time;
+this deployment does not raise those defaults
+([Workflow limits](https://developers.cloudflare.com/workflows/reference/limits/)).
+Transfer-pair labels likewise rotate after two pages (at most 400 decisions,
+or about 6,000 calls under the same pessimistic retry estimate). The two-page
+bounds retain reserve; no runtime API exposes a remaining budget.
 
 Page failures are logged before database failure bookkeeping. If bookkeeping
 also fails, the original error and the complete recording-error chain survive
@@ -165,9 +198,17 @@ create reply followed by rollback must not let the predecessor resume the same
 checkpoint. Each RPC attempt acquires a fresh DO stub because an exception can
 leave the previous stub permanently broken
 ([Cloudflare error handling](https://developers.cloudflare.com/durable-objects/best-practices/error-handling/)).
-At an instance's first boundary, a mismatch waits once for deployment propagation
-and rechecks before handing off. This bounds zero-progress instance creation
-during version propagation lag instead of immediately relaunching in a tight loop.
+At an instance's first boundary, allow one bounded page without a version RPC
+or settle sleep; forced instance-budget handoffs still apply. A fresh Workflow
+can reach a DO still running the preceding deployment in another location
+([DO lifecycle](https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/)).
+The next committed-page boundary compares versions normally, including rollback.
+This gives deployment propagation useful work to catch up and prevents
+zero-progress successor loops. Even a freshly created older pinned instance
+can run only that bounded page before rechecking; an in-flight page has the
+same committed-page cutover contract. The DO is a running-version observation,
+not an atomic global deployment authority; lag can still cause an unnecessary
+handoff at a later boundary.
 
 Run-backed Workflows reuse `claimWorkflowRun` and the `launchWorkflowRun`
 `expectedAttempt` fence. The same Run retains its cursors, receipts and cancellation;
@@ -611,12 +652,30 @@ traffic can return another environment's cached response
 
 All environments use `cubby`; `environment` metadata separates their logs and spend rules.
 The shared gateway also shares Cloudflare's Unified Billing allowance of
-200 requests per 60 seconds and its gateway-wide rate limit; this is an
-accepted capacity tradeoff. A spend limit can filter by `environment` to budget
-CI independently, but cannot separate that request allowance. Egress cooldowns
-from subscriber-credit 429s apply only to their credit bucket, leaving Unified
-Billing fallback available; unified 429s retain a shared cooldown across all
-buckets. Gateways are not a security boundary: AI Gateway tokens are
+200 requests per 60 seconds. The egress DO admits a rolling 180 starts/minute
+and at most 64 in-flight requests in the `unified` bucket, covering Workers AI
+and paid managed-provider calls. The 20-request margin leaves room for clients
+outside the Worker. 64 is an operating safety bound, over twice the concurrency
+needed at ten-second latency, not a published provider concurrency limit.
+[AI Gateway limits](https://developers.cloudflare.com/ai-gateway/reference/limits/)
+exclude BYOK from that rate limit. [Workers AI limits](https://developers.cloudflare.com/workers-ai/platform/limits/)
+publish 300 RPM for ordinary text generation and 2,000 RPM for classification;
+models requiring the Paid plan instead have per-model 20 RPM standard / 50 RPM
+prepaid limits. Clef is not a Paid-plan-only model. These docs publish no fixed
+Workers AI concurrency ceiling. Provider 429s and `Retry-After` remain authoritative.
+
+The `subscriber-credit:anthropic` BYOK bucket has independent permits and
+cooldowns, with no invented universal concurrency cap: Anthropic's
+[limits](https://platform.claude.com/docs/en/api/rate-limits) depend on the
+organization, model, requests and tokens. Its refusal/probe rules below remain.
+The ChatGPT subscription transport bypasses AI Gateway and publishes
+[plan-dependent usage limits](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan),
+not a fixed RPM/concurrency allowance; it has no local model fan-out cap and is
+not charged to the unified bucket. A full unified bucket never consumes credit
+capacity. Subscriber-credit 429s cool only their bucket; unified 429s retain a
+shared cooldown because their provider limit scope is unknown. A spend limit
+can filter by `environment`, but cannot separate the shared request allowance.
+Gateways are not a security boundary: AI Gateway tokens are
 account-scoped, so any `Run` token reaches every gateway and its stored BYOK keys
 ([authenticated gateway](https://developers.cloudflare.com/ai-gateway/configuration/authentication/)).
 Dynamic routes accept only the OpenAI chat-completions shape, so Anthropic

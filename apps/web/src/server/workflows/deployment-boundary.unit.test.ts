@@ -75,25 +75,34 @@ describe("Workflow deployment boundaries", () => {
     ]);
   });
 
-  // A fresh instance may briefly lag the current DO during deploy propagation;
-  // it must wait and recheck before allocating another zero-progress successor.
-  it("waits for propagation at startup and rechecks before handing off", async () => {
+  // A current Workflow can initially reach the preceding DO deployment.
+  // Startup must make progress without a settle sleep or successor storm;
+  // the next committed-page boundary still detects a deploy or rollback.
+  it("starts without waiting for a stale DO and hands off after a committed page", async () => {
     const { steps, sleeps } = memoryDurableSteps();
-    let reads = 0;
     const resume = vi.fn(async () => {});
-    const handedOff = await workflowDeploymentBoundary(steps, {
-      name: "page:0",
-      version: "synthetic-a",
-      initial: true,
-      currentVersion: async () =>
-        ++reads === 1 ? "synthetic-b" : "synthetic-a",
+    const currentVersion = vi.fn(async () => "synthetic-old-do");
+    const input = {
+      version: "synthetic-current",
+      currentVersion,
       continue: resume,
-    });
-    expect(handedOff).toBe(false);
-    expect(sleeps).toEqual([
-      { name: "deployment-settle:page:0", durationMs: 30_000 },
-    ]);
+    };
+    expect(
+      await workflowDeploymentBoundary(steps, {
+        ...input,
+        name: "page:0",
+        initial: true,
+      }),
+    ).toBe(false);
+    expect(sleeps).toEqual([]);
     expect(resume).not.toHaveBeenCalled();
+    expect(
+      await workflowDeploymentBoundary(steps, {
+        ...input,
+        name: "page:1",
+      }),
+    ).toBe(true);
+    expect(resume).toHaveBeenCalledOnce();
   });
 
   // A lost create response followed by rollback must never authorize the
@@ -159,7 +168,8 @@ describe("Workflow deployment boundaries", () => {
       runId: "00000000-0000-4000-8000-000000000001",
       attempt: 1,
     });
-    await expect(boundary("page:0")).resolves.toBe(true);
+    await expect(boundary("page:0")).resolves.toBe(false);
+    await expect(boundary("page:1")).resolves.toBe(true);
     expect(launches).toBe(1);
   });
 

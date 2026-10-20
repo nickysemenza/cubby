@@ -23,29 +23,29 @@ export async function workflowDeploymentBoundary(
     `deployment guard · ${input.name}`,
     BOOKKEEPING_RETRIES,
     async () => {
-      const currentVersion = input.force ? null : await input.currentVersion();
+      // The DO can still serve the preceding deployment at fresh startup.
+      // Commit one bounded page before comparing; never sleep or chain empty
+      // successors while propagation catches up. Forced budgets still win.
+      const starting = input.initial && !input.force;
+      const currentVersion =
+        input.force || starting ? null : await input.currentVersion();
       return {
-        handoff: Boolean(input.force) || currentVersion !== input.version,
+        handoff:
+          Boolean(input.force) ||
+          (!starting && currentVersion !== input.version),
         reason: input.force
           ? "instance budget"
-          : currentVersion !== input.version
-            ? "deployment changed"
-            : "deployment current",
+          : starting
+            ? "instance startup"
+            : currentVersion !== input.version
+              ? "deployment changed"
+              : "deployment current",
         pinnedVersion: input.version,
         currentVersion,
       };
     },
   );
   if (!handoff.handoff) return false;
-  if (input.initial && !input.force) {
-    await steps.sleep(`deployment-settle:${input.name}`, 30_000);
-    const settled = await steps.do(
-      `deployment-settled:${input.name}`,
-      BOOKKEEPING_RETRIES,
-      async () => (await input.currentVersion()) !== input.version,
-    );
-    if (!settled) return false;
-  }
   await steps.do(
     input.dashboard
       ? `handoff → ${input.dashboard.nextInstanceId} · ${input.name}`
