@@ -20,10 +20,7 @@ enum RecipeSourcePresentation: Sendable, Hashable {
             guard let rawURL = object["url"]?.stringValue, let url = URL(string: rawURL) else {
                 return nil
             }
-            let host =
-                url.host?.replacingOccurrences(
-                    of: "^www\\.", with: "", options: .regularExpression
-                ) ?? rawURL
+            let host = url.host.map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 } ?? rawURL
             return .external(host: host, url: url)
         default:
             return nil
@@ -120,86 +117,11 @@ struct EntityRowPresentation: Sendable, Hashable {
         var facts: [Fact] = []
         var seen = Set<String>()
 
-        func append(_ columnID: String, label: String? = nil) {
+        func append(_ columnID: String) {
             guard seen.insert(columnID).inserted,
-                let field = descriptor.fields.first(where: { $0.key == columnID || $0.columnId == columnID })
+                let fact = fact(columnID, descriptor: descriptor, row: row)
             else { return }
-            let key = field.key
-            if field.listRenderer == .dataQuality {
-                let text: String
-                if field.readKey == nil {
-                    text = "Not assessed"
-                } else if let status = row.raw[key]?["status"]?.stringValue {
-                    let label =
-                        field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
-                    // A null score is a not-assessed record; the server caps any unresolved gap at
-                    // 99 or below, so rounding never shows a gap as 100.
-                    if let score = row.raw[key]?["score"]?.doubleValue {
-                        text = "\(Int(score.rounded()))/100 · \(label)"
-                    } else {
-                        text = label
-                    }
-                } else {
-                    text = row.pendingFields.contains(key) ? "Loading…" : "Unavailable"
-                }
-                facts.append(Fact(id: key, label: label ?? field.label, value: text))
-                return
-            }
-            if field.listRenderer == .spendingCategorySummary,
-                let value = row.raw[key],
-                let summary = try? value.decoded(SpendingCategorySummary.self)
-            {
-                let names = summary.categories.map(\.name).joined(separator: ", ")
-                let text =
-                    names.isEmpty ? summary.classificationLabel : "\(summary.classificationLabel): \(names)"
-                facts.append(Fact(id: key, label: label ?? field.label, value: text))
-                return
-            }
-            if let names = FieldResolutionPresentation.allocatedReferenceLabel(in: row.raw, field: field) {
-                facts.append(Fact(id: key, label: label ?? field.label, value: names))
-                return
-            }
-            // A declared `labelPath` is the text the server composed (or the name of the record
-            // a reference cell links to); nothing here re-derives the figure.
-            if let path = field.labelPath, let text = row.raw.pathText(path) {
-                facts.append(Fact(id: key, label: label ?? field.label, value: text))
-                return
-            }
-            if let renderer = field.listRenderer,
-                case .implemented = NativePresentationCoverage.list(renderer),
-                let source = RecipeSourcePresentation.parse(row.raw[key])
-            {
-                facts.append(Fact(id: key, label: label ?? field.label, value: source.label))
-                return
-            }
-            if let items = EntityFieldValue.resolvedItems(in: row.raw, field: field, surface: "list") {
-                if !items.isEmpty {
-                    facts.append(
-                        Fact(
-                            id: key, label: label ?? field.label,
-                            segments: items.map { Fact.Segment(text: $0.label, inherited: $0.inherited) }))
-                } else if let emptyLabel = field.emptyLabel {
-                    facts.append(Fact(id: key, label: label ?? field.label, value: emptyLabel))
-                }
-                return
-            }
-            let resolution = FieldResolutionPresentation(raw: row.raw, field: field)
-            let inherited = resolution?.isInherited ?? false
-            if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
-                facts.append(
-                    Fact(
-                        id: key, label: label ?? field.label,
-                        value: reference.name ?? reference.id, inherited: inherited))
-            } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
-                ?? resolution?.emptyLabel(field: field)
-            {
-                facts.append(
-                    Fact(
-                        id: key, label: label ?? field.label, value: value,
-                        isDate: field.kind == .date || field.kind == .timestamp,
-                        dateValue: EntityFieldValue.dateValue(in: row.raw, field: field, surface: "list"),
-                        inherited: inherited))
-            }
+            facts.append(fact)
         }
 
         // The chooser already labels the photo's capture day in its section header. Its rows
@@ -213,6 +135,81 @@ struct EntityRowPresentation: Sendable, Hashable {
         return EntityRowPresentation(
             title: row.title, facts: facts, shortcode: row.id,
             imageURL: row.imageURL)
+    }
+
+    /// One column's fact for `row`, the unit `resolve` assembles; a table cell asks for its own
+    /// column alone rather than resolving the row's data-quality column with it.
+    static func fact(_ columnID: String, descriptor: EntityDescriptor, row: EntityRow) -> Fact? {
+        guard let field = descriptor.fields.first(where: { $0.key == columnID || $0.columnId == columnID })
+        else { return nil }
+        let key = field.key
+        if field.listRenderer == .dataQuality {
+            let text: String
+            if field.readKey == nil {
+                text = "Not assessed"
+            } else if let status = row.raw[key]?["status"]?.stringValue {
+                let label =
+                    field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
+                // A null score is a not-assessed record; the server caps any unresolved gap at
+                // 99 or below, so rounding never shows a gap as 100.
+                if let score = row.raw[key]?["score"]?.doubleValue {
+                    text = "\(Int(score.rounded()))/100 · \(label)"
+                } else {
+                    text = label
+                }
+            } else {
+                text = row.pendingFields.contains(key) ? "Loading…" : "Unavailable"
+            }
+            return Fact(id: key, label: field.label, value: text)
+        }
+        if field.listRenderer == .spendingCategorySummary,
+            let value = row.raw[key],
+            let summary = try? value.decoded(SpendingCategorySummary.self)
+        {
+            let names = summary.categories.map(\.name).joined(separator: ", ")
+            let text =
+                names.isEmpty ? summary.classificationLabel : "\(summary.classificationLabel): \(names)"
+            return Fact(id: key, label: field.label, value: text)
+        }
+        if let names = FieldResolutionPresentation.allocatedReferenceLabel(in: row.raw, field: field) {
+            return Fact(id: key, label: field.label, value: names)
+        }
+        // A declared `labelPath` is the text the server composed (or the name of the record
+        // a reference cell links to); nothing here re-derives the figure.
+        if let path = field.labelPath, let text = row.raw.pathText(path) {
+            return Fact(id: key, label: field.label, value: text)
+        }
+        if let renderer = field.listRenderer,
+            case .implemented = NativePresentationCoverage.list(renderer),
+            let source = RecipeSourcePresentation.parse(row.raw[key])
+        {
+            return Fact(id: key, label: field.label, value: source.label)
+        }
+        if let items = EntityFieldValue.resolvedItems(in: row.raw, field: field, surface: "list") {
+            if !items.isEmpty {
+                return Fact(
+                    id: key, label: field.label,
+                    segments: items.map { Fact.Segment(text: $0.label, inherited: $0.inherited) })
+            } else if let emptyLabel = field.emptyLabel {
+                return Fact(id: key, label: field.label, value: emptyLabel)
+            }
+            return nil
+        }
+        let resolution = FieldResolutionPresentation(raw: row.raw, field: field)
+        let inherited = resolution?.isInherited ?? false
+        if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
+            return Fact(
+                id: key, label: field.label, value: reference.name ?? reference.id, inherited: inherited)
+        } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
+            ?? resolution?.emptyLabel(field: field)
+        {
+            return Fact(
+                id: key, label: field.label, value: value,
+                isDate: field.kind == .date || field.kind == .timestamp,
+                dateValue: EntityFieldValue.dateValue(in: row.raw, field: field, surface: "list"),
+                inherited: inherited)
+        }
+        return nil
     }
 
     static func listContextKeys(descriptor: EntityDescriptor) -> Set<String> {

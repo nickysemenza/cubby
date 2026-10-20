@@ -61,9 +61,7 @@ public struct AuditFieldChange: Sendable, Hashable {
 
     /// `unitPrice` → "Unit price".
     public var label: String {
-        let spaced = field.replacingOccurrences(
-            of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression
-        ).replacingOccurrences(of: "_", with: " ").lowercased()
+        let spaced = FieldKeyWords.spaced(field).lowercased()
         return spaced.prefix(1).uppercased() + spaced.dropFirst()
     }
 }

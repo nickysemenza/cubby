@@ -98,10 +98,12 @@ struct EntityShelfView: View {
 
     @ViewBuilder
     private func destination(for row: EntityRow) -> some View {
+        let override = subtitleOverride?(row)
+        let facts = override == nil ? subtitleFacts(for: row) : []
         let card = EntityCard(
             title: row.title,
-            subtitle: subtitleOverride?(row) ?? subtitle(for: row),
-            subtitlePieces: subtitleOverride == nil ? subtitlePieces(for: row) : nil,
+            subtitle: override ?? subtitle(from: facts, row: row),
+            subtitlePieces: subtitleOverride == nil && facts.contains { $0.dateValue != nil } ? facts : nil,
             identifier: row.id,
             imageURL: row.imageURL,
             symbol: descriptor.recordSymbol(in: row),
@@ -146,8 +148,10 @@ struct EntityShelfView: View {
         return "browse.\(descriptor.key.rawValue).\(density.rawValue).\(row.id)"
     }
 
-    private func subtitlePieces(for row: EntityRow) -> [EntityRowPresentation.Fact]? {
-        let pieces = descriptor.presentation.shelfSubtitle.compactMap { key -> EntityRowPresentation.Fact? in
+    /// The declared subtitle fields with a value, read once per card for both the pieces and
+    /// the joined string.
+    private func subtitleFacts(for row: EntityRow) -> [EntityRowPresentation.Fact] {
+        descriptor.presentation.shelfSubtitle.compactMap { key -> EntityRowPresentation.Fact? in
             guard let field = descriptor.field(key),
                 let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
             else { return nil }
@@ -156,16 +160,10 @@ struct EntityShelfView: View {
                 id: key, label: date == nil ? nil : field.label, value: value,
                 isDate: date != nil, dateValue: date)
         }
-        return pieces.contains { $0.dateValue != nil } ? pieces : nil
     }
 
-    private func subtitle(for row: EntityRow) -> String? {
-        let parts = descriptor.presentation.shelfSubtitle.compactMap { key -> String? in
-            guard let field = descriptor.field(key) else { return nil }
-            return EntityFieldValue.text(in: row.raw, field: field, surface: "list")
-        }
-        if !parts.isEmpty { return parts.joined(separator: " · ") }
-        return row.subtitle
+    private func subtitle(from facts: [EntityRowPresentation.Fact], row: EntityRow) -> String? {
+        facts.isEmpty ? row.subtitle : facts.map(\.value).joined(separator: " · ")
     }
 }
 

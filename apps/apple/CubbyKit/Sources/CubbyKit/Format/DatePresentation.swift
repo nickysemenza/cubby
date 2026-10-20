@@ -107,6 +107,21 @@ public struct DatePresentation: Sendable, Equatable {
         return parse(value).map { timestamp($0, now: now, compact: compact, locale: locale) }
     }
 
+    /// `value(_:now:compact:)?.absolute` without building the age and zone strings it discards.
+    public static func absolute(
+        of value: String, now: Date = .now, compact: Bool = false, locale: Locale = .autoupdatingCurrent
+    ) -> String? {
+        if let date = HouseholdDay.date(from: value) {
+            return day(date, now: now, compact: compact, locale: locale)
+        }
+        return parse(value).map { absolute($0, now: now, compact: compact, locale: locale) }
+    }
+
+    /// Whether `value(_:)` reads `value` as a date, without formatting it.
+    public static func isDate(_ value: String) -> Bool {
+        HouseholdDay.date(from: value) != nil || parse(value) != nil
+    }
+
     private static let calendar: Calendar = {
         var value = Calendar(identifier: .gregorian)
         value.timeZone = HouseholdDay.timeZone
