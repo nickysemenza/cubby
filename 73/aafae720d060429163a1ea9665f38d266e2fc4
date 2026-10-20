@@ -1,0 +1,19 @@
+apps/web/src/ui/data-table/table.css
+  s_d3ea63dc8edc80::t_7dd036290e6f2e 1,6-12,27-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "73aafae720d060429163a1ea9665f38d266e2fc4",
+  "prompts": {},
+  "sessions": {
+    "s_d3ea63dc8edc80": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b26-64cd-76a3-976c-3d2550ca6a7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
