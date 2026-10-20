@@ -34,6 +34,8 @@ describe("bounded MCP writes", () => {
   });
   afterEach(() => queue.restore());
 
+  // Setup inserts 25,000 dependents; SQL shape/count, not fixture wall time,
+  // guards the mutation bound on slower CI hardware.
   it.each(["commands", "bulkUpdate"] as const)(
     "bounds a 25-row %s batch independently of dependent count",
     async (mode) => {
@@ -114,6 +116,7 @@ describe("bounded MCP writes", () => {
       }
       expect(samples[1]).toBe(samples[0]);
     },
+    30_000,
   );
 
   it.each(["update", "commands", "bulkUpdate"] as const)(

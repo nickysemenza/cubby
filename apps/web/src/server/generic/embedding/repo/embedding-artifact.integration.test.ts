@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setCfEnv, type getAiGateway } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { derivedRefreshWork, entityEmbedding } from "~/server/db/schema";
+import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
@@ -79,6 +80,7 @@ describe("immutable embedding artifacts", () => {
       await renameFixtureRaw(ctx.db, "product", subject.entityId, name);
       await refreshSearchDocument(ctx.db, "product", subject.entityId);
       // Isolate external ordering from projection-frontier scheduling.
+      await foldDerivedRefreshCaptures(ctx.db);
       await getDb(ctx.db)
         .update(derivedRefreshWork)
         .set({ state: "completed", publishing: true });
@@ -179,6 +181,7 @@ describe("immutable embedding artifacts", () => {
       [{ entityKind: "product", entityId: target.entityId }],
       port,
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     await getDb(ctx.db)
       .update(derivedRefreshWork)
       .set({ state: "completed", publishing: true });

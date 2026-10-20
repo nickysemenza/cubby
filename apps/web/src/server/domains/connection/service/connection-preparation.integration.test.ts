@@ -31,6 +31,7 @@ import {
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
@@ -154,6 +155,7 @@ describe("connection preparation and publication authority", () => {
     });
     await refreshSearchDocument(ctx.db, "product", target.entityId);
     await refreshSearchDocument(ctx.db, "expense", payment.entityId);
+    await foldDerivedRefreshCaptures(ctx.db);
     await getDb(ctx.db)
       .update(derivedRefreshWork)
       .set({ state: "completed", publishing: false });

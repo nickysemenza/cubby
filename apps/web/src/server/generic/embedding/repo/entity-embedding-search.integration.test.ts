@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { derivedRefreshWork } from "~/server/db/schema";
+import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
@@ -71,6 +72,7 @@ describe("validated semantic candidates", () => {
       await index.upsert([{ id, values, metadata: { entityType: "product" } }]);
     };
     await seed(first.text);
+    await foldDerivedRefreshCaptures(ctx.db);
     await getDb(ctx.db)
       .update(derivedRefreshWork)
       .set({ state: "completed", publishing: false });
@@ -161,6 +163,7 @@ describe("validated semantic candidates", () => {
         entityId: entity.entityId,
       });
     }
+    await foldDerivedRefreshCaptures(ctx.db);
     await getDb(ctx.db)
       .update(derivedRefreshWork)
       .set({ state: "completed", publishing: false });
@@ -210,6 +213,7 @@ describe("validated semantic candidates", () => {
         metadata: { entityType: "product" },
       })),
     );
+    await foldDerivedRefreshCaptures(ctx.db);
     await getDb(ctx.db)
       .update(derivedRefreshWork)
       .set({ state: "completed", publishing: false });

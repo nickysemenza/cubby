@@ -171,6 +171,13 @@ async function flushDerivedRefresh(
 export async function foldDerivedRefreshCaptures(
   db: Database,
 ): Promise<number> {
+  // Most frontier pages have no new inputs. Avoid opening a write transaction
+  // for an empty inbox; a later capture has its own wake-up and periodic repair.
+  const [pending] = await unwrapDb(db)
+    .select({ id: derivedRefreshCaptureInbox.id })
+    .from(derivedRefreshCaptureInbox)
+    .limit(1);
+  if (!pending) return 0;
   return withTransactionDatabase(db, async (tx) => {
     const client = unwrapDb(tx);
     const page = await client
