@@ -1,3 +1,4 @@
+import type { WorkflowCommandMetadata } from "@cubby/schemas/workflow-command";
 import { z } from "zod";
 
 import type { QueryCachePolicy, RippleKey } from "~/contracts/cache-policy";
@@ -130,6 +131,8 @@ export interface MutationContract<
   Output extends z.ZodTypeAny = z.ZodTypeAny,
 > {
   readonly kind: "mutation";
+  /** Explicit whitelist for shared user command invocation; never inferred from mutation kind. */
+  readonly command?: WorkflowCommandMetadata;
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;

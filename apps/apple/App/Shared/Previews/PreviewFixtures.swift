@@ -102,11 +102,8 @@ enum PreviewFixtures {
         return context.makeImage()!
     }()
 
-    /// `task.todayBriefing`'s `next` rows, for `TodayView`'s preview.
-    static let sampleTodayTasks: [TaskTodayBriefingItemOut] = fixture("sampleTodayTasks")
-    static let sampleTodayBriefing = TaskTodayBriefingOut(
-        next: sampleTodayTasks, nextCount: sampleTodayTasks.count + 1, laterCount: 2,
-        blockedCount: 1, overdueCount: 0, dueThisWeekCount: 2)
+    /// The shared task briefing report used by Today.
+    static let sampleTodayBriefing: EntityReportOut = fixture("sampleTodayBriefing")
 
     /// Today's meal list rows, for `TodayView`'s preview.
     static let sampleTodayMeals: [EntityRow] = {

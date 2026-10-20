@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type {
   ProductId,
   ProductShortcode,
@@ -17,8 +18,9 @@ import type {
   TaskOut,
   TaskUpdateInput,
 } from "@cubby/schemas/project";
+import { taskFiltersSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { type ListReadRow } from "~/entity/model/list-read-fields";
@@ -73,6 +75,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { buildTaskWhere } from "./lookup";
 import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
@@ -743,7 +746,21 @@ export const reorderTasks = async (
   input: TaskBulkReorderInput,
   actor: ActorContext,
 ): Promise<TaskOut[]> => {
-  const { ranks, move } = input;
+  const { ranks, move, position } = input;
+  const placementWhere = position
+    ? await buildTaskWhere(
+        db,
+        taskFiltersSchema.parse({
+          topLevelOnly: true,
+          ...Object.fromEntries(
+            Object.entries(position.group).map(([key, value]) => [
+              key,
+              [value ?? FILTER_NONE],
+            ]),
+          ),
+        }),
+      )
+    : undefined;
 
   const updatedIds = await withTransaction(db, async (tx) => {
     const rankedIds = await resolveLiveTaskIdsOrThrow(
@@ -769,11 +786,6 @@ export const reorderTasks = async (
       }
     }
 
-    // Every ranked id maps to its own new sortOrder — a single CASE-WHEN
-    // UPDATE, not one round-trip per card. STEP-spaced integers, so the
-    // helper's `::real` cast is lossless here (fine-grained midpoint writes go
-    // through the single-update path in updateTask, which keeps full double
-    // precision).
     await batchUpdateWithCaseWhen(tx, task, resolvedRanks);
 
     if (move != null && moveId != null) {
@@ -801,6 +813,83 @@ export const reorderTasks = async (
       }
     }
 
+    if (position) {
+      const placedId = (await resolveLiveTaskIdsOrThrow(tx, [position.id]))[0]!;
+      const group = await tx
+        .select({
+          id: task.id,
+          shortcode: task.shortcode,
+          sortOrder: task.sortOrder,
+        })
+        .from(task)
+        .where(placementWhere)
+        .orderBy(
+          sql`${task.sortOrder} ASC NULLS LAST`,
+          desc(task.createdAt),
+          asc(task.shortcode),
+        );
+      if (!group.some((row) => row.id === placedId)) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Placed task is outside the destination group",
+        );
+      }
+      const ordered = group.filter((row) => row.id !== placedId);
+      const anchor = position.before ?? position.after;
+      const anchorIndex = anchor
+        ? ordered.findIndex((row) => row.shortcode === anchor)
+        : 0;
+      if (anchorIndex < 0)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Task placement anchor ${anchor} is outside the destination group`,
+        );
+      const index = anchorIndex + (!position.before && position.after ? 1 : 0);
+      const left = index > 0 ? ordered[index - 1]!.sortOrder : null;
+      const right = index < ordered.length ? ordered[index]!.sortOrder : null;
+      const candidate =
+        left !== null && right !== null
+          ? left + (right - left) / 2
+          : left !== null
+            ? left + 1024
+            : right !== null
+              ? right - 1024
+              : index === 0
+                ? 1024
+                : null;
+      const sparse =
+        candidate !== null &&
+        Number.isFinite(candidate) &&
+        (left === null || candidate > left) &&
+        (right === null || candidate < right);
+      if (sparse) {
+        await batchUpdateWithCaseWhen(
+          tx,
+          task,
+          [{ id: placedId, sortOrder: candidate }],
+          { touchUpdatedAt: false },
+        );
+      } else {
+        // Rebalance the complete thin group, retaining every unseen row's relative position
+        // and timestamps (Done caps are ordered by updatedAt, not storage maintenance).
+        ordered.splice(
+          index,
+          0,
+          group.find((row) => row.id === placedId)!,
+        );
+        await batchUpdateWithCaseWhen(
+          tx,
+          task,
+          ordered.map((row, index) => ({
+            id: row.id,
+            sortOrder: (index + 1) * 1024,
+          })),
+          { touchUpdatedAt: false },
+        );
+      }
+      await updateLiveAndReturn(tx, task, { updatedAt: new Date() }, placedId);
+      return [...new Set([...resolvedRanks.map((row) => row.id), placedId])];
+    }
     return resolvedRanks.map((r) => r.id);
   });
 

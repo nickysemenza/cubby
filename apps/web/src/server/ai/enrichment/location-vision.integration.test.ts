@@ -78,7 +78,10 @@ describe("describeLocation previous description", () => {
     // the analysis row's own id once returned nothing here).
     const report = await buildEntityReport(
       ctx.db,
-      { slot: "location.ai-description", id: location.id },
+      {
+        slot: "location.ai-description",
+        scope: { kind: "record", id: location.id },
+      },
       async () => null,
       ctx.actor,
     );

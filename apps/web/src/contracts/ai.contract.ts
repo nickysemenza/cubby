@@ -185,12 +185,14 @@ export const aiContract = defineContract("ai", {
     invalidates: [],
   }),
   pauseSuggestionSweep: mutation({
+    command: { label: "Pause suggestions", confirmation: null },
     mcp: { omit: "operator_maintenance" },
     input: suggestionSweepControlInput,
     output: zod.object({ paused: zod.literal(true) }),
     invalidates: [],
   }),
   resumeSuggestionSweep: mutation({
+    command: { label: "Resume suggestions", confirmation: null },
     mcp: { omit: "operator_maintenance" },
     input: suggestionSweepControlInput,
     output: suggestionSweepStartOut,

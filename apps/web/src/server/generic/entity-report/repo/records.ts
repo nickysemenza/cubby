@@ -21,6 +21,8 @@ import type { ImageIdentificationResult } from "@cubby/schemas/image-identificat
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { and, asc, eq } from "drizzle-orm";
 
+import { recipeContract } from "~/contracts/recipe.contract";
+import { operationCommandRequest } from "~/contracts/workflow-command";
 import { computeParseDrift, driftAxes } from "~/lib/parse-drift";
 import type { Database } from "~/server/db";
 import { getDb, mapImages, notDeleted } from "~/server/db/helpers";
@@ -224,11 +226,10 @@ const driftExtras = async (
               label: "Re-parse",
               prominent: false,
               confirm: `Re-parse this line in ${usage.recipe.name} with the current parser and apply the result to the recipe?`,
-              request: {
-                kind: "reparse-line",
+              request: operationCommandRequest(recipeContract, "reparseLine", {
                 recipeId: recipeShortcode.parse(usage.recipe.id),
                 lineId: usage.id,
-              },
+              }),
             },
           ]
         : [],

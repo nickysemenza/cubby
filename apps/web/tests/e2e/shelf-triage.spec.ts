@@ -90,6 +90,68 @@ test("shelf triage stocks with the ledger default, parks in Unknown, and discard
   ).toBeVisible({ timeout: 15000 });
 });
 
+// A multi-product preview must keep each product's exact stock unit and must
+// not mistake an installed row for the stock slot that an add will merge into.
+test("bulk stocking previews each selected product at the chosen location", async ({
+  page,
+}, testInfo) => {
+  const prefix = uniqueName(testInfo, "Synthetic bulk preview");
+  const shelfName = `${prefix} shelf`;
+  const shelf = await seedLocationPrerequisite(page, shelfName);
+  const first = await seedLedgerProduct(page, {
+    name: `${prefix} oil`,
+    bought: 5,
+  });
+  const second = await seedLedgerProduct(page, {
+    name: `${prefix} fasteners`,
+    bought: 8,
+  });
+  await createEntityFixture(page, "inventory", {
+    productId: first.id,
+    locationId: shelf.id,
+    amount: { value: 2, unit: "l" },
+  });
+  await createEntityFixture(page, "inventory", {
+    productId: second.id,
+    locationId: shelf.id,
+    amount: { value: 7, unit: "each" },
+    placement: "installed",
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?name=${encodeURIComponent(prefix)}`,
+  );
+  for (const name of [`${prefix} oil`, `${prefix} fasteners`]) {
+    await page
+      .getByRole("row")
+      .filter({ hasText: name })
+      .getByRole("checkbox", { name: "Select row" })
+      .click();
+  }
+  await page
+    .locator("[data-bulk-action-bar]")
+    .getByRole("button", { name: "Add to inventory", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Add to inventory",
+    exact: true,
+  });
+  await selectComboboxItem(
+    page,
+    dialog.getByRole("combobox", { name: "Location" }),
+    shelfName,
+  );
+  await expect(
+    dialog.getByText("already 2 l here — adds to that row"),
+  ).toBeVisible();
+  await expect(dialog.getByText(/already 7 each here/)).toHaveCount(0);
+  await dialog.getByRole("button", { name: `Remove ${prefix} oil` }).click();
+  await expect(dialog.getByText(/already 2 l here/)).toHaveCount(0);
+  await expect(
+    dialog.getByText(`${prefix} fasteners`, { exact: true }),
+  ).toBeVisible();
+});
+
 test("shelf triage bounds the pass by spend and by category", async ({
   page,
 }, testInfo) => {

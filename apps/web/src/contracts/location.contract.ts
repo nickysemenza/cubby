@@ -1,8 +1,6 @@
 import {
   infLocation,
   infLocationListOut,
-  locationBulkUpdateParentInput,
-  locationBulkUpdateParentOut,
   locationFiltersSchema,
   locationInventoryBreakdownOut,
   locationPickerItemOut,
@@ -47,17 +45,6 @@ export const locationContract = defineContract("location", {
     input: z.undefined(),
     output: infLocation,
     invalidates: ["location"],
-  }),
-  bulkUpdateParent: mutation({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["bulkUpdate"],
-      note: "entity.bulkUpdate on location parent",
-    },
-    native: "Audit adopt",
-    input: locationBulkUpdateParentInput,
-    output: locationBulkUpdateParentOut,
-    invalidates: ["locationReparent"],
   }),
   getByShortcodes: query({
     mcp: {

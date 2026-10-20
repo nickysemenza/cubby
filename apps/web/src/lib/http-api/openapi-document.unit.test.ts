@@ -140,7 +140,6 @@ describe("generated HTTP OpenAPI document", () => {
     // Pin the reviewed native erasures; expanding the emitter policy needs a consumer review.
     for (const name of [
       "ProjectDashboardSummaryOut",
-      "ProjectPortfolioAnalyticsOut",
       "RunWorkSnapshotOutput",
       "RunWorkOutput",
       "RunControlOutput",
@@ -150,6 +149,7 @@ describe("generated HTTP OpenAPI document", () => {
         additionalProperties: true,
       });
     }
+    expect(schemas).not.toHaveProperty("ProjectPortfolioAnalyticsOut");
   });
 
   it("is OpenAPI 3.1 without 3.0 keywords or JSON Schema plumbing", () => {

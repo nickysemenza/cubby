@@ -16,6 +16,7 @@ import type {
 export const renderRelationArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
+  const relationLists = entities.flatMap((entity) => entity.relationLists);
   const relationMutations = entities.flatMap(
     (entity) => entity.relationMutations,
   );
@@ -45,7 +46,7 @@ export const renderRelationArtifacts = (
     relationMutations.map(({ itemSchema }) => itemSchema),
   );
   const relationRowSchemaImports = schemaImports(
-    relationMutations.map(({ rowSchema }) => rowSchema),
+    relationLists.map(({ rowSchema }) => rowSchema),
   );
   const relationCommandVariant = ({
     entity,
@@ -111,45 +112,45 @@ export const renderRelationArtifacts = (
         ? variants[0]
         : `z.union([\n  ${variants.join(",\n  ")}\n])`;
   const relationListCommandSchema = listUnion(
-    relationMutations.map(
+    relationLists.map(
       ({ entity, relation }) =>
-        `z.object({action:z.literal("listRelation"),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)})}).strict()`,
+        `z.object({action:z.literal("listRelation"),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)}),...relationPageInput.shape}).strict()`,
     ),
   );
   const relationListResultSchema = listUnion(
-    relationMutations.map(
+    relationLists.map(
       ({ entity, relation, rowSchema }) =>
-        `z.object({action:z.literal("listRelation"),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)}),items:z.array(${rowSchema.export})})`,
+        `z.object({action:z.literal("listRelation"),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)}),items:z.array(${rowSchema.export}),totalCount:z.number().int().nonnegative()})`,
     ),
   );
   const relationListEntities = compactLiteral([
-    ...new Set(relationMutations.map(({ entity }) => entity)),
+    ...new Set(relationLists.map(({ entity }) => entity)),
   ]);
   const relationListRelations = compactLiteral([
-    ...new Set(relationMutations.map(({ relation }) => relation)),
+    ...new Set(relationLists.map(({ relation }) => relation)),
   ]);
   const relationListRows = [
     ...new Set(
-      relationMutations.map(({ rowSchema }) => `z.array(${rowSchema.export})`),
+      relationLists.map(({ rowSchema }) => `z.array(${rowSchema.export})`),
     ),
   ];
   const relationListInputSchema =
-    relationMutations.length === 0
+    relationLists.length === 0
       ? "z.never()"
-      : `z.object({entity:z.enum(${relationListEntities}),relation:z.enum(${relationListRelations}),id:anyShortcodeSchema(${relationListEntities})}).strict().superRefine((input,ctx)=>{const result=generatedEntityRelationListCommandSchema.safeParse({action:"listRelation",...input});if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
+      : `z.object({entity:z.enum(${relationListEntities}),relation:z.enum(${relationListRelations}),id:anyShortcodeSchema(${relationListEntities}),...relationPageInput.shape}).strict().superRefine((input,ctx)=>{const result=generatedEntityRelationListCommandSchema.safeParse({action:"listRelation",...input});if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
   const relationListOutputSchema =
-    relationMutations.length === 0
+    relationLists.length === 0
       ? "z.never()"
-      : `z.object({entity:z.enum(${relationListEntities}),relation:z.enum(${relationListRelations}),id:z.string(),items:${schemaUnion(relationListRows)}})`;
-  const relationListCases = relationMutations
+      : `z.object({entity:z.enum(${relationListEntities}),relation:z.enum(${relationListRelations}),id:z.string(),items:${schemaUnion(relationListRows)},totalCount:z.number().int().nonnegative()})`;
+  const relationListCases = relationLists
     .map(
       ({ entity, relation, adapter }) =>
-        `    case ${JSON.stringify(`${entity}:${relation}`)}: return {...command,entity:${JSON.stringify(entity)},relation:${JSON.stringify(relation)},items:await ${adapter.export}.list(ctx.db,command.id)};`,
+        `    case ${JSON.stringify(`${entity}:${relation}`)}: return {...command,entity:${JSON.stringify(entity)},relation:${JSON.stringify(relation)},...await ${adapter.export}.listPage(ctx.db,command.id,command)};`,
     )
     .join("\n");
   const relationAdapterImports = [
     ...new Map(
-      relationMutations.map(({ adapter }) => [
+      [...relationMutations, ...relationLists].map(({ adapter }) => [
         `${adapter.module}#${adapter.export}`,
         adapter,
       ]),
@@ -190,6 +191,7 @@ export const renderRelationArtifacts = (
         "apps/web/src/entity/generated/entity-relation-lists.gen.ts",
       source:
         generatedHeader +
+        'import { entityRelationPageInputSchema as relationPageInput } from "@cubby/schemas/common";\n' +
         'import { anyShortcodeSchema, shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
         `${relationRowSchemaImports}\n` +
         'import { z } from "zod";\n\n' +

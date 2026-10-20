@@ -89,6 +89,68 @@ struct ClientQueryTests {
         return data
     }
 
+    /// Adoption must remain one atomic bulk write through the catalog, with duplicate bins
+    /// removed before submission and the server's changed-row count preserved.
+    @Test func adoptionUsesGenericBulkUpdate() async throws {
+        let (request, body) = try await captureBody(
+            returning: Data(
+                #"{"action":"bulkUpdate","entity":"location","updatedReferences":[{"entity":"location","id":"LOC-2345"}],"sideEffects":{}}"#
+                    .utf8)
+        ) { client in
+            let count = try await client.adopt(
+                [LocationCode("LOC-2345"), LocationCode("LOC-2345")], into: LocationCode("LOC-3456"))
+            #expect(count == 1)
+        }
+        #expect(request.url?.path == "/api/v1/entity/mutate")
+        #expect(body["action"]?.stringValue == "bulkUpdate")
+        #expect(body["entity"]?.stringValue == "location")
+        #expect(body["ids"] == .array([.string("LOC-2345")]))
+        #expect(body["data"] == .object(["parentId": .string("LOC-3456")]))
+    }
+
+    /// An explicit null moves a location to the root; omitting parentId would leave it unchanged.
+    @Test func bulkUpdatePreservesExplicitRootParent() async throws {
+        let (request, body) = try await captureBody(
+            returning: Data(
+                #"{"action":"bulkUpdate","entity":"location","updatedReferences":[{"entity":"location","id":"LOC-2345"}],"sideEffects":{}}"#
+                    .utf8)
+        ) { client in
+            let count = try await client.bulkUpdate(
+                EntityCatalog[.location], ids: ["LOC-2345"], data: ["parentId": .null])
+            #expect(count == 1)
+        }
+        #expect(request.url?.path == "/api/v1/entity/mutate")
+        #expect(body["action"]?.stringValue == "bulkUpdate")
+        #expect(body["entity"]?.stringValue == "location")
+        #expect(body["data"] == .object(["parentId": .null]))
+    }
+
+    @Test func relationRowsSendsTargetedPagination() async throws {
+        let request = try await capture(
+            returning: Data(
+                #"{"entity":"purchase","relation":"products","id":"PUR-2345","items":[],"totalCount":0}"#.utf8
+            )
+        ) { client in
+            let result = try await client.relationRows(
+                source: EntityRef(entity: .purchase, id: "PUR-2345"), relation: "products",
+                targetIDs: ["PRD-3456"], offset: 3, limit: 7)
+            #expect(result["totalCount"]?.doubleValue == 0)
+        }
+        #expect(request.url?.path == "/api/v1/entity/relation")
+        #expect(request.httpMethod == "GET")
+        let query = queryItems(of: request)
+        for item in [
+            URLQueryItem(name: "entity", value: "purchase"),
+            URLQueryItem(name: "relation", value: "products"),
+            URLQueryItem(name: "id", value: "PUR-2345"),
+            URLQueryItem(name: "targetIds", value: "PRD-3456"),
+            URLQueryItem(name: "offset", value: "3"),
+            URLQueryItem(name: "limit", value: "7"),
+        ] {
+            #expect(query.contains(item))
+        }
+    }
+
     @Test func auditHistoryUsesTypedPagedRead() async throws {
         let request = try await capture(returning: Data(#"{"entries":[],"nextCursor":"page-3"}"#.utf8)) {
             client in

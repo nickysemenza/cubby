@@ -140,8 +140,6 @@ export const projectHandlers = implementOperationDomain(projectContract, {
   },
   dashboardSummary: (context, input) =>
     projectDashboardSummary(context.db, input),
-  portfolioAnalytics: (context, input) =>
-    projectPortfolioAnalytics(context.db, input),
   createFromTasks: (context, input) =>
     projectCreateFromTasksWorkflow(context.db, input, context.actorContext),
   toolSuggestions: async (context, input) =>

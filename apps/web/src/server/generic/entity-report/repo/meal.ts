@@ -13,6 +13,8 @@ import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { countLabel } from "@cubby/shared/pluralize";
 import { and, asc, inArray } from "drizzle-orm";
 
+import { mealContract } from "~/contracts/meal.contract";
+import { operationCommandRequest } from "~/contracts/workflow-command";
 import { formatCount } from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import type { Database } from "~/server/db";
@@ -157,18 +159,19 @@ export async function mealCompositionReport(
             prominent: false,
             confirm: null,
             inputs: [scaleInput(entry.scale)],
-            request: {
-              kind: "meal-scale-recipe",
-              mealRecipeId: entry.id,
+            request: operationCommandRequest(mealContract, "updateRecipe", {
+              id: entry.id,
               scale: null,
-            },
+            }),
           },
           {
             id: `remove:${entry.id}`,
             label: "Remove",
             prominent: false,
             confirm: `Remove ${name} from this meal?`,
-            request: { kind: "meal-remove-recipe", mealRecipeId: entry.id },
+            request: operationCommandRequest(mealContract, "removeRecipe", {
+              id: entry.id,
+            }),
           },
         ],
       };
@@ -209,13 +212,12 @@ export async function mealCompositionReport(
                 },
               ]),
         ],
-        request: {
-          kind: "meal-add-recipe",
+        request: operationCommandRequest(mealContract, "addRecipe", {
           mealId,
           recipeId: null,
           scale: null,
           convertToCooked: meal.mealKind === "cooked" ? false : null,
-        },
+        }),
       },
     ],
   };
@@ -300,25 +302,46 @@ function portionBlocks(
             label: eaten ? "Mark planned" : "Mark eaten",
             prominent: false,
             confirm: null,
-            request: {
-              kind: "meal-portion-set",
-              ...target,
-              ledgerPartyId: portion.eater.id,
-              value: portion.amount.value,
-              unit: portion.amount.unit,
-              confirmed: !eaten,
-            },
+            request: operationCommandRequest(
+              mealContract,
+              "savePreparation",
+              {
+                mealRecipeId: target.mealRecipeId,
+                changes: [
+                  {
+                    action: "set",
+                    mealId: target.mealId,
+                    ledgerPartyId: portion.eater.id,
+                    amount: {
+                      value: portion.amount.value,
+                      unit: portion.amount.unit,
+                    },
+                    confirmed: !eaten,
+                  },
+                ],
+              },
+              {
+                ledgerPartyId: "changes.0.ledgerPartyId",
+                value: "changes.0.amount.value",
+                unit: "changes.0.amount.unit",
+              },
+            ),
           },
           {
             id: `portion-remove:${portion.targetMeal.id}:${portion.eater.id}`,
             label: "Remove portion",
             prominent: false,
             confirm: `Remove ${portion.eater.name}'s portion of ${preparation.recipe.name}?`,
-            request: {
-              kind: "meal-portion-remove",
-              ...target,
-              ledgerPartyId: portion.eater.id,
-            },
+            request: operationCommandRequest(mealContract, "savePreparation", {
+              mealRecipeId: target.mealRecipeId,
+              changes: [
+                {
+                  action: "remove",
+                  mealId: target.mealId,
+                  ledgerPartyId: portion.eater.id,
+                },
+              ],
+            }),
           },
         ],
       };
@@ -363,15 +386,27 @@ function portionBlocks(
                   initial: portionUnits(preparation)[0]?.value ?? null,
                 },
               ],
-              request: {
-                kind: "meal-portion-set",
-                mealRecipeId,
-                mealId,
-                ledgerPartyId: null,
-                value: null,
-                unit: null,
-                confirmed: false,
-              },
+              request: operationCommandRequest(
+                mealContract,
+                "savePreparation",
+                {
+                  mealRecipeId: mealRecipeId,
+                  changes: [
+                    {
+                      action: "set",
+                      mealId: mealId,
+                      ledgerPartyId: null,
+                      amount: { value: null, unit: null },
+                      confirmed: false,
+                    },
+                  ],
+                },
+                {
+                  ledgerPartyId: "changes.0.ledgerPartyId",
+                  value: "changes.0.amount.value",
+                  unit: "changes.0.amount.unit",
+                },
+              ),
             } satisfies ReportCommand,
           ]
         : []),
@@ -389,12 +424,12 @@ function portionBlocks(
             min: 1,
           },
         ],
-        request: {
-          kind: "meal-yield",
-          mealRecipeId,
-          field: "actual",
-          grams: null,
-        },
+        request: operationCommandRequest(
+          mealContract,
+          "savePreparation",
+          { mealRecipeId: mealRecipeId, actualYieldGrams: null, changes: [] },
+          { grams: "actualYieldGrams" },
+        ),
       },
     ],
   };

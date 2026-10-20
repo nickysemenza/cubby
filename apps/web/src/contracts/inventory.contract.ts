@@ -6,11 +6,9 @@ import {
   inventoryBulkDiscardPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
-  inventoryLocationIdsInput,
   inventoryLocationSnapshotInput,
   inventoryLocationSnapshotOut,
   inventoryWithLocationAndProductListAndSideEffectsOut,
-  inventoryWithLocationAndProductListOut,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
   inventoryReceiveExpenseInput,
@@ -34,6 +32,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const inventoryContract = defineContract("inventory", {
   receiveExpense: mutation({
+    command: { label: "Receive inventory", confirmation: null },
     mcp: {
       omit: "deferred_capability",
     },
@@ -51,10 +50,18 @@ export const inventoryContract = defineContract("inventory", {
     output: inventoryReceivingContextOut,
   }),
   bulkAdd: mutation({
+    command: {
+      label: "Add inventory",
+      confirmation: null,
+      affectedEntities: ["inventory", "location", "product"],
+      resultFields: [
+        { label: "Created", path: "createdCount" },
+        { label: "Merged", path: "mergedCount" },
+      ],
+    },
     mcp: {
-      omit: "kernel_alternative",
-      kernel: ["create", "commands"],
-      note: "entity.create or entity.commands on inventory",
+      omit: "deferred_capability",
+      note: "Atomic add-or-sum is distinct from strict entity.create; user commands call inventory.bulkAdd",
     },
     native: "Add to inventory from the hero action",
     input: inventoryBulkAddPayload,
@@ -62,6 +69,7 @@ export const inventoryContract = defineContract("inventory", {
     invalidates: ["inventory"],
   }),
   bulkDiscard: mutation({
+    command: { label: "Discard inventory", confirmation: null },
     mcp: {
       omit: "deferred_capability",
     },
@@ -70,6 +78,7 @@ export const inventoryContract = defineContract("inventory", {
     invalidates: ["expense"],
   }),
   bulkMove: mutation({
+    command: { label: "Move inventory", confirmation: null },
     mcp: {
       omit: "agent_twin",
       twin: "inventory.moveEntries",
@@ -80,6 +89,7 @@ export const inventoryContract = defineContract("inventory", {
     invalidates: ["inventory"],
   }),
   moveEntries: mutation({
+    command: { label: "Move inventory", confirmation: null },
     native: "Accept inventory placement recommendation",
     input: moveInventoryEntriesPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
@@ -112,17 +122,6 @@ export const inventoryContract = defineContract("inventory", {
     input: inventoryFindDuplicatesInput,
     output: inventoryDuplicateUniqueProductsOut,
   }),
-  getByLocationIds: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
-      note: "entity_read.list on inventory filtered by locationId",
-    },
-    readPolicy: "strong",
-    native: "Audit bin rows",
-    input: inventoryLocationIdsInput,
-    output: inventoryWithLocationAndProductListOut,
-  }),
   locationSnapshot: query({
     mcp: { omit: "client_view" },
     native: "Ownership-aware inventory snapshot",
@@ -130,6 +129,7 @@ export const inventoryContract = defineContract("inventory", {
     output: inventoryLocationSnapshotOut,
   }),
   setOwnership: mutation({
+    command: { label: "Set ownership", confirmation: null },
     mcp: {
       omit: "kernel_alternative",
       kernel: ["update"],
@@ -141,6 +141,7 @@ export const inventoryContract = defineContract("inventory", {
     invalidates: ["inventory"],
   }),
   confirmOwnership: mutation({
+    command: { label: "Confirm ownership", confirmation: null },
     native: "Confirm inherited inventory owner",
     input: confirmInventoryOwnershipInput,
     output: inventoryOwnershipMutationOut,

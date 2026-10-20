@@ -11,7 +11,6 @@ import {
   inventoryBulkAddPayload,
   inventoryBulkDiscardPayload,
   inventoryFindDuplicatesInput,
-  inventoryLocationIdsInput,
   inventoryLocationSnapshotInput,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
@@ -538,20 +537,6 @@ async function findInventoryDuplicates(
   }));
 }
 
-async function getInventoryByLocationShortcodes(
-  db: Database,
-  input: z.output<typeof inventoryLocationIdsInput>,
-) {
-  const resolved = await resolveEntityIds(db, input.locationIds, "location");
-  return getInventoryByLocationIds(
-    db,
-    input.locationIds.map((shortcode) =>
-      parseEntityId("location", resolved.get(shortcode)!),
-    ),
-    { placement: input.placement },
-  );
-}
-
 async function getInventoryLocationSnapshot(
   db: Database,
   input: z.output<typeof inventoryLocationSnapshotInput>,
@@ -656,8 +641,6 @@ export const inventoryHandlers = implementOperationDomain(inventoryContract, {
     resolveScanStraysService(context.db, input, context.actorContext),
   findDuplicates: (context, input) =>
     findInventoryDuplicates(context.db, input),
-  getByLocationIds: (context, input) =>
-    getInventoryByLocationShortcodes(context.db, input),
   locationSnapshot: (context, input) =>
     getInventoryLocationSnapshot(context.db, input),
   setOwnership: (context, input) => setOwnership(context, input),

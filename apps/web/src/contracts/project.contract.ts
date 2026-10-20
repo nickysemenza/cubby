@@ -108,17 +108,8 @@ export const projectContract = defineContract("project", {
     output: schemas.projectDependencyGraphSchema,
     cache: { tags: [["project", "dependencyGraph"]] },
   }),
-  portfolioAnalytics: query({
-    mcp: {
-      omit: "client_view",
-      note: "Project analytics charts; agents read budgets through project_overview.budget and spend through project_overview.expense_analytics",
-    },
-    native: "Project analytics",
-    input: schemas.projectDashboardFiltersSchema,
-    output: schemas.projectPortfolioAnalyticsOut,
-    cache: { profile: "stable" },
-  }),
   createFromTasks: mutation({
+    command: { label: "Create project from tasks", confirmation: null },
     mcp: {
       omit: "kernel_alternative",
       kernel: ["create", "bulkUpdate"],
@@ -165,6 +156,7 @@ export const projectContract = defineContract("project", {
     },
   }),
   setToolUsage: mutation({
+    command: { label: "Set tool usage", confirmation: null },
     mcp: {
       omit: "kernel_alternative",
       kernel: ["link", "unlink"],

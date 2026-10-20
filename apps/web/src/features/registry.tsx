@@ -399,7 +399,7 @@ const listSlots = {
     schedule: projectList("schedule"),
     analytics: projectList("analytics"),
   },
-  task: { agenda: taskList("agenda"), board: taskList("board") },
+  task: { agenda: taskList("agenda") },
 } satisfies ListSlotTable;
 
 const headerAction = <E extends GenericDetailEntity>(

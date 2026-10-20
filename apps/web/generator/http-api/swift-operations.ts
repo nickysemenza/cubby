@@ -1,4 +1,6 @@
 import { z } from "zod";
+import * as commandContracts from "../../src/contracts/index.ts";
+import type { OperationContract } from "../../src/contracts/define.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import type { OpenApiDocument } from "./openapi.ts";
@@ -29,7 +31,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
     doc: null,
   },
   "chatgpt.connect": { method: "connectChatGpt", doc: null },
-  "purchase.products": { method: "purchaseProducts", doc: null },
   "purchase.settlementCandidates": {
     method: "purchaseSettlementCandidates",
     doc: "Unallocated statement entries near an order, already ranked and worded. Advisory: reading allocates nothing.",
@@ -74,7 +75,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "attachProductsToPurchase",
     doc: "Records which products a Purchase bought. The link carries no money or quantity.",
   },
-  "product.purchases": { method: "productPurchases", doc: null },
   "recipe.getIngredientUsage": { method: "ingredientUsage", doc: null },
   "meal.addRecipe": {
     method: "addRecipeToMeal",
@@ -244,10 +244,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "run.commitPrepared": { method: "commitPreparedImport", doc: null },
   "statementRow.commitCsv": { method: "commitStatementCsv", doc: null },
   "statementRow.previewCsv": { method: "previewStatementCsv", doc: null },
-  "task.todayBriefing": {
-    method: "todayBriefing",
-    doc: "The complete ranked task briefing, including summary counts outside the visible prefix.",
-  },
 } as const satisfies Readonly<
   Record<string, Readonly<{ method: string; doc: string | null }>>
 >;
@@ -347,6 +343,98 @@ export const renderClientOperations = (
         "    }",
       ].join("\n");
     });
+  // Command dispatch is emitted from the opt-in contract metadata, never a hand-maintained
+  // operation-id switch in the runner. Native's ordinary operations use the existing typed
+  // generated client and JSONNullMiddleware just like their direct callers.
+  const commands = Object.values<OperationContract>(commandContracts).flatMap(
+    (contract) =>
+      Object.entries(contract.ops).flatMap(([member, definition]) => {
+        const id = `${contract.domain}.${member}`;
+        if (
+          definition.kind !== "mutation" ||
+          !definition.command ||
+          !generatedOperationIds.has(id)
+        )
+          return [];
+        const route = swiftRoutes.find((route) => route.id === id);
+        if (
+          !route?.hasBody ||
+          route.pathParameters.length ||
+          route.queryParameters.length
+        )
+          throw new Error(
+            `${id}: declared native commands must take a JSON body only`,
+          );
+        const item = document.paths[route.route];
+        const operation = passthroughOperation.parse(
+          Object.entries(item ?? {}).find(
+            ([method]) => `.${method}` === route.method,
+          )?.[1],
+        );
+        if (!operation.requestBody)
+          throw new Error(`${id}: command is missing a body`);
+        return [
+          {
+            id,
+            definition,
+            input: swiftComponentAlias(operation.requestBody, id),
+          },
+        ];
+      }),
+  );
+  const dispatch = commands
+    .map(({ id, input }) =>
+      [
+        `        case ${JSON.stringify(id)}:`,
+        `            let input: ${input} = try body.decoded()`,
+        `            return try await sending(body) { try await perform { try JSONValue(encoding: try await api.${id.replaceAll(".", "_")}(body: .json(input)).ok.body.json) } }`,
+      ].join("\n"),
+    )
+    .join("\n");
+  const metadata = commands
+    .map(({ id, definition }) => {
+      if (definition.kind !== "mutation" || !definition.command)
+        throw new Error(id);
+      const c = definition.command;
+      return `        case ${JSON.stringify(id)}: return .init(label: ${JSON.stringify(c.label)}, confirmation: ${c.confirmation === null ? "nil" : JSON.stringify(c.confirmation)}, booleanInputs: ${JSON.stringify(c.booleanInputs ?? [])}, runIdsPath: ${c.runIdsPath ? JSON.stringify(c.runIdsPath) : "nil"}, navigateRunPath: ${c.navigateRunPath ? JSON.stringify(c.navigateRunPath) : "nil"}, success: ${c.success ? JSON.stringify(c.success) : "nil"}, changed: ${JSON.stringify(c.affectedEntities ?? definition.invalidates ?? [])}, resultFields: [${(c.resultFields ?? []).map((field) => `.init(label: ${JSON.stringify(field.label)}, path: ${JSON.stringify(field.path)})`).join(", ")}])`;
+    })
+    .join("\n");
+  const commandSource = `
+public struct WorkflowCommandResultField: Sendable {
+    public let label: String
+    public let path: String
+}
+
+public struct WorkflowCommandPresentation: Sendable {
+    public let label: String
+    public let confirmation: String?
+    public let booleanInputs: [String]
+    public let runIdsPath: String?
+    public let navigateRunPath: String?
+    public let success: String?
+    public let changed: [String]
+    public let resultFields: [WorkflowCommandResultField]
+}
+
+public enum WorkflowCommandCatalog {
+    public static let operations: Set<String> = ${JSON.stringify(commands.map(({ id }) => id))}
+    public static func presentation(for operation: String) -> WorkflowCommandPresentation? {
+        switch operation {
+${metadata}
+        default: return nil
+        }
+    }
+}
+
+extension CubbyClient {
+    public func executeCommand(operation: String, body: JSONValue) async throws -> JSONValue {
+        switch operation {
+${dispatch}
+        default: throw ReportActionError.unavailable("Undeclared user command: \\(operation)")
+        }
+    }
+}
+`;
   return {
     relativePath:
       "apps/apple/CubbyKit/Sources/CubbyKit/Generated/ClientOperations.swift",
@@ -355,6 +443,7 @@ export const renderClientOperations = (
       "import CubbyAPI\n\n" +
       "/// The `CubbyClient` methods that are one generated call and nothing else, from\n" +
       "/// `CLIENT_PASSTHROUGH_METHODS` in `apps/web/generator/http-api/swift-operations.ts`.\n" +
-      `extension CubbyClient {\n${methods.join("\n\n")}\n}\n`,
+      `extension CubbyClient {\n${methods.join("\n\n")}\n}\n` +
+      commandSource,
   };
 };

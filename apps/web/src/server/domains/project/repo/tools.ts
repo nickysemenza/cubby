@@ -437,7 +437,7 @@ async function listProjectResources(
         liveLinks("projectTool"),
       ),
     )
-    .orderBy(asc(product.name));
+    .orderBy(asc(product.name), asc(product.id));
 
   const reusableRows = rows.filter(
     (
@@ -873,6 +873,7 @@ export const projectResourcesRelationAdapter = linkRelationAdapter<
     detach: "Resource uses this detach would remove.",
   },
   list: (db, projectId) => listProjectResources(db, projectId),
+  targetId: (row) => row.productId,
   preflight: { detach: preflightDetachProjectResources },
   // Tool timelines need more than the preflight: see `findToolTimelineConflicts`.
   previewAttach: (db, projectId, productIds) =>

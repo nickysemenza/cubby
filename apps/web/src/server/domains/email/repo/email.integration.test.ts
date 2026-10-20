@@ -655,7 +655,11 @@ describe("Email generic persisted reads", () => {
           block.kind === "records" ? (block.commands ?? []) : [],
         )
         .map((command) => command.request),
-    ).toContainEqual({ kind: "create-email-accuracy", sampleSize: 200 });
+    ).toContainEqual({
+      kind: "operation",
+      operation: "purchaseImport.emailAccuracyCreate",
+      body: { sampleSize: 200 },
+    });
     const reviews = detail.find(
       (block) => block.kind === "table" && block.title === "Member reviews",
     );

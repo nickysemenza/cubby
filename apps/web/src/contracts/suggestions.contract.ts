@@ -69,6 +69,7 @@ export const suggestionsContract = defineContract("suggestions", {
     },
   }),
   acceptClean: mutation({
+    command: { label: "Accept clean suggestions", confirmation: null },
     mcp: {
       omit: "agent_twin",
       twin: "assessment.reviewBatch",
@@ -100,6 +101,7 @@ export const suggestionsContract = defineContract("suggestions", {
   }),
   /** A member's switch: on requires eligibility, off is always allowed. */
   setRule: mutation({
+    command: { label: "Set automatic rule", confirmation: null },
     input: setAutomaticRuleInput,
     output: automaticRuleOut,
     invalidates: ["suggestions"],

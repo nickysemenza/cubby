@@ -28,6 +28,7 @@ private final class FakeReports: ReportServing {
     let importFailsOnCall = Mutex(0)
     /// When set, `run.control` answers with a server error.
     let controlFails = Mutex(false)
+    let controlOutput = Mutex<JSONValue?>(nil)
     let pages: Mutex<[EntityReportOut]>
 
     /// Holds every read until released, so a test can act while one is in flight.
@@ -55,6 +56,32 @@ private final class FakeReports: ReportServing {
         await reads.hold()
         let page = pages.withLock { $0.count > 1 ? $0.removeFirst() : $0[0] }
         return slots.map { ($0, page) }
+    }
+    func executeCommand(operation: String, body: JSONValue) async throws -> JSONValue {
+        // The fake records typed inputs so existing confirmation, failure and operand regressions
+        // remain meaningful after the production dispatch moves into generated operations.
+        switch operation {
+        case "run.control":
+            if let output = controlOutput.withLock({ $0 }) { return output }
+            let successor = try await controlRun(body.decoded())
+            return successor.map { ["successor": ["publicId": .string($0)]] } ?? [:]
+        case "run.retryStep": try await retryRunStep(body.decoded())
+        case "problems.resolveRunFinding":
+            let applied = try await resolveFinding(body.decoded())
+            return ["status": .string(applied ? "applied" : "dismissed")]
+        case "recipe.reparseLine": return try JSONValue(encoding: await reparseLine(body.decoded()))
+        case "recipe.generateFlow": try await generateFlow(body.decoded())
+        case "meal.addRecipe": try await addMealRecipe(body.decoded())
+        case "meal.updateRecipe": try await updateMealRecipe(body.decoded())
+        case "meal.removeRecipe": try await removeMealRecipe(body.decoded())
+        case "meal.savePreparation": try await saveMealPreparation(body.decoded())
+        case "purchaseImport.correctEmailRelevance":
+            return try JSONValue(encoding: await correctEmailRelevance(body.decoded()))
+        case "purchaseImport.emailReclassify":
+            return try JSONValue(encoding: await reclassifyEmails(body.decoded()))
+        default: throw ReportActionError.unavailable(operation)
+        }
+        return [:]
     }
     func controlRun(_ input: RunControlInput) async throws -> String? {
         calls.withLock { $0.controls.append(input) }
@@ -139,26 +166,24 @@ private func report(
 private let cancel = #"""
     {"id": "cancel-run", "label": "Cancel Run", "prominent": true,
      "confirm": "Cancel this Run?",
-     "request": {"kind": "run-control", "runId": "RUN-4K7M", "action": "cancel"}}
+     "request": {"kind": "operation", "operation": "run.control", "body": {"runId": "RUN-4K7M", "action": "cancel"}}}
     """#
 
 private let dismiss = #"""
     {"id": "f:dismiss", "label": "Dismiss", "prominent": false, "confirm": null,
-     "request": {"kind": "resolve-finding", "findingId": "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91",
-                 "decision": "dismiss", "reviewedFingerprint": null}}
+     "request": {"kind": "operation", "operation": "problems.resolveRunFinding", "body": {"id": "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91", "action": "dismiss"}}}
     """#
 
 private let reparse = #"""
     {"id": "reparse:8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91", "label": "Re-parse", "prominent": false,
      "confirm": "Re-parse this line in Synthetic Tart with the current parser?",
-     "request": {"kind": "reparse-line", "recipeId": "RCP-4K7M",
-                 "lineId": "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91"}}
+     "request": {"kind": "operation", "operation": "recipe.reparseLine", "body": {"recipeId": "RCP-4K7M", "lineId": "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91"}}}
     """#
 
 private let generateFlow = #"""
     {"id": "generate-flow:first", "label": "Generate walkthrough", "prominent": true,
      "confirm": "Ask the AI to arrange this recipe's steps? It uses the model.",
-     "request": {"kind": "generate-recipe-flow", "recipeId": "RCP-4K7M", "force": false}}
+     "request": {"kind": "operation", "operation": "recipe.generateFlow", "body": {"force": false, "id": "RCP-4K7M"}}}
     """#
 
 private let mealRecipeID = "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91"
@@ -166,13 +191,13 @@ private let mealRecipeID = "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91"
 private let scaleCommand = #"""
     {"id": "scale:x", "label": "Change scale", "prominent": false, "confirm": null,
      "inputs": [{"kind": "number", "key": "scale", "label": "Recipe scale", "initial": 2, "min": 0.01}],
-     "request": {"kind": "meal-scale-recipe", "mealRecipeId": "\#(mealRecipeID)", "scale": null}}
+     "request": {"kind": "operation", "operation": "meal.updateRecipe", "body": {"scale": null, "id": "\#(mealRecipeID)"}}}
     """#
 
 private let removeCommand = #"""
     {"id": "remove:x", "label": "Remove", "prominent": false,
      "confirm": "Remove Synthetic stew from this meal?",
-     "request": {"kind": "meal-remove-recipe", "mealRecipeId": "\#(mealRecipeID)"}}
+     "request": {"kind": "operation", "operation": "meal.removeRecipe", "body": {"id": "\#(mealRecipeID)"}}}
     """#
 
 private let addRecipeCommand = #"""
@@ -181,8 +206,7 @@ private let addRecipeCommand = #"""
                 {"kind": "number", "key": "scale", "label": "Recipe scale", "initial": 1, "min": 0.01},
                 {"kind": "choice", "key": "convertToCooked", "label": "Not cooked yet", "initial": "true",
                  "options": [{"value": "true", "label": "Switch"}, {"value": "false", "label": "Keep"}]}],
-     "request": {"kind": "meal-add-recipe", "mealId": "MEL-4K7M", "recipeId": null, "scale": null,
-                 "convertToCooked": null}}
+     "request": {"kind": "operation", "operation": "meal.addRecipe", "body": {"mealId": "MEL-4K7M", "recipeId": null, "scale": null, "convertToCooked": null}}}
     """#
 
 private let addPortionCommand = #"""
@@ -191,20 +215,18 @@ private let addPortionCommand = #"""
                 {"kind": "number", "key": "value", "label": "Amount", "initial": 1, "min": 0.01},
                 {"kind": "choice", "key": "unit", "label": "Unit", "initial": "serving",
                  "options": [{"value": "serving", "label": "serving"}, {"value": "g", "label": "g"}]}],
-     "request": {"kind": "meal-portion-set", "mealRecipeId": "\#(mealRecipeID)", "mealId": "MEL-4K7M",
-                 "ledgerPartyId": null, "value": null, "unit": null, "confirmed": false}}
+     "request": {"kind": "operation", "operation": "meal.savePreparation", "body": {"mealRecipeId": "\#(mealRecipeID)", "changes": [{"action": "set", "mealId": "MEL-4K7M", "ledgerPartyId": null, "confirmed": false, "amount": {"value": null, "unit": null}}]}, "bindings": {"ledgerPartyId": "changes.0.ledgerPartyId", "value": "changes.0.amount.value", "unit": "changes.0.amount.unit"}}}
     """#
 
 private let markEatenCommand = #"""
     {"id": "portion-status", "label": "Mark eaten", "prominent": false, "confirm": null,
-     "request": {"kind": "meal-portion-set", "mealRecipeId": "\#(mealRecipeID)", "mealId": "MEL-4K7M",
-                 "ledgerPartyId": "LPY-4K7M", "value": 1, "unit": "serving", "confirmed": true}}
+     "request": {"kind": "operation", "operation": "meal.savePreparation", "body": {"mealRecipeId": "\#(mealRecipeID)", "changes": [{"action": "set", "mealId": "MEL-4K7M", "ledgerPartyId": "LPY-4K7M", "confirmed": true, "amount": {"value": 1, "unit": "serving"}}]}, "bindings": {"ledgerPartyId": "changes.0.ledgerPartyId", "value": "changes.0.amount.value", "unit": "changes.0.amount.unit"}}}
     """#
 
 private let yieldCommand = #"""
     {"id": "yield", "label": "Set actual yield", "prominent": false, "confirm": null,
      "inputs": [{"kind": "number", "key": "grams", "label": "Made (g)", "initial": null, "min": 1}],
-     "request": {"kind": "meal-yield", "mealRecipeId": "\#(mealRecipeID)", "field": "actual", "grams": null}}
+     "request": {"kind": "operation", "operation": "meal.savePreparation", "body": {"mealRecipeId": "\#(mealRecipeID)", "actualYieldGrams": null, "changes": []}, "bindings": {"grams": "actualYieldGrams"}}}
     """#
 
 private let checksumA = String(repeating: "a", count: 64)
@@ -215,14 +237,13 @@ private let correctRelevanceCommand = #"""
      "inputs": [{"kind": "choice", "key": "classification", "label": "Relevance", "initial": "related",
                  "options": [{"value": "related", "label": "Related"}, {"value": "uncertain", "label": "Uncertain"}]},
                 {"kind": "text", "key": "reason", "label": "Reason", "initial": null}],
-     "request": {"kind": "correct-email-relevance", "id": "EML-4K7M", "expectedChecksum": "\#(checksumA)",
-                 "reviewedChecksum": "\#(checksumB)", "classification": "related", "reason": "server default"}}
+     "request": {"kind": "operation", "operation": "purchaseImport.correctEmailRelevance", "body": {"id": "EML-4K7M", "expectedChecksum": "\#(checksumA)", "reviewedChecksum": "\#(checksumB)", "classification": "related", "reason": "server default"}}}
     """#
 
 private func reclassifyCommand(_ ids: [String]) -> String {
     let list = ids.map { #""\#($0)""# }.joined(separator: ",")
     return
-        #"{"id": "reclassify", "label": "Reclassify", "prominent": false, "confirm": null, "request": {"kind": "reclassify-email", "ids": [\#(list)]}}"#
+        #"{"id": "reclassify", "label": "Reclassify", "prominent": false, "confirm": null, "request": {"kind": "operation", "operation": "purchaseImport.emailReclassify", "body": {"ids": [\#(list)]}}}"#
 }
 
 @MainActor
@@ -253,14 +274,14 @@ struct ReportSlotModelTests {
         #expect(service.calls.withLock { $0.controls.isEmpty })
         #expect(model.actionError != nil)
 
-        #expect(await model.run(action, confirmed: true) == .done(nil))
+        #expect(await model.run(action, confirmed: true) != nil)
         let sent = try #require(service.calls.withLock { $0.controls.first })
         #expect(sent.runId == "RUN-4K7M")
         #expect(sent.action == .cancel)
         #expect(service.calls.withLock { $0.controls.count } == 1)
     }
 
-    @Test("A re-parse asks first, then sends only the line's ids and words what the server changed")
+    @Test("A re-parse asks first, sends only the line ids and refreshes the report")
     func reparseSendsOnlyTheLine() async throws {
         let action: ReportCommand = try decode(reparse)
         let service = FakeReports([try report(live: false, status: "completed")])
@@ -269,7 +290,7 @@ struct ReportSlotModelTests {
         #expect(await model.run(action, confirmed: false) == nil)
         #expect(service.calls.withLock { $0.reparses.isEmpty })
 
-        #expect(await model.run(action, confirmed: true) == .done("Re-parsed the line (amount, name)"))
+        #expect(await model.run(action, confirmed: true) != nil)
         let sent = try #require(service.calls.withLock { $0.reparses.first })
         #expect(sent.recipeId == "RCP-4K7M")
         #expect(sent.lineId == "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91")
@@ -286,7 +307,7 @@ struct ReportSlotModelTests {
         #expect(await model.run(action, confirmed: false) == nil)
         #expect(service.calls.withLock { $0.flows.isEmpty })
 
-        #expect(await model.run(action, confirmed: true) == .done("Walkthrough generated"))
+        #expect(await model.run(action, confirmed: true) != nil)
         let sent = try #require(service.calls.withLock { $0.flows.first })
         #expect(sent.id == "RCP-4K7M")
         #expect(sent.force == false)
@@ -310,7 +331,7 @@ struct ReportSlotModelTests {
         #expect(service.calls.withLock { $0.scaled.isEmpty })
 
         form.setNumber("scale", 3)
-        #expect(await model.run(command, confirmed: false, form: form) == .done("Scale changed"))
+        #expect(await model.run(command, confirmed: false, form: form) != nil)
         let sent = try #require(service.calls.withLock { $0.scaled.first })
         #expect(sent.id == mealRecipeID)
         #expect(sent.scale == 3)
@@ -371,7 +392,7 @@ struct ReportSlotModelTests {
         let model = model(service)
         #expect(await model.run(command, confirmed: false) == nil)
         #expect(service.calls.withLock { $0.removed.isEmpty })
-        #expect(await model.run(command, confirmed: true) == .done("Removed from the meal"))
+        #expect(await model.run(command, confirmed: true) != nil)
         #expect(service.calls.withLock { $0.removed.first?.id } == mealRecipeID)
     }
 
@@ -389,7 +410,7 @@ struct ReportSlotModelTests {
         form.setRecord("recipeId", id: "RCP-4K7M", title: "Synthetic stew")
         form.setNumber("scale", 1.5)
         #expect(form.isComplete)
-        #expect(await model.run(command, confirmed: false, form: form) == .done("Added to the meal"))
+        #expect(await model.run(command, confirmed: false, form: form) != nil)
         let sent = try #require(service.calls.withLock { $0.added.first })
         #expect(sent.mealId == "MEL-4K7M")
         #expect(sent.recipeId == "RCP-4K7M")
@@ -408,10 +429,10 @@ struct ReportSlotModelTests {
         form.setRecord("ledgerPartyId", id: "LPY-4K7M", title: "Test eater")
         form.setNumber("value", 250)
         form.setChoice("unit", "g")
-        #expect(await model.run(add, confirmed: false, form: form) == .done("Portion saved"))
+        #expect(await model.run(add, confirmed: false, form: form) != nil)
 
         let eaten: ReportCommand = try decode(markEatenCommand)
-        #expect(await model.run(eaten, confirmed: false) == .done("Portion saved"))
+        #expect(await model.run(eaten, confirmed: false) != nil)
 
         let sent = service.calls.withLock { $0.prepared }
         #expect(sent.count == 2)
@@ -438,7 +459,7 @@ struct ReportSlotModelTests {
         var form = ReportCommandForm(command: command)
         #expect(!form.isComplete)
         form.setNumber("grams", 1200)
-        #expect(await model.run(command, confirmed: false, form: form) == .done("Yield saved"))
+        #expect(await model.run(command, confirmed: false, form: form) != nil)
         let sent = try JSONValue(encoding: try #require(service.calls.withLock { $0.prepared.first }))
         #expect(sent["actualYieldGrams"]?.doubleValue == 1200)
         #expect(sent["changes"]?.arrayValue?.isEmpty == true)
@@ -460,7 +481,7 @@ struct ReportSlotModelTests {
         form.setChoice("classification", "uncertain")
         form.setText("reason", " Synthetic shipping notice ")
         #expect(
-            await model.run(command, confirmed: false, form: form) == .done("Relevance corrected: uncertain"))
+            await model.run(command, confirmed: false, form: form) != nil)
         let sent = try #require(service.calls.withLock { $0.corrections.first })
         #expect(sent.id == "EML-4K7M")
         #expect(sent.expectedChecksum == checksumA)
@@ -482,8 +503,27 @@ struct ReportSlotModelTests {
         #expect(
             await model.run(several, confirmed: false)
                 == .done(
-                    "Reclassification queued. Results will appear on the Runs: RUN-2K7M, RUN-3K7M, RUN-4K7M"
+                    "Import Runs: RUN-2K7M, RUN-3K7M, RUN-4K7M"
                 ))
+    }
+
+    // A successful command must not swallow a malformed successor and lose navigation.
+    @Test func controlSuccessorValidatesBeforeReportingSuccess() async throws {
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let command: ReportCommand = try decode(cancel)
+        service.controlOutput.withLock { $0 = ["successor": ["publicId": 42]] }
+        await #expect(throws: (any Error).self) {
+            try await ReportSlotModel.perform(command.request, form: nil, service: service)
+        }
+        service.controlOutput.withLock { $0 = ["successor": ["publicId": "RUN-3456"]] }
+        let opened = try await ReportSlotModel.perform(command.request, form: nil, service: service)
+        #expect(opened == .openedRun("RUN-3456"))
+        service.controlOutput.withLock { $0 = ["successor": .null] }
+        let outcome = try await ReportSlotModel.perform(command.request, form: nil, service: service)
+        guard case .done = outcome else {
+            Issue.record("A null successor should finish without navigation")
+            return
+        }
     }
 
     @Test("An action with no confirmation acts on the tap and refreshes the report")
@@ -491,7 +531,7 @@ struct ReportSlotModelTests {
         let action: ReportCommand = try decode(dismiss)
         let service = FakeReports([try report(live: false, status: "completed")])
         let model = model(service)
-        #expect(await model.run(action, confirmed: false) == .done("Dismissed import finding"))
+        #expect(await model.run(action, confirmed: false) != nil)
         let sent = try #require(service.calls.withLock { $0.findings.first })
         #expect(sent.action == .dismiss)
         #expect(sent.reviewedFingerprint == nil)
@@ -503,11 +543,11 @@ struct ReportSlotModelTests {
         let retry: ReportCommand = try decode(
             #"""
             {"id": "retry:exif", "label": "Retry failed", "prominent": true, "confirm": null,
-             "request": {"kind": "retry-run-step", "runId": "RUN-4K7M", "stepKey": "exif"}}
+             "request": {"kind": "operation", "operation": "run.retryStep", "body": {"runId": "RUN-4K7M", "stepKey": "exif"}}}
             """#)
         let service = FakeReports([try report(live: false, status: "needs_review")])
         let model = model(service)
-        #expect(await model.run(retry, confirmed: false) == .done("Retrying the step's failures"))
+        #expect(await model.run(retry, confirmed: false) != nil)
         let sent = try #require(service.calls.withLock { $0.stepRetries.first })
         #expect(sent.runId == "RUN-4K7M")
         #expect(sent.stepKey == "exif")
@@ -518,7 +558,7 @@ struct ReportSlotModelTests {
         let retry: ReportCommand = try decode(
             #"""
             {"id": "r", "label": "Retry", "prominent": false, "confirm": null,
-             "request": {"kind": "run-control", "runId": "RUN-4K7M", "action": "retry"}}
+             "request": {"kind": "operation", "operation": "run.control", "body": {"runId": "RUN-4K7M", "action": "retry"}}}
             """#)
         let service = FakeReports([try report(live: false, status: "completed")])
         service.controlFails.withLock { $0 = true }

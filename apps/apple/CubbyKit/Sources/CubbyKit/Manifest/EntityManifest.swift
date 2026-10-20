@@ -24,6 +24,7 @@ extension ListView {
         case .table: "table"
         case .shelf: "shelf"
         case .timeline: "timeline"
+        case .board(let spec): spec.id
         case .slot(let id, _, _): id
         }
     }
@@ -32,6 +33,7 @@ extension ListView {
         case .table: ListPresentationChoice.list.label
         case .shelf: ListPresentationChoice.cards.label
         case .timeline: "Timeline"
+        case .board(let spec): spec.label
         case .slot(_, let label, _): label
         }
     }

@@ -97,6 +97,7 @@ export const entityGraphContract = defineContract("entity", {
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   relation: query({
+    native: "Paged declared relation rows with provenance and movement facts",
     input: generatedEntityRelationListInputSchema,
     output: generatedEntityRelationListOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },

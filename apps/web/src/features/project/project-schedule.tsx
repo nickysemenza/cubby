@@ -329,7 +329,7 @@ export function ProjectScheduleDetail({
   const query = useQuery(
     entityReport.get.queryOptions({
       slot: "project.schedule",
-      id: projectId,
+      scope: { kind: "record", id: projectId },
     }),
   );
   const allRows = useMemo<ProjectScheduleEntry[]>(() => {

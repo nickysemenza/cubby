@@ -287,6 +287,7 @@ export function ConnectedRecordsTable({
     <RelationshipMovementProvider
       source={movementSource}
       recordId={sourceId}
+      targetIds={items.map((item) => item.target.entityId)}
       operations={{}}
     >
       <EntityDisplayImagesProvider

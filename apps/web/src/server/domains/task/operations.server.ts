@@ -6,12 +6,10 @@ import type { z } from "zod";
 import { taskContract } from "~/contracts/task.contract";
 import type { Database } from "~/server/db";
 import { listActionableTasks } from "~/server/domains/task/repo/actionable";
-import { getTaskBoard } from "~/server/domains/task/repo/board";
 import { reorderTasks } from "~/server/domains/task/repo/crud";
 import { taskList } from "~/server/domains/task/repo/lookup";
 import { getTaskSummary } from "~/server/domains/task/repo/summary";
 import { getTaskTimeline } from "~/server/domains/task/repo/timeline";
-import { getTaskTodayBriefing } from "~/server/domains/task/repo/today-briefing";
 import { runMutationSideEffectsForEntities } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -80,8 +78,6 @@ export const taskHandlers = implementOperationDomain(taskContract, {
       )
     ).data,
   summary: (context) => getTaskSummary(context.db),
-  todayBriefing: (context) => getTaskTodayBriefing(context.db),
-  board: (context, input) => getTaskBoard(context.db, input),
   timeline: (context, input) => getTaskTimeline(context.db, input),
   bulkReorder: (context, input) =>
     taskBulkReorderWorkflow(context.db, input, context.actorContext),

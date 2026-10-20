@@ -159,6 +159,23 @@ extension EntityDescriptor {
             ["action": "update", "entity": .string(key.rawValue), "id": .string(id), "data": body], client)
     }
 
+    /// One server transaction for the selection, including normal entity invariants and side effects.
+    func bulkUpdate(_ body: JSONValue, ids: [String], client: Client) async throws -> Int {
+        try require(.bulkUpdate)
+        var seen = Set<String>()
+        let uniqueIDs = ids.filter { seen.insert($0).inserted }
+        let result = try await mutate(
+            [
+                "action": "bulkUpdate", "entity": .string(key.rawValue),
+                "ids": .array(uniqueIDs.map { .string($0) }), "data": body,
+            ], client)
+        guard result["action"]?.stringValue == "bulkUpdate",
+            result["entity"]?.stringValue == key.rawValue,
+            let updated = result["updatedReferences"]?.arrayValue
+        else { throw URLError(.cannotParseResponse) }
+        return updated.count
+    }
+
     /// `entity.mutate` delete. Destructive: only the hero-action runner calls it, behind an
     /// explicit confirmation.
     func delete(id: String, client: Client) async throws {

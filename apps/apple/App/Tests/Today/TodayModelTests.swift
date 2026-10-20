@@ -73,7 +73,7 @@ struct TodayModelTests {
         TodayModelStub.handler.withLock { handler in
             handler = { request, stub in
                 switch request.url!.path() {
-                case "/api/v1/task/todayBriefing":
+                case "/api/v1/entityReport/get":
                     stub.respond(status: 200, data: Self.tasksPayload)
                 default:
                     pendingContinuation.yield(TodayModelStub.deferResponse(for: stub))
@@ -92,8 +92,13 @@ struct TodayModelTests {
         #expect(model.mealsIsLoading && model.problemsIsLoading)
         #expect(Self.loadedTaskName(model.tasks) == "Water seedlings")
         if case .loaded(let briefing) = model.tasks {
-            #expect(briefing.dueThisWeekCount == 1)
-            #expect(briefing.laterCount == 2)
+            let figures = ReportPresentation(briefing).blocks.flatMap {
+                block -> [ReportPresentation.Figure] in
+                if case .stats(_, let figures) = block { return figures }
+                return []
+            }
+            #expect(figures.first { $0.label == "Due this week" }?.value == 1)
+            #expect(figures.first { $0.label == "Later" }?.value == 2)
         }
         TodayModelStub.respond(to: firstPending, status: 500, data: Self.failurePayload)
         TodayModelStub.respond(to: secondPending, status: 500, data: Self.failurePayload)
@@ -107,7 +112,7 @@ struct TodayModelTests {
         let shouldFail = Mutex(false)
         TodayModelStub.handler.withLock { handler in
             handler = { request, stub in
-                guard request.url!.path() == "/api/v1/task/todayBriefing" else {
+                guard request.url!.path() == "/api/v1/entityReport/get" else {
                     stub.respond(status: 500, data: Self.failurePayload)
                     return
                 }
@@ -140,15 +145,18 @@ struct TodayModelTests {
     }
 
     nonisolated private static let tasksPayload = Data(
-        #"{"next":[{"id":"TSK-2345","name":"Water seedlings","status":"not_started","dueDate":null,"dueEndDate":null,"projectId":null,"projectName":null}],"nextCount":1,"laterCount":2,"blockedCount":0,"overdueCount":0,"dueThisWeekCount":1}"#
+        #"{"blocks":[{"kind":"stats","figures":[{"label":"Due this week","value":1,"format":"count"},{"label":"Later","value":2,"format":"count"}]},{"kind":"records","empty":"No tasks","rows":[{"entity":"task","id":"TSK-2345","title":"Water seedlings","trailing":null}]}]}"#
             .utf8
     )
     nonisolated private static let failurePayload = Data(
         #"{"code":"TEST","message":"Still offline"}"#.utf8)
 
-    private static func loadedTaskName(_ state: TodaySectionState<TaskTodayBriefingOut>) -> String? {
+    private static func loadedTaskName(_ state: TodaySectionState<EntityReportOut>) -> String? {
         guard case .loaded(let tasks) = state else { return nil }
-        return tasks.next.first?.name
+        for block in ReportPresentation(tasks).blocks {
+            if case .records(let records) = block { return records.rows.first?.title }
+        }
+        return nil
     }
 
     private func waitUntil(_ condition: @MainActor () -> Bool) async {

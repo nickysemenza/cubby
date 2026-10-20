@@ -69,7 +69,7 @@ describe("recipe availability and costing coverage reports", () => {
     entityReportOut.parse(
       await buildEntityReport(
         tdb.db,
-        { slot, id },
+        { slot, scope: { kind: "record", id: id } },
         async () => null,
         TEST_ACTOR,
         services(),
@@ -145,7 +145,10 @@ describe("recipe availability and costing coverage reports", () => {
     const blocks = entityReportOut.parse(
       await buildEntityReport(
         tdb.db,
-        { slot: "recipe.walkthrough", id: recipe.id },
+        {
+          slot: "recipe.walkthrough",
+          scope: { kind: "record", id: recipe.id },
+        },
         async () => null,
         TEST_ACTOR,
       ),
@@ -159,9 +162,9 @@ describe("recipe availability and costing coverage reports", () => {
             label: "Generate walkthrough",
             prominent: true,
             request: {
-              kind: "generate-recipe-flow",
-              recipeId: recipe.id,
-              force: false,
+              kind: "operation",
+              operation: "recipe.generateFlow",
+              body: { id: recipe.id, force: false },
             },
           },
         ],
@@ -230,7 +233,10 @@ describe("recipe availability and costing coverage reports", () => {
     const blocks = entityReportOut.parse(
       await buildEntityReport(
         tdb.db,
-        { slot: "recipe.walkthrough", id: recipe.id },
+        {
+          slot: "recipe.walkthrough",
+          scope: { kind: "record", id: recipe.id },
+        },
         async () => null,
         TEST_ACTOR,
       ),
@@ -276,7 +282,10 @@ describe("recipe availability and costing coverage reports", () => {
     await expect(
       buildEntityReport(
         tdb.db,
-        { slot: "recipe.availability", id: recipe.id },
+        {
+          slot: "recipe.availability",
+          scope: { kind: "record", id: recipe.id },
+        },
         async () => null,
         TEST_ACTOR,
       ),

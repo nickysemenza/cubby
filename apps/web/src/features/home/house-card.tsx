@@ -1,243 +1,31 @@
-import type {
-  TaskTodayBriefingItemOut,
-  TaskTodayBriefingOut,
-} from "@cubby/schemas/project";
-import { getErrorMessage } from "@cubby/shared";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useId, useMemo } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import {
-  EntityDisplayImagesProvider,
-  useEntityDisplayImage,
-} from "~/entity/entity-media/entity-display-images";
-import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { DateDisplay } from "~/ui/common/date-display";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
-import { SectionHeading } from "~/ui/layout";
+import { CollectionReportSlot } from "~/entity/entity-detail/report-slot";
+import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Skeleton } from "~/ui/primitives/skeleton";
 
-const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";
-type TodayBriefingCounts = Pick<
-  TaskTodayBriefingOut,
-  | "nextCount"
-  | "laterCount"
-  | "blockedCount"
-  | "overdueCount"
-  | "dueThisWeekCount"
-> & { next: readonly unknown[] };
-
-/**
- * Today's briefing receives only this already-ranked prefix from the server;
- * it never invents a client-side score or has to fetch the actionable graph.
- */
-export function taskBriefingEvidence(
-  briefing: TodayBriefingCounts | undefined,
-): string | null {
-  if (!briefing) return null;
-  const parts = [
-    briefing.overdueCount > 0 ? `${briefing.overdueCount} overdue` : null,
-    briefing.dueThisWeekCount > 0
-      ? `${briefing.dueThisWeekCount} due this week`
-      : null,
-    briefing.blockedCount > 0 ? `${briefing.blockedCount} blocked` : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : "Nothing urgent is due.";
-}
-
-export function taskBriefingSecondary(
-  briefing: TodayBriefingCounts | undefined,
-): string | null {
-  if (!briefing) return null;
-  const hiddenNext = Math.max(briefing.nextCount - briefing.next.length, 0);
-  const parts = [
-    hiddenNext > 0 ? `${hiddenNext} more ready` : null,
-    briefing.laterCount > 0 ? `${briefing.laterCount} later` : null,
-    briefing.blockedCount > 0 ? `${briefing.blockedCount} blocked` : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-export function TaskBriefingEvidenceLine({
-  briefing,
-}: {
-  briefing: TodayBriefingCounts | undefined;
-}) {
-  return (
-    <p className="mt-2 flex flex-wrap gap-x-2 font-mono text-2xs text-muted-foreground uppercase">
-      {taskBriefingEvidence(briefing)
-        ?.split(" · ")
-        .map((part) => (
-          <span key={part} className="whitespace-nowrap">
-            {part}
-          </span>
-        ))}
-    </p>
-  );
-}
-
-function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
-  const taskImage = useEntityDisplayImage({
-    entityKind: "task",
-    entityId: item.id,
-  });
-  const projectImage = useEntityDisplayImage({
-    entityKind: "project",
-    entityId: item.projectId ?? "",
-  });
-  return (
-    <RecordRow
-      primary={
-        <EntityRefLink
-          entity="task"
-          data={{ id: item.id, name: item.name, status: item.status }}
-          displayImage={taskImage}
-          className={TODAY_ENTITY_LINK_CLASS}
-          truncate
-        />
-      }
-      secondary={
-        item.projectId && item.projectName ? (
-          <EntityRefLink
-            entity="project"
-            data={{
-              id: item.projectId,
-              name: item.projectName,
-              emoji: item.projectEmoji,
-            }}
-            displayImage={projectImage}
-            className={TODAY_ENTITY_LINK_CLASS}
-            compact
-          />
-        ) : (
-          <span className="font-mono text-2xs text-slate uppercase">
-            House task
-          </span>
-        )
-      }
-      trailing={
-        <span className="font-mono text-2xs tabular-nums">
-          <DateDisplay start={item.dueDate} end={item.dueEndDate} />
-        </span>
-      }
-    />
-  );
-}
-
-/**
- * The bounded briefing query is safe to preload with the rest of Today's
- * first paint: it shares actionable blocking semantics without hydrating the
- * full graph or its why-chain display data.
- */
 export function TodayAttention() {
-  const titleId = useId();
-  const briefing = useQuery(task.todayBriefing.queryOptions());
-  const secondary = taskBriefingSecondary(briefing.data);
-  const imageRefs = useMemo(
-    () =>
-      (briefing.data?.next ?? []).flatMap((item) => [
-        { entityKind: "task" as const, entityId: item.id },
-        ...(item.projectId
-          ? [{ entityKind: "project" as const, entityId: item.projectId }]
-          : []),
-      ]),
-    [briefing.data?.next],
-  );
-
   return (
-    <section aria-labelledby={titleId} className="min-w-0">
-      <SectionHeading
-        id={titleId}
-        title={
-          <>
-            <HammerIcon
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-            Next up
-          </>
-        }
-        description="Unblocked household work, in its existing priority order."
-        actions={
-          <Button
-            render={<Link to="/tasks" search={{ view: "agenda" }} />}
-            nativeButton={false}
-            variant="ghost"
-            size="sm"
-            className="h-11 shrink-0 text-xs sm:h-7"
-          >
-            All tasks
-          </Button>
-        }
+    <Section
+      title="Next up"
+      icon={<HammerIcon />}
+      description="Unblocked household work, in its existing priority order."
+      actions={
+        <Button
+          render={<Link to="/tasks" search={{ view: "agenda" }} />}
+          nativeButton={false}
+          variant="ghost"
+          size="sm"
+        >
+          All tasks
+        </Button>
+      }
+    >
+      <CollectionReportSlot
+        slot="task.briefing"
+        scope={{ kind: "list", entity: "task", filters: {} }}
       />
-
-      {briefing.isLoading ? (
-        <Skeleton className="mt-2 h-4 w-44" />
-      ) : briefing.isError ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Task summary is unavailable right now.
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="ml-1 min-h-11 px-0 text-xs sm:min-h-0"
-            onClick={() => briefing.refetch()}
-          >
-            Retry
-          </Button>
-        </p>
-      ) : (
-        <TaskBriefingEvidenceLine briefing={briefing.data} />
-      )}
-
-      <div className="mt-2 border-y border-border">
-        {briefing.isLoading ? (
-          <output
-            className="block space-y-2 py-2"
-            aria-label="Loading next tasks"
-          >
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-4/5" />
-          </output>
-        ) : briefing.isError ? (
-          <div className="flex min-h-16 items-center justify-between gap-3 py-2">
-            <p className="text-xs text-muted-foreground">
-              Couldn&apos;t load the next task queue:{" "}
-              {getErrorMessage(briefing.error)}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 shrink-0 sm:min-h-0"
-              onClick={() => briefing.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
-        ) : briefing.data?.next.length === 0 ? (
-          <p className="min-h-16 content-center py-2 text-sm text-muted-foreground">
-            Nothing ready right now. Open work is blocked or set aside.
-          </p>
-        ) : (
-          <EntityDisplayImagesProvider refs={imageRefs}>
-            <RecordList aria-label="Next tasks" className="py-1">
-              {briefing.data?.next.map((item) => (
-                <TodayTaskRow key={item.id} task={item} />
-              ))}
-            </RecordList>
-          </EntityDisplayImagesProvider>
-        )}
-      </div>
-
-      {secondary ? (
-        <p className="mt-2 font-mono text-2xs text-muted-foreground uppercase">
-          {secondary}
-        </p>
-      ) : null}
-    </section>
+    </Section>
   );
 }

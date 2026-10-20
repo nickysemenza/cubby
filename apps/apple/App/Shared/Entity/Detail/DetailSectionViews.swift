@@ -1039,7 +1039,7 @@ struct RelationSectionView: View {
     @State private var contextRevision = 0
 
     private struct RelationFinancialEvidence {
-        let movementKinds: [ProductMovementKind]
+        let movementKinds: [String]
         let hasPlanned: Bool
         let hasLink: Bool
     }
@@ -1083,7 +1083,10 @@ struct RelationSectionView: View {
             await model.list.loadInitial()
             await model.loadConnectionEvidence()
         }
-        .task(id: "\(model.source.key.rawValue):\(model.recordID):\(contextRevision)") {
+        .task(
+            id:
+                "\(model.source.key.rawValue):\(model.recordID):\(contextRevision):\(model.list.rows.map(\.id).joined(separator: ","))"
+        ) {
             context = [:]
             contextError = nil
             await loadFinancialContext()
@@ -1097,21 +1100,37 @@ struct RelationSectionView: View {
         guard hasFinancialContext else { return }
         do {
             var evidence: [String: RelationFinancialEvidence] = [:]
-            if model.source.key == .product {
-                let rows = try await appModel.client.productPurchases(
-                    .init(productId: model.recordID))
-                for row in rows {
-                    evidence[row.purchaseId] = RelationFinancialEvidence(
-                        movementKinds: row.movementKinds, hasPlanned: row.hasPlanned,
-                        hasLink: row.source == .link || row.source == .both)
+            let ids = model.list.rows.map(\.id)
+            for start in stride(from: 0, to: ids.count, by: 50) {
+                let page = try await appModel.client.relationRows(
+                    source: EntityRef(entity: model.source.key, id: model.recordID),
+                    relation: model.spec.relation,
+                    targetIDs: Array(ids[start..<min(start + 50, ids.count)]))
+                guard let rows = page["items"]?.arrayValue else {
+                    throw DecodingError.dataCorrupted(
+                        .init(
+                            codingPath: [], debugDescription: "Relation page is missing items: \(page)"))
                 }
-            } else {
-                let rows = try await appModel.client.purchaseProducts(
-                    .init(purchaseId: model.recordID))
+                guard page["totalCount"]?.doubleValue == Double(rows.count) else {
+                    throw DecodingError.dataCorrupted(
+                        .init(
+                            codingPath: [], debugDescription: "Incomplete targeted relation page: \(page)"))
+                }
                 for row in rows {
-                    evidence[row.productId.rawValue] = RelationFinancialEvidence(
-                        movementKinds: row.movementKinds, hasPlanned: row.hasPlanned,
-                        hasLink: row.source == .link || row.source == .both)
+                    guard let id = row["productId"]?.stringValue ?? row["purchaseId"]?.stringValue,
+                        let kinds = row["movementKinds"]?.arrayValue,
+                        kinds.allSatisfy({ $0.stringValue != nil }),
+                        let planned = row["hasPlanned"]?.boolValue,
+                        let source = row["source"]?.stringValue,
+                        ["expense", "link", "both"].contains(source)
+                    else {
+                        throw DecodingError.dataCorrupted(
+                            .init(
+                                codingPath: [], debugDescription: "Invalid relation movement row: \(row)"))
+                    }
+                    evidence[id] = RelationFinancialEvidence(
+                        movementKinds: kinds.compactMap(\.stringValue), hasPlanned: planned,
+                        hasLink: source == "link" || source == "both")
                 }
             }
             try Task.checkCancellation()
@@ -1128,10 +1147,10 @@ struct RelationSectionView: View {
     @ViewBuilder
     private func financialBadges(_ evidence: RelationFinancialEvidence, rowID: String) -> some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            ForEach(evidence.movementKinds, id: \.rawValue) { kind in
-                StatusChip(text: "Movement · \(kind.rawValue.capitalized)")
+            ForEach(evidence.movementKinds, id: \.self) { kind in
+                StatusChip(text: "Movement · \(kind.capitalized)")
                     .accessibilityIdentifier(
-                        "relation.evidence.\(model.target.key.rawValue).\(rowID).movement.\(kind.rawValue)")
+                        "relation.evidence.\(model.target.key.rawValue).\(rowID).movement.\(kind)")
             }
             if evidence.hasPlanned {
                 StatusChip(text: "Planned", tone: .warning)

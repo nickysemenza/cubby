@@ -70,7 +70,10 @@ describe("cookbook.extraction-report", () => {
     entityReportOut.parse(
       await buildEntityReport(
         ctx.db,
-        { slot: "cookbook.extraction-report", id },
+        {
+          slot: "cookbook.extraction-report",
+          scope: { kind: "record", id: id },
+        },
         async () => null,
         ctx.actor,
       ),
@@ -136,7 +139,10 @@ describe("cookbook.extraction-report", () => {
       entityReportOut.parse(
         await buildEntityReport(
           ctx.db,
-          { slot: "cookbook.import-progress", id },
+          {
+            slot: "cookbook.import-progress",
+            scope: { kind: "record", id: id },
+          },
           async () => null,
           ctx.actor,
         ),

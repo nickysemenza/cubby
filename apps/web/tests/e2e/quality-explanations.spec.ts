@@ -600,11 +600,11 @@ test("specialist board cards and gallery sections retain the shared quality expl
   const task = await seedTaskPrerequisite(page, { name });
   await gotoAuthenticatedPage(
     page,
-    `/tasks?view=board&q=${encodeURIComponent(name)}`,
+    `/tasks?view=board&searchQuery=${encodeURIComponent(name)}`,
   );
   const card = page
-    .locator(".group.relative")
-    .filter({ has: page.getByRole("button", { name, exact: true }) });
+    .getByRole("article")
+    .filter({ has: page.getByRole("link", { name, exact: true }) });
   // Complete quality paints nothing; its status stays spoken.
   await expect(card).toContainText("Complete");
   await card

@@ -35,6 +35,7 @@ export type HandlerDefinition = {
 /** The runtime shape of a `defineContract(...)` value, as the generator reads it. */
 export type ContractMember = {
   kind: Kind;
+  command?: import("../../src/contracts/define").MutationContract["command"];
   observability?: {
     entities?: readonly string[];
     productPhases?: readonly string[];

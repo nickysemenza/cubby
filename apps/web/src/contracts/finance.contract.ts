@@ -83,6 +83,7 @@ export const financialTransactionContract = defineContract(
   "financialTransaction",
   {
     allocateSettlement: mutation({
+      command: { label: "Allocate settlement", confirmation: null },
       input: financialSettlementAllocationInput,
       output: financialSettlementAllocationInput.omit({
         priorAllocations: true,
@@ -92,6 +93,7 @@ export const financialTransactionContract = defineContract(
       invalidates: ["financialTransaction", "purchase", "expense"],
     }),
     acceptTransferPair: mutation({
+      command: { label: "Accept transfer pair", confirmation: null },
       input: acceptFinancialTransferPairInput,
       output: acceptFinancialTransferPairOut,
       native: "Accept a reviewed transfer pair as a Ledger Transfer",
@@ -104,6 +106,7 @@ export const financialTransactionContract = defineContract(
       invalidates: ["financialTransaction", "purchase", "expense", "email"],
     }),
     bookTransaction: mutation({
+      command: { label: "Book transaction", confirmation: null },
       input: financialBookingInput,
       output: financialBookingResult,
       invalidates: ["financialTransaction", "purchase", "expense"],
@@ -126,6 +129,7 @@ export const financialTransactionContract = defineContract(
       },
     }),
     commitBookingCorrection: mutation({
+      command: { label: "Commit booking correction", confirmation: null },
       mcp: {
         omit: "deferred_capability",
       },
@@ -150,6 +154,7 @@ export const financialTransactionContract = defineContract(
       cache: { tags: [["financialTransaction"], ["purchase"], ["expense"]] },
     }),
     commitBooking: mutation({
+      command: { label: "Commit booking", confirmation: null },
       mcp: {
         omit: "deferred_capability",
       },

@@ -420,6 +420,11 @@ export const runContract = defineContract("run", {
     invalidates: ["runOnly", "purchase", "product"],
   }),
   control: mutation({
+    command: {
+      label: "Update Run",
+      confirmation: null,
+      navigateRunPath: "successor.publicId",
+    },
     mcp: {
       omit: "agent_twin",
       twin: "run.lifecycle",
@@ -431,6 +436,7 @@ export const runContract = defineContract("run", {
     invalidates: ["runOnly"],
   }),
   retryStep: mutation({
+    command: { label: "Retry step", confirmation: null },
     mcp: { omit: "operator_maintenance" },
     native: "Retry one step's failures from a Run's Steps section",
     input: runRetryStepInput,

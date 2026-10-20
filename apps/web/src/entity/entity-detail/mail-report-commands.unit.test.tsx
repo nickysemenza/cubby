@@ -19,8 +19,9 @@ const command = reportCommand.parse({
   prominent: false,
   confirm: null,
   request: {
-    kind: "import-email",
-    items: [{ id: "EML-4K7M", expectedChecksum: original }],
+    kind: "operation",
+    operation: "purchaseImport.emailImport",
+    body: { items: [{ id: "EML-4K7M", expectedChecksum: original }] },
   },
 });
 
@@ -70,8 +71,9 @@ it("imports a shipment without an order ID and links every server-created Run", 
         command={reportCommand.parse({
           ...command,
           request: {
-            kind: "import-email",
-            items: [{ id: "EML-4K7M", expectedChecksum: revised }],
+            kind: "operation",
+            operation: "purchaseImport.emailImport",
+            body: { items: [{ id: "EML-4K7M", expectedChecksum: revised }] },
           },
         })}
       />,

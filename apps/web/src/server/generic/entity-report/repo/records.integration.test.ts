@@ -73,7 +73,7 @@ describe("records reports", () => {
     const report = entityReportOut.parse(
       await buildEntityReport(
         ctx.db,
-        { slot: "product.runs", id: product.id },
+        { slot: "product.runs", scope: { kind: "record", id: product.id } },
         async () => party,
         ctx.actor,
       ),
@@ -111,7 +111,7 @@ describe("records reports", () => {
     const out = entityReportOut.parse(
       await buildEntityReport(
         ctx.db,
-        { slot, id },
+        { slot, scope: { kind: "record", id: id } },
         async () => null,
         ctx.actor,
       ),
@@ -170,7 +170,7 @@ describe("records reports", () => {
     await expect(
       buildEntityReport(
         ctx.db,
-        { slot: "purchase.runs", id: "PUR-4K7M" },
+        { slot: "purchase.runs", scope: { kind: "record", id: "PUR-4K7M" } },
         async () => null,
         ctx.actor,
       ),

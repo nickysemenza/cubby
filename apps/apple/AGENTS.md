@@ -71,8 +71,10 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   document by `apps/web/generator/http-api/native.ts` into `Generated/OperationRoutes.swift`
   (`pnpm generate`). Look routes up
   by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Entity reads
-  and writes go through the four generic kernel operations (`entity.detail`, `entity.list`,
-  `entity.mutate`, `entity.timeline`), dispatched by the hand-written
+  and writes go through generic kernel operations (`entity.detail`, `entity.list`,
+  `entity.mutate`, `entity.timeline`); declared relationship rows use the paged
+  `CubbyClient.relationRows` adapter over `entity.relation`, retaining server provenance.
+  Kernel actions are dispatched by the hand-written
   `Manifest/EntityKernel.swift` over the generated `Generated/entity-kernel.json` (per-entity
   actions, image attach/reorder, and every list/timeline filter name with its JSON kind). Not
   every entity has every action: read-only `image`, `cookbook` and `run` have no `create`;

@@ -1,8 +1,4 @@
-import {
-  taskBoardOut,
-  type TaskFilters,
-  taskFiltersSchema,
-} from "@cubby/schemas/project";
+import { type TaskFilters, taskFiltersSchema } from "@cubby/schemas/project";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -16,10 +12,7 @@ import {
   getProjectByID,
   updateProject,
 } from "~/server/domains/project/repo/crud";
-import { taskHandlers } from "~/server/domains/task/operations.server";
 import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
-import { requireActor } from "~/server/http/request-context";
-import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { listActionableTasks } from "./actionable";
 import { getTaskByShortcode, updateTask } from "./crud";
@@ -246,21 +239,6 @@ describe("member assignee inheritance", () => {
       { pageIndex: 0, pageSize: 20 },
     );
     expect(mine.data.map((row) => row.id)).toContain(task.output.id);
-    // Reads outside the kernel resolve `@me` at the operation boundary.
-    const board = taskBoardOut.parse(
-      await taskHandlers.runs.board!.run(
-        {
-          ...requireActor(
-            createTestRequestContext(ctx.db, {
-              auth: { userId: ctx.actor.userId },
-            }),
-          ),
-          signal: new AbortController().signal,
-        },
-        { assigneeId: [CURRENT_MEMBER_FILTER] },
-      ),
-    );
-    expect(board.active.map((row) => row.id)).toContain(task.output.id);
     // Only Ledger Party filters resolve; a text search for "@me" stays text.
     const searched = await me({
       search: CURRENT_MEMBER_FILTER,

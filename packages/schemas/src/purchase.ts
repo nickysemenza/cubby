@@ -636,14 +636,6 @@ export const mergePurchasesInput = z.object({
 });
 export type MergePurchasesInput = z.infer<typeof mergePurchasesInput>;
 
-export const purchaseProductsInput = z.object({
-  purchaseId: purchaseShortcode,
-});
-
-export const productPurchasesInput = z.object({
-  productId: productShortcode,
-});
-
 /**
  * How a purchase⟷product row came to exist.
  *
@@ -691,7 +683,6 @@ export const purchaseProductOut = z.object({
   componentCount: z.number().int().nonnegative(),
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
-export const purchaseProductsOut = z.array(purchaseProductOut);
 
 /** One account that paid an order: a member's explicit link, or derived from payment evidence. */
 export const purchasePaymentAccountOut = z.object({
@@ -726,4 +717,3 @@ export const productPurchaseOut = z.object({
     .describe("At least one live future Expense names this pair."),
 });
 export type ProductPurchaseOut = z.infer<typeof productPurchaseOut>;
-export const productPurchasesOut = z.array(productPurchaseOut);

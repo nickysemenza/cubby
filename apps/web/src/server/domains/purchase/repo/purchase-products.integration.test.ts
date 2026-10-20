@@ -17,6 +17,7 @@ import { createExpense } from "~/server/domains/expense/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { getProductMovementTimeline } from "~/server/domains/product/repo/movement-timeline";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { executeEntity } from "~/server/entity-kernel";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import {
@@ -26,17 +27,21 @@ import {
   relatedWhereConditions,
 } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { requireActor } from "~/server/http/request-context";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   attachPurchaseProducts,
   detachPurchaseProducts,
   listProductPurchases,
   listPurchaseProducts,
+  listPurchaseProductsPage,
+  listProductPurchasesPage,
 } from "./purchase-products";
 
 describe("purchase ↔ product links", () => {
@@ -98,6 +103,11 @@ describe("purchase ↔ product links", () => {
       const linked = await mkPurchase("Linked evidence");
       const planned = await mkPurchase("Planned evidence");
       const retired = await mkPurchase("Retired evidence");
+      // Undated orders sort after dated orders in both paged and full reads.
+      await getDb(ctx.db)
+        .update(purchase)
+        .set({ date: null })
+        .where(eq(purchase.id, linked.id));
       for (const line of [
         { cost: 20, productQuantity: 1 },
         { cost: -5, productQuantity: 0 },
@@ -160,6 +170,7 @@ describe("purchase ↔ product links", () => {
 
       const inverse = await listProductPurchases(ctx.db, item.entityId);
       expect(inverse).toHaveLength(3);
+      expect(inverse.at(-1)?.purchaseId).toBe(linked.shortcode);
       expect(
         inverse.find((row) => row.purchaseId === mixed.shortcode),
       ).toMatchObject({
@@ -183,6 +194,51 @@ describe("purchase ↔ product links", () => {
       expect(await listPurchaseProducts(ctx.db, mixed.id)).toMatchObject([
         { productId: item.id, source: "both", hasPlanned: true },
       ]);
+      // Pair deduplication precedes paging/counting; equal dates still have a
+      // stable tie-breaker, and a later page retains the same provenance.
+      const pages = await Promise.all(
+        [0, 1, 2].map((offset) =>
+          listProductPurchasesPage(ctx.db, item.entityId, { offset, limit: 1 }),
+        ),
+      );
+      expect(pages.map((page) => page.totalCount)).toEqual([3, 3, 3]);
+      expect(
+        new Set(
+          pages.flatMap((page) => page.items.map((row) => row.purchaseId)),
+        ).size,
+      ).toBe(3);
+      expect(pages.flatMap((page) => page.items)).toEqual(inverse);
+      const kernel = requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      );
+      expect(
+        await executeEntity(kernel, {
+          action: "listRelation",
+          entity: "product",
+          relation: "purchases",
+          id: item.id,
+          offset: 1,
+          limit: 1,
+        }),
+      ).toMatchObject({ items: pages[1]!.items, totalCount: 3 });
+      expect(
+        await listProductPurchasesPage(ctx.db, item.entityId, {
+          offset: 1,
+          limit: 1,
+          targetIds: [mixed.shortcode],
+        }),
+      ).toEqual({ items: [], totalCount: 1 });
+      expect(
+        await listPurchaseProductsPage(ctx.db, mixed.id, {
+          offset: 0,
+          limit: 1,
+        }),
+      ).toMatchObject({
+        totalCount: 1,
+        items: [{ productId: item.id, source: "both", hasPlanned: true }],
+      });
       const previews = await loadRelatedPreviews(ctx.db, {
         source: "product",
         sourceIds: [item.id],
@@ -254,6 +310,19 @@ describe("purchase ↔ product links", () => {
       expect(await listPurchaseProducts(ctx.db, mixed.id)).toMatchObject([
         { source: "expense", linkAttachedAt: null },
       ]);
+      expect(
+        await executeEntity(kernel, {
+          action: "listRelation",
+          entity: "purchase",
+          relation: "products",
+          id: mixed.shortcode,
+          offset: 0,
+          limit: 1,
+        }),
+      ).toMatchObject({
+        totalCount: 1,
+        items: [{ source: "expense", linkAttachedAt: null, hasPlanned: true }],
+      });
       await getDb(ctx.db)
         .update(purchase)
         .set({ deletedAt: new Date() })

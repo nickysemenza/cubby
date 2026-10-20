@@ -19,6 +19,7 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { Row, Stack } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -286,6 +287,9 @@ export function ChoiceFormFooter({
   done: boolean;
   onRun: () => void;
 }) {
+  const [confirmedOperation, setConfirmedOperation] = useState<string | null>(
+    null,
+  );
   if (done) return <StatusText>{form.doneText}</StatusText>;
   if (form.disabledReason !== null)
     return <StatusText>{form.disabledReason}</StatusText>;
@@ -301,6 +305,32 @@ export function ChoiceFormFooter({
     ) !== null;
   return (
     <Stack gap="sm">
+      <Overlay
+        open={confirmedOperation !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmedOperation(null);
+        }}
+        title={form.command.label}
+        description={form.command.confirm}
+        pending={pending}
+        primary={{
+          label: form.command.label,
+          disabled:
+            unanswered > 0 ||
+            !buildable ||
+            confirmedOperation !== state.operationId,
+          onClick: () => {
+            if (
+              confirmedOperation === state.operationId &&
+              unanswered === 0 &&
+              buildable
+            ) {
+              onRun();
+              setConfirmedOperation(null);
+            }
+          },
+        }}
+      />
       {form.choices.map((choice) => (
         <ChoiceControl
           key={choice.id}
@@ -325,7 +355,10 @@ export function ChoiceFormFooter({
       <Button
         type="button"
         disabled={pending || unanswered > 0 || !buildable}
-        onClick={onRun}
+        onClick={() => {
+          if (form.command.confirm) setConfirmedOperation(state.operationId);
+          else onRun();
+        }}
       >
         {pending ? "Importing…" : form.command.label}
       </Button>

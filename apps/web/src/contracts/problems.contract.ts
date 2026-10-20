@@ -108,6 +108,7 @@ export const problemsContract = defineContract("problems", {
     invalidates: ["ingredientCleanup"],
   }),
   resolveRunFinding: mutation({
+    command: { label: "Resolve finding", confirmation: null },
     native: "Review and apply import corrections",
     input: resolveRunFindingInput,
     output: resolveRunFindingOut,

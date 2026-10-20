@@ -107,6 +107,7 @@ private struct ReportSlotContent: View {
         .onAppear { model.retain() }
         .onDisappear { model.release() }
         .onChange(of: model.actionNotice) { appModel.recordEntityMutation(keys: Self.written) }
+
     }
 
     /// A command can change the run and the records its fix writes (a re-parse writes a recipe

@@ -1,3 +1,4 @@
+import type { EntityRelationPageInput } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
@@ -813,6 +814,37 @@ const readProductListPage = async (
   const results = page.data as ProductSelectedPageRow[];
   return { results, totalCount: page.count, groups: page.groups };
 };
+
+/** Narrow root-table projection for relation paging; the scaffold owns the count. */
+export function pageProductRelationTargets(
+  db: Database,
+  where: SQL | undefined,
+  orderBy: SQL[],
+  input: Pick<EntityRelationPageInput, "offset" | "limit">,
+) {
+  return productScaffold.list(
+    db,
+    {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: input.limit },
+      projection: { kind: "base" },
+    },
+    {
+      where,
+      orderBy,
+      select: (page) =>
+        getDb(db)
+          .select({ id: product.id, code: product.shortcode })
+          .from(product)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(input.offset),
+      hydrate: (rows) => rows,
+    },
+  );
+}
 
 export const productList = async (
   db: Database,

@@ -8,71 +8,18 @@ public protocol ReportServing: Sendable {
     func report(slot: ReportSlot, id: String, cursor: String?) async throws -> EntityReportOut
     /// Several slots of one record in one read (`entityReport.getMany`).
     func reports(slots: [ReportSlot], id: String) async throws -> [(ReportSlot, EntityReportOut)]
-    /// `run.control`; the successor run's shortcode when the action started one.
-    func controlRun(_ input: RunControlInput) async throws -> String?
-    /// `run.retryStep`: re-admit one step's failures and relaunch its Run.
-    func retryRunStep(_ input: RunRetryStepInput) async throws
-    /// `problems.resolveRunFinding`; true when the fix was applied rather than dismissed.
-    func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool
-    /// `recipe.reparseLine`: the server re-parses one stored line and writes what drifted.
-    func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput
-    /// `recipe.generateFlow`: the AI arranges a recipe's steps into a walkthrough.
-    func generateFlow(_ input: RecipeFlowGenerateInput) async throws
-    /// The meal composition operations (`meal.addRecipe`, `updateRecipe`, `removeRecipe`,
-    /// `savePreparation`); the server composed every id, the person supplied the rest.
+    func executeCommand(operation: String, body: JSONValue) async throws -> JSONValue
     /// The cookbook commands, run to their end; each answers with the sentence to show.
     func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws -> CookbookChunkResult
     func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws -> CookbookChunkResult
-    func addMealRecipe(_ input: MealAddRecipeInput) async throws
-    func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws
-    func removeMealRecipe(_ input: MealRecipeIdInput) async throws
-    func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws
     /// `run.commitPrepared`: approve and import one prepared batch.
     func commitPrepared(_ input: RunCommitPreparedInput) async throws
-    /// `purchaseImport.emailPurchaseDecide`: link or dismiss one Email for one Purchase.
-    func decideEmailPurchase(_ input: EmailPurchaseDecisionInput) async throws
-        -> EmailPurchaseDecisionOut
-    func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
-        -> CreateEmailAccuracyEvaluationOut
-    func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut
-    /// `purchaseImport.emailReclassify`: classify the selected Emails again from their originals.
-    func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut
-    /// `purchaseImport.emailPreviewRerun`: run one Email's extraction preview again.
-    func rerunEmailPreview(_ input: EmailAtChecksumInput) async throws -> RerunEmailPreviewOut
-    func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
-        -> CorrectEmailRelevanceOut
+
 }
 
 /// Commands a read-only fake need not implement; `CubbyClient` always does.
 extension ReportServing {
-    public func decideEmailPurchase(_ input: EmailPurchaseDecisionInput) async throws
-        -> EmailPurchaseDecisionOut
-    {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
-        -> CreateEmailAccuracyEvaluationOut
-    {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func rerunEmailPreview(_ input: EmailAtChecksumInput) async throws -> RerunEmailPreviewOut {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
-        -> CorrectEmailRelevanceOut
-    {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func generateFlow(_ input: RecipeFlowGenerateInput) async throws {
+    public func executeCommand(operation: String, body: JSONValue) async throws -> JSONValue {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws
@@ -85,83 +32,15 @@ extension ReportServing {
     {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
-    public func addMealRecipe(_ input: MealAddRecipeInput) async throws {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func removeMealRecipe(_ input: MealRecipeIdInput) async throws {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
-    public func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws {
-        throw ReportActionError.unavailable("Not supported by this service.")
-    }
 }
 
 extension CubbyClient: ReportServing {
-    public func decideEmailPurchase(_ input: EmailPurchaseDecisionInput) async throws
-        -> EmailPurchaseDecisionOut
-    {
-        try await perform {
-            try await api.purchaseImport_emailPurchaseDecide(body: .json(input)).ok.body.json
-        }
-    }
-    public func createEmailAccuracy(_ input: CreateEmailAccuracyEvaluationInput) async throws
-        -> CreateEmailAccuracyEvaluationOut
-    {
-        try await perform {
-            try await api.purchaseImport_emailAccuracyCreate(body: .json(input)).ok.body.json
-        }
-    }
-    public func importEmail(_ input: EmailImportInput) async throws -> EmailImportOut {
-        try await perform { try await api.purchaseImport_emailImport(body: .json(input)).ok.body.json }
-    }
-    public func reclassifyEmails(_ input: ReclassifyEmailsInput) async throws -> ReclassifyEmailsOut {
-        try await perform {
-            try await api.purchaseImport_emailReclassify(body: .json(input)).ok.body.json
-        }
-    }
-    public func rerunEmailPreview(_ input: EmailAtChecksumInput) async throws -> RerunEmailPreviewOut {
-        try await perform {
-            try await api.purchaseImport_emailPreviewRerun(body: .json(input)).ok.body.json
-        }
-    }
-    public func correctEmailRelevance(_ input: CorrectEmailRelevanceInput) async throws
-        -> CorrectEmailRelevanceOut
-    {
-        try await perform {
-            try await api.purchaseImport_correctEmailRelevance(body: .json(input)).ok.body.json
-        }
-    }
     public func report(slot: ReportSlot, id: String, cursor: String?) async throws -> EntityReportOut {
         try await entityReport(slot: slot, id: id, cursor: cursor)
     }
 
     public func reports(slots: [ReportSlot], id: String) async throws -> [(ReportSlot, EntityReportOut)] {
         try await entityReports(slots: slots, id: id)
-    }
-
-    public func controlRun(_ input: RunControlInput) async throws -> String? {
-        let out: RunControlOutput = try await controlRun(input)
-        return try RunSnapshot.successorID(in: JSONValue(encoding: out))
-    }
-
-    public func retryRunStep(_ input: RunRetryStepInput) async throws {
-        let _: RunRetryStepOutput = try await retryRunStep(input)
-    }
-
-    public func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool {
-        let out: ResolveRunFindingOut = try await resolveRunFinding(input)
-        return out.status == .applied
-    }
-
-    public func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
-        try await reparseRecipeLine(input)
-    }
-
-    public func generateFlow(_ input: RecipeFlowGenerateInput) async throws {
-        let _: RecipeFlowArtifact = try await generateRecipeFlow(input)
     }
 
     public func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws
@@ -182,22 +61,6 @@ extension CubbyClient: ReportServing {
                     + out.failures.map { "\($0.sourceRecipeId): \($0.error)" }.joined(separator: "; ")
                 : nil,
             next: nil)
-    }
-
-    public func addMealRecipe(_ input: MealAddRecipeInput) async throws {
-        let _: MealOut = try await addRecipeToMeal(input)
-    }
-
-    public func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws {
-        let _: MealOut = try await updateMealRecipe(input)
-    }
-
-    public func removeMealRecipe(_ input: MealRecipeIdInput) async throws {
-        let _: MealOut = try await removeMealRecipe(input)
-    }
-
-    public func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws {
-        let _: SaveMealRecipePreparationOut = try await saveMealPreparation(input)
     }
 
     public func commitPrepared(_ input: RunCommitPreparedInput) async throws {
@@ -403,7 +266,7 @@ public final class ReportSlotModel {
         _ action: ReportCommand, confirmed: Bool, form: ReportCommandForm? = nil
     ) async -> ReportActionOutcome? {
         guard busyActionID == nil else { return nil }
-        if action.confirm != nil, !confirmed {
+        if action.declaredConfirmation != nil, !confirmed {
             actionError = ReportActionError.confirmationRequired.localizedDescription
             return nil
         }
@@ -471,133 +334,37 @@ public final class ReportSlotModel {
         }
     }
 
-    /// One answer from a server-declared choice, as the request's enum; a value outside it is an
-    /// incomplete answer rather than a crash.
-    private static func option<T: RawRepresentable<String>>(_ raw: String) throws -> T {
-        guard let value = T(rawValue: raw) else { throw ReportActionError.incompleteAnswers }
-        return value
-    }
-
-    /// Reclassification continues independently of this request.
-    static func reclassifySummary(_ result: ReclassifyEmailsOut) -> String {
-        "Reclassification queued. Results will appear on the Runs: " + result.runIds.joined(separator: ", ")
-    }
-
     static func perform(
         _ request: ReportCommandRequest, form: ReportCommandForm?, service: any ReportServing,
         progress: @MainActor (String) -> Void = { _ in }
     ) async throws -> ReportActionOutcome {
         switch request {
-        case .decideEmailPurchase(let decision):
-            let linking = decision.decision == .linked
-            let result = try await service.decideEmailPurchase(
-                .init(
-                    id: decision.id, expectedChecksum: decision.expectedChecksum,
-                    purchaseId: decision.purchaseId,
-                    decision: linking ? .linked : .dismissed))
-            return .done(
-                linking ? "Linked to \(result.purchaseId)" : "Dismissed for \(result.purchaseId)")
-        case .createEmailAccuracy(let review):
-            let result = try await service.createEmailAccuracy(.init(sampleSize: review.sampleSize))
-            return .done("Independent review sample: \(result.sampleSize) Emails")
-        case .importEmail(let original):
-            let result = try await service.importEmail(
-                .init(
-                    items: original.items.map {
-                        .init(id: $0.id, expectedChecksum: $0.expectedChecksum)
-                    }))
-            if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
-            return .done("Import Runs: " + result.runIds.joined(separator: ", "))
-        case .reclassifyEmail(let selection):
-            let result = try await service.reclassifyEmails(.init(ids: selection.ids))
-            if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
-            return .done(Self.reclassifySummary(result))
-        case .rerunEmailPreview(let preview):
-            let result = try await service.rerunEmailPreview(
-                .init(id: preview.id, expectedChecksum: preview.expectedChecksum))
-            if result.status == .selected { return .openedRun(result.runId) }
-            return .done(
-                "Extraction preview: \(result.status.rawValue)"
-                    + (result.reason.map { " (\($0))" } ?? ""))
-        case .correctEmailRelevance(let correction):
-            let reason = (form?.text("reason") ?? correction.reason)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let classification = form?.text("classification") ?? correction.classification.rawValue
-            guard !reason.isEmpty else { throw ReportActionError.incompleteAnswers }
-            let result = try await service.correctEmailRelevance(
-                .init(
-                    id: correction.id, expectedChecksum: correction.expectedChecksum,
-                    reviewedChecksum: correction.reviewedChecksum,
-                    classification: try Self.option(classification), reason: reason))
-            return .done("Relevance corrected: \(result.classification.rawValue)")
-        case .retryRunStep(let retry):
-            try await service.retryRunStep(.init(runId: retry.runId, stepKey: retry.stepKey))
-            return .done("Retrying the step's failures")
-        case .runControl(let control):
-            let successor = try await service.controlRun(
-                .init(
-                    runId: control.runId, action: control.action))
-            if let successor { return .openedRun(successor) }
-            return .done(nil)
-        case .resolveFinding(let finding):
-            let applied = try await service.resolveFinding(
-                .init(
-                    reviewedFingerprint: finding.reviewedFingerprint, id: finding.findingId,
-                    action: finding.decision == .apply ? .apply : .dismiss))
-            return .done(applied ? "Applied import correction" : "Dismissed import finding")
-        case .mealAddRecipe(let add):
-            guard let recipeID = form?.text("recipeId") ?? add.recipeId,
-                let scale = form?.number("scale") ?? add.scale
-            else { throw ReportActionError.incompleteAnswers }
-            let convert = form?.text("convertToCooked").map { $0 == "true" } ?? add.convertToCooked
-            try await service.addMealRecipe(
-                .init(
-                    mealId: add.mealId, recipeId: recipeID, scale: scale, convertToCooked: convert))
-            return .done("Added to the meal")
-        case .mealScaleRecipe(let change):
-            guard let scale = form?.number("scale") ?? change.scale
-            else { throw ReportActionError.incompleteAnswers }
-            try await service.updateMealRecipe(.init(id: change.mealRecipeId, scale: scale))
-            return .done("Scale changed")
-        case .mealRemoveRecipe(let remove):
-            try await service.removeMealRecipe(.init(id: remove.mealRecipeId))
-            return .done("Removed from the meal")
-        case .mealPortionSet(let portion):
-            guard let eater = form?.text("ledgerPartyId") ?? portion.ledgerPartyId,
-                let value = form?.number("value") ?? portion.value,
-                let unit = form?.text("unit") ?? portion.unit
-            else { throw ReportActionError.incompleteAnswers }
-            try await service.saveMealPreparation(
-                .init(
-                    mealRecipeId: portion.mealRecipeId,
-                    changes: [
-                        .set(
-                            .init(
-                                action: .set, mealId: portion.mealId, ledgerPartyId: eater,
-                                amount: .init(value: value, unit: unit), confirmed: portion.confirmed))
-                    ]))
-            return .done("Portion saved")
-        case .mealPortionRemove(let portion):
-            try await service.saveMealPreparation(
-                .init(
-                    mealRecipeId: portion.mealRecipeId,
-                    changes: [
-                        .remove(
-                            .init(
-                                action: .remove, mealId: portion.mealId, ledgerPartyId: portion.ledgerPartyId)
-                        )
-                    ]))
-            return .done("Portion removed")
-        case .mealYield(let made):
-            guard let grams = form?.number("grams") ?? made.grams.map(Double.init)
-            else { throw ReportActionError.incompleteAnswers }
-            let whole = Int(grams.rounded())
-            try await service.saveMealPreparation(
-                .init(
-                    mealRecipeId: made.mealRecipeId,
-                    estimatedYieldGrams: made.field == .estimated ? whole : nil,
-                    actualYieldGrams: made.field == .actual ? whole : nil, changes: []))
-            return .done("Yield saved")
+        case .operation(let command):
+            guard let presentation = WorkflowCommandCatalog.presentation(for: command.operation) else {
+                throw ReportActionError.unavailable("Undeclared user command: \(command.operation)")
+            }
+            let bindings =
+                try command.bindings.map {
+                    try JSONValue(encoding: $0).objectValue?.compactMapValues(\.stringValue) ?? [:]
+                } ?? [:]
+            let body = try ReportCommandForm.commandBody(
+                try JSONValue(encoding: command.body), bindings: bindings,
+                form: form, booleanInputs: presentation.booleanInputs)
+            let output = try await service.executeCommand(operation: command.operation, body: body)
+            let result = output
+            if let path = presentation.navigateRunPath,
+                let runID = try JSONRead(value: result, context: command.operation).optionalString(path)
+            {
+                return .openedRun(runID)
+            }
+            if let path = presentation.runIdsPath {
+                let runs =
+                    result.pathValue(path)?.arrayValue?.compactMap(\.stringValue)
+                    ?? result.pathText(path).map { [$0] } ?? []
+                if runs.count == 1, let runID = runs.first { return .openedRun(runID) }
+                if !runs.isEmpty { return .done("Import Runs: " + runs.joined(separator: ", ")) }
+            }
+            return .done(presentation.message(for: result) ?? "\(presentation.label) completed")
         case .reprocessCookbook(let book):
             // One bounded window per call; the first error ends the loop, and what landed is
             // already finalized by the server.
@@ -629,15 +396,6 @@ public final class ReportSlotModel {
                 progress("Added \(added) of \(book.recipeIds.count)…")
             }
             return .done("Added \(added) recipes")
-        case .generateRecipeFlow(let flow):
-            try await service.generateFlow(.init(id: flow.recipeId, force: flow.force))
-            return .done("Walkthrough generated")
-        case .reparseLine(let line):
-            let result = try await service.reparseLine(.init(recipeId: line.recipeId, lineId: line.lineId))
-            return .done(
-                result.status == .updated
-                    ? "Re-parsed the line (\(result.changed.map(\.rawValue).joined(separator: ", ")))"
-                    : "Nothing to update from a fresh parse.")
         }
     }
 }

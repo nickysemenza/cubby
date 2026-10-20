@@ -12,7 +12,6 @@ import {
 } from "~/entity/filters";
 import { Stack } from "~/ui/layout";
 
-import { TasksBoardView } from "./board/tasks-board-view";
 import { NextTasks } from "./next-tasks";
 import { TasksStatsStrip } from "./tasks-stats-strip";
 
@@ -37,12 +36,6 @@ function TaskAgendaSlot({ search }: ListSlotProps) {
   );
 }
 
-function TaskBoardSlot({ search }: ListSlotProps) {
-  const filters = useRendererFilters(search);
-  return <TasksBoardView filters={filters} />;
-}
-
 export const taskListSlots = {
   agenda: TaskAgendaSlot,
-  board: TaskBoardSlot,
 } satisfies Record<ListSlotId<"task">, ListSlotComponent>;

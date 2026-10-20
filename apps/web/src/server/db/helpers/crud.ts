@@ -523,9 +523,10 @@ export async function batchUpdateWithCaseWhen<TUpdate extends { id: string }>(
   dbOrTx: RepositoryQueryClient,
   table: PgTable,
   updates: TUpdate[],
-  chunkSize = 250,
+  options: { chunkSize?: number; touchUpdatedAt?: boolean } = {},
 ): Promise<number> {
   if (updates.length === 0) return 0;
+  const { chunkSize = 250, touchUpdatedAt = true } = options;
 
   return withTrace(TraceNames.db("batchUpdateWithCaseWhen"), async (span) => {
     span.setAttribute("db.table", getTableName(table));
@@ -558,13 +559,13 @@ export async function batchUpdateWithCaseWhen<TUpdate extends { id: string }>(
         for (const update of batch) {
           const value = updateValueAt(update, columnName);
           // Cast values to head off Postgres type inference issues inside CASE:
-          //   - numbers → ::real (float4 columns)
+          //   - numbers → ::double precision (preserves sparse ranks; float4 columns coerce on assignment)
           //   - objects/arrays → JSON-encoded ::jsonb (jsonb columns, e.g.
           //     location.valuation). node-postgres would bind a bare object as
           //     untyped text, which Postgres can't coerce inside a CASE branch.
           //   - strings/other → bound as-is (text).
           const typedValue = isNumericUpdateValue(value)
-            ? sql`${value}::real`
+            ? sql`${value}::double precision`
             : value === null
               ? sql`NULL`
               : isJsonContainer(value)
@@ -580,7 +581,8 @@ export async function batchUpdateWithCaseWhen<TUpdate extends { id: string }>(
         );
       }
 
-      caseStatements.push(sql`${sql.identifier("updatedAt")} = NOW()`);
+      if (touchUpdatedAt)
+        caseStatements.push(sql`${sql.identifier("updatedAt")} = NOW()`);
 
       const ids = batch.map((u) => u.id);
 

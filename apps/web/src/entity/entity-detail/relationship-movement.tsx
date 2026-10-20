@@ -1,14 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductMovementKind } from "@cubby/schemas/product";
 import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { createContext, useContext, type ReactNode } from "react";
+import type { z } from "zod";
 
-import {
-  product as productOperations,
-  purchase as purchaseOperations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import type { generatedEntityRelationListOutputSchema } from "~/entity/generated/entity-relation-lists.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Badge } from "~/ui/primitives/badge";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
@@ -17,8 +15,7 @@ type MovementEvidence = Pick<
   "movementKinds" | "hasPlanned" | "source"
 >;
 export interface RelationshipMovementOperations {
-  purchaseProducts?: typeof purchaseOperations.products;
-  productPurchases?: typeof productOperations.purchases;
+  relation?: typeof entityGraph.relation;
 }
 
 export function relationshipMovementSource(
@@ -84,79 +81,80 @@ export function RelationshipMovementBadges({
   return compact ? <CellFrame trailing={null}>{badges}</CellFrame> : badges;
 }
 
-type ProviderProps = {
-  recordId: string;
-  operations: RelationshipMovementOperations;
-  children: ReactNode;
-};
-
-function MovementEvidenceProvider({
-  rows,
-  query,
-  children,
-}: {
-  rows: Map<string, MovementEvidence>;
-  query: { isPending: boolean; isError: boolean; error: unknown };
-  children: ReactNode;
-}) {
-  return (
-    <MovementContext.Provider value={{ rows, pending: query.isPending }}>
-      {children}
-      {query.isError ? (
-        <p role="alert" className="text-xs text-destructive">
-          Could not load movement evidence: {String(query.error)}
-        </p>
-      ) : null}
-    </MovementContext.Provider>
-  );
+function combineMovementQueries(
+  queries: UseQueryResult<
+    z.infer<typeof generatedEntityRelationListOutputSchema>
+  >[],
+) {
+  const rows = new Map<string, MovementEvidence>();
+  for (const query of queries)
+    for (const row of query.data?.items ?? []) {
+      if (
+        !("movementKinds" in row) ||
+        !("hasPlanned" in row) ||
+        !("source" in row)
+      )
+        continue;
+      const id =
+        "productId" in row
+          ? row.productId
+          : "purchaseId" in row
+            ? row.purchaseId
+            : null;
+      if (typeof id === "string") rows.set(id, row);
+    }
+  return {
+    rows,
+    pending: queries.some((query) => query.isPending),
+    errors: queries
+      .filter((query) => query.isError)
+      .map((query) => query.error),
+  };
 }
 
-function PurchaseMovementProvider({
-  recordId,
-  operations,
-  children,
-}: ProviderProps) {
-  const query = useQuery(
-    (operations.purchaseProducts ?? purchaseOperations.products).queryOptions({
-      purchaseId: parseShortcodeFor("purchase", recordId),
-    }),
-  );
-  return (
-    <MovementEvidenceProvider
-      rows={new Map(query.data?.map((row) => [row.productId, row]))}
-      query={query}
-    >
-      {children}
-    </MovementEvidenceProvider>
-  );
-}
-
-function ProductMovementProvider({
-  recordId,
-  operations,
-  children,
-}: ProviderProps) {
-  const query = useQuery(
-    (operations.productPurchases ?? productOperations.purchases).queryOptions({
-      productId: parseShortcodeFor("product", recordId),
-    }),
-  );
-  return (
-    <MovementEvidenceProvider
-      rows={new Map(query.data?.map((row) => [row.purchaseId, row]))}
-      query={query}
-    >
-      {children}
-    </MovementEvidenceProvider>
-  );
-}
-
-/** One cached relation read per source supplies both desktop and phone rows. */
+/** Read only the currently rendered targets, in bounded batches. */
 export function RelationshipMovementProvider({
   source,
-  ...props
-}: ProviderProps & { source: "purchase" | "product" | null }) {
-  if (source === "purchase") return <PurchaseMovementProvider {...props} />;
-  if (source === "product") return <ProductMovementProvider {...props} />;
-  return props.children;
+  recordId,
+  targetIds,
+  operations,
+  children,
+}: {
+  source: "purchase" | "product" | null;
+  recordId: string;
+  targetIds: string[];
+  operations: RelationshipMovementOperations;
+  children: ReactNode;
+}) {
+  const ids = [...new Set(targetIds)].sort();
+  const batches = Array.from(
+    { length: source ? Math.ceil(ids.length / 50) : 0 },
+    (_, index) => ids.slice(index * 50, (index + 1) * 50),
+  );
+  const evidence = useQueries({
+    combine: combineMovementQueries,
+    queries:
+      source === null
+        ? []
+        : batches.map((targetIds) =>
+            (operations.relation ?? entityGraph.relation).queryOptions({
+              entity: source,
+              relation: source === "purchase" ? "products" : "purchases",
+              id: recordId,
+              targetIds,
+              offset: 0,
+              limit: 50,
+            }),
+          ),
+  });
+  return (
+    <MovementContext.Provider value={evidence}>
+      {children}
+      {[...new Set(evidence.errors.map(String))].map((error) => (
+        <p key={error} role="alert" className="text-xs text-destructive">
+          Could not load movement evidence: {error}
+        </p>
+      ))}
+    </MovementContext.Provider>
+  );
 }

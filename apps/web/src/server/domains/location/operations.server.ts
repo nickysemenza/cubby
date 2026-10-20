@@ -15,7 +15,6 @@ import {
 } from "~/server/domains/location/repo/tree";
 import { getLocationValuationSummary } from "~/server/domains/location/repo/valuation";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
-import { ENTITY_KERNEL_OPERATIONS } from "~/server/generated/entity-kernel-bindings.gen";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -72,15 +71,6 @@ export const locationHandlers = implementOperationDomain(locationContract, {
     ),
   ensureGlobalUnknown: (context) =>
     ensureGlobalUnknownWorkflow(context, undefined),
-  // The arrange workflow retains its 3000-row envelope; execution shares the
-  // generic bulk transaction and normal location invariants.
-  bulkUpdateParent: async (context, input) => {
-    const result = await ENTITY_KERNEL_OPERATIONS.location.bulkUpdate(context, {
-      ids: [...new Set(input.ids)],
-      data: { parentId: input.parentId ?? null },
-    });
-    return { updated: result.updatedReferences.length };
-  },
   getByShortcodes: (context, input) =>
     getLocationsByShortcodes(context.db, input.shortcodes),
   search: (context, input) =>

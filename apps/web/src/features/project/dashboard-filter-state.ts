@@ -195,8 +195,8 @@ export function filtersToSearch(filters: Filters): FilterSearchOutput {
   };
 }
 
-/** The shared scope input both `project.dashboardSummary` and
- * `project.portfolioAnalytics` accept (see `projectDashboardFiltersSchema`
+/** The shared scope input `project.dashboardSummary` and the scoped
+ * `project.analytics` report accept (see `projectDashboardFiltersSchema`
  * in `@cubby/schemas/project`). */
 export type ScopeInput = {
   statusScope: ProjectStatus[] | undefined;

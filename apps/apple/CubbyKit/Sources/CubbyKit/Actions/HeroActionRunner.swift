@@ -117,10 +117,9 @@ public struct HeroActionRunner: Sendable {
     }
 
     /// Operation ids with a typed handler in `perform`, and previews in `preview`.
-    public static let handledOperations: Set<String> = [
-        "product.discard", "inventory.bulkAdd", "ai.describeLocation", "image.attachExisting",
-        "imageProcessing.status",
-    ]
+    public static let handledOperations: Set<String> = WorkflowCommandCatalog.operations.union([
+        "ai.describeLocation", "image.attachExisting", "imageProcessing.status",
+    ])
     public static let handledPreviews: Set<String> = [
         "product.discardPreview", "product.addToInventoryPreview",
     ]
@@ -255,18 +254,6 @@ public struct HeroActionRunner: Sendable {
             let resolved = try Self.resolvedValues(operation.fields, values: values)
             let body = Self.fill(operation.body, rowID: row.id, itemID: itemID, values: resolved)
             switch operation.operation {
-            case "product.discard":
-                let result = try await client.sending(body, client.discardProduct)
-                let removed = result.inventory?.removed == true ? "; shelf entry removed" : ""
-                return .completed(
-                    "Discarded \(abs(result.storedQuantity).formatted())\(removed)",
-                    changed: [entity, .expense, .inventory])
-            case "inventory.bulkAdd":
-                let result = try await client.sending(body, client.bulkAddInventory)
-                return .completed(
-                    result.mergedCount == 0
-                        ? "Added to inventory" : "Added to inventory; merged into stock already there",
-                    changed: [entity, .inventory, .location])
             case "ai.describeLocation":
                 let result = try await client.sending(body, client.describeLocation)
                 return .review(
@@ -284,7 +271,16 @@ public struct HeroActionRunner: Sendable {
                 }
                 return try await reviewDetectedValue(
                     row: row, entity: entity, imageID: itemID, continuation: continuation)
-            default: throw HeroActionError.unsupported(operation.operation)
+            default:
+                guard let presentation = WorkflowCommandCatalog.presentation(for: operation.operation) else {
+                    throw HeroActionError.unsupported(operation.operation)
+                }
+                if presentation.confirmation != nil, !confirmed { throw HeroActionError.confirmationRequired }
+                let result = try await client.executeCommand(operation: operation.operation, body: body)
+                let changed = Set(
+                    [entity] + presentation.changed.compactMap(EntityKey.init(rawValue:))
+                )
+                return .completed(presentation.message(for: result) ?? presentation.label, changed: changed)
             }
         case .create(let target, let seed, let editor):
             var prefill: [String: JSONValue] = [:]

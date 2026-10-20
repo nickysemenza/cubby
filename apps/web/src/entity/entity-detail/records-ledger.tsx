@@ -139,7 +139,16 @@ function RowText({ row }: { row: ReportRecordRow }) {
           )}
           title={clip ? line.text : undefined}
         >
-          {isCode(line.text) ? (
+          {line.ref ? (
+            <EntityRefLink
+              variant="preview"
+              entity={line.ref.entity}
+              id={line.ref.id}
+              displayImage={null}
+            >
+              {line.text}
+            </EntityRefLink>
+          ) : isCode(line.text) ? (
             <code className="font-mono text-2xs">{line.text}</code>
           ) : (
             <ShortcodeProse>{line.text}</ShortcodeProse>

@@ -72,7 +72,7 @@ describe("meal.composition", () => {
     entityReportOut.parse(
       await buildEntityReport(
         ctx.db,
-        { slot: "meal.composition", id: mealCode },
+        { slot: "meal.composition", scope: { kind: "record", id: mealCode } },
         async () => null,
         ctx.actor,
         createTestRequestContext(ctx.db).services,
@@ -99,12 +99,20 @@ describe("meal.composition", () => {
         label: "Change scale",
         confirm: null,
         inputs: [{ kind: "number", key: "scale", initial: 2, min: 0.01 }],
-        request: { kind: "meal-scale-recipe", mealRecipeId, scale: null },
+        request: {
+          kind: "operation",
+          operation: "meal.updateRecipe",
+          body: { id: mealRecipeId, scale: null },
+        },
       },
       {
         label: "Remove",
         confirm: "Remove Synthetic stew from this meal?",
-        request: { kind: "meal-remove-recipe", mealRecipeId },
+        request: {
+          kind: "operation",
+          operation: "meal.removeRecipe",
+          body: { id: mealRecipeId },
+        },
       },
     ]);
     expect(recipes.commands).toMatchObject([
@@ -116,11 +124,14 @@ describe("meal.composition", () => {
         ],
         // A cooked meal needs no conversion, so nothing is asked.
         request: {
-          kind: "meal-add-recipe",
-          mealId: meal.output.id,
-          recipeId: null,
-          scale: null,
-          convertToCooked: false,
+          kind: "operation",
+          operation: "meal.addRecipe",
+          body: {
+            mealId: meal.output.id,
+            recipeId: null,
+            scale: null,
+            convertToCooked: false,
+          },
         },
       },
     ]);
@@ -149,22 +160,42 @@ describe("meal.composition", () => {
       {
         label: "Mark eaten",
         request: {
-          kind: "meal-portion-set",
-          mealRecipeId,
-          mealId: meal.output.id,
-          ledgerPartyId: eater.id,
-          value: 1,
-          unit: "serving",
-          confirmed: true,
+          kind: "operation",
+          operation: "meal.savePreparation",
+          body: {
+            mealRecipeId: mealRecipeId,
+            changes: [
+              {
+                action: "set",
+                mealId: meal.output.id,
+                ledgerPartyId: eater.id,
+                confirmed: true,
+                amount: { value: 1, unit: "serving" },
+              },
+            ],
+          },
+          bindings: {
+            ledgerPartyId: "changes.0.ledgerPartyId",
+            value: "changes.0.amount.value",
+            unit: "changes.0.amount.unit",
+          },
         },
       },
       {
         label: "Remove portion",
         request: {
-          kind: "meal-portion-remove",
-          mealRecipeId,
-          mealId: meal.output.id,
-          ledgerPartyId: eater.id,
+          kind: "operation",
+          operation: "meal.savePreparation",
+          body: {
+            mealRecipeId: mealRecipeId,
+            changes: [
+              {
+                action: "remove",
+                mealId: meal.output.id,
+                ledgerPartyId: eater.id,
+              },
+            ],
+          },
         },
       },
     ]);
@@ -228,7 +259,11 @@ describe("meal.composition", () => {
     const add = recipes.commands?.[0];
     expect(add).toMatchObject({
       label: "Add recipe",
-      request: { kind: "meal-add-recipe", convertToCooked: null },
+      request: {
+        kind: "operation",
+        operation: "meal.addRecipe",
+        body: { convertToCooked: null },
+      },
     });
     expect(add?.inputs?.map((input) => input.key)).toEqual([
       "recipeId",

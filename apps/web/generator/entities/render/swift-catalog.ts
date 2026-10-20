@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
 import type { ManifestWire } from "../../../../../packages/schemas/src/manifest-wire.ts";
 import { capitalize } from "../../../../../packages/shared/src/text-case.ts";
@@ -445,6 +446,17 @@ const listViewJSON = (
   entity: string,
   view: ListView,
 ): ManifestWire<"ListView"> => {
+  if (typeof view === "object" && view.kind === "board") {
+    const { kind: _, ...spec } = view;
+    return {
+      board: {
+        _0: {
+          ...spec,
+          filters: z.record(z.string(), z.json()).parse(spec.filters),
+        },
+      },
+    };
+  }
   if (isSlotListView(view))
     return {
       slot: {

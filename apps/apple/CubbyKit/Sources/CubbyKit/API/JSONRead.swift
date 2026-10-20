@@ -19,6 +19,26 @@ struct JSONRead: Sendable {
         return text
     }
 
+    /// An optional result object may be absent/null; once present, its navigation field is required.
+    func optionalString(_ path: String) throws -> String? {
+        let keys = path.split(separator: ".").map(String.init)
+        var current = value
+        for (index, key) in keys.enumerated() {
+            guard let object = current.objectValue else {
+                throw malformed(path, expected: "an object containing \(key)")
+            }
+            guard let next = object[key], next != .null else {
+                if index == 0 { return nil }
+                throw malformed(path, expected: "a nonempty string")
+            }
+            current = next
+        }
+        guard let text = current.stringValue, !text.isEmpty else {
+            throw malformed(path, expected: "a nonempty string")
+        }
+        return text
+    }
+
     func number(_ path: String) throws -> Double {
         guard let number = field(path)?.doubleValue, number.isFinite else {
             throw malformed(path, expected: "a finite number")

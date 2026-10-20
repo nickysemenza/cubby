@@ -36,6 +36,7 @@ import { mealRecipeOut } from "@cubby/schemas/meal-fields";
 import { nutritionEstimate } from "@cubby/schemas/nutrition";
 import { problemsCountSchema } from "@cubby/schemas/problems";
 import { taskTodayBriefingItemOut } from "@cubby/schemas/project";
+import { taskBriefingReport } from "../../src/server/generic/entity-report/repo/task";
 
 import { mock } from "../../src/lib/test/mock-schema";
 
@@ -172,8 +173,7 @@ function buildTimeline(): z.infer<typeof entityTimelineOut> {
 }
 
 // ---------------------------------------------------------------------------
-// sampleTodayTasks: [TaskTodayBriefingItemOut] — `task.todayBriefing`'s
-// `next` rows, for `TodayView`'s preview.
+// The shared task briefing report for Today previews.
 
 function buildTodayTasks(): z.infer<typeof taskTodayBriefingItemOut>[] {
   const items = [
@@ -487,7 +487,18 @@ interface Fixture {
 
 const FIXTURES: readonly Fixture[] = [
   { name: "sampleTimeline", build: buildTimeline },
-  { name: "sampleTodayTasks", build: buildTodayTasks },
+  {
+    name: "sampleTodayBriefing",
+    build: () =>
+      taskBriefingReport({
+        next: buildTodayTasks(),
+        nextCount: 4,
+        laterCount: 2,
+        blockedCount: 1,
+        overdueCount: 0,
+        dueThisWeekCount: 2,
+      }),
+  },
   { name: "sampleTodayMeals", build: buildTodayMeals },
   { name: "sampleTodayProblems", build: buildProblemsCount },
   { name: "sampleMealNutrition", build: buildMealNutrition },

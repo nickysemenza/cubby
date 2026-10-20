@@ -3,7 +3,6 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
   type linkExpensesToPurchaseInput,
-  type purchaseProductsInput,
   type purchaseSettlementCandidatesOut,
   splitExpenseDelta,
   type splitExpenseInput,
@@ -30,7 +29,6 @@ import {
   composeLinkProductCandidates,
   LINK_PRODUCT_LIMIT,
 } from "~/server/domains/purchase/repo/purchase-link-draft";
-import { listPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { checkSettlementAllocationDraft } from "~/server/domains/purchase/repo/purchase-settlement-allocation";
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { composeSettlementReview } from "~/server/domains/purchase/repo/purchase-settlement-review";
@@ -48,7 +46,6 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import {
   resolveAllPresent,
-  resolveOrThrow,
   resolveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
@@ -122,16 +119,6 @@ export const splitExpenseWorkflow = bindWorkflow(
     })
     .output(({ split }) => split.items),
 );
-
-export async function purchaseProductsWorkflow(
-  context: EntityKernelContext,
-  input: typeof purchaseProductsInput._output,
-) {
-  return listPurchaseProducts(
-    context.db,
-    await resolveOrThrow(context.db, "purchase", input.purchaseId),
-  );
-}
 
 async function loadSettlementTransaction(
   context: EntityKernelContext,
@@ -216,7 +203,6 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
       }),
     });
   },
-  products: (context, input) => purchaseProductsWorkflow(context, input),
   link: (context, input) => linkExpensesToPurchaseWorkflow(context, input),
   split: (context, input) => splitExpenseWorkflow(context, input),
   splitStart: async (context, input) =>

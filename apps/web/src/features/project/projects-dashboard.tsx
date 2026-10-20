@@ -34,6 +34,7 @@ import type { ProjectPortfolioAnalyticsViewProps } from "~/features/project/proj
 import {
   image,
   project,
+  entityReport,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
@@ -236,7 +237,10 @@ function MainDashboard({ view }: { view: DashboardView }) {
   // bounds now live in `scopeInput` itself (via `filtersToScopeInput`), so
   // there's no separate dateFrom/dateTo spread here anymore.
   const analyticsQuery = useQuery({
-    ...project.portfolioAnalytics.queryOptions(scopeInput),
+    ...entityReport.get.queryOptions({
+      slot: "project.analytics",
+      scope: { kind: "list", entity: "project", filters: scopeInput },
+    }),
     enabled: view === "analytics",
   });
 

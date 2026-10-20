@@ -33,8 +33,12 @@ struct RecordRowView: View {
             thumbnailSize: large ? 112 : 36
         ) {
             ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
-                Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
-                    .textSelection(.enabled)
+                if let ref = line.ref, let entity = EntityKey(rawValue: ref.entity) {
+                    NavigationLink(line.text, value: Route.entityDetail(entity, id: ref.id))
+                } else {
+                    Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
+                        .textSelection(.enabled)
+                }
             }
         } rail: {
             if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty { Text(trailing) }
@@ -98,7 +102,7 @@ struct ReportCommandBar: View {
         ) { command in
             Button(command.label) { Task { await model.run(command, confirmed: true) } }
         } message: { command in
-            Text(command.confirm ?? "")
+            Text(command.declaredConfirmation ?? "")
         }
         .sheet(item: $draft) { _ in
             if let binding = Binding($draft) {
@@ -126,7 +130,7 @@ struct ReportCommandBar: View {
     private func start(_ command: ReportCommand) {
         if !(command.inputs ?? []).isEmpty {
             draft = ReportCommandDraft(command: command)
-        } else if command.confirm == nil {
+        } else if command.declaredConfirmation == nil {
             Task { await model.run(command, confirmed: false) }
         } else {
             confirming = command
@@ -229,7 +233,7 @@ struct ReportCommandFormSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(draft.command.label) {
-                        if draft.command.confirm == nil { run() } else { confirming = true }
+                        if draft.command.declaredConfirmation == nil { run() } else { confirming = true }
                     }
                     .disabled(!draft.form.isComplete || model.busyActionID != nil)
                     .accessibilityIdentifier("report.input.run")
@@ -240,7 +244,7 @@ struct ReportCommandFormSheet: View {
             ) {
                 Button(draft.command.label) { run() }
             } message: {
-                Text(draft.command.confirm ?? "")
+                Text(draft.command.declaredConfirmation ?? "")
             }
             .sheet(item: $picking) { field in
                 if case .record(let entity) = field.kind, let target = EntityKey(rawValue: entity) {

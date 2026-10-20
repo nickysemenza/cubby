@@ -84,6 +84,11 @@ import {
 } from "./list-slot-types";
 import { listSlotFor } from "./list-slots";
 import { resolveListView } from "./resolve-list-view";
+const EntityBoard = lazy(() =>
+  import("./board/entity-board").then((module) => ({
+    default: module.EntityBoard,
+  })),
+);
 
 const EntityTimeline = lazy(() =>
   import("~/entity/timeline/entity-timeline").then((module) => ({
@@ -270,6 +275,18 @@ export function GenericEntityList({
   const { search, navigate } = useListSearch();
   const { view } = resolveListView(entity, search);
 
+  if (typeof view === "object" && view.kind === "board") {
+    if (!isListEntity(entity))
+      throw new Error(`${entity} has no board list read`);
+    return (
+      <EntityBoard
+        entity={entity}
+        view={view}
+        search={search}
+        navigate={navigate}
+      />
+    );
+  }
   if (isSlotListView(view)) {
     const Slot = listSlotFor(entity, view.id);
     return Slot ? <Slot search={search} navigate={navigate} /> : null;

@@ -13,6 +13,7 @@ export const entityReportContract = defineContract("entityReport", {
    * (`reportSlots`), so web and native render one read.
    */
   get: query({
+    transport: "post",
     mcp: { omit: "client_view", note: "Detail slot reports" },
     native: "Detail slot reports",
     input: entityReportInput,

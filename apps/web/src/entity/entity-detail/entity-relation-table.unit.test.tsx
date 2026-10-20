@@ -25,8 +25,7 @@ import {
 import { installFeatures } from "~/features/registry";
 import {
   entityList,
-  purchase as purchaseOperations,
-  product as productOperations,
+  entityGraph,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -207,10 +206,16 @@ describe("EntityRelationTable", () => {
       meta: { pageIndex: 0, pageSize: 50, totalCount: 3, sums: {} },
     }));
     let reads = 0;
-    const purchaseProducts = purchaseOperations.products.withTransport(
-      async () => {
-        reads += 1;
-        return rows.map((row, index) =>
+    const relation = entityGraph.relation.withTransport(async ({ input }) => {
+      expect(input.targetIds).toEqual(rows.map((row) => row.id).sort());
+      expect(input.limit).toBe(50);
+      reads += 1;
+      return {
+        entity: "purchase",
+        relation: "products",
+        id: "PUR-ROLE",
+        totalCount: rows.length,
+        items: rows.map((row, index) =>
           mock(purchaseProductOut, {
             seed: index,
             overrides: {
@@ -221,15 +226,15 @@ describe("EntityRelationTable", () => {
               hasPlanned: index !== 1,
             },
           }),
-        );
-      },
-    );
+        ),
+      };
+    });
     render(
       <EntityRelationTable
         plan={planFor("purchase", "products")}
         recordId={testShortcode("purchase", "PUR-ROLE")}
         title="Products"
-        operations={{ list, purchaseProducts }}
+        operations={{ list, relation }}
       />,
       { wrapper: harness.wrapper },
     );
@@ -265,8 +270,12 @@ describe("EntityRelationTable", () => {
       items: [row],
       meta: { pageIndex: 0, pageSize: 50, totalCount: 1, sums: {} },
     }));
-    const productPurchases = productOperations.purchases.withTransport(
-      async () => [
+    const relation = entityGraph.relation.withTransport(async () => ({
+      entity: "product",
+      relation: "purchases",
+      id: "PRD-ROLE",
+      totalCount: 1,
+      items: [
         mock(productPurchaseOut, {
           seed: 11,
           overrides: {
@@ -277,13 +286,13 @@ describe("EntityRelationTable", () => {
           },
         }),
       ],
-    );
+    }));
     render(
       <EntityRelationTable
         plan={planFor("product", "purchases")}
         recordId={testShortcode("product", "PRD-ROLE")}
         title="Related orders"
-        operations={{ list, productPurchases }}
+        operations={{ list, relation }}
       />,
       { wrapper: harness.wrapper },
     );

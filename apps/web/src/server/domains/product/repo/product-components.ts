@@ -256,7 +256,7 @@ export async function listProductComponents(
         liveLinks("productComponent"),
       ),
     )
-    .orderBy(asc(product.name));
+    .orderBy(asc(product.name), asc(product.id));
 
   const componentProductIds = rows.map((row) => row.productId);
   // `loadProductPickerQuantities` rather than a stock query of our own: it
@@ -762,6 +762,7 @@ export const productComponentsRelationAdapter = linkRelationAdapter<
     detach: "Component links this detach would remove.",
   },
   list: listProductComponents,
+  targetId: (row) => row.productId,
   preflight: {
     attach: preflightAttachComponents,
     detach: preflightDetachComponents,

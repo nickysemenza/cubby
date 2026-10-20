@@ -17,26 +17,13 @@ export const taskContract = defineContract("task", {
     input: z.undefined(),
     output: schemas.taskSummaryOut,
   }),
-  // Bounded Home summary; see expense.monthlySummary.
-  todayBriefing: query({
-    mcp: { omit: "agent_twin", twin: "task.listActionable" },
-    readPolicy: "strong",
-    native: "Today tasks",
-    input: z.undefined(),
-    output: schemas.taskTodayBriefingOut,
-  }),
-  board: query({
-    mcp: { omit: "client_view" },
-    native: "Task board",
-    input: schemas.taskFiltersSchema,
-    output: schemas.taskBoardOut,
-  }),
   timeline: query({
     mcp: { omit: "client_view" },
     input: schemas.taskFiltersSchema,
     output: schemas.taskTimelineOut,
   }),
   bulkReorder: mutation({
+    command: { label: "Reorder tasks", confirmation: null },
     mcp: { omit: "client_view", note: "Board drag ordering" },
     native: "Task board ordering",
     input: schemas.taskBulkReorderInput,

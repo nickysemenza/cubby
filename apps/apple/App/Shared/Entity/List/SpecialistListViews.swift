@@ -57,7 +57,6 @@ enum ListSlotRegistry {
     ) -> AnyView {
         switch slot {
         case .mealCalendar: AnyView(MealCalendarListView(client: client, filters: filters))
-        case .taskBoard: AnyView(TaskBoardListView(client: client, filters: filters))
         case .locationGallery: AnyView(LocationGalleryListView(client: client, filters: filters))
         case .projectAnalytics: AnyView(ProjectAnalyticsListView(client: client, filters: filters))
         case .expenseAnalytics: AnyView(ExpenseAnalyticsListView(client: client, filters: filters))
@@ -247,128 +246,6 @@ struct MealCalendarListView: View {
     }
 }
 
-// MARK: - task.board
-
-private struct TaskBoardData {
-    let tasks: [JSONValue]
-    let doneCount: Int
-}
-
-struct TaskBoardListView: View {
-    let client: CubbyClient
-    let filters: EntityFilterState
-    @State private var selectedStatus = "not_started"
-    @State private var axis = TaskBoardLane.Axis.project
-
-    private let statuses = ["not_started", "later", "in_progress", "blocked", "done"]
-
-    var body: some View {
-        SpecialistLoadView(
-            loadingLabel: "Loading board", filters: filters,
-            fetch: { filters in
-                let result = wire(try await client.taskBoard(filters: filters))
-                return TaskBoardData(
-                    tasks: (result["active"]?.arrayValue ?? []) + (result["recentDone"]?.arrayValue ?? []),
-                    doneCount: Int(result["doneCount"]?.doubleValue ?? 0))
-            }
-        ) { board, loader in
-            List {
-                Picker("Status", selection: $selectedStatus) {
-                    ForEach(statuses, id: \.self) {
-                        Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
-                    }
-                }
-                Picker("Lane", selection: $axis) {
-                    Text("Project").tag(TaskBoardLane.Axis.project)
-                    Text("Trade").tag(TaskBoardLane.Axis.trade)
-                }
-                let visible = board.tasks.filter { $0["status"]?.stringValue == selectedStatus }
-                ForEach(TaskBoardLanes.groups(of: visible, axis: axis), id: \.lane.id) { group in
-                    Section(group.lane.title) {
-                        ForEach(Array(group.tasks.enumerated()), id: \.offset) { index, task in
-                            taskRow(
-                                task, index: index, lane: group.tasks, all: board.tasks, loader: loader)
-                        }
-                    }
-                }
-                if selectedStatus == "done" {
-                    Text("\(board.doneCount) done in all; recent tasks shown")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func taskRow(
-        _ task: JSONValue, index: Int, lane: [JSONValue], all: [JSONValue],
-        loader: SpecialistLoader<TaskBoardData>
-    ) -> some View {
-        if let id = task["id"]?.stringValue {
-            HStack {
-                NavigationLink(value: Route.entityDetail(.task, id: id)) {
-                    VStack(alignment: .leading) {
-                        Text(task["name"]?.stringValue ?? id)
-                        EntityQualityFact(key: .task, id: id, raw: task)
-                    }
-                }
-                Menu("Move", systemImage: "arrow.up.arrow.down") {
-                    ForEach(statuses, id: \.self) { status in
-                        Button(status.replacingOccurrences(of: "_", with: " ").capitalized) {
-                            Task { await move(id, field: "status", value: .string(status), loader: loader) }
-                        }
-                    }
-                    ForEach(TaskBoardLanes.destinations(of: all, axis: axis)) { destination in
-                        Button("Lane: \(destination.title)") {
-                            Task {
-                                await move(
-                                    id, field: axis.rawValue,
-                                    value: destination.value.map { .string($0) } ?? .null,
-                                    loader: loader)
-                            }
-                        }
-                    }
-                    Button("Move earlier") {
-                        Task { await reorder(id, offset: -1, in: lane, loader: loader) }
-                    }
-                    .disabled(index == 0)
-                    Button("Move later") {
-                        Task { await reorder(id, offset: 1, in: lane, loader: loader) }
-                    }
-                    .disabled(index == lane.count - 1)
-                }
-                .accessibilityLabel("Move \(task["name"]?.stringValue ?? id)")
-            }
-        }
-    }
-
-    private func move(
-        _ id: String, field: String, value: JSONValue, loader: SpecialistLoader<TaskBoardData>
-    ) async {
-        await loader.perform {
-            try await client.update(
-                EntityCatalog[.task], id: id, patch: EntityPatch(values: [field: value]))
-        }
-    }
-
-    private func reorder(
-        _ id: String, offset: Int, in lane: [JSONValue], loader: SpecialistLoader<TaskBoardData>
-    ) async {
-        guard let index = lane.firstIndex(where: { $0["id"]?.stringValue == id }),
-            lane.indices.contains(index + offset)
-        else { return }
-        var ordered = lane.compactMap { $0["id"]?.stringValue }
-        guard ordered.count == lane.count else { return }
-        ordered.swapAt(index, index + offset)
-        await loader.perform {
-            for start in stride(from: 0, to: ordered.count, by: 200) {
-                let end = min(start + 200, ordered.count)
-                try await client.reorderTasks((start..<end).map { (ordered[$0], Double($0 * 1024)) })
-            }
-        }
-    }
-}
-
 // MARK: - location.gallery
 
 struct LocationGalleryListView: View {
@@ -434,8 +311,7 @@ struct ProjectAnalyticsListView: View {
         SpecialistLoadView(
             loadingLabel: "Loading analytics", filters: filters,
             fetch: { filters in
-                let (summary, analytics) = try await client.projectAnalytics(filters: filters)
-                return try ReportPresentation.projectAnalytics(summary: summary, analytics: analytics)
+                ReportPresentation(try await client.projectAnalytics(filters: filters))
             }
         ) { report, _ in
             List {

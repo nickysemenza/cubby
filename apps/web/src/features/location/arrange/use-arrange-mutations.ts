@@ -4,9 +4,11 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
+  entityMutation,
   inventory,
   location,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -31,11 +33,14 @@ export function useArrangeMutations() {
   const queryClient = useQueryClient();
   const treeKey = location.makeTree.queryOptions().queryKey;
 
-  const reparentBase = location.bulkUpdateParent.mutationOptions();
+  const reparentBase = entityMutation.mutate
+    .forEntity("location")
+    .mutationOptions();
   const reparent = useMutation({
     ...reparentBase,
     onMutate: async (vars) => {
-      const dragId = vars.ids[0];
+      if (vars.action !== "bulkUpdate" || vars.entity !== "location") return;
+      const dragId = z.array(z.string()).parse(vars.ids)[0];
       await queryClient.cancelQueries({ queryKey: treeKey });
       const current = queryClient.getQueryData<InfLocation[]>(treeKey);
       if (current && dragId) {
@@ -44,9 +49,9 @@ export function useArrangeMutations() {
           applyLocationMove(
             current,
             parseShortcodeFor("location", dragId),
-            vars.parentId == null
+            vars.data.parentId == null
               ? null
-              : parseShortcodeFor("location", vars.parentId),
+              : parseShortcodeFor("location", vars.data.parentId),
           ),
         );
       }
@@ -86,7 +91,13 @@ export function useArrangeMutations() {
     moveLocation: (
       dragId: LocationShortcode,
       targetId: LocationShortcode | null,
-    ) => reparent.mutate({ ids: [dragId], parentId: targetId }),
+    ) =>
+      reparent.mutate({
+        action: "bulkUpdate",
+        entity: "location",
+        ids: [dragId],
+        data: { parentId: targetId },
+      }),
     moveItem: (drag: ItemDragData, targetLocationId: LocationShortcode) =>
       move.mutate({
         sourceLocationId: drag.sourceLocationId,

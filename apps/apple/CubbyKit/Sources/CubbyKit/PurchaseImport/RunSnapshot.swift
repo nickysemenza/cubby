@@ -48,10 +48,4 @@ public struct RunSnapshot: Codable, Sendable {
         findings.first { $0.value["id"]?.stringValue == id }?.value
     }
 
-    /// A control can finish without creating a successor. A malformed successor must not
-    /// silently report success while dropping the new Run's navigation target.
-    static func successorID(in raw: JSONValue) throws -> String? {
-        guard let successor = raw["successor"], successor != .null else { return nil }
-        return try JSONRead(value: successor, context: "Run control.successor").string("publicId")
-    }
 }

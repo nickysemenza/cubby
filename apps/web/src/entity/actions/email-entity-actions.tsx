@@ -31,7 +31,7 @@ import type {
 } from "./entity-actions";
 
 /** Submission only queues work; Run receipts establish outcomes. */
-export function reclassifySummary({ runIds }: ReclassifyEmailsOut) {
+function reclassifySummary({ runIds }: ReclassifyEmailsOut) {
   return `Reclassification queued (${runIds.join(", ")}). Results will appear on the Runs.`;
 }
 
