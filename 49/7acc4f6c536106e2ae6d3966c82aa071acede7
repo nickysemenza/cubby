@@ -1,0 +1,29 @@
+apps/web/DESIGN.md
+  s_d3ea63dc8edc80::t_41b61f6ca07911 260
+apps/web/src/entity/table/table-header-layout.tsx
+  s_07c44b07003a0b::t_8cdb93ad6a06fd 249,605-610,693-694
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "497acc4f6c536106e2ae6d3966c82aa071acede7",
+  "prompts": {},
+  "sessions": {
+    "s_07c44b07003a0b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b41-791a-7863-bf34-79bf5da1f48a",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d3ea63dc8edc80": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b26-64cd-76a3-976c-3d2550ca6a7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
