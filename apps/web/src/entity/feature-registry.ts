@@ -71,7 +71,9 @@ export interface FeatureRegistry {
   };
   /** Feature components and hooks the generic entity surfaces render. */
   components: {
-    ProductDiscardDialog: typeof ProductDiscardDialog;
+    ProductDiscardDialog: ComponentType<
+      ComponentProps<typeof ProductDiscardDialog>
+    >;
     SpendingCategoryMergeReview: ComponentType<
       ComponentProps<typeof SpendingCategoryMergeReview>
     >;

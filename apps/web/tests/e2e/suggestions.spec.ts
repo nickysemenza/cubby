@@ -363,10 +363,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await expect(
     page.getByText("One Purchase and one lump Expense", { exact: true }),
   ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("statement-spending-desktop.png"),
-    fullPage: true,
-  });
+
   const attach = page.waitForRequest((request) =>
     dispatchesOperation(
       request,

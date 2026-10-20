@@ -133,7 +133,7 @@ test("receiving after a photo import writes nothing until additional units are c
     .getByRole("button", { name: "Open Where and how many?" })
     .click();
   await expect(dialog.getByLabel("Amount Value")).toHaveValue("2");
-  await page.screenshot({ path: "../../artifacts/decision-steps/receive.png" });
+
   await dialog.getByRole("button", { name: "Add to inventory" }).click();
   await expect(dialog).toHaveCount(0);
   const stocked = await boughtRows();

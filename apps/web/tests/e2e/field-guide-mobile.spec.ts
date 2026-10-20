@@ -14,7 +14,7 @@ test.use({
 
 test("image-free records retain identity and a usable detail path on a phone", async ({
   page,
-}, testInfo) => {
+}) => {
   const name = `E2E field guide record ${Date.now()}`;
   const product = await seedProductPrerequisite(page, { name });
 
@@ -26,7 +26,6 @@ test("image-free records retain identity and a usable detail path on a phone", a
   await expect(card).toBeVisible();
   await expect(card.getByRole("link", { name, exact: true })).toBeVisible();
   await expectViewportBounded(page);
-  await page.screenshot({ path: testInfo.outputPath("phone-shelf.png") });
 
   await card
     .getByRole("link", { name: `Open detail page for ${name}` })
@@ -34,5 +33,4 @@ test("image-free records retain identity and a usable detail path on a phone", a
   await expect(page).toHaveURL(new RegExp(`/products/${product.id}$`));
   await expect(page.getByRole("heading", { name })).toBeVisible();
   await expectViewportBounded(page);
-  await page.screenshot({ path: testInfo.outputPath("phone-detail.png") });
 });

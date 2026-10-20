@@ -111,7 +111,7 @@ test("related Runs show account labels and shared quality", async ({
 // Phase work must survive target-free Runs; handoff grouping must leave errors readable.
 test("Run work shows phase progress, unknown totals, and expandable handoffs", async ({
   page,
-}, testInfo) => {
+}) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
   const runId = await ensureRun(db, actor, {
     purpose: "maintenance",
@@ -211,16 +211,10 @@ test("Run work shows phase progress, unknown totals, and expandable handoffs", a
   await expect(
     page.getByText("Synthetic upstream failure", { exact: true }),
   ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("run-phase-progress.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(bar).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("run-phase-progress-mobile.png"),
-    fullPage: true,
-  });
+
   await getDb(db)
     .update(runStep)
     .set({
@@ -249,10 +243,7 @@ test("Run work shows phase progress, unknown totals, and expandable handoffs", a
     page.getByText("7 / unknown items · 0 failed", { exact: true }),
   ).toBeVisible();
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.screenshot({
-    path: testInfo.outputPath("run-indeterminate-progress-mobile.png"),
-    fullPage: true,
-  });
+
   // Unknown work must remain visible and animate; skeletons deliberately do neither.
   const indicator = unknown.locator(":scope > div");
   await expect(indicator).not.toHaveCSS("animation-name", "none");
@@ -266,10 +257,7 @@ test("Run work shows phase progress, unknown totals, and expandable handoffs", a
   expect(widths.indicator).toBeGreaterThan(0);
   expect(widths.indicator).toBeLessThan(widths.track);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.screenshot({
-    path: testInfo.outputPath("run-indeterminate-progress-reduced-motion.png"),
-    fullPage: true,
-  });
+
   // A pre-sample generation checkpoint already knows its scope and completed work.
   await getDb(db)
     .update(runStep)
@@ -305,13 +293,6 @@ test("Run work shows phase progress, unknown totals, and expandable handoffs", a
   await expect(generation).toHaveAttribute("aria-valuenow", "60");
   await expect(generation).toHaveAttribute("aria-valuemax", "200");
   await expect(page.getByText(/30% · 140 charges left/)).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("run-resumed-generation.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({
-    path: testInfo.outputPath("run-resumed-generation-mobile.png"),
-    fullPage: true,
-  });
 });

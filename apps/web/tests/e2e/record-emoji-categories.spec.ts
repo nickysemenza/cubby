@@ -20,7 +20,7 @@ import {
 test("edits compound emoji, clears it, and browses inherited category membership", async ({
   page,
   baseURL,
-}, testInfo) => {
+}) => {
   test.setTimeout(90_000);
   const headers = { Origin: baseURL! };
   const create = async (
@@ -197,9 +197,6 @@ test("edits compound emoji, clears it, and browses inherited category membership
   await expect(page).toHaveURL(new RegExp(`spendingCategory=${spending}`));
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("emoji-categories-phone.png"),
-  });
 });
 
 test("reviews vendor purchase evidence and rejects stale accepted defaults", async ({
@@ -346,9 +343,7 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
   }
 });
 
-test("unassessed quality remains visible in phone cards", async ({
-  page,
-}, testInfo) => {
+test("unassessed quality remains visible in phone cards", async ({ page }) => {
   await page.setViewportSize({ width: 402, height: 874 });
   const name = `Synthetic planned quality ${Date.now()}`;
   await createEntityFixture(page, "expense", {
@@ -385,7 +380,4 @@ test("unassessed quality remains visible in phone cards", async ({
     .click();
   await expect(popover).toContainText("No weighted checks apply");
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("unassessed-quality-phone.png"),
-  });
 });

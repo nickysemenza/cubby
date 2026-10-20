@@ -237,20 +237,14 @@ test("resolves identity, validates counts, and applies selected fields without r
   await expect(
     page.getByText("Run cost · includes all nested work"),
   ).toBeVisible();
-  await page.screenshot({
-    path: "/tmp/cubby-photo-review-fa0dc45b-desktop.png",
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 402, height: 874 });
   await expect
     .poll(() =>
       page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     )
     .toBe(true);
-  await page.screenshot({
-    path: "/tmp/cubby-photo-review-fa0dc45b-mobile.png",
-    fullPage: true,
-  });
+
   // The optional editor primed this Product's detail cache before applying.
   // Following its result link must show the committed fields immediately.
   await group
@@ -1149,14 +1143,10 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     name: "New product name",
     exact: true,
   });
-  await group.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/desktop-concern.png",
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await group.scrollIntoViewIfNeeded();
-  await group.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/phone-concern.png",
-  });
+
   await page.setViewportSize({ width: 1440, height: 1000 });
   await name.fill("Synthetic jacket blue XL");
   await name.blur();
@@ -1358,12 +1348,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
         ),
     )
     .toBe(true);
-  await attach.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/desktop-attach-no-label.png",
-  });
-  await page.getByRole("navigation", { name: "Section index" }).screenshot({
-    path: "../../artifacts/photo-review-polish/desktop-nav.png",
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await attach.scrollIntoViewIfNeeded();
   expect(
@@ -1387,18 +1372,14 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       );
     });
   expect(railOffset).toBeLessThanOrEqual(1);
-  await attach.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/phone-attach-no-label.png",
-  });
+
   await page.getByRole("button", { name: /Jump to:/ }).click();
   await expect(
     page
       .getByRole("menuitem", { name: productName, exact: true })
       .locator('[aria-label="Ready"]'),
   ).toBeVisible();
-  await page
-    .getByRole("menu")
-    .screenshot({ path: "../../artifacts/photo-review-polish/phone-nav.png" });
+
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
@@ -1429,13 +1410,9 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     nameField.getByRole("button", { name: /^Add ‘blue’ to name$/i }),
   ).toBeVisible();
   await expect(nameField.getByText(/Label:|Label differs/)).toBeVisible();
-  await create.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/desktop-create-mark.png",
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
-  await create.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/phone-create-mark.png",
-  });
+
   await page.setViewportSize({ width: 1440, height: 1000 });
   await create.getByRole("button", { name: /^Add ‘xl’ to name$/i }).click();
   await expect(
@@ -1470,13 +1447,9 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attachChecks.getByText("Matches the label").first(),
   ).toBeAttached();
-  await attach.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/desktop-attach-label.png",
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
-  await attach.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-polish/phone-attach-label.png",
-  });
+
   await page.setViewportSize({ width: 1440, height: 1000 });
   // Evidence keeps the saved value; pending edits appear separately as a diff.
   const changed = await startOperation(page.request, "photoImport.saveGroups", {
@@ -1792,7 +1765,4 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
 
   await expect(card.getByText("Why the agent proposed this")).toBeVisible();
   await expect(card.getByText(agentNote)).toBeHidden();
-  await card.locator("[data-photo-group]").first().screenshot({
-    path: "../../artifacts/photo-review-real-data/desktop-care-label.png",
-  });
 });

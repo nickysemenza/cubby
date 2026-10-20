@@ -32,7 +32,7 @@ test.beforeEach(async ({ page }) => {
 
 test("quality leads entity tables, explains its calculation, and restores temporary ordering", async ({
   page,
-}, testInfo) => {
+}) => {
   test.setTimeout(60_000);
   const name = `Synthetic quality ${Date.now()}`;
   const plant = await seedPlantPrerequisite(page, `${name} crop`);
@@ -121,7 +121,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   });
   expect(footerOverflow).toBeLessThanOrEqual(0);
   await expectViewportBounded(page);
-  await page.screenshot({ path: testInfo.outputPath("quality-desktop.png") });
+
   await page.keyboard.press("Escape");
   await expect(popover).not.toBeVisible();
 
@@ -467,7 +467,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
 
 test("explanations load lazily, recover from errors, and expand bounded evidence on phones", async ({
   page,
-}, testInfo) => {
+}) => {
   const name = `Synthetic explanation recovery ${Date.now()}`;
   const product = await seedProductPrerequisite(page, { name });
   const requests: string[][] = [];
@@ -587,9 +587,7 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
       );
     })
     .toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath("large-evidence-phone.png"),
-  });
+
   await page.keyboard.press("Escape");
   await expect(popover).not.toBeVisible();
   await expect(trigger).toBeFocused();

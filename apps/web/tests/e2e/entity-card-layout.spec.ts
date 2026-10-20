@@ -59,7 +59,7 @@ test("product category and identifiers stay readable in cards and a plant's rela
 
 test("card density adapts to the work surface and stays temporary through filtering", async ({
   page,
-}, testInfo) => {
+}) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   const name = `Card layout ${Date.now()}`;
   await seedConcurrently(
@@ -82,7 +82,6 @@ test("card density adapts to the work surface and stays temporary through filter
     .locator(":scope > *")
     .first()
     .evaluate((el) => el.getBoundingClientRect().width);
-  await page.screenshot({ path: testInfo.outputPath("desktop-cards.png") });
 
   await chooseListView(page, "Compact");
   await expect(grid).toHaveAttribute("data-compact", "true");
@@ -111,9 +110,7 @@ test("card density adapts to the work surface and stays temporary through filter
       }),
   ).toBeVisible();
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("desktop-compact-inspector.png"),
-  });
+
   await page
     .getByRole("button", { name: "Close inspector", exact: true })
     .first()
@@ -126,7 +123,6 @@ test("card density adapts to the work surface and stays temporary through filter
   await expect(grid.locator(":scope > *")).toHaveCount(1);
   await expect(grid).toHaveAttribute("data-compact", "true");
   await expectViewportBounded(page);
-  await page.screenshot({ path: testInfo.outputPath("desktop-compact.png") });
 
   await page.reload();
   await expect(grid).toHaveAttribute("data-compact", "false");

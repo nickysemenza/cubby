@@ -3,7 +3,7 @@ import {
   locationShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { z } from "zod";
 
 import { expenseCaptureRequest } from "~/entity/editing/editor-requests";
@@ -123,13 +123,15 @@ function useDiscardProductAction(): EntityActionHandles {
       );
     },
     dialog: product !== null && (
-      <ProductDiscardDialog
-        open
-        onOpenChange={(open) => {
-          if (!open) setProduct(null);
-        }}
-        product={product}
-      />
+      <Suspense fallback={null}>
+        <ProductDiscardDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setProduct(null);
+          }}
+          product={product}
+        />
+      </Suspense>
     ),
   };
 }

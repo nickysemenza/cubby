@@ -79,7 +79,7 @@ test("shelf triage stocks with the ledger default, parks in Unknown, and discard
   await discard.getByRole("button", { name: "Change What left?" }).click();
   await expect(discard.getByLabel("Units discarded")).toHaveValue("1");
   await discard.getByLabel("Units discarded").fill("2");
-  await page.screenshot({ path: "../../artifacts/decision-steps/discard.png" });
+
   await discard.getByRole("button", { name: "Discard", exact: true }).click();
   // Settling the last outstanding product ends the pass on its summary; with a
   // stranger's rows still queued, this one shows as done instead.
@@ -244,9 +244,7 @@ test("discard decisions preserve quantity and shelf choice and allow leaving sto
   await page
     .getByRole("option", { name: `${otherName} — 4 each`, exact: true })
     .click();
-  await page.screenshot({
-    path: "../../artifacts/decision-steps/discard-shelf.png",
-  });
+
   await dialog.getByRole("button", { name: "Change What left?" }).click();
   await expect(dialog.getByLabel("Units discarded")).toHaveValue("2");
   await dialog
@@ -295,12 +293,7 @@ test("decision showcase edits the create draft independently of attach evidence"
   const attach = page.getByRole("list", { name: "Synthetic link decisions" });
   await expect(attach.getByText(/Ordered Sep 2, 2026/)).toBeVisible();
   await attach.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: "../../artifacts/decision-steps/design-desktop.png",
-  });
+
   await page.setViewportSize({ width: 402, height: 874 });
   await attach.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: "../../artifacts/decision-steps/design-phone.png",
-  });
 });

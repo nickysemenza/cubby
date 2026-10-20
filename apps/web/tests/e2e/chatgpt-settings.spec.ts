@@ -59,7 +59,7 @@ test("settings explains local authorization and exposes no model selectors", asy
 
 test("settings renders the complete returned catalog, refresh errors, and disconnect", async ({
   page,
-}, testInfo) => {
+}) => {
   // External account access cannot run in CI. The browser receives synthetic
   // catalog responses; credential rotation has its own focused regression.
   let connected = true;
@@ -152,18 +152,12 @@ test("settings renders the complete returned catalog, refresh errors, and discon
   await expect(
     card.getByRole("button", { name: "Manage usage" }),
   ).toHaveAttribute("href", "https://chatgpt.com/settings/usage");
-  await testInfo.attach("chatgpt-models-desktop", {
-    body: await card.screenshot(),
-    contentType: "image/png",
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     card.getByText("example-future-model", { exact: true }),
   ).toBeVisible();
-  await testInfo.attach("chatgpt-models-phone", {
-    body: await card.screenshot(),
-    contentType: "image/png",
-  });
+
   failed = true;
   await card.getByRole("button", { name: "Refresh models" }).click();
   await expect(card.getByText(/example eligibility restriction/)).toBeVisible();

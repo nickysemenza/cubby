@@ -50,7 +50,6 @@ import { discardInventoryActionDefinition } from "~/features/inventory/discard-i
 import { inventoryLocationEntityActionDefinitions } from "~/features/inventory/inventory-location-entity-actions";
 import { locationListRenderers } from "~/features/location/list-renderers";
 import { addToInventoryActionDefinition } from "~/features/product/add-to-inventory-action";
-import { ProductDiscardDialog } from "~/features/product/product-discard-dialog";
 import {
   ProductExternalIdsField,
   ProductLabelNutritionField,
@@ -83,6 +82,13 @@ const named = <M, K extends keyof M>(
   module: Promise<M>,
   name: K,
 ): Promise<{ default: M[K] }> => module.then((m) => ({ default: m[name] }));
+
+const ProductDiscardDialog = lazy(() =>
+  named(
+    import("~/features/product/product-discard-dialog"),
+    "ProductDiscardDialog",
+  ),
+);
 
 /** The Run slots that are nothing but their server-composed report. */
 type RunReportSlotId =

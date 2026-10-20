@@ -29,7 +29,7 @@ test("streamed standalone tree disclosure waits for its own handlers", async ({
 // remaining keyboard-reachable, and filters losing their Clear action.
 test("location browser scrolls the full hierarchy, tracks navigation, and discloses contents", async ({
   page,
-}, testInfo) => {
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const suffix = Date.now();
   const root = await createEntityFixture(page, "location", {
@@ -154,9 +154,6 @@ test("location browser scrolls the full hierarchy, tracks navigation, and disclo
     tree.getByRole("treeitem", { name: shelfName, exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await expect(cabinetSection).toHaveCount(1);
-  await browser.screenshot({
-    path: testInfo.outputPath("location-browser-desktop.png"),
-  });
 
   const search = browser.getByRole("searchbox", {
     name: "Find a location or item",
@@ -201,9 +198,7 @@ test("location browser scrolls the full hierarchy, tracks navigation, and disclo
   await expect(
     shelfSection.getByRole("link", { name: "Open record", exact: true }),
   ).toHaveAttribute("href", `/locations/${shelf.id}`);
-  await browser.screenshot({
-    path: testInfo.outputPath("location-browser-phone.png"),
-  });
+
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

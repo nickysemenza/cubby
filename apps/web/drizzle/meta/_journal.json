@@ -722,6 +722,13 @@
       "when": 1792532135051,
       "tag": "0102_assignment_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1792539170759,
+      "tag": "0103_statement_charge_history",
+      "breakpoints": true
     }
   ]
 }

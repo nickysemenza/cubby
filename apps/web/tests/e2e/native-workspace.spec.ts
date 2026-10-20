@@ -24,7 +24,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   browser,
   baseURL,
   e2eRuntime,
-}, testInfo) => {
+}) => {
   const unauthenticated = await authenticatedPage.request.post(
     "/api/native-workspace/session",
   );
@@ -164,10 +164,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   );
   await expect(productLink).toContainText("Workspace drill refreshed");
   await expect(page.locator("[data-run-evidence]")).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("run-evidence-desktop.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("[data-run-evidence]")).toBeVisible();
   await expect
@@ -177,10 +174,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
       ),
     )
     .toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath("run-evidence-phone.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(
     `/runs/${run.shortcode}?nativeWorkspace=run-evidence#unsupported-section`,
@@ -198,10 +192,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   expect(new URL(page.url()).searchParams.has("nativeWorkspace")).toBe(false);
   await expect(page.locator("[data-native-workspace]")).toHaveCount(0);
   await expect(page.locator('[data-app-shell="authenticated"]')).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("product-workspace-desktop.png"),
-    fullPage: true,
-  });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("heading", { level: 2, name: "Work", exact: true }),
@@ -216,10 +207,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
       ),
     )
     .toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath("product-workspace-phone.png"),
-    fullPage: true,
-  });
+
   await context.clearCookies();
   await page.goto(
     `/runs/${run.shortcode}?nativeWorkspace=run-evidence#evidence`,

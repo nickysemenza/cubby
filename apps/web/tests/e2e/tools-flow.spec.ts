@@ -8,7 +8,7 @@ import { expect, test } from "./support/e2e-test";
 
 test("tool Flow keeps group order across pagination, jumps to unloaded groups, and reflows around inspection", async ({
   page,
-}, testInfo) => {
+}) => {
   page.setDefaultTimeout(15_000);
   // Keep the first page below the 500px prefetch margin until a section jump.
   await page.setViewportSize({ width: 1600, height: 500 });
@@ -122,10 +122,6 @@ test("tool Flow keeps group order across pagination, jumps to unloaded groups, a
   ).toHaveCount(6);
   await page.setViewportSize({ width: 1600, height: 1000 });
   await splitMarker.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: testInfo.outputPath("desktop-flow.png"),
-    animations: "disabled",
-  });
 
   const flowBeforeInspection = await flow.boundingBox();
   if (!flowBeforeInspection)
@@ -147,10 +143,6 @@ test("tool Flow keeps group order across pagination, jumps to unloaded groups, a
     .poll(async () => (await flow.boundingBox())?.width ?? 0)
     .toBeLessThan(flowBeforeInspection.width - 300);
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("desktop-flow-inspector.png"),
-    animations: "disabled",
-  });
 
   await page
     .getByRole("button", { name: "Close inspector", exact: true })

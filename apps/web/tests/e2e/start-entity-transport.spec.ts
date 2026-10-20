@@ -180,7 +180,7 @@ test("core entity list, detail, and mutation ride named browser operations", asy
 test("server error references remain usable on desktop", async ({
   page,
   context,
-}, testInfo) => {
+}) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
@@ -240,7 +240,6 @@ test("server error references remain usable on desktop", async ({
     "diagnostic-test-request",
   );
   await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("error-desktop.png") });
 });
 
 // The real browser must remain usable while an independent field read hangs;
