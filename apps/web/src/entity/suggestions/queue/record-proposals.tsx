@@ -8,10 +8,11 @@ import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import { Stack, Row } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { useAcceptClean } from "./accept-clean";
+import { ScopedListPager } from "./scoped-list-pager";
 import {
   MobileEvidenceDisclosure,
   SuggestionActions,
@@ -92,29 +93,14 @@ export function RecordProposals({ id }: { id: string }) {
             ))}
           </RecordList>
         </SuggestionReviewProvider>
-        {query.data && query.data.meta.totalCount > 50 ? (
-          <Row gap="sm">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - 50))}
-            >
-              Previous
-            </Button>
-            <span className="text-xs tabular-nums">
-              {offset + 1}–{offset + query.data.items.length} of{" "}
-              {query.data.meta.totalCount}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!query.data.next}
-              onClick={() => setOffset(offset + 50)}
-            >
-              Next
-            </Button>
-          </Row>
+        {query.data ? (
+          <ScopedListPager
+            offset={offset}
+            itemCount={query.data.items.length}
+            totalCount={query.data.meta.totalCount}
+            nextOffset={query.data.next ? offset + 50 : null}
+            onOffsetChange={setOffset}
+          />
         ) : null}
       </Stack>
     </section>

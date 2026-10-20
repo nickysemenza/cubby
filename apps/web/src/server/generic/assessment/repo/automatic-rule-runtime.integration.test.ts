@@ -32,6 +32,7 @@ import {
   setAutomaticRule,
 } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 type Ctx = ReturnType<typeof withTestDb>;
@@ -655,6 +656,26 @@ describe("Automatic rules", () => {
     const state = await stateOf(ctx, suggestion.id);
     expect(state.data.auditSample).toBe(false);
     expect(state.status).toBe("applied");
+    // Automatic applications stay available to historical grading reads.
+    const history = await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+      status: "applied",
+    });
+    expect(history.items.map((item) => item.assessmentId)).toContain(
+      suggestion.id,
+    );
+    const audited = (
+      await listAutomaticDecisions(ctx.db, {
+        family: "statement_transaction",
+        recordIds: [existing.id],
+      })
+    ).items.find((item) => item.id === suggestion.id);
+    expect(audited?.records).toEqual(
+      expect.arrayContaining([
+        { entity: "financialTransaction", id: existing.id },
+        expect.objectContaining({ entity: "financialAccount" }),
+      ]),
+    );
     const [stamp] = state.data.matchedRules!;
     expect(stamp).toMatch(/^statement_transaction\.attach@.+@.+/);
     const events = await feedbackFor(ctx, suggestion.id);

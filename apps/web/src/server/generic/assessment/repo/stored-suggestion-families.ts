@@ -17,6 +17,7 @@ import {
   reviewFamilyDeclarations,
 } from "./review-families";
 import {
+  assessmentIdScope,
   keyBase,
   type SuggestionFamilyPresentation,
   type SuggestionFamilyQuery,
@@ -70,6 +71,7 @@ async function storedKeys(
     SELECT a.id, s.fingerprint, a."createdAt", COALESCE((a.judgment->>${assessmentJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
     FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
     WHERE a.family = ${family} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}
+      AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
       ${
         family === "product_pair"

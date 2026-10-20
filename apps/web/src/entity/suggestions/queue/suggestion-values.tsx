@@ -119,12 +119,16 @@ export function ImpactLabels({ impact }: { impact: SuggestionImpact[] }) {
   return (
     <ChipCluster
       lines={1}
+      limit={1}
       items={ordered.map((item) => ({
         key: `${item.kind}:${item.label}`,
         label: item.label,
         node: (
-          <Badge variant={item.kind === "caution" ? "warning" : "outline"}>
-            {item.label}
+          <Badge
+            className="max-w-full min-w-0 shrink"
+            variant={item.kind === "caution" ? "warning" : "outline"}
+          >
+            <span className="truncate">{item.label}</span>
           </Badge>
         ),
       }))}

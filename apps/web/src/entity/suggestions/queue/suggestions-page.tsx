@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -129,6 +130,7 @@ function StatusTabs({
       <Button
         variant="ghost"
         size="sm"
+        className="basis-full justify-start md:basis-auto"
         render={
           <Link
             to="/automatic-decisions"
@@ -138,6 +140,7 @@ function StatusTabs({
         nativeButton={false}
       >
         Review automatic decisions
+        <CaretRightIcon aria-hidden />
       </Button>
     </div>
   );
@@ -313,25 +316,27 @@ function FamilyChips({
       .reduce((sum, row) => sum + row.pending, 0);
   };
   return (
-    <Picker
-      mode="segmented"
-      label="Suggestion families"
-      options={[
-        { value: "all", label: "All", hint: countHint(count()) },
-        ...FAMILY_CHIPS.map((chip) => ({
-          value: chip.family,
-          label: chip.label,
-          hint: countHint(count(chip.family)),
-        })),
-      ]}
-      value={familyOf(search)}
-      onValueChange={(value) =>
-        onSearch({
-          family: FAMILY_CHIPS.find((chip) => chip.family === value)?.family,
-          group: undefined,
-        })
-      }
-    />
+    <div className="max-w-full overflow-x-auto">
+      <Picker
+        mode="segmented"
+        label="Suggestion families"
+        options={[
+          { value: "all", label: "All", hint: countHint(count()) },
+          ...FAMILY_CHIPS.map((chip) => ({
+            value: chip.family,
+            label: chip.label,
+            hint: countHint(count(chip.family)),
+          })),
+        ]}
+        value={familyOf(search)}
+        onValueChange={(value) =>
+          onSearch({
+            family: FAMILY_CHIPS.find((chip) => chip.family === value)?.family,
+            group: undefined,
+          })
+        }
+      />
+    </div>
   );
 }
 
@@ -386,7 +391,6 @@ const QUICK_FILTERS = {
   statement_transaction: ["clean", "action", "kind", "account", "owner"],
   recommendation: ["relation", "entityKind"],
   transfer_pair: ["clean", "strength", "owner"],
-  applied: [],
 } satisfies Partial<Record<SuggestionView, readonly string[]>>;
 
 function QuickFilters({
@@ -602,7 +606,10 @@ function SuggestionsTableBody({
     getRowId: (row) => row.id,
     rowSelection: selection.rowSelection,
     onRowSelectionChange: selection.onRowSelectionChange,
-    initialColumnVisibility: viewSetting(VIEW_HIDDEN_COLUMNS, view),
+    initialColumnVisibility: viewSetting<Record<string, false>>(
+      VIEW_HIDDEN_COLUMNS,
+      view,
+    ),
     scrollRestorationId: `suggestions-${view}`,
     rowContentVersion: review,
   });
@@ -683,8 +690,7 @@ function SuggestionsTableBody({
     const rows = list.data;
     const index = rows.findIndex((row) => row.id === current);
     const row = rows[index];
-    // Applied rows are already settled: A and D have nothing to review.
-    const reviewable = view === "applied" ? undefined : row;
+    const reviewable = row;
     // A settled row leaves the list: the next row (else the previous) stays current.
     const advance = () => {
       const next = rows[index + 1] ?? rows[index - 1];
@@ -798,7 +804,7 @@ function SuggestionsTableBody({
             />
           ) : null}
         </div>
-        {cleanCount > 0 && !grouped && view !== "applied" ? (
+        {cleanCount > 0 && !grouped ? (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-positive/30 bg-positive/5 px-2.5 py-1.5 text-xs">
             <span className="font-medium text-positive">Clean</span>
             <span>
@@ -904,9 +910,7 @@ function SuggestionsTableBody({
         showColumnMenu
         emptyState={
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            {view === "applied"
-              ? "No Automatic rule has applied a change here."
-              : "No pending suggestions here. Find suggestions to look again."}
+            No pending suggestions here. Find suggestions to look again.
           </p>
         }
       />

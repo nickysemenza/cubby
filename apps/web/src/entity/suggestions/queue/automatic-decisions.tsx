@@ -1,9 +1,12 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
 import type { AutomaticDecisionRow } from "@cubby/schemas/automatic-decision";
+import { humanize } from "@cubby/shared";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { usePageCount } from "~/entity/page/page";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   assessment,
@@ -18,6 +21,7 @@ import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack, Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
+import { ScopedListPager } from "./scoped-list-pager";
 import { RecordLink } from "./suggestion-values";
 
 const FAMILY_OPTIONS = [
@@ -56,12 +60,15 @@ export function AutomaticDecisions({
     }),
   );
   const loading = useHydratedLoading(query.isLoading);
+  usePageCount(id || query.isLoading ? undefined : query.data?.totalCount);
   return (
     <section aria-label="Automatic decisions">
       <Stack gap="sm">
         <Row gap="sm" className="flex-wrap">
           <Picker
             mode="choose"
+            compact
+            className="w-full md:w-60"
             aria-label="Automatic decision family"
             options={FAMILY_OPTIONS}
             value={family}
@@ -72,6 +79,8 @@ export function AutomaticDecisions({
           />
           <Picker
             mode="choose"
+            compact
+            className="w-full md:w-60"
             aria-label="Automatic decision review status"
             options={REVIEW_OPTIONS}
             value={reviewStatus}
@@ -102,35 +111,14 @@ export function AutomaticDecisions({
             <AutomaticDecision key={row.id} row={row} />
           ))}
         </RecordList>
-        {query.data && query.data.totalCount > 50 ? (
-          <Row gap="sm">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - 50))}
-            >
-              Previous
-            </Button>
-            <span className="text-xs tabular-nums">
-              {offset + 1}–{offset + query.data.items.length} of{" "}
-              {query.data.totalCount}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={query.data.nextOffset === null}
-              onClick={() => {
-                if (
-                  query.data?.nextOffset !== null &&
-                  query.data?.nextOffset !== undefined
-                )
-                  setOffset(query.data.nextOffset);
-              }}
-            >
-              Next
-            </Button>
-          </Row>
+        {query.data ? (
+          <ScopedListPager
+            offset={offset}
+            itemCount={query.data.items.length}
+            totalCount={query.data.totalCount}
+            nextOffset={query.data.nextOffset}
+            onOffsetChange={setOffset}
+          />
         ) : null}
       </Stack>
     </section>
@@ -192,9 +180,9 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
       }
       trailing={<DateDisplay timestamp={row.createdAt} />}
       actions={
-        <>
+        <Row gap="sm">
           <span className="text-xs">
-            {row.verdict === "wrong" ? "Wrong" : (row.verdict ?? "Unreviewed")}
+            {row.verdict ? humanize(row.verdict) : "Unreviewed"}
           </span>
           <Button
             size="sm"
@@ -204,7 +192,7 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
           >
             Wrong
           </Button>
-        </>
+        </Row>
       }
       detail={
         <Stack gap="sm">
@@ -213,8 +201,14 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
               Rule {row.automaticRule}
             </span>
           ) : null}
-          <details className="text-xs">
-            <summary>Technical evidence</summary>
+          <details className="group text-xs">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-muted-foreground md:min-h-7 [&::-webkit-details-marker]:hidden">
+              <CaretRightIcon
+                aria-hidden
+                className="size-3.5 group-open:rotate-90"
+              />
+              Technical evidence
+            </summary>
             <pre className="break-words whitespace-pre-wrap">
               {JSON.stringify(row.decision, null, 2)}
             </pre>

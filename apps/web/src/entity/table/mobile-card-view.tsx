@@ -335,7 +335,7 @@ function RowContent<TItem extends RowData>({
   showThumb: boolean;
   thumb: ReactNode;
   row: Row<TItem>;
-  title: string;
+  title: ReactNode;
   /** The canonical route: the title becomes a link stretched over the row. */
   href?: string;
   longPress: LongPressHandlers;

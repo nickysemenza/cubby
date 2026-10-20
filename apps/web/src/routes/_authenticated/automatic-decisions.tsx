@@ -17,7 +17,12 @@ export const Route = createFileRoute("/_authenticated/automatic-decisions")({
 function AutomaticDecisionsPage() {
   const { record, family } = Route.useSearch();
   return (
-    <Page variant="list" title="Review automatic decisions" layout="full">
+    <Page
+      variant="list"
+      title="Review automatic decisions"
+      layout="full"
+      bodyGutter="standard"
+    >
       <AutomaticDecisions
         key={`${record}:${family}`}
         id={record}

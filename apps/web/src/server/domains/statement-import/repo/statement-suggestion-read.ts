@@ -21,6 +21,7 @@ import {
 
 /** Record-level scope the cross-family list pushes into SQL. */
 export type StatementSuggestionScope = {
+  assessmentIds?: readonly string[];
   /** FinancialAccount or candidate/hold FinancialTransaction ids. */
   recordUuids?: readonly string[];
   runCode?: string;
@@ -35,6 +36,13 @@ const inStatus = (status: StatementSuggestionScope["status"]) =>
 
 const conditions = (filters: StatementSuggestionScope): SQL => {
   const where: SQL[] = [inStatus(filters.status)];
+  if (filters.assessmentIds)
+    where.push(
+      sql`s.id IN (${sql.join(
+        filters.assessmentIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`,
+    );
   if (filters.runCode)
     where.push(
       sql`s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runCode})`,

@@ -1,4 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
+import type { Page } from "@playwright/test";
+import { productShortcode } from "@cubby/schemas/identifiers";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -11,6 +13,7 @@ import {
 } from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
+import { updateProduct } from "~/server/domains/product/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
@@ -22,20 +25,78 @@ import {
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 import { seedUnimportedOrderMail } from "./fixtures/mail";
-import { seedImagePrerequisite } from "./fixtures/photos";
+import {
+  seedImagePrerequisite,
+  attachProductImagePrerequisite,
+} from "./fixtures/photos";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
+
+async function seedTagProposal(page: Page, sourceId: string, tag: string) {
+  const { db } = await createEvidenceHarnessContext(page);
+  const donors = await Promise.all(
+    [1, 2, 3].map((index) =>
+      createEntityFixture(page, "product", {
+        name: `Synthetic tag support ${index} ${crypto.randomUUID()}`,
+        tags: [tag],
+      }),
+    ),
+  );
+  const records = await getDb(db)
+    .select({
+      id: productTable.id,
+      shortcode: productTable.shortcode,
+      updatedAt: productTable.updatedAt,
+    })
+    .from(productTable)
+    .where(
+      inArray(
+        productTable.shortcode,
+        [sourceId, ...donors.map((donor) => donor.id)].map((value) =>
+          productShortcode.parse(value),
+        ),
+      ),
+    );
+  const source = records.find((record) => record.shortcode === sourceId);
+  if (!source) throw new Error("Synthetic tag source missing");
+  const supports = records.filter((record) => record.id !== source.id);
+  const prediction = await assessRecommendation(
+    db,
+    sourceId,
+    "product.tag-propagation",
+    [tag],
+    {
+      tag,
+      supportingProductCount: supports.length,
+      supportingProductIds: supports.map((record) => record.shortcode),
+      basis: {
+        sourceRevision: source.updatedAt.toISOString(),
+        supportingProducts: supports.map((record) => ({
+          id: record.shortcode,
+          revision: record.updatedAt.toISOString(),
+        })),
+      },
+    },
+  );
+  return { prediction, supports };
+}
 
 // Failure modes: already-acted pending rows bury real proposals; non-actionable
 // pairs become proposals; only the source endpoint exposes review; Wrong removes
 // an automatic decision from its audit or silently changes imported data.
 test("one queue separates proposals from automatic history and reviews either endpoint", async ({
   page,
+  e2eRuntime,
 }, testInfo) => {
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Synthetic queue drill");
   const item = await createEntityFixture(page, "product", { name });
+  const cover = await seedImagePrerequisite(
+    "synthetic-queue-cover",
+    e2eRuntime.objectStorageUrl,
+  );
+  await attachProductImagePrerequisite(page, cover.id, item.id, "item");
   const other = await createEntityFixture(page, "product", {
     name: `${name} neighbour`,
   });
@@ -132,6 +193,14 @@ test("one queue separates proposals from automatic history and reviews either en
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("link", { name: new RegExp(name) }).first(),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
   await page.screenshot({
     path: testInfo.outputPath("suggestions-mobile.png"),
     fullPage: true,
@@ -201,7 +270,9 @@ test("one queue separates proposals from automatic history and reviews either en
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await audit.getByRole("button", { name: "Wrong", exact: true }).click();
-  await expect(audit).toContainText("Wrong");
+  await expect(
+    audit.getByRole("button", { name: "Wrong", exact: true }),
+  ).toBeDisabled();
   await expect
     .poll(async () =>
       (
@@ -371,12 +442,10 @@ test("new proposal families require explicit review and preserve merge confirmat
     tags: ["synthetic-existing"],
   });
   const taggedId = await resolveOrThrow(db, "product", tagged.id);
-  const tag = await assessRecommendation(
-    db,
+  const { prediction: tag } = await seedTagProposal(
+    page,
     tagged.id,
-    "product.tag-propagation",
-    ["synthetic-addition"],
-    { tag: "synthetic-addition", supportingProductCount: 3 },
+    "synthetic-addition",
   );
   const picture = await seedImagePrerequisite(
     "synthetic-review-description",
@@ -502,4 +571,40 @@ test("new proposal families require explicit review and preserve merge confirmat
     .where(inArray(productTable.id, [firstId, secondId]));
   expect(merged.filter((row) => row.deletedAt !== null)).toHaveLength(1);
   expect(merged.filter((row) => row.deletedAt === null)).toHaveLength(1);
+});
+
+// Persisted tag votes must not authorize an apply after their supporting facts change.
+test("a stored tag Suggestion refuses changed supporting evidence", async ({
+  page,
+}, testInfo) => {
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const source = await createEntityFixture(page, "product", {
+    name: uniqueName(testInfo, "Synthetic stale tag target"),
+    tags: [],
+  });
+  const { supports } = await seedTagProposal(
+    page,
+    source.id,
+    "synthetic-stale-tag",
+  );
+  const donor = supports[0];
+  if (!donor) throw new Error("Synthetic tag support missing");
+  await gotoAuthenticatedPage(page, `/suggestions?record=product:${source.id}`);
+  const row = page
+    .getByRole("row")
+    .filter({ hasText: "Add tag synthetic-stale-tag" });
+  await expect(row).toHaveCount(1);
+  await updateProduct(db, donor.id, { tags: [] }, actor);
+  await row.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(page.getByRole("main")).toContainText(
+    "Tag proposal evidence changed; find suggestions again",
+  );
+  expect(
+    (
+      await getDb(db)
+        .select({ tags: productTable.tags })
+        .from(productTable)
+        .where(eq(productTable.shortcode, productShortcode.parse(source.id)))
+    )[0]?.tags,
+  ).toEqual([]);
 });

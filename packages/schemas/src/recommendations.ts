@@ -60,6 +60,7 @@ export const tagPropagationRecommendationOut = z.object({
       review: assessmentReviewReference.optional(),
       tag: z.string(),
       supportingProductCount: z.number().int().positive(),
+      supportingProductIds: z.array(productShortcode).optional(),
     }),
   ),
 });

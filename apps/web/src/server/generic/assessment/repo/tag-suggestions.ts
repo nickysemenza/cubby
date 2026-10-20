@@ -1,9 +1,9 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import { productId } from "@cubby/schemas/identifiers";
+import { productShortcode } from "@cubby/schemas/identifiers";
 import { tagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import { recommendationSuggestionRow } from "@cubby/schemas/suggestion-list";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -12,6 +12,7 @@ import { assessment, assessmentState, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { executeEntity } from "~/server/entity-kernel/execute";
+import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
 
 import {
   keyBase,
@@ -19,7 +20,123 @@ import {
   type SuggestionKey,
 } from "./suggestion-families";
 
-const proposalSchema = tagPropagationRecommendationOut.shape.proposals.element;
+const candidateSchema = tagPropagationRecommendationOut.shape.proposals.element;
+const proposalSchema = candidateSchema.extend({
+  basis: z.object({
+    sourceRevision: z.iso.datetime(),
+    supportingProducts: z
+      .array(z.object({ id: productShortcode, revision: z.iso.datetime() }))
+      .min(3),
+  }),
+});
+
+async function tagRecords(db: Database, codes: readonly string[]) {
+  const unique = [...new Set(codes)];
+  const rows = [];
+  for (let start = 0; start < unique.length; start += 250) {
+    rows.push(
+      ...(await getDb(db)
+        .select({
+          shortcode: product.shortcode,
+          tags: product.tags,
+          updatedAt: product.updatedAt,
+        })
+        .from(product)
+        .where(
+          and(
+            inArray(
+              product.shortcode,
+              unique
+                .slice(start, start + 250)
+                .map((id) => productShortcode.parse(id)),
+            ),
+            isNull(product.deletedAt),
+          ),
+        )),
+    );
+  }
+  return new Map(rows.map((row) => [row.shortcode, row]));
+}
+
+function currentBasis(
+  sourceId: string,
+  proposal: z.infer<typeof proposalSchema>,
+  records: Awaited<ReturnType<typeof tagRecords>>,
+) {
+  const source = records.get(productShortcode.parse(sourceId));
+  const donors = proposal.basis.supportingProducts;
+  return source &&
+    source.updatedAt.toISOString() === proposal.basis.sourceRevision &&
+    !source.tags.includes(proposal.tag) &&
+    donors.length === proposal.supportingProductCount &&
+    new Set(donors.map((donor) => donor.id)).size === donors.length &&
+    donors.every((donor) => {
+      const current = records.get(donor.id);
+      return (
+        donor.id !== sourceId &&
+        current?.updatedAt.toISOString() === donor.revision &&
+        current.tags.includes(proposal.tag)
+      );
+    })
+    ? source
+    : undefined;
+}
+
+export async function tagSourceRevision(db: Database, sourceId: string) {
+  return (await tagRecords(db, [sourceId]))
+    .get(productShortcode.parse(sourceId))
+    ?.updatedAt.toISOString();
+}
+
+/** Persist the discovery basis so a later review cannot apply stale donor votes. */
+export async function prepareTagSuggestionPublication(
+  db: Database,
+  sourceId: string,
+  candidate: z.infer<typeof candidateSchema>,
+  sourceRevision: string,
+) {
+  const records = await tagRecords(db, [
+    sourceId,
+    ...(candidate.supportingProductIds ?? []),
+  ]);
+  const parsed = proposalSchema.safeParse({
+    ...candidate,
+    basis: {
+      sourceRevision,
+      supportingProducts: (candidate.supportingProductIds ?? []).flatMap(
+        (id) => {
+          const record = records.get(id);
+          return record
+            ? [{ id, revision: record.updatedAt.toISOString() }]
+            : [];
+        },
+      ),
+    },
+  });
+  if (!parsed.success || !currentBasis(sourceId, parsed.data, records))
+    return null;
+  const proposal = parsed.data;
+  return async (transactionDb: Database) => {
+    if (
+      !currentBasis(
+        sourceId,
+        proposal,
+        await tagRecords(transactionDb, [
+          sourceId,
+          ...proposal.basis.supportingProducts.map((donor) => donor.id),
+        ]),
+      )
+    )
+      return null;
+    return assessRecommendation(
+      transactionDb,
+      sourceId,
+      "product.tag-propagation",
+      [proposal.tag],
+      proposal,
+    );
+  };
+}
 
 async function tagRows(db: Database, ids?: readonly string[]) {
   const { rows } = await unwrapDb(db).execute<{
@@ -45,19 +162,29 @@ async function tagRows(db: Database, ids?: readonly string[]) {
             )})`
           : sql``
       }`);
-  return rows.flatMap((row) => {
+  const parsedRows = rows.flatMap((row) => {
     const parsed = proposalSchema.safeParse(row.evidence);
     return parsed.success && parsed.data.supportingProductCount >= 3
       ? [{ ...row, proposal: parsed.data }]
       : [];
   });
+  const records = await tagRecords(
+    db,
+    parsedRows.flatMap((row) => [
+      row.shortcode,
+      ...row.proposal.basis.supportingProducts.map((donor) => donor.id),
+    ]),
+  );
+  return parsedRows.filter((row) =>
+    currentBasis(row.shortcode, row.proposal, records),
+  );
 }
 export async function tagSuggestionKeys(
   db: Database,
   query: SuggestionFamilyQuery,
 ): Promise<SuggestionKey[]> {
   if (query.filters.status !== "pending") return [];
-  return (await tagRows(db)).map((row) => ({
+  return (await tagRows(db, query.assessmentIds)).map((row) => ({
     family: "recommendation",
     assessmentId: row.id,
     status: "pending",
@@ -130,24 +257,21 @@ export async function applyTagSuggestion(
     .where(eq(assessment.id, state.id))
     .limit(1);
   const proposal = proposalSchema.parse(prediction?.evidence);
-  const [source] = await getDb(db)
-    .select({
-      shortcode: product.shortcode,
-      tags: product.tags,
-      updatedAt: product.updatedAt,
-      deletedAt: product.deletedAt,
-    })
+  const [identity] = await getDb(db)
+    .select({ shortcode: product.shortcode })
     .from(product)
-    .where(eq(product.id, productId.parse(state.recordId)))
+    .where(sql`${product.id} = ${state.recordId}::uuid`)
     .limit(1);
-  if (!source) throw new Error("Product no longer exists");
-  if (
-    !prediction ||
-    source.deletedAt ||
-    source.updatedAt > prediction.createdAt ||
-    proposal.supportingProductCount < 3 ||
-    source.tags.includes(proposal.tag)
-  )
+  if (!identity) throw new Error("Product no longer exists");
+  const source = currentBasis(
+    identity.shortcode,
+    proposal,
+    await tagRecords(db, [
+      identity.shortcode,
+      ...proposal.basis.supportingProducts.map((donor) => donor.id),
+    ]),
+  );
+  if (!source)
     throw new Error("Tag proposal evidence changed; find suggestions again");
   await executeEntity(
     { ...context, db },

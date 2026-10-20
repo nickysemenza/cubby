@@ -20,8 +20,8 @@ export function parseRecordParam(value: string | undefined) {
 export const suggestionsSearchSchema = z.object({
   family: suggestionListFamily.optional().catch(undefined),
   /**
-   * The page tab: absent lists pending Suggestions, `applied_automatically`
-   * what rules applied, `rules` the Automatic rules themselves.
+   * The page tab: absent lists pending Suggestions; `rules` configures rules.
+   * Legacy `applied_automatically` URLs redirect to the automatic-decision audit.
    */
   status: z
     .enum(["applied_automatically", "rules"])

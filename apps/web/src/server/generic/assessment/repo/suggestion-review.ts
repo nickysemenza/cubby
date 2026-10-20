@@ -227,12 +227,16 @@ export async function fieldSuggestionKeys(
     entities?: readonly string[];
     recordUuids?: readonly string[];
     runId?: string;
+    assessmentIds?: readonly string[];
   },
 ) {
   const conditions: (SQL | undefined)[] = [
     eq(suggestionTable.family, "field"),
     eq(suggestionTable.active, true),
     eq(suggestionTable.status, scope.status),
+    scope.assessmentIds
+      ? inArray(suggestionTable.id, [...scope.assessmentIds])
+      : undefined,
     scope.entities
       ? inArray(suggestionTable.entity, [...scope.entities])
       : undefined,

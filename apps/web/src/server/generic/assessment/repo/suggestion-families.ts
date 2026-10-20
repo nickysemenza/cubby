@@ -40,7 +40,7 @@ import {
   type suggestionAction,
 } from "@cubby/schemas/suggestion-list";
 import { transferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -98,7 +98,20 @@ const stamps = z.array(z.string()).catch([]);
 export type SuggestionFamilyQuery = {
   filters: SuggestionListFilters;
   records?: { code: string; entity: ShortcodeEntity; id: string }[];
+  assessmentIds?: readonly string[];
 };
+
+/** Push declared secondary-record matches into each family's indexed key read. */
+export const assessmentIdScope = (
+  ids: readonly string[] | undefined,
+  column: SQL,
+) =>
+  ids
+    ? sql`${column} IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`
+    : sql`true`;
 
 type ReviewItem = z.input<typeof assessmentReviewInput>;
 type Action = z.infer<typeof suggestionAction>;
@@ -207,6 +220,7 @@ const field: SuggestionFamilyPresentation<"field"> = {
       entities: filters.entity ? [filters.entity] : undefined,
       recordUuids: records?.map((record) => record.id),
       runId: runCode(query),
+      assessmentIds: query.assessmentIds,
     });
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
@@ -375,6 +389,7 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
         recordUuids,
         runCode: runCode(query),
         status,
+        assessmentIds: query.assessmentIds,
       });
       return rows.map((row) => ({
         family: "statement_transaction" as const,
@@ -571,6 +586,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       SELECT a.id, a.fingerprint, a."createdAt", a.evidence->'candidate' AS candidate
       FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
       WHERE a.family = ${assessmentFamily.enum.recommendation} AND a.served AND s.active
+        AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
         AND s.status = ${suggestionStatus.enum.pending}
         AND a.subject->>'scope' LIKE 'connection.%'
         AND NOT EXISTS (SELECT 1 FROM "Feedback" f WHERE f."assessmentId" = a.id
@@ -726,6 +742,7 @@ async function transferPairRows(
     SELECT s.id, s.fingerprint, a."createdAt", a.judgment, s.data
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
     WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
+      AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
       ${
         ids
           ? sql`AND s.id IN (${sql.join(

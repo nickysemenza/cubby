@@ -9,12 +9,14 @@ import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { QuotesIcon } from "@phosphor-icons/react/dist/csr/Quotes";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { z } from "zod";
@@ -551,7 +553,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   sections.push({
     id: "suggestions",
     title: "Suggestions",
-    icon: InfoIcon,
+    icon: SparkleIcon,
     placement: "primary",
     content: (
       <Suspense fallback={<SlotFallback />}>
@@ -562,7 +564,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   sections.push({
     id: "automatic-decisions",
     title: "Review automatic decisions",
-    icon: InfoIcon,
+    icon: ClockCounterClockwiseIcon,
     placement: "primary",
     content: (
       <Suspense fallback={<SlotFallback />}>

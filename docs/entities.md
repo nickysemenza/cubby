@@ -2714,6 +2714,11 @@ expand every affected record: both endpoints of connections and pairs, reference
 values of fields, and a statement row's account and candidate Transactions.
 Non-actionable Product pairs remain ordinary history. A merge still requires
 explicit survivor and impact confirmation, and identity conflicts cannot merge.
+Tag proposals retain the source and every supporting Product's revision; listing,
+publication and confirmation recheck those revisions and the supporting tags.
+Older count-only tag advice cannot establish that basis and remains ordinary history.
+Project, placement and tag proposals appear after a Sweep publishes them; passive
+record reads never discover or publish new advice.
 Similar-Product browsing stays informational; photo-import choices stay in their Run.
 
 `/automatic-decisions` is the separate generic **Review automatic decisions** view,

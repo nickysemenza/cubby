@@ -109,7 +109,7 @@ export async function getProductMatchQueue(
       reviewableOnly: true,
       assessmentIds: input.assessmentIds,
       candidateId: other,
-      limit: 200,
+      limit: input.assessmentIds ? input.assessmentIds.length : 200,
     })
   ).sort((a, b) => Number(b.source === "agent") - Number(a.source === "agent"));
   const productIds = rows.flatMap((row) => [row.productAId, row.productBId]);

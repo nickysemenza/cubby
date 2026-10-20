@@ -16,8 +16,10 @@ import {
   importSourceClaim,
   runFinding,
 } from "~/server/db/schema";
+import { orderMailEvent } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -45,6 +47,67 @@ const gmail: GmailProvider = {
 };
 describe("immutable Email observations", () => {
   const ctx = withTestDb();
+  // Event-only authority can predate a retained Email. Audit expansion must
+  // recover the Email through the original, alongside the current Purchase.
+  it("finds an automatic event-only link from either later-retained endpoint", async () => {
+    const fixture = await importedPurchaseFixture(ctx.db, ctx.actor);
+    await ingestGmailMessages(ctx.db, gmail, {
+      ledgerPartyId: fixture.party.id,
+      mailboxId: "synthetic-link-mailbox",
+      messageIds: ["synthetic-link-message"],
+      storage,
+      callerJudges: true,
+    });
+    const [mail] = await getDb(ctx.db).select().from(emailTable);
+    if (!mail?.orderMailId) throw new Error("Synthetic retained Email missing");
+    const [event] = await getDb(ctx.db)
+      .insert(orderMailEvent)
+      .values({
+        orderMailId: mail.orderMailId,
+        event: "placed",
+        orderId: "SYNTHETIC-LINK",
+        amount: 5,
+        currency: "USD",
+        sourceKey: `synthetic:${mail.orderMailId}`,
+      })
+      .returning();
+    if (!event) throw new Error("Synthetic retained event missing");
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(emailTable.id, mail.id));
+    const prediction = await publishEmailLinkDecision(
+      ctx.db,
+      {
+        eventId: event.id,
+        purchaseId: fixture.order.id,
+        decision: "linked",
+        evidenceChecksum: mail.checksum!,
+        decidedByUserId: ctx.actor.userId,
+        proposedBy: "heuristic",
+      },
+      "automatic",
+    );
+    expect(prediction.subject).toMatchObject({ recordId: null });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ deletedAt: null })
+      .where(eq(emailTable.id, mail.id));
+    for (const code of [mail.shortcode, fixture.order.shortcode]) {
+      const audit = await listAutomaticDecisions(ctx.db, {
+        family: "email_link",
+        recordIds: [code],
+      });
+      expect(
+        audit.items.find((row) => row.id === prediction.id)?.records,
+      ).toEqual(
+        expect.arrayContaining([
+          { entity: "email", id: mail.shortcode },
+          { entity: "purchase", id: fixture.order.shortcode },
+        ]),
+      );
+    }
+  });
   it("persists prediction before a label and keeps raw retrieval failures separate", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic member",

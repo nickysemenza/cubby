@@ -158,15 +158,6 @@ export function wrongItem(row: SuggestionListRow): ReviewItem | null {
   return { ...base(row), verdict: "wrong", intent: "history" };
 }
 
-/**
- * Wrong on an automatic application: a history-only Miss against the rule
- * that applied it. The application stays; correcting it is the record's own edit.
- */
-export function automaticMissItem(row: SuggestionListRow): ReviewItem | null {
-  if (!row.automaticRule) return null;
-  return { ...base(row), verdict: "wrong", intent: "history" };
-}
-
 /** Dismiss: settle without applying; this pair of legs stays suppressed on every later pass. */
 function transferPairDismissItem(
   row: Extract<SuggestionListRow, { family: "transfer_pair" }>,

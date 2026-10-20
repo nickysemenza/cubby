@@ -168,10 +168,10 @@ Status, enum, category, and suggestion values share `Pill` geometry. Saved statu
 ### Records, forms, and tables
 
 Pending Suggestion counts sit beside a record's identity as quiet, focusable
-badges and open the shared inline review. Record details use that same review
-section. Automatic decisions have their own RecordList and detail section, with
-family and review-status pickers, affected-record links, a readable decision and
-Wrong. Unverified legacy applications say so beside the decision; raw payloads
+badges that open the shared record review in a popover. Record details host
+that review as a section. Automatic decisions have their own RecordList and detail section, with
+family and review-status pickers in the list’s compact control row, with a quiet count beside the page title, affected-record links, a readable decision and
+Wrong. Unverified legacy applications say so beneath the decision; raw payloads
 stay in an explicit Technical evidence disclosure. Family declarations choose
 the actions and evidence; clients do not create another family review screen.
 
@@ -211,10 +211,10 @@ link to the passive Problems overview until Run detail reads stop recovering
 execution. Problems and Research saved views link into this projection without
 creating assignments.
 
-The Suggestions page has three line tabs with quiet counts: Pending,
-Applied automatically, and Automatic rules (each rule's precision and switch).
-The family choice and scope chips sit under the first two. Impact chips lead
-with cautions and count past two lines as "+N".
+The Suggestions page has Pending and Automatic rules line tabs, with a separate
+Review automatic decisions link beneath them on phones. The family choice stays
+in a bounded horizontal scroll strip, and scope chips sit beneath it. Impact chips
+lead with one caution-first label and count the remaining labels as "+N".
 
 The Problems overview is one `IndexedSections` page grouped Needs you,
 Fixes automatically, Coverage & cues and Upkeep. Its headline reads inline

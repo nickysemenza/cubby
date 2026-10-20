@@ -40,7 +40,7 @@ interface SlotValue {
 
 export interface MobileListRowModel<TItem extends RowData> {
   row: Row<TItem>;
-  title: string;
+  title: ReactNode;
   subtitle?: ReactNode;
   imageSlot?: ReactNode;
   actionsContent?: ReactNode;
@@ -211,7 +211,7 @@ function collectMobileSlots<TItem extends RowData>(
   row: Row<TItem>,
   entity: Entity | undefined,
 ) {
-  let title = extractEntityTitle(row.original);
+  let title: ReactNode = extractEntityTitle(row.original);
   if (entity === "inventory") {
     title = inventoryProductName(row.original) ?? title;
   }
@@ -258,13 +258,14 @@ function collectMobileSlots<TItem extends RowData>(
       continue;
     }
     if (slot === "title") {
-      // Linked desktop identities render a component, but their accessor is
-      // still the authoritative plain-text label for the mobile card.
-      title =
-        mobileTitleText(
-          rendered,
-          valueUnavailable ? undefined : cell.getValue(),
-        ) ?? title;
+      // Resolved identity links can retain their rendered label; other columns
+      // keep the accessor as their authoritative plain-text fallback.
+      title = meta?.mobile?.renderTitle
+        ? rendered
+        : (mobileTitleText(
+            rendered,
+            valueUnavailable ? undefined : cell.getValue(),
+          ) ?? title);
       continue;
     }
 

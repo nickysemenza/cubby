@@ -78,7 +78,7 @@ export const reviewFamilyDeclarations = {
     records: sql`${one} || CASE WHEN a.subject->>'scope' LIKE 'connection.%'
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
       ELSE COALESCE(a.evidence->'records', '[]'::jsonb) END`,
-    actionable: sql`(a.subject->>'scope' LIKE 'connection.%' OR a.subject->>'scope' IN ('product.tag-propagation', 'inventory.placement'))`,
+    actionable: sql`(a.subject->>'scope' LIKE 'connection.%' OR a.subject->>'scope' = 'product.tag-propagation')`,
   },
   product_pair: {
     ...assessmentReviewFamilies.product_pair,
@@ -262,6 +262,7 @@ export async function touchingAssessmentIds(
   scope: {
     entity?: string;
     records?: readonly { code: string; entity: string; id: string }[];
+    eligibility: SQL;
   },
 ) {
   if (!scope.entity && !scope.records) return null;
@@ -277,7 +278,9 @@ export async function touchingAssessmentIds(
     : sql``;
   const { rows } = await unwrapDb(db).execute<{
     id: string;
-  }>(sql`SELECT a.id FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
+  }>(sql`WITH eligible AS MATERIALIZED (
+      SELECT a.id FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${scope.eligibility}
+    ) SELECT a.id FROM eligible JOIN "Assessment" a ON a.id = eligible.id JOIN "AssessmentState" s ON s.id = a.id
     WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(${assessmentRecordsSql}) r WHERE r->>'id' IS NOT NULL
       ${scope.entity ? sql`AND r->>'entity' = ${scope.entity}` : sql``} ${recordMatch})`);
   return new Set(rows.map((row) => row.id));

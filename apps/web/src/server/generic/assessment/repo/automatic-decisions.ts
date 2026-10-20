@@ -33,10 +33,13 @@ export async function listAutomaticDecisions(
   const resolved = input.recordIds
     ? await resolveShortcodes(db, input.recordIds)
     : null;
+  const rule = automaticApplicationRule(sql`a.id`);
   const touching = await touchingAssessmentIds(db, {
     records: resolved
       ? [...resolved].map(([code, record]) => ({ code, ...record }))
       : undefined,
+    eligibility: sql`a.served AND (${automaticFamilyEligibility} OR ${rule} IS NOT NULL)
+      ${input.family ? sql`AND a.family = ${input.family}` : sql``}`,
   });
   if (touching?.size === 0)
     return automaticDecisionListOut.parse({
@@ -44,7 +47,6 @@ export async function listAutomaticDecisions(
       totalCount: 0,
       nextOffset: null,
     });
-  const rule = automaticApplicationRule(sql`a.id`);
   const where = sql`a.served AND (
     ${automaticFamilyEligibility}
     OR ${rule} IS NOT NULL)
