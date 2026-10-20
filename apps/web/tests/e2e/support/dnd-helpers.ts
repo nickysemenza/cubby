@@ -38,7 +38,10 @@ export async function dragByKeyboard(
   // KeyboardSensor attaches its document key listener in a zero-delay task.
   // One frame models human input cadence without a fixed sleep.
   await nextAnimationFrame(source);
-  for (const move of moves) await source.press(move);
+  for (const move of moves) {
+    await source.press(move);
+    await nextAnimationFrame(source);
+  }
   await source.press("Space");
 }
 
@@ -56,6 +59,7 @@ export async function waitForDndMutation(
   page: Page,
   entity: string,
   refetchOperation?: string,
+  mutationOperation?: string,
 ) {
   let committed = false;
   const settled = await page.waitForResponse((response) => {
@@ -64,7 +68,9 @@ export async function waitForDndMutation(
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === BROWSER_OPERATION_PATH &&
       operationHeader(response, "-kind") === "mutation" &&
-      operationHeader(response, "-entity") === entity &&
+      (mutationOperation
+        ? operationHeader(response) === mutationOperation
+        : operationHeader(response, "-entity") === entity) &&
       response.ok()
     ) {
       committed = true;

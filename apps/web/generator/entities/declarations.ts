@@ -175,6 +175,10 @@ export type EntityPorts = Readonly<{
   }>;
   timeline: SourceRef | null;
 }>;
+type RelationList = Pick<
+  RelationMutation,
+  "entity" | "relation" | "rowSchema" | "adapter"
+>;
 export type RelationMutation = Readonly<{
   entity: string;
   relation: string;
@@ -469,6 +473,7 @@ export type CompiledEntity = Readonly<{
   imagePolicy: EntityDeclarationMetadata["capabilities"]["images"];
   relations: EntityDeclarationMetadata["relations"];
   relationMutations: readonly RelationMutation[];
+  relationLists: readonly RelationList[];
   lifecycle: Readonly<{
     softDelete: boolean;
     delete: DeclarationValue | null;

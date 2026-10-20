@@ -1155,7 +1155,7 @@ describe("Email Purchase links", () => {
     ]);
     const report = await buildEntityReport(
       ctx.db,
-      { slot: "email.review", id: f.email },
+      { slot: "email.review", scope: { kind: "record", id: f.email } },
       async () => null,
       ctx.actor,
     );
@@ -1248,7 +1248,7 @@ describe("Email Purchase links", () => {
     }
     const report = await buildEntityReport(
       ctx.db,
-      { slot: "email.review", id: f.email },
+      { slot: "email.review", scope: { kind: "record", id: f.email } },
       async () => null,
       ctx.actor,
     );
@@ -1837,7 +1837,7 @@ describe("Email Purchase links", () => {
     });
     const report = await buildEntityReport(
       ctx.db,
-      { slot: "email.review", id: f.email },
+      { slot: "email.review", scope: { kind: "record", id: f.email } },
       async () => null,
       ctx.actor,
     );

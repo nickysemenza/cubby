@@ -306,17 +306,6 @@ export const infLocationWithSideEffects = infLocation.and(
   z.object({ sideEffects: mutationSideEffectsSchema }),
 );
 
-const optionalLocationShortcode = locationShortcode.nullable().optional();
-
-export const locationBulkUpdateParentInput = z.object({
-  ids: z.array(locationShortcode).min(1).max(3000),
-  parentId: optionalLocationShortcode,
-});
-
-export const locationBulkUpdateParentOut = z.object({
-  updated: z.number().int().nonnegative(),
-});
-
 export const locationIdInput = z.object({
   id: locationShortcode,
 });
@@ -328,10 +317,6 @@ export const locationShortcodesInput = z.object({
 export const locationShortcodeInput = z.object({
   shortcode: locationShortcode,
 });
-
-export type LocationBulkUpdateParentInput = z.infer<
-  typeof locationBulkUpdateParentInput
->;
 
 export const locationMcpOut = z.object({
   id: locationListItemFields.id,

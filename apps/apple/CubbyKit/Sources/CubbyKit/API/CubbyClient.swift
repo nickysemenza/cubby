@@ -191,6 +191,15 @@ public actor CubbyClient {
         try await perform { try await descriptor.update(.object(body), id: id, client: api) }
     }
 
+    /// Applies one atomic catalog bulk update. Explicit nulls clear fields; omitted fields stay unchanged.
+    public func bulkUpdate(
+        _ descriptor: EntityDescriptor, ids: [String], data: [String: JSONValue]
+    ) async throws -> Int {
+        try await perform {
+            try await descriptor.bulkUpdate(.object(data), ids: ids, client: api)
+        }
+    }
+
     /// Runs one generated call whose typed body was decoded from `body`, restoring on the wire
     /// every `null` the typed body cannot encode (`JSONNullMiddleware`). Any operation the app
     /// feeds a composed JSON body goes through here.
@@ -290,6 +299,31 @@ public actor CubbyClient {
                         targetIds: targetIDs, offset: offset, limit: limit
                     ))
             ).ok.body.json
+        }
+    }
+
+    /// Declared relation rows with server-owned provenance and explicit pagination.
+    public func relationRows(
+        source: EntityRef, relation: String, targetIDs: [String]? = nil,
+        offset: Int = 0, limit: Int = 50
+    ) async throws -> JSONValue {
+        typealias Query = Operations.Entity_relation.Input.Query
+        guard let entity = Query.EntityPayload(rawValue: source.entity.rawValue),
+            let relationKey = Query.RelationPayload(rawValue: relation)
+        else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: [],
+                    debugDescription:
+                        "entity.relation does not support \(source.entity.rawValue).\(relation)"))
+        }
+        return try await perform {
+            try JSONValue(
+                encoding: try await api.entity_relation(
+                    query: .init(
+                        entity: entity, relation: relationKey, id: source.id,
+                        offset: offset, limit: limit, targetIds: targetIDs)
+                ).ok.body.json)
         }
     }
 
@@ -678,13 +712,6 @@ public actor CubbyClient {
         }
     }
 
-    public func taskBoard(filters: EntityFilterState) async throws -> TaskBoardOut {
-        let input = try Self.decodeFilters(TaskFilters.self, entity: .task, filters: filters)
-        return try await perform {
-            try await api.task_board(body: .json(input)).ok.body.json
-        }
-    }
-
     public func reorderTask(_ id: String, rank: Double) async throws {
         try await reorderTasks([(id, rank)])
     }
@@ -697,43 +724,27 @@ public actor CubbyClient {
         }
     }
 
-    public func projectAnalytics(filters: EntityFilterState) async throws
-        -> (summary: JSONValue, analytics: JSONValue)
-    {
-        let search = filters["search"]?.first
-        let from = filters["dateFrom"]?.first
-        let to = filters["dateTo"]?.first
-        let locations = filters["location"]
-        let completionYear = filters["completionYear"]?.first
-        let dashboardStatuses = filters["status"]?.compactMap {
-            Operations.Project_dashboardSummary.Input.Query.StatusScopePayloadPayload(rawValue: $0)
+    public func projectAnalytics(filters: EntityFilterState) async throws -> EntityReportOut {
+        var values: [String: JSONValue] = [:]
+        for (source, target) in [("status", "statusScope"), ("kind", "kinds"), ("location", "locations")] {
+            if let selected = filters[source], !selected.isEmpty {
+                values[target] = .array(selected.map { .string($0) })
+            }
         }
-        let dashboardKinds = filters["kind"]?.compactMap {
-            Operations.Project_dashboardSummary.Input.Query.KindsPayloadPayload(rawValue: $0)
+        for key in ["search", "dateFrom", "dateTo", "completionYear"] {
+            if let value = filters[key]?.first { values[key] = .string(value) }
         }
-        let portfolioStatuses = filters["status"]?.compactMap {
-            Operations.Project_portfolioAnalytics.Input.Query.StatusScopePayloadPayload(rawValue: $0)
-        }
-        let portfolioKinds = filters["kind"]?.compactMap {
-            Operations.Project_portfolioAnalytics.Input.Query.KindsPayloadPayload(rawValue: $0)
-        }
-        return try await perform {
-            let summary = try await api.project_dashboardSummary(
-                query: .init(
-                    statusScope: dashboardStatuses, kinds: dashboardKinds,
-                    locations: locations, search: search, dateFrom: from, dateTo: to,
-                    completionYear: completionYear)
-            )
-            .ok.body.json
-            let analytics = try await api.project_portfolioAnalytics(
-                query: .init(
-                    statusScope: portfolioStatuses, kinds: portfolioKinds,
-                    locations: locations, search: search, dateFrom: from, dateTo: to,
-                    completionYear: completionYear)
-            )
-            .ok.body.json
-            return try (JSONValue(encoding: summary), JSONValue(encoding: analytics))
-        }
+        return try await entityReport(
+            slot: .project_analytics,
+            scope: .object([
+                "kind": .string("list"), "entity": .string("project"), "filters": .object(values),
+            ]))
+    }
+
+    public func todayBriefing() async throws -> EntityReportOut {
+        try await entityReport(
+            slot: .task_briefing,
+            scope: .object(["kind": .string("list"), "entity": .string("task"), "filters": .object([:])]))
     }
 
     public func expenseAnalytics(filters: EntityFilterState) async throws -> ExpenseAnalyticsOut {
@@ -768,16 +779,6 @@ public actor CubbyClient {
     public func ensureGlobalUnknownLocation() async throws -> LocationCode {
         try await perform {
             try await api.location_ensureGlobalUnknown(body: .json(.init())).ok.body.json.id
-        }
-    }
-
-    /// Re-parents bins under `parent`. Returns how many changed.
-    public func bulkUpdateParent(_ bins: [LocationCode], to parent: LocationCode?) async throws -> Int {
-        try await perform {
-            let output = try await api.location_bulkUpdateParent(
-                body: .json(.init(ids: bins, parentId: parent))
-            )
-            return try output.ok.body.json.updated
         }
     }
 
@@ -836,11 +837,20 @@ public actor CubbyClient {
     public func entityReport(slot: ReportSlot, id: String, cursor: String? = nil) async throws
         -> EntityReportOut
     {
-        // The query's slot enum shares the manifest slot id with `ReportSlot` as its raw value.
-        guard let queryed = Operations.EntityReport_get.Input.Query.SlotPayload(rawValue: slot.rawValue)
-        else { throw URLError(.badURL) }
+        try await entityReport(
+            slot: slot, scope: .object(["kind": .string("record"), "id": .string(id)]), cursor: cursor)
+    }
+
+    /// The scope is validated by the chosen report, including its accepted filters.
+    public func entityReport(slot: ReportSlot, scope: JSONValue, cursor: String? = nil) async throws
+        -> EntityReportOut
+    {
+        var fields: [String: JSONValue] = ["slot": .string(slot.rawValue), "scope": scope]
+        if let cursor { fields["cursor"] = .string(cursor) }
         return try await perform {
-            try await api.entityReport_get(query: .init(slot: queryed, id: id, cursor: cursor)).ok.body.json
+            try await sending(.object(fields)) { input in
+                try await api.entityReport_get(body: .json(input)).ok.body.json
+            }
         }
     }
 

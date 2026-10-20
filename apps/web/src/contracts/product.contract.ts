@@ -153,14 +153,6 @@ export const productContract = defineContract("product", {
       ],
     },
   }),
-  purchases: query({
-    mcp: {
-      omit: "client_view",
-      note: "Agents read purchase products through entity_read.relations",
-    },
-    native: "Show related Purchase movement evidence for a Product",
-    ...productWorkflowSchemas.purchases,
-  }),
   components: query({
     mcp: {
       omit: "client_view",
@@ -204,6 +196,12 @@ export const productContract = defineContract("product", {
     invalidates: ["projectResource"],
   }),
   discard: mutation({
+    command: {
+      label: "Discard product",
+      confirmation: null,
+      affectedEntities: ["product", "inventory", "expense"],
+      resultFields: [{ label: "Stored quantity", path: "storedQuantity" }],
+    },
     mcp: {
       omit: "deferred_capability",
     },

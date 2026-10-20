@@ -61,7 +61,7 @@ export const inventoryPlacement = cycleSafeInventoryPlacement;
 export { inventoryValuation } from "./inventory-fields";
 
 /**
- * The location operations' placement scope (`inventoryLocationIdsInput`):
+ * The inventory snapshot's placement scope:
  * one placement, or `all`. List filters are any-of over the placements
  * instead, and an omitted list filter is unrestricted; the inventory list
  * opens on stock through its declared `initialFilter`.
@@ -550,16 +550,6 @@ export type ReconcileSessionPayload = z.infer<typeof reconcileSessionPayload>;
 
 export const inventoryFindDuplicatesInput = z.object({
   excludeLocationId: locationShortcode.optional(),
-});
-
-export const inventoryLocationIdsInput = z.object({
-  locationIds: z.array(locationShortcode),
-  // Defaults to "all" rather than the browse default, because the two callers
-  // want opposite things: an audit session passes "stock" (a recount cannot
-  // include fixtures, and its predicate must match the snapshot queries in
-  // reconcileLocationSession or the stale guard compares two populations), and
-  // the location card grid wants everything it has always had.
-  placement: inventoryPlacementFilter.optional(),
 });
 
 /**

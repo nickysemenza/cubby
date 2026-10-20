@@ -9,50 +9,44 @@ import Testing
 /// timeline's date domain.
 @Suite("ReportPresentation")
 struct ReportPresentationTests {
-    // A reduced analytics carrier must preserve project navigation and unknown estimates;
-    // required spend must fail with diagnostics instead of becoming a plausible zero.
-    @Test func projectAnalyticsKeepsLinksAndUnknownEstimate() throws {
-        let summary: JSONValue = [
-            "summary": [
-                "activeProjectCount": 2, "openTaskCount": 3, "actualSpend": 125,
-            ]
-        ]
-        let analytics: JSONValue = [
-            "costVsEstimate": [
+    // Shared collection reports retain navigable cost rows, unknown figures and context links.
+    @Test func collectionReportsKeepLinksAndUnknownEstimate() throws {
+        let value: JSONValue = [
+            "blocks": [
+                ["kind": "stats", "figures": [["label": "Estimate", "value": nil, "format": "money"]]],
                 [
-                    "projectId": "PRJ-2345", "projectName": "Fixture renovation",
-                    "actual": 125, "committed": 25, "estimate": nil,
-                ]
+                    "kind": "table", "columns": ["Project", "Estimate"],
+                    "rows": [
+                        [
+                            "id": "PRJ-2345", "cells": ["Fixture renovation", "—"],
+                            "ref": ["entity": "project", "id": "PRJ-2345"],
+                        ]
+                    ],
+                ],
+                [
+                    "kind": "records", "empty": "No tasks",
+                    "rows": [
+                        [
+                            "entity": "task", "id": "TSK-2345", "title": "Fixture work", "trailing": nil,
+                            "lines": [
+                                [
+                                    "text": "Fixture renovation",
+                                    "ref": ["entity": "project", "id": "PRJ-2345"],
+                                ]
+                            ],
+                        ]
+                    ],
+                ],
             ]
         ]
-        let report = try ReportPresentation.projectAnalytics(summary: summary, analytics: analytics)
-        guard case .table(let table) = report.blocks.last else {
-            Issue.record("Expected navigable cost comparison")
-            return
-        }
+        let report = ReportPresentation(try value.decoded() as EntityReportOut)
+        guard case .stats(_, let figures) = report.blocks[0],
+            case .table(let table) = report.blocks[1],
+            case .records(let records) = report.blocks[2]
+        else { Issue.record("Expected shared collection blocks"); return }
+        #expect(figures.first?.text == "—")
         #expect(table.rows.first?.ref == .init(entity: "project", id: "PRJ-2345"))
-        #expect(table.rows.first?.cells.last == "—")
-        #expect(throws: (any Error).self) {
-            try ReportPresentation.projectAnalytics(
-                summary: ["summary": ["activeProjectCount": 2, "openTaskCount": 3]], analytics: analytics)
-        }
-        #expect(throws: (any Error).self) {
-            try ReportPresentation.projectAnalytics(
-                summary: summary,
-                analytics: ["costVsEstimate": [["projectId": "PRJ-2345", "actual": "unknown"]]])
-        }
-        #expect(throws: (any Error).self) {
-            try ReportPresentation.projectAnalytics(
-                summary: summary,
-                analytics: [
-                    "costVsEstimate": [
-                        [
-                            "projectId": "PRJ-2345", "projectName": "Fixture renovation",
-                            "actual": 125, "committed": 25,
-                        ]
-                    ]
-                ])
-        }
+        #expect(records.rows.first?.lines.first?.ref == .init(entity: "project", id: "PRJ-2345"))
     }
 
     private static let json = #"""
@@ -141,7 +135,7 @@ struct ReportPresentationTests {
         let report = try JSONDecoder.cubby().decode(
             EntityReportOut.self,
             from: Data(
-                #"{"blocks":[{"kind":"records","rows":[],"empty":"None yet","commands":[{"id":"generate-flow:first","label":"Generate walkthrough","prominent":true,"confirm":"Uses the model.","request":{"kind":"generate-recipe-flow","recipeId":"RCP-4K7M","force":false}}]}]}"#
+                #"{"blocks":[{"kind":"records","rows":[],"empty":"None yet","commands":[{"id":"generate-flow:first","label":"Generate walkthrough","prominent":true,"confirm":"Uses the model.","request":{"kind":"operation","operation":"recipe.generateFlow","body":{"recipeId":"RCP-4K7M","force":false}}}]}]}"#
                     .utf8))
         guard case .records(let records) = ReportPresentation(report).blocks[0] else {
             Issue.record("expected records")

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { timestampedFields } from "./base-entity";
 import { publicImpactItemSchema } from "./entity-integrity";
-import { id } from "./identifier-fields";
+import { id, anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
+import { shortcodeEntities } from "./entity-manifest";
 
 export const dbTimestampsOut = z
   .object(timestampedFields)
@@ -77,6 +78,18 @@ export const relationMutationOut = z.object({
 });
 
 /** Public relation item shared by id-only attach/detach families. */
+export const entityRelationPageInputSchema = z.object({
+  offset: z.number().int().nonnegative().default(0),
+  limit: z.number().int().min(1).max(100).default(50),
+  targetIds: z
+    .array(anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)))
+    .max(50)
+    .optional(),
+});
+export type EntityRelationPageInput = z.infer<
+  typeof entityRelationPageInputSchema
+>;
+
 export const entityRelationReferenceItemSchema = z
   .object({
     id: z.string().min(1),

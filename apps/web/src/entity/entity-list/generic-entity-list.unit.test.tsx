@@ -194,13 +194,14 @@ describe("listPage", () => {
     const options = within(switcher).getAllByRole("menuitem");
     expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
       entitySummary.task.list.views.flatMap((view) => {
-        const label = isSlotListView(view)
-          ? view.label
-          : view === "table"
-            ? "List"
-            : view === "shelf"
-              ? "Cards"
-              : "Timeline";
+        const label =
+          typeof view === "object"
+            ? view.label
+            : view === "table"
+              ? "List"
+              : view === "shelf"
+                ? "Cards"
+                : "Timeline";
         return view === "shelf"
           ? [`${label} view`, "Compact view"]
           : [`${label} view`];

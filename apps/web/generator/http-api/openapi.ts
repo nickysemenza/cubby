@@ -474,7 +474,6 @@ const JSON_VALUE_COMPONENTS = [
   "EntityListInput",
   "EntityListSummaryOutput",
   "ProjectDashboardSummaryOut",
-  "ProjectPortfolioAnalyticsOut",
   "RunWorkSnapshotOutput",
   "RunWorkOutput",
   "RunControlOutput",

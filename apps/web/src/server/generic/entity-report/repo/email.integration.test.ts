@@ -194,7 +194,7 @@ describe("Email review report", () => {
       (
         await buildEntityReport(
           ctx.db,
-          { slot: "email.review", id },
+          { slot: "email.review", scope: { kind: "record", id: id } },
           async () => null,
           ctx.actor,
         )
@@ -345,8 +345,11 @@ describe("Email review report", () => {
       );
     expect(commandsOf(blocks).map((command) => command.request)).toContainEqual(
       {
-        kind: "import-email",
-        items: [{ id: email.shortcode, expectedChecksum: "a".repeat(64) }],
+        kind: "operation",
+        operation: "purchaseImport.emailImport",
+        body: {
+          items: [{ id: email.shortcode, expectedChecksum: "a".repeat(64) }],
+        },
       },
     );
     // An absent estimate never reads as free.
@@ -370,13 +373,17 @@ describe("Email review report", () => {
     const unavailableCommands = commandsOf(unavailable);
     expect(
       unavailableCommands.some(
-        (command) => command.request.kind === "import-email",
+        (command) =>
+          command.request.kind === "operation" &&
+          command.request.operation === "purchaseImport.emailImport",
       ),
     ).toBe(false);
     // Reclassify refetches the original, so it stays offered without content.
     expect(
       unavailableCommands.some(
-        (command) => command.request.kind === "reclassify-email",
+        (command) =>
+          command.request.kind === "operation" &&
+          command.request.operation === "purchaseImport.emailReclassify",
       ),
     ).toBe(true);
   });

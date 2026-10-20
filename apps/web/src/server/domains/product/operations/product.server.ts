@@ -79,7 +79,6 @@ import {
   listProductProjectUses,
   setProductProjectUses,
 } from "~/server/domains/project/repo/tools";
-import { listProductPurchases } from "~/server/domains/purchase/repo/purchase-products";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -543,11 +542,6 @@ export const productHandlers = implementOperationDomain(productContract, {
   },
   projectUses: async (context, input) =>
     listProductProjectUses(
-      context.db,
-      await productShortcodes.one(context.db, input.productId),
-    ),
-  purchases: async (context, input) =>
-    listProductPurchases(
       context.db,
       await productShortcodes.one(context.db, input.productId),
     ),

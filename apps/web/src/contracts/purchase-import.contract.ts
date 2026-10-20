@@ -57,6 +57,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 // the same writers serve Pi's Mail import and a member's Claude/Codex session.
 export const purchaseImportContract = defineContract("purchaseImport", {
   emailAccuracyCreate: mutation({
+    command: { label: "Create independent review", confirmation: null },
     input: createEmailAccuracyEvaluationInput,
     output: createEmailAccuracyEvaluationOut,
     native: "Freeze an independent Email accuracy sample",
@@ -90,12 +91,18 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     invalidates: ["expense", "product", "purchase", "runOnly"],
   }),
   correctEmailRelevance: mutation({
+    command: { label: "Correct relevance", confirmation: null },
     input: correctEmailRelevanceInput,
     output: correctEmailRelevanceOut,
     native: "Correct reviewed Email relevance and recover its original",
     invalidates: ["email"],
   }),
   emailImport: mutation({
+    command: {
+      label: "Import Email",
+      confirmation: null,
+      runIdsPath: "runIds",
+    },
     input: emailImportInput,
     output: emailImportOut,
     native: "Explicit selected Email import",
@@ -103,6 +110,7 @@ export const purchaseImportContract = defineContract("purchaseImport", {
   }),
   /** Link or dismiss one Email for one Purchase (Purchase, Vendor and Email pages). */
   emailPurchaseDecide: mutation({
+    command: { label: "Update Purchase link", confirmation: null },
     input: emailPurchaseDecisionInput,
     output: emailPurchaseDecisionOut,
     native: "Link or dismiss an Email for a Purchase",
@@ -111,12 +119,22 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     invalidates: ["email"],
   }),
   emailReclassify: mutation({
+    command: {
+      label: "Reclassify Email",
+      confirmation: null,
+      runIdsPath: "runIds",
+    },
     input: reclassifyEmailsInput,
     output: reclassifyEmailsOut,
     native: "Reclassify selected Emails from their originals",
     invalidates: ["email", "runOnly"],
   }),
   emailPreviewRerun: mutation({
+    command: {
+      label: "Rerun preview",
+      confirmation: null,
+      runIdsPath: "runId",
+    },
     input: emailAtChecksum,
     output: rerunEmailPreviewOut,
     native: "Rerun one Email's extraction preview",

@@ -60,7 +60,7 @@ export async function listPurchasePaymentAccounts(
         liveLinks("purchasePaymentAccount"),
       ),
     )
-    .orderBy(asc(financialAccount.name));
+    .orderBy(asc(financialAccount.name), asc(financialAccount.id));
   if (links.length > 0)
     return links.map((row) => ({
       accountId: parseShortcodeFor("financialAccount", row.code),
@@ -75,7 +75,7 @@ export async function listPurchasePaymentAccounts(
     .where(
       sql`${financialAccount.id} = ANY((${purchasePayingAccountIdsSql('"Purchase"')})::uuid[])`,
     )
-    .orderBy(asc(financialAccount.name));
+    .orderBy(asc(financialAccount.name), asc(financialAccount.id));
   return derived.map((row) => ({
     accountId: parseShortcodeFor("financialAccount", row.code),
     accountName: row.name,
@@ -287,6 +287,7 @@ export const purchasePaymentAccountsRelationAdapter = linkRelationAdapter<
       "Payment-account links this detach would remove; with none left, paying accounts derive from payment evidence again.",
   },
   list: listPurchasePaymentAccounts,
+  targetId: (row) => row.accountId,
   preflight: { attach: preflightAttach, detach: preflightDetach },
   attach: (db, purchaseId, targets, actor) =>
     attachPaymentAccounts(

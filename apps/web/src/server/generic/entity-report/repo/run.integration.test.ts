@@ -64,7 +64,7 @@ describe("Run detail reports", () => {
     const { id } = await startRun();
     const report = await buildEntityReport(ctx.db, {
       slot: "run.import-stats",
-      id,
+      scope: { kind: "record", id: id },
     });
     expect(report.live).toBe(true);
     expect(report.status).toBe("running");
@@ -75,11 +75,11 @@ describe("Run detail reports", () => {
     const { id } = await startRun();
     const live = await buildEntityReport(ctx.db, {
       slot: "run.import-progress-live",
-      id,
+      scope: { kind: "record", id: id },
     });
     const stopped = await buildEntityReport(ctx.db, {
       slot: "run.import-progress-stopped",
-      id,
+      scope: { kind: "record", id: id },
     });
     expect(live.blocks.length).toBeGreaterThan(0);
     expect(stopped.blocks).toEqual([]);
@@ -89,7 +89,7 @@ describe("Run detail reports", () => {
     const { id } = await startRun();
     const report = await buildEntityReport(ctx.db, {
       slot: "run.live-progress",
-      id,
+      scope: { kind: "record", id: id },
     });
     expect(report.blocks[0]).toMatchObject({
       kind: "progress",
@@ -120,7 +120,10 @@ describe("Run detail reports", () => {
         userId: ctx.actor.userId,
         channel: "mcp",
       });
-    const report = await buildEntityReport(ctx.db, { slot: "run.changes", id });
+    const report = await buildEntityReport(ctx.db, {
+      slot: "run.changes",
+      scope: { kind: "record", id: id },
+    });
     const block = report.blocks[0];
     if (block?.kind !== "records") throw new Error("expected records");
     expect(block.rows[0]?.title).toContain("Updated purchase");
@@ -198,7 +201,7 @@ describe("Run detail reports", () => {
         state: "completed",
       });
     const next = await buildEntityReport(ctx.db, {
-      id,
+      scope: { kind: "record", id: id },
       slot: "run.import-timeline",
     });
     const nextRows = next.blocks.flatMap((block) =>
@@ -219,7 +222,12 @@ describe("Run detail reports", () => {
     const singles = await countTestDbQueries(async () => {
       const out = [];
       for (const slot of POLLED)
-        out.push(await buildEntityReport(ctx.db, { slot, id }));
+        out.push(
+          await buildEntityReport(ctx.db, {
+            slot,
+            scope: { kind: "record", id: id },
+          }),
+        );
       return out;
     });
     const batch = await countTestDbQueries(() =>
@@ -295,10 +303,13 @@ describe("Run detail reports", () => {
           createdAt: new Date(Date.UTC(2026, 8, 20, 0, 0, index)),
         })),
       );
-    const first = await buildEntityReport(ctx.db, { id, slot: "run.changes" });
+    const first = await buildEntityReport(ctx.db, {
+      scope: { kind: "record", id: id },
+      slot: "run.changes",
+    });
     expect(first.nextCursor).toBeTruthy();
     const second = await buildEntityReport(ctx.db, {
-      id,
+      scope: { kind: "record", id: id },
       slot: "run.changes",
       cursor: first.nextCursor,
     });
@@ -332,16 +343,22 @@ describe("Run detail reports", () => {
     const { id } = await startRun();
     const log = await buildEntityReport(ctx.db, {
       slot: "run.import-debug-log",
-      id,
+      scope: { kind: "record", id: id },
     });
     expect(log.blocks.length).toBeGreaterThan(0);
-    const usage = await buildEntityReport(ctx.db, { slot: "run.ai-usage", id });
+    const usage = await buildEntityReport(ctx.db, {
+      slot: "run.ai-usage",
+      scope: { kind: "record", id: id },
+    });
     expect(usage.blocks.at(-1)).toMatchObject({
       kind: "records",
       empty: "No AI calls were recorded for this run.",
     });
     await expect(
-      buildEntityReport(ctx.db, { slot: "run.ai-usage", id: "RUN-9Z9Z" }),
+      buildEntityReport(ctx.db, {
+        slot: "run.ai-usage",
+        scope: { kind: "record", id: "RUN-9Z9Z" },
+      }),
     ).rejects.toThrow("was not found");
   });
 });

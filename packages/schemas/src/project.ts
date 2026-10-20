@@ -219,21 +219,41 @@ export const taskBoardMovePatch = z.object({
 });
 export type TaskBoardMovePatch = z.infer<typeof taskBoardMovePatch>;
 
-/**
- * Bulk manual-reorder write — the board's "materialize" path (see
- * board-model.ts computeRank). `ranks` re-assigns sparse `sortOrder` values to
- * a run of cards when a single midpoint isn't representable (degenerate gap or
- * an insert into the unranked tail); `move` optionally carries the dragged
- * card's own axis change when the drop also crossed cells. Capped so a
- * pathological cell can't issue an unbounded write.
- */
-export const taskBulkReorderInput = z.object({
-  ranks: z
-    .array(z.object({ id: taskShortcode, sortOrder: z.number() }))
-    .min(1)
-    .max(200),
-  move: z.object({ id: taskShortcode, patch: taskBoardMovePatch }).optional(),
-});
+/** Placement anchors refer to the complete group; clients never renumber a partial page. */
+export const taskBulkReorderInput = z
+  .object({
+    ranks: z
+      .array(z.object({ id: taskShortcode, sortOrder: z.number() }))
+      .max(200)
+      .default([]),
+    position: z
+      .object({
+        id: taskShortcode,
+        before: taskShortcode.nullish(),
+        after: taskShortcode.nullish(),
+        group: z
+          .strictObject({
+            status: taskStatusSchema.optional(),
+            projectId: projectShortcode.nullable().optional(),
+            trade: tradeSchema.optional(),
+          })
+          .refine(
+            (group) => Object.keys(group).length === 1,
+            "One destination group is required",
+          ),
+      })
+      .optional(),
+    move: z.object({ id: taskShortcode, patch: taskBoardMovePatch }).optional(),
+  })
+  .refine(
+    (input) => input.ranks.length > 0 || input.position !== undefined,
+    "Ranks or a position are required",
+  )
+  .refine(
+    (input) =>
+      !input.position || !input.move || input.position.id === input.move.id,
+    "The placed and moved task must match",
+  );
 export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
@@ -347,15 +367,6 @@ export const taskSummaryOut = z.object({
   blocked: z.number().int(),
 });
 export type TaskSummaryOut = z.infer<typeof taskSummaryOut>;
-
-export type TaskBoardInput = TaskFilters;
-
-export const taskBoardOut = z.object({
-  active: z.array(taskOut),
-  recentDone: z.array(taskOut),
-  doneCount: z.number().int(),
-});
-export type TaskBoardOut = z.infer<typeof taskBoardOut>;
 
 export const taskTimelineOut = z.object({
   tasks: z.array(taskOut),

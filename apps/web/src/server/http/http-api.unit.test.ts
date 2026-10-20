@@ -344,21 +344,21 @@ describe("HTTP boundary", () => {
     );
   });
   it.each([
-    ["locationIds=LOC-ABCD", ["LOC-ABCD"]],
-    ["locationIds=LOC-ABCD&locationIds=LOC-EFGH", ["LOC-ABCD", "LOC-EFGH"]],
+    ["entityKinds=product", ["product"]],
+    ["entityKinds=product&entityKinds=location", ["product", "location"]],
     [
-      "locationIds%5B0%5D=LOC-ABCD&locationIds%5B1%5D=LOC-EFGH",
-      ["LOC-ABCD", "LOC-EFGH"],
+      "entityKinds%5B0%5D=product&entityKinds%5B1%5D=location",
+      ["product", "location"],
     ],
-    ["locationIds%5B%5D=LOC-ABCD", ["LOC-ABCD"]],
-  ])("decodes native list query values for %s", async (query, locationIds) => {
-    expect((await request(`inventory/getByLocationIds?${query}`)).status).toBe(
+    ["entityKinds%5B%5D=product", ["product"]],
+  ])("decodes native list query values for %s", async (query, entityKinds) => {
+    expect((await request(`search/find?query=sample&${query}`)).status).toBe(
       200,
     );
     expect(ports.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        operation: "inventory.getByLocationIds",
-        input: expect.objectContaining({ locationIds }),
+        operation: "search.find",
+        input: expect.objectContaining({ entityKinds }),
       }),
     );
   });

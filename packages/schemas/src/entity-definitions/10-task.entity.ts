@@ -164,10 +164,34 @@ export default defineEntity({
         "table",
         { kind: "slot", id: "agenda", label: "Next" },
         {
-          kind: "slot",
+          kind: "board",
           id: "board",
           label: "Board",
-          searchKeys: ["cols", "lane", "q"],
+          groupBy: "status",
+          groupings: ["status", "projectId", "trade"],
+          cardFields: [
+            "projectId",
+            "trade",
+            "dueDate",
+            "status",
+            "dataQuality",
+          ],
+          filters: { topLevelOnly: true },
+          pageSize: 50,
+          caps: [
+            {
+              field: "status",
+              value: "done",
+              limit: 20,
+              orderBy: "updatedAt",
+              direction: "desc",
+            },
+          ],
+          sort: [
+            { orderBy: "sortOrder", direction: "asc" },
+            { orderBy: "createdAt", direction: "desc" },
+          ],
+          reorder: { operation: "task.bulkReorder" },
         },
         "timeline",
       ],
@@ -817,6 +841,7 @@ export default defineEntity({
     },
     sort: {
       fields: [
+        "sortOrder",
         "name",
         "status",
         "dueDate",
@@ -828,7 +853,7 @@ export default defineEntity({
         "updatedAt",
       ],
     },
-    grouping: ["status"],
+    grouping: ["status", "projectId", "trade"],
     intents: {
       fields: {
         capture: [

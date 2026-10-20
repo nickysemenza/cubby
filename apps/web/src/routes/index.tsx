@@ -13,11 +13,12 @@ import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
 import { RecordedSpendCard } from "~/features/home/recorded-spend-card";
 import { TodayNutrition } from "~/features/meal/daily-nutrition";
 import { installFeatures } from "~/features/registry";
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import {
   expense,
   location,
   meal,
-  task,
+  entityReport,
   problems,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
@@ -51,7 +52,12 @@ export const Route = createFileRoute("/")({
         meal.getNutrition.queryOptions({ date: asOf.meals.from }),
       ),
       context.queryClient.ensureQueryData(problems.getCounts.queryOptions()),
-      context.queryClient.ensureQueryData(task.todayBriefing.queryOptions()),
+      context.queryClient.ensureInfiniteQueryData(
+        cursorQueryOptions(entityReport.get, {
+          slot: "task.briefing",
+          scope: { kind: "list", entity: "task", filters: {} },
+        }),
+      ),
       context.queryClient.ensureQueryData(
         meal.upcomingSummary.queryOptions(asOf.meals),
       ),

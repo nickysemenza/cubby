@@ -351,7 +351,6 @@ export const nativeCoverage = {
       "location.gallery",
       "meal.calendar",
       "project.analytics",
-      "task.board",
       "expense.analytics",
     ]),
     ...ownedElsewhere([

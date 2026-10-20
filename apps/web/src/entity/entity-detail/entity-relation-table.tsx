@@ -706,6 +706,9 @@ function LiveEntityRelationTable({
     <RelationshipMovementProvider
       source={movementSource}
       recordId={recordId}
+      targetIds={list.workbench.table
+        .getRowModel()
+        .rows.map((row) => row.original.id)}
       operations={operations}
     >
       <div className="space-y-2">

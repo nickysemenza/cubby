@@ -11,7 +11,7 @@ const fixtureName = (prefix: string, testInfo: TestInfo) =>
   `${prefix} ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
 
 const taskDropTarget = (page: Page, label: string) =>
-  page.getByRole("group", { name: `${label} task drop target` });
+  page.getByRole("region", { name: label, exact: true });
 
 test("moves a task between statuses with the keyboard and persists it", async ({
   page,
@@ -22,13 +22,44 @@ test("moves a task between statuses with the keyboard and persists it", async ({
   const source = page.getByRole("button", { name: `Drag ${name}` });
   await gotoAuthenticatedPage(
     page,
-    `/tasks?view=board&q=${encodeURIComponent(name)}`,
+    `/tasks?view=board&searchQuery=${encodeURIComponent(name)}`,
     source,
   );
-  const committed = waitForDndMutation(page, "task", "task.board");
+  const committed = waitForDndMutation(
+    page,
+    "task",
+    "entity.list",
+    "task.bulkReorder",
+  );
   await dragByKeyboard(source, ["ArrowRight"]);
   await committed;
   await reloadAuthenticatedPage(page, taskDropTarget(page, "Later"));
   await expect(taskDropTarget(page, "Later")).toContainText(name);
   await expect(taskDropTarget(page, "Not started")).not.toContainText(name);
+});
+
+test("keyboard dragging reaches the last position in the same group", async ({
+  page,
+}, testInfo) => {
+  const prefix = fixtureName("e2e keyboard ordering", testInfo);
+  await seedTaskPrerequisite(page, { name: `${prefix} first` });
+  await seedTaskPrerequisite(page, { name: `${prefix} second` });
+  await seedTaskPrerequisite(page, { name: `${prefix} third` });
+  const source = page.getByRole("button", { name: `Drag ${prefix} third` });
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?view=board&searchQuery=${encodeURIComponent(prefix)}`,
+    source,
+  );
+  const committed = waitForDndMutation(
+    page,
+    "task",
+    "entity.list",
+    "task.bulkReorder",
+  );
+  await dragByKeyboard(source, ["ArrowDown", "ArrowDown", "ArrowDown"]);
+  await committed;
+  await reloadAuthenticatedPage(page, taskDropTarget(page, "Not started"));
+  const cards = taskDropTarget(page, "Not started").getByRole("article");
+  await expect(cards.last()).toContainText(`${prefix} third`);
 });

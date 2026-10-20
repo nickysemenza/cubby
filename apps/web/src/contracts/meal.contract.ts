@@ -118,6 +118,7 @@ export const mealContract = defineContract("meal", {
     },
   }),
   saveFood: mutation({
+    command: { label: "Save food", confirmation: null },
     mcp: {
       omit: "deferred_capability",
     },
@@ -126,6 +127,7 @@ export const mealContract = defineContract("meal", {
     invalidates: ["meal"],
   }),
   removeFood: mutation({
+    command: { label: "Remove food", confirmation: null },
     mcp: {
       omit: "deferred_capability",
     },
@@ -159,6 +161,15 @@ export const mealContract = defineContract("meal", {
     output: schemas.shoppingListOut,
   }),
   addRecipe: mutation({
+    command: {
+      label: "Add recipe",
+      confirmation: null,
+      booleanInputs: ["convertToCooked"],
+      inputs: [
+        { kind: "record", key: "recipeId", label: "Recipe", entity: "recipe" },
+        { kind: "number", key: "scale", label: "Scale", initial: 1, min: 0.01 },
+      ],
+    },
     mcp: { omit: "agent_twin", twin: "meal.planRecipe" },
     native: "Plan a recipe into a meal from its composition report",
     input: schemas.mealAddRecipeInput,
@@ -166,12 +177,26 @@ export const mealContract = defineContract("meal", {
     invalidates: ["meal"],
   }),
   updateRecipe: mutation({
+    command: {
+      label: "Change scale",
+      confirmation: null,
+      inputs: [
+        {
+          kind: "number",
+          key: "scale",
+          label: "Scale",
+          initial: null,
+          min: 0.01,
+        },
+      ],
+    },
     native: "Change a meal recipe's scale from the composition report",
     input: schemas.mealUpdateRecipeInput,
     output: schemas.mealOut,
     invalidates: ["meal"],
   }),
   removeRecipe: mutation({
+    command: { label: "Remove recipe", confirmation: null },
     native: "Remove a recipe from a meal from the composition report",
     input: schemas.mealRecipeIdInput,
     output: schemas.mealOut,
@@ -179,6 +204,7 @@ export const mealContract = defineContract("meal", {
   }),
   // Copies are plans: planned portions, no images, appended to the target days.
   duplicate: mutation({
+    command: { label: "Duplicate meal", confirmation: null },
     mcp: {
       omit: "deferred_capability",
     },
@@ -187,6 +213,7 @@ export const mealContract = defineContract("meal", {
     invalidates: ["meal"],
   }),
   copyRange: mutation({
+    command: { label: "Copy meals", confirmation: null },
     mcp: {
       omit: "deferred_capability",
     },
@@ -195,6 +222,7 @@ export const mealContract = defineContract("meal", {
     invalidates: ["meal"],
   }),
   savePreparation: mutation({
+    command: { label: "Save preparation", confirmation: null },
     native: "Set or remove portions and the yield from the composition report",
     input: schemas.saveMealRecipePreparationInput,
     output: schemas.saveMealRecipePreparationOut,
@@ -213,6 +241,7 @@ export const mealContract = defineContract("meal", {
   }),
   /** Plan a recipe into a meal; compact identity + coverage, nutrients on request. */
   planRecipe: mutation({
+    command: { label: "Plan recipe", confirmation: null },
     input: schemas.mealAddRecipeInput.extend({
       nutrition: addRecipeNutritionDetail,
     }),

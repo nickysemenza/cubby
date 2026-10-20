@@ -152,7 +152,7 @@ export const operationOverrides = {
         return input.entity === "product"
           ? productWriteTags(input)
           : // A location reparent moves inventory, product and problem views
-            // too — the wide fan-out `location.bulkUpdateParent` declares.
+            // too, so bulk updates need the full reparent fan-out.
             // `entityRipple("location")` is the narrow one.
             input.entity === "location" && input.action === "bulkUpdate"
             ? ripple.locationReparent

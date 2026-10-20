@@ -9,8 +9,6 @@ import {
   purchaseLinkProductsCandidatesInput,
   purchaseLinkProductsCandidatesOut,
   purchaseOut,
-  purchaseProductsInput,
-  purchaseProductsOut,
   purchaseSettlementAllocationCheckInput,
   purchaseSettlementAllocationCheckOut,
   purchaseSettlementCandidatesInput,
@@ -94,22 +92,15 @@ export const purchaseContract = defineContract("purchase", {
     output: purchaseSettlementAllocationCheckOut,
     cache: { tags: [] },
   }),
-  products: query({
-    mcp: {
-      omit: "client_view",
-      note: "Agents read purchase products through entity_read.relations",
-    },
-    native: "Show Product movement evidence for a Purchase",
-    input: purchaseProductsInput,
-    output: purchaseProductsOut,
-  }),
   link: mutation({
+    command: { label: "Attach expenses", confirmation: null },
     native: "Attach expenses to a Purchase",
     input: linkExpensesToPurchaseInput,
     output: purchaseOut,
     invalidates: ["purchase"],
   }),
   split: mutation({
+    command: { label: "Split expense", confirmation: null },
     mcp: { omit: "agent_twin", twin: "purchase.splitWithDelta" },
     native: "Split an Expense into parts filed under its Purchase",
     input: splitExpenseInput,
@@ -163,6 +154,7 @@ export const purchaseContract = defineContract("purchase", {
     cache: { tags: [["product"], ["purchase"]] },
   }),
   attachProducts: mutation({
+    command: { label: "Attach products", confirmation: null },
     mcp: {
       omit: "kernel_alternative",
       kernel: ["link"],
@@ -176,6 +168,7 @@ export const purchaseContract = defineContract("purchase", {
   // Agent-facing (MCP `expenses`, `purchase_import`).
   /** `split` plus the conservation check an agent confirms before moving on. */
   splitWithDelta: mutation({
+    command: { label: "Split expense", confirmation: null },
     input: splitExpenseInput,
     output: splitExpenseWithDeltaOut,
     invalidates: ["expense"],

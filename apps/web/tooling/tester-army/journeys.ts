@@ -1135,11 +1135,11 @@ export const journeys: Journey[] = [
   {
     id: "board-move-card",
     title: "task board lanes and moving a card",
-    open: () => ({ web: "/tasks?view=board&cols=project" }),
+    open: () => ({ web: "/tasks?view=board&groupBy=projectId" }),
     steps: [
       {
-        goal: `Open the task board grouped by project. Confirm the lanes include "Inbox" and "${JOURNEY_NAMES.boardProjectA}".`,
-        web: `This is the task board with lanes grouped by project. Confirm the lanes include "Inbox" and "${JOURNEY_NAMES.boardProjectA}".`,
+        goal: `Open the task board grouped by project. Confirm the lanes include "No project" and "${JOURNEY_NAMES.boardProjectA}".`,
+        web: `This is the task board with lanes grouped by project. Confirm the lanes include "No project" and "${JOURNEY_NAMES.boardProjectA}".`,
         ios: "Open the Library tab, then Browse catalog. Finish on the Browse catalog list.",
         tapControl: {
           ios: {
@@ -1159,12 +1159,15 @@ export const journeys: Journey[] = [
       {
         tapControl: { ios: { role: "button", name: "Board" } },
         check: {
-          visible: () => ["Inbox", JOURNEY_NAMES.boardProjectA],
+          visible: () => ["Group by"],
         },
       },
       {
-        goal: `Move the card "Synthetic inbox card" from Inbox into the "${JOURNEY_NAMES.boardProjectA}" lane.`,
-        web: `Drag the "Drag Synthetic inbox card" handle onto the "${JOURNEY_NAMES.boardProjectA} task drop target". Finish with Synthetic inbox card inside that project column and Inbox empty.`,
+        ios: "Use Group by to choose Project. Use Group to choose No project. Finish with Synthetic inbox card visible.",
+      },
+      {
+        goal: `Move the card "Synthetic inbox card" from No project into the "${JOURNEY_NAMES.boardProjectA}" lane.`,
+        web: `Drag the "Drag Synthetic inbox card" handle onto the "${JOURNEY_NAMES.boardProjectA}" board region. Finish with Synthetic inbox card inside that project column and No project empty.`,
         ios: [],
         tapControl: {
           ios: { role: "button", name: "Move Synthetic inbox card" },
@@ -1172,7 +1175,7 @@ export const journeys: Journey[] = [
       },
       {
         tapControl: {
-          ios: { role: "button", name: `Lane: ${JOURNEY_NAMES.boardProjectA}` },
+          ios: { role: "button", name: JOURNEY_NAMES.boardProjectA },
         },
       },
     ],

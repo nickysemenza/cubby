@@ -72,9 +72,9 @@ describe("Steps ledger", () => {
       "R2 object not found: synthetic/IMG-0001.heic (404)",
     ]);
     expect(exif?.commands?.[0]?.request).toEqual({
-      kind: "retry-run-step",
-      runId: "RUN-4K7M",
-      stepKey: "exif",
+      kind: "operation",
+      operation: "run.retryStep",
+      body: { runId: "RUN-4K7M", stepKey: "exif" },
     });
     expect(idle?.lines?.[0]?.text).toBe("Embeddings, Recipe totals");
   });

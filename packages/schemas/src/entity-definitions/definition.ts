@@ -174,7 +174,8 @@ export type EntityDetailSection = NonNullable<
   EntityPresentation["detail"]["sections"]
 >[number];
 export type EntityListView = EntityPresentation["list"]["views"][number];
-export type EntitySlotListView = Exclude<EntityListView, string>;
+export type EntitySlotListView = Extract<EntityListView, { kind: "slot" }>;
+export type EntityBoardListView = Extract<EntityListView, { kind: "board" }>;
 
 /** Shared labels for the list presentation control on every platform. */
 export const LIST_PRESENTATION_CHOICES = [
@@ -218,15 +219,15 @@ export const displayFormats = [
 ] as const;
 export type DisplayFormat = (typeof displayFormats)[number];
 
-/** The three built-in renderers; every other view is a slot. */
+/** Built-in string renderers; configured renderers carry their own discriminant. */
 export const BUILT_IN_LIST_VIEWS = ["table", "shelf", "timeline"] as const;
 export const isSlotListView = (
   view: EntityListView,
 ): view is EntitySlotListView =>
-  !BUILT_IN_LIST_VIEWS.some((builtIn) => builtIn === view);
+  typeof view === "object" && view.kind === "slot";
 /** The id a view is addressed by in `?view=`. */
 export const listViewId = (view: EntityListView): string =>
-  isSlotListView(view) ? view.id : view;
+  typeof view === "object" ? view.id : view;
 
 /**
  * Executable entity declarations deliberately carry Zod instances.  This
@@ -1202,7 +1203,42 @@ const buildMetadataSchemas = () => {
       .strict(),
   ]);
 
+  const boardListViewSchema = z
+    .object({
+      kind: z.literal("board"),
+      id: sectionId,
+      label: nonEmptyString(),
+      groupBy: nonEmptyString(),
+      groupings: z.array(nonEmptyString()).min(1),
+      cardFields: z.array(fieldKey),
+      filters: z.record(z.string(), z.unknown()).optional().default({}),
+      pageSize: z.number().int().min(1).max(100).optional().default(50),
+      caps: z
+        .array(
+          z.object({
+            field: fieldKey,
+            value: z.string(),
+            limit: z.number().int().min(1).max(100),
+            orderBy: fieldKey.optional(),
+            direction: z.enum(["asc", "desc"]).optional(),
+          }),
+        )
+        .optional()
+        .default([]),
+      sort: z
+        .array(
+          z.object({ orderBy: fieldKey, direction: z.enum(["asc", "desc"]) }),
+        )
+        .min(1),
+      reorder: z
+        .object({ operation: nonEmptyString() })
+        .nullable()
+        .optional()
+        .default(null),
+    })
+    .strict();
   const listViewSchema = z.union([
+    boardListViewSchema,
     z.enum(["table", "shelf", "timeline"]),
     z
       .object({
@@ -2502,11 +2538,18 @@ const buildMetadataSchemas = () => {
       /** Empty-state copy for this `many` relation's derived detail table,
        * replacing the generic "No <plural> yet." sentence. */
       empty: nonEmptyString().optional(),
+      list: z
+        .object({
+          rowSchema: sourceRefMetadataSchema,
+          adapter: sourceRefMetadataSchema,
+        })
+        .strict()
+        .optional(),
       mutation: z
         .object({
           source: nonEmptyString(),
           itemSchema: sourceRefMetadataSchema,
-          /** One listed row; the relation `listRelation` action returns an array of it. */
+          /** One listed row; `listRelation` returns a counted page of these rows. */
           rowSchema: sourceRefMetadataSchema,
           adapter: sourceRefMetadataSchema,
           audiences: z.array(z.enum(["browser", "mcp"])).min(1),

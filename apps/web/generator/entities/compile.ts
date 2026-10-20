@@ -2317,6 +2317,19 @@ export const compileEntity = (
             },
           ],
   );
+  const relationLists = declaration.relations.flatMap((relation) => {
+    const read = relation.list ?? relation.mutation;
+    return read
+      ? [
+          {
+            entity: key,
+            relation: relation.key,
+            rowSchema: read.rowSchema,
+            adapter: read.adapter,
+          },
+        ]
+      : [];
+  });
   const bulkUpdateFields =
     declaration.capabilities.lifecycle !== "readOnly" &&
     contract?.update &&
@@ -2363,6 +2376,7 @@ export const compileEntity = (
     imagePolicy: declaration.capabilities.images,
     relations: declaration.relations,
     relationMutations,
+    relationLists,
     lifecycle: {
       softDelete: declaration.capabilities.softDelete,
       delete: declaration.capabilities.delete,
@@ -3003,6 +3017,37 @@ export const compileEntityDeclarations = (
       ),
     ),
   );
+  for (const entity of entities) {
+    for (const view of entity.inspector.list.views) {
+      if (typeof view !== "object" || view.kind !== "board") continue;
+      if (!view.groupings.includes(view.groupBy))
+        throw new EntityDeclarationError(
+          `${entity.key}.${view.id}: default grouping must be offered.`,
+        );
+      for (const key of view.groupings) {
+        const choice = entity.listFields.grouping.find(
+          (choice) => choice.key === key,
+        );
+        if (!choice || choice.reason !== null || !choice.filter)
+          throw new EntityDeclarationError(
+            `${entity.key}.${view.id}: unusable board grouping ${key}: ${choice?.reason ?? "no declared filter"}`,
+          );
+      }
+      const fields = new Set(
+        entity.fieldModel.fields.map((field) => field.key),
+      );
+      for (const key of view.cardFields)
+        if (!fields.has(key))
+          throw new EntityDeclarationError(
+            `${entity.key}.${view.id}: unknown card field ${key}.`,
+          );
+      for (const term of view.sort)
+        if (!entity.fieldModel.sort?.fields.includes(term.orderBy))
+          throw new EntityDeclarationError(
+            `${entity.key}.${view.id}: unsupported board sort ${term.orderBy}.`,
+          );
+    }
+  }
   validateEntityIdentities(entities);
   for (const entity of entities) {
     for (const field of entity.fieldModel.fields) {

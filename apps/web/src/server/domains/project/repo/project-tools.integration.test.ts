@@ -69,6 +69,8 @@ describe("project reusable resources", () => {
     await expect(
       executeEntity(kernel, {
         action: "listRelation",
+        offset: 0,
+        limit: 50,
         entity: "project",
         relation: "resources",
         id: projectId,

@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
-  isSlotListView,
   listPresentationLabel,
   listViewId,
 } from "@cubby/schemas/entity-definitions/definition";
@@ -114,10 +113,11 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
     const id = listViewId(candidate);
     const choice = {
       value: id,
-      label: isSlotListView(candidate)
-        ? candidate.label
-        : (listPresentationLabel(candidate) ?? "Timeline"),
-      icon: isSlotListView(candidate) ? undefined : VIEW_ICONS[candidate],
+      label:
+        typeof candidate === "object"
+          ? candidate.label
+          : (listPresentationLabel(candidate) ?? "Timeline"),
+      icon: typeof candidate === "object" ? undefined : VIEW_ICONS[candidate],
     };
     return candidate === "shelf"
       ? [

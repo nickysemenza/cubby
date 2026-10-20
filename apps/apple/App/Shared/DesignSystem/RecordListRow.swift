@@ -4,6 +4,7 @@ import SwiftUI
 /// the row owns thumbnail fallback, identity/context, the trailing rail, and wrapping geometry.
 struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
     let title: String
+    var titleDestination: Route? = nil
     var imageURL: URL? = nil
     var symbol: String = "square.dashed"
     var emoji: String? = nil
@@ -32,9 +33,16 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                     : AnyLayout(RecordRowColumns(spacing: FieldGuideTokens.Space.sm))
                 layout {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.subheadline.weight(.semibold))
-                            .accessibilityIdentifier(titleIdentifier)
-                            .fixedSize(horizontal: false, vertical: true)
+                        Group {
+                            if let titleDestination {
+                                NavigationLink(title, value: titleDestination)
+                            } else {
+                                Text(title)
+                            }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .accessibilityIdentifier(titleIdentifier)
+                        .fixedSize(horizontal: false, vertical: true)
                         context().font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }

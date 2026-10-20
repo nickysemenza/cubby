@@ -16,6 +16,21 @@ metadata and applies defaults before typed compilation. Cross-entity
 references, capability compatibility, field rosters, and physical storage remain
 semantic compiler checks. Field-validation Zod instances pass through unchanged.
 
+## Declared board lists
+
+A `kind: "board"` list view configures grouping choices, card fields, intrinsic filters,
+per-group caps, page size, ordering and an optional reorder command. `model.grouping`
+remains the authority for groupability and filter bindings. Both clients read group
+summaries from the full filtered generic list, then query bounded card pages for a
+group. A cap limits cards, never the header count. Move and reorder submit one declared
+workflow command body to the domain transaction. Clients send neighbor anchors and the
+destination group; `task.bulkReorder` calculates sparse ranks over the complete thin group,
+rebalancing it only when no rank fits. Rebalancing preserves unseen rows and their timestamps.
+Clients do not number a partial page or split a move into writes. Capped recency groups
+allow moves between groups but do not offer manual ordering. Task trade grouping uses
+the required effective trade; clearing an inherited source must still leave a resolvable
+trade. No-value groups without a declared no-value filter remain readable but cannot be placement destinations or manually reordered. No-project placement uses the canonical reference-presence filter. Clearable grouping choices retain their no-value destination even when its count is zero.
+
 ## Generic by default
 
 Cubby's entities share one declaration spine, and every client — web, iOS and
@@ -399,8 +414,13 @@ separately rather than generalizing a synthetic speedup to production.
 table or dated schedule rows has no per-platform code: the server composes it
 once (`entityReport.get`, builders in `server/generic/entity-report/repo/`, block kinds
 in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
-(`ReportDetailSlot`, Swift Charts) only draw it. Add the slot id to
-`reportSlots`, a declaration to `REPORTS`, and register the slot on both clients;
+(`ReportDetailSlot`, Swift Charts) only draw it. `entityReport.get` accepts an
+explicit `record`, filtered `list`, or bounded `selection` scope in a POST body.
+Each builder validates its supported entity, filters, and cursor; unsupported
+scopes fail rather than falling through to a record read. Portfolio analytics
+reuse the domain allocation query and sum selected scope roots once; task
+briefings reuse the bounded, ranked Today projection. Add the slot id to
+`reportSlots`, a builder, and the appropriate declaration or collection surface;
 money in a report is `SUM(Expense.cost)` or the persisted valuation, never
 recomputed on a client. Money summaries and chart labels preserve cents, matching
 the report rows. Linked record names truncate within the available row width,
@@ -420,11 +440,22 @@ body to write), `purchase.linkExpenseCandidates` and `purchase.checkLinkExpenses
 move off another purchase), `purchase.linkProductCandidates` (a search minus the
 explicitly attached). The write re-validates; a refused check sends no write.
 
+When an indexed section supplies a report block’s heading, its nested renderer omits that heading so the section has one title and one accessible region name.
+
 **Report commands and batching.** A `records` row may carry `badges` (toned chips), `lines` (an
-untoned line is the row's result, `muted` lines its evidence), a `trailing` figure,
-an `externalLink` (label and HTTP(S) URL), a collapsible `detail` and `commands`: each command names an existing operation and its exact
-body (`run-control`, `resolve-finding`, and the recipe, cookbook and meal commands) plus `confirm` copy: native asks before sending
-(approve, reject and apply carry one; dismiss and retry act on the tap), web acts on the tap as it always has.
+untoned line is the row's result, `muted` lines its evidence, and an optional
+`ref` opens its context record), a `trailing` figure, an `externalLink` (label
+and HTTP(S) URL), a collapsible `detail` and `commands`. Ordinary commands name
+an existing mutation operation and its exact body. The mutation contract's
+opt-in `command` metadata owns shared operands, confirmation, and result
+presentation. `operationCommandRequest` checks server construction against the
+operation input; generated web/native dispatch invokes that same operation and
+its cache policy. Both clients confirm before sending when copy is declared.
+Form bindings replace only declared operands; frozen evidence, fingerprints,
+and approval bodies remain part of the domain request, and the writer validates
+them again. Cookbook chunk loops and interactive device/review adapters retain
+their domain protocols. Command presentation adds no workflow executor or new
+business-rule language.
 A report may say the record is `live` (clients poll; there is no realtime transport), carry its
 `status` (a client showing another refreshes its record) and a `nextCursor` for paging. A page that
 shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
@@ -2189,6 +2220,8 @@ and emit no migration.
 
 ## Data quality
 
+Compact entity facts, including board cards, use the shared quality value and lazy field explanation; they never summarize the quality object as a field count.
+
 Product price checks share catalog price evidence for filtering and a scoped
 numeric projection for quality hydration. Applicability, missing-value checks,
 and exception fingerprints read the same projection during hydration. Both
@@ -2516,6 +2549,13 @@ acquisition rules.
 Mutable sources additionally name a typed item schema, adapter, and
 transport exposure. The compiler rejects duplicate relation/source keys,
 unresolvable mutation sources, invalid inverses, and stale generated bindings.
+Read adapters may expose paged rich rows through `entityGraph.relation` and
+the kernel's `listRelation` action. Purchase/Product reads select and count
+distinct live pairs before enriching the selected page, preserve explicit-link
+detachability alongside movement evidence, and use stable date/name plus ID
+ordering. Undated purchases sort last. Filtered target IDs constrain both the
+page and its count; a client must not fetch an entire relation to decorate one
+visible page.
 
 Lifecycle is deliberately separate from logical relationships. Physical edges
 carry stable domain meaning, while each delete or merge operation declares its

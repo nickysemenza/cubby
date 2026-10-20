@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { QueryClient } from "@tanstack/react-query";
 
@@ -40,7 +39,7 @@ export function entityListLoader<E extends ListEntity>(entity: E) {
       // A slot view (Runs history) owns its reads and its URL keys — `sort`
       // there is `newest|oldest`, not a kernel sort field — so the kernel
       // list is not its first page to hydrate.
-      active: !isSlotListView(view),
+      active: typeof view === "string",
       // The table pages a nested tree's roots; Cards and the timeline stay flat.
       nested: view === "table" && listNested(entity, deps),
       signal: abortController.signal,

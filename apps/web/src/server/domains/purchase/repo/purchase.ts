@@ -1,3 +1,4 @@
+import type { EntityRelationPageInput } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
@@ -852,6 +853,37 @@ export const purchaseListSummary = async (
     expenseCount: Number(totals?.expenseCount ?? 0),
   };
 };
+
+/** Narrow root-table projection for relation paging; the scaffold owns the count. */
+export function pagePurchaseRelationTargets(
+  db: Database,
+  where: SQL | undefined,
+  orderBy: SQL[],
+  input: Pick<EntityRelationPageInput, "offset" | "limit">,
+) {
+  return purchaseScaffold.list(
+    db,
+    {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: input.limit },
+      projection: { kind: "base" },
+    },
+    {
+      where,
+      orderBy,
+      select: (page) =>
+        getDb(db)
+          .select({ id: purchase.id, code: purchase.shortcode })
+          .from(purchase)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(input.offset),
+      hydrate: (rows) => rows,
+    },
+  );
+}
 
 export const purchaseList = async (
   db: Database,

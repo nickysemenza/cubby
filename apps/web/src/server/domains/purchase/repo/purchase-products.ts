@@ -38,9 +38,16 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
-import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
+import {
+  getProductCoverImageUrlsByProductIds,
+  pageProductRelationTargets,
+} from "~/server/domains/product/repo/crud";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
-import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
+import { pagePurchaseRelationTargets } from "~/server/domains/purchase/repo/purchase";
+import {
+  type RelationListPageInput,
+  linkRelationAdapter,
+} from "~/server/entity-kernel/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
@@ -200,6 +207,7 @@ const loadComponentCountsByProductId = async (
 export async function listPurchaseProducts(
   db: Database,
   purchaseId: PurchaseId,
+  selectedIds?: ProductId[],
 ): Promise<PurchaseProductOut[]> {
   const dbc = getDb(db);
   const productColumns = {
@@ -228,6 +236,7 @@ export async function listPurchaseProducts(
       .where(
         and(
           eq(entityLink.fromEntityId, purchaseId),
+          selectedIds ? inArray(product.id, selectedIds) : undefined,
           liveLinks("purchaseProduct"),
         ),
       ),
@@ -247,7 +256,12 @@ export async function listPurchaseProducts(
         product,
         and(eq(product.id, expense.productId), notDeleted(product)),
       )
-      .where(expensePairPredicate(eq(expense.purchaseId, purchaseId))),
+      .where(
+        and(
+          expensePairPredicate(eq(expense.purchaseId, purchaseId)),
+          selectedIds ? inArray(product.id, selectedIds) : undefined,
+        ),
+      ),
   ]);
 
   const movementEvidence = movementEvidenceByPair(
@@ -261,7 +275,11 @@ export async function listPurchaseProducts(
   >(
     linkRows.map((row) => ({ ...row, key: row.productId })),
     expenseRows.map((row) => ({ ...row, key: row.productId })),
-  ).sort((a, b) => a.productName.localeCompare(b.productName));
+  ).sort(
+    (a, b) =>
+      a.productName.localeCompare(b.productName) ||
+      a.productId.localeCompare(b.productId),
+  );
 
   const productIds = rows.map((row) => row.productId);
   const [prices, coverImageUrls, componentCounts] = await Promise.all([
@@ -286,6 +304,7 @@ export async function listPurchaseProducts(
 export async function listProductPurchases(
   db: Database,
   productId: ProductId,
+  selectedIds?: PurchaseId[],
 ): Promise<ProductPurchaseOut[]> {
   const dbc = getDb(db);
   const purchaseColumns = {
@@ -319,7 +338,11 @@ export async function listProductPurchases(
       )
       .leftJoin(vendor, liveVendor)
       .where(
-        and(eq(entityLink.toEntityId, productId), liveLinks("purchaseProduct")),
+        and(
+          eq(entityLink.toEntityId, productId),
+          liveLinks("purchaseProduct"),
+          selectedIds ? inArray(purchase.id, selectedIds) : undefined,
+        ),
       ),
     dbc
       .select({
@@ -338,7 +361,12 @@ export async function listProductPurchases(
         and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
       )
       .leftJoin(vendor, liveVendor)
-      .where(expensePairPredicate(eq(expense.productId, productId))),
+      .where(
+        and(
+          expensePairPredicate(eq(expense.productId, productId)),
+          selectedIds ? inArray(purchase.id, selectedIds) : undefined,
+        ),
+      ),
   ]);
 
   const movementEvidence = movementEvidenceByPair(
@@ -352,7 +380,11 @@ export async function listProductPurchases(
   >(
     linkRows.map((row) => ({ ...row, key: row.purchaseKey })),
     expenseRows.map((row) => ({ ...row, key: row.purchaseKey })),
-  ).sort((a, b) => comparePlainDatesDescending(a.date, b.date));
+  ).sort(
+    (a, b) =>
+      comparePlainDatesDescending(a.date, b.date) ||
+      a.purchaseKey.localeCompare(b.purchaseKey),
+  );
 
   return rows.map((row) => ({
     purchaseId: parseShortcodeFor("purchase", row.purchaseCode),
@@ -365,6 +397,108 @@ export async function listProductPurchases(
     ...movementEvidence(row.purchaseKey),
   }));
 }
+
+/** Select distinct pairs before enrichment; count and page share every predicate. */
+async function selectPairPage(
+  db: Database,
+  direction: "purchase" | "product",
+  ownerId: PurchaseId | ProductId,
+  page: RelationListPageInput,
+) {
+  const fromPurchase = direction === "purchase";
+  const target = fromPurchase ? product : purchase;
+  const expenseOwner = sql.raw(fromPurchase ? '"purchaseId"' : '"productId"');
+  const expenseTarget = sql.raw(fromPurchase ? '"productId"' : '"purchaseId"');
+  const linkOwner = sql.raw(fromPurchase ? '"fromEntityId"' : '"toEntityId"');
+  const linkTarget = sql.raw(fromPurchase ? '"toEntityId"' : '"fromEntityId"');
+  const ownerTable = sql.raw(fromPurchase ? '"Purchase"' : '"Product"');
+  const where = and(
+    notDeleted(target),
+    sql`EXISTS (SELECT 1 FROM ${ownerTable} owner WHERE owner."id" = ${ownerId} AND owner."deletedAt" IS NULL)`,
+    sql`${target.id} IN (
+      SELECT ${expenseTarget} FROM "Expense"
+        WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL AND ${expenseOwner} = ${ownerId}
+      UNION
+      SELECT ${linkTarget} FROM "EntityLink"
+        WHERE "kind" = 'purchaseProduct' AND "deletedAt" IS NULL AND ${linkOwner} = ${ownerId}
+    )`,
+    page.targetIds ? inArray(target.shortcode, page.targetIds) : undefined,
+  );
+  const selected = fromPurchase
+    ? await pageProductRelationTargets(
+        db,
+        where,
+        [asc(product.name), asc(product.id)],
+        page,
+      )
+    : await pagePurchaseRelationTargets(
+        db,
+        where,
+        [sql`${purchase.date} DESC NULLS LAST`, asc(purchase.id)],
+        page,
+      );
+  return { items: selected.data, totalCount: selected.count };
+}
+
+export async function listPurchaseProductsPage(
+  db: Database,
+  ownerId: PurchaseId,
+  page: RelationListPageInput,
+) {
+  const selected = await selectPairPage(db, "purchase", ownerId, page);
+  const rows =
+    selected.items.length === 0
+      ? []
+      : await listPurchaseProducts(
+          db,
+          ownerId,
+          selected.items.map(({ id }) => parseEntityId("product", id)),
+        );
+  const byId = new Map(rows.map((row) => [row.productId, row]));
+  return {
+    items: selected.items
+      .map(({ code }) => byId.get(parseShortcodeFor("product", code))!)
+      .filter(Boolean),
+    totalCount: selected.totalCount,
+  };
+}
+
+export async function listProductPurchasesPage(
+  db: Database,
+  ownerId: ProductId,
+  page: RelationListPageInput,
+) {
+  const selected = await selectPairPage(db, "product", ownerId, page);
+  const rows =
+    selected.items.length === 0
+      ? []
+      : await listProductPurchases(
+          db,
+          ownerId,
+          selected.items.map(({ id }) => parseEntityId("purchase", id)),
+        );
+  const byId = new Map(rows.map((row) => [row.purchaseId, row]));
+  return {
+    items: selected.items
+      .map(({ code }) => byId.get(parseShortcodeFor("purchase", code))!)
+      .filter(Boolean),
+    totalCount: selected.totalCount,
+  };
+}
+
+export const productPurchasesRelationAdapter = {
+  async listPage(
+    db: Database,
+    ownerShortcode: string,
+    page: RelationListPageInput,
+  ) {
+    return listProductPurchasesPage(
+      db,
+      await resolveOrThrow(db, "product", ownerShortcode),
+      page,
+    );
+  },
+};
 
 async function liveProductShortcodes(
   dbc: DrizzleClient,
@@ -609,6 +743,8 @@ export const purchaseProductsRelationAdapter = linkRelationAdapter<
     detach: "Provenance links this detach would remove.",
   },
   list: listPurchaseProducts,
+  targetId: (row) => row.productId,
+  listPage: listPurchaseProductsPage,
   preflight: {
     attach: preflightAttachPurchaseProducts,
     detach: preflightDetachPurchaseProducts,

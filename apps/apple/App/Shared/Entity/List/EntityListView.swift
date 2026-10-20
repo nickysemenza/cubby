@@ -128,7 +128,7 @@ struct EntityListView: View {
                             id: view.id, label: view.label, symbol: "calendar.day.timeline.left",
                             view: view, density: nil, browsePresentation: nil)
                     ]
-                case .slot:
+                case .board, .slot:
                     [
                         PresentationChoice(
                             id: view.id, label: view.label, symbol: "rectangle.dashed", view: view,
@@ -499,7 +499,7 @@ struct EntityListView: View {
                 switch model.view {
                 case .table: browsePresentation.rawValue
                 case .shelf: cardDensity.rawValue
-                case .timeline, .slot: model.view.id
+                case .timeline, .board, .slot: model.view.id
                 }
             },
             set: { id in selectPresentation(id, model: model) })
@@ -539,7 +539,11 @@ struct EntityListView: View {
 
     @ViewBuilder
     private func content(_ model: GenericEntityListModel) -> some View {
-        if case .slot(let id, _, _) = model.view {
+        if case .board(let spec) = model.view {
+            EntityBoardListView(
+                descriptor: descriptor, spec: spec, client: appModel.client, filters: specialistFilters(model)
+            )
+        } else if case .slot(let id, _, _) = model.view {
             specialistSlot(id, model: model)
         } else if model.isSearching {
             searchContent(model)

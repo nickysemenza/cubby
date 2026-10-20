@@ -27,6 +27,8 @@ import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
+import { operationCommandRequest } from "~/contracts/define";
+import { purchaseImportContract } from "~/contracts/purchase-import.contract";
 import {
   formatAiCost,
   formatAiCostSubtotal,
@@ -662,14 +664,17 @@ const correctRelevanceCommand = (
     },
     { kind: "text", key: "reason", label: "Reason", initial: null },
   ],
-  request: {
-    kind: "correct-email-relevance",
-    id: shortcode,
-    expectedChecksum: email.checksum,
-    reviewedChecksum: email.checksum,
-    classification: "related",
-    reason: "",
-  },
+  request: operationCommandRequest(
+    purchaseImportContract,
+    "correctEmailRelevance",
+    {
+      id: shortcode,
+      expectedChecksum: email.checksum,
+      reviewedChecksum: email.checksum,
+      classification: "related",
+      reason: "",
+    },
+  ),
 });
 
 function memberRow(
@@ -720,11 +725,11 @@ function previewRow(
             label: "Rerun preview",
             prominent: false,
             confirm: "Rerun the cheap extraction preview for this Email?",
-            request: {
-              kind: "rerun-email-preview",
-              id: shortcode,
-              expectedChecksum: email.checksum,
-            },
+            request: operationCommandRequest(
+              purchaseImportContract,
+              "emailPreviewRerun",
+              { id: shortcode, expectedChecksum: email.checksum },
+            ),
           },
         ]
       : [];
@@ -819,10 +824,11 @@ function importRow(
         label: "Import this Email",
         prominent: true,
         confirm: null,
-        request: {
-          kind: "import-email",
-          items: [{ id: shortcode, expectedChecksum: email.checksum }],
-        },
+        request: operationCommandRequest(
+          purchaseImportContract,
+          "emailImport",
+          { items: [{ id: shortcode, expectedChecksum: email.checksum }] },
+        ),
       },
     ],
   });
@@ -908,13 +914,13 @@ function linkCommands(
   shortcode: EmailShortcode,
   link: EmailPurchaseLink,
 ): ReportCommand[] {
-  const request = (decision: "linked" | "dismissed") => ({
-    kind: "decide-email-purchase" as const,
-    id: shortcode,
-    expectedChecksum: email.checksum,
-    purchaseId: link.purchaseId,
-    decision,
-  });
+  const request = (decision: "linked" | "dismissed") =>
+    operationCommandRequest(purchaseImportContract, "emailPurchaseDecide", {
+      id: shortcode,
+      expectedChecksum: email.checksum,
+      purchaseId: link.purchaseId,
+      decision,
+    });
   const replaces = link.replacesPurchaseIds.join(", ");
   const link_: ReportCommand = {
     id: `link:${shortcode}:${link.purchaseId}`,
@@ -1209,7 +1215,11 @@ export async function emailReviewReport(
           prominent: true,
           confirm:
             "Rerun rule, the decision model and the relevance model from this Email's Gmail original? The result is recorded; it replaces Relevance only when nothing retained is dropped.",
-          request: { kind: "reclassify-email", ids: [shortcode] },
+          request: operationCommandRequest(
+            purchaseImportContract,
+            "emailReclassify",
+            { ids: [shortcode] },
+          ),
         },
       ],
     },
@@ -1390,7 +1400,11 @@ export async function emailAccuracyViewReport(
             prominent: true,
             confirm: null,
             label: "Start a 200-Email accuracy sample",
-            request: { kind: "create-email-accuracy", sampleSize: 200 },
+            request: operationCommandRequest(
+              purchaseImportContract,
+              "emailAccuracyCreate",
+              { sampleSize: 200 },
+            ),
           },
         ],
       },

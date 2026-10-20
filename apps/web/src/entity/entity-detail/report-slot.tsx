@@ -46,6 +46,38 @@ import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
 import { RecordsBlockView, RecordsDetailActions } from "./records-block";
 import { ReportVerb } from "./records-ledger";
 
+type RecordReportInput = Omit<EntityReportInput, "scope"> & { id: string };
+
+/** Collection reports use the same blocks and cursor protocol as record reports. */
+export function CollectionReportSlot(input: EntityReportInput) {
+  const query = useInfiniteQuery(cursorQueryOptions(entityReport.get, input));
+  if (query.isPending) return <Skeleton className="h-16 w-full" />;
+  if (query.isError)
+    return (
+      <ErrorDisplay
+        error={query.error}
+        title="this report"
+        onRetry={() => void query.refetch()}
+      />
+    );
+  return (
+    <Stack gap="sm">
+      <ReportBlocks blocks={mergePages(query.data.pages)} />
+      {query.hasNextPage ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={query.isFetchingNextPage}
+          onClick={() => void query.fetchNextPage()}
+        >
+          Load more
+        </Button>
+      ) : null}
+    </Stack>
+  );
+}
+
 const TONE_TEXT = {
   positive: "text-positive",
   warning: "text-warning-ink",
@@ -398,7 +430,7 @@ function syncRecordStatus(
  * query; every other slot reads on its own and pages with the server's `nextCursor`.
  */
 function useReportBlocks(
-  input: EntityReportInput,
+  input: RecordReportInput,
   status: string | undefined,
   nested: boolean,
 ) {
@@ -416,7 +448,11 @@ function useReportBlocks(
         : false,
   });
   const paged = useInfiniteQuery({
-    ...cursorQueryOptions(entityReport.get, input),
+    ...cursorQueryOptions(entityReport.get, {
+      slot: input.slot,
+      scope: { kind: "record", id: input.id },
+      cursor: input.cursor,
+    }),
     enabled: !batched,
   });
   const report = batch.data?.reports.find(
@@ -468,7 +504,7 @@ export function EntityReportSlot({
   status,
   nested = false,
   ...input
-}: EntityReportInput & {
+}: RecordReportInput & {
   record?: object;
   entity?: string;
   recordsList?: (block: Extract<ReportBlock, { kind: "records" }>) => ReactNode;
@@ -535,7 +571,7 @@ export function ReportDetailActions({
   id,
   status,
   record,
-}: EntityReportInput & { status?: string; record?: object }) {
+}: RecordReportInput & { status?: string; record?: object }) {
   const query = useReportBlocks({ slot, id }, status, true);
   const placement = reportDetailActionsFor(slot);
   return (

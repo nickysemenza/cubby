@@ -117,4 +117,67 @@ public struct ReportCommandForm: Equatable, Sendable {
     }
 
     public var isComplete: Bool { missing.isEmpty }
+    static func commandBody(
+        _ body: JSONValue, bindings: [String: String], form: ReportCommandForm?,
+        booleanInputs: [String]
+    ) throws -> JSONValue {
+        guard let form else { return body }
+        var result = body
+        for field in form.fields {
+            let value: JSONValue
+            if let number = form.number(field.key) {
+                value = .number(number)
+            } else if let text = form.text(field.key) {
+                value =
+                    booleanInputs.contains(field.key)
+                    ? .bool(text == "true")
+                    : .string(
+                        field.kind == .text ? text.trimmingCharacters(in: .whitespacesAndNewlines) : text)
+            } else {
+                throw ReportActionError.incompleteAnswers
+            }
+            result = try setting(
+                result, path: (bindings[field.key] ?? field.key).split(separator: ".")[...], value: value)
+        }
+        return result
+    }
+
+    private static func setting(_ body: JSONValue, path: ArraySlice<Substring>, value: JSONValue) throws
+        -> JSONValue
+    {
+        guard let key = path.first else { return value }
+        let rest = path.dropFirst()
+        switch body {
+        case .object(var fields):
+            fields[String(key)] = try setting(fields[String(key)] ?? .null, path: rest, value: value)
+            return .object(fields)
+        case .array(var values):
+            guard let index = Int(key), values.indices.contains(index) else {
+                throw ReportActionError.incompleteAnswers
+            }
+            values[index] = try setting(values[index], path: rest, value: value)
+            return .array(values)
+        default: throw ReportActionError.incompleteAnswers
+        }
+    }
+
+}
+
+extension ReportCommand {
+    public var declaredConfirmation: String? {
+        if let confirm { return confirm }
+        if case .operation(let command) = request {
+            return WorkflowCommandCatalog.presentation(for: command.operation)?.confirmation
+        }
+        return nil
+    }
+}
+
+extension WorkflowCommandPresentation {
+    public func message(for result: JSONValue) -> String? {
+        let facts = resultFields.compactMap { field in
+            result.pathText(field.path).map { "\(field.label): \($0)" }
+        }
+        return facts.isEmpty ? success : facts.joined(separator: "; ")
+    }
 }

@@ -62,11 +62,7 @@ struct RunSnapshotTests {
             #expect(String(describing: error).contains("status"))
             #expect(String(describing: error).contains("42"))
         }
-        #expect(try RunSnapshot.successorID(in: ["successor": nil]) == nil)
-        #expect(try RunSnapshot.successorID(in: ["successor": ["publicId": "RUN-3456"]]) == "RUN-3456")
-        #expect(throws: (any Error).self) {
-            try RunSnapshot.successorID(in: ["successor": ["publicId": 42]])
-        }
+
     }
 
     @Test func photoApprovalKeepsOnlySelectedFrozenRevisions() throws {

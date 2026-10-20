@@ -71,6 +71,7 @@ class CubbyMouseSensor extends MouseSensor {
  */
 export function createValidTargetKeyboardCoordinates(
   isValid: ValidKeyboardTarget,
+  alignCenters = false,
 ): KeyboardCoordinateGetter {
   return (event, { currentCoordinates, context }) => {
     const direction =
@@ -121,8 +122,16 @@ export function createValidTargetKeyboardCoordinates(
 
     if (!best) return undefined;
     return {
-      x: currentCoordinates.x + best.rect.left - activeRect.left,
-      y: currentCoordinates.y + best.rect.top - activeRect.top,
+      x:
+        currentCoordinates.x +
+        best.rect.left -
+        activeRect.left +
+        (alignCenters ? (best.rect.width - activeRect.width) / 2 : 0),
+      y:
+        currentCoordinates.y +
+        best.rect.top -
+        activeRect.top +
+        (alignCenters ? (best.rect.height - activeRect.height) / 2 : 0),
     };
   };
 }

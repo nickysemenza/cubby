@@ -27,15 +27,17 @@ import {
   shortcode,
 } from "@cubby/schemas/identifiers";
 import { positiveAmount } from "@cubby/schemas/inventory";
+import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { useQuery } from "@tanstack/react-query";
-import { type FC, useEffect, useMemo, useRef } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { type FC, useEffect, useRef } from "react";
 import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { entityListFor } from "~/entity/entity-list";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
@@ -50,6 +52,8 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
@@ -146,17 +150,56 @@ export const ProductBulkAddToInventoryDialog: FC<
     null,
   );
 
-  // The server owns the proposed amount and the warnings (parts already
-  // account for every unit bought; stock already at this location), so web and
-  // native show one verdict. Multi-product selections have no single basis.
+  // Only a single product needs its valuation/default-amount preview. Bulk selections read
+  // exact stock slots through the shared list, completing pages before disclosing merges.
   const { data: preview } = useQuery({
     ...productOperations.addToInventoryPreview.queryOptions({
-      // A parseable placeholder keeps the disabled query's input valid.
       productId: sole?.id ?? shortcode("PRD-2222"),
       locationId,
     }),
     enabled: open && sole !== undefined,
   });
+  const stockEnabled =
+    open && sole === undefined && locationId !== null && fields.length > 0;
+  const stockPage = (pageIndex: number) =>
+    entityListFor("inventory").queryOptions({
+      filters: {
+        productIdFilter: fields.map((field) => field.productId),
+        locationIdFilter: locationId ? [locationId] : [],
+        includeSubLocations: false,
+        placementFilter: ["stock"],
+      },
+      pagination: { pageIndex, pageSize: MAX_PAGE_SIZE },
+    });
+  const firstStockPage = useQuery({ ...stockPage(0), enabled: stockEnabled });
+  const remainingStockPages = useQueries({
+    queries: Array.from(
+      {
+        length: Math.max(
+          0,
+          Math.ceil(
+            (firstStockPage.data?.meta.totalCount ?? 0) / MAX_PAGE_SIZE,
+          ) - 1,
+        ),
+      },
+      (_, index) => ({ ...stockPage(index + 1), enabled: stockEnabled }),
+    ),
+  });
+  const stockPages = [firstStockPage, ...remainingStockPages];
+  const stock = {
+    data: stockPages.flatMap((page) => page.data?.items ?? []),
+    isPending: stockPages.some((page) => page.isPending),
+    isFetching: stockPages.some((page) => page.isFetching),
+    isError: stockPages.some((page) => page.isError),
+    error: stockPages.find((page) => page.error)?.error,
+    refetch: () => Promise.all(stockPages.map((page) => page.refetch())),
+  };
+  const onHandByProductId = new Map<string, string>(
+    (stock.data ?? []).map((entry) => [
+      entry.product.id,
+      tryFormatAmount(entry.amount),
+    ]),
+  );
   const overAccounted = preview?.kitWarning ?? null;
   const amountDirty =
     form.formState.dirtyFields.items?.[0]?.amount !== undefined;
@@ -171,27 +214,6 @@ export const ProductBulkAddToInventoryDialog: FC<
       form.setValue("items.0.amount", serverDefaultAmount);
     }
   }, [sole, serverDefaultAmount, amountDirty, form]);
-
-  // What is already on that shelf, so a row that will merge can say so. One
-  // query for the whole location — the selection is small, and this endpoint
-  // is unpaginated, unlike the entity list.
-  const { data: existing } = useQuery({
-    ...inventory.getByLocationIds.queryOptions({
-      locationIds: locationId ? [locationId] : [],
-    }),
-    enabled: open && locationId !== null,
-  });
-
-  // Stock only: an installed fixture occupies a different slot, so it is not
-  // what an added unit would merge into.
-  const onHandByProductId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entry of existing ?? []) {
-      if (entry.placement !== "stock") continue;
-      map.set(entry.product.id, tryFormatAmount(entry.amount));
-    }
-    return map;
-  }, [existing]);
 
   const addMutation = useActionMutation({
     mutationFn: inventory.bulkAdd.mutationOptions,
@@ -241,12 +263,27 @@ export const ProductBulkAddToInventoryDialog: FC<
         label: `Add ${fields.length} to inventory`,
         pendingLabel: `Adding ${fields.length}…`,
         pending: addMutation.isPending,
-        disabled: fields.length === 0,
+        disabled:
+          fields.length === 0 ||
+          (!sole &&
+            locationId !== null &&
+            (stock.isPending || stock.isFetching || stock.isError)),
         onClick: onSubmit,
       }}
     >
       {/* Long product names must not push editable amounts past the viewport. */}
       <Stack gap="md" className="min-w-0">
+        {!sole && locationId && stock.isFetching && (
+          <SimpleLoading text="Checking existing stock…" />
+        )}
+        {!sole && stock.error && (
+          <ErrorDisplay
+            error={stock.error}
+            title="Stock preview"
+            onRetry={() => void stock.refetch()}
+          />
+        )}
+
         {overAccounted && (
           <Alert variant="destructive">
             <WarningIcon />
@@ -298,7 +335,7 @@ export const ProductBulkAddToInventoryDialog: FC<
           <Stack gap="sm" className="min-w-0">
             {fields.map((field, index) => {
               const onHand = sole
-                ? (preview?.existingAtLocationLabel ?? undefined)
+                ? preview?.existingAtLocationLabel
                 : onHandByProductId.get(field.productId);
               return (
                 <Row
@@ -324,6 +361,7 @@ export const ProductBulkAddToInventoryDialog: FC<
                   </Stack>
                   <div className="w-full sm:w-44 sm:shrink-0">
                     <AmountFieldGroup
+                      compact
                       form={form}
                       valuePath={`items.${index}.amount.value`}
                       unitPath={`items.${index}.amount.unit`}

@@ -33,6 +33,8 @@ extension CubbyClient: AuditService {
     }
 
     public func adopt(_ bins: [LocationCode], into parent: LocationCode) async throws -> Int {
-        try await bulkUpdateParent(bins, to: parent)
+        try await bulkUpdate(
+            EntityCatalog[.location], ids: bins.map { $0.rawValue },
+            data: ["parentId": .string(parent.rawValue)])
     }
 }

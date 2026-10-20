@@ -1,4 +1,7 @@
-import type { RelationMutationOut } from "@cubby/schemas/common";
+import type {
+  EntityRelationPageInput,
+  RelationMutationOut,
+} from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   ENTITY_LINK_KINDS,
@@ -24,10 +27,21 @@ interface EntityRelationMutationContext {
   actorContext: ActorContext;
 }
 
+export type RelationListPageInput = EntityRelationPageInput;
+interface RelationListPage<TRow> {
+  items: TRow[];
+  totalCount: number;
+}
+
 /** Repository-side seam used by generated entity relation bindings. */
 export interface EntityRelationMutationAdapter<TItem, TRow> {
   /** The owner's current rows, read for the kernel `listRelation` action. */
   list(db: Database, ownerShortcode: string): Promise<TRow[]>;
+  listPage(
+    db: Database,
+    ownerShortcode: string,
+    page: RelationListPageInput,
+  ): Promise<RelationListPage<TRow>>;
   preview(
     db: Database,
     action: "attach" | "detach",
@@ -62,6 +76,12 @@ export interface LinkRelationSpec<
   /** What an attach / a detach would do, for the advisory plan. */
   describe: { attach: string; detach: string };
   list: (db: Database, ownerId: EntityId<LinkFrom<K>>) => Promise<TRow[]>;
+  targetId: (row: TRow) => string;
+  listPage?: (
+    db: Database,
+    ownerId: EntityId<LinkFrom<K>>,
+    page: RelationListPageInput,
+  ) => Promise<RelationListPage<TRow>>;
   preflight: {
     attach?: (
       dbc: DrizzleClient,
@@ -124,6 +144,18 @@ export const linkRelationAdapter = <
   return {
     async list(db, ownerShortcode) {
       return spec.list(db, await resolveOwner(db, ownerShortcode));
+    },
+    async listPage(db, ownerShortcode, page) {
+      const owner = await resolveOwner(db, ownerShortcode);
+      if (spec.listPage) return spec.listPage(db, owner, page);
+      const targets = page.targetIds ? new Set(page.targetIds) : null;
+      const rows = (await spec.list(db, owner)).filter(
+        (row) => targets === null || targets.has(spec.targetId(row)),
+      );
+      return {
+        items: rows.slice(page.offset, page.offset + page.limit),
+        totalCount: rows.length,
+      };
     },
     async preview(db, action, ownerId, targetIds) {
       const owner = parseEntityId(from, ownerId);

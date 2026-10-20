@@ -64,7 +64,10 @@ describe("reparseRecipeLine", () => {
     const out = entityReportOut.parse(
       await buildEntityReport(
         ctx.db,
-        { slot: "ingredient.recipe-usages", id: flourCode },
+        {
+          slot: "ingredient.recipe-usages",
+          scope: { kind: "record", id: flourCode },
+        },
         async () => null,
         ctx.actor,
       ),
@@ -88,9 +91,9 @@ describe("reparseRecipeLine", () => {
           label: "Re-parse",
           prominent: false,
           request: {
-            kind: "reparse-line",
-            recipeId: recipe.id,
-            lineId: line.id,
+            kind: "operation",
+            operation: "recipe.reparseLine",
+            body: { recipeId: recipe.id, lineId: line.id },
           },
         },
       ],

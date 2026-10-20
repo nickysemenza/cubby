@@ -287,7 +287,7 @@ struct TodayView: View {
 
 struct TodayContent: View {
     let dateText: String
-    let tasks: TodaySectionState<TaskTodayBriefingOut>
+    let tasks: TodaySectionState<EntityReportOut>
     let meals: TodaySectionState<[EntityRow]>
     let problems: TodaySectionState<ProblemsCount>
     var nutrition: TodaySectionState<MealNutritionOut> = .loading
@@ -352,12 +352,7 @@ struct TodayContent: View {
                         InlineLoadFailure(
                             message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
-                        nextUpEmptyState(briefing)
-                        ForEach(briefing.next) { task in
-                            NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
-                                taskRow(task)
-                            }
-                        }
+                        ReportBlocksView(report: ReportPresentation(briefing))
                     }
                     if let tasksError {
                         InlineLoadFailure(
@@ -591,12 +586,7 @@ struct TodayContent: View {
                         InlineLoadFailure(
                             message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
-                        nextUpEmptyState(briefing)
-                        ForEach(briefing.next) { task in
-                            NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
-                                taskRow(task)
-                            }
-                        }
+                        ReportBlocksView(report: ReportPresentation(briefing))
                     }
                     if let tasksError {
                         InlineLoadFailure(
@@ -687,50 +677,8 @@ struct TodayContent: View {
             .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
     }
 
-    /// `nil` when there is nothing overdue, due soon, blocked, or later to summarize — distinct
-    /// from `briefing.next.isEmpty`, which is about the ready-now list `nextUpEmptyState` renders
-    /// alongside it.
-    private func taskSummary(_ briefing: TaskTodayBriefingOut) -> String? {
-        let parts = [
-            briefing.overdueCount > 0 ? "\(briefing.overdueCount) overdue" : nil,
-            briefing.dueThisWeekCount > 0 ? "\(briefing.dueThisWeekCount) due this week" : nil,
-            briefing.blockedCount > 0 ? "\(briefing.blockedCount) blocked" : nil,
-            briefing.nextCount > briefing.next.count
-                ? "\(briefing.nextCount - briefing.next.count) more ready" : nil,
-            briefing.laterCount > 0 ? "\(briefing.laterCount) later" : nil,
-        ].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    private func taskRow(_ task: TaskTodayBriefingItemOut) -> some View {
-        RecordListRow(title: task.name, symbol: EntityCatalog[.task].sfSymbol) {
-            if let project = task.projectName {
-                Text([task.projectEmoji, project].compactMap { $0 }.joined(separator: " "))
-            }
-        } rail: {
-            Text(task.status == .inProgress ? "In progress" : "Not started")
-                .foregroundStyle(task.status == .inProgress ? FieldGuideTokens.interaction : Color.secondary)
-            if let dueDate = task.dueDate { Text("Due \(formattedDueDate(dueDate))").monospacedDigit() }
-        } supplement: {
-            EmptyView()
-        }
-    }
-
     private func mealRow(_ meal: EntityRow) -> some View {
         EntityRowView(key: .meal, row: meal, columns: ["mealType", "recipeNames"])
-    }
-
-    /// One consistently-styled empty/summary line for "Next up" instead of two differently-sized
-    /// messages stacked (a summary-count caption plus a body-size "nothing ready" line).
-    @ViewBuilder
-    private func nextUpEmptyState(_ briefing: TaskTodayBriefingOut) -> some View {
-        let summary = taskSummary(briefing)
-        if let summary {
-            emptyStateText(summary)
-        }
-        if briefing.next.isEmpty {
-            emptyStateText(summary == nil ? "Nothing urgent or ready right now" : "Nothing ready right now")
-        }
     }
 
     /// House style for a section's empty/placeholder line (`.fieldGuideLabel` + secondary), shared
@@ -739,14 +687,6 @@ struct TodayContent: View {
     private func emptyStateText(_ text: String) -> some View {
         Text(text).font(.fieldGuideLabel).foregroundStyle(.secondary)
     }
-}
-
-/// `dueDate` comes back as a calendar day (`yyyy-MM-dd`); a full timestamp is accepted too, since
-/// the server contract for this field isn't pinned. Anything else prints as-is rather than hiding
-/// what the server actually sent.
-private func formattedDueDate(_ raw: String) -> String {
-    guard let date = PlainDate(rawValue: raw).date() ?? DatePresentation.parse(raw) else { return raw }
-    return date.formatted(.dateTime.month(.abbreviated).day())
 }
 
 #Preview("Today", traits: .modifier(SignedInPreview())) {
@@ -777,9 +717,7 @@ private func formattedDueDate(_ raw: String) -> String {
         TodayContent(
             dateText: "Friday, September 11",
             tasks: .loaded(
-                TaskTodayBriefingOut(
-                    next: [], nextCount: 0, laterCount: 0, blockedCount: 0,
-                    overdueCount: 0, dueThisWeekCount: 0)),
+                EntityReportOut(blocks: [])),
             meals: .loaded([]),
             problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(MealNutritionOut(meals: [], people: [])),

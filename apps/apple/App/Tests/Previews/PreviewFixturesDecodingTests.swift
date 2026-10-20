@@ -17,7 +17,7 @@ import Testing
     func generatedFixtureDecodes(_ fixture: Fixture) throws {
         switch fixture {
         case .timeline: try decode(EntityTimelineOut.self, "sampleTimeline")
-        case .todayTasks: try decode([TaskTodayBriefingItemOut].self, "sampleTodayTasks")
+        case .todayTasks: try decode(EntityReportOut.self, "sampleTodayBriefing")
         case .todayMeals:
             try decode([JSONValue].self, "sampleTodayMeals")
             #expect(PreviewFixtures.sampleTodayMeals.allSatisfy { !$0.id.isEmpty && !$0.title.isEmpty })

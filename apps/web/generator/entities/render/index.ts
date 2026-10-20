@@ -358,6 +358,7 @@ type KernelHttpAction =
   | "get"
   | "create"
   | "update"
+  | "bulkUpdate"
   | "delete";
 export type KernelActions = Readonly<
   Record<string, readonly KernelHttpAction[]>
@@ -391,6 +392,7 @@ export const kernelHttpActionsFor = (
         verbs.push("get");
       if (entity.contract.create) verbs.push("create");
       if (entity.contract.update) verbs.push("update");
+      if (bulkUpdateFor(entity)) verbs.push("bulkUpdate");
       if (entity.operationOwners.delete === "kernel") verbs.push("delete");
       return [[entity.key, verbs]];
     }),

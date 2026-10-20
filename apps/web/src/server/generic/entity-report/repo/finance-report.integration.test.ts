@@ -68,9 +68,12 @@ describe("finance entity reports", () => {
     slot: Parameters<typeof buildEntityReport>[1]["slot"],
     id: string,
   ) =>
-    buildEntityReport(ctx.db, { slot, id }, async () => null, ctx.actor).then(
-      (result) => result.blocks,
-    );
+    buildEntityReport(
+      ctx.db,
+      { slot, scope: { kind: "record", id: id } },
+      async () => null,
+      ctx.actor,
+    ).then((result) => result.blocks);
 
   it("allocates a purchase's whole expense total across its project groups", async () => {
     const [kitchen, garden] = await Promise.all([

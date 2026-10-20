@@ -9,98 +9,74 @@ import {
   type ChoiceAnswers,
   commitPreparedInput,
 } from "@cubby/schemas/report-choice";
+import { workflowCommandBody } from "@cubby/schemas/workflow-command";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
-import { reclassifySummary } from "~/entity/actions/email-entity-actions";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { Picker } from "~/entity/picker/picker";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { readPathValue } from "~/entity/read-path";
 import { runHref } from "~/entity/routing/purchase-import-links";
 import {
-  meal,
-  purchaseImport,
-  problems,
   recipe,
   run,
+  workflowCommandOptions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { Row } from "~/ui/layout";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
-const sameSelection = (
-  sent: readonly { id: string; expectedChecksum: string }[] | undefined,
-  shown: readonly { id: string; expectedChecksum: string }[],
-) =>
-  sent !== undefined &&
-  sent.length === shown.length &&
-  sent.every(
-    (item, index) =>
-      item.id === shown[index]?.id &&
-      item.expectedChecksum === shown[index]?.expectedChecksum,
-  );
-
-/** Runs a row command through the operation it names; the server composed the exact body. */
+/** Runs ordinary commands with the catalog's validation, cache ripple and result effects. */
 export function useReportCommands() {
-  const emailDecision = useActionMutation({
-    mutationFn: purchaseImport.emailPurchaseDecide.mutationOptions,
-    error: "Could not update the Email's Purchase link",
-    success: ({ purchaseId, state }) =>
-      state === "linked"
-        ? `Linked to ${purchaseId}`
-        : `Dismissed for ${purchaseId}`,
-  });
-  const emailAccuracy = useActionMutation({
-    mutationFn: purchaseImport.emailAccuracyCreate.mutationOptions,
-    error: "Could not create the independent review sample",
-    success: ({ sampleSize }) =>
-      `Independent review sample: ${sampleSize} Emails`,
-  });
-  const emailImport = useActionMutation({
-    mutationFn: purchaseImport.emailImport.mutationOptions,
-    error: "Could not import this Email",
-    success: ({ runIds }) => `Import Runs: ${runIds.join(", ")}`,
-  });
-  const emailReclassify = useActionMutation({
-    mutationFn: purchaseImport.emailReclassify.mutationOptions,
-    error: "Could not reclassify this Email",
-    success: reclassifySummary,
-  });
-  const emailPreview = useActionMutation({
-    mutationFn: purchaseImport.emailPreviewRerun.mutationOptions,
-    error: "Could not rerun the extraction preview",
-    success: ({ runId, status }) => `Extraction preview: ${status} (${runId})`,
-  });
-  const relevance = useActionMutation({
-    mutationFn: purchaseImport.correctEmailRelevance.mutationOptions,
-    error: "Could not correct the Relevance",
-    success: "Relevance corrected",
-  });
-  const control = useActionMutation({
-    mutationFn: run.control.mutationOptions,
-    error: "Could not update the Run",
-    onSuccess: ({ successor }) => {
-      if (successor) window.location.assign(runHref(successor.publicId));
-    },
-  });
-  const retryStep = useActionMutation({
-    mutationFn: run.retryStep.mutationOptions,
-    error: "Could not retry the step",
-    success: "Retrying the step's failures",
-  });
-  const finding = useActionMutation({
-    mutationFn: problems.resolveRunFinding.mutationOptions,
-    error: "Could not resolve the finding",
-    success: (result) =>
-      result.status === "applied"
-        ? "Applied import correction"
-        : "Dismissed import finding",
+  const queryClient = useQueryClient();
+  const ordinary = useActionMutation({
+    mutationFn: () => ({
+      mutationFn: async (
+        request: Extract<ReportCommandRequest, { kind: "operation" }>,
+      ) => {
+        const declared = workflowCommandOptions(request.operation);
+        const { command } = declared;
+        const options = {
+          mutationFn: declared.mutationFn,
+          mutationKey: declared.mutationKey,
+          meta: declared.meta,
+          onError: () => undefined,
+        };
+        // The inner mutation retains the operation's meta, so the existing global cache ripple
+        // and side-effect handling observe the actual operation and exact submitted body.
+        const result = await queryClient
+          .getMutationCache()
+          .build(queryClient, options)
+          .execute(request.body);
+        const successor = command.navigateRunPath
+          ? readPathValue(result, command.navigateRunPath)
+          : undefined;
+        if (typeof successor === "string")
+          window.location.assign(runHref(successor));
+        const facts = (command.resultFields ?? []).flatMap((field) => {
+          const value = readPathValue(result, field.path);
+          return typeof value === "string" || typeof value === "number"
+            ? [`${field.label}: ${value}`]
+            : [];
+        });
+        const message = facts.length ? facts.join("; ") : undefined;
+        if (typeof message === "string" || command.success)
+          toast.success(
+            typeof message === "string" ? message : command.success,
+          );
+        return { request, result };
+      },
+    }),
+    error: "Could not run command",
   });
   const reprocess = useActionMutation({
     mutationFn: recipe.reprocessCookbookOnce.mutationOptions,
@@ -110,80 +86,33 @@ export function useReportCommands() {
     mutationFn: recipe.importCookbookRecipesOnce.mutationOptions,
     error: "Could not add the recipes",
   });
-  const mealRecipe = useActionMutation({
-    mutationFn: meal.updateRecipe.mutationOptions,
-    error: "Could not change the meal",
-  });
-  const mealAdd = useActionMutation({
-    mutationFn: meal.addRecipe.mutationOptions,
-    error: "Could not add the recipe",
-  });
-  const mealRemove = useActionMutation({
-    mutationFn: meal.removeRecipe.mutationOptions,
-    error: "Could not remove the recipe",
-  });
-  const mealPrepare = useActionMutation({
-    mutationFn: meal.savePreparation.mutationOptions,
-    error: "Could not save the portions",
-  });
-  const flow = useActionMutation({
-    mutationFn: recipe.generateFlow.mutationOptions,
-    error: "Could not generate the walkthrough",
-    success: "Walkthrough generated",
-  });
-  const reparse = useActionMutation({
-    mutationFn: recipe.reparseLine.mutationOptions,
-    error: "Re-parse failed",
-    success: (result) =>
-      result.status === "updated"
-        ? `Re-parsed the line (${result.changed.join(", ")})`
-        : "Nothing to update from a fresh parse.",
-  });
   const commit = useActionMutation({
     mutationFn: run.commitPrepared.mutationOptions,
     error: "Could not import the prepared orders",
   });
   return {
-    runsFor: (request: ReportCommandRequest): readonly string[] =>
-      match(request)
-        .with({ kind: "import-email" }, (r) =>
-          sameSelection(emailImport.variables?.items, r.items)
-            ? (emailImport.data?.runIds ?? [])
-            : [],
-        )
-        .with({ kind: "reclassify-email" }, (r) =>
-          emailReclassify.variables?.ids.join() === r.ids.join()
-            ? (emailReclassify.data?.runIds ?? [])
-            : [],
-        )
-        .with({ kind: "rerun-email-preview" }, (r) =>
-          emailPreview.data &&
-          emailPreview.variables?.id === r.id &&
-          emailPreview.variables.expectedChecksum === r.expectedChecksum
-            ? [emailPreview.data.runId]
-            : [],
-        )
-        .otherwise(() => []),
+    runsFor: (request: ReportCommandRequest): readonly string[] => {
+      if (
+        request.kind !== "operation" ||
+        !ordinary.data ||
+        JSON.stringify(ordinary.data.request) !== JSON.stringify(request)
+      )
+        return [];
+      const path = workflowCommandOptions(request.operation).command.runIdsPath;
+      const value = path
+        ? readPathValue(ordinary.data.result, path)
+        : undefined;
+      return typeof value === "string"
+        ? [value]
+        : (z.array(z.string()).safeParse(value).data ?? []);
+    },
+    result: ordinary.data?.result,
     pending:
-      emailDecision.isPending ||
-      emailImport.isPending ||
-      emailReclassify.isPending ||
-      emailPreview.isPending ||
-      relevance.isPending ||
-      emailAccuracy.isPending ||
-      control.isPending ||
-      finding.isPending ||
-      reparse.isPending ||
-      flow.isPending ||
+      ordinary.isPending ||
       reprocess.isPending ||
       importRecipes.isPending ||
-      mealRecipe.isPending ||
-      mealAdd.isPending ||
-      mealRemove.isPending ||
-      mealPrepare.isPending ||
       commit.isPending,
     committed: commit.isSuccess,
-    /** Approves a prepared batch with the answers given; nothing is sent while any is missing. */
     commit: (
       request: CommitPreparedRequest,
       answers: ChoiceAnswers,
@@ -194,59 +123,7 @@ export function useReportCommands() {
     },
     run: (request: ReportCommandRequest) =>
       match(request)
-        .with({ kind: "create-email-accuracy" }, (r) =>
-          emailAccuracy.mutate({ sampleSize: r.sampleSize }),
-        )
-        .with({ kind: "import-email" }, (r) =>
-          emailImport.mutate({ items: r.items }),
-        )
-        .with({ kind: "reclassify-email" }, (r) =>
-          emailReclassify.mutate({ ids: r.ids }),
-        )
-        .with({ kind: "rerun-email-preview" }, (r) =>
-          emailPreview.mutate({
-            id: r.id,
-            expectedChecksum: r.expectedChecksum,
-          }),
-        )
-        .with({ kind: "correct-email-relevance" }, (r) =>
-          relevance.mutate({
-            id: r.id,
-            expectedChecksum: r.expectedChecksum,
-            reviewedChecksum: r.reviewedChecksum,
-            classification: r.classification,
-            reason: r.reason,
-          }),
-        )
-        .with({ kind: "decide-email-purchase" }, (r) =>
-          emailDecision.mutate({
-            id: r.id,
-            expectedChecksum: r.expectedChecksum,
-            purchaseId: r.purchaseId,
-            decision: r.decision,
-          }),
-        )
-        .with({ kind: "retry-run-step" }, (r) =>
-          retryStep.mutate({ runId: r.runId, stepKey: r.stepKey }),
-        )
-        .with({ kind: "run-control" }, (r) => {
-          const input: Parameters<typeof run.control.call>[0] = {
-            runId: r.runId,
-            action: r.action,
-          };
-          control.mutate(input);
-        })
-        .with({ kind: "resolve-finding" }, (r) => {
-          const input: Parameters<typeof problems.resolveRunFinding.call>[0] = {
-            id: r.findingId,
-            action: r.decision,
-          };
-          if (r.reviewedFingerprint)
-            input.reviewedFingerprint = r.reviewedFingerprint;
-          finding.mutate(input);
-        })
-        // Bounded calls, one window at a time; the first error stops the loop (the hook has
-        // already shown it).
+        .with({ kind: "operation" }, (request) => ordinary.mutate(request))
         .with({ kind: "reprocess-cookbook" }, async (r) => {
           let offset: number | null = 0;
           let total = 0;
@@ -287,78 +164,24 @@ export function useReportCommands() {
           }
           toast.success(`Added ${imported} recipes`);
         })
-        // The meal commands ask the person for a scale, recipe, eater or amount first; web has
-        // its own dialogs for those and never renders these reports, so a request that still
-        // lacks its input is not sent.
-        .with({ kind: "meal-add-recipe" }, (r) => {
-          if (r.recipeId !== null && r.scale !== null)
-            mealAdd.mutate({
-              mealId: r.mealId,
-              recipeId: r.recipeId,
-              scale: r.scale,
-            });
-        })
-        .with({ kind: "meal-scale-recipe" }, (r) => {
-          if (r.scale !== null)
-            mealRecipe.mutate({ id: r.mealRecipeId, scale: r.scale });
-        })
-        .with({ kind: "meal-remove-recipe" }, (r) =>
-          mealRemove.mutate({ id: r.mealRecipeId }),
-        )
-        .with({ kind: "meal-portion-set" }, (r) => {
-          if (r.ledgerPartyId !== null && r.value !== null && r.unit !== null)
-            mealPrepare.mutate({
-              mealRecipeId: r.mealRecipeId,
-              changes: [
-                {
-                  action: "set",
-                  mealId: r.mealId,
-                  ledgerPartyId: r.ledgerPartyId,
-                  amount: { value: r.value, unit: r.unit },
-                  confirmed: r.confirmed,
-                },
-              ],
-            });
-        })
-        .with({ kind: "meal-portion-remove" }, (r) =>
-          mealPrepare.mutate({
-            mealRecipeId: r.mealRecipeId,
-            changes: [
-              {
-                action: "remove",
-                mealId: r.mealId,
-                ledgerPartyId: r.ledgerPartyId,
-              },
-            ],
-          }),
-        )
-        .with({ kind: "meal-yield" }, (r) => {
-          if (r.grams !== null)
-            mealPrepare.mutate({
-              mealRecipeId: r.mealRecipeId,
-              ...(r.field === "actual"
-                ? { actualYieldGrams: r.grams }
-                : { estimatedYieldGrams: r.grams }),
-              changes: [],
-            });
-        })
-        .with({ kind: "generate-recipe-flow" }, (r) =>
-          flow.mutate({ id: r.recipeId, force: r.force }),
-        )
-        .with({ kind: "reparse-line" }, (r) =>
-          reparse.mutate({ recipeId: r.recipeId, lineId: r.lineId }),
-        )
         .exhaustive(),
   };
 }
 
 export type ReportCommands = ReturnType<typeof useReportCommands>;
 
-/**
- * A row command. Web acts on the tap, as these controls always have (the Run page's Approve,
- * Reject and Apply fix buttons never asked first); the `confirm` copy is for native, which asks
- * before anything that writes.
- */
+function validCommandBody(
+  request: Extract<ReportCommandRequest, { kind: "operation" }>,
+): boolean {
+  try {
+    workflowCommandOptions(request.operation).parse(request.body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Collects the declared operands, then confirms the exact command before dispatch. */
 export function CommandButton({
   command,
   commands,
@@ -372,6 +195,7 @@ export function CommandButton({
   /** A row command inside a ledger line: ghost unless prominent, within the row's height. */
   quiet?: boolean;
 }) {
+  const [staged, setStaged] = useState<ReportCommandRequest | null>(null);
   const [values, setValues] = useState<Record<string, string | number>>(() =>
     Object.fromEntries(
       (command.inputs ?? []).flatMap((input) =>
@@ -391,12 +215,57 @@ export function CommandButton({
   const complete = (command.inputs ?? []).every((input) =>
     completeOperand(input, values[input.key]),
   );
-  const request = reportCommandRequest.safeParse({
-    ...command.request,
-    ...values,
-  });
+  const metadata =
+    command.request.kind === "operation"
+      ? workflowCommandOptions(command.request.operation).command
+      : undefined;
+  const confirmation = command.confirm ?? metadata?.confirmation;
+  const request = reportCommandRequest.safeParse(
+    command.request.kind === "operation"
+      ? {
+          ...command.request,
+          body: workflowCommandBody(
+            command.request,
+            values,
+            metadata?.booleanInputs,
+          ),
+        }
+      : command.request,
+  );
+  const validBody =
+    request.success &&
+    (request.data.kind !== "operation" || validCommandBody(request.data));
   return (
     <Row gap="sm" wrap align={compact ? "center" : "end"}>
+      <Overlay
+        open={staged !== null}
+        onOpenChange={(open) => {
+          if (!open) setStaged(null);
+        }}
+        title={command.label}
+        description={confirmation}
+        pending={commands.pending}
+        primary={{
+          label: command.label,
+          disabled:
+            !complete ||
+            !validBody ||
+            !request.success ||
+            JSON.stringify(staged) !== JSON.stringify(request.data),
+          onClick: () => {
+            if (
+              staged &&
+              request.success &&
+              complete &&
+              validBody &&
+              JSON.stringify(staged) === JSON.stringify(request.data)
+            ) {
+              commands.run(staged);
+              setStaged(null);
+            }
+          },
+        }}
+      />
       {(command.inputs ?? []).map((input) => (
         <CommandOperand
           key={input.key}
@@ -412,9 +281,12 @@ export function CommandButton({
         size="sm"
         variant={command.prominent ? "default" : quiet ? "ghost" : "outline"}
         className={quiet ? "h-6" : undefined}
-        disabled={commands.pending || !complete || !request.success}
+        disabled={commands.pending || !complete || !validBody}
         onClick={() => {
-          if (request.success && complete) commands.run(request.data);
+          if (request.success && complete && validBody) {
+            if (confirmation) setStaged(request.data);
+            else commands.run(request.data);
+          }
         }}
       >
         {command.label}

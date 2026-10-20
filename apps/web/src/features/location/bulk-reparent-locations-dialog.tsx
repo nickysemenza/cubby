@@ -13,7 +13,7 @@ import { z } from "zod";
 
 import { PickerField } from "~/entity/forms/picker-field";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
 import { Stack } from "~/ui/layout";
@@ -57,9 +57,12 @@ export function BulkReparentLocationsDialog({
     form.watch("targetParent"),
   ).data;
 
-  const bulkUpdateParent = useMutation({
-    ...location.bulkUpdateParent.mutationOptions(),
-    onSuccess: ({ updated }) => {
+  const reparent = useMutation({
+    ...entityMutation.mutate.forEntity("location").mutationOptions(),
+    onSuccess: (result) => {
+      if (result.action !== "bulkUpdate")
+        throw new Error("Expected bulk update result");
+      const updated = result.updatedReferences.length;
       toast.success(
         `Moved ${countLabel(updated, "location")} to the new parent.`,
       );
@@ -77,9 +80,11 @@ export function BulkReparentLocationsDialog({
     }
 
     setError(null);
-    await bulkUpdateParent.mutateAsync({
+    await reparent.mutateAsync({
+      action: "bulkUpdate",
+      entity: "location",
       ids: [...selectedIds],
-      parentId: targetParent,
+      data: { parentId: targetParent },
     });
   });
 
@@ -121,7 +126,7 @@ export function BulkReparentLocationsDialog({
         }
         unchangedLabel="already under this parent"
         onSubmit={handleSubmit}
-        isPending={bulkUpdateParent.isPending}
+        isPending={reparent.isPending}
       >
         <Stack gap="md">
           <PickerField

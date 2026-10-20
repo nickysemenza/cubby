@@ -3,6 +3,7 @@ import type {
   EntityReportOut,
 } from "@cubby/schemas/entity-report";
 import { entityReportOut } from "@cubby/schemas/entity-report";
+import { entityReportInput } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb, countTestDbQueries } from "tooling/test-setup";
@@ -36,13 +37,153 @@ const blocksOf = <K extends ReportBlock["kind"]>(
  */
 describe("entity report", () => {
   const ctx = withTestDb("mcp");
+  // A collection scope must never fall through to a record builder, silently
+  // discard filters, or count nested project spend twice in its headline.
+  it("validates collection scopes and totals selected project roots once", async () => {
+    const { output: parent } = await createRepoEntity(ctx, "project", {
+      name: "Selected parent",
+      costEstimate: 400,
+    });
+    const { output: child } = await createRepoEntity(ctx, "project", {
+      name: "Selected child",
+      parentProjectId: parent.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      name: "Selected expense",
+      cost: 125,
+      future: false,
+      costType: "materials",
+      trade: "other",
+      projectId: child.id,
+    });
+    const request = entityReportInput.parse({
+      slot: "project.analytics",
+      scope: {
+        kind: "selection",
+        entity: "project",
+        ids: [parent.id, child.id],
+      },
+    });
+    const result = await buildEntityReport(
+      ctx.db,
+      request,
+      async () => null,
+      ctx.actor,
+    );
+    const stats = blocksOf(result.blocks, "stats");
+    expect(
+      stats
+        .flatMap((block) => block.figures)
+        .find((figure) => figure.label === "Actual")?.value,
+    ).toBe(125);
+    const unsupported = entityReportInput.parse({
+      slot: "project.budget",
+      scope: { kind: "list", entity: "project", filters: {} },
+    });
+    await expect(
+      buildEntityReport(ctx.db, unsupported, async () => null, ctx.actor),
+    ).rejects.toThrow(/scope/iu);
+    await expect(
+      buildEntityReport(
+        ctx.db,
+        {
+          ...request,
+          scope: { kind: "selection", entity: "task", ids: [child.id] },
+        },
+        async () => null,
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/scope/iu);
+    await expect(
+      buildEntityReport(
+        ctx.db,
+        { ...request, cursor: "unexpected" },
+        async () => null,
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/cursor/iu);
+    await expect(
+      buildEntityReport(
+        ctx.db,
+        {
+          ...request,
+          scope: {
+            kind: "list",
+            entity: "project",
+            filters: { unsupported: true },
+          },
+        },
+        async () => null,
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/unsupported/iu);
+  });
+  // A credit-only trade must remain visible when shared tables replace the specialized chart.
+  it("discloses credit-only trade amounts in scoped analytics", async () => {
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "Credit-only work",
+    });
+    await createRepoEntity(ctx, "expense", {
+      name: "Material credit",
+      cost: -5,
+      future: false,
+      date: "2026-01-01",
+      costType: "materials",
+      trade: "other",
+      projectId: project.id,
+    });
+    const result = await buildEntityReport(
+      ctx.db,
+      {
+        slot: "project.analytics",
+        scope: { kind: "selection", entity: "project", ids: [project.id] },
+      },
+      async () => null,
+      ctx.actor,
+    );
+    const trade = blocksOf(result.blocks, "table").find(
+      (block) => block.title === "Spend by trade",
+    );
+    expect(trade?.rows).toContainEqual(
+      expect.objectContaining({
+        cells: ["other", "$0.00", "$0.00", "-$5.00", "-$5.00", "1"],
+      }),
+    );
+  });
+
+  // The bounded next-task rows must still disclose ready work beyond their window.
+  it("shows the remaining ready task count after the shared briefing window", async () => {
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "Ready work",
+      defaultTrade: "building",
+    });
+    for (let index = 0; index < 5; index++) {
+      await createRepoEntity(ctx, "task", {
+        name: `Ready step ${index}`,
+        projectId: project.id,
+      });
+    }
+    const result = await buildEntityReport(
+      ctx.db,
+      {
+        slot: "task.briefing",
+        scope: { kind: "list", entity: "task", filters: {} },
+      },
+      async () => null,
+      ctx.actor,
+    );
+    const [tasks] = blocksOf(result.blocks, "records");
+    expect(tasks?.rows).toHaveLength(4);
+    expect(tasks?.footer).toBe("1 more ready");
+  });
+
   const report = async (
     slot: Parameters<typeof buildEntityReport>[1]["slot"],
     id: string,
   ) => {
     const out = await buildEntityReport(
       ctx.db,
-      { slot, id },
+      { slot, scope: { kind: "record", id: id } },
       async () => null,
       ctx.actor,
     );
@@ -188,7 +329,7 @@ describe("entity report", () => {
     const budget = await countTestDbQueries(() =>
       buildEntityReport(
         ctx.db,
-        { id: project.id, slot: "project.budget" },
+        { scope: { kind: "record", id: project.id }, slot: "project.budget" },
         async () => null,
         ctx.actor,
       ),
@@ -238,7 +379,7 @@ describe("entity report", () => {
         await countTestDbQueries(() =>
           buildEntityReport(
             ctx.db,
-            { id: product.id, slot },
+            { scope: { kind: "record", id: product.id }, slot },
             async () => null,
             ctx.actor,
           ),
@@ -285,7 +426,12 @@ describe("entity report", () => {
     for (const slot of slots)
       singles.push(
         await countTestDbQueries(() =>
-          buildEntityReport(ctx.db, { id, slot }, async () => null, ctx.actor),
+          buildEntityReport(
+            ctx.db,
+            { scope: { kind: "record", id: id }, slot },
+            async () => null,
+            ctx.actor,
+          ),
         ),
       );
     const common = singles[0]!.statements.filter((statement) =>
@@ -604,7 +750,10 @@ describe("entity report", () => {
         ctx.db,
         {
           slot: "project.budget",
-          id: parseShortcodeFor("meal", meal.shortcode),
+          scope: {
+            kind: "record",
+            id: parseShortcodeFor("meal", meal.shortcode),
+          },
         },
         async () => null,
         ctx.actor,

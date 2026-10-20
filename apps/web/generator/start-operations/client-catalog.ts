@@ -245,7 +245,8 @@ export const renderClientCatalog = async (): Promise<string> => {
   const modules = await loadClientModules();
   const renderer = new CatalogRenderer(modules);
   const names = new Map<string, string>();
-  const blocks = (await loadContracts()).map((loaded) => {
+  const loadedContracts = await loadContracts();
+  const blocks = loadedContracts.map((loaded) => {
     const name = domainExportName(loaded.exportName);
     const existing = names.get(name);
     if (existing !== undefined)
@@ -270,6 +271,27 @@ export const renderClientCatalog = async (): Promise<string> => {
     `// (contracts/cache-policy.ts); policy that reads the call's input lives in\n` +
     `// operation-overrides.ts and is spread onto its member here.\n\n` +
     `${renderer.imports().join("\n")}\n\n` +
-    blocks.join("\n")
+    blocks.join("\n") +
+    `\nexport function workflowCommandOptions(operation: string) {\n  switch (operation) {\n${loadedContracts
+      .flatMap(({ exportName, contract }) =>
+        Object.entries(contract.ops).flatMap(([member, definition]) => {
+          if (
+            definition.kind !== "mutation" ||
+            definition.command === undefined
+          )
+            return [];
+          const descriptor = property(domainExportName(exportName), member);
+          const declared = property(
+            property(property("contracts", exportName), "ops"),
+            member,
+          );
+          return [
+            `    case ${JSON.stringify(`${contract.domain}.${member}`)}: return { ...${descriptor}.mutationOptions(), command: ${declared}.command!, parse: (body: Record<string, unknown>) => ${declared}.input.parse(body), mutationFn: async (body: Record<string, unknown>): Promise<unknown> => ${descriptor}.call(${declared}.input.parse(body)) };`,
+          ];
+        }),
+      )
+      .join(
+        "\n",
+      )}\n    default: throw new Error(\`Undeclared user command: \${operation}\`);\n  }\n}\n`
   );
 };

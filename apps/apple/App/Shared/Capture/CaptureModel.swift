@@ -105,7 +105,9 @@ final class CaptureModel {
     func moveMissing(_ id: LocationCode, to parent: LocationCode) async {
         guard let anchor = session.location, parent != anchor, id != parent else { return }
         do {
-            _ = try await client.bulkUpdateParent([id], to: parent)
+            _ = try await client.bulkUpdate(
+                EntityCatalog[.location], ids: [id.rawValue],
+                data: ["parentId": .string(parent.rawValue)])
             missingBins?.removeAll { $0.id == id }
             tree = try await client.locationTree()
             missingError = nil

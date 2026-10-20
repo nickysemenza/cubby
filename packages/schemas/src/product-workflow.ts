@@ -50,7 +50,6 @@ import {
   productProjectUsesSetInput,
   productProjectUsesSetOut,
 } from "./project";
-import { productPurchasesInput, productPurchasesOut } from "./purchase";
 
 export const productSearchInput = z.object({
   filters: productFiltersSchema,
@@ -150,7 +149,6 @@ export const productWorkflowSchemas = {
     input: productProjectUsesInput,
     output: productProjectUsesOut,
   },
-  purchases: { input: productPurchasesInput, output: productPurchasesOut },
   components: { input: productComponentsInput, output: productComponentsOut },
   kitComponentRows: {
     input: kitComponentRowsInput,

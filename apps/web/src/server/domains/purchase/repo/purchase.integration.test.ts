@@ -28,7 +28,6 @@ import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   linkExpensesToPurchaseWorkflow,
-  purchaseProductsWorkflow,
   splitExpenseWorkflow,
 } from "~/server/domains/purchase/operations/purchase.server";
 import {
@@ -57,6 +56,7 @@ import {
   splitExpense,
   updatePurchase,
 } from "./purchase";
+import { purchaseProductsRelationAdapter } from "./purchase-products";
 
 // Full-filter totals must include unloaded purchases and credits, without summing stated totals.
 describe("purchase list totals", () => {
@@ -180,9 +180,12 @@ describe("purchase application workflows", () => {
       });
     await products("attach", source.id);
     expect(
-      (await purchaseProductsWorkflow(context, { purchaseId: source.id })).map(
-        (row) => row.productId,
-      ),
+      (
+        await purchaseProductsRelationAdapter.listPage(ctx.db, source.id, {
+          offset: 0,
+          limit: 50,
+        })
+      ).items.map((row) => row.productId),
     ).toEqual([item.id]);
     const merged = await executeEntity(context, {
       action: "merge",
@@ -197,13 +200,21 @@ describe("purchase application workflows", () => {
       expect(saved.cost).toBe(part.cost);
     }
     expect(
-      (await purchaseProductsWorkflow(context, { purchaseId: keep.id })).map(
-        (row) => row.productId,
-      ),
+      (
+        await purchaseProductsRelationAdapter.listPage(ctx.db, keep.id, {
+          offset: 0,
+          limit: 50,
+        })
+      ).items.map((row) => row.productId),
     ).toEqual([item.id]);
     await products("detach", keep.id);
     expect(
-      await purchaseProductsWorkflow(context, { purchaseId: keep.id }),
+      (
+        await purchaseProductsRelationAdapter.listPage(ctx.db, keep.id, {
+          offset: 0,
+          limit: 50,
+        })
+      ).items,
     ).toEqual([]);
   });
 });

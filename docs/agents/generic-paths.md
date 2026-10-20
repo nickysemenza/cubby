@@ -56,7 +56,11 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   shared server-owned blocks; web `ReportBlocks` and native `ReportDetailSlot`
   render them. [Compiled entities](../entities.md#one-declaration-several-consumers)
   owns block/command/choice semantics. Add a builder rather than deriving figures
-  or disabled reasons on a client.
+  or disabled reasons on a client. Use explicit record/list/selection scopes.
+- Workflow commands: opt-in `command` metadata on mutation contracts,
+  `operationCommandRequest` for server report construction, and generated
+  `workflowCommandOptions` / `CubbyClient.executeCommand` for invocation. Keep
+  domain validation in the existing operation handler and writer.
 - Swift: generated OpenAPI client, `entity-manifest.json`, the generated manifest
   vocabulary enums (`Generated/EntityVocabulary.swift`) and descriptor types
   (`Generated/EntityDescriptors.swift`, including `ValueSchema`). The typed description in

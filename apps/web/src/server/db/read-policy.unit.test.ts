@@ -20,7 +20,6 @@ describe("shared read policy", () => {
       "suggestions.list",
       "suggestions.automaticDecisions",
       "recipe.getDependencyGraph",
-      "task.board",
     ] as const) {
       expect(readPolicyFor(operation, "query")).toBe("strong");
     }
@@ -32,7 +31,7 @@ describe("shared read policy", () => {
       "location.valuationSummary",
       "meal.getNutrition",
       "meal.upcomingSummary",
-      "task.todayBriefing",
+      "entityReport.get",
     ] as const) {
       expect(readPolicyFor(operation, "query")).toBe("strong");
     }

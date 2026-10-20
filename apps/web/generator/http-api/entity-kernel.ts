@@ -284,7 +284,7 @@ export const renderEntityKernelArtifacts = (
  * this entity.
  */
 export interface NativeCoverage {
-  httpActions: readonly ("list" | "timeline" | "get" | "create" | "update" | "delete")[];
+  httpActions: readonly ("list" | "timeline" | "get" | "create" | "update" | "bulkUpdate" | "delete")[];
   rpcIds: readonly string[];
 }
 

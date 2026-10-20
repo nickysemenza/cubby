@@ -5,4 +5,4 @@
  * deploys the server answers older apps' writes with HTTP 426 (reads still run). Compatible changes ship in
  * the nightly release without touching it. Three numeric components.
  */
-export const APPLE_CLIENT_COMPATIBILITY_VERSION = "2.52.0";
+export const APPLE_CLIENT_COMPATIBILITY_VERSION = "2.53.0";

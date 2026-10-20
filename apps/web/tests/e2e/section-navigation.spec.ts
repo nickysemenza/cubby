@@ -62,14 +62,16 @@ test("portfolio and cash flow expose their continuous sections through contents 
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoAuthenticatedPage(page, "/projects?view=analytics");
-  await page
+  const openTasks = page
     .getByRole("navigation", { name: "Section index" })
-    .getByRole("link", { name: "Open Tasks by Project", exact: true })
-    .click();
-  await expect(page.locator("#open-tasks")).toBeFocused();
-  await expect(page).toHaveURL(/view=analytics#open-tasks$/);
+    .getByRole("link", { name: "Open tasks by project", exact: true });
+  const target = await openTasks.getAttribute("href");
+  if (!target?.startsWith("#"))
+    throw new Error("Portfolio section link has no anchor");
+  await openTasks.click();
+  await expect(page.locator(target)).toBeFocused();
   await expect(
-    page.getByRole("region", { name: "Cost vs Estimate", exact: true }),
+    page.getByRole("region", { name: "Cost vs estimate", exact: true }),
   ).toBeAttached();
 
   await gotoAuthenticatedPage(page, "/cash-flow");

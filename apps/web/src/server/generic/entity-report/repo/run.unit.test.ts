@@ -391,10 +391,9 @@ describe("import report blocks", () => {
       expect(row?.key).toBe(FINDING_ID);
       expect(row?.commands?.map((action) => action.request)).toEqual([
         {
-          kind: "resolve-finding",
-          findingId: FINDING_ID,
-          decision: "dismiss",
-          reviewedFingerprint: null,
+          kind: "operation",
+          operation: "problems.resolveRunFinding",
+          body: { id: FINDING_ID, action: "dismiss" },
         },
       ]);
     });
@@ -403,10 +402,9 @@ describe("import report blocks", () => {
       const row = firstRow([finding]);
       expect(row?.commands?.map((action) => action.request)).toEqual([
         {
-          kind: "resolve-finding",
-          findingId: FINDING_ID,
-          decision: "dismiss",
-          reviewedFingerprint: null,
+          kind: "operation",
+          operation: "problems.resolveRunFinding",
+          body: { id: FINDING_ID, action: "dismiss" },
         },
       ]);
       expect(row?.at).toBe("2026-09-20T16:02:00.000Z");
@@ -441,10 +439,13 @@ describe("import report blocks", () => {
         action.id.endsWith("apply"),
       );
       expect(apply?.request).toEqual({
-        kind: "resolve-finding",
-        findingId: FINDING_ID,
-        decision: "apply",
-        reviewedFingerprint: "f".repeat(64),
+        kind: "operation",
+        operation: "problems.resolveRunFinding",
+        body: {
+          id: FINDING_ID,
+          action: "apply",
+          reviewedFingerprint: "f".repeat(64),
+        },
       });
       expect(apply?.confirm).toContain("Aggregate line");
       expect(row?.lines?.map((l) => l.text)).toContain(
@@ -971,9 +972,9 @@ describe("liveProgressBlocks", () => {
     });
     expect(actionsOf(running).map((action) => action.request)).toEqual([
       {
-        kind: "run-control",
-        runId: RUN_ID,
-        action: "cancel",
+        kind: "operation",
+        operation: "run.control",
+        body: { runId: RUN_ID, action: "cancel" },
       },
     ]);
     expect(
@@ -988,7 +989,9 @@ describe("liveProgressBlocks", () => {
         }),
       ).map(
         (action) =>
-          action.request.kind === "run-control" && action.request.action,
+          action.request.kind === "operation" &&
+          action.request.operation === "run.control" &&
+          action.request.body.action,
       ),
     ).toEqual(["retry"]);
     expect(

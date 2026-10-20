@@ -3172,6 +3172,16 @@ Rules:
           { edge: "Expense.productId", direction: "outgoing" },
         ],
       },
+      list: {
+        rowSchema: {
+          module: "@cubby/schemas/purchase",
+          export: "productPurchaseOut",
+        },
+        adapter: {
+          module: "~/server/domains/purchase/repo/purchase-products",
+          export: "productPurchasesRelationAdapter",
+        },
+      },
       sources: [
         {
           key: "explicit",

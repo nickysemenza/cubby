@@ -243,7 +243,7 @@ const REPORTS = {
   "run.suggestions": runBuilder("run.suggestions"),
   "run.changes": runBuilder("run.changes"),
 } satisfies Record<
-  EntityReportInput["slot"],
+  Exclude<EntityReportInput["slot"], "task.briefing">,
   ReportDependency<EntityReportOut>
 >;
 
@@ -255,9 +255,15 @@ export async function buildEntityReport(
   actor: ActorContext,
   services?: ReportServices,
 ): Promise<EntityReportOut> {
+  if (input.scope.kind !== "record") {
+    const { buildCollectionReport } = await import("./collection");
+    return foldRepeatedRows(await buildCollectionReport(db, input));
+  }
+  if (input.slot === "task.briefing")
+    throw new Error("task.briefing does not support a record scope.");
   const execution = new ReportExecution({
     db,
-    id: input.id,
+    id: input.scope.id,
     slots: [input.slot],
     cursor: input.cursor,
     viewer,
@@ -287,10 +293,13 @@ export async function buildEntityReports(
     services,
   });
   const reports: EntityReportManyOut["reports"] = [];
-  for (const slot of input.slots)
+  for (const slot of input.slots) {
+    if (slot === "task.briefing")
+      throw new Error("task.briefing does not support a record scope.");
     reports.push({
       slot,
       report: foldRepeatedRows(await execution.read(REPORTS[slot])),
     });
+  }
   return { reports };
 }

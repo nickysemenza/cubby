@@ -1,28 +1,16 @@
-import { createEmailAccuracyEvaluationInput } from "./email-accuracy.js";
 import { z } from "zod";
-import {
-  correctEmailRelevanceInput,
-  emailAtChecksum,
-  emailImportInput,
-  emailPurchaseDecisionInput,
-  reclassifyEmailsInput,
-} from "./email-actions.js";
+import { reportScope } from "./entity-report-scope";
 
 import {
   COLLECTION_ACTIONS,
   type CollectionActionId,
 } from "./entity-definitions/collection-actions";
 import { SECTION_ACTION_IDS } from "./entity-section-actions";
+import { cookbookShortcode, runShortcode } from "./identifiers";
 import {
-  cookbookShortcode,
-  ledgerPartyShortcode,
-  mealRecipeId,
-  mealShortcode,
-  recipeShortcode,
-  runShortcode,
-} from "./identifiers";
-import { mealScale, mealYieldGrams } from "./meal-shared";
-import { runControlAction } from "./run-fields";
+  workflowCommandRequest,
+  workflowCommandInput,
+} from "./workflow-command";
 
 /**
  * The generic read a detail slot draws on every client. The server composes
@@ -33,6 +21,7 @@ import { runControlAction } from "./run-fields";
  * values, bar/stack/line), `table`, `schedule` (dated spans) and `note`.
  */
 export const reportSlots = [
+  "task.briefing",
   "email.review",
   "recipe.availability",
   "recipe.costing-coverage",
@@ -104,8 +93,7 @@ export type ReportSlot = z.infer<typeof reportSlot>;
 
 export const entityReportInput = z.object({
   slot: reportSlot,
-  /** The record's public shortcode; its prefix must match the slot's entity. */
-  id: z.string().min(1),
+  scope: reportScope,
   /** The next page of a paged report (`nextCursor` of the previous one). */
   cursor: z.string().min(1).optional(),
 });
@@ -242,112 +230,18 @@ const reportNote = z.object({
   tone: reportTone.optional(),
 });
 
-/**
- * What a row command runs. Each member names one existing operation and carries its exact body,
- * so a client never assembles a request from a label; `confirm` is shown before it is sent by
- * native; web acts on the tap as it always has. Null means one tap acts on both.
- */
+/** Ordinary commands reuse operation contracts; chunk workflows retain their bounded adapters. */
 export const reportCommandRequest = z.discriminatedUnion("kind", [
-  emailImportInput.extend({ kind: z.literal("import-email") }),
-  reclassifyEmailsInput.extend({ kind: z.literal("reclassify-email") }),
-  emailAtChecksum.extend({ kind: z.literal("rerun-email-preview") }),
-  emailPurchaseDecisionInput.extend({
-    kind: z.literal("decide-email-purchase"),
-  }),
-  correctEmailRelevanceInput.extend({
-    kind: z.literal("correct-email-relevance"),
-    // The template carries no reason; the member types it in the command's
-    // `text` input, and the operation refuses a blank one.
-    reason: z.string(),
-  }),
-  createEmailAccuracyEvaluationInput.extend({
-    kind: z.literal("create-email-accuracy"),
-  }),
-  z.object({
-    kind: z.literal("run-control"),
-    runId: runShortcode,
-    action: runControlAction,
-  }),
-  /** Re-admit one step's failures and relaunch its step-ledger Run (`run.retryStep`). */
-  z.object({
-    kind: z.literal("retry-run-step"),
-    runId: runShortcode,
-    stepKey: z.string().min(1),
-  }),
-  z.object({
-    kind: z.literal("resolve-finding"),
-    findingId: z.uuid(),
-    decision: z.enum(["apply", "dismiss"]),
-    reviewedFingerprint: z.string().nullable(),
-  }),
-  /** Re-derive a book's imported recipes from its stored extraction (no AI). */
+  workflowCommandRequest,
   z.object({
     kind: z.literal("reprocess-cookbook"),
     cookbookId: cookbookShortcode,
   }),
-  /**
-   * Import these source recipes (the tree's item ids) from the book's stored extraction. The
-   * client sends at most `chunkSize` per call (the server's cap) and stops at the first error.
-   */
   z.object({
     kind: z.literal("import-cookbook-recipes"),
     cookbookId: cookbookShortcode,
     recipeIds: z.array(z.string().min(1)).min(1),
     chunkSize: z.number().int().positive(),
-  }),
-  /** Ask the AI to arrange a recipe's steps into a walkthrough (`force` replaces a current one). */
-  z.object({
-    kind: z.literal("generate-recipe-flow"),
-    recipeId: recipeShortcode,
-    force: z.boolean(),
-  }),
-  /** Plan a recipe into a meal: the person picks the recipe (`recipeId`) and its scale. */
-  z.object({
-    kind: z.literal("meal-add-recipe"),
-    mealId: mealShortcode,
-    recipeId: recipeShortcode.nullable(),
-    scale: mealScale.nullable(),
-    /** The person's reviewed answer for a meal that is not cooked yet; false for a cooked one. */
-    convertToCooked: z.boolean().nullable(),
-  }),
-  /** Change how much of a meal's recipe is served (`scale`, entered by the person). */
-  z.object({
-    kind: z.literal("meal-scale-recipe"),
-    mealRecipeId,
-    scale: mealScale.nullable(),
-  }),
-  z.object({ kind: z.literal("meal-remove-recipe"), mealRecipeId }),
-  /**
-   * Set one eater's portion of a prepared recipe on a target meal. `value`/`unit` are entered by
-   * the person to add a portion and carried by the server to change its status.
-   */
-  z.object({
-    kind: z.literal("meal-portion-set"),
-    mealRecipeId,
-    mealId: mealShortcode,
-    ledgerPartyId: ledgerPartyShortcode.nullable(),
-    value: z.number().positive().nullable(),
-    unit: z.string().min(1).nullable(),
-    confirmed: z.boolean(),
-  }),
-  z.object({
-    kind: z.literal("meal-portion-remove"),
-    mealRecipeId,
-    mealId: mealShortcode,
-    ledgerPartyId: ledgerPartyShortcode,
-  }),
-  /** Record how much a preparation made, in whole grams (entered by the person). */
-  z.object({
-    kind: z.literal("meal-yield"),
-    mealRecipeId,
-    field: z.enum(["actual", "estimated"]),
-    grams: mealYieldGrams.nullable(),
-  }),
-  /** Re-parse one stored recipe line with the current parser; the server decides what changes. */
-  z.object({
-    kind: z.literal("reparse-line"),
-    recipeId: recipeShortcode,
-    lineId: z.uuid(),
   }),
 ]);
 export type ReportCommandRequest = z.infer<typeof reportCommandRequest>;
@@ -358,39 +252,7 @@ export type ReportCommandRequest = z.infer<typeof reportCommandRequest>;
  * a primitive both clients already draw (a number field, the entity picker, an option list, a
  * text field).
  */
-export const reportCommandInput = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("number"),
-    key: z.string().min(1),
-    label: z.string().min(1),
-    /** Shown first (the current value, or a sensible default). */
-    initial: z.number().nullable(),
-    min: z.number(),
-  }),
-  z.object({
-    kind: z.literal("record"),
-    key: z.string().min(1),
-    label: z.string().min(1),
-    /** The entity whose records the client searches. */
-    entity: z.string().min(1),
-  }),
-  z.object({
-    kind: z.literal("choice"),
-    key: z.string().min(1),
-    label: z.string().min(1),
-    options: z
-      .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
-      .min(1),
-    initial: z.string().nullable(),
-  }),
-  z.object({
-    kind: z.literal("text"),
-    key: z.string().min(1),
-    label: z.string().min(1),
-    /** Required free text, e.g. why the member corrected a record. */
-    initial: z.string().nullable(),
-  }),
-]);
+export const reportCommandInput = workflowCommandInput;
 export type ReportCommandInput = z.infer<typeof reportCommandInput>;
 
 export const reportCommand = z.object({
@@ -541,7 +403,13 @@ const reportRecordRow = z.object({
    * evidence; `warning` and `destructive` lines wrap in full instead of clipping.
    */
   lines: z
-    .array(z.object({ text: z.string(), tone: reportTone.optional() }))
+    .array(
+      z.object({
+        text: z.string(),
+        tone: reportTone.optional(),
+        ref: reportRef.optional(),
+      }),
+    )
     .optional(),
   /** Raw material kept out of the way (an operation's arguments). */
   detail: z.object({ label: z.string(), text: z.string() }).optional(),

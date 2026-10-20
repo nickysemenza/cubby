@@ -187,6 +187,7 @@ export const recipeContract = defineContract("recipe", {
     cache: { tags: [["recipe"]] },
   }),
   duplicate: mutation({
+    command: { label: "Duplicate recipe", confirmation: null },
     mcp: {
       omit: "kernel_alternative",
       kernel: ["get", "create"],
@@ -243,6 +244,7 @@ export const recipeContract = defineContract("recipe", {
     cache: { tags: [["recipe", "flow"]] },
   }),
   generateFlow: mutation({
+    command: { label: "Generate walkthrough", confirmation: null },
     mcp: { omit: "model_assist" },
     native: "Generate a recipe's AI walkthrough from its report",
     input: recipeFlowGenerateInputSchema,
@@ -329,6 +331,7 @@ export const recipeContract = defineContract("recipe", {
   }),
   /** Re-parse one stored line with the current parser and write what changed. */
   reparseLine: mutation({
+    command: { label: "Reparse line", confirmation: null },
     mcp: {
       omit: "operator_maintenance",
       note: "Parser-upgrade repair; agents edit lines through recipe_import.patch_line",

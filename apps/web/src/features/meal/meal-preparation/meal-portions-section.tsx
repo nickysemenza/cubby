@@ -33,7 +33,10 @@ export function MealPortionsSection({
   onEditPreparation?: (mealRecipeId: string) => void;
 }) {
   const query = useQuery(
-    entityReport.get.queryOptions({ slot: "meal.composition", id: mealId }),
+    entityReport.get.queryOptions({
+      slot: "meal.composition",
+      scope: { kind: "record", id: mealId },
+    }),
   );
   const blocks = (query.data?.blocks ?? []).filter(isPortions);
 

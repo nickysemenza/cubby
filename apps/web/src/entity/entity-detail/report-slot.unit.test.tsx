@@ -3,7 +3,13 @@ import type {
   ReportCommand,
 } from "@cubby/schemas/entity-report";
 import { shortcode } from "@cubby/schemas/identifiers";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { installFeatures } from "~/features/registry";
@@ -249,12 +255,15 @@ describe("EntityReportSlot records", () => {
                     },
                   ],
                   request: {
-                    kind: "correct-email-relevance",
-                    id: EMAIL_ID,
-                    expectedChecksum: "a".repeat(64),
-                    reviewedChecksum: "a".repeat(64),
-                    classification: "related",
-                    reason: "",
+                    kind: "operation",
+                    operation: "purchaseImport.correctEmailRelevance",
+                    body: {
+                      id: EMAIL_ID,
+                      expectedChecksum: "a".repeat(64),
+                      reviewedChecksum: "a".repeat(64),
+                      classification: "related",
+                      reason: "",
+                    },
                   },
                 },
               ]),
@@ -437,7 +446,7 @@ describe("EntityReportSlot records", () => {
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(calls.at(-1)?.input).toEqual({
       slot: "run.ai-usage",
-      id: RUN_ID,
+      scope: { kind: "record", id: RUN_ID },
       cursor: "cursor-2",
     });
     expect(
@@ -545,6 +554,14 @@ describe("EntityReportSlot records", () => {
         screen.getByText(/All Product decisions reviewed\./),
       ).toBeInTheDocument();
       fireEvent.click(approve);
+      expect(
+        calls.some((call) => call.operation === "run.commitPrepared"),
+      ).toBe(false);
+      fireEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Approve and import",
+        }),
+      );
       expect(
         await screen.findByText("Prepared import approved and committed."),
       ).toBeInTheDocument();

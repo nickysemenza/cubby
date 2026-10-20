@@ -25,7 +25,7 @@ import type {
   ProjectPortfolioAnalyticsOut,
   Trade,
 } from "@cubby/schemas/project";
-import { and, asc, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -58,6 +58,7 @@ const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
 export async function projectPortfolioAnalytics(
   db: Database,
   filters: ProjectPortfolioAnalyticsInput,
+  selection?: readonly string[],
 ): Promise<ProjectPortfolioAnalyticsOut> {
   const wholeTree = filters.completionYear
     ? await loadProjectSubtreeRollups(db)
@@ -74,7 +75,10 @@ export async function projectPortfolioAnalytics(
         .map((row) => row.id)
     : undefined;
   const projectRows = await getDb(db).query.project.findMany({
-    where: buildDashboardProjectWhere(filters, completionIds),
+    where: and(
+      buildDashboardProjectWhere(filters, completionIds),
+      selection ? inArray(project.shortcode, [...selection]) : undefined,
+    ),
     orderBy: [asc(project.name)],
     columns: { id: true, shortcode: true, name: true },
   });

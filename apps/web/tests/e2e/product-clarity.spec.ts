@@ -398,7 +398,7 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
     const { db, actor } = await createEvidenceHarnessContext(page);
     const report = await buildEntityReport(
       db,
-      { slot: "product.runs", id: product.id },
+      { slot: "product.runs", scope: { kind: "record", id: product.id } },
       async () => member,
       actor,
     );

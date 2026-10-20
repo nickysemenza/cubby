@@ -18,6 +18,9 @@ import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
+import { operationCommandRequest } from "~/contracts/define";
+import { problemsContract } from "~/contracts/problems.contract";
+import { runContract } from "~/contracts/run.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
@@ -398,12 +401,15 @@ function findingActions(
             label: "Apply fix",
             prominent: true,
             confirm: applyConfirm,
-            request: {
-              kind: "resolve-finding",
-              findingId: finding.id,
-              decision: "apply",
-              reviewedFingerprint,
-            },
+            request: operationCommandRequest(
+              problemsContract,
+              "resolveRunFinding",
+              {
+                id: finding.id,
+                action: "apply",
+                reviewedFingerprint: reviewedFingerprint,
+              },
+            ),
           },
         ];
   return [
@@ -413,12 +419,10 @@ function findingActions(
       label: "Dismiss",
       prominent: false,
       confirm: null,
-      request: {
-        kind: "resolve-finding",
-        findingId: finding.id,
-        decision: "dismiss",
-        reviewedFingerprint: null,
-      },
+      request: operationCommandRequest(problemsContract, "resolveRunFinding", {
+        id: finding.id,
+        action: "dismiss",
+      }),
     },
   ];
 }
@@ -804,11 +808,10 @@ function workflowBlocks(
             label: "Cancel run",
             prominent: false,
             confirm: "Cancel this Run? Work already saved stays saved.",
-            request: {
-              kind: "run-control",
+            request: operationCommandRequest(runContract, "control", {
               runId,
               action: "cancel",
-            },
+            }),
           },
         ]
       : progress.status === "failed"
@@ -818,11 +821,10 @@ function workflowBlocks(
               label: "Retry run",
               prominent: true,
               confirm: null,
-              request: {
-                kind: "run-control",
+              request: operationCommandRequest(runContract, "control", {
                 runId,
                 action: "retry",
-              },
+              }),
             },
           ]
         : [];
@@ -986,11 +988,10 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
                 label: "Retry failed",
                 prominent: true,
                 confirm: null,
-                request: {
-                  kind: "retry-run-step",
+                request: operationCommandRequest(runContract, "retryStep", {
                   runId: report.code,
                   stepKey: step.key,
-                },
+                }),
               },
             ]
           : [],

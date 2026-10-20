@@ -13,7 +13,7 @@ enum TodaySectionState<Value> {
 @MainActor
 @Observable
 final class TodayModel {
-    private(set) var tasks: TodaySectionState<TaskTodayBriefingOut> = .loading
+    private(set) var tasks: TodaySectionState<EntityReportOut> = .loading
     private(set) var meals: TodaySectionState<[EntityRow]> = .loading
     private(set) var problems: TodaySectionState<ProblemsCount> = .loading
 
@@ -149,7 +149,7 @@ final class TodayModel {
         problemsIsLoading = false
     }
 
-    private var loadedTasks: TaskTodayBriefingOut? {
+    private var loadedTasks: EntityReportOut? {
         if case .loaded(let value) = tasks { return value }
         return nil
     }

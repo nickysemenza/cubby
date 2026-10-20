@@ -1,3 +1,4 @@
+import { dataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductListItem } from "@cubby/schemas/product";
@@ -10,6 +11,8 @@ import {
   CategoryLabelById,
 } from "~/entity/presentation/category-label";
 import { NoneValue } from "~/ui/primitives/none-value";
+
+import { EntityQualityFact } from "./data-quality-value";
 
 /** `label`: a value's known display name, shown while its record resolves. */
 type CompactFieldContext = { label?: string };
@@ -33,6 +36,11 @@ function checkedRenderer<TSchema extends z.ZodType>(
     return parsed.success ? render(parsed.data, context) : undefined;
   };
 }
+
+const qualityRow = z.object({
+  id: z.string(),
+  dataQuality: dataQuality.optional(),
+});
 
 const categoryRow = z.object({ category: productCategorySummary.nullable() });
 const externalIdsRow = z.object({
@@ -77,6 +85,14 @@ export function compactFieldRendererFor(
   entity: Entity,
   fieldKey: string,
 ): CompactFieldRenderer | null {
+  if (fieldKey === "dataQuality")
+    return checkedRenderer(qualityRow, (record) => (
+      <EntityQualityFact
+        entity={entity}
+        id={record.id}
+        quality={record.dataQuality}
+      />
+    ));
   if (entity !== "product") return null;
   return (
     Object.entries(productRenderers).find(([key]) => key === fieldKey)?.[1] ??

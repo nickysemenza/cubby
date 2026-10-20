@@ -1,6 +1,8 @@
 import type { ReportBlock, ReportCommand } from "@cubby/schemas/entity-report";
 import { recipeShortcode, type RecipeId } from "@cubby/schemas/identifiers";
 
+import { operationCommandRequest } from "~/contracts/define";
+import { recipeContract } from "~/contracts/recipe.contract";
 import type { Database } from "~/server/db";
 
 /**
@@ -30,7 +32,10 @@ export async function recipeWalkthroughReport(
     confirm: force
       ? "Ask the AI to arrange this recipe's steps again? It replaces the walkthrough and uses the model."
       : "Ask the AI to arrange this recipe's steps into a walkthrough? It uses the model and can take a minute.",
-    request: { kind: "generate-recipe-flow", recipeId, force },
+    request: operationCommandRequest(recipeContract, "generateFlow", {
+      id: recipeId,
+      force: force,
+    }),
   });
   if (state.status === "missing" || !recipe)
     return [

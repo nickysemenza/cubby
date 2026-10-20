@@ -63,7 +63,6 @@ describe("shared database freshness operation routing", () => {
       "entity.detail",
       "search.global",
       "expense.analytics",
-      "task.board",
     ] as const) {
       const selected = await selectOperationContext(
         context,

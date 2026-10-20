@@ -41,7 +41,10 @@ export function SweepStatusLine({
   onSettled?: () => void;
 }) {
   const report = useQuery({
-    ...entityReport.get.queryOptions({ slot: "run.steps", id: runId }),
+    ...entityReport.get.queryOptions({
+      slot: "run.steps",
+      scope: { kind: "record", id: runId },
+    }),
     refetchInterval: (query) =>
       query.state.data?.live === false ? false : POLL_MS,
   });

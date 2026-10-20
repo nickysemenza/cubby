@@ -166,9 +166,14 @@ export async function applyReviewedSourceReconciliation(
   );
   await expect(apply).toHaveCount(1);
   await apply.click();
-  await expect(
-    page.getByText("Applied import correction", { exact: true }),
-  ).toBeVisible();
+  const confirmation = page.getByRole("dialog", {
+    name: "Apply fix",
+    exact: true,
+  });
+  await confirmation
+    .getByRole("button", { name: "Apply fix", exact: true })
+    .click();
+  await expect(confirmation).toHaveCount(0);
   await expect(apply).toHaveCount(0);
   await expect(
     page.locator("#import-findings").getByText("applied", { exact: true }),

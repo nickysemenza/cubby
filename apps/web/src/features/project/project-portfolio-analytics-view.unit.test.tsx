@@ -1,4 +1,4 @@
-import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+import type { EntityReportOut } from "@cubby/schemas/entity-report";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,13 +14,16 @@ afterEach(() => {
   harness.dispose();
 });
 
-const data: ProjectPortfolioAnalyticsOut = {
-  costVsEstimate: [],
-  spendingByProject: [],
-  monthlySpend: [],
-  plannedVsActual: [],
-  tradeActivity: [],
-  taskHeatmap: [],
+const data: EntityReportOut = {
+  blocks: [
+    {
+      kind: "table",
+      title: "Cost vs estimate",
+      columns: ["Project", "Estimate"],
+      rows: [],
+      empty: "No cost data.",
+    },
+  ],
 };
 
 describe("portfolio analytics query lifecycle", () => {
