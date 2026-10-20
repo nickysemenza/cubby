@@ -1,0 +1,19 @@
+apps/apple/CubbyKit/Sources/CubbyKit/Photo/LibrarySighting.swift
+  s_359d51740d6cee::t_c5cf98004a3ad3 259,261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7f982bf3fec9720961b226779a37be5750ce618b",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
