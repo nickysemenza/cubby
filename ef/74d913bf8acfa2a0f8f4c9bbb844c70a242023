@@ -1,0 +1,55 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_7b604f631f7be8 258
+apps/web/generator/entities/presentation.ts
+  s_9b829d577c7e4c::t_517ca8961ee4aa 623
+apps/web/src/entity/entity-list/entity-shelf.tsx
+  s_9b829d577c7e4c::t_6d8a9fdd6f9130 14,144
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_9b829d577c7e4c::t_86cb7bac21e67f 358-360
+apps/web/src/entity/entity-list/record-caption.tsx
+  s_9b829d577c7e4c::t_da2ee5ded2e95a 1-50
+apps/web/src/entity/hooks/use-standard-columns.tsx
+  s_9b829d577c7e4c::t_49cbfacd7c235f 13-17,19-22,215-227,270,314
+apps/web/src/entity/table/column-helpers.tsx
+  s_9b829d577c7e4c::t_1b44715364f5e5 43,214-215,270-286,401-412,421-430
+apps/web/src/entity/table/desktop-data-row.preview.test.tsx
+  s_9b829d577c7e4c::t_a7c27a7d44ec03 17,25,47-49
+apps/web/src/entity/table/table-header-layout.tsx
+  s_9b829d577c7e4c::t_dcc933a8dec004 97-98,108
+apps/web/src/entity/table/table.tsx
+  s_9b829d577c7e4c::t_9ddedb25676474 859
+apps/web/src/styles.css
+  s_9b829d577c7e4c::t_3039a748f4627b 592-595
+apps/web/src/ui/common/currency-value.tsx
+  s_9b829d577c7e4c::t_9b8979accd915c 72-73
+apps/web/src/ui/data-table/rendered-column-fit.preview.test.tsx
+  s_9b829d577c7e4c::t_be1baf3e1d355d 348-350,354,356,358
+apps/web/src/ui/data-table/table-density.preview.test.tsx
+  s_9b829d577c7e4c::t_41e00d8902fe30 38,616,808,813,821-823
+apps/web/src/ui/data-table/use-rendered-column-widths.ts
+  s_9b829d577c7e4c::t_2c7e440dbcd63e 89,94,96
+docs/entities.md
+  s_9b829d577c7e4c::t_11bf91165aac29 651-653
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_9b829d577c7e4c::t_fa0dc42ea36662 99-100
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_9b829d577c7e4c::t_ccf1eda4a38481 145-146
+packages/schemas/src/entity-definitions/definition.ts
+  s_9b829d577c7e4c::t_d21e76cbced86b 1452-1456,1682,1701
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ef74d913bf8acfa2a0f8f4c9bbb844c70a242023",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

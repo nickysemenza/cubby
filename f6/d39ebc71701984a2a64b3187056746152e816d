@@ -1,0 +1,53 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_45dd0acaf8f51f 50,305
+apps/web/src/entity/display/entity-display.tsx
+  s_9b829d577c7e4c::t_d7559fd6f7b1cc 44-49,437-452,1171,1182-1189
+apps/web/src/entity/entity-detail/detail-activity.tsx
+  s_9b829d577c7e4c::t_df26438b82178f 1-151
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_9b829d577c7e4c::t_5d8939b9de8b87 7-10,23,55-56,83,94,96,524-533,558-566,705-709,717-774
+apps/web/src/entity/entity-detail/generic-entity-detail.unit.test.tsx
+  s_9b829d577c7e4c::t_ac5f71a8eb49b6 165-168,361-362,364
+apps/web/src/entity/entity-detail/needs-you.tsx
+  s_9b829d577c7e4c::t_f492c2957f76c4 1-88
+apps/web/src/entity/entity-detail/record-quality.tsx
+  s_9b829d577c7e4c::t_159680e901efd2 16,23,30-31,266-268,275-353,357-364
+apps/web/src/entity/entity-detail/spend-chart.tsx
+  s_9b829d577c7e4c::t_63269c00e7fe15 1-94
+apps/web/src/entity/page/page-hero.tsx
+  s_9b829d577c7e4c::t_d4b0c5cd325553 48,52-55,237,239-240,259,273,276,338-345,348,350-358,361-365,368-372,406,434,454
+apps/web/src/entity/page/page.tsx
+  s_9b829d577c7e4c::t_c5893b3bf756d3 157-158,269
+apps/web/src/entity/suggestions/record-suggestions.tsx
+  s_9b829d577c7e4c::t_aa09baed4899c0 1471-1477
+apps/web/src/entity/suggestions/suggestion-status.tsx
+  s_9b829d577c7e4c::t_952dced0056b85 150
+apps/web/src/entity/table/detail-page.tsx
+  s_9b829d577c7e4c::t_ffe7e3f37eee4c 5,71-76,171-173,192-196,275-276
+apps/web/src/entity/work-queue/record-work-queue.tsx
+  s_9b829d577c7e4c::t_63d2d6d51db591 32-39,47-53,57-87
+apps/web/src/ui/common/basic-info.tsx
+  s_9b829d577c7e4c::t_71b9ccdaddf4b9 2-9,31-88,103,108,151
+apps/web/src/ui/common/ledger.css
+  s_9b829d577c7e4c::t_f07f73776dc566 25,28,81-166
+apps/web/src/ui/data-table/indexed-sections.tsx
+  s_9b829d577c7e4c::t_93d480c20c96aa 148,176,255,262,267,272,296,318,442-443,448-452,483-485,489,492,688,701-703,712-715,722-726
+apps/web/src/ui/layout/section.tsx
+  s_9b829d577c7e4c::t_da962bae79c65f 40,47,130,148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f6d39ebc71701984a2a64b3187056746152e816d",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

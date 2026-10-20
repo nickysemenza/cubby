@@ -1,0 +1,33 @@
+apps/web/src/contracts/entity-graph.contract.ts
+  s_2493609cc0d9bb::t_95b2cd04639d16 12-17,43-54
+apps/web/src/entity/entity-detail/use-detail-data.ts
+  s_2493609cc0d9bb::t_9e2f0566458077 1-26
+apps/web/src/server/generic/entity-detail/repo/detail-data.integration.test.ts
+  s_2493609cc0d9bb::t_a5b085975206ac 1-221
+apps/web/src/server/generic/entity-detail/repo/detail-data.ts
+  s_2493609cc0d9bb::t_2c94c328d72721 1-161
+apps/web/src/server/operation-runtime/entity-runtime.server.ts
+  s_2493609cc0d9bb::t_f081564f2fb2bc 28-31,102-104
+docs/entities.md
+  s_2493609cc0d9bb::t_ba08367a48a699 126-150
+packages/schemas/package.json
+  s_2493609cc0d9bb::t_d6947df0577f46 53
+packages/schemas/src/entity-detail-data.ts
+  s_2493609cc0d9bb::t_36b8207279df99 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6bd5f0670c270d79bbcced696f1f521e411571ae",
+  "prompts": {},
+  "sessions": {
+    "s_2493609cc0d9bb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a51-2244-7f02-b591-b96aae72c6c6",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

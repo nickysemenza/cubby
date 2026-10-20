@@ -1,0 +1,35 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_fba6e04d0556e6 50
+apps/web/src/entity/entity-detail/detail-activity.tsx
+  s_9b829d577c7e4c::t_772195c2d56920 93
+apps/web/src/entity/entity-detail/detail-hero-stats.tsx
+  s_9b829d577c7e4c::t_2135d1ab7469cf 1-63
+apps/web/src/entity/entity-detail/entity-workbench-inspector.tsx
+  s_9b829d577c7e4c::t_4a8b4840ffc214 107,135,147,154
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_9b829d577c7e4c::t_80bb987fbd2b96 47,81,151
+apps/web/src/entity/entity-detail/inspector-frame.tsx
+  s_9b829d577c7e4c::t_69eb6d79b7a2e9 114
+apps/web/src/entity/entity-detail/inspector-record.tsx
+  s_9b829d577c7e4c::t_3db1a01a5aebb1 25,30,126-130,132-133,135-188,190-192
+apps/web/src/ui/common/ledger.css
+  s_9b829d577c7e4c::t_6baf83d9a5b262 123-125,131-133,141-142,144,149-152,161-167,171-172,177-178
+apps/web/src/ui/overlays/side-panel.tsx
+  s_9b829d577c7e4c::t_3ff24da0bf1702 254,263,309,315-316,320,324,331,357,378-379,383,391,410,500
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5cb70224131a9b4249ce2bfcde58532348ed9b99",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

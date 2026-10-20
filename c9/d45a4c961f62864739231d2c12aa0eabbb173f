@@ -1,0 +1,33 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_c4bb3703f93422 3,10,14-16,18,24,28,40,44,50,54,58,62,305,313-314
+apps/web/package.json
+  s_9b829d577c7e4c::t_920fa9f495a174 63-64
+apps/web/src/features/shell/authenticated-app-shell.tsx
+  s_9b829d577c7e4c::t_d4b5a9b3b47975 267-268,431,447,453,502-504
+apps/web/src/styles.css
+  s_9b829d577c7e4c::t_dcc2e9a2317ea6 9-10,22-28,68,70,73-79,90-91,163-195,253,257,259-260,370,374,377-378,396-399,574
+apps/web/src/ui/navigation/navigation-count-badge.tsx
+  s_9b829d577c7e4c::t_d909e79054820b 38
+packages/design-tokens/brand.css
+  s_9b829d577c7e4c::t_f45bbed1e74900 54-56,67-68,70-77
+packages/design-tokens/tokens.json
+  s_9b829d577c7e4c::t_e7c94dd26c1184 172-174,184-187
+pnpm-lock.yaml
+  s_9b829d577c7e4c::t_4613484a3ec29b 350-355,1772,2482-2487,7321,7325-7326,13379-13382,13681,13709,17311-17312
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c9d45a4c961f62864739231d2c12aa0eabbb173f",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
