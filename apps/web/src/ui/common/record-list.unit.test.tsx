@@ -27,14 +27,14 @@ it("opens and closes a disclosure, default-open or not", async () => {
       />
     </RecordList>,
   );
-  expect(screen.getByText("Synthetic quote")).not.toBeVisible();
-  fireEvent.click(screen.getByText("2 citations"));
+  expect(screen.queryByText("Synthetic quote")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "2 citations" }));
   await expect.poll(() => screen.getByText("Synthetic quote")).toBeVisible();
   expect(screen.getByText("Synthetic lone quote")).toBeVisible();
-  fireEvent.click(screen.getByText("1 citation"));
+  fireEvent.click(screen.getByRole("button", { name: "1 citation" }));
   await expect
-    .poll(() => screen.getByText("Synthetic lone quote"))
-    .not.toBeVisible();
+    .poll(() => screen.queryByText("Synthetic lone quote"))
+    .toBeNull();
 });
 
 it("derives columns from rows' facts in first-seen order", () => {

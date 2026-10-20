@@ -94,7 +94,7 @@ export function DataTablePagination<TData extends RowData>({
               gap="sm"
               className="sm:justify-start"
             >
-              <p className="font-mono text-2xs font-medium tracking-wider text-muted-foreground uppercase">
+              <p className="text-xs font-medium text-muted-foreground">
                 Rows per page
               </p>
               <RowsPerPageSelect table={table} />
@@ -104,7 +104,7 @@ export function DataTablePagination<TData extends RowData>({
           <Row
             align="center"
             justify="center"
-            className="min-w-0 flex-1 font-mono text-2xs text-muted-foreground uppercase tabular-nums sm:flex-none"
+            className="min-w-0 flex-1 font-mono text-2xs text-muted-foreground tabular-nums sm:flex-none"
           >
             <span className="hidden sm:inline">
               Page {table.state.pagination.pageIndex + 1} of{" "}

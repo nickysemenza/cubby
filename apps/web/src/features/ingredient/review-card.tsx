@@ -124,16 +124,14 @@ function QueueUsdaPicker({
 
       {food && (
         <div className="border border-positive/40 bg-positive/5 p-2">
-          <p className="mb-1 text-2xs font-medium tracking-wide text-positive uppercase">
-            Selected
-          </p>
+          <p className="mb-1 text-xs font-medium text-positive">Selected</p>
           <UsdaFoodResultRow food={food} />
         </div>
       )}
 
       {!noMatch && (alternatives.length > 0 || altLoading) && (
         <Stack gap="sm">
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <p className="text-xs font-medium text-muted-foreground">
             Other USDA matches
           </p>
           {altLoading && alternatives.length === 0 ? (
@@ -270,7 +268,7 @@ export function ReviewCard({
             <Stack gap="sm">
               {mergeOptions.length > 0 && (
                 <Stack gap="xs">
-                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Possible {pluralize("duplicate", mergeOptions.length)}
                   </p>
                   <div className="divide-y border border-dashed">

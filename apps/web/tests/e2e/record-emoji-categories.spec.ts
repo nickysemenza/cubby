@@ -380,6 +380,9 @@ test("unassessed quality remains visible in phone cards", async ({
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   const popover = page.locator('[data-slot="popover-content"]');
+  await popover
+    .getByRole("button", { name: "Technical details", exact: true })
+    .click();
   await expect(popover).toContainText("No weighted checks apply");
   await expectViewportBounded(page);
   await page.screenshot({

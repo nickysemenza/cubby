@@ -3,6 +3,7 @@ import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
 
 import { cn } from "~/lib/utils";
+import { popoverElevationClassName } from "~/ui/primitives/popover-elevation";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +55,8 @@ function CommandDialog({
       </DialogHeader>
       <DialogContent
         className={cn(
-          "overflow-hidden rounded-xl! bg-popover p-0 shadow-[var(--shadow-overlay)]",
+          popoverElevationClassName,
+          "overflow-hidden rounded-lg! bg-popover p-0",
           className,
         )}
         showCloseButton={showCloseButton}

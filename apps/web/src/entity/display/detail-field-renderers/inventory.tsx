@@ -2,6 +2,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 
 import { renderDetailFieldValue } from "~/entity/display/entity-display";
 import { Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 import type { EntityDetailFieldRenderers } from "./index";
 import { InventoryExpenseActions } from "./inventory-expense";
@@ -19,12 +20,13 @@ export const inventoryDetailFields = {
         {ownerField
           ? renderDetailFieldValue("inventory", record, ownerField)
           : null}
-        <details className="max-w-2xl">
-          <summary className="cursor-pointer text-xs font-medium">
-            Purchase or sale evidence
-          </summary>
+        <Disclosure
+          summary="Purchase or sale evidence"
+          className="max-w-2xl"
+          keepMounted
+        >
           <InventoryExpenseActions record={record} />
-        </details>
+        </Disclosure>
       </Stack>
     ),
   }),

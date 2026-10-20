@@ -13,9 +13,8 @@ import {
   imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { AiCost } from "~/ui/common/ai-cost";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Progress } from "~/ui/primitives/progress";
 import { StatusText } from "~/ui/primitives/status-text";
 
@@ -112,11 +111,8 @@ function PhotoRunProgress({
                 ? "Preparing photo descriptions"
                 : "Photos uploaded; ready to group");
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle as="h2">Progress</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3">
+    <Section headingAs="h2" title="Progress">
+      <div className="grid gap-3">
         <p className="text-sm font-medium">{stage}</p>
         <PhotoRunCost run={run} />
         <Progress
@@ -179,8 +175,8 @@ function PhotoRunProgress({
           </StatusText>
         ) : null}
         {children}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
 

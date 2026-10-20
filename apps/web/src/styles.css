@@ -2,8 +2,8 @@
 @import "@daveyplate/better-auth-ui/css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-/* Field Guide primitives (surface ramp, ink, signal, domain colors,
-   semantic tones, type stacks) are generated from the shared design tokens.
+/* Field Guide primitives (surface ramp, ink, signal, semantic tones,
+   categories and type stacks) are generated from the shared design tokens.
    Imported first; everything below only references these vars. */
 @import "@cubby/design-tokens/brand.css";
 @import "@fontsource-variable/inter";
@@ -179,6 +179,8 @@
   --brand-warning: #8f5a00;
   --brand-warning-ink: #75500d;
   --brand-warning-surface: #fff1cc;
+  /* Warning callouts are a quieter wash than warning chips. */
+  --brand-warning-panel: #fbf3e0;
   --brand-destructive: #c4291c;
   --brand-destructive-surface: #ffe7e4;
   --brand-info: #0067c7;
@@ -191,6 +193,8 @@
   --foreground-strong: #202020;
   --link: #0077e6;
   --hairline-soft: #f2f2f2;
+  /* Dashed empty-state slots: one step stronger than a hairline. */
+  --hairline-strong: #d4d4d4;
   --row-current: #ededed;
 
   /* The docked side panel's width; the panel's resize handle overrides it. */
@@ -275,13 +279,13 @@
   --ingredient-name: var(--brand-foreground);
   --ingredient-modifier: var(--brand-shelf);
 
-  /* Charts reuse the stable interaction and domain palette. */
+  /* Charts use the interaction accent and a categorical palette. */
   --chart-1: var(--brand-ultramarine); /* accent / primary series */
-  --chart-2: var(--brand-domain-pantry);
-  --chart-3: var(--brand-domain-house);
-  --chart-4: var(--brand-domain-plan);
-  --chart-5: var(--brand-domain-cook);
-  --chart-6: var(--brand-domain-finance);
+  --chart-2: var(--category-1);
+  --chart-3: var(--category-2);
+  --chart-4: var(--category-3);
+  --chart-5: var(--category-4);
+  --chart-6: var(--category-5);
   --chart-7: var(--brand-graphite-secondary);
   --chart-8: color-mix(
     in oklab,
@@ -335,37 +339,6 @@
   /* Web workspace geometry; native retains its platform metrics. */
   --radius: var(--brand-web-radius-panel);
 
-  --domain-cook: var(--brand-domain-cook);
-  --domain-cook-surface: color-mix(
-    in oklab,
-    var(--brand-domain-cook) 9%,
-    var(--brand-surface)
-  );
-  --domain-pantry: var(--brand-domain-pantry);
-  --domain-pantry-surface: color-mix(
-    in oklab,
-    var(--brand-domain-pantry) 9%,
-    var(--brand-surface)
-  );
-  --domain-plan: var(--brand-domain-plan);
-  --domain-plan-surface: color-mix(
-    in oklab,
-    var(--brand-domain-plan) 9%,
-    var(--brand-surface)
-  );
-  --domain-house: var(--brand-domain-house);
-  --domain-house-surface: color-mix(
-    in oklab,
-    var(--brand-domain-house) 9%,
-    var(--brand-surface)
-  );
-  --domain-finance: var(--brand-domain-finance);
-  --domain-finance-surface: color-mix(
-    in oklab,
-    var(--brand-domain-finance) 9%,
-    var(--brand-surface)
-  );
-
   /* Sidebar */
   --sidebar: #fafafa;
   --sidebar-foreground: var(--brand-foreground);
@@ -396,6 +369,7 @@
   --color-foreground-strong: var(--foreground-strong);
   --color-link: var(--link);
   --color-hairline-soft: var(--hairline-soft);
+  --color-hairline-strong: var(--hairline-strong);
   --color-row-current: var(--row-current);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -424,6 +398,7 @@
   --color-positive: var(--positive);
   --color-positive-surface: var(--positive-surface);
   --color-warning-surface: var(--warning-surface);
+  --color-warning-panel: var(--brand-warning-panel);
   --color-destructive-surface: var(--destructive-surface);
   --color-info: var(--info);
   --color-info-surface: var(--info-surface);
@@ -452,11 +427,6 @@
   --color-ultramarine: var(--brand-ultramarine);
   --color-ultramarine-dark: var(--brand-ultramarine-dark);
   --color-hairline: var(--brand-hairline);
-  --color-domain-cook: var(--brand-domain-cook);
-  --color-domain-pantry: var(--brand-domain-pantry);
-  --color-domain-plan: var(--brand-domain-plan);
-  --color-domain-house: var(--brand-domain-house);
-  --color-domain-finance: var(--brand-domain-finance);
   --color-ingredient-amount: var(--ingredient-amount);
   --color-ingredient-name: var(--ingredient-name);
   --color-ingredient-modifier: var(--ingredient-modifier);
@@ -513,7 +483,7 @@
 
   /* Command dialog group headings stay compact and quiet. */
   .command-dialog-styles {
-    @apply [&_[cmdk-group-heading]]:text-slate [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
+    @apply [&_[cmdk-group-heading]]:text-slate [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
   }
 
   /* Sonner injects its own border/shadow, hence the overrides. */

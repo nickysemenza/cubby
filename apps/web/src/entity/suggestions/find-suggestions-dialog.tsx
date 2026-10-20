@@ -140,16 +140,28 @@ function FamilyRow({
 export function FindSuggestionsAction({
   entity,
   filters,
+  inline = false,
 }: {
   entity: ShortcodeEntity;
   filters: object;
+  /** A compact action in the list's totals and suggestion status line. */
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   if (!DECISION_FIELDS.some((item) => item.entity === entity)) return null;
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className={
+          inline
+            ? "h-5 px-0 text-xs font-normal text-muted-foreground"
+            : undefined
+        }
+        onClick={() => setOpen(true)}
+      >
         Find suggestions…
       </Button>
       {open ? (

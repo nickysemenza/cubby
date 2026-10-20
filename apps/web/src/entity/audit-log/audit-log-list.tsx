@@ -14,16 +14,10 @@ import { householdLocalDate } from "~/lib/household-date";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordHeading, RecordList } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyIcon,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { AUDIT_COLUMNS, AuditRecordRow, auditFacts } from "./audit-log-entry";
@@ -150,33 +144,39 @@ export function AuditLogList({
 
   if (isError) {
     return (
-      <Empty variant="minimal" className="py-6">
-        <EmptyIcon icon={WarningCircleIcon} />
-        <EmptyTitle>Couldn&apos;t load activity</EmptyTitle>
-        <EmptyDescription>
-          {getErrorMessage(error) || "Try again to load recent activity."}
-        </EmptyDescription>
-        <EmptyActions>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 sm:h-7"
-            onClick={() => refetch()}
-          >
-            Retry
-          </Button>
-        </EmptyActions>
-      </Empty>
+      <EmptyState
+        size="page"
+        icon={WarningCircleIcon}
+        description={
+          getErrorMessage(error) || "Try again to load recent activity."
+        }
+        action={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 sm:h-7"
+              onClick={() => refetch()}
+            >
+              Retry
+            </Button>
+          </>
+        }
+      >
+        Couldn&apos;t load activity
+      </EmptyState>
     );
   }
 
   if (entries.length === 0) {
     return (
-      <Empty variant="minimal" className="py-6">
-        <EmptyIcon icon={PulseIcon} />
-        <EmptyTitle>No activity yet</EmptyTitle>
-        <EmptyDescription>Actions you take will appear here</EmptyDescription>
-      </Empty>
+      <EmptyState
+        size="page"
+        icon={PulseIcon}
+        description="Actions you take will appear here"
+      >
+        No activity yet
+      </EmptyState>
     );
   }
 

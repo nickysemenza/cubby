@@ -15,8 +15,9 @@ import {
 
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { SectionHeading } from "~/ui/layout";
+import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -111,9 +112,8 @@ function SectionCard({
   return (
     <SectionEmptyContext.Provider value={setEmpty}>
       <SectionCountContext.Provider value={setCount}>
-        <section
+        <Section
           id={section.id}
-          aria-labelledby={`${section.id}-heading`}
           tabIndex={-1}
           data-empty={empty || undefined}
           data-detail-section
@@ -124,33 +124,20 @@ function SectionCard({
               : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
             className,
           )}
+          headingAs={Heading}
+          title={section.title}
+          empty={empty}
+          count={
+            <SectionIndexMarker
+              id={`${section.id}-marker`}
+              state={{ empty, count }}
+            />
+          }
+          caption={section.description}
+          actions={section.headerAction}
         >
-          <SectionHeading
-            as={Heading}
-            id={`${section.id}-heading`}
-            muted={empty}
-            title={
-              <>
-                <section.icon className="size-3.5 shrink-0 text-muted-foreground" />
-                {section.title}
-              </>
-            }
-            meta={
-              <SectionIndexMarker
-                id={`${section.id}-marker`}
-                state={{ empty, count }}
-                className="text-xs font-normal"
-              />
-            }
-            description={section.description}
-            actions={section.headerAction}
-          />
-          <div className="mt-2 min-w-0">
-            {section.content ?? (
-              <p className="text-sm text-muted-foreground">No items.</p>
-            )}
-          </div>
-        </section>
+          {section.content ?? <EmptyState size="inline">No items.</EmptyState>}
+        </Section>
       </SectionCountContext.Provider>
     </SectionEmptyContext.Provider>
   );

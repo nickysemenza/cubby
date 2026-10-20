@@ -1,5 +1,5 @@
 import type { UnparsedError } from "~/lib/error-utils";
-import { workflowForPurpose } from "~/lib/workflows/run-workflows";
+import { workflowForPurpose } from "~/lib/workflows/run-workflows.ts";
 import { getRunWorkflow } from "~/server/cf-env";
 
 import { type WorkflowRunParams, type WorkflowRunPurpose } from "./contract";

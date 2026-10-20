@@ -15,7 +15,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { BasicInfo } from "~/ui/common/basic-info";
+import { Facts } from "~/ui/common/facts";
 
 import { EntityRefLink } from "./entity-ref-link";
 
@@ -277,7 +277,7 @@ describe("EntityRefLink list variant", () => {
   it("renders the empty placeholder for no items", () => {
     renderLink(<EntityRefLink variant="list" entity="recipe" items={[]} />);
 
-    expect(screen.getByText("No items linked yet")).toBeInTheDocument();
+    expect(screen.getByText("No items linked yet.")).toBeInTheDocument();
   });
 });
 
@@ -475,8 +475,9 @@ describe("EntityRefLink filter variant", () => {
 
   it("keeps the filter action outside an editable value", () => {
     renderLink(
-      <BasicInfo
-        fields={[
+      <Facts
+        layout="list"
+        facts={[
           {
             label: "Category",
             value: <button type="button">Edit category</button>,

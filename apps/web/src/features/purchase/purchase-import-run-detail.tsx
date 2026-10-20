@@ -52,7 +52,8 @@ import {
   RecordRow,
 } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
-import { Row, Section, Stack } from "~/ui/layout";
+import { Panel, Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
@@ -270,21 +271,20 @@ function RunLineageAndInputs({ run }: { run: RunDetail }) {
         ) : null,
       )}
       {run.restartInputs ? (
-        <details className="border border-border bg-card p-3">
-          <summary className="cursor-pointer font-medium">
-            Restart inputs
-          </summary>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Exactly what “Start new run with same inputs” copies. Proposals,
-            decisions, and the agent conversation are not carried over.
-          </p>
-          <pre
-            aria-label="Restart inputs JSON"
-            className="mt-2 max-h-96 overflow-auto bg-muted p-2 font-mono text-xs"
-          >
-            {JSON.stringify(run.restartInputs, null, 2)}
-          </pre>
-        </details>
+        <Panel tone="default">
+          <Disclosure summary="Restart inputs">
+            <p className="text-xs text-muted-foreground">
+              Exactly what “Start new run with same inputs” copies. Proposals,
+              decisions, and the agent conversation are not carried over.
+            </p>
+            <pre
+              aria-label="Restart inputs JSON"
+              className="mt-2 max-h-96 overflow-auto bg-muted p-2 font-mono text-xs"
+            >
+              {JSON.stringify(run.restartInputs, null, 2)}
+            </pre>
+          </Disclosure>
+        </Panel>
       ) : null}
     </Stack>
   );
@@ -388,9 +388,8 @@ function AgentWorkOverview({
     return `${item.completed} times`;
   };
   return (
-    <div className="rounded-md border border-border bg-muted/20 p-3">
-      <h3 className="text-sm font-semibold">Work at a glance</h3>
-      <p className="mt-1 text-sm" aria-live="polite">
+    <Panel tone="muted" headingAs="h3" title="Work at a glance">
+      <p className="text-sm" aria-live="polite">
         {headline}
       </p>
       <p className="text-xs text-muted-foreground">{detail}</p>
@@ -513,7 +512,7 @@ function AgentWorkOverview({
         run, without attributing it to individual steps. Photo waiting is a
         lower bound; attempt time includes executor and network latency.
       </p>
-    </div>
+    </Panel>
   );
 }
 
@@ -641,7 +640,7 @@ function TerminalAgentSurface({ run }: { run: RunDetail }) {
       query.state.data?.status === "running" ? 1_000 : false,
   });
   return (
-    <Section description="This terminal run is view-only. The complete materialized conversation remains available as durable evidence.">
+    <Section caption="This terminal run is view-only. The complete materialized conversation remains available as durable evidence.">
       {history.isLoading ? (
         <StatusText>Loading agent history…</StatusText>
       ) : null}
@@ -712,7 +711,7 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
   const messages = agent.conversation?.messages ?? [];
 
   return (
-    <Section description="The durable operation timeline is below; this conversation stays current through the agent stream.">
+    <Section caption="The durable operation timeline is below; this conversation stays current through the agent stream.">
       <Row gap="sm" align="center">
         <Badge
           variant={
@@ -933,31 +932,33 @@ export function RunPhotoBatch({ record }: { record: RunOut }) {
           <RunControls run={run} />
           <PhotoImportRunView run={run} />
           {run.dispatch?.eventId ? (
-            <Section title={isActiveRun(run) ? "Live agent" : "Agent history"}>
+            <Section
+              headingAs="h2"
+              title={isActiveRun(run) ? "Live agent" : "Agent history"}
+            >
               <AgentSurface run={run} />
             </Section>
           ) : null}
-          <details className="border border-border bg-card p-4">
-            <summary className="cursor-pointer font-medium">
-              Timeline and system log
-            </summary>
-            <div className="mt-4 grid gap-4">
-              <h3 className="text-sm font-medium">Durable transcript</h3>
-              <EntityReportSlot
-                slot="run.import-timeline"
-                id={run.publicId}
-                status={run.status}
-                nested
-              />
-              <h3 className="text-sm font-medium">System log</h3>
-              <EntityReportSlot
-                slot="run.import-debug-log"
-                id={run.publicId}
-                status={run.status}
-                nested
-              />
-            </div>
-          </details>
+          <Panel tone="default">
+            <Disclosure summary="Timeline and system log">
+              <div className="grid gap-4 pt-2">
+                <h3 className="text-sm font-medium">Durable transcript</h3>
+                <EntityReportSlot
+                  slot="run.import-timeline"
+                  id={run.publicId}
+                  status={run.status}
+                  nested
+                />
+                <h3 className="text-sm font-medium">System log</h3>
+                <EntityReportSlot
+                  slot="run.import-debug-log"
+                  id={run.publicId}
+                  status={run.status}
+                  nested
+                />
+              </div>
+            </Disclosure>
+          </Panel>
         </>
       )}
     </RunGate>

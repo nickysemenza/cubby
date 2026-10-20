@@ -12,11 +12,12 @@ import {
 import { useRouteEntity } from "~/entity/hooks/use-route-entity";
 import {
   type DetailHeroActions,
-  type DetailHeroStat,
+  DetailPageHeader,
   type DetailWayfinding,
-  PageHeader,
-} from "~/entity/page/page-hero";
+  ListPageHeader,
+} from "~/entity/page/entity-page-header";
 import { cn } from "~/lib/utils";
+import type { KeyNumber } from "~/ui/common/key-numbers";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { type PageLayout, PageWrapper } from "~/ui/layout/page-wrapper";
 
@@ -129,7 +130,6 @@ interface PageListProps extends PageBaseProps {
   variant?: "list";
   entity?: Entity;
   actions?: ReactNode;
-  compact?: boolean;
   /**
    * List pages that are durable operating surfaces use a compact ruled
    * workbench header instead of the editorial page hero. The header remains
@@ -153,7 +153,7 @@ interface PageDetailProps extends PageBaseProps {
   entity: Entity;
   wayfinding?: DetailWayfinding | false;
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  heroStats?: DetailHeroStat[];
+  heroStats?: readonly KeyNumber[];
   /** Declared chart closing the key-numbers strip. */
   heroChart?: ReactNode;
   heroNo?: string;
@@ -166,13 +166,13 @@ interface PageDetailProps extends PageBaseProps {
 /**
  * Discriminated union — `variant="detail"` requires `entity` at compile time
  * (the spec-plate can't render without it), so callers get a TS error instead of
- * the runtime guard in {@link PageHeader}.
+ * a runtime guard.
  */
 type PageProps = PageBareProps | PageListProps | PageDetailProps;
 
 /**
  * The single page shell for bounded bare, list, and detail surfaces. List and
- * detail pages add the unified {@link PageHeader} and a Suspense boundary;
+ * detail pages add the shared `PageHeader` and a Suspense boundary;
  * `bare` preserves the same width contract without inventing route identity.
  */
 export function Page(props: PageProps) {
@@ -202,15 +202,13 @@ function ListPageShell(props: PageListProps) {
   return (
     <PageWrapper layout={layout}>
       <div>
-        <PageHeader
-          variant="list"
+        <ListPageHeader
           title={title}
           eyebrow={eyebrow}
           entity={entity}
           actions={props.actions}
-          compact={props.compact}
-          listChrome={listChrome}
-          workbenchControls={props.workbenchControls}
+          chrome={listChrome}
+          controls={props.workbenchControls}
           mobileTitleVisible={props.mobileTitleVisible}
           count={count}
         />
@@ -267,7 +265,18 @@ function DetailPageShell(props: PageDetailProps) {
   return (
     <PageWrapper layout={props.layout}>
       <div className="space-y-4">
-        <PageHeader {...props} variant="detail" count={undefined} />
+        <DetailPageHeader
+          entity={props.entity}
+          wayfinding={props.wayfinding}
+          title={props.title}
+          rawData={props.rawData}
+          heroNo={props.heroNo}
+          heroStamp={props.heroStamp}
+          heroStats={props.heroStats}
+          heroChart={props.heroChart}
+          heroActions={props.heroActions}
+          heroImages={props.heroImages}
+        />
         <PageIdentityContext.Provider value={null}>
           <PageDetailContext.Provider
             value={{

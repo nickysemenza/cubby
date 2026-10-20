@@ -127,6 +127,8 @@ export function LabelSheet({
   const cells: React.ReactNode[] = [];
   for (let i = 0; i < skip; i++) {
     cells.push(
+      // An unused label position on the physical sheet, not a content panel.
+      // oxlint-disable-next-line cubby/no-hand-rolled-panel
       <div
         key={`spacer-${i}`}
         className={

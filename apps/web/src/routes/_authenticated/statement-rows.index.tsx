@@ -47,7 +47,6 @@ const searchDefaults = {
 const StatementRowsPage = listChromePage({
   title: "Statement Rows",
   layout: "full",
-  compact: true,
   page: StatementRowList,
   actions: () => (
     <>

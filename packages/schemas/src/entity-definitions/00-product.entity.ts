@@ -170,6 +170,7 @@ export default defineEntity({
       ],
     },
     list: {
+      titleSubtitle: true,
       savedViews: [
         // `@me` is the viewing member (ADR 0018).
         {

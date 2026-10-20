@@ -1,0 +1,12 @@
+const ordinary = "uppercase shadow-lg dark:bg-black";
+const title = <div title="uppercase" data-label="rounded-xl" />;
+const selectors = cn("[&[data-case='uppercase']]:text-sm [&:is(.dark:hover)]:text-xs");
+const allowed = clsx("rounded-md rounded-lg rounded-full shadow-none text-sm text-xs text-2xs text-3xs", active && "text-base");
+const arbitraryColor = cn("text-[#fff] text-[var(--ink)] text-[length:var(--type-size)]");
+const conditions = clsx(mode === "uppercase" && "text-sm", { "text-xs": mode === "dark:bg-black" });
+const variants = cva("text-sm", { variants: { uppercase: { yes: "text-xs" } }, defaultVariants: { uppercase: "yes" }, compoundVariants: [{ tone: "uppercase", class: "text-sm" }] });
+const template = cn(`rounded-${size} ${mode === "uppercase" ? "text-xs" : "text-sm"}`);
+const irrelevantCall = describe("uppercase", () => {});
+// eslint-disable-next-line cubby/no-shadow-utility -- Floating surface uses shared popover elevation.
+const popover = cn("shadow-[var(--brand-elevation-popover)]");
+const fragments = cn(`not-${size}uppercase ${size}rounded-xl foo${size}dark:bg-black`);

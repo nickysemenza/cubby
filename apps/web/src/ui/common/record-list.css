@@ -23,11 +23,9 @@
   display: flex;
   align-items: baseline;
   gap: var(--brand-space-2);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   line-height: 1rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--muted-foreground);
 }
 .ledger[data-record-list] > .ledger-row[data-record-heading] + .ledger-row {
@@ -42,14 +40,6 @@
 .ledger[data-record-list] > .ledger-row[data-record-fold] {
   font-size: 0.75rem;
   color: var(--muted-foreground);
-}
-
-.ledger[data-record-list="timeline"]
-  > .ledger-row[data-record-heading]
-  > [data-ledger-slot="group"] {
-  letter-spacing: normal;
-  text-transform: none;
-  font-size: 0.75rem;
 }
 
 /* A state mark, title, time and commands share the row's first line (where a

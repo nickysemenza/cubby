@@ -2,13 +2,14 @@ import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import type { Fact } from "~/ui/common/fact-list";
+import type { Fact } from "~/ui/common/facts";
 import {
   RecordList,
   RecordRow,
   recordColumnsOf,
 } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 
 import type { DependencyGraphCanvas as DependencyGraphCanvasComponent } from "./dependency-graph-canvas";
@@ -190,10 +191,10 @@ export function DependencyGraphViewer({
           }
         />
       )}
-      <details>
-        <summary className="cursor-pointer text-sm font-medium">
-          Record and relationship list ({graph.nodes.length})
-        </summary>
+      <Disclosure
+        summary="Record and relationship list"
+        meta={graph.nodes.length}
+      >
         <RecordList
           aria-label="Records and relationships"
           columns={recordColumnsOf(rows)}
@@ -261,7 +262,7 @@ export function DependencyGraphViewer({
             );
           })}
         </RecordList>
-      </details>
+      </Disclosure>
     </Stack>
   );
 }

@@ -1,16 +1,10 @@
-import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type FC, useState } from "react";
 
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 
 import { PhotoGrid } from "../entity-media/photo-grid";
 import { PhotoViewer } from "../entity-media/photo-viewer";
@@ -44,13 +38,9 @@ const EntityImageList: FC<EntityImageListProps> = ({
   return (
     <div>
       {images.length === 0 ? (
-        <Empty variant="minimal" className="py-4">
-          <EmptyMedia variant="icon">
-            <ImageIcon className="size-4" />
-          </EmptyMedia>
-          <EmptyTitle>No images</EmptyTitle>
-          <EmptyDescription>Upload images to see them here</EmptyDescription>
-        </Empty>
+        <EmptyState size="inline">
+          No images yet. Upload images to see them here.
+        </EmptyState>
       ) : (
         <div>
           <PhotoGrid

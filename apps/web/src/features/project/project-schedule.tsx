@@ -29,7 +29,9 @@ import {
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
-import { Button } from "~/ui/primitives/button";
+import { Panel } from "~/ui/layout/panel";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 
 import {
   buildPortfolioScheduleRows,
@@ -60,12 +62,9 @@ function ScheduleError({
   retry: () => void;
 }) {
   return (
-    <div
-      role="alert"
-      className="rounded-md border border-border bg-card p-4 text-sm"
-    >
-      <p className="font-medium">Couldn't load the project schedule</p>
-      <p className="mt-1 text-muted-foreground">{getErrorMessage(error)}</p>
+    <Alert variant="destructive">
+      <AlertTitle>Couldn't load the project schedule</AlertTitle>
+      <AlertDescription>{getErrorMessage(error)}</AlertDescription>
       <Button
         type="button"
         variant="outline"
@@ -75,7 +74,7 @@ function ScheduleError({
       >
         Retry
       </Button>
-    </div>
+    </Alert>
   );
 }
 
@@ -100,7 +99,11 @@ function ProjectDependencyInspection({
             to={entities[entry.entity].routes.detail}
             params={entityDetailParams(id)}
             title={names.get(id) ?? id}
-            className="inline-flex min-h-10 items-center rounded-sm border border-border px-2 text-xs text-primary hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-7"
+            className={buttonVariants({
+              variant: "outline",
+              size: "xs",
+              className: "max-md:min-h-10",
+            })}
           >
             {names.get(id) ?? id}
           </Link>
@@ -109,21 +112,23 @@ function ProjectDependencyInspection({
     </div>
   );
   return (
-    <section
-      className="rounded-md border border-border bg-card p-3"
+    <Panel
+      tone="default"
+      render={<section />}
       aria-label={`Dependencies for ${entry.name}`}
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">Dependencies for {entry.name}</h3>
+      headingAs="h3"
+      title={`Dependencies for ${entry.name}`}
+      actions={
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
           Close
         </Button>
-      </div>
+      }
+    >
       <div className="space-y-2">
         {relation("Blocked by", entry.blockedByIds)}
         {relation("Blocking", entry.blockingIds)}
       </div>
-    </section>
+    </Panel>
   );
 }
 

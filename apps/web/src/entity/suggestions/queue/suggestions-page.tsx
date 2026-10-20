@@ -38,8 +38,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
+import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
@@ -47,6 +47,8 @@ import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import { Panel } from "~/ui/layout/panel";
+import { Alert } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
@@ -805,7 +807,10 @@ function SuggestionsTableBody({
           ) : null}
         </div>
         {cleanCount > 0 && !grouped ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-positive/30 bg-positive/5 px-2.5 py-1.5 text-xs">
+          <Panel
+            tone="default"
+            className="flex flex-wrap items-center gap-2 py-1.5 text-xs"
+          >
             <span className="font-medium text-positive">Clean</span>
             <span>
               {countLabel(cleanCount, "suggestion", { formatted: true })} can be
@@ -841,14 +846,11 @@ function SuggestionsTableBody({
                 Review first
               </Button>
             </span>
-          </div>
+          </Panel>
         ) : null}
         {accept.dialogs}
         {review.failures.length ? (
-          <div
-            role="alert"
-            className="flex flex-col gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs"
-          >
+          <Alert variant="destructive" className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="font-medium text-destructive">
                 {countLabel(review.failures.length, "suggestion")} could not be
@@ -873,7 +875,7 @@ function SuggestionsTableBody({
                 </li>
               ))}
             </ul>
-          </div>
+          </Alert>
         ) : null}
       </div>
       <RTable

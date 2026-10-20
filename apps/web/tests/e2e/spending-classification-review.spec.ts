@@ -260,13 +260,10 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   await expect(async () => {
     const disclosure = popover
-      .locator("details")
-      .filter({
-        has: page.getByRole("heading", { name: "Technical details" }),
-      })
-      .first();
-    if (!(await disclosure.getAttribute("open")))
-      await disclosure.locator("summary").first().click();
+      .getByRole("heading", { name: "Technical details" })
+      .getByRole("button");
+    if ((await disclosure.getAttribute("aria-expanded")) !== "true")
+      await disclosure.click();
     await expect(popover.getByText("Rule:", { exact: true })).toBeVisible();
   }).toPass();
   await page.keyboard.press("Escape");

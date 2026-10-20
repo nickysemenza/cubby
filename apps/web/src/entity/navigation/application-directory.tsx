@@ -144,11 +144,7 @@ export function ApplicationDirectory({
                 aria-labelledby={`${filterId}-${group.key}`}
               >
                 <Row gap="sm" className="border-b border-border pb-3">
-                  <group.icon
-                    className="size-5"
-                    style={{ color: `var(--domain-${group.key})` }}
-                    aria-hidden
-                  />
+                  <group.icon className="size-5 text-foreground" aria-hidden />
                   <h2
                     id={`${filterId}-${group.key}`}
                     className="text-base font-semibold"

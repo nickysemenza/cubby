@@ -55,7 +55,7 @@ function ImportPage() {
   });
 
   return (
-    <Page variant="list" title="Import recipes" eyebrow="Recipes" compact>
+    <Page variant="list" title="Import recipes" eyebrow="Recipes">
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
         <TabsList variant="line">
           <TabsTrigger value="cookbook">Cookbook</TabsTrigger>

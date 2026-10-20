@@ -1,18 +1,12 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
 
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
 import { Label } from "~/ui/primitives/label";
 
 import { ConversionCapabilities } from "./conversion-capabilities";
@@ -76,7 +70,6 @@ export function UnitCoveragePanel({
     storedMappings: UnitMappingInput[];
   };
 }) {
-  const [graphOpen, setGraphOpen] = useState(defaultGraphOpen);
   const [showNutrients, setShowNutrients] = useState(false);
   const showNutrientsId = useId();
 
@@ -103,55 +96,32 @@ export function UnitCoveragePanel({
         />
       )}
 
-      <Collapsible open={graphOpen} onOpenChange={setGraphOpen}>
-        <CollapsibleTrigger
-          render={
-            <Row
-              as="button"
-              type="button"
-              align="center"
-              gap="sm"
-              className="w-full rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
-            />
-          }
-        >
-          <CaretRightIcon
-            className={`size-4 transition-transform ${graphOpen ? "rotate-90" : ""}`}
-            aria-hidden
-          />
-          <NetworkIcon className="size-4" aria-hidden />
-          <span>Conversion graph</span>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          {/* Guard the mount so d3-force only loads + simulates once expanded. */}
-          {graphOpen && (
-            <Stack gap="sm">
-              {nutrientCount > 0 && (
-                <Row align="center" gap="sm">
-                  <Checkbox
-                    id={showNutrientsId}
-                    checked={showNutrients}
-                    onCheckedChange={(c) => setShowNutrients(c === true)}
-                  />
-                  <Label htmlFor={showNutrientsId} className="text-sm">
-                    Show nutrient mappings ({nutrientCount})
-                  </Label>
-                </Row>
-              )}
-              <Suspense
-                fallback={
-                  <div className="h-[260px] animate-pulse border bg-muted/30" />
-                }
-              >
-                <UnitMappingGraph
-                  mappings={mappings}
-                  includeNutrients={showNutrients}
-                />
-              </Suspense>
-            </Stack>
+      <Disclosure summary="Conversion graph" defaultOpen={defaultGraphOpen}>
+        <Stack gap="sm">
+          {nutrientCount > 0 && (
+            <Row align="center" gap="sm">
+              <Checkbox
+                id={showNutrientsId}
+                checked={showNutrients}
+                onCheckedChange={(c) => setShowNutrients(c === true)}
+              />
+              <Label htmlFor={showNutrientsId} className="text-sm">
+                Show nutrient mappings ({nutrientCount})
+              </Label>
+            </Row>
           )}
-        </CollapsibleContent>
-      </Collapsible>
+          <Suspense
+            fallback={
+              <div className="h-[260px] animate-pulse border bg-muted/30" />
+            }
+          >
+            <UnitMappingGraph
+              mappings={mappings}
+              includeNutrients={showNutrients}
+            />
+          </Suspense>
+        </Stack>
+      </Disclosure>
 
       {servingAlias && (
         <ServingAliasField

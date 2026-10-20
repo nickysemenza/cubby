@@ -7,6 +7,7 @@ import { AuthUIProvider } from "~/features/auth/auth-ui-provider";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { cn } from "~/lib/utils";
+import { Alert } from "~/ui/primitives/alert";
 import { buttonVariants } from "~/ui/primitives/button";
 
 // Deliberately NOT loose. The OAuth server appends a signed authorize query
@@ -44,13 +45,10 @@ function AuthPage() {
           column so the alert aligns with the card's edges. */}
       <div className="mx-auto w-full max-w-sm">
         {googleError ? (
-          <p
-            role="alert"
-            className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-          >
+          <Alert variant="destructive" className="mb-3">
             Google sign-in requires read-only Gmail access. Try again and
             approve the Gmail permission.
-          </p>
+          </Alert>
         ) : null}
         <AuthUIProvider>
           <AuthView

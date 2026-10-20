@@ -21,6 +21,7 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge } from "~/ui/primitives/badge";
 import {
   Table,
@@ -243,7 +244,11 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
         and explains blockers. Compatible project, trade, search, and due-date
         filters are applied by the server.
       </p>
-      <Section title="Next" description="Unblocked tasks you can act on now.">
+      <Section
+        headingAs="h2"
+        title="Next"
+        caption="Unblocked tasks you can act on now."
+      >
         {data.next.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing next right now — everything open is blocked or set aside.
@@ -254,19 +259,15 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
       </Section>
 
       {data.later.length > 0 && (
-        <details className="group">
-          <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
-            Someday ({data.later.length})
-          </summary>
-          <div className="mt-2">
-            <TaskRows rows={data.later} displayImages={displayImages} />
-          </div>
-        </details>
+        <Disclosure summary="Someday" meta={data.later.length}>
+          <TaskRows rows={data.later} displayImages={displayImages} />
+        </Disclosure>
       )}
 
       <Section
+        headingAs="h2"
         title="Blocked"
-        description="Open tasks waiting on something else, with the chain of why."
+        caption="Open tasks waiting on something else, with the chain of why."
       >
         {data.blocked.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing is blocked.</p>

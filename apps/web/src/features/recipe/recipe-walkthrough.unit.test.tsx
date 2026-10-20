@@ -32,9 +32,11 @@ describe("RecipeWalkthrough", () => {
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(
-      screen.getByText(walkthroughPlan.walkthrough!.stops[0]!.explanation),
-    ).not.toBeVisible();
-    fireEvent.click(screen.getByText("Why this step · AI explanation"));
+      screen.queryByText(walkthroughPlan.walkthrough!.stops[0]!.explanation),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Why this step · AI explanation" }),
+    );
     expect(
       screen.getByText(walkthroughPlan.walkthrough!.stops[0]!.explanation),
     ).toBeVisible();
@@ -53,8 +55,8 @@ describe("RecipeWalkthrough", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("Step 1 of 2");
     expect(
-      screen.getByText(walkthroughPlan.walkthrough!.stops[0]!.explanation),
-    ).not.toBeVisible();
+      screen.queryByText(walkthroughPlan.walkthrough!.stops[0]!.explanation),
+    ).toBeNull();
   });
 
   it("uses current ingredient amounts without multiplying divided additions or rewriting instructions", () => {
@@ -94,8 +96,10 @@ describe("RecipeWalkthrough", () => {
       <RecipeWalkthrough recipe={walkthroughRecipe} plan={walkthroughPlan} />,
       { wrapper: harness.routerWrapper },
     );
-    expect(screen.getByText("Serve with lemon slices.")).not.toBeVisible();
-    fireEvent.click(screen.getByText("Full original method"));
+    expect(screen.queryByText("Serve with lemon slices.")).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Full original method" }),
+    );
     expect(screen.getByText("Serve with lemon slices.")).toBeVisible();
   });
 

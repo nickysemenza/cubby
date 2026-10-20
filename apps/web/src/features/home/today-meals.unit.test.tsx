@@ -44,7 +44,7 @@ describe("TodayMeals", () => {
     });
 
     const retry = await screen.findByRole("button", { name: "Retry" });
-    expect(retry).toHaveClass("min-h-11");
+    expect(retry).toHaveClass("max-md:min-h-11");
 
     fireEvent.click(retry);
     await waitFor(() => expect(requests).toHaveLength(2));

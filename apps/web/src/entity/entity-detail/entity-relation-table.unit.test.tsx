@@ -384,11 +384,14 @@ describe("EntityRelationTable", () => {
     expect(row).toHaveTextContent(formatCategoryLabel(category));
     // Regression: the category pill replaced the reference link, so it
     // rendered as inert text instead of opening the category.
-    expect(
-      within(row).getByRole("link", {
-        name: formatCategoryLabel(category),
-      }),
-    ).toHaveAttribute("href", `/product-categories/${category.id}`);
+    for (const link of within(row).getAllByRole("link", {
+      name: formatCategoryLabel(category),
+    })) {
+      expect(link).toHaveAttribute(
+        "href",
+        `/product-categories/${category.id}`,
+      );
+    }
     expect(row).toHaveTextContent(product.externalIds[0]!.source);
     expect(row).not.toHaveTextContent('"externalId"');
     expect(row.querySelector("pre")).toBeNull();

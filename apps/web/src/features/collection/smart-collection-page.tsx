@@ -6,7 +6,6 @@ import {
 } from "@cubby/schemas/collection";
 import { TRADE_LABELS, tradeSchema, tradeValues } from "@cubby/schemas/project";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
@@ -17,13 +16,9 @@ import { collection as collectionOperations } from "~/integrations/tanstack-quer
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -139,7 +134,6 @@ function SmartRuleEditor({
   updateDraft: (next: SmartCollectionDraft) => void;
   onReset: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [newKind, setNewKind] = useState<SmartCollectionRule["kind"]>(
     "locationNameContains",
   );
@@ -154,189 +148,180 @@ function SmartRuleEditor({
         )?.message;
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="border-y border-border bg-muted/20">
-        <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 px-3 py-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
-              Edit temporary rules
-              <CaretDownIcon
-                className={`transition-transform ${open ? "rotate-180" : ""}`}
-                aria-hidden
-              />
-            </CollapsibleTrigger>
-            {changed && <Badge variant="secondary">Temporary changes</Badge>}
-            {!parsed.success && (
-              <span className="text-xs text-destructive">
-                Preview uses the last valid rules
-              </span>
-            )}
-          </div>
+    <Disclosure
+      summary="Edit temporary rules"
+      className="border-y border-border bg-muted/20 px-3 py-2"
+      aside={
+        <>
+          {changed && <Badge variant="secondary">Temporary changes</Badge>}
+          {!parsed.success && (
+            <span className="text-xs text-destructive">
+              Preview uses the last valid rules
+            </span>
+          )}
           {changed && (
             <Button type="button" variant="ghost" size="sm" onClick={onReset}>
               <ArrowCounterClockwiseIcon aria-hidden /> Reset to starter
             </Button>
           )}
+        </>
+      }
+    >
+      <div className="space-y-4 py-3">
+        <div className="max-w-lg space-y-1">
+          <label htmlFor={nameId} className="text-xs font-medium">
+            Collection name
+          </label>
+          <Input
+            id={nameId}
+            value={draft.name}
+            aria-invalid={Boolean(errorAt(["name"]))}
+            onChange={(event) =>
+              updateDraft({ ...draft, name: event.target.value })
+            }
+          />
+          {errorAt(["name"]) && (
+            <p className="text-xs text-destructive">{errorAt(["name"])}</p>
+          )}
         </div>
 
-        <CollapsibleContent>
-          <div className="space-y-4 border-t border-border bg-card px-3 py-4">
-            <div className="max-w-lg space-y-1">
-              <label htmlFor={nameId} className="text-xs font-medium">
-                Collection name
-              </label>
-              <Input
-                id={nameId}
-                value={draft.name}
-                aria-invalid={Boolean(errorAt(["name"]))}
-                onChange={(event) =>
-                  updateDraft({ ...draft, name: event.target.value })
-                }
-              />
-              {errorAt(["name"]) && (
-                <p className="text-xs text-destructive">{errorAt(["name"])}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <div>
-                <h3 className="text-xs font-semibold">Match any condition</h3>
-                <p className="text-xs text-muted-foreground">
-                  A Product appears when at least one condition has recorded
-                  evidence.
-                </p>
-              </div>
-              {draft.rules.length === 0 ? (
-                <p className="border-y border-border py-3 text-xs text-muted-foreground">
-                  No conditions. This Collection matches no Products.
-                </p>
-              ) : (
-                <div className="divide-y divide-border border-y border-border">
-                  {draft.rules.map((rule, index) => {
-                    const valueError = errorAt(["rules", index, "value"]);
-                    return (
-                      <div
-                        key={rule.id}
-                        className="grid gap-2 py-2 md:grid-cols-[14rem_minmax(12rem,1fr)_auto] md:items-start"
-                      >
+        <div className="space-y-2">
+          <div>
+            <h3 className="text-xs font-semibold">Match any condition</h3>
+            <p className="text-xs text-muted-foreground">
+              A Product appears when at least one condition has recorded
+              evidence.
+            </p>
+          </div>
+          {draft.rules.length === 0 ? (
+            <p className="border-y border-border py-3 text-xs text-muted-foreground">
+              No conditions. This Collection matches no Products.
+            </p>
+          ) : (
+            <div className="divide-y divide-border border-y border-border">
+              {draft.rules.map((rule, index) => {
+                const valueError = errorAt(["rules", index, "value"]);
+                return (
+                  <div
+                    key={rule.id}
+                    className="grid gap-2 py-2 md:grid-cols-[14rem_minmax(12rem,1fr)_auto] md:items-start"
+                  >
+                    <Picker
+                      mode="choose"
+                      label={`Condition ${index + 1} type`}
+                      options={RULE_KIND_OPTIONS}
+                      value={rule.kind}
+                      onValueChange={(kind) => {
+                        if (kind == null || !isRuleKind(kind)) return;
+                        const rules = draft.rules.slice();
+                        rules[index] = {
+                          id: rule.id,
+                          kind,
+                          value: ruleDefault(kind),
+                        };
+                        updateDraft({ ...draft, rules });
+                      }}
+                    />
+                    <div>
+                      {rule.kind === "historicalExpenseTrade" ? (
                         <Picker
-                          mode="choose"
-                          label={`Condition ${index + 1} type`}
-                          options={RULE_KIND_OPTIONS}
-                          value={rule.kind}
-                          onValueChange={(kind) => {
-                            if (kind == null || !isRuleKind(kind)) return;
+                          label={`Condition ${index + 1} value`}
+                          options={TRADE_OPTIONS}
+                          value={rule.value}
+                          onValueChange={(next) => {
+                            const trade = tradeSchema.safeParse(next);
+                            if (!trade.success) return;
                             const rules = draft.rules.slice();
                             rules[index] = {
-                              id: rule.id,
-                              kind,
-                              value: ruleDefault(kind),
+                              ...rule,
+                              value: trade.data,
                             };
                             updateDraft({ ...draft, rules });
                           }}
                         />
-                        <div>
-                          {rule.kind === "historicalExpenseTrade" ? (
-                            <Picker
-                              label={`Condition ${index + 1} value`}
-                              options={TRADE_OPTIONS}
-                              value={rule.value}
-                              onValueChange={(next) => {
-                                const trade = tradeSchema.safeParse(next);
-                                if (!trade.success) return;
-                                const rules = draft.rules.slice();
-                                rules[index] = {
-                                  ...rule,
-                                  value: trade.data,
-                                };
-                                updateDraft({ ...draft, rules });
-                              }}
-                            />
-                          ) : (
-                            <Input
-                              aria-label={`Condition ${index + 1} value`}
-                              value={rule.value}
-                              aria-invalid={Boolean(valueError)}
-                              onChange={(event) => {
-                                const rules = draft.rules.slice();
-                                rules[index] = {
-                                  ...rule,
-                                  value: event.target.value,
-                                };
-                                updateDraft({ ...draft, rules });
-                              }}
-                            />
-                          )}
-                          {valueError && (
-                            <p className="mt-1 text-xs text-destructive">
-                              {valueError}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Remove condition ${index + 1}`}
-                          onClick={() =>
-                            updateDraft({
-                              ...draft,
-                              rules: draft.rules.filter(
-                                (_, ruleIndex) => ruleIndex !== index,
-                              ),
-                            })
-                          }
-                        >
-                          <TrashIcon aria-hidden />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Picker
-                  mode="choose"
-                  className="min-w-56"
-                  label="New condition type"
-                  options={RULE_KIND_OPTIONS}
-                  value={newKind}
-                  onValueChange={(kind) => {
-                    if (kind != null && isRuleKind(kind)) setNewKind(kind);
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    updateDraft({
-                      ...draft,
-                      rules: [
-                        ...draft.rules,
-                        {
-                          id: crypto.randomUUID(),
-                          kind: newKind,
-                          value: ruleDefault(newKind),
-                        },
-                      ],
-                    })
-                  }
-                  disabled={draft.rules.length >= 20}
-                >
-                  <PlusIcon aria-hidden /> Add condition
-                </Button>
-              </div>
+                      ) : (
+                        <Input
+                          aria-label={`Condition ${index + 1} value`}
+                          value={rule.value}
+                          aria-invalid={Boolean(valueError)}
+                          onChange={(event) => {
+                            const rules = draft.rules.slice();
+                            rules[index] = {
+                              ...rule,
+                              value: event.target.value,
+                            };
+                            updateDraft({ ...draft, rules });
+                          }}
+                        />
+                      )}
+                      {valueError && (
+                        <p className="mt-1 text-xs text-destructive">
+                          {valueError}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Remove condition ${index + 1}`}
+                      onClick={() =>
+                        updateDraft({
+                          ...draft,
+                          rules: draft.rules.filter(
+                            (_, ruleIndex) => ruleIndex !== index,
+                          ),
+                        })
+                      }
+                    >
+                      <TrashIcon aria-hidden />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
+          )}
 
-            <p className="text-xs text-muted-foreground">
-              Edits reset when you refresh. The starter “{starter.name}” is
-              never changed.
-            </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Picker
+              mode="choose"
+              className="min-w-56"
+              label="New condition type"
+              options={RULE_KIND_OPTIONS}
+              value={newKind}
+              onValueChange={(kind) => {
+                if (kind != null && isRuleKind(kind)) setNewKind(kind);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                updateDraft({
+                  ...draft,
+                  rules: [
+                    ...draft.rules,
+                    {
+                      id: crypto.randomUUID(),
+                      kind: newKind,
+                      value: ruleDefault(newKind),
+                    },
+                  ],
+                })
+              }
+              disabled={draft.rules.length >= 20}
+            >
+              <PlusIcon aria-hidden /> Add condition
+            </Button>
           </div>
-        </CollapsibleContent>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Edits reset when you refresh. The starter “{starter.name}” is never
+          changed.
+        </p>
       </div>
-    </Collapsible>
+    </Disclosure>
   );
 }
 

@@ -12,6 +12,8 @@ import { Picker } from "~/entity/picker/picker";
 import { formatDateSpan } from "~/lib/date-span";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { Panel } from "~/ui/layout/panel";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -344,14 +346,11 @@ function YieldFields({
           .
         </Description>
       )}
-      <details className="text-xs">
-        <summary className="min-h-10 cursor-pointer content-center text-muted-foreground hover:text-foreground">
-          Recipe nutrition details
-        </summary>
+      <Disclosure summary="Recipe nutrition details" className="text-xs">
         <div className="border-t pt-2">
           <MealNutritionEstimates totals={source.totals} />
         </div>
-      </details>
+      </Disclosure>
     </Stack>
   );
 }
@@ -414,14 +413,17 @@ function PeopleFields({
       <Stack gap="sm">
         {currentRows.map(renderRow)}
         {otherRows.length ? (
-          <details className="rounded-md border border-[var(--border)] bg-[var(--muted)]/35 px-3 py-2">
-            <summary className="min-h-10 cursor-pointer content-center text-sm font-medium">
-              Other meals · {otherRows.length}
-            </summary>
-            <Stack gap="sm" className="pt-2">
-              {otherRows.map(renderRow)}
-            </Stack>
-          </details>
+          <Panel tone="muted">
+            <Disclosure
+              summary="Other meals"
+              meta={otherRows.length}
+              keepMounted
+            >
+              <Stack gap="sm" className="pt-1">
+                {otherRows.map(renderRow)}
+              </Stack>
+            </Disclosure>
+          </Panel>
         ) : null}
       </Stack>
     </Stack>

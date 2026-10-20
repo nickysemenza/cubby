@@ -50,6 +50,7 @@ export default defineEntity({
       // a self-relation whose target label doesn't match the section title.
       hero: {
         chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
+        stats: ["lastBulkInventory"],
         breadcrumb: "parentId",
       },
       additionalSections: [

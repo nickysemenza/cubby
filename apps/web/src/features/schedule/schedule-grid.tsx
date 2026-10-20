@@ -446,7 +446,7 @@ export function ScheduleGrid({
                 {minors.map((tick) => (
                   <span
                     key={tick.day}
-                    className="absolute top-1 border-l border-border pl-1 text-[10px] text-muted-foreground"
+                    className="absolute top-1 border-l border-border pl-1 text-2xs text-muted-foreground"
                     style={{ left: (tick.day - startDay) * dayWidth }}
                   >
                     {tick.label}
@@ -499,7 +499,7 @@ export function ScheduleGrid({
                   )
                 }
                 className={cn(
-                  "relative flex border-b border-border/70 text-[13px]/5 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                  "relative flex border-b border-border/70 text-sm/5 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                   row.group ? "bg-muted/50 font-semibold" : "hover:bg-muted/40",
                 )}
                 style={{ height: ROW_HEIGHT }}
@@ -606,7 +606,7 @@ export function ScheduleGrid({
                         aria-label={segmentDescription(segment)}
                         title={segmentDescription(segment)}
                         className={cn(
-                          "absolute top-[8px] flex h-4 max-w-none items-center overflow-hidden rounded-[2px] border px-1 text-[10px] leading-none font-medium whitespace-nowrap text-white",
+                          "absolute top-[8px] flex h-4 max-w-none items-center overflow-hidden rounded-[2px] border px-1 text-2xs leading-none font-medium whitespace-nowrap text-white",
                           segment.variant === "reference" &&
                             "border-dashed bg-transparent! text-foreground",
                         )}

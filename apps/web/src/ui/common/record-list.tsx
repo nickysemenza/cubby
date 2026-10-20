@@ -10,9 +10,10 @@ import {
 
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
-import { type Fact, factColumnStyle, FactList } from "./fact-list";
+import { type Fact, factColumnStyle, Facts } from "./facts";
 import { Ledger, LedgerCell, LedgerRow } from "./ledger";
 
 import "./record-list.css";
@@ -226,7 +227,8 @@ export function RecordRow({
       ) : null}
       {facts?.length ? (
         <LedgerCell as="div" slot="facts">
-          <FactList
+          <Facts
+            layout="inline"
             facts={facts}
             columnOf={columnOf ? (id) => columnOf.get(id) : undefined}
           />
@@ -454,18 +456,13 @@ export function RecordDetail({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
-  // Uncontrolled: the browser owns the open state, so a toggle made before hydration survives
-  // it. React writes `open` only when this prop changes, which it never does after mount.
   return (
-    <details className="group text-xs/5" open={defaultOpen || undefined}>
-      <summary className="inline-flex cursor-pointer list-none items-center gap-0.5 text-muted-foreground hover:text-foreground max-md:min-h-11 max-md:min-w-11 [&::-webkit-details-marker]:hidden">
-        <CaretRightIcon
-          aria-hidden
-          className="size-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
-        />
-        {summary}
-      </summary>
-      <div className="mt-1">{children}</div>
-    </details>
+    <Disclosure
+      summary={summary}
+      defaultOpen={defaultOpen}
+      className="text-xs/5"
+    >
+      {children}
+    </Disclosure>
   );
 }

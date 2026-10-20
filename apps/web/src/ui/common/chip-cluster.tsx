@@ -138,7 +138,7 @@ export function ChipCluster({
       )}
     >
       {leading && (
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
+        <span className="shrink-0 text-xs text-muted-foreground">
           {leading}
         </span>
       )}
@@ -163,9 +163,7 @@ export function ChipCluster({
         ) : (
           <OverflowCount hidden={hidden} count={count} />
         ))}
-      {trailing && (
-        <span className="shrink-0 text-[0.6875rem]">{trailing}</span>
-      )}
+      {trailing && <span className="shrink-0 text-xs">{trailing}</span>}
     </span>
   );
 }
@@ -194,7 +192,7 @@ function OverflowCount({
             type="button"
             data-chip-overflow=""
             aria-label={`${count} more: ${content}`}
-            className="shrink-0 cursor-default rounded-sm text-[0.6875rem] leading-3 text-muted-foreground tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="shrink-0 cursor-default rounded-sm text-xs leading-3 text-muted-foreground tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
         }
       >

@@ -1,13 +1,7 @@
 import { eq } from "drizzle-orm";
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 
-import {
-  email,
-  entityAttachment,
-  image,
-  product,
-  run,
-} from "~/server/db/schema";
+import { email, run } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -25,7 +19,6 @@ import {
   getFixtureDb,
 } from "./fixtures/core";
 import { seedUnimportedOrderMail } from "./fixtures/mail";
-import { seedImagePrerequisite } from "./fixtures/photos";
 
 // Failure modes: a member filter widens to shared work, filtering runs only on
 // the loaded page, URL state is lost on reload, a queue row loses its source,
@@ -70,10 +63,12 @@ test("Work queue filters routing before paging and opens its source record", asy
   // One record can need both repair and research. Copy its code once, along
   // with the shared vendor's logo task even before it has a purchase.
   await expect(
-    page.getByRole("table").getByRole("link", {
-      name: `${prefix} shared product`,
-      exact: true,
-    }),
+    page
+      .getByRole("list", { name: "Work queue", exact: true })
+      .getByRole("link", {
+        name: `${prefix} shared product`,
+        exact: true,
+      }),
   ).toHaveCount(2);
   await page.getByRole("checkbox", { name: "Select all", exact: true }).check();
   await page.getByRole("button", { name: "Copy codes", exact: true }).click();
@@ -182,8 +177,8 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
     page,
     `/work-queue?query=${encodeURIComponent(prefix)}&source=research&sort=-name`,
   );
-  const table = page.getByRole("table");
-  const first = table.getByRole("row").filter({
+  const list = page.getByRole("list", { name: "Work queue", exact: true });
+  const first = list.getByRole("listitem").filter({
     has: page.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
   });
   await first
@@ -199,7 +194,7 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
   await expect(
     first.getByRole("checkbox", { name: "Select row", exact: true }),
   ).toBeChecked();
-  await first.getByRole("cell", { name: "Product", exact: true }).click();
+  await first.getByText("Product", { exact: true }).click();
   await expect(
     page.getByRole("complementary", { name: "Product inspector" }),
   ).toBeVisible();
@@ -209,42 +204,37 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
   await page
     .getByRole("button", { name: "Close inspector", exact: true })
     .click();
-  await page
-    .getByRole("region", { name: "Work queue keyboard navigation" })
-    .evaluate((pane) => {
-      pane.scrollTop = pane.scrollHeight;
-    });
+  // Scrolling the page to the last loaded row pulls the next page.
+  await expect(async () => {
+    await list.getByRole("listitem").last().scrollIntoViewIfNeeded();
+    await expect(
+      list.getByRole("link", { name: `${prefix} Alpha`, exact: true }),
+    ).toBeVisible({ timeout: 1_000 });
+  }).toPass();
   await expect(
-    table.getByRole("link", { name: `${prefix} Alpha`, exact: true }),
-  ).toBeVisible();
-  await expect(
-    table.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
+    list.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
   ).toBeVisible();
   await page.reload();
-  await expect(table.getByRole("link").first()).toHaveText(`${prefix} Foxtrot`);
-  await table
-    .getByRole("button", { name: "Sort by Record", exact: true })
-    .click();
-  await table
-    .getByRole("button", { name: "Sort by Record", exact: true })
-    .click();
-  await expect(table.getByRole("link").first()).toHaveText(`${prefix} Alpha`);
+  await expect(list.getByRole("link").first()).toHaveText(`${prefix} Foxtrot`);
+  await page.getByRole("button", { name: /^Sort: Record/ }).click();
+  await page.getByRole("menuitem", { name: "Ascending", exact: true }).click();
+  await expect(list.getByRole("link").first()).toHaveText(`${prefix} Alpha`);
   await expect(page).toHaveURL(/sort=name/);
-  await table
-    .getByRole("row")
+  await list
+    .getByRole("listitem")
     .filter({
       has: page.getByRole("link", { name: `${prefix} Alpha`, exact: true }),
     })
     .getByRole("checkbox", { name: "Select row", exact: true })
     .check();
-  // Shared tables replace filter controls with the selection bar. A bookmarked
-  // filter navigation must still clear the selection from its prior scope.
+  // A bookmarked filter navigation must clear the selection from its prior
+  // scope.
   await gotoAuthenticatedPage(
     page,
     `/work-queue?query=${encodeURIComponent(`${prefix} Alpha`)}&source=research&sort=name`,
   );
   await expect(
-    table.getByRole("link", { name: `${prefix} Bravo`, exact: true }),
+    list.getByRole("link", { name: `${prefix} Bravo`, exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Copy codes", exact: true }),
@@ -253,7 +243,7 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
     page,
     `/work-queue?query=${encodeURIComponent(prefix)}&source=research&sort=reason&page=4&pageSize=2`,
   );
-  await expect(table.getByRole("link").first()).toBeVisible();
+  await expect(list.getByRole("link").first()).toBeVisible();
   await expect(page).not.toHaveURL(/[?&]page(?:Size)?=/);
 });
 
@@ -337,72 +327,26 @@ test("Work queue Run navigation reads passive retained details", async ({
 });
 
 // Failure modes: the queue sits inside a contained gutter instead of reaching
-// the workbench edges, a source record loses its thumbnail, categorical values
-// lose their labels, the next action disappears, or keyboard activation of
-// Details bubbles to the row's inspector/navigation handler.
-test("Work queue rows show the source record's image, type and next action", async ({
+// the workbench edges, a row loses its record type, the next action
+// disappears, or keyboard activation of Details bubbles to the row's
+// inspector/navigation handler.
+test("Work queue rows show the source record's type and next action", async ({
   page,
-  e2eRuntime,
 }, testInfo) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const name = uniqueName(testInfo, "Queue pictured product");
-  const seeded = await seedProductPrerequisite(page, { name });
-  const picture = await seedImagePrerequisite(
-    `queue-thumb-${Date.now()}`,
-    e2eRuntime.objectStorageUrl,
-  );
-  const db = getDb(getFixtureDb());
-  const [owner] = await db
-    .select({ id: product.id })
-    .from(product)
-    .where(eq(product.shortcode, seeded.id));
-  const [stored] = await db
-    .select({ id: image.id })
-    .from(image)
-    .where(eq(image.shortcode, picture.id));
-  if (!owner || !stored) throw new Error("Synthetic queue image is missing");
-  await db.insert(entityAttachment).values({
-    entityId: owner.id,
-    entityKind: "product",
-    purpose: "item",
-    role: "cover",
-    imageId: stored.id,
-  });
+  const name = uniqueName(testInfo, "Queue research product");
+  await seedProductPrerequisite(page, { name });
   await gotoAuthenticatedPage(
     page,
     `/work-queue?query=${encodeURIComponent(name)}&source=research`,
   );
   const record = page.getByRole("link", { name, exact: true });
-  const row = page.getByRole("row").filter({ has: record });
-  await expect
-    .poll(() =>
-      row
-        .getByRole("img", { name: "Image", exact: true })
-        .evaluate(
-          (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
-        ),
-    )
-    .toBe(true);
-  await expect(
-    row.getByRole("cell", { name: "Product", exact: true }),
-  ).toBeVisible();
-  await expect(
-    row.getByRole("cell", { name: "Research", exact: true }),
-  ).toHaveCount(2);
-  await expect(
-    page.getByRole("columnheader").filter({
-      has: page.getByRole("button", {
-        name: "Sort by Next action",
-        exact: true,
-      }),
-    }),
-  ).toBeVisible();
-  await expect(
-    row.getByRole("cell").filter({
-      hasText: "Review missing facts and add verified evidence.",
-    }),
-  ).toBeVisible();
+  const row = page.getByRole("listitem").filter({ has: record });
+  await expect(row.getByText("Product", { exact: true })).toBeVisible();
+  await expect(row).toContainText(
+    "Review missing facts and add verified evidence.",
+  );
   const queueUrl = page.url();
   const details = row.getByRole("button", {
     name: "Action details",
@@ -427,9 +371,12 @@ test("Work queue rows show the source record's image, type and next action", asy
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
   }
-  const table = await page.getByRole("table").boundingBox();
+  // Full-width rows inside the page gutter (24px a side), not a contained column.
+  const list = await page
+    .getByRole("list", { name: "Work queue", exact: true })
+    .boundingBox();
   const main = await page.getByRole("main").boundingBox();
-  expect(table && main && main.width - table.width).toBeLessThanOrEqual(2);
+  expect(list && main && main.width - list.width).toBeLessThanOrEqual(50);
 });
 
 // Failure mode: the record strip keeps a gap the person just resolved on the

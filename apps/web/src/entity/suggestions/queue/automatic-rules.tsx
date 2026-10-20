@@ -77,7 +77,7 @@ export function AutomaticRulesSection({
     <Section
       title="Automatic rules"
       headingAs="h2"
-      meta={rules.data ? `${on} of ${list.length} on` : null}
+      caption={rules.data ? `${on} of ${list.length} on` : null}
     >
       {rules.error ? (
         <p

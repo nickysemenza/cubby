@@ -27,11 +27,11 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
+import { Section } from "~/ui/layout";
 import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { Spinner } from "~/ui/primitives/spinner";
@@ -49,9 +49,7 @@ const isNumber = (value: unknown): value is number => typeof value === "number";
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="border border-border bg-card p-4">
-      <div className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-        {label}
-      </div>
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold">
         {isNumber(value) ? formatCount(value) : value}
       </div>
@@ -79,14 +77,9 @@ function ChartCard({
   children: ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="font-mono text-xs tracking-wide uppercase">
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="h-[280px]">{children}</CardContent>
-    </Card>
+    <Section headingAs="h2" title={title}>
+      <div className="h-[280px]">{children}</div>
+    </Section>
   );
 }
 
@@ -174,20 +167,15 @@ function SchemaCard({
   schema: object | null;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="font-mono text-xs uppercase">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {schema ? (
-          <pre className="max-h-[360px] overflow-auto bg-muted p-4 text-xs">
-            {JSON.stringify(schema, null, 2)}
-          </pre>
-        ) : (
-          <Description>Not available for retired tools.</Description>
-        )}
-      </CardContent>
-    </Card>
+    <Section headingAs="h2" title={title}>
+      {schema ? (
+        <pre className="max-h-[360px] overflow-auto bg-muted p-4 text-xs">
+          {JSON.stringify(schema, null, 2)}
+        </pre>
+      ) : (
+        <Description>Not available for retired tools.</Description>
+      )}
+    </Section>
   );
 }
 
@@ -247,13 +235,8 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
           emptyTitle="No caller data in this window."
         />
       </ChartCard>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="font-mono text-xs tracking-wide uppercase">
-            Caller breakdown
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Section headingAs="h2" title="Caller breakdown">
+        <div className="space-y-4">
           <div>
             <div className="mb-2 text-xs text-muted-foreground">Surfaces</div>
             {data.surfaces.map((row) => (
@@ -283,8 +266,8 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </Section>
     </div>
   );
 }
@@ -654,13 +637,11 @@ function ActivityTable({
   );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          {toolName ? `Recent calls · ${toolName}` : "Global activity"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Section
+      headingAs="h2"
+      title={toolName ? `Recent calls · ${toolName}` : "Global activity"}
+    >
+      <div className="space-y-4">
         <RTable
           table={table}
           ariaLabel={
@@ -673,8 +654,8 @@ function ActivityTable({
           infiniteScroll={infiniteScroll}
           emptyState="No captured calls."
         />
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
 
@@ -721,26 +702,24 @@ export function McpUsageDashboard() {
       {selected.description ? (
         <Description>{selected.description}</Description>
       ) : null}
-      <Card>
-        <CardContent className="space-y-4 pt-4">
-          <ToolAnnotations tool={selected} />
-          <div className="grid gap-4 md:grid-cols-4">
-            <Metric label="Status" value={selected.status} />
-            <Metric
-              label="First used"
-              value={formatOrNever(selected.firstUsedAt)}
-            />
-            <Metric
-              label="Last used"
-              value={formatOrNever(selected.lastUsedAt)}
-            />
-            <Metric
-              label="Last release"
-              value={selected.lastRelease?.slice(0, 10) ?? "—"}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4 pt-4">
+        <ToolAnnotations tool={selected} />
+        <div className="grid gap-4 md:grid-cols-4">
+          <Metric label="Status" value={selected.status} />
+          <Metric
+            label="First used"
+            value={formatOrNever(selected.firstUsedAt)}
+          />
+          <Metric
+            label="Last used"
+            value={formatOrNever(selected.lastUsedAt)}
+          />
+          <Metric
+            label="Last release"
+            value={selected.lastRelease?.slice(0, 10) ?? "—"}
+          />
+        </div>
+      </div>
       <div className="grid gap-4">
         <ChartCard title="Selected-tool trend">
           {selected.daily.length === 0 ? (
@@ -760,11 +739,8 @@ export function McpUsageDashboard() {
             />
           )}
         </ChartCard>
-        <Card>
-          <CardHeader>
-            <CardTitle>Selected-tool callers</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
+        <Section headingAs="h2" title="Selected-tool callers">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
               <div className="mb-2 text-xs text-muted-foreground">Users</div>
               {selected.users.map((user) => (
@@ -781,8 +757,8 @@ export function McpUsageDashboard() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </Section>
       </div>
       <div className="grid gap-4">
         <SchemaCard title="Input schema" schema={selected.inputSchema} />
@@ -855,11 +831,8 @@ export function McpUsageDashboard() {
           ) : null
         }
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Tool pruning worklist</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Section headingAs="h2" title="Tool pruning worklist">
+          <div className="space-y-4">
             <ToolRosterTable
               tools={tools}
               sort={sort}
@@ -889,12 +862,12 @@ export function McpUsageDashboard() {
                 </div>
               }
             />
-          </CardContent>
-        </Card>
+          </div>
+        </Section>
       </SidePanelLayout>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
+        <span className="text-xs font-medium text-muted-foreground">
           Entity
         </span>
         <Button

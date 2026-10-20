@@ -6,6 +6,7 @@ import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import type { Filter, FilterBarField } from "~/ui/data-table/filter-bar-core";
 import { Row, Stack } from "~/ui/layout";
+import { Panel } from "~/ui/layout/panel";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { Demo, DemoGrid } from "../components/design-section";
@@ -104,9 +105,9 @@ export function ValuesSection() {
           name="<GapChipCluster gaps />"
           note="Work queue checks: one chip per failed check, two lines inside a 32px row, then +N with every message."
         >
-          <div className="w-64 rounded-sm border px-1 py-1.5">
+          <Panel tone="default" className="w-64 px-1 py-1.5">
             <GapChipCluster gaps={demoGaps} />
-          </div>
+          </Panel>
         </Demo>
         <Demo
           name="<FilterBar fields filters />"

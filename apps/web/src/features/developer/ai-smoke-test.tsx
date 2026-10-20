@@ -10,16 +10,9 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { formatDuration } from "~/lib/format-duration";
-import { Row } from "~/ui/layout";
+import { Row, Section } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import {
@@ -118,12 +111,8 @@ function ScenarioCard({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{spec.label}</CardTitle>
-        <CardDescription>{spec.description}</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
+    <Section headingAs="h2" title={spec.label} caption={spec.description}>
+      <div className="grid gap-3">
         <Row align="center" gap="sm" wrap>
           <Badge variant="outline">{result?.feature ?? spec.feature}</Badge>
           <Badge variant="outline">{result?.model ?? spec.model}</Badge>
@@ -202,8 +191,8 @@ function ScenarioCard({
             {JSON.stringify(result.result, null, 2)}
           </pre>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
 

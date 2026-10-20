@@ -47,6 +47,7 @@ import {
 } from "~/ui/primitives/dropdown-menu";
 import { TableHead, TableRow } from "~/ui/primitives/table";
 
+import { ColumnFilterEditor } from "../../ui/data-table/column-filter-editor";
 import {
   columnWidthValue,
   columnOffsetValue,
@@ -64,7 +65,6 @@ import {
   type ColumnValueKind,
   type CubbyColumnMeta,
   hasColumnFilterEditor,
-  requestColumnFilterEdit,
 } from "../../ui/data-table/table-meta";
 
 type HeaderStyles = { header: string; sortIcon: string };
@@ -142,7 +142,7 @@ function headerContent<TData extends RowData>(
   const label =
     meta?.shortHeader ??
     flexRender(header.column.columnDef.header, header.getContext());
-  if (!meta?.linksTo) {
+  if (!meta?.linksTo || columnValueKind(meta) === "person") {
     const Glyph = valueKindGlyph(columnValueKind(meta));
     if (Glyph === null) return label;
     return (
@@ -190,7 +190,7 @@ function CollapsedHeaderLabel<TData extends RowData>({
       className="inline-flex min-w-0 items-center text-muted-foreground/70"
       title={`${label} · empty in these rows`}
     >
-      {meta?.linksTo ? (
+      {meta?.linksTo && columnValueKind(meta) !== "person" ? (
         <EntityIcon
           entity={meta.linksTo}
           aria-hidden="true"
@@ -213,6 +213,10 @@ function columnValueKind(meta: ColumnMeta): ColumnValueKind | null {
   if (meta?.valueKind) return meta.valueKind;
   const filter = meta?.filterConfig;
   if (filter?.dateRange) return "date";
+  if (meta?.cellData?.kind === "currency") return "money";
+  if (meta?.linksTo === "ledgerParty") return "person";
+  if (filter?.valueType === "boolean" || filter?.valueType === "presence")
+    return "boolean";
   if (meta?.numeric) return "number";
   if (filter?.filterType === "multiselect" || filter?.filterType === "select")
     return "enum";
@@ -242,8 +246,7 @@ function valueKindGlyph(kind: ColumnValueKind | null) {
 /**
  * The column's own menu: sort, filter, group, pin and hide in one place. The
  * caret appears on hover or focus over the header's free edge, so it takes no
- * width at rest. "Filter…" asks the filter bar (the one editor owner) to open
- * this column's editor; the URL-backed filter state stays single-owner.
+ * width at rest. Its inline editor shares the filter bar's URL-backed draft.
  */
 function HeaderMenu<TData extends RowData>({
   header,
@@ -297,7 +300,10 @@ function HeaderMenu<TData extends RowData>({
       >
         <CaretDownIcon className="size-3" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={numeric ? "start" : "end"} className="w-52">
+      <DropdownMenuContent
+        align={numeric ? "start" : "end"}
+        className="w-59 [&_[role=menuitem]]:min-h-6.5 [&_[role=menuitem]]:text-sm"
+      >
         <DropdownMenuGroup>
           <DropdownMenuLabel>{label}</DropdownMenuLabel>
           {canSort && (
@@ -373,24 +379,7 @@ function ColumnFilterMenuItems<TData extends RowData>({
   column: Header<typeof cubbyTableFeatures, TData, unknown>["column"];
 }) {
   if (!hasColumnFilterEditor(table)) return null;
-  const filtered = column.getIsFiltered();
-  return (
-    <>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onClick={() => requestColumnFilterEdit(table, column.id)}
-      >
-        <FunnelSimpleIcon aria-hidden="true" />
-        {filtered ? "Edit filter…" : "Filter…"}
-      </DropdownMenuItem>
-      {filtered && (
-        <DropdownMenuItem onClick={() => column.setFilterValue(undefined)}>
-          <XIcon aria-hidden="true" />
-          Clear filter
-        </DropdownMenuItem>
-      )}
-    </>
-  );
+  return <ColumnFilterEditor table={table} columnId={column.id} />;
 }
 
 function HeaderMenuCheck() {
@@ -445,9 +434,7 @@ function HeaderHoverChrome({
         // its own pointer for its phrase.
         "pointer-events-none invisible absolute inset-y-0 my-auto flex h-5 items-center gap-1 rounded-sm bg-card px-0.5 group-focus-within/th:visible group-hover/th:visible [&_[data-field-provenance]]:pointer-events-auto",
         // Clear of the column menu caret at the same edge.
-        numeric
-          ? "left-6 shadow-[6px_0_6px_var(--card)]"
-          : "right-6 shadow-[-6px_0_6px_var(--card)]",
+        numeric ? "left-6" : "right-6",
       )}
     >
       <FieldProvenance compact provenance={provenance} />
@@ -541,7 +528,7 @@ function SortableHeader<TData extends RowData>({
       colSpan={header.colSpan}
       aria-sort={ariaSort(sortDirection)}
       className={cn(
-        "group/th relative",
+        "group/th relative has-[[data-popup-open]]:bg-muted",
         styles.header,
         "px-1",
         numeric && "text-right",
@@ -615,14 +602,12 @@ function SortableHeader<TData extends RowData>({
           </span>
         )}
         {hoverChrome}
-        {!collapsed && (
-          <HeaderMenu
-            header={header}
-            table={table}
-            label={headerLabel}
-            numeric={numeric}
-          />
-        )}
+        <HeaderMenu
+          header={header}
+          table={table}
+          label={headerLabel}
+          numeric={numeric}
+        />
       </div>
       {header.column.getCanResize() && (
         <ColumnResizeHandle
@@ -705,9 +690,8 @@ export default function TableHeaderLayout<TData extends RowData>({
           );
           return (
             <TableRow
-              key={[...leading, ...trailing]
-                .map((header) => header.id)
-                .join(":")}
+              // Column changes must not remount an open filter menu.
+              key={`header-level-${index}`}
               className="border-b border-border/50"
             >
               {leading.map(renderHeader)}

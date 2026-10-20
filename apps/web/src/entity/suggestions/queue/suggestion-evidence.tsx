@@ -27,8 +27,9 @@ import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
-import { FactList } from "~/ui/common/fact-list";
+import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { Panel } from "~/ui/layout/panel";
 import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -88,7 +89,7 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
           ))
         : null}
       {plan.status === "ready" ? (
-        <Facts
+        <EvidenceFacts
           rows={[
             [
               "Effect",
@@ -365,28 +366,25 @@ function EvidenceBox({
   children: ReactNode;
 }) {
   return (
-    <section className="min-w-0 rounded-md border bg-card px-2.5 py-2">
-      <h4 className="mb-1 text-2xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title}
-      </h4>
+    <Panel tone="default" render={<section />} headingAs="h4" title={title}>
       {children}
-    </section>
+    </Panel>
   );
 }
 
 /** Label/value facts; a null value leaves its row out. */
-function Facts({ rows }: { rows: [string, ReactNode][] }) {
+/** Evidence as a compact property list; absent values drop out. */
+function EvidenceFacts({ rows }: { rows: [string, ReactNode][] }) {
   return (
-    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
-      {rows
-        .filter(([, value]) => value !== null && value !== undefined)
-        .map(([label, value]) => (
-          <div key={label} className="contents">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="min-w-0">{value}</dd>
-          </div>
-        ))}
-    </dl>
+    <FactsDensityProvider density="compact">
+      <Facts
+        layout="list"
+        facts={rows.map(([label, value]) => ({
+          label,
+          value: value ?? undefined,
+        }))}
+      />
+    </FactsDensityProvider>
   );
 }
 
@@ -443,7 +441,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
   return (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
       <EvidenceBox title="Statement charge">
-        <Facts
+        <EvidenceFacts
           rows={[
             ["Descriptor", charge.rawDescription],
             ["Merchant", charge.merchant],
@@ -571,7 +569,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
             })}
           </ul>
         ) : charge.create ? (
-          <Facts
+          <EvidenceFacts
             rows={[
               [
                 "Kind",
@@ -711,7 +709,7 @@ function AppliedFieldEvidence({ row }: { row: FieldRow }) {
   return (
     <div className="max-w-xl">
       <EvidenceBox title="Applied automatically">
-        <Facts
+        <EvidenceFacts
           rows={[
             [
               "Value",
@@ -804,7 +802,7 @@ function TransferPairEvidence({
           { title: "Money in", leg: pair.inflow },
         ].map(({ title, leg }) => (
           <EvidenceBox key={title} title={title}>
-            <Facts
+            <EvidenceFacts
               rows={[
                 [
                   "Account",
@@ -879,7 +877,7 @@ function TransferPairEvidence({
         ))}
       </div>
       <EvidenceBox title="Pair evidence">
-        <Facts
+        <EvidenceFacts
           rows={[
             ["Transfer date", <DateDisplay key="date" start={pair.date} />],
             ["Date gap", `${countLabel(pair.dateGapDays, "day")} apart`],
@@ -991,7 +989,8 @@ function DeclaredEvidence({
   return (
     <div className="space-y-2">
       <p className="text-sm whitespace-pre-wrap">{evidence.description}</p>
-      <FactList
+      <Facts
+        layout="inline"
         facts={evidence.facts.map((fact, index) => ({
           id: `${fact.label}:${index}`,
           label: fact.label,

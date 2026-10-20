@@ -8,7 +8,7 @@ import { z } from "zod";
 import { usePageDetailContext } from "~/entity/page/page";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Section } from "~/ui/layout";
 
 import {
   type IndexedSection,
@@ -276,14 +276,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       leadIndex={leadIndex}
       footer={
         isDebugEnabled && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle as="h2">Raw Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <JsonRenderer input={rawData} pretty />
-            </CardContent>
-          </Card>
+          <Section headingAs="h2" title="Raw details">
+            <JsonRenderer input={rawData} pretty />
+          </Section>
         )
       }
     />

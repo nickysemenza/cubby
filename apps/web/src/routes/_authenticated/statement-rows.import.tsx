@@ -21,6 +21,7 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
+import { Panel } from "~/ui/layout/panel";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 
@@ -282,7 +283,6 @@ function StatementImportPage() {
       variant="list"
       title="Import statement"
       eyebrow="Finance"
-      compact
       actions={
         <Button
           variant="outline"
@@ -320,9 +320,11 @@ function StatementImportPage() {
         {error !== null && <ErrorDisplay error={error} />}
 
         {mappingFile && mapping && (
-          <section
+          <Panel
+            tone="default"
+            render={<section />}
             aria-label="Map statement columns"
-            className="space-y-4 rounded-sm border border-border bg-card p-4"
+            className="space-y-4"
           >
             <div>
               <h2 className="text-lg font-semibold">
@@ -456,11 +458,11 @@ function StatementImportPage() {
             <Button disabled={busy} onClick={() => void previewMappedFile()}>
               {busy ? "Checking rows…" : "Preview mapped rows"}
             </Button>
-          </section>
+          </Panel>
         )}
 
         {result && (
-          <output className="rounded-sm border border-border bg-card p-4">
+          <Panel tone="default" render={<output />}>
             <p className="text-sm font-semibold">Statement recorded</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {result.transactions} transactions created · {result.evidence} new
@@ -475,14 +477,14 @@ function StatementImportPage() {
             >
               Review statement rows
             </Button>
-          </output>
+          </Panel>
         )}
 
         {review && (
           <section aria-label="Statement preview" className="space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-3">
               <div>
-                <p className="text-xs tracking-wide text-muted-foreground uppercase">
+                <p className="text-xs font-medium text-muted-foreground">
                   {review.fileName}
                 </p>
                 <h2 className="mt-1 text-lg font-semibold">
@@ -538,7 +540,7 @@ function StatementImportPage() {
                 {review.file.signWarning}
               </p>
             )}
-            <div className="divide-y divide-border rounded-sm border border-border bg-card">
+            <Panel tone="default" flush className="divide-y divide-border">
               {review.file.preview?.rows.map((row) => {
                 const ready = row.status === "ready_to_create";
                 return (
@@ -635,7 +637,7 @@ function StatementImportPage() {
                   </div>
                 );
               })}
-            </div>
+            </Panel>
             <p className="text-xs text-muted-foreground">
               Source rows are saved in bounded, retryable batches. Only checked
               rows with an explicit kind become transactions. For large files,

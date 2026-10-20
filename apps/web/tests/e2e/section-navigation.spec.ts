@@ -32,11 +32,11 @@ test("settings section navigation preserves drafts, feedback, and diagnostic dis
   await expect(
     page.getByRole("button", { name: "Re-run", exact: true }),
   ).toBeHidden();
-  await page.getByRole("button", { name: "Toggle developer tools" }).click();
+  await page.getByRole("button", { name: "Connection diagnostics" }).click();
   await expect(
     page.getByRole("button", { name: "Re-run", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Toggle developer tools" }).click();
+  await page.getByRole("button", { name: "Connection diagnostics" }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: /^Jump to:/ }).click();

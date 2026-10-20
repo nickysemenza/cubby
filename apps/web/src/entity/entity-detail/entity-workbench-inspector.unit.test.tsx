@@ -224,31 +224,23 @@ describe("EntityWorkbenchInspector", () => {
         name: "Fixture vendor relationships",
       }),
     ).toBeVisible();
-    expect(
-      screen.getByText("Relations", { exact: true, selector: "summary" }),
-    ).toBeVisible();
-    expect(
-      screen.getByText("Activity", { exact: true, selector: "summary" }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Relations" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Activity" })).toBeVisible();
     expect(screen.getByLabelText("Open full vendor details")).toHaveAttribute(
       "href",
       `/vendors/${VENDOR_ID}`,
     );
 
     const recordFields = screen.getByText("Website", { exact: true });
-    fireEvent.click(
-      screen.getByText("Relations", { exact: true, selector: "summary" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Relations" }));
     expect(await screen.findByText("Fixture purchase")).toBeVisible();
 
-    fireEvent.click(
-      screen.getByText("Activity", { exact: true, selector: "summary" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Activity" }));
     await waitFor(() => {
-      expect(
-        screen.getByText("Activity", { exact: true, selector: "summary" })
-          .parentElement,
-      ).toHaveAttribute("open");
+      expect(screen.getByRole("button", { name: "Activity" })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
     });
     expect(screen.getByText("Website", { exact: true })).toBe(recordFields);
     expect(recordFields).toBeVisible();
@@ -264,9 +256,7 @@ describe("EntityWorkbenchInspector", () => {
     expect(
       await screen.findByRole("heading", { name: "fixture.jpg" }),
     ).toBeVisible();
-    expect(
-      screen.getByText("Relations", { exact: true, selector: "summary" }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Relations" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Edit record" })).toBeVisible();
     expect(screen.getByLabelText("Open full image details")).toHaveAttribute(
       "href",

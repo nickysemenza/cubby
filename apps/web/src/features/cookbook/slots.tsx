@@ -5,7 +5,6 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
 
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
@@ -16,6 +15,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -57,22 +57,16 @@ function ReextractNotice() {
 export const CookbookContents: DetailSlotComponent<"cookbook"> = ({
   record: cookbook,
 }) => {
-  const [reportOpen, setReportOpen] = useState(false);
   return (
     <Stack gap="md">
       <IngredientUsagePanel cookbookId={cookbook.id} />
       {!cookbook.needsReextract && (
-        <details onToggle={(event) => setReportOpen(event.currentTarget.open)}>
-          <summary className="cursor-pointer py-2 text-sm font-medium">
-            Extraction report
-          </summary>
-          {reportOpen && (
-            <EntityReportSlot
-              slot="cookbook.extraction-report"
-              id={cookbook.id}
-            />
-          )}
-        </details>
+        <Disclosure summary="Extraction report">
+          <EntityReportSlot
+            slot="cookbook.extraction-report"
+            id={cookbook.id}
+          />
+        </Disclosure>
       )}
     </Stack>
   );

@@ -218,7 +218,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                 >
                   Related
                 </h2>
-                <span className="font-mono text-2xs text-muted-foreground uppercase">
+                <span className="text-xs font-medium text-muted-foreground">
                   Meaning-based matches
                 </span>
               </Row>
@@ -390,7 +390,7 @@ function SearchRow({
       </div>
       <PreviewButton onClick={() => onPreview(previewRow)} />
       <div className="hidden max-w-44 shrink-0 text-right sm:block">
-        <span className="block truncate font-mono text-2xs text-muted-foreground uppercase">
+        <span className="block truncate text-xs font-medium text-muted-foreground">
           {entities[entityKindMap[item.entityKind]].label}
         </span>
         <span className="block truncate font-mono text-2xs text-foreground tabular-nums">
@@ -412,7 +412,7 @@ function PreviewButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 font-mono text-2xs text-muted-foreground uppercase hover:text-primary"
+      className="shrink-0 text-xs font-medium text-muted-foreground hover:text-primary"
     >
       Preview
     </button>
@@ -502,7 +502,7 @@ function ProductSearchRow({
         </div>
         <PreviewButton onClick={() => onPreview(previewRow)} />
         <div className="hidden max-w-44 shrink-0 text-right sm:block">
-          <span className="block font-mono text-2xs text-muted-foreground uppercase">
+          <span className="block text-xs font-medium text-muted-foreground">
             Product
           </span>
           <span className="block font-mono text-2xs text-foreground tabular-nums">
@@ -708,7 +708,7 @@ function SearchLanding({
             <button
               type="button"
               onClick={clearRecents}
-              className="font-mono text-2xs text-muted-foreground uppercase hover:text-foreground"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground"
             >
               Clear
             </button>

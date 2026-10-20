@@ -47,7 +47,7 @@ function NewRecipePage() {
   const sharedUrl = extractUrl(url, text);
 
   return (
-    <Page variant="list" title="New recipe" compact>
+    <Page variant="list" title="New recipe">
       <NewRecipe
         initialUrl={sharedUrl}
         initialName={title?.trim() || undefined}

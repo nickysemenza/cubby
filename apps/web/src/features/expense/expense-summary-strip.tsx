@@ -1,6 +1,5 @@
 import { formatCurrency } from "~/lib/number-format";
-import { Skeleton } from "~/ui/primitives/skeleton";
-import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 
 interface ExpenseSummary {
   actual: number;
@@ -34,16 +33,20 @@ export function ExpenseSummaryStrip({
   ] as const;
 
   return (
-    <StatGrid className={className}>
-      {metrics.map(([label, value]) =>
-        loading ? (
-          <Skeleton key={label} className="h-14 w-full" />
-        ) : (
-          <StatTile key={label} label={label}>
-            {value}
-          </StatTile>
-        ),
-      )}
-    </StatGrid>
+    <KeyNumbers
+      layout="strip"
+      label="Spend summary"
+      loadingCount={metrics.length}
+      items={
+        loading
+          ? []
+          : metrics.map(([label, value]) => ({
+              label,
+              value,
+              money: typeof value === "string" && value !== "Unavailable",
+            }))
+      }
+      className={className}
+    />
   );
 }

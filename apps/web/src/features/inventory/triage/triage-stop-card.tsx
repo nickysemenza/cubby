@@ -17,9 +17,8 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
 
@@ -87,90 +86,88 @@ export function TriageStopCard({
   const cover = product.displayImages[0]?.url;
 
   return (
-    <Card variant="panel">
-      <CardContent className="p-4">
-        <Stack gap="md">
-          <Row align="start" gap="md" className="min-w-0">
-            <Image
-              src={cover}
-              alt={product.name}
-              displayWidth={96}
-              className="size-24 shrink-0 border border-[var(--border)] object-cover"
+    <Panel tone="default">
+      <Stack gap="md">
+        <Row align="start" gap="md" className="min-w-0">
+          <Image
+            src={cover}
+            alt={product.name}
+            displayWidth={96}
+            className="size-24 shrink-0 border border-[var(--border)] object-cover"
+          />
+          <Stack gap="xs" className="min-w-0 flex-1">
+            <QueuePassPosition
+              index={index}
+              total={total}
+              className="text-left"
             />
-            <Stack gap="xs" className="min-w-0 flex-1">
-              <QueuePassPosition
-                index={index}
-                total={total}
-                className="text-left"
+            <h2 className="min-w-0 font-heading text-xl font-semibold">
+              <EntityRefLink
+                displayImage={null}
+                showIdentityMark={false}
+                entity="product"
+                data={product}
               />
-              <h2 className="min-w-0 font-heading text-xl font-semibold">
-                <EntityRefLink
-                  displayImage={null}
-                  showIdentityMark={false}
-                  entity="product"
-                  data={product}
-                />
-              </h2>
-              {product.manufacturer && (
-                <Description size="xs">{product.manufacturer}</Description>
-              )}
-              <Description>
-                The ledger says {expected} bought
-                {product.expenseTotal > 0
-                  ? ` for ${formatCurrency(product.expenseTotal)}`
-                  : ""}
-                . Nothing is on a shelf.
-              </Description>
-            </Stack>
-          </Row>
+            </h2>
+            {product.manufacturer && (
+              <Description size="xs">{product.manufacturer}</Description>
+            )}
+            <Description>
+              The ledger says {expected} bought
+              {product.expenseTotal > 0
+                ? ` for ${formatCurrency(product.expenseTotal)}`
+                : ""}
+              . Nothing is on a shelf.
+            </Description>
+          </Stack>
+        </Row>
 
-          <Row gap="sm" wrap>
-            <Button
-              type="button"
-              className="min-h-12 md:min-h-10"
-              disabled={busy}
-              onClick={() => setStockOpen(true)}
-            >
-              <MapPinIcon />
-              Stock at a location
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12 md:min-h-10"
-              disabled={busy}
-              onClick={() => void parkInUnknown()}
-            >
-              <QuestionIcon />
-              Park in Unknown
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="min-h-12 md:min-h-10"
-              disabled={busy}
-              onClick={() => setDiscardOpen(true)}
-            >
-              <TrashIcon />
-              Discard
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-12 md:min-h-10"
-              disabled={busy}
-              onClick={onSkip}
-            >
-              <SkipForwardIcon />
-              Skip for now
-            </Button>
-          </Row>
-          <Description size="xs">
-            Parked items show up under Items parked in Unknown, ready to move
-            once you find where they live.
-          </Description>
-        </Stack>
-      </CardContent>
+        <Row gap="sm" wrap>
+          <Button
+            type="button"
+            className="min-h-12 md:min-h-10"
+            disabled={busy}
+            onClick={() => setStockOpen(true)}
+          >
+            <MapPinIcon />
+            Stock at a location
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12 md:min-h-10"
+            disabled={busy}
+            onClick={() => void parkInUnknown()}
+          >
+            <QuestionIcon />
+            Park in Unknown
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="min-h-12 md:min-h-10"
+            disabled={busy}
+            onClick={() => setDiscardOpen(true)}
+          >
+            <TrashIcon />
+            Discard
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-12 md:min-h-10"
+            disabled={busy}
+            onClick={onSkip}
+          >
+            <SkipForwardIcon />
+            Skip for now
+          </Button>
+        </Row>
+        <Description size="xs">
+          Parked items show up under Items parked in Unknown, ready to move once
+          you find where they live.
+        </Description>
+      </Stack>
 
       <ProductBulkAddToInventoryDialog
         key={`stock:${product.id}`}
@@ -194,6 +191,6 @@ export function TriageStopCard({
         defaultQuantity={expected > 0 ? expected : undefined}
         onComplete={onSettled}
       />
-    </Card>
+    </Panel>
   );
 }

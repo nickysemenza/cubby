@@ -1,3 +1,4 @@
+import "../../ui/data-table/table.css";
 import type { Entity } from "@cubby/schemas/entity";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
@@ -17,8 +18,8 @@ import {
 } from "~/entity/suggestions/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
+import { CurrencyValue } from "~/ui/common/currency-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -26,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
 } from "~/ui/primitives/dropdown-menu";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   Table,
   TableBody,
@@ -36,6 +38,7 @@ import {
 } from "~/ui/primitives/table";
 
 import type { BulkActionPreview } from "../../ui/data-table/bulk-actions.types";
+import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";
 import { CellSelectionContext } from "../../ui/data-table/cell-selection-context";
 import {
   columnOffsetValue,
@@ -278,7 +281,7 @@ function TableStatus<TItem extends RowData>({
   hydrated: boolean;
   rows: readonly Row<TItem>[];
 }): ReactNode {
-  if (isLoading || !hydrated) return <SimpleLoading />;
+  if (isLoading || !hydrated) return null;
   if (error) {
     return <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />;
   }
@@ -450,8 +453,8 @@ function PresentationToggleMenuItem({
 
 /**
  * Keeps footer geometry in the same coordinate system as the pinned headers.
- * Server totals can render before every infinite row is loaded, so this is
- * deliberately driven by footer definitions, not the loaded-row count.
+ * A loaded currency projection admits the footer. Existing server aggregates
+ * retain their full-set totals; other money columns sum the loaded rows.
  */
 function PinnedTableFooter<TItem extends RowData>({
   table,
@@ -460,7 +463,14 @@ function PinnedTableFooter<TItem extends RowData>({
   table: ITable<TItem>;
   hasRows: boolean;
 }) {
-  if (!hasRows) return null;
+  if (
+    !hasRows ||
+    tableMoneyTotals(
+      table.getVisibleLeafColumns(),
+      table.getFilteredRowModel().rows,
+    ).length === 0
+  )
+    return null;
   const startGroups = table.getStartFooterGroups();
   const centerGroups = table.getCenterFooterGroups();
   const endGroups = table.getEndFooterGroups();
@@ -481,16 +491,8 @@ function PinnedTableFooter<TItem extends RowData>({
       trailing: endGroups[index]?.headers ?? [],
     }),
   );
-  if (
-    !footerGroups.some((group) =>
-      [...group.leading, ...group.trailing].some(
-        (header) => header.column.columnDef.footer,
-      ),
-    )
-  )
-    return null;
   return (
-    <TableFooter className="border-t bg-card text-sm font-medium">
+    <TableFooter className="border-t border-hairline-strong bg-card text-sm font-semibold">
       {footerGroups.map((group) => (
         <TableRow key={group.id} className="hover:bg-muted/50">
           {group.leading.map((header) => (
@@ -550,21 +552,46 @@ function PinnedFooterCell<TItem extends RowData>({
             ),
           }
         : {};
+  const loaded = table.getFilteredRowModel().rows;
+  const money = tableMoneyTotals([header.column], loaded)[0];
+  const serverTotal =
+    table.options.meta?.serverTotals?.sums?.[header.column.id];
+  const total = serverTotal ?? money?.value;
+  const identity =
+    header.column.columnDef.meta?.entityColumnRole === "identity";
+  const fullTotal = tableMoneyTotals(
+    table.getVisibleLeafColumns(),
+    loaded,
+  ).some(
+    (column) =>
+      table.options.meta?.serverTotals?.sums?.[column.columnId] !== undefined,
+  );
+  const count = fullTotal
+    ? (table.options.meta?.serverTotals?.totalCount ?? loaded.length)
+    : loaded.length;
+  const footer =
+    money && total !== undefined ? (
+      <CurrencyValue value={total} interactive={false} />
+    ) : identity ? (
+      <span className="font-normal text-muted-foreground">
+        {count} {fullTotal ? "rows" : "loaded rows"}
+      </span>
+    ) : (
+      flexRender(header.column.columnDef.footer, header.getContext())
+    );
   return (
     <TableCell
       data-column-id={header.column.id}
       colSpan={header.colSpan}
       className={cn(
-        "px-2 py-1",
+        "h-8 border-t border-hairline-strong px-1 py-0",
         header.column.columnDef.meta?.className,
         pinned && "sticky z-20 bg-card",
         boundaryClass,
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
     >
-      {header.isPlaceholder
-        ? null
-        : flexRender(header.column.columnDef.footer, header.getContext())}
+      {header.isPlaceholder ? null : footer}
     </TableCell>
   );
 }
@@ -760,6 +787,7 @@ export default function RTable<TItem extends RowData>(
 
 function DesktopTableView<TItem extends RowData>({
   table,
+  isLoading,
   controller,
   entity,
   embedded = false,
@@ -779,6 +807,7 @@ function DesktopTableView<TItem extends RowData>({
 }: Pick<
   RTableProps<TItem>,
   | "table"
+  | "isLoading"
   | "entity"
   | "embedded"
   | "desktopInspector"
@@ -855,12 +884,12 @@ function DesktopTableView<TItem extends RowData>({
           >
             <Table
               aria-label={ariaLabel}
-              aria-busy={isTransitioning}
+              aria-busy={isTransitioning || isLoading}
               className={styles.table}
               containerClassName="overflow-visible"
               style={columnSizeVars}
             >
-              <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
+              <TableHeader className="sticky top-0 z-30 border-b border-border bg-card [&_th]:bg-card [&_tr]:border-b-0">
                 <TableHeaderLayout
                   table={table}
                   collapsedColumns={collapsedColumns}
@@ -1109,7 +1138,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     />
   );
   const hasStatusContent =
-    isLoading || !hydrated || Boolean(error) || rows.length === 0;
+    !isLoading && hydrated && (Boolean(error) || rows.length === 0);
   const entityMediaRefs = collectTableEntityMediaRefs(
     table.getVisibleLeafColumns(),
     rows,
@@ -1137,7 +1166,38 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   const [rowActivity] = useState(createRowActivityStore);
   const renderTableBody = () => {
     // Keep loaded rows usable after a failed refresh; status lives below the table.
-    if (!hydrated || (isLoading && rows.length === 0)) return null;
+    if (!hydrated || (isLoading && rows.length === 0))
+      return (
+        <>
+          {Array.from({ length: 10 }, (_, index) => (
+            <TableRow
+              key={`skeleton-${index}`}
+              aria-hidden
+              className="h-8 hover:bg-transparent"
+            >
+              {table.getVisibleLeafColumns().map((column) => (
+                <TableCell
+                  key={column.id}
+                  className="h-8 border-b border-hairline-soft px-1 py-0"
+                  style={{
+                    width: columnWidthValue(column.id),
+                    maxWidth: columnWidthValue(column.id),
+                  }}
+                >
+                  <Skeleton
+                    className={
+                      column.columnDef.meta?.entityColumnRole === "selection"
+                        ? "size-3.5"
+                        : "h-3 w-2/3 max-w-32"
+                    }
+                  />
+                </TableCell>
+              ))}
+              <TableCell data-spacer />
+            </TableRow>
+          ))}
+        </>
+      );
 
     // A pinned section header scrolled out of range renders ahead of the top
     // spacer, which gives up the header's height so the layout keeps its size.
@@ -1333,6 +1393,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           <Stack>
             <DesktopTableView
               table={table}
+              isLoading={isLoading || !hydrated}
               controller={controller}
               entity={entity}
               embedded={embedded}

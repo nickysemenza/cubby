@@ -106,12 +106,12 @@ describe("AgentContextPerCall", () => {
     render(<AgentContextPerCall messages={messages} />);
 
     const region = screen.getByRole("region", { name: "Context per call" });
-    const disclosure = within(region)
-      .getByText("Context per call")
-      .closest("details");
-    expect(disclosure?.open).toBe(false);
-    fireEvent.click(within(region).getByText("Context per call"));
-    expect(disclosure?.open).toBe(true);
+    const trigger = within(region).getByRole("button", {
+      name: "Context per call",
+    });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(
       within(region).getByText(
         "Top contributors across the run: get_photo_run_context results 47% · MCP tool schemas 27% · Instructions 7% · Conversation 7%",
@@ -145,6 +145,9 @@ describe("AgentContextPerCall", () => {
       "get_photo_run_context results 1,100",
     );
 
+    fireEvent.click(
+      within(region).getByRole("button", { name: "Show as table" }),
+    );
     const table = within(region).getByRole("table", {
       name: "Context per call table",
     });
@@ -231,6 +234,7 @@ describe("AgentTokenAccounting", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Token accounting" }));
     expect(
       screen.getByText(
         "Usage records may trail pi's ledger until the Run settles.",

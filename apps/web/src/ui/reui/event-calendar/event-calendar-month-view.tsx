@@ -175,7 +175,7 @@ function EventCalendarMonthView({
               role="columnheader"
               className={cn(
                 "truncate px-2 py-1.5 font-medium text-muted-foreground",
-                "font-mono uppercase tracking-wider",
+                "font-medium text-xs",
               )}
             >
               <>

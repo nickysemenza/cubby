@@ -27,7 +27,7 @@ function SearchResultEntityLink({ item }: { item: SearchHit }) {
 function ResultTable({ title, items }: { title: string; items: SearchHit[] }) {
   return (
     <section className="border border-border bg-card p-4">
-      <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+      <h2 className="mb-2 text-xs font-semibold text-muted-foreground">
         {title}
       </h2>
       <Table className="table-auto">
@@ -124,7 +124,7 @@ export function SearchDebugPage() {
       <section className="border border-border bg-card p-4">
         <Row align="center" justify="between" gap="sm" wrap>
           <Stack gap="xs">
-            <h2 className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <h2 className="text-xs font-semibold text-muted-foreground">
               AI usage
             </h2>
           </Stack>

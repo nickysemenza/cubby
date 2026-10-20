@@ -1,16 +1,17 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 
+import { createActionFor } from "~/entity/actions/action-items";
 import { Page } from "~/entity/page/page";
 import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
+import { HomeKeyNumbers } from "~/features/home/home-key-numbers";
+import { HomeMoney } from "~/features/home/home-money";
+import { HomePantry } from "~/features/home/home-pantry";
 import { TodayAttention } from "~/features/home/house-card";
 import { TodayMeals } from "~/features/home/meals-card";
-import { PantryValueCard } from "~/features/home/pantry-value-card";
+import { NeedsYou } from "~/features/home/needs-you";
 import { PinnedViews } from "~/features/home/pinned-views";
-import { ProblemsBanner } from "~/features/home/problems-banner";
-import { DailyPasses } from "~/features/home/quick-actions-card";
 import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
-import { RecordedSpendCard } from "~/features/home/recorded-spend-card";
 import { TodayNutrition } from "~/features/meal/daily-nutrition";
 import { installFeatures } from "~/features/registry";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
@@ -21,9 +22,10 @@ import {
   entityReport,
   problems,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { authClient } from "~/lib/auth-client";
-import { formatInstant } from "~/lib/date-format";
-import { Grid, Section } from "~/ui/layout";
+import { formatCalendarDay } from "~/lib/date-format";
+import { Section } from "~/ui/layout";
+import { PageHeader } from "~/ui/layout/page-header";
+import { Button } from "~/ui/primitives/button";
 
 const HomeInsights = lazy(async () => {
   const module = await import("~/features/home/home-insights");
@@ -31,6 +33,9 @@ const HomeInsights = lazy(async () => {
 });
 
 const EntityCount = lazy(() => import("~/features/home/entitycount"));
+
+const LOG_MEAL = createActionFor("meal");
+const NEW_TASK = createActionFor("task");
 
 export const Route = createFileRoute("/")({
   // The home dashboard is authenticated-only (the counts/feeds are all
@@ -73,143 +78,100 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-function timeOfDay(date: Date): string {
-  const hour = date.getHours();
-  if (hour < 12) return "morning";
-  if (hour < 18) return "afternoon";
-  return "evening";
-}
-
 function Home() {
   // Home sits outside `_authenticated`, which otherwise installs the feature
   // registry its pickers read; idempotent.
   installFeatures();
   const { asOf } = Route.useLoaderData();
-  const session = authClient.useSession();
-  // Clock-dependent text is set after mount so SSR (UTC) and the client's
-  // local timezone can't disagree during hydration.
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => setNow(new Date()), []);
-
-  const firstName = session.data?.user?.name?.split(" ")[0];
-  const greeting =
-    now && firstName
-      ? `Good ${timeOfDay(now)}, ${firstName}.`
-      : "Welcome home.";
+  // The loader's household-local day, so SSR and hydration print one title.
+  const today = asOf.meals.from;
 
   return (
-    <Page
-      variant="list"
-      title={greeting}
-      mobileTitleVisible
-      actions={
-        now ? (
-          <p className="font-mono text-2xs text-muted-foreground uppercase">
-            {formatInstant(now, "weekdayDatePadded")}
-          </p>
-        ) : null
-      }
-      layout="contained"
-    >
-      <div className="flex items-center gap-3 border-b border-border pb-2">
-        <span
-          className="size-2.5 shrink-0 rounded-full bg-signal ring-1 ring-foreground/10"
-          aria-hidden
-        />
-        <p className="text-sm text-muted-foreground">
-          Tasks, meals, and household records in one view.
-        </p>
-      </div>
+    <Page variant="bare" layout="contained">
+      <PageHeader
+        layout="stacked"
+        title={formatCalendarDay(today, "weekdayLongMonthDay")}
+        actions={
+          <>
+            {LOG_MEAL && (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link to={LOG_MEAL.to} search={LOG_MEAL.search} />}
+              >
+                Log meal
+              </Button>
+            )}
+            {NEW_TASK && (
+              <Button
+                nativeButton={false}
+                render={<Link to={NEW_TASK.to} search={NEW_TASK.search} />}
+              >
+                New task
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {/* Status bar — absent only when there is nothing outstanding at all.
-          It carries the destructive tone for real defects and a quiet one for
-          a coverage-only backlog, which is why it can render either way. */}
-      <ProblemsBanner />
-
-      {/* Declared saved views pinned to home (Wardrobe, My stuff, …). */}
-      <PinnedViews />
-
-      {/* The briefing reads tasks, meals, recurring actions, then nutrition on
-          a phone. Desktop keeps tasks and meals side by side. */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-        <div className="contents lg:grid lg:content-start lg:gap-4">
-          <div className="order-1 lg:order-none">
+      {/* Current work leads; the rail holds household context and, below
+          the wide breakpoint, follows the main column. */}
+      <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 pb-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <HomeKeyNumbers asOf={asOf} />
+          <div className="grid grid-cols-1 items-start gap-x-5 gap-y-4 md:grid-cols-2">
             <TodayAttention />
+            <NeedsYou />
           </div>
-          <div className="order-3 lg:order-none">
-            <DailyPasses />
-          </div>
+          <RecentActivityFeed limit={6} />
+          <Section
+            headingAs="h2"
+            title="Browse records"
+            caption="Everything the household has on record"
+            disclosure={{}}
+          >
+            <Suspense
+              fallback={
+                <output className="block min-h-24 text-sm text-muted-foreground">
+                  Loading record counts…
+                </output>
+              }
+            >
+              <EntityCount />
+            </Suspense>
+          </Section>
+          {/* Insights — exploration, not operation: the heaviest reads on the
+              most-visited route and the least likely to change what anyone
+              does next, so the region is collapsed by default. Section mounts
+              its body only while open, so a closed region runs no queries. */}
+          <Section
+            headingAs="h2"
+            title="Insights"
+            caption="Four exploratory views"
+            disclosure={{}}
+          >
+            <Suspense
+              fallback={
+                <output className="block min-h-24 text-sm text-muted-foreground">
+                  Loading insights…
+                </output>
+              }
+            >
+              <HomeInsights />
+            </Suspense>
+          </Section>
         </div>
-        <div className="contents lg:grid lg:content-start lg:gap-4">
-          <div className="order-2 lg:order-none">
-            <TodayMeals asOf={asOf} />
-          </div>
-          <div className="order-4 lg:order-none">
-            <TodayNutrition initialDate={asOf.meals.from} />
-          </div>
-        </div>
+        <aside
+          aria-label="Household context"
+          className="flex min-w-0 flex-col gap-4"
+        >
+          <TodayMeals asOf={asOf} />
+          <HomeMoney asOf={asOf} />
+          <TodayNutrition initialDate={asOf.meals.from} />
+          <HomePantry />
+          <PinnedViews />
+        </aside>
       </div>
-
-      {/* The household's two operating signals — state of what is on hand and
-          what has been spent. Mobile puts pantry first because it is the
-          physical, daily-use check. */}
-      <Section
-        title="Household signals"
-        description="The state of what is on hand and what has been spent."
-      >
-        <Grid cols="pair" gap="md">
-          <div className="lg:order-2">
-            <PantryValueCard />
-          </div>
-          <div className="lg:order-1">
-            <RecordedSpendCard asOf={asOf} />
-          </div>
-        </Grid>
-      </Section>
-
-      {/* Activity is useful context after the immediate operating picture, but
-          it does not compete with today's actions for the first decision. */}
-      <Section
-        title="What changed"
-        description="The latest recorded changes across the household."
-      >
-        <RecentActivityFeed limit={6} />
-      </Section>
-
-      <Section
-        title="Browse records"
-        meta={"Everything the household has on record"}
-        disclosure={{}}
-      >
-        <Suspense
-          fallback={
-            <output className="block min-h-24 text-sm text-muted-foreground">
-              Loading record counts…
-            </output>
-          }
-        >
-          <EntityCount />
-        </Suspense>
-      </Section>
-
-      {/* Insights — the visualization panels folded in from the retired
-          /insights page. Exploration, not operation: they are the heaviest
-          reads on the most-visited route and the least likely to change what
-          anyone does next, so the whole region is collapsed by default.
-          The disclosure IS the gate — Section mounts its body only
-          while open, so a closed region runs no queries at all, and the panels
-          need no per-panel scroll-gating of their own. */}
-      <Section title="Insights" meta={"Four exploratory views"} disclosure={{}}>
-        <Suspense
-          fallback={
-            <output className="block min-h-24 text-sm text-muted-foreground">
-              Loading insights…
-            </output>
-          }
-        >
-          <HomeInsights />
-        </Suspense>
-      </Section>
     </Page>
   );
 }

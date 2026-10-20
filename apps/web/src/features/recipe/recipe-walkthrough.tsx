@@ -10,6 +10,7 @@ import { useRef, useState } from "react";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 
 import { FlowSourceContent } from "./recipe-flow-renderers";
@@ -143,14 +144,15 @@ export function RecipeWalkthrough({
           >
             {stop.title}
           </h4>
-          <details key={stop.id} className="border-y py-2">
-            <summary className="min-h-11 cursor-pointer content-center text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
-              Why this step · AI explanation
-            </summary>
+          <Disclosure
+            key={stop.id}
+            summary="Why this step · AI explanation"
+            className="border-y py-2"
+          >
             <p className="pb-2 text-sm leading-relaxed text-muted-foreground">
               {stop.explanation}
             </p>
-          </details>
+          </Disclosure>
           {stop.operationIds.map((id) => {
             const operation = operations.get(id);
             if (!operation) return null;
@@ -240,11 +242,8 @@ export function RecipeWalkthrough({
         </Stack>
       </div>
 
-      <details className="border-t pt-2">
-        <summary className="min-h-11 cursor-pointer content-center text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
-          Full original method
-        </summary>
-        <Stack gap="md" className="max-w-prose py-4">
+      <Disclosure summary="Full original method" className="border-t pt-2">
+        <Stack gap="md" className="max-w-prose py-3">
           {recipe.sections.map((section) => (
             <Instructions
               key={section.id}
@@ -258,7 +257,7 @@ export function RecipeWalkthrough({
             />
           ))}
         </Stack>
-      </details>
+      </Disclosure>
     </Stack>
   );
 }

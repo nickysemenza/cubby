@@ -57,6 +57,6 @@ describe("RecentActivityFeed", () => {
     act(() => reveal?.());
 
     await waitFor(() => expect(requests).toBe(1));
-    expect(await screen.findByText("No activity yet")).toBeVisible();
+    expect(await screen.findByText(/^No activity yet\./)).toBeVisible();
   });
 });

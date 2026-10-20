@@ -95,7 +95,7 @@ test("combined records retain server sorting, pagination, and filters after relo
   await expect(alpha).toBeVisible();
   await page.keyboard.press("Escape");
   // Image is presence: Any | Has image | No image.
-  await openFilter("Image");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
   await page.getByRole("button", { name: "No image", exact: true }).click();
   await expect(alpha).toBeVisible();
   await page.getByRole("button", { name: "Has image", exact: true }).click();
@@ -112,7 +112,9 @@ test("combined records retain server sorting, pagination, and filters after relo
     .click();
   await expect(page).toHaveURL(/orderBy=quality/);
   await expect(qualityCell()).toHaveText("Not assessed");
-  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page.getByRole("button", { name: "Clear all", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("textbox", { name: "Name or shortcode" }),
   ).toHaveValue("");
@@ -353,7 +355,7 @@ test("purchase detail renders an attached HEIC instead of the empty image state"
     `Purchase HEIC ${Date.now()}`,
   );
   await page.goto(`/purchases/${fixture.purchase.id}`);
-  await expect(page.getByText("No images", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/^No images yet/)).toHaveCount(0);
   await expect(
     page.locator("#images").getByRole("img", { name: fixture.filename }),
   ).toHaveCount(1);
@@ -375,7 +377,9 @@ test("the Run list hides ephemeral runs by default and shows them once cleared",
   await expect(table).toContainText(fixture.visibleName);
   await expect(table).not.toContainText(fixture.hiddenName);
 
-  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page.getByRole("button", { name: "Clear all", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(table).toContainText(fixture.hiddenName);
   await expect(table).toContainText(fixture.visibleName);
 

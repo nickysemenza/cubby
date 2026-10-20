@@ -1,14 +1,6 @@
 import type { NutritionInfo } from "@cubby/usda";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
-import { useState } from "react";
 
-import { Row } from "~/ui/layout";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 import { NutritionInfoTable } from "../usda-food/nutrition";
 
@@ -25,33 +17,14 @@ export function FullNutrientBreakdown({
 }: {
   nutritionInfo: NutritionInfo;
 }) {
-  const [open, setOpen] = useState(false);
-
   if (nutritionInfo.nutrientSummary.length === 0) return null;
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger
-        render={
-          <Row
-            as="button"
-            type="button"
-            align="center"
-            gap="sm"
-            className="w-full rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
-          />
-        }
-      >
-        <CaretRightIcon
-          className={`size-4 transition-transform ${open ? "rotate-90" : ""}`}
-          aria-hidden
-        />
-        <TreeViewIcon className="size-4" aria-hidden />
-        <span>Full nutrient breakdown</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <NutritionInfoTable n={nutritionInfo} />
-      </CollapsibleContent>
-    </Collapsible>
+    <Disclosure
+      summary="Full nutrient breakdown"
+      meta={nutritionInfo.nutrientSummary.length}
+    >
+      <NutritionInfoTable n={nutritionInfo} />
+    </Disclosure>
   );
 }

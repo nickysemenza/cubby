@@ -5,8 +5,8 @@ import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 
+import { RecipePartHeading } from "./recipe-part-heading";
 import { formatRichText, parseRichTextSafe } from "./richtext";
-import { SectionHeading } from "./section-heading";
 
 interface RecipeInstructionsProps {
   recipe: RecipeOut;
@@ -46,11 +46,11 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
           key={section.id}
           className="animate-in duration-300 fade-in slide-in-from-bottom-2"
         >
-          <SectionHeading
+          <RecipePartHeading
             sectionName={section.name}
             index={sectionIndex}
             total={recipe.sections.length}
-            variant="title"
+            className="mb-2"
           />
 
           <Stack as="ol" gap="sm" className="my-0 ml-0 list-none md:space-y-4">

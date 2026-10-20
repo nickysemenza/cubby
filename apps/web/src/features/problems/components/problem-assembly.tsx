@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { describeRangeBounds, humanize } from "@cubby/shared";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
 
@@ -10,12 +9,8 @@ import { getEntityFilters } from "~/entity/filter-manifest";
 import { FILTER_ANY, FILTER_NONE } from "~/entity/filters";
 import type { ProblemQuery } from "~/entity/problems/problem-query";
 import { cn } from "~/lib/utils";
-import { Button, buttonVariants } from "~/ui/primitives/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { buttonVariants } from "~/ui/primitives/button";
 
 /**
  * A router-agnostic list continuation prepared by the Problem Query adapter.
@@ -153,94 +148,79 @@ export function ProblemAssembly({
   const derived = queries.some((query) => query.source.kind === "derived");
 
   return (
-    <Collapsible>
-      <CollapsibleTrigger
-        render={
-          <Button
-            size="xs"
-            variant="ghost"
-            className="-ml-1.5 text-muted-foreground"
-          />
-        }
-      >
-        How it works <CaretDownIcon className="ml-1 size-3" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="mt-1 space-y-2 border-l border-border pl-2 text-xs text-muted-foreground">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-2xs tracking-wider text-slate uppercase">
-              {isBranching ? "Any branch" : "Assembly"}
-            </span>
-            {queries.map((query, queryIndex) => (
-              <Fragment key={query.key}>
-                {queryIndex > 0 && (
-                  <span className="font-mono text-2xs">OR</span>
-                )}
-                {assemblyChips(query).map((chip, chipIndex) => (
-                  <Fragment key={`${query.key}-${chip}`}>
-                    {chipIndex > 0 && <span>AND</span>}
-                    <span className="border border-border bg-muted/40 px-1.5 py-0.5 text-foreground">
-                      {chip}
-                    </span>
-                  </Fragment>
-                ))}
-              </Fragment>
-            ))}
-          </div>
-          {queries.map((query) => (
-            <div key={query.key}>
-              {isBranching && (
-                <span className="font-medium text-foreground">
-                  {query.title}:{" "}
-                </span>
-              )}
-              {query.source.kind === "entity" ? (
-                <span>
-                  Matches {entityPluralLabel(query.source.entity).toLowerCase()}{" "}
-                  with the filters above
-                  {query.source.sort?.length
-                    ? `, sorted by ${query.source.sort.map((sort) => `${sort.desc ? "descending" : "ascending"} ${humanize(sort.id)}`).join(", ")}`
-                    : ""}
-                  .
-                </span>
-              ) : (
-                <span>
-                  {query.source.operations
-                    .map((operation) => operation.label)
-                    .join(" → ")}
-                  {query.source.grain
-                    ? `; one result per ${query.source.grain}.`
-                    : "."}
-                </span>
-              )}
-              <span> {freshnessDetail(query)}</span>
-              {isBranching &&
-                listLocations
-                  .filter((entry) => entry.query.key === query.key)
-                  .map((entry) => (
-                    <a
-                      key={entry.query.key}
-                      href={entry.location.href}
-                      className={cn(
-                        buttonVariants({ size: "xs", variant: "ghost" }),
-                        "ml-1",
-                      )}
-                    >
-                      <FunnelIcon className="mr-1 size-3" />
-                      Open {entry.count}{" "}
-                      {entityPluralLabel(entry.location.entity).toLowerCase()}
-                    </a>
-                  ))}
-            </div>
+    <Disclosure summary="How it works">
+      <div className="space-y-2 border-l border-border pl-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-slate">
+            {isBranching ? "Any branch" : "Assembly"}
+          </span>
+          {queries.map((query, queryIndex) => (
+            <Fragment key={query.key}>
+              {queryIndex > 0 && <span className="font-mono text-2xs">OR</span>}
+              {assemblyChips(query).map((chip, chipIndex) => (
+                <Fragment key={`${query.key}-${chip}`}>
+                  {chipIndex > 0 && <span>AND</span>}
+                  <span className="border border-border bg-muted/40 px-1.5 py-0.5 text-foreground">
+                    {chip}
+                  </span>
+                </Fragment>
+              ))}
+            </Fragment>
           ))}
-          {derived && (
-            <p>
-              These results are derived from complete candidate sets, so there
-              is no broader list link.
-            </p>
-          )}
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+        {queries.map((query) => (
+          <div key={query.key}>
+            {isBranching && (
+              <span className="font-medium text-foreground">
+                {query.title}:{" "}
+              </span>
+            )}
+            {query.source.kind === "entity" ? (
+              <span>
+                Matches {entityPluralLabel(query.source.entity).toLowerCase()}{" "}
+                with the filters above
+                {query.source.sort?.length
+                  ? `, sorted by ${query.source.sort.map((sort) => `${sort.desc ? "descending" : "ascending"} ${humanize(sort.id)}`).join(", ")}`
+                  : ""}
+                .
+              </span>
+            ) : (
+              <span>
+                {query.source.operations
+                  .map((operation) => operation.label)
+                  .join(" → ")}
+                {query.source.grain
+                  ? `; one result per ${query.source.grain}.`
+                  : "."}
+              </span>
+            )}
+            <span> {freshnessDetail(query)}</span>
+            {isBranching &&
+              listLocations
+                .filter((entry) => entry.query.key === query.key)
+                .map((entry) => (
+                  <a
+                    key={entry.query.key}
+                    href={entry.location.href}
+                    className={cn(
+                      buttonVariants({ size: "xs", variant: "ghost" }),
+                      "ml-1",
+                    )}
+                  >
+                    <FunnelIcon className="mr-1 size-3" />
+                    Open {entry.count}{" "}
+                    {entityPluralLabel(entry.location.entity).toLowerCase()}
+                  </a>
+                ))}
+          </div>
+        ))}
+        {derived && (
+          <p>
+            These results are derived from complete candidate sets, so there is
+            no broader list link.
+          </p>
+        )}
+      </div>
+    </Disclosure>
   );
 }

@@ -420,7 +420,7 @@ export const RecipeCompareGrid: React.FC<{
           <tr className="border-t bg-muted/30">
             <td
               colSpan={compared.length + 2}
-              className={`${STICKY} px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase`}
+              className={`${STICKY} px-2 py-2 text-xs font-medium text-muted-foreground`}
             >
               Recipe details
             </td>

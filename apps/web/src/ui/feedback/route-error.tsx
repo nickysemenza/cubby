@@ -1,6 +1,5 @@
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { SignInIcon } from "@phosphor-icons/react/dist/csr/SignIn";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { WifiSlashIcon } from "@phosphor-icons/react/dist/csr/WifiSlash";
@@ -22,12 +21,8 @@ import {
 } from "~/lib/error-utils";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
 
 type ErrorCategory =
   | "auth"
@@ -106,7 +101,6 @@ const getIcon = (category: ErrorCategory) => {
  */
 export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [sentryEventId, setSentryEventId] = useState<string>();
 
   const { code, reason, message, diagnostics } = getAppErrorDetails(error);
@@ -192,74 +186,55 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
 
       <ErrorDetails error={error} />
       {!diagnostics && (
-        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <CollapsibleTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-muted-foreground"
-              />
-            }
+        <Disclosure summary="Technical details">
+          <Stack
+            gap="sm"
+            className="w-[min(60rem,calc(100vw-2rem))] border border-[var(--border)] bg-muted/50 p-4 text-left font-mono text-sm leading-6 break-words"
           >
-            Technical details
-            <CaretDownIcon
-              className={`ml-1 size-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <Stack
-              gap="sm"
-              className="mt-2 w-[min(60rem,calc(100vw-2rem))] border border-[var(--border)] bg-muted/50 p-4 text-left font-mono text-sm leading-6 break-words"
-            >
-              {code && (
-                <div>
-                  <span className="text-muted-foreground">Code: </span>
-                  <span className="text-foreground">{code}</span>
-                </div>
-              )}
-              {reason && (
-                <div>
-                  <span className="text-muted-foreground">Reason: </span>
-                  <span className="text-foreground">{reason}</span>
-                </div>
-              )}
+            {code && (
               <div>
-                <span className="text-muted-foreground">Message: </span>
-                <span className="text-foreground">{message || rawMessage}</span>
+                <span className="text-muted-foreground">Code: </span>
+                <span className="text-foreground">{code}</span>
               </div>
-              {requestId && (
-                <div>
-                  <span className="text-muted-foreground">Request ID: </span>
-                  <span className="text-foreground">{requestId}</span>
-                </div>
-              )}
-              {sentryEventId && (
-                <div>
-                  <span className="text-muted-foreground">Sentry: </span>
-                  <a
-                    href={sentryEventUrl(sentryEventId)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-cobalt hover:text-cobalt-hover underline underline-offset-2"
-                  >
-                    View event {sentryEventId}
-                  </a>
-                </div>
-              )}
-              {stack && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                    Stack trace
-                  </summary>
-                  <pre className="mt-1 max-h-96 overflow-auto text-xs whitespace-pre-wrap text-muted-foreground">
-                    {stack}
-                  </pre>
-                </details>
-              )}
-            </Stack>
-          </CollapsibleContent>
-        </Collapsible>
+            )}
+            {reason && (
+              <div>
+                <span className="text-muted-foreground">Reason: </span>
+                <span className="text-foreground">{reason}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">Message: </span>
+              <span className="text-foreground">{message || rawMessage}</span>
+            </div>
+            {requestId && (
+              <div>
+                <span className="text-muted-foreground">Request ID: </span>
+                <span className="text-foreground">{requestId}</span>
+              </div>
+            )}
+            {sentryEventId && (
+              <div>
+                <span className="text-muted-foreground">Sentry: </span>
+                <a
+                  href={sentryEventUrl(sentryEventId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-cobalt hover:text-cobalt-hover underline underline-offset-2"
+                >
+                  View event {sentryEventId}
+                </a>
+              </div>
+            )}
+            {stack && (
+              <Disclosure summary="Stack trace" className="mt-2">
+                <pre className="max-h-96 overflow-auto text-xs whitespace-pre-wrap text-muted-foreground">
+                  {stack}
+                </pre>
+              </Disclosure>
+            )}
+          </Stack>
+        </Disclosure>
       )}
     </div>
   );

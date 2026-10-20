@@ -241,7 +241,7 @@ export const publicNavItems: NavItem[] = [
  * {@link desktopNav} — the single source of truth for the IA. Matches the
  * entity's `routes.list` against each group's children so the group label
  * can never drift from the real nav (see the hand-kept map this replaced,
- * `ENTITY_NAV_GROUP` in page-hero.tsx, which fell out of sync with the Data/
+ * `ENTITY_NAV_GROUP` in the page header, which fell out of sync with the Data/
  * Cook reorg noted above).
  *
  * Every entity's list route appears exactly once across {@link desktopNav}

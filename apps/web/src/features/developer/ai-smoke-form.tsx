@@ -12,6 +12,7 @@ import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Textarea } from "~/ui/primitives/textarea";
@@ -420,7 +421,10 @@ function FieldSuggestionFields({
       />
       <fieldset className="grid gap-1">
         <legend className="text-sm font-medium">Targets</legend>
-        <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md border border-border p-2 sm:grid-cols-2">
+        <Panel
+          tone="default"
+          className="grid max-h-40 gap-1 overflow-y-auto p-2 sm:grid-cols-2"
+        >
           {targets.map((field) => (
             <label key={field.key} className="flex items-center gap-2 text-sm">
               <input
@@ -438,7 +442,7 @@ function FieldSuggestionFields({
               {field.key}
             </label>
           ))}
-        </div>
+        </Panel>
       </fieldset>
       {basisKeys.map((key) => {
         const field = fields.find((candidate) => candidate.key === key);

@@ -3,6 +3,7 @@ import type { MerchantVendorInference } from "@cubby/schemas/financial-transacti
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 const supportCopy = (count: number) =>
   `${count} previously settled ${count === 1 ? "transaction" : "transactions"}`;
@@ -74,11 +75,12 @@ export function PossibleVendor({
   }
 
   return (
-    <details className="group min-w-0 text-xs">
-      <summary className="cursor-pointer text-muted-foreground marker:text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35 focus-visible:outline-none">
-        {inference.candidates.length} possible vendors
-      </summary>
-      <Stack as="ul" gap="tight" className="mt-2">
+    <Disclosure
+      summary="Possible vendors"
+      meta={inference.candidates.length}
+      className="text-xs"
+    >
+      <Stack as="ul" gap="tight">
         {inference.candidates.map((candidate) => (
           <Row as="li" key={candidate.vendorId} justify="between" gap="sm">
             <EntityRefLink
@@ -95,6 +97,6 @@ export function PossibleVendor({
           </Row>
         ))}
       </Stack>
-    </details>
+    </Disclosure>
   );
 }

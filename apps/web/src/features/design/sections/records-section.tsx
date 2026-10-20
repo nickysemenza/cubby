@@ -2,7 +2,7 @@ import { type ReportBlock } from "@cubby/schemas/entity-report";
 import { useState } from "react";
 
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
-import { FactList, type Fact } from "~/ui/common/fact-list";
+import type { Fact } from "~/ui/common/facts";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import {
   RecordDetail,
@@ -42,8 +42,8 @@ const FACTS = [
 
 const KIND_COLORS = {
   created: "var(--positive)",
-  edited: "var(--domain-plan)",
-  moved: "var(--domain-house)",
+  edited: "var(--foreground)",
+  moved: "var(--foreground)",
 } as const;
 
 function RecordPrimitivesDemo() {
@@ -185,26 +185,6 @@ export function RecordsSection() {
           note="Rows' labelled facts align under one header; below 40rem the header hides and labels sit inline."
         >
           <ColumnsDemo />
-        </Demo>
-        <Demo
-          name="<FactList>"
-          note="Inline labelled values: bold label for row facts, emphasis=value for headline figures."
-        >
-          <Stack gap="sm">
-            <FactList
-              facts={[
-                { label: "Manufacturer", value: "Example Footwear" },
-                { label: "Unvalued", value: "1 unit", tone: "warning" },
-              ]}
-            />
-            <FactList
-              emphasis="value"
-              facts={[
-                { label: "Total", value: "$128.40" },
-                { label: "Items", value: "12" },
-              ]}
-            />
-          </Stack>
         </Demo>
         <Demo
           name={'<RecordList variant="timeline">'}

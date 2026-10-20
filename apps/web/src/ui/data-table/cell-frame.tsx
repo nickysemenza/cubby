@@ -98,7 +98,7 @@ export function CellFrame({
               className={cn(
                 "flex shrink-0 items-center",
                 floating &&
-                  "absolute inset-y-0 end-0 my-auto h-fit rounded-sm bg-(--table-row-surface) shadow-[-6px_0_6px_var(--table-row-surface)] [td.text-right_&]:start-0 [td.text-right_&]:end-auto [td.text-right_&]:shadow-[6px_0_6px_var(--table-row-surface)]",
+                  "absolute inset-y-0 end-0 my-auto h-fit rounded-sm bg-(--table-row-surface) [td.text-right_&]:start-0 [td.text-right_&]:end-auto",
                 floating &&
                   "data-rail-covers:pointer-events-none data-rail-covers:opacity-0 data-rail-covers:focus-within:pointer-events-auto data-rail-covers:focus-within:opacity-100",
               )}
@@ -141,7 +141,7 @@ export const CELL_RAIL_BUTTON_CLASS =
  * own line.
  */
 export const CELL_EDIT_GROUP_CLASS =
-  "group/cell-edit relative flex w-full min-w-0 items-center in-data-[slot=basic-info-value]:w-auto in-data-[slot=basic-info-value]:gap-1";
+  "group/cell-edit relative flex w-full min-w-0 items-center in-data-[slot=fact-value]:w-auto in-data-[slot=fact-value]:gap-1";
 
 export const CELL_EDIT_PENCIL_CLASS =
-  "absolute inset-y-0 right-0 my-auto size-5 shrink-0 justify-center rounded-sm bg-muted p-0 opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover/cell-edit:opacity-100 focus-visible:opacity-100 pointer-coarse:static pointer-coarse:opacity-100 pointer-coarse:shadow-none in-data-[slot=basic-info-value]:static in-data-[slot=basic-info-value]:ms-0 in-data-[slot=basic-info-value]:bg-transparent in-data-[slot=basic-info-value]:shadow-none in-data-[slot=basic-info-value]:hover:bg-muted in-[.ledger-row:hover]:opacity-100";
+  "absolute inset-y-0 right-0 my-auto size-5 shrink-0 justify-center rounded-sm bg-muted p-0 opacity-0 transition-opacity group-hover/cell-edit:opacity-100 focus-visible:opacity-100 pointer-coarse:static pointer-coarse:opacity-100 pointer-coarse:shadow-none in-data-[slot=fact-value]:static in-data-[slot=fact-value]:ms-0 in-data-[slot=fact-value]:bg-transparent in-data-[slot=fact-value]:shadow-none in-data-[slot=fact-value]:hover:bg-muted in-[.ledger-row:hover]:opacity-100";

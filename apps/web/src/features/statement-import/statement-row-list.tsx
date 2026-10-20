@@ -27,11 +27,11 @@ import { formatCount, formatCurrency } from "~/lib/number-format";
 import { statusTone } from "~/lib/status-tone";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { badgeVariantColor } from "~/ui/primitives/badge";
-import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
 import { Input } from "~/ui/primitives/input";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
@@ -186,7 +186,15 @@ function StatementRowSummary({
   // A settled query with no data means it errored — `isLoading` alone would
   // leave this stuck on the skeleton forever instead of surfacing the error.
   if (error) return <ErrorDisplay error={error} />;
-  if (isLoading || !data) return <DrilldownMetricStrip loadingCount={5} />;
+  if (isLoading || !data)
+    return (
+      <KeyNumbers
+        layout="strip"
+        label="Statement rows"
+        items={[]}
+        loadingCount={5}
+      />
+    );
 
   const selectable = (
     label: string,
@@ -200,8 +208,10 @@ function StatementRowSummary({
   });
 
   return (
-    <DrilldownMetricStrip
-      metrics={[
+    <KeyNumbers
+      layout="strip"
+      label="Statement rows"
+      items={[
         selectable("Total", data.total, "all"),
         selectable("Matched", data.matched, "matched"),
         selectable(
@@ -214,6 +224,7 @@ function StatementRowSummary({
         {
           label: "Unmatched $",
           value: formatCurrency(data.unmatchedAmount),
+          money: true,
         },
       ]}
     />

@@ -11,14 +11,9 @@ import { type GenericDetailEntity } from "~/entity/entity-detail/detail-record";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
 import { readRecordField } from "~/entity/entity-references";
 import { Page } from "~/entity/page/page";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { useDetailTitle } from "~/ui/hooks/use-document-title";
 import { Button } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 
 /**
  * The `$shortcode` page bodies every entity detail route shares, as factories.
@@ -151,20 +146,24 @@ export function notFoundPage(entity: BrowserRoutedEntity) {
   const description = `This ${label.toLocaleLowerCase()} is no longer available.`;
   return function EntityNotFound() {
     return (
-      <Page variant="list" title={title} entity={entity} compact>
-        <Empty>
-          <EmptyTitle>{title}</EmptyTitle>
-          <EmptyDescription>{description}</EmptyDescription>
-          <EmptyActions>
-            <Button
-              variant="outline"
-              render={<Link to={entities[entity].routes.list} />}
-              nativeButton={false}
-            >
-              Browse {entities[entity].pluralLabel.toLocaleLowerCase()}
-            </Button>
-          </EmptyActions>
-        </Empty>
+      <Page variant="list" title={title} entity={entity}>
+        <EmptyState
+          size="page"
+          description={description}
+          action={
+            <>
+              <Button
+                variant="outline"
+                render={<Link to={entities[entity].routes.list} />}
+                nativeButton={false}
+              >
+                Browse {entities[entity].pluralLabel.toLocaleLowerCase()}
+              </Button>
+            </>
+          }
+        >
+          {title}
+        </EmptyState>
       </Page>
     );
   };

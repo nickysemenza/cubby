@@ -75,7 +75,7 @@ test("product location context preserves links and explains the same partial gap
   await ownerControl.click();
   const ownerPanel = await inlineExplanation(page, ownerControl);
   await ownerPanel
-    .locator("summary")
+    .getByRole("button")
     .filter({ hasText: `${name} shelf` })
     .click();
   await ownerPanel

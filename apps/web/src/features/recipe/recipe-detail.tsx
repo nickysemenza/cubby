@@ -1,10 +1,8 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
-import { BowlFoodIcon } from "@phosphor-icons/react/dist/csr/BowlFood";
 import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
 import { CoffeeIcon } from "@phosphor-icons/react/dist/csr/Coffee";
 import { GitBranchIcon } from "@phosphor-icons/react/dist/csr/GitBranch";
-import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
@@ -30,8 +28,8 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useWakeLock } from "~/ui/hooks/use-wake-lock";
-import { Row, Stack } from "~/ui/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Panel, Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 import EntityImageList from "../../entity/components/entity-image-list";
 import { useRecipeCostingData } from "../../entity/hooks/use-recipe-costing-data";
@@ -241,11 +239,8 @@ function RecipeSummary({
 }) {
   if (!totals) return null;
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle>Recipe summary</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-start gap-6">
+    <Section headingAs="h2" title="Recipe summary">
+      <div className="flex flex-wrap items-start gap-6">
         <div className="grid gap-1 text-sm">
           <span>Cost: {formatEstimate(totals.estimates.cost, "cost")}</span>
           <span>Weight: {Math.round(totals.weight)} g</span>
@@ -260,8 +255,8 @@ function RecipeSummary({
             servingLabel={nutritionBasisLabel}
           />
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
 
@@ -286,30 +281,20 @@ function RecipeDataCharts({
   if (ingredients.length === 0) return null;
   const chart = (
     <div className="grid gap-6 lg:grid-cols-2">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Cost Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RecipeCostTreemap
-            ingredients={ingredients}
-            totalCost={totals?.price ?? 0}
-          />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Nutrition Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <NutritionBars
-            ingredients={ingredients}
-            nutrition={nutrition}
-            basisLabel={nutritionBasisLabel}
-            factor={nutritionFactor}
-          />
-        </CardContent>
-      </Card>
+      <Section headingAs="h2" title="Cost breakdown">
+        <RecipeCostTreemap
+          ingredients={ingredients}
+          totalCost={totals?.price ?? 0}
+        />
+      </Section>
+      <Section headingAs="h2" title="Nutrition breakdown">
+        <NutritionBars
+          ingredients={ingredients}
+          nutrition={nutrition}
+          basisLabel={nutritionBasisLabel}
+          factor={nutritionFactor}
+        />
+      </Section>
     </div>
   );
   return <Suspense fallback={<LoadingRecipeView />}>{chart}</Suspense>;
@@ -591,18 +576,16 @@ function RecipeWorkflowSupplemental({
     <>
       <RecipeReaderImages viewMode={viewMode} images={recipeImages} />
       {nutritionEstimates ? (
-        <details className="group border border-border bg-muted/30 px-4 py-2 print:hidden">
-          <summary className="cursor-pointer eyebrow marker:content-none">
-            <BowlFoodIcon className="mr-2 inline size-3 align-[-2px]" />
-            Nutrition
-          </summary>
-          <div className="mt-4">
-            <NutritionLabel
-              estimates={nutritionEstimates}
-              servingLabel={nutritionServingLabel}
-            />
-          </div>
-        </details>
+        <Panel tone="muted" className="print:hidden">
+          <Disclosure summary="Nutrition">
+            <div className="pt-2">
+              <NutritionLabel
+                estimates={nutritionEstimates}
+                servingLabel={nutritionServingLabel}
+              />
+            </div>
+          </Disclosure>
+        </Panel>
       ) : null}
       {isDebugEnabled ? <RecipeCostingDebugCard recipeId={recipeId} /> : null}
     </>
@@ -618,14 +601,9 @@ function RecipeReaderImages({
 }) {
   if (viewMode !== "read" || images.length <= 1) return null;
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle icon={ImageIcon}>More Images</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <EntityImageList images={images.slice(1)} />
-      </CardContent>
-    </Card>
+    <Section headingAs="h2" title="More images">
+      <EntityImageList images={images.slice(1)} />
+    </Section>
   );
 }
 

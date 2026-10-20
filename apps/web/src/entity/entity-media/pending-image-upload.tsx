@@ -670,7 +670,7 @@ export function PendingImageUpload({
                   <XIcon className="size-4" />
                 </Button>
                 {onExistingImagesReorder && index === 0 && (
-                  <span className="absolute bottom-1 left-1 z-20 rounded-sm bg-background/80 px-1 font-mono text-2xs text-foreground uppercase">
+                  <span className="absolute bottom-1 left-1 z-20 rounded-sm bg-background/80 px-1 text-xs font-medium text-foreground">
                     Cover
                   </span>
                 )}

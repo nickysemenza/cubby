@@ -37,6 +37,7 @@ import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import {
   RecordDot,
   RecordHeading,
@@ -46,11 +47,10 @@ import {
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { EnumPill } from "~/ui/primitives/enum-pill";
-import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 import {
   Tooltip,
   TooltipContent,
@@ -287,7 +287,7 @@ function ControlsBand({
         }}
       />
       {cohort && (
-        <span className="ml-auto shrink-0 font-mono text-2xs tracking-wider text-slate uppercase tabular-nums">
+        <span className="ml-auto shrink-0 font-mono text-2xs text-slate tabular-nums">
           {cohort}
         </span>
       )}
@@ -509,7 +509,7 @@ function LifecyclesView({
     );
   return (
     <Stack gap="sm">
-      <div className="overflow-x-auto rounded-[8px] border border-border">
+      <Panel tone="default" flush className="overflow-x-auto">
         <div className="min-w-[48rem]">
           <div className="grid grid-cols-[14rem_1fr] border-b border-border bg-muted/40">
             <div className="sticky left-0 z-10 border-r border-border bg-muted p-2 font-mono text-xs">
@@ -603,7 +603,7 @@ function LifecyclesView({
             </div>
           ))}
         </div>
-      </div>
+      </Panel>
       <Row wrap gap="md" className="text-xs">
         {kinds.map((kind) => (
           <EnumPill key={kind} color={kindColor(kind)}>
@@ -693,7 +693,7 @@ function TimelinePager({
       align="center"
       justify="end"
       gap="xs"
-      className="font-mono text-2xs text-muted-foreground uppercase tabular-nums"
+      className="font-mono text-2xs text-muted-foreground tabular-nums"
     >
       <span className="mr-2">
         Page {meta.pageIndex + 1} of {pageCount} ({meta.totalCount} records)
@@ -832,13 +832,15 @@ export function EntityTimeline<E extends TimelineEntity>({
         {data && (
           <>
             {data.stats.length > 0 && (
-              <StatGrid>
-                {data.stats.map((stat) => (
-                  <StatTile key={stat.key} label={stat.label}>
-                    {stat.value}
-                  </StatTile>
-                ))}
-              </StatGrid>
+              <KeyNumbers
+                layout="strip"
+                label="Timeline figures"
+                items={data.stats.map((stat) => ({
+                  id: stat.key,
+                  label: stat.label,
+                  value: stat.value,
+                }))}
+              />
             )}
             {data.notes.length > 0 && (
               <Description>

@@ -123,7 +123,7 @@ export function AgentTranscript({
           type="button"
           size="sm"
           variant="outline"
-          className="absolute right-3 bottom-3 shadow-sm"
+          className="absolute right-3 bottom-3"
           onClick={() => {
             const pane = paneRef.current;
             if (pane) pane.scrollTop = pane.scrollHeight;
@@ -444,7 +444,7 @@ function TurnMetadata({ message }: { message: AgentConversationMessage }) {
   ].filter(Boolean);
   return (
     <p
-      className="text-[11px]/4 text-muted-foreground tabular-nums"
+      className="text-xs/4 text-muted-foreground tabular-nums"
       title={context ? `Context: ${context}` : undefined}
     >
       {facts.join(" · ")}

@@ -1,113 +1,56 @@
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import {
-  useId,
-  useState,
-  type HTMLAttributes,
-  type ReactNode,
-  type Ref,
-} from "react";
+import { type HTMLAttributes, type ReactNode, type Ref, useId } from "react";
 
 import { cn } from "~/lib/utils";
+
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
+  DisclosureBody,
+  DisclosureRoot,
+  type DisclosureState,
+  DisclosureTrigger,
+} from "./disclosure";
 
 type HeadingLevel = "h2" | "h3" | "h4";
 
-/** One compact heading band, with actions outside any disclosure trigger. */
-export function SectionHeading({
-  title,
-  description,
-  actions,
-  meta,
-  icon,
-  as: Heading = "h2",
-  id,
-  muted = false,
-}: {
-  title?: ReactNode;
-  description?: ReactNode;
-  actions?: ReactNode;
-  meta?: ReactNode;
-  icon?: ReactNode;
-  as?: HeadingLevel;
-  id?: string;
-  muted?: boolean;
-}) {
-  return (
-    <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border pb-1">
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          {title && (
-            <Heading
-              id={id}
-              className={cn(
-                "flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground-strong",
-                muted && "text-muted-foreground",
-              )}
-            >
-              {icon && (
-                <span
-                  aria-hidden
-                  className="shrink-0 text-muted-foreground [&>svg]:size-3.5"
-                >
-                  {icon}
-                </span>
-              )}
-              {title}
-            </Heading>
-          )}
-          {meta && (
-            <div className="min-w-0 text-xs text-muted-foreground tabular-nums">
-              {meta}
-            </div>
-          )}
-        </div>
-        {description && (
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-        )}
-      </div>
-      {actions && (
-        <div className="flex max-w-full flex-wrap items-center gap-2">
-          {actions}
-        </div>
-      )}
-    </div>
-  );
-}
+type SectionHeading =
+  | {
+      title: ReactNode;
+      /** The page outline decides the level; the look never changes with it. */
+      headingAs: HeadingLevel;
+    }
+  | { title?: undefined; headingAs?: undefined };
 
-interface SectionDisclosure {
-  defaultOpen?: boolean;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  /** Keep child-local state only when the caller deliberately accepts eager work. */
-  keepMounted?: boolean;
-}
-
-interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
-  title?: ReactNode;
-  description?: ReactNode;
-  icon?: ReactNode;
-  meta?: ReactNode;
-  actions?: ReactNode;
-  headingAs?: HeadingLevel;
-  disclosure?: SectionDisclosure;
-  ref?: Ref<HTMLElement>;
-}
+type SectionProps = Omit<HTMLAttributes<HTMLElement>, "title"> &
+  SectionHeading & {
+    /** Quiet mono figure beside the title: the section's row count, 0 included. */
+    count?: ReactNode;
+    /** One-line takeaway under the heading (dashboards, analytics). */
+    caption?: ReactNode;
+    /** Quiet "+" or link; siblings of the disclosure trigger, never inside it. */
+    actions?: ReactNode;
+    /** 13px heading for sections nested inside another region. */
+    compact?: boolean;
+    /** Empty sections stay in the page with a secondary title. */
+    empty?: boolean;
+    /** Ruled rows start at the heading rule: no gap above the body. */
+    ruled?: boolean;
+    disclosure?: DisclosureState;
+    ref?: Ref<HTMLElement>;
+  };
 
 /**
- * Dense page, dashboard and form region. A disclosure defers its descendants
- * until open; form values that must survive closing belong to the form owner.
+ * Every page, detail, dashboard and form region: a title with optional count
+ * and actions over a hairline, an optional caption, then the body. A
+ * disclosure defers its body until open.
  */
 export function Section({
   title,
-  description,
-  icon,
-  meta,
+  headingAs: Heading = "h2",
+  count,
+  caption,
   actions,
-  headingAs = "h2",
+  compact = false,
+  empty = false,
+  ruled = false,
   disclosure,
   className,
   children,
@@ -115,59 +58,74 @@ export function Section({
   ...props
 }: SectionProps) {
   const titleId = useId();
-  const [localOpen, setLocalOpen] = useState(disclosure?.defaultOpen ?? false);
-  const open = disclosure?.open ?? localOpen;
-  const changeOpen = (next: boolean) => {
-    setLocalOpen(next);
-    disclosure?.onOpenChange?.(next);
-  };
-  const header = (title || description || meta || actions) && (
-    <SectionHeading
-      id={titleId}
-      as={headingAs}
-      title={
-        disclosure ? (
-          <CollapsibleTrigger className="-my-1 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-sm py-1 text-left hover:text-primary focus-visible:outline-2 focus-visible:outline-ring sm:min-h-0">
-            <CaretRightIcon
-              aria-hidden
-              className={cn("size-3 shrink-0", open && "rotate-90")}
-            />
-            <span className="min-w-0 break-words">{title}</span>
-          </CollapsibleTrigger>
-        ) : (
-          title
-        )
-      }
-      description={description}
-      icon={icon}
-      meta={meta}
-      actions={actions}
-    />
+  const hasHeader = title != null || caption != null || actions != null;
+  const heading = hasHeader && (
+    <div
+      data-slot="section-heading"
+      className="flex flex-wrap items-center gap-x-3 border-b border-border pb-1.5"
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        {title != null && (
+          <Heading
+            id={titleId}
+            className={cn(
+              "flex min-w-0 font-semibold text-foreground",
+              compact ? "text-sm/4.5" : "text-base/4.5",
+              empty && "font-medium text-muted-foreground",
+            )}
+          >
+            {disclosure ? (
+              <DisclosureTrigger>{title}</DisclosureTrigger>
+            ) : (
+              title
+            )}
+          </Heading>
+        )}
+        {count != null && (
+          <span className="font-mono text-xs/4.5 text-muted-foreground tabular-nums">
+            {count}
+          </span>
+        )}
+      </div>
+      {actions != null && (
+        <div className="-my-1 flex max-w-full flex-wrap items-center gap-2 text-xs/4.5 text-muted-foreground [&>a]:inline-flex [&>a]:items-center [&>a]:hover:text-foreground [&>a]:hover:underline [&>a]:max-md:min-h-11">
+          {actions}
+        </div>
+      )}
+      {caption != null && (
+        <p className="basis-full text-xs/4.5 text-muted-foreground">
+          {caption}
+        </p>
+      )}
+    </div>
   );
-  const body = (
-    <div className="min-w-0 space-y-2 text-xs/relaxed">{children}</div>
-  );
+  const body = <div className="min-w-0 space-y-2 text-sm">{children}</div>;
   return (
     <section
-      aria-labelledby={title && !props["aria-label"] ? titleId : undefined}
-      className={cn("flex min-w-0 flex-col gap-2", className)}
+      aria-labelledby={
+        title != null && !props["aria-label"] ? titleId : undefined
+      }
+      className={cn(
+        "flex min-w-0 flex-col",
+        ruled ? "gap-0" : "gap-2",
+        className,
+      )}
       ref={ref}
       {...props}
     >
       {disclosure ? (
-        <Collapsible
-          open={open}
-          onOpenChange={changeOpen}
-          className="min-w-0 space-y-2"
+        <DisclosureRoot
+          state={disclosure}
+          className={cn("min-w-0", !ruled && "space-y-2")}
         >
-          {header}
-          <CollapsibleContent keepMounted={disclosure.keepMounted}>
-            {open || disclosure.keepMounted ? body : null}
-          </CollapsibleContent>
-        </Collapsible>
+          {heading}
+          <DisclosureBody keepMounted={disclosure.keepMounted}>
+            {body}
+          </DisclosureBody>
+        </DisclosureRoot>
       ) : (
         <>
-          {header}
+          {heading}
           {body}
         </>
       )}

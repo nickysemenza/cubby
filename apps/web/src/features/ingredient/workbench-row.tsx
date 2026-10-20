@@ -93,7 +93,7 @@ export function EnrichmentWorkbenchInspector({
           footer:
             row.recipeCount > 0 ? (
               <Stack gap="sm">
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                <p className="text-xs font-medium text-muted-foreground">
                   Appears in {countLabel(row.recipeCount, "recipe")}
                 </p>
                 {usages.data && usages.data.length > 0 ? (

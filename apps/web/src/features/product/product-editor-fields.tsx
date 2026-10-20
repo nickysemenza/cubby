@@ -12,7 +12,6 @@ import {
 } from "@cubby/shared/collection-tag";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useId, useMemo, useRef, useState } from "react";
 import {
@@ -38,13 +37,9 @@ import { ChipsInput } from "~/ui/forms/chips-input";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
 import { Description } from "~/ui/primitives/description";
 import { FieldError } from "~/ui/primitives/field";
 import { Image } from "~/ui/primitives/image";
@@ -452,7 +447,6 @@ export function ProductLabelNutritionField({
 }: SpecializedIntentRendererProps) {
   const servingPath = `${field.key}.servingGrams`;
   const sourcePath = `${field.key}.source`;
-  const [open, setOpen] = useState(() => form.getValues(servingPath) != null);
   const servingGrams = useWatch({ control: form.control, name: servingPath });
   const hasServing = servingGrams != null;
   const inferredPath = `${field.key}.inferredZeroNutrients`;
@@ -468,103 +462,87 @@ export function ProductLabelNutritionField({
     | undefined;
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger
-        render={
-          <Row
-            as="button"
-            type="button"
-            align="center"
-            gap="sm"
-            className="w-full rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
-          />
-        }
-      >
-        <CaretRightIcon
-          className={`size-4 transition-transform ${open ? "rotate-90" : ""}`}
-          aria-hidden
+    <Disclosure
+      summary={`Package label${hasServing ? "" : " (optional)"}`}
+      defaultOpen={form.getValues(servingPath) != null}
+    >
+      <Stack gap="sm">
+        <NullableNumericField
+          form={form}
+          step="1"
+          name={servingPath}
+          label="Serving size, as printed (g)"
+          placeholder="e.g. 44"
         />
-        <span>Package label{hasServing ? "" : " (optional)"}</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <Stack gap="sm" className="pt-2">
-          <NullableNumericField
-            form={form}
-            step="1"
-            name={servingPath}
-            label="Serving size, as printed (g)"
-            placeholder="e.g. 44"
-          />
-          {hasServing && (
-            <>
-              <UnifiedTextField
-                form={form}
-                name={sourcePath}
-                label="Source"
-                placeholder="e.g. Hero package label"
-                nullable
-              />
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
-                {LABEL_NUTRIENT_ORDER.map((key) => {
-                  const info = TIER1_NUTRIENTS[key];
-                  return (
-                    <Stack gap="xs" key={key}>
-                      <NullableNumericField
-                        form={form}
-                        step="0.1"
-                        name={`${field.key}.nutrients.${key}`}
-                        label={`${info.displayName} (${info.unit.toLowerCase()})`}
-                        placeholder="Unknown"
-                      />
-                      <label
-                        htmlFor={`${field.key}-inferred-${key}`}
-                        className="flex items-center gap-2 text-xs text-muted-foreground"
-                      >
-                        <Checkbox
-                          id={`${field.key}-inferred-${key}`}
-                          checked={inferredZeroNutrients.includes(key)}
-                          onCheckedChange={(checked) => {
-                            const next = inferredZeroNutrients.filter(
-                              (value) => value !== key,
-                            );
+        {hasServing && (
+          <>
+            <UnifiedTextField
+              form={form}
+              name={sourcePath}
+              label="Source"
+              placeholder="e.g. Hero package label"
+              nullable
+            />
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+              {LABEL_NUTRIENT_ORDER.map((key) => {
+                const info = TIER1_NUTRIENTS[key];
+                return (
+                  <Stack gap="xs" key={key}>
+                    <NullableNumericField
+                      form={form}
+                      step="0.1"
+                      name={`${field.key}.nutrients.${key}`}
+                      label={`${info.displayName} (${info.unit.toLowerCase()})`}
+                      placeholder="Unknown"
+                    />
+                    <label
+                      htmlFor={`${field.key}-inferred-${key}`}
+                      className="flex items-center gap-2 text-xs text-muted-foreground"
+                    >
+                      <Checkbox
+                        id={`${field.key}-inferred-${key}`}
+                        checked={inferredZeroNutrients.includes(key)}
+                        onCheckedChange={(checked) => {
+                          const next = inferredZeroNutrients.filter(
+                            (value) => value !== key,
+                          );
+                          form.setValue(
+                            inferredPath,
+                            checked ? [...next, key] : next,
+                            { shouldDirty: true },
+                          );
+                          if (checked)
                             form.setValue(
-                              inferredPath,
-                              checked ? [...next, key] : next,
+                              `${field.key}.nutrients.${key}`,
+                              null,
                               { shouldDirty: true },
                             );
-                            if (checked)
-                              form.setValue(
-                                `${field.key}.nutrients.${key}`,
-                                null,
-                                { shouldDirty: true },
-                              );
-                          }}
-                        />
-                        Inferred zero from label evidence
-                      </label>
-                    </Stack>
-                  );
-                })}
-              </div>
-              {inferredZeroNutrients.length > 0 && (
-                <UnifiedTextField
-                  form={form}
-                  name={`${field.key}.inferenceEvidence`}
-                  label="Evidence for inferred zeros"
-                  placeholder="Transcribe the panel's explicit statement, or record your reviewed confirmation"
-                  nullable
-                />
-              )}
-              <Description>
-                Blank fields remain unknown. Enter printed numbers as measured
-                values; infer zero only from explicit evidence.
-              </Description>
-            </>
-          )}
-          <FieldError errors={[labelNutritionError]} />
-        </Stack>
-      </CollapsibleContent>
-    </Collapsible>
+                        }}
+                      />
+                      Inferred zero from label evidence
+                    </label>
+                  </Stack>
+                );
+              })}
+            </div>
+            {inferredZeroNutrients.length > 0 && (
+              <UnifiedTextField
+                form={form}
+                name={`${field.key}.inferenceEvidence`}
+                label="Evidence for inferred zeros"
+                placeholder="Transcribe the panel's explicit statement, or record your reviewed confirmation"
+                nullable
+              />
+            )}
+            <Description>
+              Blank fields remain unknown. Enter printed numbers as measured
+              values; infer zero only from explicit evidence.
+            </Description>
+          </>
+        )}
+        <FieldError errors={[labelNutritionError]} />
+      </Stack>
+    </Disclosure>
   );
 }
 

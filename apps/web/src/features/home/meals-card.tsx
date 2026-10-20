@@ -1,27 +1,31 @@
-import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
-import { ForkKnifeIcon } from "@phosphor-icons/react/dist/csr/ForkKnife";
+import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { format, isSameDay, parseISO } from "date-fns";
-import { useId } from "react";
+import { format, parseISO } from "date-fns";
 
-import { formatMealCost, mealListLabel } from "~/features/meal/meal-format";
-import { mealKindIcon, mealTypeIcon } from "~/features/meal/meal-options";
+import { actionsForSurface } from "~/entity/actions/action-items";
+import { entities, entityDetailParams } from "~/entity/entities";
+import { mealListLabel } from "~/features/meal/meal-format";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
-import { Row, Stack, SectionHeading } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Skeleton } from "~/ui/primitives/skeleton";
+import { EmptyState } from "~/ui/feedback/empty-state";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Section } from "~/ui/layout";
 
 import type { HomeAsOfWindow } from "./home-as-of-window";
+import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
 
 export interface TodayMealsOperations {
   upcomingSummary: typeof meal.upcomingSummary;
 }
 
+const MEAL_ROWS = 5;
+
+/** The recurring meal verbs: "What can I make?" and the shopping list. */
+const mealActions = actionsForSurface("home-quick");
+
 /**
- * Home-page meals tile: what's planned between today and a week out, read from
- * a bounded projection over the calendar's canonical date ordering.
+ * Home's Meals rail: what's planned between today and a week out, read from a
+ * bounded projection over the calendar's canonical date ordering.
  *
  * The date window is computed once in the household timezone by the route
  * loader, so SSR and hydration use the same query key and the same "today".
@@ -34,116 +38,65 @@ export function TodayMeals({
   /** Replaces the upcoming-summary transport for a local browser host. */
   operations?: TodayMealsOperations;
 }) {
-  const titleId = useId();
-  const today = parseISO(asOf.meals.from);
   const upcomingSummary = operations?.upcomingSummary ?? meal.upcomingSummary;
   const mealsQuery = useQuery(upcomingSummary.queryOptions(asOf.meals));
   const meals = mealsQuery.data ?? [];
-
+  const later = meals.length - MEAL_ROWS;
   return (
-    <section aria-labelledby={titleId} className="min-w-0">
-      <SectionHeading
-        id={titleId}
-        title={
-          <>
-            <ForkKnifeIcon
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-            Meals ahead
-          </>
-        }
-        description="The next seven days."
-        actions={
-          <Button
-            render={<Link to="/meals" />}
-            nativeButton={false}
-            variant="ghost"
-            size="sm"
-            className="h-11 shrink-0 text-xs sm:h-7"
-          >
-            Calendar
-          </Button>
-        }
-      />
-
-      <Stack gap="xs" className="mt-2">
-        {mealsQuery.isLoading ? (
-          <>
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-3/4" />
-          </>
-        ) : mealsQuery.isError ? (
-          <div className="flex min-h-16 items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              Meals are unavailable right now.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-11 shrink-0 sm:min-h-0"
-              onClick={() => mealsQuery.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
-        ) : (
-          <RecordList
-            aria-label="Meals ahead"
-            empty={
-              <span className="block min-h-12 content-center text-sm">
-                Nothing planned this week.
-              </span>
-            }
-          >
-            {meals.map((meal) => {
-              const date = parseISO(meal.date);
-              const isToday = isSameDay(date, today);
-              const mealLabel = mealListLabel(meal);
-              const SlotIcon = mealTypeIcon(meal.mealType);
-              const KindIcon = mealKindIcon(meal.mealKind);
-              return (
-                <RecordRow
-                  key={meal.id}
-                  leading={
-                    <Row align="center" gap="xs">
-                      <span className="font-mono text-2xs text-slate uppercase tabular-nums">
-                        {isToday ? "Today" : format(date, "EEE d")}
-                      </span>
-                      <SlotIcon
-                        className="size-3.5 shrink-0 text-slate"
-                        aria-hidden
-                      />
-                    </Row>
-                  }
-                  primary={
-                    <Link
-                      to="/meals/$shortcode"
-                      params={{ shortcode: meal.id }}
-                      title={mealLabel}
-                      className="flex min-h-11 min-w-0 items-center hover:underline sm:min-h-0"
-                    >
-                      <span className="truncate">{mealLabel}</span>
-                    </Link>
-                  }
-                  trailing={
-                    <Row align="center" gap="xs">
-                      {KindIcon && (
-                        <KindIcon
-                          className="size-3.5 text-slate"
-                          aria-label={MEAL_KIND_LABELS[meal.mealKind]}
-                        />
-                      )}
-                      <span>{formatMealCost(meal.totals)}</span>
-                    </Row>
-                  }
-                />
-              );
-            })}
-          </RecordList>
-        )}
-      </Stack>
-    </section>
+    <Section
+      title="Meals"
+      headingAs="h2"
+      ruled
+      actions={<Link to="/meals">Plan</Link>}
+    >
+      {mealsQuery.isError ? (
+        <ErrorDisplay
+          error={mealsQuery.error}
+          title="meals"
+          onRetry={() => void mealsQuery.refetch()}
+          className="mt-2"
+        />
+      ) : mealsQuery.data === undefined ? (
+        <HomeRowsLoading label="Loading meals" rows={2} />
+      ) : meals.length === 0 ? (
+        <EmptyState size="inline" className="mt-2">
+          Nothing planned this week. <Link to="/meals">Plan a meal</Link>.
+        </EmptyState>
+      ) : (
+        <HomeList label="Meals ahead">
+          {meals.slice(0, MEAL_ROWS).map((item) => {
+            const label = mealListLabel(item);
+            const slot = item.mealType ? MEAL_TYPE_LABELS[item.mealType] : null;
+            return (
+              <HomeRow
+                key={item.id}
+                leading={
+                  item.date === asOf.meals.from
+                    ? "Today"
+                    : format(parseISO(item.date), "EEE")
+                }
+              >
+                <Link
+                  to={entities.meal.routes.detail}
+                  params={entityDetailParams(item.id)}
+                  title={label}
+                  className="truncate underline-offset-2 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {slot && slot !== label ? `${slot} · ${label}` : label}
+                </Link>
+              </HomeRow>
+            );
+          })}
+        </HomeList>
+      )}
+      <p className="flex flex-wrap gap-x-3 pt-2 text-xs text-muted-foreground [&>a]:inline-flex [&>a]:items-center [&>a]:hover:text-foreground [&>a]:hover:underline [&>a]:max-md:min-h-11">
+        {later > 0 && <span>{later} more this week</span>}
+        {mealActions.map((action) => (
+          <Link key={action.id} to={action.path} search={action.search}>
+            {action.name}
+          </Link>
+        ))}
+      </p>
+    </Section>
   );
 }

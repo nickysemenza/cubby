@@ -1,0 +1,14 @@
+const direct = <div className="rounded-lg border" />;
+const split = cn("rounded-md", active && "border-border");
+const directional = <div className={`rounded-t-md ${active ? "border" : ""}`} />;
+const line = cn("rounded-md border-b border-border/50");
+const colorOnly = <div className="border-border" />;
+const roundedOnly = cn("rounded-lg");
+const selector = cn("[&.rounded-md]:border-b");
+const image = <img className="rounded-md border" />;
+const chip = <span className={cn("rounded-sm border px-1")} />;
+const pill = <div className="rounded-full border" />;
+const control = <Button className="rounded-md border" />;
+const panelLink = <Link className="rounded-md border" />;
+const unrounded = <div className="rounded-none border" />;
+const descendants = <div className="[&_pre]:rounded-md [&_pre]:border" />;

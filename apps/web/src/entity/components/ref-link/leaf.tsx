@@ -326,7 +326,7 @@ export function ChipRefLink({
   }
   if (compact) {
     const chip =
-      "inline-flex max-w-full min-w-0 rounded-sm bg-muted px-1 text-[0.6875rem] leading-3";
+      "inline-flex max-w-full min-w-0 rounded-sm bg-muted px-1 text-xs leading-3";
     const text = <span className="min-w-0 truncate">{label}</span>;
     return isHoverPreviewEntity(entity) ? (
       <PreviewRefLink
@@ -433,7 +433,7 @@ export function AuditRefLink({
       {name ? (
         <>
           <span className={cn(compact && "truncate")}>{name}</span>
-          <span className="shrink-0 font-mono text-2xs text-slate uppercase">
+          <span className="shrink-0 text-xs font-medium text-slate">
             {entityId}
           </span>
         </>

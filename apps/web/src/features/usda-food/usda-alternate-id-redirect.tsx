@@ -4,8 +4,8 @@ import { useEffect } from "react";
 
 import { Page } from "~/entity/page/page";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Stack } from "~/ui/layout";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 type AlternateId = Parameters<typeof usdaFood.alternateId.queryOptions>[0];
@@ -40,12 +40,7 @@ export function UsdaAlternateIdRedirect({
 
   if (isLoading) {
     return (
-      <Page
-        variant="list"
-        title="Looking up USDA food"
-        entity="usda-food"
-        compact
-      >
+      <Page variant="list" title="Looking up USDA food" entity="usda-food">
         <Stack>
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-32 w-full" />
@@ -56,27 +51,16 @@ export function UsdaAlternateIdRedirect({
 
   if (error || !food) {
     return (
-      <Page
-        variant="list"
-        title="USDA food not found"
-        entity="usda-food"
-        compact
-      >
-        <Empty>
-          <EmptyTitle>{label} not found</EmptyTitle>
-          <EmptyDescription>{notFoundDescription}</EmptyDescription>
-        </Empty>
+      <Page variant="list" title="USDA food not found" entity="usda-food">
+        <EmptyState size="page" description={notFoundDescription}>
+          {label} not found
+        </EmptyState>
       </Page>
     );
   }
 
   return (
-    <Page
-      variant="list"
-      title="Redirecting to USDA food"
-      entity="usda-food"
-      compact
-    >
+    <Page variant="list" title="Redirecting to USDA food" entity="usda-food">
       <p className="text-sm text-muted-foreground">Redirecting to USDA food…</p>
     </Page>
   );

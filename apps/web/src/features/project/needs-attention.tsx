@@ -16,6 +16,7 @@ import { Link } from "@tanstack/react-router";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 import { attentionEvidence } from "./attention-presentation";
 
@@ -185,14 +186,15 @@ function AttentionGroup({
   children: React.ReactNode;
 }) {
   return (
-    <details className="group">
-      <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-warning-ink hover:text-warning-ink/80">
-        {icon}
-        {title}
-      </summary>
-      <Stack gap="xs" className="mt-2 ml-4">
-        {children}
-      </Stack>
-    </details>
+    <Disclosure
+      summary={
+        <span className="inline-flex items-center gap-2">
+          {icon}
+          {title}
+        </span>
+      }
+    >
+      <Stack gap="xs">{children}</Stack>
+    </Disclosure>
   );
 }

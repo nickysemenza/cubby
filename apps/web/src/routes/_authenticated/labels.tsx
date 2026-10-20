@@ -28,9 +28,10 @@ import { useShortcodeLookups } from "~/features/labels/use-shortcode-lookups";
 import { generateLabelCsv } from "~/lib/label-generator";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { StatusText } from "~/ui/primitives/status-text";
 
@@ -137,15 +138,15 @@ function LabelsPage() {
   if (shortcodes.length === 0) {
     return (
       <Page variant="list" title="Print labels">
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-6 text-center">
-            <p className="text-muted-foreground">
-              No items selected. Select items from the locations or products
-              table, or add them here.
-            </p>
+        <EmptyState
+          size="page"
+          description="Select items from the locations or products table, or add them here."
+          action={
             <AddLabelsPopover codes={codes} onCodesChange={handleCodesChange} />
-          </CardContent>
-        </Card>
+          }
+        >
+          No items selected.
+        </EmptyState>
       </Page>
     );
   }
@@ -245,20 +246,14 @@ function LabelsPage() {
         }
       >
         {isLoading ? (
-          <Card>
-            <CardContent className="py-6 text-center">
-              <p className="text-muted-foreground">Loading...</p>
-            </CardContent>
-          </Card>
+          <SimpleLoading text="Loading labels…" />
         ) : error ? (
-          <Card>
-            <CardContent className="space-y-3 py-6">
-              <ErrorDisplay error={error} />
-              <Button variant="outline" onClick={() => void refetch()}>
-                Retry label lookup
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="space-y-3 py-6">
+            <ErrorDisplay error={error} />
+            <Button variant="outline" onClick={() => void refetch()}>
+              Retry label lookup
+            </Button>
+          </div>
         ) : isSheetFormat(format) ? (
           <>
             {unresolvedCount > 0 && (

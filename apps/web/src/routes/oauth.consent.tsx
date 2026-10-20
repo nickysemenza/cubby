@@ -13,16 +13,9 @@ import { authClient } from "~/lib/auth-client";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
 
 // Only the two params this screen renders from. The rest of the signed
 // authorize query stays in the address bar untouched — the oauthProviderClient
@@ -126,85 +119,90 @@ function ConsentPage() {
 
   return (
     <AuthEntryFrame>
-      <Card variant="panel">
-        <CardHeader>
-          <div className="text-xs text-slate">Authorize access</div>
-          <CardTitle>{appName}</CardTitle>
-          <CardDescription>
-            {clientState.kind === "loading"
-              ? "Verifying the requesting application…"
-              : client?.client_uri
-                ? `${client.client_uri} wants to access your Cubby account.`
-                : "This application wants to access your Cubby account."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Stack gap="md">
-            {clientState.kind === "verified" && clientId && (
-              <div className="font-mono text-2xs text-slate">{clientId}</div>
-            )}
-            {clientState.kind === "invalid" && (
+      <Panel
+        tone="default"
+        headingAs="h1"
+        title={
+          <>
+            <span className="block text-xs/4.5 font-normal text-muted-foreground">
+              Authorize access
+            </span>
+            {appName}
+          </>
+        }
+        caption={
+          clientState.kind === "loading"
+            ? "Verifying the requesting application…"
+            : client?.client_uri
+              ? `${client.client_uri} wants to access your Cubby account.`
+              : "This application wants to access your Cubby account."
+        }
+      >
+        <Stack gap="md">
+          {clientState.kind === "verified" && clientId && (
+            <div className="font-mono text-2xs text-slate">{clientId}</div>
+          )}
+          {clientState.kind === "invalid" && (
+            <p role="alert" className="text-xs text-destructive">
+              {clientState.message}
+            </p>
+          )}
+          {clientState.kind === "error" && (
+            <Stack gap="sm">
               <p role="alert" className="text-xs text-destructive">
                 {clientState.message}
               </p>
-            )}
-            {clientState.kind === "error" && (
-              <Stack gap="sm">
-                <p role="alert" className="text-xs text-destructive">
-                  {clientState.message}
-                </p>
-                <p className="text-2xs text-muted-foreground">
-                  {clientState.detail}
-                </p>
-                <div>
-                  <Button variant="outline" onClick={() => void loadClient()}>
-                    Retry verification
-                  </Button>
-                </div>
-              </Stack>
-            )}
-            {scopes.length > 0 && (
-              <Stack gap="sm">
-                <div className="text-xs text-slate">Permissions requested</div>
-                <Stack gap="xs" as="ul">
-                  {scopes.map((s) => (
-                    <Row key={s} align="center" gap="sm" as="li">
-                      <Badge variant="secondary">{s}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {scopeDescription(s)}
-                      </span>
-                    </Row>
-                  ))}
-                </Stack>
-              </Stack>
-            )}
-
-            <p className="text-xs text-muted-foreground">
-              Approving also lets this application read and modify your
-              inventory, recipes, and other Cubby data through the MCP API.
-            </p>
-
-            {decisionError && (
-              <p role="alert" className="text-xs text-destructive">
-                {decisionError}
+              <p className="text-2xs text-muted-foreground">
+                {clientState.detail}
               </p>
-            )}
+              <div>
+                <Button variant="outline" onClick={() => void loadClient()}>
+                  Retry verification
+                </Button>
+              </div>
+            </Stack>
+          )}
+          {scopes.length > 0 && (
+            <Stack gap="sm">
+              <div className="text-xs text-slate">Permissions requested</div>
+              <Stack gap="xs" as="ul">
+                {scopes.map((s) => (
+                  <Row key={s} align="center" gap="sm" as="li">
+                    <Badge variant="secondary">{s}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {scopeDescription(s)}
+                    </span>
+                  </Row>
+                ))}
+              </Stack>
+            </Stack>
+          )}
 
-            <Row gap="sm" justify="end">
-              <Button
-                variant="outline"
-                onClick={() => decide(false)}
-                disabled={!hydrated || submitting !== null}
-              >
-                {submitting === "deny" ? "Denying…" : "Deny"}
-              </Button>
-              <Button onClick={() => decide(true)} disabled={!allowEnabled}>
-                {submitting === "accept" ? "Authorizing…" : "Allow"}
-              </Button>
-            </Row>
-          </Stack>
-        </CardContent>
-      </Card>
+          <p className="text-xs text-muted-foreground">
+            Approving also lets this application read and modify your inventory,
+            recipes, and other Cubby data through the MCP API.
+          </p>
+
+          {decisionError && (
+            <p role="alert" className="text-xs text-destructive">
+              {decisionError}
+            </p>
+          )}
+
+          <Row gap="sm" justify="end">
+            <Button
+              variant="outline"
+              onClick={() => decide(false)}
+              disabled={!hydrated || submitting !== null}
+            >
+              {submitting === "deny" ? "Denying…" : "Deny"}
+            </Button>
+            <Button onClick={() => decide(true)} disabled={!allowEnabled}>
+              {submitting === "accept" ? "Authorizing…" : "Allow"}
+            </Button>
+          </Row>
+        </Stack>
+      </Panel>
     </AuthEntryFrame>
   );
 }

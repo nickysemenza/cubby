@@ -55,9 +55,7 @@ test.describe("Create Recipe - Full Flow", () => {
     ).toBeVisible({ timeout: 10000 });
 
     const ingredientsSidebar = page.locator("aside").filter({
-      has: page
-        .locator(":scope > div > h3")
-        .filter({ hasText: /^Ingredients$/ }),
+      has: page.getByRole("heading", { name: "Ingredients", exact: true }),
     });
     await expect(ingredientsSidebar).toHaveCount(1);
     const ingredientRow = ingredientsSidebar.getByRole("listitem").filter({
@@ -81,9 +79,7 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(ingredientLink).toBeVisible();
     await expect(ingredientLink).toHaveAttribute("href", /\/ingredients\//);
 
-    const summary = page.locator('[data-slot="card"]').filter({
-      has: page.getByText("Recipe summary", { exact: true }),
-    });
+    const summary = page.getByRole("region", { name: "Recipe summary" });
     await expect(
       summary.getByText("Cost: $5.00", { exact: true }),
     ).toBeVisible();

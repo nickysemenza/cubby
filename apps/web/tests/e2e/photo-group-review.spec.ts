@@ -406,7 +406,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   ).toHaveCount(0);
   await page.keyboard.press("Escape");
 
-  const g1Card = page.locator('[data-slot="card"]').filter({
+  const g1Card = page.locator("[data-photo-group]").filter({
     has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
   });
   await expect(g1Card).toBeVisible();
@@ -508,7 +508,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     .getByRole("link", { name: new RegExp(g2Name) })
     .click();
   const g2Card = page
-    .locator('[data-slot="card"]')
+    .locator("[data-photo-group]")
     .filter({ has: page.getByRole("heading", { name: g2Name }) });
   await g2Card.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(
@@ -588,7 +588,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
 
-  const group = page.locator('[data-slot="card"]').filter({
+  const group = page.locator("[data-photo-group]").filter({
     has: page.getByRole("heading", { name: createdName }),
   });
   // Weak neighbours offer the list without naming one; strong ones say "Compare".
@@ -1149,12 +1149,12 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     name: "New product name",
     exact: true,
   });
-  await group.locator('[data-slot="card"]').first().screenshot({
+  await group.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-concern.png",
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await group.scrollIntoViewIfNeeded();
-  await group.locator('[data-slot="card"]').first().screenshot({
+  await group.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/phone-concern.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -1298,7 +1298,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   ).toBeVisible();
   await expect(
     attach
-      .locator('[data-slot="card-header"]')
+      .locator('[data-slot="section-heading"]')
       .getByText("↪ Attach", { exact: true }),
   ).toBeVisible();
   await expect(attach.getByText("On hand", { exact: true })).toBeVisible();
@@ -1358,7 +1358,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
         ),
     )
     .toBe(true);
-  await attach.locator('[data-slot="card"]').first().screenshot({
+  await attach.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-attach-no-label.png",
   });
   await page.getByRole("navigation", { name: "Section index" }).screenshot({
@@ -1387,7 +1387,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       );
     });
   expect(railOffset).toBeLessThanOrEqual(1);
-  await attach.locator('[data-slot="card"]').first().screenshot({
+  await attach.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/phone-attach-no-label.png",
   });
   await page.getByRole("button", { name: /Jump to:/ }).click();
@@ -1429,11 +1429,11 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     nameField.getByRole("button", { name: /^Add ‘blue’ to name$/i }),
   ).toBeVisible();
   await expect(nameField.getByText(/Label:|Label differs/)).toBeVisible();
-  await create.locator('[data-slot="card"]').first().screenshot({
+  await create.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-create-mark.png",
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await create.locator('[data-slot="card"]').first().screenshot({
+  await create.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/phone-create-mark.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -1470,11 +1470,11 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attachChecks.getByText("Matches the label").first(),
   ).toBeAttached();
-  await attach.locator('[data-slot="card"]').first().screenshot({
+  await attach.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/desktop-attach-label.png",
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await attach.locator('[data-slot="card"]').first().screenshot({
+  await attach.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-polish/phone-attach-label.png",
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -1792,7 +1792,7 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
 
   await expect(card.getByText("Why the agent proposed this")).toBeVisible();
   await expect(card.getByText(agentNote)).toBeHidden();
-  await card.locator('[data-slot="card"]').first().screenshot({
+  await card.locator("[data-photo-group]").first().screenshot({
     path: "../../artifacts/photo-review-real-data/desktop-care-label.png",
   });
 });

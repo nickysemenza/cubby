@@ -1,6 +1,6 @@
 import type { MerchantVendorInference } from "@cubby/schemas/financial-transaction";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -67,8 +67,9 @@ describe("PossibleVendor", () => {
       wrapper: harness.wrapper,
     });
 
-    const disclosure = screen.getByText("2 possible vendors");
-    expect(disclosure.closest("summary")).not.toBeNull();
+    const trigger = screen.getByRole("button", { name: "Possible vendors" });
+    expect(screen.queryByRole("link", { name: "Alpha Supply" })).toBeNull();
+    fireEvent.click(trigger);
     expect(
       screen.getByRole("link", { name: "Alpha Supply" }),
     ).toBeInTheDocument();

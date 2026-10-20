@@ -109,6 +109,9 @@ it("keeps a keyboard-accessible explorer action in the relationship list", async
     />,
   );
 
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Record and relationship list" }),
+  );
   const explore = await screen.findByRole("button", {
     name: "Explore Impact driver",
   });
@@ -154,7 +157,9 @@ it("retains navigable relationships when worker layout fails", async () => {
     await screen.findByText(/Couldn't load the dependency graph layout/),
   ).toBeVisible();
   expect(screen.getByText("layout unavailable")).toBeVisible();
-  fireEvent.click(screen.getByText("Record and relationship list (1)"));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Record and relationship list" }),
+  );
   expect(screen.getByRole("link", { name: "Impact driver" })).toHaveAttribute(
     "href",
     "/products/PRD-1",

@@ -128,7 +128,10 @@ test("dense record header preserves identity, actions, and the editor", async ({
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name, exact: true }) });
   await expect(
-    row.getByRole("link", { name: "Example essentials", exact: true }),
+    row.locator('[data-cell-col="categoryId"]').getByRole("link", {
+      name: "Example essentials",
+      exact: true,
+    }),
   ).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath("dense-list-1440.png"),

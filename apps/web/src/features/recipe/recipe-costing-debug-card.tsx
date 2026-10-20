@@ -6,9 +6,8 @@ import { match } from "ts-pattern";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatEstimate, formatKcal } from "~/lib/nutrition-format";
-import { Row } from "~/ui/layout";
+import { Row, Section } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import {
   StaticTable,
   type StaticTableColumn,
@@ -166,14 +165,11 @@ export const RecipeCostingDebugCard: React.FC<{
 
   if (error) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>Costing Debug</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-destructive">
+      <Section headingAs="h2" title="Costing debug">
+        <div className="text-sm text-destructive">
           explain failed: {error.message}
-        </CardContent>
-      </Card>
+        </div>
+      </Section>
     );
   }
   if (!data) return null;
@@ -186,65 +182,63 @@ export const RecipeCostingDebugCard: React.FC<{
     (drift.cost || Object.values(drift.nutrition).some(Boolean));
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between pb-2">
-        <CardTitle>Costing Debug</CardTitle>
+    <Section
+      headingAs="h2"
+      title="Costing debug"
+      actions={
         <CopyJsonButton
           value={data}
           title="Copy the full explain payload"
           label="copy explain"
         />
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {/* Persistence panel: stored vs live, staleness, completeness. */}
-        <Row wrap align="center" gap="sm" className="text-xs">
-          <Badge variant={persisted.stale ? "destructive" : "secondary"}>
-            {persisted.stale ? "stale" : "fresh"}
-          </Badge>
-          {!computed.complete && (
-            <Badge variant="destructive">USDA incomplete</Badge>
-          )}
-          <span className="text-muted-foreground">
-            persisted{" "}
-            {persisted.totals
-              ? `${formatEstimate(persisted.totals.cost, "cost")} · ${formatEstimate(persisted.totals.nutrition.kcal, "kcal", "kcal")}`
-              : "—"}
-            {persisted.totalsComputedAt &&
-              ` @ ${formatInstant(persisted.totalsComputedAt, "dateTime")}`}
-          </span>
-          <span className={showDrift ? "font-medium" : ""}>
-            live {formatEstimate(computed.totals.cost, "cost")} ·{" "}
-            {formatEstimate(computed.totals.nutrition.kcal, "kcal", "kcal")}
-            {showDrift && (
-              <Badge className="ml-1" variant="destructive">
-                drift
-              </Badge>
-            )}
-          </span>
-        </Row>
-
-        {computed.usdaMisses.length > 0 && (
-          <StatusText as="div" tone="destructive" className="text-xs">
-            USDA misses:{" "}
-            {computed.usdaMisses
-              .map(
-                (m) => `${m.ingredientName} (${m.productName} fdc ${m.fdcId})`,
-              )
-              .join(", ")}
-          </StatusText>
+      }
+    >
+      {/* Persistence panel: stored vs live, staleness, completeness. */}
+      <Row wrap align="center" gap="sm" className="text-xs">
+        <Badge variant={persisted.stale ? "destructive" : "secondary"}>
+          {persisted.stale ? "stale" : "fresh"}
+        </Badge>
+        {!computed.complete && (
+          <Badge variant="destructive">USDA incomplete</Badge>
         )}
+        <span className="text-muted-foreground">
+          persisted{" "}
+          {persisted.totals
+            ? `${formatEstimate(persisted.totals.cost, "cost")} · ${formatEstimate(persisted.totals.nutrition.kcal, "kcal", "kcal")}`
+            : "—"}
+          {persisted.totalsComputedAt &&
+            ` @ ${formatInstant(persisted.totalsComputedAt, "dateTime")}`}
+        </span>
+        <span className={showDrift ? "font-medium" : ""}>
+          live {formatEstimate(computed.totals.cost, "cost")} ·{" "}
+          {formatEstimate(computed.totals.nutrition.kcal, "kcal", "kcal")}
+          {showDrift && (
+            <Badge className="ml-1" variant="destructive">
+              drift
+            </Badge>
+          )}
+        </span>
+      </Row>
 
-        {/* Per-row trace: usage, fired rule per measure, value-or-error + path. */}
-        <StaticTable
-          className="table-auto"
-          rows={computed.diagnostics}
-          columns={DIAGNOSTIC_COLUMNS}
-          rowKey={(row) => row.id}
-          headClassName="h-auto py-1 pr-2 pl-0"
-          cellClassName={CELL_CLASS}
-          rowClassName="align-top"
-        />
-      </CardContent>
-    </Card>
+      {computed.usdaMisses.length > 0 && (
+        <StatusText as="div" tone="destructive" className="text-xs">
+          USDA misses:{" "}
+          {computed.usdaMisses
+            .map((m) => `${m.ingredientName} (${m.productName} fdc ${m.fdcId})`)
+            .join(", ")}
+        </StatusText>
+      )}
+
+      {/* Per-row trace: usage, fired rule per measure, value-or-error + path. */}
+      <StaticTable
+        className="table-auto"
+        rows={computed.diagnostics}
+        columns={DIAGNOSTIC_COLUMNS}
+        rowKey={(row) => row.id}
+        headClassName="h-auto py-1 pr-2 pl-0"
+        cellClassName={CELL_CLASS}
+        rowClassName="align-top"
+      />
+    </Section>
   );
 };

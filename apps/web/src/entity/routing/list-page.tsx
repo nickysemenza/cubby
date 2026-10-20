@@ -15,7 +15,7 @@ import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
-import type { ComponentType, ReactNode } from "react";
+import { type ComponentType, type ReactNode, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import {
@@ -152,6 +152,7 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
           <Button
             variant="ghost"
             size="sm"
+            className="h-7.5 text-sm"
             aria-label={`${entities[entity].pluralLabel} view: ${viewLabel}`}
           />
         }
@@ -236,8 +237,9 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
       <DropdownMenuTrigger
         render={
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
+            className="h-7.5 text-sm"
             aria-label={
               groupSummary ? `Grouped by ${groupSummary}` : "Group by"
             }
@@ -246,7 +248,6 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
       >
         <RowsIcon className="size-3.5" />
         {groupSummary ?? "Group"}
-        <CaretDownIcon className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-52">
         <DropdownMenuGroup aria-label="Group by">
@@ -382,7 +383,6 @@ interface ListChromeOptions {
   entity?: Entity;
   layout?: PageLayout;
   eyebrow?: ReactNode;
-  compact?: boolean;
   actions?: () => ReactNode;
   /**
    * A view menu or segmented `Picker`, rendered in the workbench query
@@ -413,12 +413,13 @@ export function listChromePage({
   entity,
   layout = "full",
   eyebrow,
-  compact,
   actions,
   workbenchControls,
   bodyGutter,
 }: ListChromeOptions) {
   return function ListChromeShell() {
+    const [density, setDensity] = useState<"cards" | "compact">("cards");
+    const cardDensity = { density, setDensity };
     const routedEntity =
       entity !== undefined && isBrowserRoutedEntity(entity) ? entity : null;
     const resolvedWorkbenchControls =
@@ -427,7 +428,7 @@ export function listChromePage({
         ? () => <ListWorkbenchMenus entity={routedEntity} />
         : undefined);
     return (
-      <EntityListCardDensityProvider>
+      <EntityListCardDensityProvider value={cardDensity}>
         <Page
           variant="list"
           listChrome="workbench"
@@ -435,9 +436,12 @@ export function listChromePage({
           entity={entity}
           layout={layout}
           eyebrow={eyebrow}
-          compact={compact}
           actions={actions?.()}
-          workbenchControls={resolvedWorkbenchControls?.()}
+          workbenchControls={
+            <EntityListCardDensityProvider value={cardDensity}>
+              {resolvedWorkbenchControls?.()}
+            </EntityListCardDensityProvider>
+          }
           bodyGutter={bodyGutter?.()}
         >
           <PageBody />

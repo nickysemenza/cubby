@@ -26,14 +26,9 @@ import {
 import { DetailPagePending } from "~/entity/navigation/route-pending";
 import { Page } from "~/entity/page/page";
 import { shortcodeHead } from "~/lib/page-title";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
 import { Button } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
   loader: ({ params }) => {
@@ -50,18 +45,24 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <Page variant="list" title="Not found" compact>
-      <Empty>
-        <EmptyTitle>Nothing found for that code</EmptyTitle>
-        <EmptyDescription>
-          This QR label doesn't match anything in Cubby.
-        </EmptyDescription>
-        <EmptyActions>
-          <Button render={<Link to="/" />} nativeButton={false}>
-            Back to Today
-          </Button>
-        </EmptyActions>
-      </Empty>
+    <Page variant="list" title="Not found">
+      <EmptyState
+        size="page"
+        description="This QR label doesn't match anything in Cubby."
+        action={
+          <>
+            <Button
+              variant="outline"
+              render={<Link to="/" />}
+              nativeButton={false}
+            >
+              Back to Today
+            </Button>
+          </>
+        }
+      >
+        Nothing found for that code
+      </EmptyState>
     </Page>
   ),
   head: shortcodeHead,

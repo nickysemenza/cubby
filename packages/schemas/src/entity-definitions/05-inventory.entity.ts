@@ -56,6 +56,7 @@ export default defineEntity({
       hero: { stats: ["amount"] },
     },
     list: {
+      titleSubtitle: true,
       // Installed fixtures (a wired-in dimmer) are not movable stock, so a
       // fresh inventory list opens on stock; clearing it shows both.
       initialFilter: [{ id: "placement", value: ["stock"] }],

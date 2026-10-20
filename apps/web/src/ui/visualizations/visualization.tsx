@@ -1,8 +1,9 @@
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Suspense, type ReactNode } from "react";
 
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { SectionHeading } from "~/ui/layout/section";
+import { Section } from "~/ui/layout/section";
 
 type RefreshState =
   | { refreshError?: never; onRetry?: never }
@@ -63,11 +64,8 @@ export function Visualization({
       Loading visualization…
     </output>
   );
-  return (
-    <div className="min-w-0 space-y-2">
-      {title && (
-        <SectionHeading as="h3" title={title} description={description} />
-      )}
+  const body = (
+    <>
       {(state.status === "ready" || state.status === "empty") &&
       state.refreshError != null ? (
         <ErrorDisplay
@@ -88,16 +86,24 @@ export function Visualization({
             onRetry={state.onRetry}
           />
         ) : (
-          <div
-            className="flex flex-col items-center justify-center gap-1 py-6 text-center text-xs text-muted-foreground"
+          <EmptyState
+            size="page"
+            icon={Icon}
+            description={subMessage}
+            className="justify-center"
             style={{ minHeight: height }}
           >
-            {Icon && <Icon aria-hidden className="size-5" />}
-            <p>{message ?? "No data to display."}</p>
-            {subMessage && <p>{subMessage}</p>}
-          </div>
+            {message ?? "No data to display."}
+          </EmptyState>
         )}
       </div>
-    </div>
+    </>
+  );
+  return title ? (
+    <Section title={title} headingAs="h3" compact caption={description}>
+      {body}
+    </Section>
+  ) : (
+    <div className="min-w-0 space-y-2">{body}</div>
   );
 }

@@ -180,7 +180,7 @@ export function GapChip({
         isDefectDataCheck(gap.check) ? "var(--destructive)" : "var(--warning)"
       }
       description={gap.message}
-      className={dense ? "h-3 px-1 py-0 text-[0.6875rem]" : undefined}
+      className={dense ? "h-3 px-1 py-0 text-xs" : undefined}
     >
       {dataCheckLabel[gap.check]}
       <span className="sr-only">: {gap.message}</span>
@@ -221,7 +221,7 @@ export function GapChipCluster({ gaps }: { gaps: readonly WorkQueueGap[] }) {
                   type="button"
                   aria-label={`Show ${count} more checks`}
                   // The hit area extends past the glyph without widening the fit.
-                  className="relative rounded-sm text-[0.6875rem] leading-3 text-muted-foreground tabular-nums after:absolute after:-inset-x-1.5 after:-inset-y-2 after:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="relative rounded-sm text-xs leading-3 text-muted-foreground tabular-nums after:absolute after:-inset-x-1.5 after:-inset-y-2 after:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 />
               }
             >

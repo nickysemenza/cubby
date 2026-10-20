@@ -1,12 +1,12 @@
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import type * as React from "react";
 
 import { cn } from "~/lib/utils";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
+  DisclosureBody,
+  DisclosureRoot,
+  type DisclosureState,
+  DisclosureTrigger,
+} from "~/ui/layout/disclosure";
 
 // Adapted from the shadcn base-mira `trace` registry item (AI Elements):
 // running lines show a spinner icon instead of the registry's shimmer utility.
@@ -83,50 +83,45 @@ function TraceDescription({
 
 function TraceCollapsible({
   className,
-  ...props
-}: React.ComponentProps<typeof Collapsible>) {
+  children,
+  ...state
+}: Omit<DisclosureState, "keepMounted"> & {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <Collapsible
-      data-slot="trace-collapsible"
+    <DisclosureRoot
+      state={state}
       className={cn("flex w-full min-w-0 flex-col", className)}
-      {...props}
-    />
+    >
+      {children}
+    </DisclosureRoot>
   );
 }
 
 function TraceCollapsibleTrigger({
   className,
   children,
-  ...props
-}: React.ComponentProps<typeof CollapsibleTrigger>) {
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <CollapsibleTrigger
-      data-slot="trace-collapsible-trigger"
-      className={cn(
-        "group/trace-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-sm text-left text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 has-[[data-status=error]]:text-destructive [&>[data-slot=trace-line]]:text-inherit",
-        className,
-      )}
-      {...props}
-    >
+    <DisclosureTrigger className={cn("w-fit max-w-full", className)}>
       {children}
-      <TraceIcon className="transition-transform group-aria-expanded/trace-trigger:rotate-90 motion-reduce:transition-none">
-        <CaretRightIcon />
-      </TraceIcon>
-    </CollapsibleTrigger>
+    </DisclosureTrigger>
   );
 }
 
 function TraceCollapsibleContent({
   className,
   children,
-  ...props
-}: React.ComponentProps<typeof CollapsibleContent>) {
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <CollapsibleContent
-      data-slot="trace-collapsible-content"
-      className="h-(--collapsible-panel-height) min-w-0 overflow-hidden transition-[height] duration-150 data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none"
-      {...props}
-    >
+    <DisclosureBody className="min-w-0">
       <div
         className={cn(
           "mt-1 mb-1.5 ml-1.5 grid min-w-0 gap-1.5 border-l border-border pl-3 wrap-break-word",
@@ -135,7 +130,7 @@ function TraceCollapsibleContent({
       >
         {children}
       </div>
-    </CollapsibleContent>
+    </DisclosureBody>
   );
 }
 

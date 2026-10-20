@@ -14,8 +14,8 @@ import {
 } from "~/entity/table/column-helpers";
 import { EditableCell } from "~/entity/table/editable-cell";
 import RTable from "~/entity/table/table";
-import { BulkActionBar } from "~/ui/data-table/bulk-action-bar";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
+import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { numberCellData, specFromCellData } from "~/ui/data-table/cell-data";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";

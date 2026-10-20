@@ -29,6 +29,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatInstant } from "~/lib/date-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { Image } from "~/ui/primitives/image";
@@ -56,44 +57,41 @@ function ImageAnalysisHistory({
       {pages
         .flatMap((page) => page.items)
         .map((analysis) => (
-          <details
+          <Disclosure
             key={`${analysis.provider}:${analysis.model}:${analysis.inputFingerprint}`}
+            summary={`${analysis.provider} · ${formatInstant(analysis.createdAt, "dateShortTime")}`}
             className="border-b border-border py-2 text-sm"
           >
-            <summary className="text-xs text-muted-foreground">
-              {analysis.provider} ·{" "}
-              {formatInstant(analysis.createdAt, "dateShortTime")}
-            </summary>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {analysis.model}
               {analysis.preferred ? " · Preferred description" : ""}
             </p>
-            <details className="mt-2">
-              <summary className="text-xs">Technical details</summary>
-              <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+            <Disclosure summary="Technical details" className="mt-2">
+              <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
                 {JSON.stringify(analysis, null, 2)}
               </pre>
-            </details>
-          </details>
+            </Disclosure>
+          </Disclosure>
         ))}
       {pages
         .flatMap((page) => page.unparsed)
         .map((analysis) => (
-          <details
+          <Disclosure
             key={`${analysis.createdAt}:${analysis.promptVersion}`}
+            summary={
+              <>
+                Unparsed result · {analysis.provider ?? "Unknown provider"} ·{" "}
+                <ShortcodeProse>{analysis.reason}</ShortcodeProse>
+              </>
+            }
             className="border-b border-border py-2 text-sm"
           >
-            <summary>
-              Unparsed result · {analysis.provider ?? "Unknown provider"} ·{" "}
-              <ShortcodeProse>{analysis.reason}</ShortcodeProse>
-            </summary>
-            <details className="mt-2">
-              <summary className="text-xs">Technical details</summary>
-              <pre className="mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+            <Disclosure summary="Technical details">
+              <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
                 {analysis.rawResultJson}
               </pre>
-            </details>
-          </details>
+            </Disclosure>
+          </Disclosure>
         ))}
       {analyses.hasNextPage ? (
         <Button
@@ -145,8 +143,10 @@ function DescriptionSummary({
         </p>
       )}
       {status.analyses.length > 0 ? (
-        <details className="text-sm">
-          <summary>Compare Apple and cloud descriptions</summary>
+        <Disclosure
+          summary="Compare Apple and cloud descriptions"
+          className="text-sm"
+        >
           {status.analyses.map((analysis) => (
             <div
               key={`${analysis.provider}:${analysis.model}:${analysis.inputFingerprint}`}
@@ -161,7 +161,7 @@ function DescriptionSummary({
               </p>
             </div>
           ))}
-        </details>
+        </Disclosure>
       ) : null}
     </section>
   );
@@ -304,10 +304,9 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
           ) : null}
           <DescriptionSummary status={status.data} image={image} />
           <IdentificationSummary image={image} />
-          <details>
-            <summary className="text-sm">Technical analysis history</summary>
+          <Disclosure summary="Technical analysis history">
             <ImageAnalysisHistory id={id} />
-          </details>
+          </Disclosure>
         </>
       ) : status.error ? (
         <ErrorDisplay

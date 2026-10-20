@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from "react";
 
-import { MutedBox } from "~/ui/layout/muted-box";
+import { Panel } from "~/ui/layout/panel";
 import { Overlay } from "~/ui/overlays/overlay";
 import { DialogTrigger } from "~/ui/primitives/dialog";
 
@@ -26,9 +26,9 @@ export function DebugDialog({
       size="full"
       trigger={<DialogTrigger render={trigger} />}
     >
-      <MutedBox className="overflow-auto">
+      <Panel tone="muted" className="overflow-auto">
         <JsonRenderer input={data} pretty />
-      </MutedBox>
+      </Panel>
     </Overlay>
   );
 }

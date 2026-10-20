@@ -316,10 +316,7 @@ describe("record suggestions", () => {
     expect(suggestFields).not.toHaveBeenCalled();
     finishStored([storedRow]);
     expect(await screen.findByRole("button", { name: "Accept" })).toBeVisible();
-    const review = screen.getByText("Review", {
-      exact: true,
-      selector: "summary",
-    });
+    const review = screen.getByRole("button", { name: "Review" });
     expect(
       screen.queryByRole("button", { name: "Suggestion actions" }),
     ).toBeNull();
@@ -674,6 +671,7 @@ describe("record suggestions", () => {
       });
     });
     await screen.findByText("Suggested: Tools");
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     view.rerender(
       <Surface name="steel wrench" operations={operations} visible={false} />,

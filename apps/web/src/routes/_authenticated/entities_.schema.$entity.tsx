@@ -29,7 +29,6 @@ function EntitySchemaPage() {
     <Page
       variant="list"
       title="Entity schema"
-      compact
       bodyGutter="standard"
       actions={
         <Link

@@ -26,8 +26,9 @@ import {
 import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
-import { Button } from "~/ui/primitives/button";
-import { Card, CardContent } from "~/ui/primitives/card";
+import { EmptyState } from "~/ui/feedback/empty-state";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { buttonVariants } from "~/ui/primitives/button";
 
 const searchParamsSchema = z.object({
   ids: urlStringParam,
@@ -117,21 +118,22 @@ function RecipeComparePage() {
 
   if (recipeIds.length === 0) {
     return (
-      <Page variant="list" title="Compare Recipes">
-        <Card>
-          <CardContent className="py-6 text-center">
-            <p className="text-muted-foreground">
-              No recipes selected for comparison. Select 2 or more recipes from
-              the recipes list.
-            </p>
-            <Link to="/recipes" className="mt-4 inline-block">
-              <Button>
-                <ArrowLeftIcon className="mr-2 size-4" />
-                Back to Recipes
-              </Button>
+      <Page variant="list" title="Compare recipes">
+        <EmptyState
+          size="page"
+          description="Select 2 or more recipes from the recipes list."
+          action={
+            <Link
+              to="/recipes"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              <ArrowLeftIcon />
+              Back to recipes
             </Link>
-          </CardContent>
-        </Card>
+          }
+        >
+          No recipes selected for comparison.
+        </EmptyState>
       </Page>
     );
   }
@@ -139,23 +141,17 @@ function RecipeComparePage() {
   return (
     <Page
       variant="list"
-      title="Compare Recipes"
+      title="Compare recipes"
       layout="full"
       actions={
-        <Link to="/recipes">
-          <Button variant="outline">
-            <ArrowLeftIcon className="mr-2 size-4" />
-            Back to Recipes
-          </Button>
+        <Link to="/recipes" className={buttonVariants({ variant: "outline" })}>
+          <ArrowLeftIcon />
+          Back to recipes
         </Link>
       }
     >
       {isLoading ? (
-        <Card>
-          <CardContent className="py-6 text-center">
-            <p className="text-muted-foreground">Loading recipes...</p>
-          </CardContent>
-        </Card>
+        <SimpleLoading text="Loading recipes…" />
       ) : (
         <div className="space-y-4">
           <RecipeCompareGrid compared={compared} onRemove={handleRemove} />

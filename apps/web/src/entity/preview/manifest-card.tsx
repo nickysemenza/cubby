@@ -136,7 +136,7 @@ export function ManifestCard({
                     <ArrowUpRightIcon className="size-3.5" />
                   </Link>
                 ) : null}
-                <span className="rounded-sm bg-muted px-2 py-px font-mono text-2xs tracking-wide text-muted-foreground uppercase">
+                <span className="rounded-sm bg-muted px-2 py-px text-xs font-medium text-muted-foreground">
                   {tag}
                 </span>
               </Row>

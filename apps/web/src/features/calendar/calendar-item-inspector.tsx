@@ -318,13 +318,13 @@ function ReadOnlyCalendarItem({
         <CalendarItemPresentation item={item} variant="rich" />
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
-        <dt className="font-mono text-slate uppercase">Dates</dt>
+        <dt className="text-xs font-medium text-slate">Dates</dt>
         <dd>
           {item.startDate} – {item.endDateExclusive}
         </dd>
         {item.kind === "expense" && item.cost != null && (
           <>
-            <dt className="font-mono text-slate uppercase">Amount</dt>
+            <dt className="text-xs font-medium text-slate">Amount</dt>
             <dd>{formatCurrency(item.cost)}</dd>
           </>
         )}

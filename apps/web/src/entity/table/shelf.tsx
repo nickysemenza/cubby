@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -171,13 +172,13 @@ export function ShelfCard({
   selected?: boolean;
 }) {
   return (
-    <div
+    <Panel
+      tone="default"
+      flush
       data-entity-card
       className={cn(
-        "relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card transition-colors duration-150 hover:bg-muted/50",
-        selected
-          ? "border-primary ring-2 ring-[var(--brand-signal)]"
-          : "border-[var(--border)]",
+        "relative flex min-w-0 flex-col transition-colors duration-150 hover:bg-muted/50",
+        selected && "border-primary ring-2 ring-[var(--brand-signal)]",
       )}
       onMouseEnter={onRowHover}
       onMouseLeave={onRowHoverEnd}
@@ -264,7 +265,7 @@ export function ShelfCard({
           <ArrowUpRightIcon className="size-4" />
         </Link>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -272,16 +273,13 @@ function ShelfSkeleton({ compact = false }: { compact?: boolean }) {
   return (
     <div className={shelfGridClass(compact)}>
       {Array.from({ length: 12 }, (_, i) => (
-        <div
-          key={i}
-          className="overflow-hidden rounded-lg border border-[var(--border)]"
-        >
+        <Panel key={i} tone="default" flush>
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-2 px-2 py-2">
             <Skeleton className="h-3.5 w-3/4" />
             <Skeleton className="h-3 w-1/2" />
           </div>
-        </div>
+        </Panel>
       ))}
     </div>
   );
@@ -356,7 +354,7 @@ export function ShelfGrid<T>({
                   count={section.count}
                   onFilter={section.onFilter}
                   onHide={section.onHide}
-                  className="sticky top-[var(--app-chrome-top)] z-10 mb-3 rounded-md border"
+                  className="sticky top-[var(--app-chrome-top)] z-10 mb-3"
                 />
                 <div className={shelfGridClass(compact)}>
                   {section.items.map(renderCard)}

@@ -272,7 +272,7 @@ function Treemap({ data }: TreemapProps) {
                     {!node.data.hasPrice && width > 60 && height > 45 && (
                       <div
                         className={
-                          "mt-0.5 font-mono text-2xs text-muted-foreground uppercase" /* tight: label stack inside a clipped treemap tile */
+                          "mt-0.5 text-xs font-medium text-muted-foreground" /* tight: label stack inside a clipped treemap tile */
                         }
                       >
                         No price

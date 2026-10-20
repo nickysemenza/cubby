@@ -4,14 +4,15 @@ import { useMemo, useRef } from "react";
 import { type EntityActionDefinition } from "~/entity/actions/entity-action-definition";
 import { useRedundantOverrideBulkAction } from "~/entity/fields/field-resolution";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
-import {
-  BulkActionBar,
-  type BulkActionBarProps,
-} from "~/ui/data-table/bulk-action-bar";
 import type {
   BulkAction,
   BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
+import {
+  BulkActionBar,
+  type BulkActionBarProps,
+} from "~/ui/data-table/bulk/bulk-action-bar";
+import { tableMoneyTotals } from "~/ui/data-table/bulk/table-money";
 import type {
   CubbyRow as Row,
   CubbyTable as Table,
@@ -187,6 +188,10 @@ export function ListBulkActionBar<TData extends { id: string }>({
     <BulkActionBar
       selectedCount={state.selectedCount}
       selectedRows={selectedRows}
+      moneyTotals={tableMoneyTotals(
+        table.getVisibleLeafColumns(),
+        selectedRows,
+      )}
       actions={state.getAvailableActions(selectedRows)}
       onExecute={state.executeAction}
       onClearSelection={state.clearSelection}

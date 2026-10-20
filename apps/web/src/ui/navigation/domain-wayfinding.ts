@@ -20,9 +20,6 @@ const entitiesOn = (domain: WayfindingDomain): readonly Entity[] =>
 export type DomainWayfinding = {
   id: WayfindingDomain;
   label: string;
-  /** CSS custom-property tokens; components own the actual theme values. */
-  accentToken: `--domain-${WayfindingDomain}`;
-  surfaceToken: `--domain-${WayfindingDomain}-surface`;
   /** Entities whose canonical detail/list routes belong to this family. */
   entities: readonly Entity[];
   /** Route roots are kept here so shell and page identity share one taxonomy. */
@@ -33,16 +30,12 @@ export const DOMAIN_WAYFINDING = {
   cook: {
     id: "cook",
     label: WAYFINDING_DOMAIN_PRESENTATION.cook.label,
-    accentToken: "--domain-cook",
-    surfaceToken: "--domain-cook-surface",
     entities: entitiesOn("cook"),
     routeRoots: ["/recipes", "/cookbooks", "/ingredients"],
   },
   pantry: {
     id: "pantry",
     label: WAYFINDING_DOMAIN_PRESENTATION.pantry.label,
-    accentToken: "--domain-pantry",
-    surfaceToken: "--domain-pantry-surface",
     entities: entitiesOn("pantry"),
     routeRoots: [
       "/products",
@@ -56,16 +49,12 @@ export const DOMAIN_WAYFINDING = {
   plan: {
     id: "plan",
     label: WAYFINDING_DOMAIN_PRESENTATION.plan.label,
-    accentToken: "--domain-plan",
-    surfaceToken: "--domain-plan-surface",
     entities: entitiesOn("plan"),
     routeRoots: ["/calendar", "/meals", "/wishes"],
   },
   house: {
     id: "house",
     label: WAYFINDING_DOMAIN_PRESENTATION.house.label,
-    accentToken: "--domain-house",
-    surfaceToken: "--domain-house-surface",
     entities: entitiesOn("house"),
     routeRoots: [
       "/projects",
@@ -79,8 +68,6 @@ export const DOMAIN_WAYFINDING = {
   finance: {
     id: "finance",
     label: WAYFINDING_DOMAIN_PRESENTATION.finance.label,
-    accentToken: "--domain-finance",
-    surfaceToken: "--domain-finance-surface",
     entities: entitiesOn("finance"),
     routeRoots: [
       "/expenses",

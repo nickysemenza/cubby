@@ -3,6 +3,7 @@ import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { useState } from "react";
 
+import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
@@ -48,7 +49,11 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
           </Button>
         </div>
       ) : null}
-      <div className="relative aspect-square w-full overflow-hidden border-y border-border bg-card md:max-w-sm md:rounded-md md:border">
+      <Panel
+        tone="default"
+        flush
+        className="relative aspect-square w-full max-md:rounded-none max-md:border-x-0 md:max-w-sm"
+      >
         {image.status === "UPLOADED" ? (
           <Image
             src={
@@ -84,7 +89,7 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
             </div>
           </div>
         )}
-      </div>
+      </Panel>
     </div>
   );
 }

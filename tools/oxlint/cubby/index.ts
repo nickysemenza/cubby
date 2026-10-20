@@ -23,10 +23,25 @@ import { noUnsafeIdentifiersRule } from "./rules/no-unsafe-identifiers.ts";
 import { purchaseAgentBoundaryRule } from "./rules/purchase-agent-boundary.ts";
 import { requireSoftDeleteFilterRule } from "./rules/require-soft-delete-filter.ts";
 
+import {
+  noUppercaseUtilityRule,
+  noLargeRadiusRule,
+  noShadowUtilityRule,
+  noArbitraryFontSizeRule,
+  noDarkVariantRule,
+  noHandRolledPanelRule,
+} from "./rules/visual-conventions.ts";
+
 /** Cubby-specific Oxlint rules ported from one-off `scripts/check-*.ts` gates. */
 const cubbyPlugin = eslintCompatPlugin({
   meta: { name: "cubby" },
   rules: {
+    "no-uppercase-utility": noUppercaseUtilityRule,
+    "no-large-radius": noLargeRadiusRule,
+    "no-shadow-utility": noShadowUtilityRule,
+    "no-arbitrary-font-size": noArbitraryFontSizeRule,
+    "no-dark-variant": noDarkVariantRule,
+    "no-hand-rolled-panel": noHandRolledPanelRule,
     "no-ordinary-dialog-bypass": noOrdinaryDialogBypassRule,
     "domain-layers": domainLayersRule,
     "no-domain-barrel": noDomainBarrelRule,

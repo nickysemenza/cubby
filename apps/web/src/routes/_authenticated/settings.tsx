@@ -3,7 +3,6 @@ import { purchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-de
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CoinsIcon } from "@phosphor-icons/react/dist/csr/Coins";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
@@ -46,20 +45,9 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/ui/primitives/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { StatusText } from "~/ui/primitives/status-text";
@@ -74,7 +62,6 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function SettingsPage() {
   const { purchaseAgent } = Route.useSearch();
-  const [devOpen, setDevOpen] = useState(false);
   return (
     <Page variant="list" title="Settings">
       <IndexedSections
@@ -167,29 +154,12 @@ function SettingsPage() {
                 icon: WrenchIcon,
                 overflowVisible: true,
                 content: (
-                  <Collapsible open={devOpen} onOpenChange={setDevOpen}>
-                    <CollapsibleTrigger
-                      render={
-                        <Button
-                          variant="outline"
-                          aria-label="Toggle developer tools"
-                        />
-                      }
-                    >
-                      {devOpen
-                        ? "Hide connection diagnostics"
-                        : "Show connection diagnostics"}
-                      <CaretDownIcon
-                        className={`size-4 transition-transform ${devOpen ? "rotate-180" : ""}`}
-                      />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <Stack gap="lg" className="pt-4">
-                        <DiagnosticsCard />
-                        <CalendarFeedInspectorCard enabled={devOpen} />
-                      </Stack>
-                    </CollapsibleContent>
-                  </Collapsible>
+                  <Disclosure summary="Connection diagnostics">
+                    <Stack gap="lg">
+                      <DiagnosticsCard />
+                      <CalendarFeedInspectorCard />
+                    </Stack>
+                  </Disclosure>
                 ),
               },
             ],
@@ -492,10 +462,9 @@ function GmailAccessSettings() {
   );
 }
 
-function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
+function CalendarFeedInspectorCard() {
   const { data, error, isFetching, refetch } = useQuery({
     ...calendar.inspectFeed.queryOptions(),
-    enabled,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -507,91 +476,80 @@ function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <Row
-          align="start"
-          justify="between"
-          gap="md"
-          className="max-md:flex-col"
-        >
-          <Stack gap="sm">
-            <CardTitle>Calendar state</CardTitle>
-            <CardDescription>
-              Durable Object metadata only. Credentials and calendar contents
-              are omitted; jurisdiction is not the active colo.
-            </CardDescription>
-          </Stack>
-          <Row gap="xs" justify="end" className="shrink-0 max-md:w-full">
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-            >
-              <ArrowClockwiseIcon
-                className={`size-3 ${isFetching ? "animate-spin" : ""}`}
-              />
-              {isFetching ? "Reading…" : "Refresh"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              disabled={!json}
-              onClick={() => {
-                if (!json) return;
-                void copyTextWithToast(json, "Calendar feed state copied");
-              }}
-            >
-              <CopyIcon className="size-3" />
-              Copy JSON
-            </Button>
-          </Row>
-        </Row>
-      </CardHeader>
-      <CardContent>
-        {error ? (
-          <StatusText as="p" tone="destructive" className="text-xs">
-            Calendar state could not be loaded. Try again shortly.
-          </StatusText>
-        ) : json ? (
-          <Stack gap="md">
-            {data?.caldav?.uncertainWrites.map((write) => (
-              <Stack key={`${write.collection}/${write.filename}`} gap="xs">
-                <Description as="p" size="xs">
-                  Uncertain write: {write.collection}/{write.filename}
-                  {write.shortcode ? ` (${write.shortcode})` : ""}. Check this
-                  record in Cubby before clearing. Clearing only unblocks
-                  calendar edits; it never repeats or deletes a change.
-                </Description>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  disabled={clearWrite.isPending}
-                  onClick={() =>
-                    clearWrite.mutate({
-                      collection: write.collection,
-                      filename: write.filename,
-                    })
-                  }
-                >
-                  Clear uncertain write
-                </Button>
-              </Stack>
-            ))}
-            <pre className="max-h-[32rem] overflow-auto bg-muted/35 p-4 font-mono text-xs">
-              {json}
-            </pre>
-          </Stack>
-        ) : (
-          <Description as="p" size="xs">
-            {isFetching ? "Reading calendar state…" : "No state returned."}
-          </Description>
-        )}
-      </CardContent>
-    </Card>
+    <Section
+      title="Calendar state"
+      headingAs="h4"
+      compact
+      caption="Durable Object metadata only. Credentials and calendar contents are omitted; jurisdiction is not the active colo."
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            <ArrowClockwiseIcon
+              className={`size-3 ${isFetching ? "animate-spin" : ""}`}
+            />
+            {isFetching ? "Reading…" : "Refresh"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={!json}
+            onClick={() => {
+              if (!json) return;
+              void copyTextWithToast(json, "Calendar feed state copied");
+            }}
+          >
+            <CopyIcon className="size-3" />
+            Copy JSON
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <StatusText as="p" tone="destructive" className="text-xs">
+          Calendar state could not be loaded. Try again shortly.
+        </StatusText>
+      ) : json ? (
+        <Stack gap="md">
+          {data?.caldav?.uncertainWrites.map((write) => (
+            <Stack key={`${write.collection}/${write.filename}`} gap="xs">
+              <Description as="p" size="xs">
+                Uncertain write: {write.collection}/{write.filename}
+                {write.shortcode ? ` (${write.shortcode})` : ""}. Check this
+                record in Cubby before clearing. Clearing only unblocks calendar
+                edits; it never repeats or deletes a change.
+              </Description>
+              <Button
+                variant="outline"
+                size="xs"
+                disabled={clearWrite.isPending}
+                onClick={() =>
+                  clearWrite.mutate({
+                    collection: write.collection,
+                    filename: write.filename,
+                  })
+                }
+              >
+                Clear uncertain write
+              </Button>
+            </Stack>
+          ))}
+          <pre className="max-h-[32rem] overflow-auto bg-muted/35 p-4 font-mono text-xs">
+            {json}
+          </pre>
+        </Stack>
+      ) : (
+        <Description as="p" size="xs">
+          {isFetching ? "Reading calendar state…" : "No state returned."}
+        </Description>
+      )}
+    </Section>
   );
 }
 
@@ -610,27 +568,23 @@ function DiagnosticsCard() {
     });
 
   return (
-    <Card>
-      <CardHeader>
-        <Row align="start" justify="between" gap="md">
-          <Stack gap="sm">
-            <CardTitle>Diagnostics</CardTitle>
-            <CardDescription>
-              Latency of core infrastructure — database, USDA API, and UPC
-              lookup.
-            </CardDescription>
-          </Stack>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            {isFetching ? "Measuring…" : "Re-run"}
-          </Button>
-        </Row>
-      </CardHeader>
-      <CardContent className="divide-y divide-border/60">
+    <Section
+      title="Diagnostics"
+      headingAs="h4"
+      compact
+      caption="Latency of core infrastructure — database, USDA API, and UPC lookup."
+      actions={
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          {isFetching ? "Measuring…" : "Re-run"}
+        </Button>
+      }
+    >
+      <div className="divide-y divide-border/60">
         {error ? (
           <StatusText as="p" tone="destructive" className="py-4 text-xs">
             Timing check failed: {getErrorMessage(error)}
@@ -677,7 +631,7 @@ function DiagnosticsCard() {
             </Row>
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }

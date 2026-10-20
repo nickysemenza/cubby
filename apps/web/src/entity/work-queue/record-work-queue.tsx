@@ -9,7 +9,7 @@ import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { SectionHeading } from "~/ui/layout";
+import { Section } from "~/ui/layout";
 
 import {
   isTransferEvidenceRow,
@@ -92,18 +92,12 @@ export function RecordWorkQueue({
       </section>
     );
   return (
-    <section aria-label="Work queue" className="min-w-0">
-      <SectionHeading
-        title="Work queue"
-        actions={
-          <Link
-            to="/work-queue"
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-          >
-            Open queue
-          </Link>
-        }
-      />
+    <Section
+      title="Work queue"
+      headingAs="h3"
+      compact
+      actions={<Link to="/work-queue">Open queue</Link>}
+    >
       <Ledger>
         {rows.map((row) => (
           <LedgerRow key={row.key}>
@@ -132,6 +126,6 @@ export function RecordWorkQueue({
       {rows.some(isTransferEvidenceRow) ? (
         <TransferPairAccept transactionId={id} />
       ) : null}
-    </section>
+    </Section>
   );
 }

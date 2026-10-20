@@ -76,12 +76,12 @@ describe("structured scalar presentation", () => {
 
   it("collapses generic detail JSON until requested", () => {
     render(<>{renderScalarValue({ kind: "json", raw: data }, "detail")}</>);
-    const disclosure = screen.getByText(/1 item/i).closest("details");
-    expect(disclosure).not.toBeNull();
-    expect(disclosure).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByText(/1 item/i));
-    expect(disclosure).toHaveAttribute("open");
-    expect(disclosure).toHaveTextContent("ABC-123");
+    const trigger = screen.getByRole("button", { name: /1 item/i });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText(/ABC-123/)).toBeNull();
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/ABC-123/)).toBeVisible();
   });
 });
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { Panel } from "~/ui/layout/panel";
 
 /** A section's heading line: the component names exactly as imported, then
  * their source paths relative to `apps/web/src`. */
@@ -34,11 +35,10 @@ export function Demo({
   children: ReactNode;
 }) {
   return (
-    <figure
-      className={cn(
-        "flex min-w-0 flex-col gap-2 rounded-md border bg-card p-3",
-        className,
-      )}
+    <Panel
+      tone="default"
+      render={<figure />}
+      className={cn("flex flex-col gap-2", className)}
     >
       <figcaption className="flex flex-col gap-0.5">
         <code className="font-mono text-2xs text-foreground">{name}</code>
@@ -47,7 +47,7 @@ export function Demo({
         ) : null}
       </figcaption>
       {children}
-    </figure>
+    </Panel>
   );
 }
 

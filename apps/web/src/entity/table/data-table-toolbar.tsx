@@ -5,6 +5,7 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
+import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
 import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
 import type { RowData } from "@tanstack/react-table";
@@ -14,7 +15,7 @@ import { createPortal } from "react-dom";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { cn } from "~/lib/utils";
-import { Row } from "~/ui/layout";
+import { Row, Toolbar } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -51,7 +52,7 @@ interface DataTableToolbarProps<TData extends RowData> {
   additionalContent?: ReactNode;
   /** Primary actions (e.g., "Create New" button) */
   actions?: ReactNode;
-  /** Bulk action bar (rendered when rows selected, replaces view options) */
+  /** Floating bulk actions, rendered when rows are selected. */
   bulkActionBar?: ReactNode;
   /** Show desktop view options dropdown (column toggles) */
   showViewOptions?: boolean;
@@ -109,8 +110,8 @@ function SavedViewsSubmenu<TData extends RowData>({
  * The page-mode workbench's `Actions ▾`: table-layout customization and
  * saved views, plus whatever the table owner (`RTable`) folds in through
  * `extra` (inspector/grouped toggles and the list's bulk verbs, disabled at
- * rest). The live `bulkActionBar` replaces this tier via
- * `data-query-bulk`/`data-query-rest` (styles.css) once rows are selected.
+ * rest). The live selection bar floats below the table, leaving query tools
+ * available while rows are selected.
  */
 function ActionsMenu<TData extends RowData>({
   table,
@@ -135,7 +136,11 @@ function ActionsMenu<TData extends RowData>({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="ghost" size="sm" className="relative shrink-0" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="relative h-7.5 shrink-0 text-sm"
+            />
           }
         >
           Actions
@@ -181,22 +186,27 @@ function ActionsMenu<TData extends RowData>({
  * "Order". Writes the same `sorting` state the column headers do; a cleared
  * sort falls back to the entity's declared default order.
  */
-function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
+export function SortMenu<TData extends RowData>({
+  table,
+}: {
+  table: Table<TData>;
+}) {
   const columns = sortableColumns(table);
   if (columns.length === 0) return null;
   const [active] = table.state.sorting;
   const activeColumn = columns.find((column) => column.id === active?.id);
   const label = activeColumn ? mobileColumnLabel(activeColumn) : "Default";
+  const date = activeColumn?.columnDef.meta?.valueKind === "date";
   const OrderIcon = active?.desc ? SortDescendingIcon : SortAscendingIcon;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             aria-label={`Sort: ${label}${active ? (active.desc ? ", descending" : ", ascending") : ""}`}
-            className="shrink-0"
+            className="h-7.5 shrink-0 text-sm"
           />
         }
       >
@@ -206,7 +216,9 @@ function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
           <ArrowsDownUpIcon className="size-3.5" />
         )}
         {label}
-        <CaretDownIcon className="size-3.5" />
+        {active
+          ? ` · ${date ? (active.desc ? "newest" : "oldest") : active.desc ? "descending" : "ascending"}`
+          : ""}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
         <DropdownMenuGroup aria-label="Sort by">
@@ -272,6 +284,45 @@ function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
   );
 }
 
+function GroupMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
+  const grouping = table.options.meta?.grouping;
+  if (!grouping?.choices.length) return null;
+  const active = grouping.choices.find(
+    (choice) => choice.key === grouping.active,
+  );
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7.5 text-sm"
+            aria-label={`Group: ${active?.label ?? "None"}`}
+          />
+        }
+      >
+        <RowsIcon className="size-3.5" />
+        {active?.label ?? "Group"}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => grouping.onChange(null)}>
+          No grouping{!active && <CheckIcon className="ml-auto size-3.5" />}
+        </DropdownMenuItem>
+        {grouping.choices.map((choice) => (
+          <DropdownMenuItem
+            key={choice.key}
+            onClick={() => grouping.onChange(choice.key)}
+          >
+            {choice.label}
+            {active === choice && <CheckIcon className="ml-auto size-3.5" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /**
  * The query tier: bulk slot plus the rest (problem status, spinner, filters,
  * `Actions ▾`, page actions) as ONE node — so `styles.css`'s
@@ -317,7 +368,6 @@ function QueryTierFieldset<TData extends RowData>({
     isPage && !isMobileFilterTier ? (
       <fieldset
         disabled={isTransitioning}
-        data-workbench-table-actions
         className={actionsTarget ? "hidden md:block" : undefined}
       >
         <ActionsMenu
@@ -329,10 +379,7 @@ function QueryTierFieldset<TData extends RowData>({
       </fieldset>
     ) : null;
   return (
-    <fieldset
-      disabled={isTransitioning}
-      className="data-table-query-tier contents"
-    >
+    <fieldset disabled={isTransitioning} className="contents">
       <div data-query-bulk className="contents">
         {bulkActionBar}
       </div>
@@ -358,6 +405,7 @@ function QueryTierFieldset<TData extends RowData>({
           />
         </div>
         {isPage && !isMobileFilterTier && <SortMenu table={table} />}
+        {!isPage && !isMobileFilterTier && <GroupMenu table={table} />}
         {isPage && !isMobileFilterTier && tabsTarget
           ? createPortal(
               <SavedViewTabs table={table} entity={entity} />,
@@ -452,22 +500,24 @@ export function DataTableToolbar<TData extends RowData>({
   }
 
   return (
-    <div
+    <Toolbar
+      label="Table tools"
       data-toolbar-variant={variant}
       className={cn(
-        "flex min-w-0 flex-wrap items-center bg-card px-2 py-1",
+        "flex min-w-0 flex-wrap items-center bg-card px-2 py-1 [&>div]:w-full [&>div>div:last-child]:flex-1",
         variant === "embedded" ? "min-h-8 gap-1" : "min-h-10 gap-2",
         className,
       )}
-    >
-      {!isPage && (
-        <Row align="center" gap="xs" className="shrink-0">
-          {problemStatus}
-          {embeddedUtilities}
-          {spinner}
-        </Row>
-      )}
-      <div className="min-w-0 flex-1">{fieldset}</div>
-    </div>
+      start={
+        !isPage && (
+          <Row align="center" gap="xs" className="shrink-0">
+            {problemStatus}
+            {embeddedUtilities}
+            {spinner}
+          </Row>
+        )
+      }
+      end={<div className="min-w-0 flex-1">{fieldset}</div>}
+    />
   );
 }

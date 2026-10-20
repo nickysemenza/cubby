@@ -1,8 +1,4 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
-import { ChartPieIcon } from "@phosphor-icons/react/dist/csr/ChartPie";
-import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
-import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
-import { ShareNetworkIcon } from "@phosphor-icons/react/dist/csr/ShareNetwork";
 import { useState } from "react";
 
 import { IngredientUsagePanel } from "~/features/ingredient/ingredient-usage-panel";
@@ -18,33 +14,29 @@ export function HomeInsights() {
     <Grid cols="pair" gap="md">
       <Section
         headingAs="h3"
-        icon={<ChartPieIcon />}
         title="Which categories hold our products?"
-        description="Distribution across categories — click a ring to open one."
+        caption="Distribution across categories — click a ring to open one."
       >
         <HierarchySunburst entity="productCategory" />
       </Section>
       <Section
         headingAs="h3"
-        icon={<MapPinIcon />}
         title="Where is our inventory?"
-        description="How owned-item counts are distributed across your locations."
+        caption="How owned-item counts are distributed across your locations."
       >
         <HierarchySunburst entity="location" />
       </Section>
       <Section
         headingAs="h3"
-        icon={<ShareNetworkIcon />}
         title="Which ingredients travel together?"
-        description="Ingredients that co-occur across recipes; larger nodes are used more."
+        caption="Ingredients that co-occur across recipes; larger nodes are used more."
       >
         <IngredientNetwork />
       </Section>
       <Section
         headingAs="h3"
-        icon={<ListChecksIcon />}
         title="Which ingredients power our recipes?"
-        description="How many recipes use each ingredient; scope by cookbook."
+        caption="How many recipes use each ingredient; scope by cookbook."
       >
         <IngredientUsageSection />
       </Section>

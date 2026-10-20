@@ -16,17 +16,13 @@ import { useCallback, useId, useMemo, useRef } from "react";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { flattenRecipes } from "~/lib/cookbook-graph";
 import { cookbookRecipeSignature } from "~/lib/recipe-signature";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { Panel } from "~/ui/layout/panel";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
 import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent, CardHeader } from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/ui/primitives/collapsible";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
@@ -139,8 +135,8 @@ export function BookGroupCard({
   const allSelected = flat.length > 0 && book.selected.size === flat.length;
 
   return (
-    <Card variant="panel" size="sm">
-      <CardHeader className="flex-row items-center gap-2 space-y-0">
+    <Panel tone="default">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {ready && flat.length > 0 ? (
           <Checkbox
             aria-label="Select all in book"
@@ -153,6 +149,7 @@ export function BookGroupCard({
           onClick={() => handlers.toggleExpanded(book.source)}
           className="text-muted-foreground"
           aria-label={book.expanded ? "Collapse" : "Expand"}
+          aria-expanded={book.expanded}
         >
           {book.expanded ? (
             <CaretDownIcon className="size-4" />
@@ -201,7 +198,7 @@ export function BookGroupCard({
             <XIcon className="size-4" />
           </button>
         </Row>
-      </CardHeader>
+      </div>
 
       {book.expanded && (
         <BookDetails
@@ -213,7 +210,7 @@ export function BookGroupCard({
           existingByName={existingByName}
         />
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -234,7 +231,7 @@ function BookDetails({
 }) {
   const extraction = book.extraction;
   return (
-    <CardContent className="space-y-2">
+    <div className="mt-2 space-y-2">
       <BookIdentity book={book} />
       {book.bundleManifest && (
         <Stack gap="xs">
@@ -312,7 +309,7 @@ function BookDetails({
           existingByName={existingByName}
         />
       )}
-    </CardContent>
+    </div>
   );
 }
 
@@ -591,27 +588,20 @@ function ChapterRow({
 }) {
   return (
     <Stack gap="xs" className="pt-2">
-      <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title}
-      </div>
+      <div className="text-xs font-semibold text-muted-foreground">{title}</div>
       {context.length > 0 && (
-        <Collapsible>
-          <CollapsibleTrigger className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground">
-            <CaretDownIcon className="size-3" />
-            {countLabel(context.length, "technique")} /{" "}
-            {pluralize("essay", context.length)} — read, not importable
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <ul className="mt-1 space-y-0.5 pl-4 text-2xs text-muted-foreground">
-              {context.map((item) => (
-                <li key={item.id}>
-                  {item.title}
-                  <span className="opacity-60"> · {item.kind}</span>
-                </li>
-              ))}
-            </ul>
-          </CollapsibleContent>
-        </Collapsible>
+        <Disclosure
+          summary={`${countLabel(context.length, "technique")} / ${pluralize("essay", context.length)} — read, not importable`}
+        >
+          <ul className="space-y-0.5 text-2xs text-muted-foreground">
+            {context.map((item) => (
+              <li key={item.id}>
+                {item.title}
+                <span className="opacity-60"> · {item.kind}</span>
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
       )}
     </Stack>
   );

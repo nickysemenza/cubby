@@ -113,7 +113,7 @@ function FitFixture({
       </button>
       <div ref={ref}>
         <Table
-          className="table-fixed border-separate border-spacing-0 text-[0.8125rem]"
+          className="table-fixed border-separate border-spacing-0 text-sm"
           style={{
             ...columnWidthVariables(
               table.getVisibleLeafColumns(),
@@ -252,7 +252,7 @@ function DateFitFixture({ inherited = false }: { inherited?: boolean }) {
       }
     >
       <Table
-        className="table-fixed border-separate border-spacing-0 text-[0.8125rem] tabular-nums"
+        className="table-fixed border-separate border-spacing-0 text-sm tabular-nums"
         style={{
           ...columnWidthVariables(
             table.getVisibleLeafColumns(),
@@ -309,26 +309,34 @@ describe("rendered column fit", () => {
       await waitFor(() =>
         expect(view.getByTestId("date-fit").textContent).not.toBe("pending"),
       );
-      const label = view.getByTestId("date").querySelector("[title]");
-      if (!label) throw new Error("missing future calendar label");
-      const range = document.createRange();
-      range.selectNodeContents(label);
-      const text = range.getBoundingClientRect();
-      const clippingBounds: Array<{ left: number; right: number }> = [];
-      for (let node: Element | null = label; node; node = node.parentElement) {
-        const overflow = getComputedStyle(node).overflowX;
-        if (overflow === "hidden" || overflow === "clip") {
-          const clip = node.getBoundingClientRect();
-          const left = clip.left + node.clientLeft;
-          clippingBounds.push({ left, right: left + node.clientWidth });
+      await document.fonts.ready;
+      await waitFor(() => {
+        const label = view.getByTestId("date").querySelector("[title]");
+        if (!label) throw new Error("missing future calendar label");
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        const text = range.getBoundingClientRect();
+        const clippingBounds: Array<{ left: number; right: number }> = [];
+        for (
+          let node: Element | null = label;
+          node;
+          node = node.parentElement
+        ) {
+          const overflow = getComputedStyle(node).overflowX;
+          if (overflow === "hidden" || overflow === "clip") {
+            const clip = node.getBoundingClientRect();
+            const left = clip.left + node.clientLeft;
+            clippingBounds.push({ left, right: left + node.clientWidth });
+          }
+          if (node.hasAttribute("data-column-id")) break;
         }
-        if (node.hasAttribute("data-column-id")) break;
-      }
-      expect(
-        clippingBounds.every(
-          (clip) => text.left >= clip.left - 1 && text.right <= clip.right + 1,
-        ),
-      ).toBe(true);
+        expect(
+          clippingBounds.every(
+            (clip) =>
+              text.left >= clip.left - 1 && text.right <= clip.right + 1,
+          ),
+        ).toBe(true);
+      });
     },
   );
 

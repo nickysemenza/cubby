@@ -2,13 +2,15 @@ import { Link } from "@tanstack/react-router";
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
   type RefCallback,
 } from "react";
 
-import { SectionHeading } from "~/ui/layout";
+import { Panel, Section } from "~/ui/layout";
 
 type Slot = "quality" | "suggestions";
 type Targets = Record<Slot, HTMLElement | null>;
@@ -61,28 +63,46 @@ export function useNeedsYouTarget(slot: Slot): HTMLElement | null | undefined {
  */
 export function NeedsYou({ children }: { children?: ReactNode }) {
   const context = useContext(NeedsYouContext);
+  const sectionRef = useRef<HTMLElement>(null);
+  const [count, setCount] = useState<number>();
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const updateCount = () => {
+      const next = Array.from(
+        section.querySelectorAll("[data-needs-row]"),
+      ).filter((row) => !row.closest('[aria-busy="true"]')).length;
+      setCount((current) => (current === next ? current : next));
+    };
+    updateCount();
+    const observer = new MutationObserver(updateCount);
+    observer.observe(section, {
+      attributes: true,
+      attributeFilter: ["aria-busy", "data-needs-row"],
+      childList: true,
+      subtree: true,
+    });
+    return () => observer.disconnect();
+  }, []);
   return (
-    <section
-      aria-label="Needs you"
-      className="hidden min-w-0 has-[[data-needs-row]]:block"
+    <Section
+      ref={sectionRef}
+      title="Needs you"
+      headingAs="h2"
+      count={count ? count : undefined}
+      className="hidden has-[[data-needs-row]]:flex"
       data-testid="needs-you"
+      actions={<Link to="/work-queue">Open queue</Link>}
     >
-      <SectionHeading
-        title="Needs you"
-        actions={
-          <Link
-            to="/work-queue"
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-          >
-            Open queue
-          </Link>
-        }
-      />
-      <div className="mt-2 divide-y divide-hairline-soft rounded-lg border border-border text-sm [&>*:empty]:hidden">
+      <Panel
+        tone="default"
+        flush
+        className="divide-y divide-hairline-soft [&>*:empty]:hidden"
+      >
         {children}
         <div ref={context?.refs.suggestions} className="px-3 py-2" />
         <div ref={context?.refs.quality} className="px-3 py-2" />
-      </div>
-    </section>
+      </Panel>
+    </Section>
   );
 }

@@ -64,8 +64,8 @@ describe("inline suggestion review", () => {
         />,
       );
       expect(screen.getByRole("button", { name: "Accept" })).toBeVisible();
-      expect(screen.getByText("Evidence from the record")).not.toBeVisible();
-      fireEvent.click(screen.getByText("Review", { exact: true }));
+      expect(screen.queryByText("Evidence from the record")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Review" }));
       expect(screen.getByText("Evidence from the record")).toBeVisible();
       fireEvent.click(screen.getByRole("button", { name: "Accept" }));
       expect(save).toHaveBeenCalledOnce();

@@ -17,10 +17,10 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 
 const EMBEDDED_TABLE_STATE = {
   initialSort: "postedDate",
@@ -207,13 +207,12 @@ export function LinkedTransactions({
         mode="embedded"
         showColumnMenu
         emptyState={
-          <Empty>
-            <EmptyTitle>No linked transactions</EmptyTitle>
-            <EmptyDescription>
-              Settlement evidence can remain unmatched until there is one
-              truthful Purchase to link.
-            </EmptyDescription>
-          </Empty>
+          <EmptyState
+            size="page"
+            description="Settlement evidence can remain unmatched until there is one truthful Purchase to link."
+          >
+            No linked transactions
+          </EmptyState>
         }
       />
     </Stack>

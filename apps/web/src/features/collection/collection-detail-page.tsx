@@ -490,7 +490,7 @@ export function CollectionDetailPage({
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <CopyableShortcode code={root.id} />
-                      <span className="flex items-center gap-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase">
+                      <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                         <MapPinIcon className="size-3" aria-hidden /> Tagged
                         root
                       </span>

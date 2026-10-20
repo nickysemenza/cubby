@@ -8,7 +8,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { sumBy } from "es-toolkit";
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
@@ -22,9 +22,8 @@ import type {
   RecipeCosting,
 } from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { sectionRuleClass } from "~/ui/primitives/section-rule";
 
 import {
   buildRecipeKicker,
@@ -40,7 +39,7 @@ import {
 } from "./ingredient-quantities";
 import { RecipeHero } from "./recipe-hero";
 import { RecipeInstructions } from "./recipe-instructions";
-import { SectionHeading } from "./section-heading";
+import { RecipePartHeading } from "./recipe-part-heading";
 
 // Macro split for the vitals card: each macro's color (warm chart ramp) + its
 // calorie density, so the proportion bar is weighted by energy contribution.
@@ -194,15 +193,6 @@ interface RecipeMagazineViewProps {
   nutritionFactor?: number;
 }
 
-/** Broadsheet section heading: heavy top rule + serif title. */
-function SpreadHeading({ children }: { children: ReactNode }) {
-  return (
-    <div className={sectionRuleClass}>
-      <h3 className="my-0 font-heading text-base font-bold">{children}</h3>
-    </div>
-  );
-}
-
 /**
  * Ingredient ledger: mono quantity gutter + name, dashed rules, click a row
  * to strike it off while cooking. The source's raw line lives in the tooltip.
@@ -232,7 +222,7 @@ function IngredientLedger({
     <Stack gap="md">
       {recipe.sections.map((section, sectionIndex) => (
         <div key={section.id}>
-          <SectionHeading
+          <RecipePartHeading
             sectionName={section.name}
             index={sectionIndex}
             total={recipe.sections.length}
@@ -372,19 +362,17 @@ export function RecipeMagazineView({
 
       {/* Open-book spread: ingredients column + method column, no boxes */}
       <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:gap-12">
-        <aside className="lg:sticky lg:top-20 lg:h-fit">
-          <SpreadHeading>Ingredients</SpreadHeading>
-          <div className="mt-2">
-            <IngredientLedger recipe={recipe} gramById={gramById} />
-          </div>
-        </aside>
+        <Section
+          title="Ingredients"
+          headingAs="h2"
+          className="lg:sticky lg:top-20 lg:h-fit"
+        >
+          <IngredientLedger recipe={recipe} gramById={gramById} />
+        </Section>
 
-        <section aria-label="Method">
-          <SpreadHeading>Method</SpreadHeading>
-          <div className="mt-4">
-            <RecipeInstructions recipe={recipe} />
-          </div>
-        </section>
+        <Section title="Method" headingAs="h2">
+          <RecipeInstructions recipe={recipe} />
+        </Section>
       </div>
     </Stack>
   );

@@ -23,7 +23,7 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -285,7 +285,10 @@ function TryOutcome({
     .passthrough()
     .safeParse(first);
   return (
-    <Stack gap="xs" className="min-w-0 flex-1 rounded-md border p-2 text-xs">
+    <Panel
+      tone="default"
+      className="flex min-w-0 flex-1 flex-col gap-1 py-2 text-xs"
+    >
       <span className="font-medium">{model}</span>
       {result.error ? (
         <Description size="xs" role="alert">
@@ -321,7 +324,7 @@ function TryOutcome({
       >
         {result.runShortcode}
       </Link>
-    </Stack>
+    </Panel>
   );
 }
 

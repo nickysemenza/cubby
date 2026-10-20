@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -68,15 +69,10 @@ export function MealPortionsSection({
           onRetry={() => void query.refetch()}
         />
       ) : blocks.length === 0 ? (
-        <div className="rounded-md border border-dashed border-[var(--border)] px-3 py-4">
-          <Stack gap="xs">
-            <span className="text-sm font-medium">No recipe portions yet</span>
-            <Description size="xs">
-              Add a recipe or bring in leftovers, then record who had how many
-              servings, grams, or another known amount.
-            </Description>
-          </Stack>
-        </div>
+        <EmptyState size="inline">
+          No recipe portions yet. Add a recipe or bring in leftovers, then
+          record who had how many servings, grams, or another known amount.
+        </EmptyState>
       ) : (
         blocks.map((block) => (
           <Stack key={block.key} gap="xs">

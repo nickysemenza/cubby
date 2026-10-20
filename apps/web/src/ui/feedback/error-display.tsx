@@ -72,7 +72,12 @@ export function ErrorDisplay({
               </Button>
             ) : null}
             {onRetry ? (
-              <Button variant="outline" size="sm" onClick={onRetry}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="max-md:min-h-11"
+                onClick={onRetry}
+              >
                 Retry
               </Button>
             ) : null}

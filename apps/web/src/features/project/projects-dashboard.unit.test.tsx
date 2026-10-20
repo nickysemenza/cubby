@@ -84,7 +84,7 @@ describe("ProjectCard inspection", () => {
 
     const titleLink = screen.getByRole("link", { name: /Kitchen refresh/ });
     expect(titleLink).not.toHaveAttribute("aria-current");
-    expect(titleLink.closest('[data-slot="card"]')).not.toHaveAttribute(
+    expect(titleLink.closest('[data-slot="panel"]')).not.toHaveAttribute(
       "data-current",
     );
   });

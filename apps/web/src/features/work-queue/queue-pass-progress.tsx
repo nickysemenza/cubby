@@ -3,9 +3,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";
 import { Progress } from "~/ui/primitives/progress";
 
@@ -32,21 +31,19 @@ export function QueuePassProgress({
   trailing?: ReactNode;
 }) {
   return (
-    <Card variant="panel">
-      <CardContent className="px-4 py-2">
-        <Stack gap="xs">
-          <Row align="center" justify="between" gap="sm">
-            <Description>
-              {counts.completed} {noun}
-              {counts.skipped > 0 && `, ${counts.skipped} skipped`} of{" "}
-              {counts.total}
-            </Description>
-            {trailing}
-          </Row>
-          <Progress value={counts.settled} max={Math.max(counts.total, 1)} />
-        </Stack>
-      </CardContent>
-    </Card>
+    <Panel tone="default">
+      <Stack gap="xs">
+        <Row align="center" justify="between" gap="sm">
+          <Description>
+            {counts.completed} {noun}
+            {counts.skipped > 0 && `, ${counts.skipped} skipped`} of{" "}
+            {counts.total}
+          </Description>
+          {trailing}
+        </Row>
+        <Progress value={counts.settled} max={Math.max(counts.total, 1)} />
+      </Stack>
+    </Panel>
   );
 }
 
@@ -100,35 +97,32 @@ export function QueuePassResumePrompt<TExtra>({
   onStartNew: () => void;
 }) {
   return (
-    <Card variant="panel" className="mx-auto w-full max-w-xl">
-      <CardContent className="p-4">
-        <Stack gap="md">
-          <div className="text-base font-medium">{title}</div>
-          <Description>
-            Started <DateDisplay timestamp={candidate.startedAt} />. You
-            finished {candidate.completedCount} of {candidate.totalCount}{" "}
-            {itemNoun}
-            {candidate.skippedCount > 0
-              ? ` (${candidate.skippedCount} skipped)`
-              : ""}
-            . {detail}
-          </Description>
-          <Row gap="sm" wrap>
-            <Button type="button" className="min-h-12" onClick={onResume}>
-              {resumeLabel}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12"
-              onClick={onStartNew}
-            >
-              <ArrowCounterClockwiseIcon />
-              {startOverLabel}
-            </Button>
-          </Row>
-        </Stack>
-      </CardContent>
-    </Card>
+    <Panel tone="default" className="mx-auto w-full max-w-xl">
+      <Stack gap="md">
+        <div className="text-base font-medium">{title}</div>
+        <Description>
+          Started <DateDisplay timestamp={candidate.startedAt} />. You finished{" "}
+          {candidate.completedCount} of {candidate.totalCount} {itemNoun}
+          {candidate.skippedCount > 0
+            ? ` (${candidate.skippedCount} skipped)`
+            : ""}
+          . {detail}
+        </Description>
+        <Row gap="sm" wrap>
+          <Button type="button" className="min-h-12" onClick={onResume}>
+            {resumeLabel}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12"
+            onClick={onStartNew}
+          >
+            <ArrowCounterClockwiseIcon />
+            {startOverLabel}
+          </Button>
+        </Row>
+      </Stack>
+    </Panel>
   );
 }

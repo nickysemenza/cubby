@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 
 const route = getRouteApi("/_authenticated/tasks/");
 
@@ -16,7 +16,15 @@ export function TasksStatsStrip() {
   const navigate = route.useNavigate();
   const { data, isLoading } = useQuery(task.summary.queryOptions());
 
-  if (isLoading || !data) return <DrilldownMetricStrip loadingCount={7} />;
+  if (isLoading || !data)
+    return (
+      <KeyNumbers
+        layout="strip"
+        label="Task counts"
+        items={[]}
+        loadingCount={7}
+      />
+    );
 
   const goToNext = () =>
     navigate({ search: (prev) => ({ ...prev, view: "agenda" }) });
@@ -37,8 +45,10 @@ export function TasksStatsStrip() {
     });
 
   return (
-    <DrilldownMetricStrip
-      metrics={[
+    <KeyNumbers
+      layout="strip"
+      label="Task counts"
+      items={[
         { label: "Total open", value: data.totalOpen, onSelect: goToNext },
         { label: "Next", value: data.next, onSelect: goToNext },
         { label: "Someday", value: data.later, onSelect: goToNext },

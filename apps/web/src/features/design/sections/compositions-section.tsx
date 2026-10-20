@@ -1,6 +1,5 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import type { DecisionStep } from "@cubby/schemas/decision-step";
-import { ListBulletsIcon } from "@phosphor-icons/react/dist/csr/ListBullets";
 import { Command as CommandPrimitive } from "cmdk";
 import { useId, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -14,7 +13,7 @@ import { Demo, DemoGrid } from "~/features/design/components/design-section";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
 import { DecisionSteps } from "~/ui/common/decision-steps";
 import { FormWrapper, UnifiedTextField } from "~/ui/forms/form-utils";
-import { Section, SectionHeading, Stack } from "~/ui/layout";
+import { Section, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -278,7 +277,7 @@ function ReviewDemo({
 
 export function SuggestionReviewSection() {
   return (
-    <Section description="Shared review behavior, with local acceptance and rejection. Failure examples retain raw synthetic diagnostics and remain retryable.">
+    <Section caption="Shared review behavior, with local acceptance and rejection. Failure examples retain raw synthetic diagnostics and remain retryable.">
       <DemoGrid className="xl:grid-cols-2">
         <Demo name="SuggestionReview · inline">
           <ReviewDemo surface="inline" />
@@ -315,12 +314,10 @@ export function SectionCompositionsSection() {
         <DecisionStepsDemo action="create" />
       </Demo>
       <Demo name="Section · headings, actions and deferred context">
-        <SectionHeading
-          as="h3"
+        <Section
+          headingAs="h3"
           title="Current work"
-          meta={
-            <span className="text-xs text-muted-foreground">{count} tasks</span>
-          }
+          count={count}
           actions={
             <Button
               size="sm"
@@ -330,19 +327,21 @@ export function SectionCompositionsSection() {
               Add demo task
             </Button>
           }
-        />
-        <Section
-          headingAs="h3"
-          title="Workshop tasks"
-          icon={<ListBulletsIcon />}
-          description="Synthetic household work"
         >
           <p>{count} tasks awaiting review</p>
         </Section>
         <Section
+          headingAs="h3"
+          title="Workshop tasks"
+          caption="Synthetic household work"
+        >
+          <p>{count} tasks awaiting review</p>
+        </Section>
+        <Section
+          headingAs="h2"
           aria-label="Household context demo"
           title="Explore household context"
-          meta={"Optional detail"}
+          caption={"Optional detail"}
           disclosure={{}}
           actions={
             <Button size="sm" variant="ghost" onClick={() => setCount(2)}>

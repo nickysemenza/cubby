@@ -177,7 +177,7 @@ export function PerfOverlay() {
             type="button"
             onClick={() => setTab(t)}
             className={cn(
-              "flex-1 px-1 py-1 text-2xs tracking-wide uppercase transition-colors",
+              "flex-1 px-1 py-1 text-xs font-medium transition-colors",
               tab === t
                 ? "bg-primary/10 font-semibold text-primary"
                 : "text-muted-foreground hover:bg-muted/50",
@@ -269,7 +269,7 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
           >
             <td className="py-0.5 pr-1 align-middle" /* tight */>
               <span
-                className="text-3xs font-semibold uppercase"
+                className="text-3xs font-semibold"
                 style={{ color: `var(--chart-${SLOW_TONE[e.kind]})` }}
               >
                 {SLOW_TAG[e.kind]}
@@ -407,7 +407,7 @@ function QueriesTab({
                     className="max-w-36 truncate py-0.5"
                     title={stat.operation}
                   >
-                    <span className="mr-1 text-3xs text-muted-foreground uppercase">
+                    <span className="mr-1 text-3xs font-medium text-muted-foreground">
                       {stat.transport}
                     </span>
                     {stat.operation}
@@ -460,7 +460,7 @@ function QueriesTab({
                     className="max-w-44 truncate py-0.5"
                     title={mutation.operation}
                   >
-                    <span className="mr-1 text-3xs text-muted-foreground uppercase">
+                    <span className="mr-1 text-3xs font-medium text-muted-foreground">
                       {mutation.transport}
                     </span>
                     {mutation.operation}

@@ -225,7 +225,7 @@ describe("GenericEntityDetail", () => {
     expect(container.querySelector("section#import-targets")).toBeNull();
     expect(
       await screen.findByText(/Target outcomes · Defect/, {
-        selector: "summary span",
+        selector: "button span",
       }),
     ).toBeVisible();
     const jump = screen
@@ -362,7 +362,7 @@ describe("GenericEntityDetail", () => {
     // groups when the columns stack.
     for (const label of ["Name", "Manufacturer", "Category"]) {
       const fact = within(container).getByText(label, {
-        selector: '[data-slot="basic-info-label"]',
+        selector: '[data-slot="fact-label"]',
       });
       expect(
         fact.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -394,7 +394,7 @@ describe("GenericEntityDetail", () => {
     expect(screen.queryByText("UPC", { exact: true })).not.toBeInTheDocument();
     const labels = Array.from(
       container.querySelectorAll(
-        '[data-ledger="facts"] [data-slot="basic-info-label"]',
+        '[data-ledger="facts"] [data-slot="fact-label"]',
       ),
       (element) => element.textContent,
     );
@@ -404,7 +404,7 @@ describe("GenericEntityDetail", () => {
       if (section.kind !== "fields") continue;
       const sectionLabels = Array.from(
         container.querySelectorAll(
-          `section#${section.id} [data-slot="basic-info-label"]`,
+          `section#${section.id} [data-slot="fact-label"]`,
         ),
         (element) => element.textContent,
       );

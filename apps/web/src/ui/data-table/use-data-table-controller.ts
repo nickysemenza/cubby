@@ -146,10 +146,9 @@ export function useDataTableController<TItem extends RowData>({
   });
 
   const styles = {
-    table:
-      "border-separate border-spacing-0 text-[0.8125rem] leading-5 tabular-nums",
+    table: "border-separate border-spacing-0 text-sm leading-5 tabular-nums",
     header:
-      "h-8 overflow-hidden border-border border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
+      "h-8 overflow-hidden border-hairline-strong border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
     cell: cn(
       dConfig.cellClass,
       // text-ellipsis gives every plain-text cell a real "…" instead of a
@@ -157,7 +156,7 @@ export function useDataTableController<TItem extends RowData>({
       "overflow-hidden text-ellipsis",
       verticalAlign === "top" ? "align-top" : "align-middle",
     ),
-    row: cn(dConfig.rowClass, "table-row-hover border-b border-border"),
+    row: cn(dConfig.rowClass, "table-row-hover border-b border-hairline-soft"),
     sortIcon: "h-3 w-3",
   };
 

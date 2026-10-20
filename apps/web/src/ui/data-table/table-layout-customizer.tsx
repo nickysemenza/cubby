@@ -249,9 +249,7 @@ function Zone<TData extends RowData>({
   });
   return (
     <section className="space-y-1">
-      <h3 className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
-        {label}
-      </h3>
+      <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
       <div
         ref={setNodeRef}
         className={cn(

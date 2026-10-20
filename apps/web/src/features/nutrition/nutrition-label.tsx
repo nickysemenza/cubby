@@ -160,7 +160,7 @@ export function NutritionLabel({
         </span>
       </div>
 
-      <div className="flex justify-end border-b border-border py-1 text-2xs tracking-wider text-muted-foreground uppercase">
+      <div className="flex justify-end border-b border-border py-1 text-xs font-medium text-muted-foreground">
         % Daily Value*
       </div>
 

@@ -60,14 +60,14 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { DecisionSteps } from "~/ui/common/decision-steps";
-import { FactList } from "~/ui/common/fact-list";
+import { Facts } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useIndexedSubsections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Row, Section, Stack } from "~/ui/layout";
+import { Panel, Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import {
   DropdownMenu,
@@ -622,18 +622,15 @@ function GroupEvidence({
               </div>
             ) : null}
             {claims.length ? (
-              <details className="text-muted-foreground">
-                <summary className="cursor-pointer">
-                  {countLabel(claims.length, "claim")}
-                </summary>
-                <ul className="mt-1 space-y-0.5">
+              <Disclosure summary="Claims" meta={claims.length}>
+                <ul className="space-y-0.5 text-muted-foreground">
                   {claims.map((claim) => (
                     <li key={`${claim.evidenceKind}-${claim.text}`}>
                       {claim.text}
                     </li>
                   ))}
                 </ul>
-              </details>
+              </Disclosure>
             ) : null}
           </div>
         );
@@ -1041,11 +1038,8 @@ function PurchaseLines({
     <div className="space-y-1">
       <PurchaseLineRow line={latest} />
       {rest.length || hidden > 0 ? (
-        <details>
-          <summary className="cursor-pointer text-muted-foreground">
-            {countLabel(total - 1, "more purchase")}
-          </summary>
-          <div className="mt-1 space-y-1">
+        <Disclosure summary="More purchases" meta={total - 1}>
+          <div className="space-y-1">
             {rest.map((line) => (
               <PurchaseLineRow key={line.expenseId} line={line} />
             ))}
@@ -1059,7 +1053,7 @@ function PurchaseLines({
               </Link>
             ) : null}
           </div>
-        </details>
+        </Disclosure>
       ) : null}
     </div>
   );
@@ -1237,16 +1231,14 @@ function ExistingProductChanges({
   const review = reviewDecision(proposal);
   const changes = review.productChanges ?? {};
   return (
-    <details
+    <Disclosure
+      summary={`Product changes · ${countLabel(Object.keys(changes).length, "selected field")}`}
       className="border-t border-border pt-2 text-xs"
       open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onOpenChange={setOpen}
+      keepMounted
     >
-      <summary className="cursor-pointer">
-        Product changes ·{" "}
-        {countLabel(Object.keys(changes).length, "selected field")}
-      </summary>
-      <p className="my-2 text-muted-foreground">
+      <p className="mb-2 text-muted-foreground">
         Only selected fields change when you attach the photos. Added text is
         green; removed text is red and struck through.
       </p>
@@ -1404,7 +1396,7 @@ function ExistingProductChanges({
       ) : open && !current.isError ? (
         <p>Loading current Product…</p>
       ) : null}
-    </details>
+    </Disclosure>
   );
 }
 
@@ -1688,8 +1680,7 @@ function ProductPanel({
               />
             </Stack>
           </Stack>
-          <details className="text-xs">
-            <summary className="cursor-pointer">Notes and tags</summary>
+          <Disclosure summary="Notes and tags" className="text-xs" keepMounted>
             <Stack gap="xs">
               <CommitInput
                 label="Product notes"
@@ -1720,7 +1711,7 @@ function ProductPanel({
                 }
               />
             </Stack>
-          </details>
+          </Disclosure>
         </>
       ) : (
         <>
@@ -1816,14 +1807,11 @@ function ProductPanel({
         />
       ) : null}
       {proposal.evidence ? (
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer">
-            Why the agent proposed this
-          </summary>
-          <p className="mt-1 leading-relaxed whitespace-pre-wrap">
+        <Disclosure summary="Why the agent proposed this" className="text-xs">
+          <p className="leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {proposal.evidence}
           </p>
-        </details>
+        </Disclosure>
       ) : null}
     </Stack>
   );
@@ -1973,7 +1961,8 @@ function PhotoProductSuggestions({
                     firstLabel="Photo"
                     secondLabel="Product"
                   />
-                  <FactList
+                  <Facts
+                    layout="inline"
                     className="text-xs"
                     facts={[
                       {
@@ -2381,8 +2370,96 @@ function ProposalCard({
   const descriptionsPending = awaitingDescriptions(proposal, imagesById);
   const runLocation = usualRunLocation(proposals);
   return (
-    <Card
-      className="rounded-none border-x-0 border-b-0 shadow-none"
+    <Section
+      data-photo-group={proposal.groupKey}
+      headingAs="h3"
+      title={
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="min-w-0 break-words">{proposalName(proposal)}</span>
+          <Badge
+            variant="secondary"
+            className={
+              proposal.product.kind === "create"
+                ? "bg-action-create-surface text-action-create"
+                : "bg-action-link-surface text-action-link"
+            }
+          >
+            {proposal.product.kind === "create" ? "＋ New" : "↪ Attach"}
+          </Badge>
+        </span>
+      }
+      actions={
+        <Row align="center" gap="xs" wrap className="w-full sm:w-auto">
+          {mergeTargets.length ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={working}
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-11 sm:min-h-0"
+                  />
+                }
+              >
+                <ArrowsMergeIcon />
+                Combine photo groups…
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Move every photo into</DropdownMenuLabel>
+                  {mergeTargets.map((target) => (
+                    <DropdownMenuItem
+                      key={target.groupKey}
+                      onClick={() =>
+                        save(() =>
+                          mergeGroups(
+                            proposals,
+                            proposal.groupKey,
+                            target.groupKey,
+                          ),
+                        )
+                      }
+                    >
+                      <span className="truncate">{proposalName(target)}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          {stale ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={working}
+              onClick={() =>
+                save(() => ({
+                  groups: [],
+                  removeGroupKeys: [proposal.groupKey],
+                }))
+              }
+            >
+              Remove group
+            </Button>
+          ) : null}
+          <Button
+            variant="destructive"
+            size="sm"
+            className="min-h-11 sm:min-h-0"
+            disabled={working || stale}
+            onClick={() =>
+              action.mutate({
+                action: "discard",
+                groupKey: proposal.groupKey,
+              })
+            }
+          >
+            <TrashIcon />
+            Discard
+          </Button>
+        </Row>
+      }
       onKeyDown={(event) => {
         if (
           (event.metaKey || event.ctrlKey) &&
@@ -2400,96 +2477,7 @@ function ProposalCard({
         }
       }}
     >
-      <CardHeader>
-        <Row align="center" justify="between" wrap gap="sm">
-          <Row align="center" gap="sm" className="min-w-0">
-            <CardTitle as="h3" className="min-w-0 break-words">
-              {proposalName(proposal)}
-            </CardTitle>
-            <Badge
-              variant="secondary"
-              className={
-                proposal.product.kind === "create"
-                  ? "bg-action-create-surface text-action-create"
-                  : "bg-action-link-surface text-action-link"
-              }
-            >
-              {proposal.product.kind === "create" ? "＋ New" : "↪ Attach"}
-            </Badge>
-          </Row>
-          <Row align="center" gap="xs" wrap className="w-full sm:w-auto">
-            {mergeTargets.length ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={working}
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="min-h-11 sm:min-h-0"
-                    />
-                  }
-                >
-                  <ArrowsMergeIcon />
-                  Combine photo groups…
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-60">
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Move every photo into</DropdownMenuLabel>
-                    {mergeTargets.map((target) => (
-                      <DropdownMenuItem
-                        key={target.groupKey}
-                        onClick={() =>
-                          save(() =>
-                            mergeGroups(
-                              proposals,
-                              proposal.groupKey,
-                              target.groupKey,
-                            ),
-                          )
-                        }
-                      >
-                        <span className="truncate">{proposalName(target)}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            {stale ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={working}
-                onClick={() =>
-                  save(() => ({
-                    groups: [],
-                    removeGroupKeys: [proposal.groupKey],
-                  }))
-                }
-              >
-                Remove group
-              </Button>
-            ) : null}
-            <Button
-              variant="destructive"
-              size="sm"
-              className="min-h-11 sm:min-h-0"
-              disabled={working || stale}
-              onClick={() =>
-                action.mutate({
-                  action: "discard",
-                  groupKey: proposal.groupKey,
-                })
-              }
-            >
-              <TrashIcon />
-              Discard
-            </Button>
-          </Row>
-        </Row>
-      </CardHeader>
-      <CardContent className="@container/photo-editor">
+      <div className="@container/photo-editor">
         <PhotoProductSuggestions
           runId={runId}
           proposal={proposal}
@@ -2634,8 +2622,8 @@ function ProposalCard({
             </kbd>
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
 
@@ -2736,9 +2724,14 @@ function PhotoTable({
   groupByImage: ReadonlyMap<string, string>;
 }) {
   return (
-    <Section aria-label="Run photos" title={`Photos · ${images.length}`}>
+    <Section
+      headingAs="h2"
+      aria-label="Run photos"
+      title="Photos"
+      count={images.length}
+    >
       {/* Bounded region: a 1,000-photo run scrolls here, not the page. */}
-      <div className="max-h-[70vh] overflow-auto rounded-md border border-border">
+      <Panel tone="default" flush className="max-h-[70vh] overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow>
@@ -2856,7 +2849,7 @@ function PhotoTable({
             })}
           </TableBody>
         </Table>
-      </div>
+      </Panel>
     </Section>
   );
 }
@@ -3493,9 +3486,10 @@ export function PhotoGroupReview({
     <Stack gap="lg">
       {results.length > 0 ? (
         <Section
+          headingAs="h2"
           title="Import results"
           inert={approving}
-          description={`${resultProducts.filter((proposal) => proposal.product.kind === "create").length} Products created · ${resultProducts.filter((proposal) => proposal.product.kind === "existing").length} existing Products matched`}
+          caption={`${resultProducts.filter((proposal) => proposal.product.kind === "create").length} Products created · ${resultProducts.filter((proposal) => proposal.product.kind === "existing").length} existing Products matched`}
         >
           <RecordList aria-label="Products from this import">
             {resultProducts.map((proposal) =>
@@ -3567,8 +3561,9 @@ export function PhotoGroupReview({
         </Section>
       ) : null}
       <Section
+        headingAs="h2"
         title="Photo review"
-        description={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
+        caption={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
       >
         <output className="text-xs text-muted-foreground">
           {action.isPending
@@ -3747,8 +3742,10 @@ export function PhotoGroupReview({
 
       {review.unassignedImageIds.length ? (
         <Section
+          headingAs="h2"
           aria-label="Not in a group"
-          title={`Not in a group · ${review.unassignedImageIds.length}`}
+          title="Not in a group"
+          count={review.unassignedImageIds.length}
         >
           <PhotoGrid
             images={review.unassignedImageIds.flatMap((id) =>

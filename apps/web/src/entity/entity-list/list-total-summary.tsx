@@ -1,6 +1,6 @@
 import type { EntitySummary } from "@cubby/schemas/entity-summary";
 
-import { FactList } from "~/ui/common/fact-list";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Button } from "~/ui/primitives/button";
 
@@ -51,15 +51,7 @@ export function ListTotalSummary({
           )}
         </>
       )}
-      <FactList
-        emphasis="value"
-        facts={values.map(({ id, label, value }) => ({
-          id,
-          label,
-          value,
-          className: "font-medium tabular-nums",
-        }))}
-      />
+      <KeyNumbers layout="inline" label="All matching totals" items={values} />
     </div>
   );
 }

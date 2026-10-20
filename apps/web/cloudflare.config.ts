@@ -5,11 +5,27 @@ import {
   exports,
   triggers,
 } from "cf/config";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
-import { RUN_WORKFLOWS } from "./src/lib/workflows/run-workflows.ts";
+
+type WorkflowDefinition = {
+  name: string;
+  worker: string;
+  exportName: string;
+};
+
+const RUN_WORKFLOWS: Record<
+  "AI_REFRESH" | "MAIL_DISCOVERY" | "STEP_RUN",
+  WorkflowDefinition
+> = JSON.parse(
+  readFileSync(
+    new URL("./src/lib/workflows/run-workflows.json", import.meta.url),
+    "utf8",
+  ),
+);
 
 // Existing names and lifecycle tombstones preserve stored Durable Object namespaces.
 export const productionWorker = defineWorker({

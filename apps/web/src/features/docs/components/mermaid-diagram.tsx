@@ -1,6 +1,8 @@
 import { getErrorMessage } from "@cubby/shared";
 import { useEffect, useState } from "react";
 
+import { Panel } from "~/ui/layout/panel";
+
 let nextDiagramId = 0;
 
 export function MermaidDiagram({ source }: { source: string }) {
@@ -44,9 +46,11 @@ export function MermaidDiagram({ source }: { source: string }) {
 
   // Prose paragraph styles otherwise outgrow Mermaid's measured label boxes.
   return (
-    <figure
+    <Panel
+      tone="muted"
+      render={<figure />}
       aria-label="Mermaid diagram"
-      className="my-4 min-w-0 overflow-x-auto rounded-md border border-border/50 bg-muted/20 p-3 [&_p]:!m-0 [&_p]:!leading-normal [&_p]:!text-inherit"
+      className="my-4 overflow-x-auto [&_p]:!m-0 [&_p]:!leading-normal [&_p]:!text-inherit"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

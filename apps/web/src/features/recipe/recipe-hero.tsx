@@ -10,7 +10,7 @@ import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { Row } from "~/ui/layout";
+import { Panel, Row } from "~/ui/layout";
 import { Image } from "~/ui/primitives/image";
 
 import { RecipeSourceLink } from "../../entity/presentation/recipe-source";
@@ -168,9 +168,9 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // it — render a slim meta band instead of an empty hero block.
   if (!hasImage) {
     return (
-      <div className="rounded-xl border border-border bg-card px-3 py-2">
+      <Panel tone="default" className="py-2">
         {metaInfo}
-      </div>
+      </Panel>
     );
   }
 

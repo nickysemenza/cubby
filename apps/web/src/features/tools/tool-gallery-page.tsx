@@ -37,17 +37,11 @@ import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyIcon,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -179,7 +173,7 @@ export function ToolCard({
           displayWidth={compact ? 192 : 320}
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.015]"
           fallback={
-            <div className="flex h-full w-full items-center justify-center bg-[var(--domain-house-surface)] text-[var(--domain-house)]">
+            <div className="flex h-full w-full items-center justify-center bg-muted text-foreground">
               <WrenchIcon className="size-8" aria-hidden />
             </div>
           }
@@ -315,24 +309,27 @@ function EmptyGallery({
   onClear: () => void;
 }) {
   return (
-    <Empty className="min-h-72 bg-card">
-      <EmptyIcon icon={query ? MagnifyingGlassIcon : WrenchIcon} />
-      <EmptyHeader>
-        <EmptyTitle>
-          {query ? "No matching tools" : "No inventoried tools"}
-        </EmptyTitle>
-        <EmptyDescription>
+    <EmptyState
+      size="page"
+      className="min-h-72"
+      icon={query ? MagnifyingGlassIcon : WrenchIcon}
+      action={
+        query ? (
+          <Button variant="outline" onClick={onClear}>
+            Clear search
+          </Button>
+        ) : undefined
+      }
+      description={
+        <>
           {query
             ? `Nothing in the tool inventory matches “${query}”.`
             : "Products categorized as tools appear here once they have a live inventory placement."}
-        </EmptyDescription>
-      </EmptyHeader>
-      {query ? (
-        <Button variant="outline" onClick={onClear}>
-          Clear search
-        </Button>
-      ) : null}
-    </Empty>
+        </>
+      }
+    >
+      {query ? "No matching tools" : "No inventoried tools"}
+    </EmptyState>
   );
 }
 
@@ -394,8 +391,7 @@ function GroupJumpBar({
                   disabled={disabled}
                   className={cn(
                     "h-9 shrink-0 rounded-sm border border-transparent px-2 max-sm:h-11",
-                    active &&
-                      "border-[var(--domain-house)] bg-[var(--domain-house-surface)] text-foreground",
+                    active && "border-border bg-muted text-foreground",
                   )}
                 >
                   <span>{group.label}</span>
@@ -653,7 +649,7 @@ function GalleryGroups({
         <GroupedFlow
           groups={flowGroups}
           getItemKey={(item) => item.productId}
-          dividerAccentClassName="bg-[var(--domain-house)]"
+          dividerAccentClassName="bg-border"
           renderItem={(item, _group, headingId) =>
             renderToolCard(item, headingId)
           }
@@ -671,7 +667,7 @@ function GalleryGroups({
               aria-labelledby={headingId}
               className="scroll-mt-28 md:scroll-mt-24"
             >
-              <div className="mb-2 flex items-baseline gap-2 border-l-2 border-[var(--domain-house)] pl-2">
+              <div className="mb-2 flex items-baseline gap-2 border-b border-border pb-2">
                 <h2
                   id={headingId}
                   className="text-sm font-semibold text-foreground"
@@ -955,7 +951,7 @@ export function ToolGalleryPage({
         </div>
         {totals ? (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground sm:ml-auto">
-            <SquaresFourIcon className="size-3.5 text-[var(--domain-house)]" />
+            <SquaresFourIcon className="size-3.5 text-muted-foreground" />
             <span className="font-mono tabular-nums">
               {totals.products} tools · {totals.placements} placements
             </span>
