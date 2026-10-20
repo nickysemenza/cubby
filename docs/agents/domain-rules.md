@@ -11,7 +11,8 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   bumps `APPLE_CLIENT_COMPATIBILITY_VERSION` in
   `packages/shared/src/apple-client-version.ts` (shared by the server minimum
   and generated Apple marketing version). Older builds keep their reads; the
-  server refuses their writes until they update.
+  server refuses their writes until they update. Choose a version newer than
+  current `main`; concurrent breaking PRs must not reuse a published version.
 - MCP clients cache `tools/list` across deploys and validate results against
   it, so published output schemas are open objects: an added output field is
   safe for an open session, while removing, renaming or retyping one breaks
