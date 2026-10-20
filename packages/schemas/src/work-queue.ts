@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ledgerPartyRefOut } from "./ledger-party-fields";
 
 import { plainDate } from "./base-entity";
 import { dataCheck, type DataCheck, dataQuality } from "./data-quality";
@@ -22,10 +23,7 @@ import {
 } from "./pagination";
 import { problemRowSchema } from "./problems";
 
-export const workQueueMemberSchema = z.object({
-  id: ledgerPartyShortcode,
-  name: z.string(),
-});
+export const workQueueMemberSchema = ledgerPartyRefOut;
 
 /** Routing reflects the evidence needed for this work, not who owns the item. */
 export const workWaitingForSchema = z.discriminatedUnion("kind", [

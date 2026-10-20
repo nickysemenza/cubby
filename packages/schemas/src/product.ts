@@ -11,6 +11,8 @@ import { inventoryPlacementValues } from "@cubby/shared";
 import { upc } from "@cubby/shared/upc";
 import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
+import { locationRefOut } from "./location-fields";
+import { productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
   dateBound,
@@ -137,9 +139,8 @@ export const productQuantitySummaryBatchInput = z.object({
  * threading stock onto those row shapes would make every other producer of them
  * emit an empty array it never loaded.
  */
-export const productInventoryEntriesBatchInput = z.object({
-  ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
-});
+export const productInventoryEntriesBatchInput =
+  productQuantitySummaryBatchInput;
 
 export const productApplyUpcInput = z.object({
   id: productShortcode,
@@ -509,7 +510,7 @@ export const productDiscardPreviewOut = z.object({
     z.object({
       id: inventoryShortcode,
       amount,
-      location: z.object({ id: locationShortcode, name: z.string() }),
+      location: locationRefOut,
     }),
   ),
   /** Not stocked anywhere: the discard only records the ledger exit. */
@@ -519,7 +520,7 @@ export const productDiscardPreviewOut = z.object({
     .object({
       id: inventoryShortcode,
       amount,
-      location: z.object({ id: locationShortcode, name: z.string() }),
+      location: locationRefOut,
     })
     .nullable(),
   /**
@@ -1198,7 +1199,7 @@ export const productExternalIdCollisionsOut = z.object({
        * unchanged.
        */
       status: z.enum(["missing", "unique", "owned_by_this", "owned_by_other"]),
-      products: z.array(z.object({ id: productShortcode, name: z.string() })),
+      products: z.array(productRefOut),
     }),
   ),
 });

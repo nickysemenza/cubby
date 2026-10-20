@@ -3,11 +3,11 @@ import {
   assessmentReviewReference,
 } from "./assessment-reference";
 import { z } from "zod";
+import { locationRefOut } from "./location-fields";
+import { ledgerPartyRefOut } from "./ledger-party-fields";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import {
   inventoryShortcode,
-  ledgerPartyShortcode,
-  locationShortcode,
   productShortcode,
   purchaseShortcode,
 } from "./identifiers";
@@ -75,8 +75,8 @@ export const placementRecommendationOut = z
   .object({
     inventoryId: inventoryShortcode,
     productName: z.string(),
-    sourceLocation: z.object({ id: locationShortcode, name: z.string() }),
-    destination: z.object({ id: locationShortcode, name: z.string() }),
+    sourceLocation: locationRefOut,
+    destination: locationRefOut,
   })
   .nullable();
 
@@ -101,10 +101,7 @@ export const productMatchState = z.enum(["open", "dismissed"]);
  */
 export const productMatchSideRole = z.enum(["photo", "purchase", "other"]);
 
-export const productMatchOwner = z.object({
-  id: ledgerPartyShortcode,
-  name: z.string(),
-});
+export const productMatchOwner = ledgerPartyRefOut;
 
 export const productMatchSourceUrls = z.array(z.url()).max(10);
 

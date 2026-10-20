@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productRefOut } from "./product-fields";
 import { paginatedMetaSchema } from "./pagination";
 import {
   dataTypeEnum,
@@ -11,7 +12,6 @@ import {
 import { upc } from "@cubby/shared/upc";
 import { recipeAvailabilityListOut } from "./availability";
 import { deletedCountOut } from "./common";
-import { productShortcode } from "./identifiers";
 import {
   ingredientMcpListOut,
   ingredientMcpOut,
@@ -117,7 +117,7 @@ const usdaFoodSharedFields = {
   serving: mcpBrandedServingOut.nullable(),
   nutrientsPer100: nutrientsPer100.nullable(),
   portionInfoRaw: z.array(foodPortion),
-  linkedProducts: z.array(z.object({ id: productShortcode, name: z.string() })),
+  linkedProducts: z.array(productRefOut),
 };
 
 export const mcpUsdaFoodOut = z.object({

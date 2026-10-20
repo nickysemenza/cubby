@@ -10,6 +10,7 @@ import {
   mcpResultDetailFields,
 } from "@cubby/schemas/mcp-detail";
 import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
+import { sortDirection } from "@cubby/schemas/pagination";
 import {
   DEFAULT_PAGE_SIZE,
   listNestingSchema,
@@ -74,7 +75,7 @@ const searchableKernelEntitySchema = z.enum(
 
 const sort = z.object({
   orderBy: z.string().min(1),
-  direction: z.enum(["asc", "desc"]).default("asc"),
+  direction: sortDirection.default("asc"),
 });
 
 const listFields = {

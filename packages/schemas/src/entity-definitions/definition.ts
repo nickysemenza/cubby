@@ -9,6 +9,13 @@ import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
 
+const entityReadCapability = z.enum([
+  "media",
+  "quality",
+  "relations",
+  "derived",
+]);
+
 /** The scalar shapes the entity compiler can persist and project. */
 export const entityFieldKinds = [
   "text",
@@ -1377,8 +1384,8 @@ const buildMetadataSchemas = () => {
               derived: z.array(nonEmptyString()).default([]),
               dependencies: z
                 .partialRecord(
-                  z.enum(["media", "quality", "relations", "derived"]),
-                  z.array(z.enum(["media", "quality", "relations", "derived"])),
+                  entityReadCapability,
+                  z.array(entityReadCapability),
                 )
                 .default({}),
             })

@@ -13,6 +13,9 @@ import {
 /** Stored `RecipeSection.instructions` entries; API steps use `instruction`. */
 export type StoredRecipeInstruction = { text: string };
 
+/** Thin Recipe identity used by preparation, graph, and detail references. */
+export const recipeRefOut = z.object({ id: recipeShortcode, name: z.string() });
+
 // Recipe source values - single source of truth for both Zod and Drizzle
 export const recipeSourceValues = [
   "Book",
@@ -57,19 +60,13 @@ const componentSource = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("missing") }),
 ]);
 
-// NOTE: the success arm is structurally `amount` (value/unit) plus the `ok`
-// discriminant, but it deliberately does NOT reuse `codec.ts`'s `amount` here.
-// `amount` is a refined ZodEffects (from `.refine()`), and zod's
-// `discriminatedUnion` cannot introspect a refined/intersected member for its
-// discriminant key — `z.object({ok: z.literal(true)}).and(amount)` throws
-// "Invalid discriminated union option" at schema-construction time. Nesting
-// instead (`z.object({ok, amount})`) would fix that but changes the wire
-// shape from flat `{ok, value, unit}` to `{ok, amount: {value, unit}}`,
-// rippling into every consumer that reads `.value`/`.unit` off this
-// diagnostic — out of scope for a same-shape convention migration.
+// Diagnostics permit unchecked values and empty units, unlike codec.amount.
+// Keep success flat ({ok, value, unit}) because clients read those fields directly.
+const diagnosticFailure = z.object({ ok: z.literal(false), error: z.string() });
+
 const measureDiagnostic = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), value: z.number(), unit: z.string() }),
-  z.object({ ok: z.literal(false), error: z.string() }),
+  diagnosticFailure,
 ]);
 export type MeasureDiagnosticOut = z.infer<typeof measureDiagnostic>;
 
@@ -79,7 +76,7 @@ const nutrientDiagnostic = z.discriminatedUnion("ok", [
     kcal: z.number().nullable(),
     nutrientCount: z.number().int(),
   }),
-  z.object({ ok: z.literal(false), error: z.string() }),
+  diagnosticFailure,
 ]);
 export type NutrientDiagnosticOut = z.infer<typeof nutrientDiagnostic>;
 

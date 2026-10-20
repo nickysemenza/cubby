@@ -214,17 +214,22 @@ export const chargeHuntRunInput = z.object({
   kind: z.literal("charge_hunts"),
   huntIds: z.array(z.uuid()).min(1).max(50),
 });
+const researchDateRange = z.strictObject({
+  from: z.iso.date(),
+  to: z.iso.date(),
+});
+
 /** Host-frozen objectives; source identity is never supplied by the researcher. */
 export const researchObjective = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("vendor_purchases"),
     vendorId: z.uuid(),
-    range: z.strictObject({ from: z.iso.date(), to: z.iso.date() }).nullable(),
+    range: researchDateRange.nullable(),
   }),
   z.strictObject({
     kind: z.literal("account_history"),
     vendorAccountId: z.uuid(),
-    range: z.strictObject({ from: z.iso.date(), to: z.iso.date() }).nullable(),
+    range: researchDateRange.nullable(),
     cursor: vendorAccountCursor.nullable(),
   }),
   z.strictObject({

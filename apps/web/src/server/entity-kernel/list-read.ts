@@ -1,3 +1,4 @@
+import { sortDirection } from "@cubby/schemas/pagination";
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
@@ -55,9 +56,7 @@ const inputSchema = z.object({
     .object({ pageIndex: z.number(), pageSize: z.number() })
     .optional(),
   sort: z
-    .array(
-      z.object({ orderBy: z.string(), direction: z.enum(["asc", "desc"]) }),
-    )
+    .array(z.object({ orderBy: z.string(), direction: sortDirection }))
     .optional(),
   groupBy: z.string().optional(),
   groupLevel: z.number().optional(),

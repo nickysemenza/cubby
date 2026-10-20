@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageCaptureLocation } from "./image-capture-fields";
 
 import { deviceShortcode, ledgerPartyShortcode } from "./identifier-fields";
 
@@ -15,12 +16,7 @@ export type ImageSightingSourceType = z.infer<typeof imageSightingSourceType>;
 export const imageSightingMatchKind = z.enum(["import", "libraryMatch"]);
 export type ImageSightingMatchKind = z.infer<typeof imageSightingMatchKind>;
 
-export const imageSightingLocation = z.object({
-  lat: z.number(),
-  lng: z.number(),
-  altitude: z.number().optional(),
-  horizontalAccuracy: z.number().optional(),
-});
+export const imageSightingLocation = imageCaptureLocation;
 export type ImageSightingLocation = z.infer<typeof imageSightingLocation>;
 
 export const imageSightingCamera = z.object({

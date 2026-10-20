@@ -44,6 +44,14 @@ struct RunSnapshotTests {
         }
     }
 
+    @Test func operationErrorsPreserveEmptyStringsAndRejectOtherTypes() throws {
+        var raw = try #require(snapshot().raw.objectValue)
+        raw["operations"] = [["error": ""], ["error": nil], [:]]
+        #expect(try RunSnapshot(.object(raw)).operationErrors == [""])
+        raw["operations"] = [["error": 42]]
+        #expect(throws: (any Error).self) { try RunSnapshot(.object(raw)) }
+    }
+
     @Test func malformedMetadataAndSuccessorKeepDiagnostics() throws {
         var raw = try #require(snapshot().raw.objectValue)
         raw["status"] = 42

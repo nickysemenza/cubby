@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { batchProgressEvent } from "./batch";
 import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
 import { amount } from "./codec";
 import { ingredientUsage } from "./recipe-shared";
@@ -285,11 +286,7 @@ export const cookbookIdInput = z.object({
 });
 
 export const cookbookReprocessEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("progress"),
-    done: z.number().int().nonnegative(),
-    total: z.number().int().nonnegative(),
-  }),
+  batchProgressEvent,
   z.object({
     type: z.literal("done"),
     result: z.object({
@@ -338,11 +335,16 @@ export const cookbookReprocessChunkInput = z.object({
   offset: z.number().int().nonnegative(),
 });
 
+const recipeImportCompletionEvent = z.object({
+  type: z.literal("done"),
+  result: z.object({
+    succeeded: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+  }),
+});
+
 export const cookbookImportEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("progress"),
-    done: z.number().int().nonnegative(),
-    total: z.number().int().nonnegative(),
+  batchProgressEvent.extend({
     item: z
       .union([
         z.object({
@@ -359,13 +361,7 @@ export const cookbookImportEventSchema = z.discriminatedUnion("type", [
       ])
       .optional(),
   }),
-  z.object({
-    type: z.literal("done"),
-    result: z.object({
-      succeeded: z.number().int().nonnegative(),
-      failed: z.number().int().nonnegative(),
-    }),
-  }),
+  recipeImportCompletionEvent,
 ]);
 
 export const cookbookDiffInput = z.object({
@@ -398,10 +394,7 @@ export const importNotionSyncInput = z.object({
 });
 
 export const notionImportEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("progress"),
-    done: z.number().int().nonnegative(),
-    total: z.number().int().nonnegative(),
+  batchProgressEvent.extend({
     item: z
       .union([
         z.object({
@@ -418,13 +411,7 @@ export const notionImportEventSchema = z.discriminatedUnion("type", [
       ])
       .optional(),
   }),
-  z.object({
-    type: z.literal("done"),
-    result: z.object({
-      succeeded: z.number().int().nonnegative(),
-      failed: z.number().int().nonnegative(),
-    }),
-  }),
+  recipeImportCompletionEvent,
 ]);
 
 export const cookbookSummariesOut = z.array(cookbookSummary);

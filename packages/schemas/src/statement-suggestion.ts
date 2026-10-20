@@ -2,10 +2,8 @@ import { z } from "zod";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 
 import {
-  generatedFinancialTransactionKindValues,
-  generatedFinancialTransactionStatusValues,
-} from "./generated/entity-field-schemas.financialTransaction.gen";
-import {
+  financialTransactionKind as kind,
+  financialTransactionStatus as status,
   financialTransactionSourceRef,
   financialTransactionProviderStatus,
 } from "./financial-transaction-fields";
@@ -16,9 +14,6 @@ import {
 } from "./identifiers";
 import { plainDate } from "./project";
 import { statementTransferPairRef } from "./transfer-pair-suggestion";
-
-const kind = z.enum(generatedFinancialTransactionKindValues);
-const status = z.enum(generatedFinancialTransactionStatusValues);
 
 /** Bump with any statement label prompt/model-policy change; retained votes carry this revision. */
 export const STATEMENT_LABEL_REVISION = "2026-10-17.1";

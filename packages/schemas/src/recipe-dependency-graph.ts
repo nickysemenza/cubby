@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { cookbookShortcode, recipeShortcode } from "./identifiers";
+import { recipeRefOut } from "./recipe-shared";
 
-const recipeDepNodeSchema = z.object({
-  id: recipeShortcode,
-  name: z.string(),
+const recipeDepNodeSchema = recipeRefOut.extend({
   cookbookId: cookbookShortcode.nullable(),
   cookbookName: z.string().nullable(),
   external: z.boolean(),

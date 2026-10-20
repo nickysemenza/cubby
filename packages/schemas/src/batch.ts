@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+/** Item counts on streamed batch operations; per-item payloads extend this. */
+export const batchProgressEvent = z.object({
+  type: z.literal("progress"),
+  done: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+
 /**
  * Positional, independent results for a batched operation: one failed item
  * never fails its siblings, and `results[i]` answers `items[i]`. Pair with

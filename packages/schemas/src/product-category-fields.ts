@@ -42,3 +42,12 @@ export const productCategorySummary = z.object({
   feature: productCategoryFeature.nullable(),
 });
 export type ProductCategorySummary = z.infer<typeof productCategorySummary>;
+
+/** Purchase-line evidence for a category in Vendor reads and classification. */
+export const purchasedCategorySummary = z.object({
+  id: productCategoryShortcode,
+  name: z.string(),
+  emoji: z.string().nullable(),
+  principalLineCount: z.number().int(),
+  distinctPurchaseCount: z.number().int(),
+});

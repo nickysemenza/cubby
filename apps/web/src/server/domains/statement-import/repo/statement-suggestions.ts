@@ -17,6 +17,7 @@ import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
+import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
 import { statementRowProviderStatus } from "@cubby/schemas/statement-row";
 import {
   type StatementCounterparty,
@@ -254,7 +255,7 @@ async function loadObservations(
     providerStatus:
       row.providerStatus === null
         ? null
-        : z.enum(["posted", "pending"]).parse(row.providerStatus),
+        : financialTransactionProviderStatus.parse(row.providerStatus),
     providerNotes:
       row.providerNotes === null ? null : String(row.providerNotes),
     accountId: row.accountId === null ? null : String(row.accountId),

@@ -10,6 +10,17 @@ export const ledgerPartyKindValues = ["member", "guest", "household"] as const;
 export const ledgerPartyKind = z.enum(ledgerPartyKindValues);
 export type LedgerPartyKind = z.infer<typeof ledgerPartyKind>;
 
+/** Party identity in ownership, work-routing, and transfer responses. */
+export const ledgerPartyRefOut = z.object({
+  id: ledgerPartyShortcode,
+  name: z.string(),
+});
+
+/** A person, excluding the household collective, in ownership and meal reads. */
+export const ledgerPartyPersonSummary = ledgerPartyRefOut.extend({
+  kind: ledgerPartyKind.exclude(["household"]),
+});
+
 export const LEDGER_PARTY_KIND_LABELS = {
   member: "Member",
   guest: "Guest",

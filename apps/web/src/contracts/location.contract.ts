@@ -10,13 +10,14 @@ import {
   locationsWithParentNameOut,
   locationValuationSummaryOut,
 } from "@cubby/schemas/location";
+import { sortDirection } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
 const rosterInput = z.object({
   filters: locationFiltersSchema,
-  sort: z.object({ orderBy: z.string(), direction: z.enum(["asc", "desc"]) }),
+  sort: z.object({ orderBy: z.string(), direction: sortDirection }),
   pagination: z.object({ pageIndex: z.number(), pageSize: z.number() }),
 });
 const searchOutput = z.object({

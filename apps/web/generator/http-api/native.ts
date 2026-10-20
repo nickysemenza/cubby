@@ -14,7 +14,11 @@ import { generatedHeader, yamlGeneratedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import type { KernelActions } from "../entities/render/index.ts";
 import { type EntityOutputs, renderApiTypes } from "./api-types.ts";
-import { isObjectSchema, type JsonSchema } from "./document-passes.ts";
+import {
+  isAnonymousComponentName,
+  isObjectSchema,
+  type JsonSchema,
+} from "./document-passes.ts";
 import type { OpenApiDocument } from "./openapi.ts";
 import { renderClientOperations } from "./swift-operations.ts";
 import {
@@ -39,7 +43,11 @@ const mutationResultOverrides = (
       schema !== undefined && isObjectSchema(schema)
         ? schema.$ref?.split("/").at(-1)
         : undefined;
-    if (name === undefined || !/^[A-Z][A-Za-z0-9]*$/u.test(name))
+    if (
+      name === undefined ||
+      !/^[A-Z][A-Za-z0-9]*$/u.test(name) ||
+      isAnonymousComponentName(name)
+    )
       throw new Error(
         "A native mutation result requires named item and side-effect schemas",
       );

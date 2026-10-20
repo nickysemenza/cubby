@@ -21,7 +21,8 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { locationOut, locationType } from "./location";
+import { locationOut } from "./location";
+import { locationListRefOut } from "./location-fields";
 import { productCategory } from "./product-fields";
 import { duplicateUniqueProductSchema } from "./problems";
 import {
@@ -146,11 +147,7 @@ export const inventoryListProductOut = z.object({
 });
 export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
 
-export const inventoryListLocationOut = z.object({
-  id: locationShortcode,
-  name: z.string(),
-  type: locationType.nullable(),
-});
+export const inventoryListLocationOut = locationListRefOut;
 export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
 const inventoryListItemFields = {

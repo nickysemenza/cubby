@@ -6,6 +6,32 @@ import { wholeCentAmount } from "./money";
 import { plainDate } from "./base-entity";
 
 /** Posting state reported by the source, independent of Cubby classification. */
+const financialTransactionKindValues = [
+  "purchase",
+  "refund",
+  "account_transfer",
+  "credit_card_payment",
+  "fee",
+  "interest",
+  "income",
+  "adjustment",
+  "other",
+] as const;
+const financialTransactionStatusValues = [
+  "expected",
+  "pending",
+  "posted",
+  "void",
+] as const;
+export const financialTransactionKind = z.enum(financialTransactionKindValues);
+export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
+export const financialTransactionStatus = z.enum(
+  financialTransactionStatusValues,
+);
+export type FinancialTransactionStatus = z.infer<
+  typeof financialTransactionStatus
+>;
+
 export const financialTransactionProviderStatus = z.enum(["posted", "pending"]);
 
 export const financialTransactionNonZeroAmount = wholeCentAmount.refine(

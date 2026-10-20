@@ -28,7 +28,10 @@ public struct RunSnapshot: Codable, Sendable {
                 throw operation.malformed("", expected: "an operation object")
             }
             guard let error = operation.value["error"], error != .null else { return nil }
-            return try operation.string("error")
+            guard let message = error.stringValue else {
+                throw operation.malformed("error", expected: "a string")
+            }
+            return message
         }
         self.raw = raw
     }

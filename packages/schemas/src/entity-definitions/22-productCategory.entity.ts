@@ -9,6 +9,7 @@ import { productCategoryShortcode } from "../identifier-fields.js";
 import {
   PRODUCT_CATEGORY_MAX_DEPTH,
   productCategoryFeature,
+  productCategorySummary,
 } from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
@@ -487,15 +488,7 @@ Rules:
             "The root-to-category classification path, including this category.",
         },
         validation: {
-          read: z
-            .array(
-              z.object({
-                id: productCategoryShortcode,
-                name: z.string().min(1),
-              }),
-            )
-            .min(1)
-            .max(3),
+          read: productCategorySummary.shape.path,
           create: null,
           update: null,
         },

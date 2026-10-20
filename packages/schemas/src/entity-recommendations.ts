@@ -1,10 +1,10 @@
 import { z } from "zod";
+import { locationRefOut } from "./location-fields";
+import { productRefOut } from "./product-fields";
 import { entityGraphRootSchema } from "./entity-graph";
 import {
   expenseShortcode,
   inventoryShortcode,
-  locationShortcode,
-  productShortcode,
   projectShortcode,
 } from "./identifiers";
 import {
@@ -18,10 +18,7 @@ export const recommendationProjectTarget = z.object({
   id: projectShortcode,
   name: z.string(),
 });
-export const recommendationLocationTarget = z.object({
-  id: locationShortcode,
-  name: z.string(),
-});
+export const recommendationLocationTarget = locationRefOut;
 export const recommendationSupportingExpense = z.object({
   id: expenseShortcode,
   name: z.string(),
@@ -53,7 +50,7 @@ export const inventoryPlacementProposal = z.object({
 
 export const productRelatedProposal = z.object({
   kind: z.literal("product-related"),
-  target: z.object({ id: productShortcode, name: z.string() }),
+  target: productRefOut,
   score: z.number(),
   evidence: z.array(relatednessEvidenceSchema),
 });

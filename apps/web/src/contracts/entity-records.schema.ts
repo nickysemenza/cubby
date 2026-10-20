@@ -1,6 +1,7 @@
 import { dataQualityStatus } from "@cubby/schemas/data-quality";
 import { displayImagesField } from "@cubby/schemas/display-images";
 import { entitySchema } from "@cubby/schemas/entity";
+import { sortDirection } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
 export const entityRecordSortSchema = z.enum([
@@ -25,7 +26,7 @@ export const entityRecordsInputSchema = z.object({
   updatedFrom: date,
   updatedTo: date,
   orderBy: entityRecordSortSchema.default("updatedAt"),
-  direction: z.enum(["asc", "desc"]).default("desc"),
+  direction: sortDirection.default("desc"),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });

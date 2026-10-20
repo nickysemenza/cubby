@@ -28,12 +28,10 @@ import {
 } from "./pagination";
 import { plainDate } from "./project";
 import { externalIdSource } from "./external-id";
+import { generatedFinancialTransactionFieldSchemas } from "./generated/entity-field-schemas.financialTransaction.gen";
 import {
-  generatedFinancialTransactionFieldSchemas,
-  generatedFinancialTransactionKindValues,
-  generatedFinancialTransactionStatusValues,
-} from "./generated/entity-field-schemas.financialTransaction.gen";
-import {
+  financialTransactionKind,
+  financialTransactionStatus,
   descriptorProcessor,
   financialTransactionProviderStatus,
   financialTransactionAllocation,
@@ -53,9 +51,7 @@ export {
   type FinancialTransactionSourceRef,
 } from "./financial-transaction-fields";
 
-export const financialTransactionKind = z.enum(
-  generatedFinancialTransactionKindValues,
-);
+export const financialTransactionKind = z.enum();
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
 
 /** The same bounded candidate set reaches retrieval and declared ranking. */
@@ -216,13 +212,6 @@ export const purchaseSettlementCheckExpression = (columns: {
   `${columns.purchaseId} IS NULL OR (${purchaseSettlementKindAllowedExpression(
     columns.kind,
   )} AND ${purchaseSettlementSignSatisfiedExpression(columns)})`;
-
-export const financialTransactionStatus = z.enum(
-  generatedFinancialTransactionStatusValues,
-);
-export type FinancialTransactionStatus = z.infer<
-  typeof financialTransactionStatus
->;
 
 export const financialTransactionAllocationOut = financialTransactionAllocation;
 export const financialTransactionAllocationInput =

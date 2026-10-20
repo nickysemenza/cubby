@@ -4,8 +4,10 @@ import { projectDateSourceSchema } from "./project-output-fields";
 export {
   projectDateSourceSchema,
   projectDateWindow,
+  projectRollup,
   type ProjectDateSource,
   type ProjectDateWindow,
+  type ProjectRollup,
 } from "./project-output-fields";
 import { spendingCategoryShortcode } from "./identifiers";
 import {
@@ -107,25 +109,13 @@ export {
 
 export { plainDate } from "./base-entity";
 
-export { projectStatusSchema, projectStatusValues } from "./project-fields";
+export {
+  projectStatusSchema,
+  projectStatusValues,
+  LIVE_PROJECT_STATUSES,
+  isLiveProjectStatus,
+} from "./project-fields";
 export type { ProjectStatus } from "./project-fields";
-import type { ProjectStatus } from "./project-fields";
-
-/**
- * The "live" (not-done) statuses — spelled out rather than derived from
- * `projectStatusValues` so it stays a literal tuple. It is the exact
- * complement of `["done"]` today; the `satisfies` below catches a status
- * being *removed* from `ProjectStatus`, not a fifth status being *added* — a
- * new non-live status must be added here by hand.
- */
-export const LIVE_PROJECT_STATUSES = [
-  "planning",
-  "not_started",
-  "in_progress",
-] as const satisfies readonly ProjectStatus[];
-
-export const isLiveProjectStatus = (status: ProjectStatus): boolean =>
-  new Set<ProjectStatus>(LIVE_PROJECT_STATUSES).has(status);
 
 export { projectKindSchema, projectKindValues } from "./project-fields";
 export type { ProjectKind } from "./project-fields";
@@ -187,41 +177,6 @@ const projectScope = projectFiltersSchema
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
 
 export type ProjectSortField = GeneratedEntitySortField<"project">;
-
-export const projectRollup = z.object({
-  spent: money.describe(
-    "SUM(cost) of live expenses — the blended net (actualSpent + committedSpent − credits), including planned + offsets",
-  ),
-  // The `spent` figure above blends three economically distinct quantities;
-  // these split it so callers can show a true money-out "Actual" that matches
-  // the detail hero / budget decomposition instead of the net blend.
-  actualSpent: money.describe(
-    "SUM(cost) where cost > 0 and not future — money already spent",
-  ),
-  committedSpent: money.describe(
-    "SUM(cost) where cost > 0 and future — planned, not yet spent",
-  ),
-  credits: money.describe(
-    "SUM(-cost) where cost < 0 — project credits, positive magnitude",
-  ),
-  expenseCount: z.number().int(),
-  taskCount: z.number().int(),
-  doneTaskCount: z.number().int(),
-  subtree: z.object({
-    spent: money,
-    actualSpent: money,
-    committedSpent: money,
-    credits: money,
-    expenseCount: z.number().int(),
-    taskCount: z.number().int(),
-    doneTaskCount: z.number().int(),
-    projectCount: z.number().int().describe("Live descendant project count"),
-    costEstimate: moneyNullable.describe(
-      "SUM of non-null costEstimates; null when the subtree has none",
-    ),
-  }),
-});
-export type ProjectRollup = z.infer<typeof projectRollup>;
 
 export const projectTreeInput = z.object({
   filters: projectFiltersSchema,
@@ -302,14 +257,6 @@ export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
 
 export type TaskSortField = GeneratedEntitySortField<"task">;
-
-export const taskListAndSideEffectsOut = z.object({
-  items: z.array(taskOut),
-  sideEffects: mutationSideEffectsSchema,
-});
-export type TaskListAndSideEffectsOut = z.infer<
-  typeof taskListAndSideEffectsOut
->;
 
 export const taskBulkMutationOut = z.object({
   items: z.array(taskOut),
@@ -1074,17 +1021,6 @@ export const repointProjectUsesOut = z.object({
 export const reusableResourceCategory = z.enum(["tools", "software"]);
 export type ReusableResourceCategory = z.infer<typeof reusableResourceCategory>;
 
-const projectToolEconomicsFields = {
-  projectUseCount: z.number().int().nonnegative(),
-  netLifetimeCost: money,
-  costPerProjectUse: moneyNullable,
-  // Read shape constrained nonnegative like a write boundary — see money.ts
-  // convention note and the Task 2 divergence list. Kept as-is (positiveMoney
-  // preserves the exact current behavior); NOT the same nullability as its
-  // near-twin `projectResourceEconomicsFields` below.
-  grossLifetimeAcquisitionCost: positiveMoney,
-};
-
 export const projectSharedWindowOut = z.object({
   startDate: plainDate,
   endDate: plainDate,
@@ -1099,10 +1035,19 @@ const projectResourceEconomicsFields = {
   grossLifetimeAcquisitionCost: positiveMoneyNullable,
 };
 
-export const projectResourceOut = z.object({
+// Suggested tools require known acquisition cost; an attached resource may have unknown cost.
+const projectToolEconomicsFields = {
+  ...projectResourceEconomicsFields,
+  grossLifetimeAcquisitionCost: positiveMoney,
+};
+
+const projectResourceIdentity = z.object({
   productId: productShortcode,
   productName: z.string(),
   manufacturer: z.string(),
+});
+
+export const projectResourceOut = projectResourceIdentity.extend({
   category: reusableResourceCategory,
   coverImageUrl: z.url().nullable(),
   attachedAt: z.date(),
@@ -1120,18 +1065,13 @@ export type ProjectToolSuggestionLane = z.infer<
   typeof projectToolSuggestionLane
 >;
 
-export const projectToolSuggestionOut = z.object({
-  productId: productShortcode,
-  productName: z.string(),
-  manufacturer: z.string(),
+export const projectToolSuggestionOut = projectResourceIdentity.extend({
   coverImageUrl: z.url().nullable(),
   lane: projectToolSuggestionLane,
   matchedTrade: tradeSchema.nullable(),
   reasons: z.array(z.string()).min(1),
   isInventoried: z.boolean(),
-  // Non-nullable here, unlike `projectResourceOut.projectPurchaseCost` above —
-  // this lane only ever emits rows with real purchase evidence. See the Task 2
-  // divergence note.
+  // This lane only emits rows with purchase evidence, so the cost is required.
   projectPurchaseCost: positiveMoney,
   matchingExpenseCount: z.number().int().nonnegative(),
   ...projectToolEconomicsFields,
@@ -1162,10 +1102,7 @@ export type ProjectToolSuggestionsOut = z.infer<
   typeof projectToolSuggestionsOut
 >;
 
-export const productProjectUsesOut = z.object({
-  productId: productShortcode,
-  productName: z.string(),
-  manufacturer: z.string(),
+export const productProjectUsesOut = projectResourceIdentity.extend({
   // This is the Product's *current* category. A historical `projectTool`
   // remains readable after recategorization, but is no longer editable unless
   // it is currently tools or software.
@@ -1387,10 +1324,7 @@ export type ProjectToolMatrixColumnOut = z.infer<
   typeof projectToolMatrixColumnOut
 >;
 
-export const projectToolMatrixRowOut = z.object({
-  productId: productShortcode,
-  productName: z.string(),
-  manufacturer: z.string(),
+export const projectToolMatrixRowOut = projectResourceIdentity.extend({
   groupKey: z.string(),
   trade: tradeSchema.nullable(),
   isInventoried: z.boolean(),

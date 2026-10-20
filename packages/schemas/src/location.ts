@@ -17,6 +17,7 @@ import {
 import { firstDisplayableImage, type ImageOut, imageOut } from "./image";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
+  locationListRefOut,
   locationIdentityProductOut,
   locationType,
   locationValuation,
@@ -155,11 +156,7 @@ export const locationOut = z.object(locationOutFields);
 
 export type LocationOut = z.infer<typeof locationOut>;
 
-export const locationListRefOut = z.object({
-  id: locationShortcode,
-  name: z.string(),
-  type: locationType.nullable(),
-});
+export { locationListRefOut } from "./location-fields";
 export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
 /**
@@ -167,21 +164,12 @@ export type LocationListRefOut = z.infer<typeof locationListRefOut>;
  * includes the location itself, so a dropdown row can disambiguate the many
  * legitimately-repeated names in the tree ("shelf 1" exists in four rooms).
  */
-export const locationAncestorFields = {
-  id: locationShortcode,
-  name: z.string(),
-  type: locationType.nullable(),
-};
-export const locationAncestorOut = z.object(locationAncestorFields);
+export const locationAncestorFields = locationListRefOut.shape;
+export const locationAncestorOut = locationListRefOut;
 export type LocationAncestorOut = z.infer<typeof locationAncestorOut>;
 
-export const locationPathRefFields = {
-  id: locationShortcode,
-  name: z.string(),
-  type: locationType.nullable(),
-};
-export const locationPathRefOut = z.object({
-  ...locationPathRefFields,
+export const locationPathRefFields = locationListRefOut.shape;
+export const locationPathRefOut = locationListRefOut.extend({
   ancestors: z.array(locationAncestorOut),
 });
 export type LocationPathRefOut = z.infer<typeof locationPathRefOut>;
