@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import {
   assessmentFamily,
   assessmentJudgments,
@@ -64,6 +65,11 @@ const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
   ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${end}->>'transactionId'`)},
   ${ref(sql`'ledgerParty'`, sql`a.judgment->${end}->'owner'->>'id'`)})`;
 
+const recommendationScopes = {
+  connection: sql`a.subject->>'scope' LIKE 'connection.%'`,
+  tagPropagation: sql`a.subject->>'scope' = 'product.tag-propagation'`,
+};
+
 /** Subject expansion and row admission belong to families; surfaces only intersect records. */
 export const reviewFamilyDeclarations = {
   field: {
@@ -75,10 +81,11 @@ export const reviewFamilyDeclarations = {
   },
   recommendation: {
     ...assessmentReviewFamilies.recommendation,
-    records: sql`${one} || CASE WHEN a.subject->>'scope' LIKE 'connection.%'
+    scopes: recommendationScopes,
+    records: sql`${one} || CASE WHEN ${recommendationScopes.connection}
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
       ELSE COALESCE(a.evidence->'records', '[]'::jsonb) END`,
-    actionable: sql`(a.subject->>'scope' LIKE 'connection.%' OR a.subject->>'scope' = 'product.tag-propagation')`,
+    actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
   },
   product_pair: {
     ...assessmentReviewFamilies.product_pair,
@@ -160,6 +167,7 @@ export const reviewFamilyDeclarations = {
     label: string;
     records: SQL;
     actionable: SQL;
+    scopes?: typeof recommendationScopes;
     audit?: SQL;
     verified?: SQL;
     summarize?: (value: DecisionValue) => string;
@@ -169,6 +177,14 @@ export const reviewFamilyDeclarations = {
     };
   }
 >;
+
+/** Rule applications leave pending; automatic families retain legacy pending history. */
+export const automaticAssessmentCandidate = sql`(a.family IN (${sql.join(
+  Object.entries(reviewFamilyDeclarations).flatMap(([family, declaration]) =>
+    declaration.kind === "automatic_decision" ? [sql`${family}`] : [],
+  ),
+  sql`, `,
+)}) OR s.status <> ${suggestionStatus.enum.pending})`;
 
 export const automaticFamilyEligibility = sql`(${sql.join(
   Object.entries(reviewFamilyDeclarations).flatMap(([family, declaration]) =>
@@ -257,6 +273,7 @@ export async function readAssessmentRecordRefs(
   );
 }
 
+/** Eligibility fragments use `a` for Assessment and `s` for AssessmentState. */
 export async function touchingAssessmentIds(
   db: Database,
   scope: {

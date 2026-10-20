@@ -7,12 +7,13 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, unwrapDb } from "~/server/db/helpers";
+import { getDb, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { assessment, assessmentState, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { executeEntity } from "~/server/entity-kernel/execute";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
+import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
 
 import {
   keyBase,
@@ -149,19 +150,12 @@ async function tagRows(db: Database, ids?: readonly string[]) {
   }>(sql`
     SELECT a.id, a.evidence, a.subject, s.fingerprint, a."createdAt", p.shortcode
     FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id JOIN "Product" p ON p.id = s."recordId" AND p."deletedAt" IS NULL
-    WHERE a.family = ${assessmentFamily.enum.recommendation} AND a.subject->>'scope' = 'product.tag-propagation' AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
+    WHERE a.family = ${assessmentFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.tagPropagation} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
       AND s.suppression IS NULL AND p."updatedAt" <= a."createdAt" AND NOT (a.evidence->>'tag' = ANY(p.tags))
       AND NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity = s.entity AND suppressed."recordId" = s."recordId"
         AND suppressed.suppression->>'scope' = a.subject->>'scope' AND suppressed.suppression->>'candidateKey' = a.subject->>'candidateKey'
         AND (suppressed.suppression->>'fingerprint' IS NULL OR suppressed.suppression->>'fingerprint' = a.fingerprint))
-      ${
-        ids
-          ? sql`AND a.id IN (${sql.join(
-              ids.map((id) => sql`${id}::uuid`),
-              sql`, `,
-            )})`
-          : sql``
-      }`);
+      ${ids ? sql`AND a.id = ANY(${uuidArrayParam(ids)})` : sql``}`);
   const parsedRows = rows.flatMap((row) => {
     const parsed = proposalSchema.safeParse(row.evidence);
     return parsed.success && parsed.data.supportingProductCount >= 3

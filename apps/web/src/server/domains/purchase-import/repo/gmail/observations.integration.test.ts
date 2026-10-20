@@ -19,6 +19,7 @@ import {
 import { orderMailEvent } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -93,6 +94,25 @@ describe("immutable Email observations", () => {
       .update(emailTable)
       .set({ deletedAt: null })
       .where(eq(emailTable.id, mail.id));
+    const outcome = await publishAssessment(ctx.db, {
+      publicationKey: `synthetic-mail-outcome:${mail.id}`,
+      family: "mail_import_outcome",
+      subject: {
+        kind: "mail_import_outcome",
+        entity: "email",
+        recordId: mail.id,
+        checksum: mail.checksum!,
+        runId: fixture.parent.id,
+      },
+      judgment: {
+        kind: "imported",
+        lines: [{ name: "Synthetic packet", cost: 5 }],
+        total: 5,
+      },
+      producer: null,
+      fingerprint: mail.checksum,
+      evidence: null,
+    });
     for (const code of [mail.shortcode, fixture.order.shortcode]) {
       const audit = await listAutomaticDecisions(ctx.db, {
         family: "email_link",
@@ -100,6 +120,18 @@ describe("immutable Email observations", () => {
       });
       expect(
         audit.items.find((row) => row.id === prediction.id)?.records,
+      ).toEqual(
+        expect.arrayContaining([
+          { entity: "email", id: mail.shortcode },
+          { entity: "purchase", id: fixture.order.shortcode },
+        ]),
+      );
+      const outcomes = await listAutomaticDecisions(ctx.db, {
+        family: "mail_import_outcome",
+        recordIds: [code],
+      });
+      expect(
+        outcomes.items.find((row) => row.id === outcome.id)?.records,
       ).toEqual(
         expect.arrayContaining([
           { entity: "email", id: mail.shortcode },

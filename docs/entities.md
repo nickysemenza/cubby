@@ -2716,7 +2716,8 @@ Non-actionable Product pairs remain ordinary history. A merge still requires
 explicit survivor and impact confirmation, and identity conflicts cannot merge.
 Tag proposals retain the source and every supporting Product's revision; listing,
 publication and confirmation recheck those revisions and the supporting tags.
-Older count-only tag advice cannot establish that basis and remains ordinary history.
+Older count-only and stale tag advice stays stored with its existing status and is
+excluded from the queue; a later Sweep may publish a proposal with a new basis.
 Project, placement and tag proposals appear after a Sweep publishes them; passive
 record reads never discover or publish new advice.
 Similar-Product browsing stays informational; photo-import choices stay in their Run.

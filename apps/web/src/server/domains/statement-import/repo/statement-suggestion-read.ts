@@ -9,7 +9,7 @@ import {
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import {
   pendingSuggestion,
   suggestionField,
@@ -37,12 +37,7 @@ const inStatus = (status: StatementSuggestionScope["status"]) =>
 const conditions = (filters: StatementSuggestionScope): SQL => {
   const where: SQL[] = [inStatus(filters.status)];
   if (filters.assessmentIds)
-    where.push(
-      sql`s.id IN (${sql.join(
-        filters.assessmentIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})`,
-    );
+    where.push(sql`s.id = ANY(${uuidArrayParam(filters.assessmentIds)})`);
   if (filters.runCode)
     where.push(
       sql`s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runCode})`,

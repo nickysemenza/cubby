@@ -12,12 +12,13 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   automaticFamilyEligibility,
+  automaticAssessmentCandidate,
   automaticApplicationVerified,
   readAssessmentRecordRefs,
   reviewFamilyDeclarations,
@@ -38,7 +39,7 @@ export async function listAutomaticDecisions(
     records: resolved
       ? [...resolved].map(([code, record]) => ({ code, ...record }))
       : undefined,
-    eligibility: sql`a.served AND (${automaticFamilyEligibility} OR ${rule} IS NOT NULL)
+    eligibility: sql`a.served AND ${automaticAssessmentCandidate} AND (${automaticFamilyEligibility} OR ${rule} IS NOT NULL)
       ${input.family ? sql`AND a.family = ${input.family}` : sql``}`,
   });
   if (touching?.size === 0)
@@ -47,18 +48,11 @@ export async function listAutomaticDecisions(
       totalCount: 0,
       nextOffset: null,
     });
-  const where = sql`a.served AND (
+  const where = sql`a.served AND ${automaticAssessmentCandidate} AND (
     ${automaticFamilyEligibility}
     OR ${rule} IS NOT NULL)
     ${input.family ? sql`AND a.family = ${input.family}` : sql``}
-    ${
-      touching
-        ? sql`AND a.id IN (${sql.join(
-            [...touching].map((id) => sql`${id}::uuid`),
-            sql`, `,
-          )})`
-        : sql``
-    }
+    ${touching ? sql`AND a.id = ANY(${uuidArrayParam([...touching])})` : sql``}
     ${input.reviewStatus === "wrong" ? sql`AND latest.verdict = ${feedbackVerdict.enum.wrong}` : input.reviewStatus === "unreviewed" ? sql`AND latest.id IS NULL` : input.reviewStatus === "reviewed" ? sql`AND latest.id IS NOT NULL` : sql``}`;
   const from = sql`FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
     LEFT JOIN LATERAL (SELECT f.id, f.verdict, f."createdAt" FROM "Feedback" f

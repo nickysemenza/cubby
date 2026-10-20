@@ -4,6 +4,7 @@ import {
   type StatementRowInput,
 } from "@cubby/schemas/statement-row";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
+import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -18,6 +19,7 @@ import { answering } from "~/server/domains/statement-import/repo/statement-deci
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
 import {
   createProductFixture,
   makeProductInput,
@@ -151,6 +153,30 @@ const readyKey = (row: SuggestionListRow) =>
 
 describe("cross-family Suggestion list", () => {
   const ctx = withTestDb();
+
+  // Entity-wide history can contain more ids than a Postgres Bind message
+  // permits. A scoped key read must use a bounded number of parameters.
+  it("reads a large assessment roster through every proposal adapter", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic roster product" }),
+      ctx.actor,
+    );
+    const id = await fieldSuggestion(ctx, item, "model", 0.9, new Date());
+    const assessmentIds = [
+      id,
+      ...Array.from({ length: 65536 }, () => crypto.randomUUID()),
+    ];
+    for (const [family, presentation] of Object.entries(suggestionFamilies)) {
+      const keys = await presentation.keys(ctx.db, {
+        filters: suggestionListFilters.parse({}),
+        assessmentIds,
+      });
+      expect(keys.map((key) => key.assessmentId)).toEqual(
+        family === "field" ? [id] : [],
+      );
+    }
+  });
 
   // Reference proposals touch both the old and proposed records, even when
   // neither is the field's primary subject or entity kind.

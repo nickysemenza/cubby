@@ -16,7 +16,11 @@ import { type SQL, and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  getDb,
+  withTransactionDatabase,
+  uuidArrayParam,
+} from "~/server/db/helpers";
 import {
   run as runTable,
   assessmentState as suggestionTable,
@@ -235,7 +239,7 @@ export async function fieldSuggestionKeys(
     eq(suggestionTable.active, true),
     eq(suggestionTable.status, scope.status),
     scope.assessmentIds
-      ? inArray(suggestionTable.id, [...scope.assessmentIds])
+      ? sql`${suggestionTable.id} = ANY(${uuidArrayParam(scope.assessmentIds)})`
       : undefined,
     scope.entities
       ? inArray(suggestionTable.entity, [...scope.entities])

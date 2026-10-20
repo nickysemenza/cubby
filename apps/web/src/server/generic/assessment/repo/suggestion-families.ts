@@ -44,7 +44,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
 import {
   currentTransferPairs,
@@ -57,6 +57,7 @@ import {
   statementSuggestionStatusCounts,
 } from "~/server/domains/statement-import/repo/statement-suggestion-read";
 import { kindAgreed } from "~/server/domains/statement-import/repo/statement-transaction-kind";
+import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
 import {
   fieldSuggestionKeys,
   readFieldSuggestions,
@@ -105,13 +106,7 @@ export type SuggestionFamilyQuery = {
 export const assessmentIdScope = (
   ids: readonly string[] | undefined,
   column: SQL,
-) =>
-  ids
-    ? sql`${column} IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})`
-    : sql`true`;
+) => (ids ? sql`${column} = ANY(${uuidArrayParam(ids)})` : sql`true`);
 
 type ReviewItem = z.input<typeof assessmentReviewInput>;
 type Action = z.infer<typeof suggestionAction>;
@@ -588,7 +583,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       WHERE a.family = ${assessmentFamily.enum.recommendation} AND a.served AND s.active
         AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
         AND s.status = ${suggestionStatus.enum.pending}
-        AND a.subject->>'scope' LIKE 'connection.%'
+        AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
         AND NOT EXISTS (SELECT 1 FROM "Feedback" f WHERE f."assessmentId" = a.id
           AND f.authority = ${feedbackAuthority.enum.member}
           AND f.verdict IN (${feedbackVerdict.enum.wrong}, ${feedbackVerdict.enum.dismissed}))
@@ -645,7 +640,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       SELECT DISTINCT a.evidence->'candidate'->${"source"}->>'entityKind' AS "entityKind",
         a.evidence->'candidate'->${"source"}->>'entityId' AS "entityId"
       FROM "Assessment" a
-      WHERE a.subject->>'scope' LIKE 'connection.%' AND a.id IN (${sql.join(
+      WHERE ${reviewFamilyDeclarations.recommendation.scopes.connection} AND a.id IN (${sql.join(
         keys.map((key) => sql`${key.assessmentId}::uuid`),
         sql`, `,
       )})
@@ -698,7 +693,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
     }>(sql`
       SELECT s.status, count(*)::int AS count
       FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
-      WHERE a.family = ${assessmentFamily.enum.recommendation} AND a.subject->>'scope' LIKE 'connection.%'
+      WHERE a.family = ${assessmentFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
         ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
       GROUP BY s.status
     `);
@@ -743,14 +738,7 @@ async function transferPairRows(
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
     WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
       AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
-      ${
-        ids
-          ? sql`AND s.id IN (${sql.join(
-              ids.map((id) => sql`${id}::uuid`),
-              sql`, `,
-            )})`
-          : sql``
-      }
+      ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
       ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
       ${runCode(query) ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode(query)})` : sql``}
   `);
