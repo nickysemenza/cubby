@@ -91,7 +91,10 @@ test("one queue separates proposals from automatic history and reviews either en
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Synthetic queue drill");
-  const item = await createEntityFixture(page, "product", { name });
+  const item = await createEntityFixture(page, "product", {
+    name,
+    manufacturer: "Example Tools",
+  });
   const cover = await seedImagePrerequisite(
     "synthetic-queue-cover",
     e2eRuntime.objectStorageUrl,
@@ -188,6 +191,9 @@ test("one queue separates proposals from automatic history and reviews either en
   expect(pending.items.map((row) => row.assessmentId)).not.toContain(
     decision.id,
   );
+  await expect(
+    page.getByRole("link", { name: new RegExp(name) }).first(),
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("suggestions-desktop.png"),
     fullPage: true,
@@ -196,6 +202,14 @@ test("one queue separates proposals from automatic history and reviews either en
   await expect(
     page.getByRole("link", { name: new RegExp(name) }).first(),
   ).toBeVisible();
+  // The resolved mobile identity must receive the name column's width rather
+  // than yielding it to manufacturer metadata or keeping a compact link cap.
+  expect(
+    await page
+      .getByText(name, { exact: true })
+      .first()
+      .evaluate((element) => element.getBoundingClientRect().width),
+  ).toBeGreaterThan(150);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -259,6 +273,9 @@ test("one queue separates proposals from automatic history and reviews either en
     exact: true,
   });
   await expect(audit).toContainText("Synthetic packet");
+  await expect(
+    audit.getByRole("link", { name: /Synthetic itemized confirmation/ }),
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("automatic-decisions-desktop.png"),
     fullPage: true,

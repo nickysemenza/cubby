@@ -180,7 +180,7 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
       }
       trailing={<DateDisplay timestamp={row.createdAt} />}
       actions={
-        <Row gap="sm">
+        <Row gap="sm" className="items-center">
           <span className="text-xs">
             {row.verdict ? humanize(row.verdict) : "Unreviewed"}
           </span>

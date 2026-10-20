@@ -428,7 +428,7 @@ function QuickFilters({
               compact
               label={label}
               placeholder={`Any ${label.toLowerCase()}`}
-              className="w-44"
+              className="w-full md:w-44"
               options={options}
               isLoading={config.isLoading}
               onSearchChange={config.onSearchChange}
@@ -771,7 +771,7 @@ function SuggestionsTableBody({
             mode="choose"
             compact
             label="Sort"
-            className="w-60"
+            className="w-full md:w-60"
             options={
               order
                 ? ORDER_OPTIONS

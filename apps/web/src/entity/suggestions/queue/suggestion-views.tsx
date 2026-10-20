@@ -375,7 +375,14 @@ function allColumns() {
         meta: attachCubbyColumnMeta<Row>({
           mobile: { slot: "meta", priority: 0, label: "Family" },
         }),
-        cell: ({ row }) => FAMILY_LABEL[row.original.family],
+        cell: ({ row }) => (
+          <span
+            className="block truncate"
+            title={FAMILY_LABEL[row.original.family]}
+          >
+            {FAMILY_LABEL[row.original.family]}
+          </span>
+        ),
       }),
     );
     add(cleanColumn);

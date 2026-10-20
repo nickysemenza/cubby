@@ -374,7 +374,13 @@ function RowContent<TItem extends RowData>({
             {title}
           </Link>
         ) : (
-          <span className={titleClass}>{title}</span>
+          <span
+            className={
+              typeof title === "string" ? titleClass : "block min-w-0 text-sm/5"
+            }
+          >
+            {title}
+          </span>
         )}
         <RowSubtitle parts={subtitleParts} />
         <ProposalCount record={row.original} />

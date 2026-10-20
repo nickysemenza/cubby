@@ -22,12 +22,15 @@ function AutomaticDecisionsPage() {
       title="Review automatic decisions"
       layout="full"
       bodyGutter="standard"
+      mobileTitleVisible
     >
-      <AutomaticDecisions
-        key={`${record}:${family}`}
-        id={record}
-        initialFamily={family}
-      />
+      <div className="py-2">
+        <AutomaticDecisions
+          key={`${record}:${family}`}
+          id={record}
+          initialFamily={family}
+        />
+      </div>
     </Page>
   );
 }

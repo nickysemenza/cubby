@@ -20,6 +20,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { ChipCluster } from "~/ui/common/chip-cluster";
 import { StackedValue } from "~/ui/common/stacked-value";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
@@ -144,13 +145,15 @@ export function RecordLink({
   record: SuggestionRecordRef;
   wrap?: boolean;
 }) {
+  const mobile = useIsMobile();
+  const wraps = wrap ?? mobile;
   return (
     <EntityRefLink
       variant="byId"
       entityKind={record.entity}
       entityId={record.id}
-      compact={!wrap}
-      wrap={wrap}
+      compact={!wraps}
+      wrap={wraps}
     />
   );
 }
@@ -258,8 +261,11 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
       </span>
     ))
     .with({ family: "recommendation" }, ({ evidence }) => (
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        <span className="shrink-0 text-muted-foreground">
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
+        <span
+          className="min-w-0 truncate text-muted-foreground"
+          title={"kind" in evidence ? evidence.description : evidence.label}
+        >
           {"kind" in evidence ? evidence.description : evidence.label}
         </span>
         {row.other ? <RecordLink record={row.other} /> : null}
