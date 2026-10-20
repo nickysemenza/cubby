@@ -175,7 +175,7 @@ public final class RunReviewSession {
             try Task.checkCancellation()
             guard generation == refreshGeneration else { return }
             guard next.runID == runID else { throw ReviewRequired("The snapshot belongs to another Run.") }
-            let nextReview = next.purpose == "photo_inventory" ? try await loadReview() : nil
+            let nextReview = next.purpose == .photoInventory ? try await loadReview() : nil
             try Task.checkCancellation()
             guard generation == refreshGeneration else { return }
             if let nextReview, nextReview.review.runId != runID {

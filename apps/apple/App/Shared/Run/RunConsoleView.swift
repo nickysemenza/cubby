@@ -43,7 +43,7 @@ struct RunConsoleView: View {
     private func row(_ snapshot: RunSnapshot) -> EntityRow {
         let raw: JSONValue = .object([
             "id": .string(runID),
-            "purpose": .string(snapshot.purpose),
+            "purpose": .string(snapshot.purpose.rawValue),
             // The batch's poll is the live status; the snapshot only seeds it.
             "status": .string(batch?.status ?? snapshot.status.rawValue),
         ])
@@ -131,14 +131,14 @@ struct RunConsoleView: View {
         // Each poll of the batch also re-reads the photo review beside the reports: photo
         // processing and the agent's proposals change while the Run is live.
         .onChange(of: batch?.revision) { _, revision in
-            guard (revision ?? 0) > 1, session.snapshot?.purpose == "photo_inventory" else { return }
+            guard (revision ?? 0) > 1, session.snapshot?.purpose == .photoInventory else { return }
             Task { await refresh() }
         }
         // Ordinary session refreshes leave actionRevision unchanged, so the batch's photo
         // refresh cannot feed back into another batch refresh. A stopped Run still redraws
         // after approval; an action that makes it live again also resumes polling.
         .task(id: session.actionRevision) {
-            guard session.actionRevision > 0, session.snapshot?.purpose == "photo_inventory",
+            guard session.actionRevision > 0, session.snapshot?.purpose == .photoInventory,
                 let batch
             else { return }
             await batch.refresh()
