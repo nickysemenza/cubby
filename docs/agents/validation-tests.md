@@ -275,8 +275,9 @@ when replacing the control's selectors.
 
 Lazy quality-explanation journeys wait for the row's loaded assessment before
 opening it; initial trigger visibility can precede deferred enrichment. When
-hovering consecutive timestamp cells, assert the open tooltip so the previous
-tooltip's closing animation cannot create a duplicate text match.
+moving hover or keyboard focus between timestamp cells or chart bars, scope
+assertions to `[role="tooltip"][data-open]`; the previous tooltip remains in
+the DOM through its closing animation.
 
 Scope sidebar assertions by the section's own heading, not arbitrary descendant
 headings: nested panels and relationship graphs can repeat the same heading.

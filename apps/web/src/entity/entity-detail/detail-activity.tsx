@@ -10,14 +10,12 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
-import {
-  formatCalendarDay,
-  formatInstant,
-  formatRelative,
-} from "~/lib/date-format";
-import { householdDateTime, householdLocalDate } from "~/lib/household-date";
+import { formatCalendarDay, formatInstant } from "~/lib/date-format";
+import { dateSpanParts } from "~/lib/date-span";
+import { householdLocalDate } from "~/lib/household-date";
 import { formatCurrency } from "~/lib/number-format";
 import { RecordList, RecordMore, RecordRow } from "~/ui/common/record-list";
+import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 
@@ -83,7 +81,7 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
   );
   const events = activity.data?.pages.flatMap((page) => page.items) ?? [];
   const groups = groupActivityByDay(events);
-  const today = householdLocalDate();
+  const today = useHouseholdToday() ?? householdLocalDate();
   return (
     <Section
       // The page's established activity anchor: `#history` links keep working.
@@ -129,9 +127,7 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
                   )}
                 </time>
                 <div className="text-xs/4 text-muted-foreground">
-                  {day === today
-                    ? "today"
-                    : formatRelative(householdDateTime(day, 12 * 60))}
+                  {dateSpanParts(day, null, today).relative}
                 </div>
               </div>
               <RecordList
