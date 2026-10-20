@@ -175,7 +175,7 @@ export interface CubbyColumnMeta<TData = CellData> {
   readFields?: readonly string[];
   /** Deferred values must render their state without invoking data accessors. */
   valueUnavailable?: (row: TData) => boolean;
-  /** A present value the cell deliberately paints as nothing (complete quality). */
+  /** A present value the cell deliberately paints as nothing. */
   rendersBlank?: (row: TData) => boolean;
   /** Public refs rendered by this column, collected once at the table owner. */
   entityRefs?: (row: TData) => readonly EntityRef[];

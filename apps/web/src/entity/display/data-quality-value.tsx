@@ -17,8 +17,8 @@ export const qualityMeterFill = (score: number) =>
   Math.min(METER_BARS - 1, Math.max(1, Math.floor(score / 20)));
 
 /**
- * A quality value reads only when something is owed. Complete is silent (its
- * label stays spoken); a gap shows a five-bar meter in its condition tone —
+ * Quality scores stay visible, including complete records.
+ * A gap shows a five-bar meter in its condition tone —
  * warning for missing data, destructive for a defect — beside the score.
  */
 export function DataQualityValue({
@@ -40,7 +40,13 @@ export function DataQualityValue({
     );
   const label = dataQualityStatusLabel(quality.status);
   if (quality.status === "complete")
-    return <span className="sr-only">{label}</span>;
+    return (
+      <span className="text-muted-foreground tabular-nums" title={label}>
+        {quality.score}
+        {dense ? null : "/100"}
+        <span className="sr-only">, {label}</span>
+      </span>
+    );
   if (quality.score === null || quality.status === "not_assessed")
     return (
       <span className="text-xs text-muted-foreground" title={label}>

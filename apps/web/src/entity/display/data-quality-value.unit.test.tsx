@@ -1,19 +1,28 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { DenseCellContext } from "~/ui/common/stacked-value";
+
 import { DataQualityValue, qualityMeterFill } from "./data-quality-value";
 
 afterEach(cleanup);
 
 describe("quality cell", () => {
-  it("shows nothing for a complete record but still says so", () => {
-    const { container } = render(
-      <DataQualityValue quality={{ status: "complete", score: 100 }} />,
-    );
-    expect(container).toHaveTextContent("Complete");
-    expect(screen.getByText("Complete")).toHaveClass("sr-only");
-    expect(container.querySelector("[data-quality-meter]")).toBeNull();
-  });
+  // Regression: complete scores disappeared instead of remaining visible.
+  it.each([false, true])(
+    "shows a complete score (dense: %s) and retains its spoken status",
+    (dense) => {
+      const { container } = render(
+        <DenseCellContext.Provider value={dense ? { linksTo: null } : null}>
+          <DataQualityValue quality={{ status: "complete", score: 100 }} />
+        </DenseCellContext.Provider>,
+      );
+      expect(screen.getByText(dense ? "100" : "100/100")).toBeVisible();
+      expect(container).toHaveTextContent("Complete");
+      expect(screen.getByText(", Complete")).toHaveClass("sr-only");
+      expect(container.querySelector("[data-quality-meter]")).toBeNull();
+    },
+  );
 
   it.each([
     ["needs_data", "bg-warning"],
