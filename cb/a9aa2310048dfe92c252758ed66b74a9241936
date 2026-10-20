@@ -1,0 +1,73 @@
+apps/web/generator/entities/presentation.ts
+  s_2493609cc0d9bb::t_3a7858fec5b8ea 1-2,601,747-799
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_2493609cc0d9bb::t_73fbd5959cb7a9 72-79,106-112
+packages/schemas/src/entity-definitions/01-recipe.entity.ts
+  s_2493609cc0d9bb::t_85f856eb601f71 65-69
+packages/schemas/src/entity-definitions/02-ingredient.entity.ts
+  s_2493609cc0d9bb::t_9f3d810ba752c3 31
+packages/schemas/src/entity-definitions/03-cookbook.entity.ts
+  s_2493609cc0d9bb::t_d59cc9e2dfc866 30
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_2493609cc0d9bb::t_e2cefe0a6f8fdb 40-44,51-54
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_2493609cc0d9bb::t_15babc5a2fd650 55-57
+packages/schemas/src/entity-definitions/06-meal.entity.ts
+  s_2493609cc0d9bb::t_023f22a2c4a444 48,58
+packages/schemas/src/entity-definitions/07-ledgerParty.entity.ts
+  s_2493609cc0d9bb::t_29fd1ff9cc14f0 24-35
+packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts
+  s_2493609cc0d9bb::t_9c2da21c1e45b5 63-66
+packages/schemas/src/entity-definitions/09-project.entity.ts
+  s_2493609cc0d9bb::t_fc61346ea2ea69 72-78,93-94,96
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_2493609cc0d9bb::t_3effc942ea9e79 63-68,77
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_2493609cc0d9bb::t_c59cbfcfb3a46a 54-66
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_2493609cc0d9bb::t_b3c472c7a3b2f7 78-81,89-96
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_2493609cc0d9bb::t_5655a6688a3fe1 69-73
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_2493609cc0d9bb::t_f80b4128fb3fa0 146-149,154-157
+packages/schemas/src/entity-definitions/15-wish.entity.ts
+  s_2493609cc0d9bb::t_d788ff0b6e8703 37
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_2493609cc0d9bb::t_867c41091a741d 69-72
+packages/schemas/src/entity-definitions/18-image.entity.ts
+  s_2493609cc0d9bb::t_b97c0a92d25992 63-66
+packages/schemas/src/entity-definitions/19-planting.entity.ts
+  s_2493609cc0d9bb::t_b1cb96b484c4a0 35,37
+packages/schemas/src/entity-definitions/20-gardenEntry.entity.ts
+  s_2493609cc0d9bb::t_fcecefab07b315 37-42
+packages/schemas/src/entity-definitions/21-vendorAccount.entity.ts
+  s_2493609cc0d9bb::t_73cd922497497a 43-47
+packages/schemas/src/entity-definitions/22-productCategory.entity.ts
+  s_2493609cc0d9bb::t_a0f86db91ed4fb 29-32
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_2493609cc0d9bb::t_fffea414bfbb12 59-62,68,70-71
+packages/schemas/src/entity-definitions/26-plant.entity.ts
+  s_2493609cc0d9bb::t_7c9ca7435ecf9d 70-80
+packages/schemas/src/entity-definitions/27-spendingCategory.entity.ts
+  s_2493609cc0d9bb::t_cff9d637c7a0b5 29-37
+packages/schemas/src/entity-definitions/29-imageJob.entity.ts
+  s_2493609cc0d9bb::t_5f0a6501c13162 72-75
+packages/schemas/src/entity-definitions/definition.ts
+  s_2493609cc0d9bb::t_65100021fa2fb8 1279-1289,1308-1329,1377,1388
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cba9aa2310048dfe92c252758ed66b74a9241936",
+  "prompts": {},
+  "sessions": {
+    "s_2493609cc0d9bb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a51-2244-7f02-b591-b96aae72c6c6",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
