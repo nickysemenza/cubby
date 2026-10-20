@@ -30,6 +30,7 @@ import { plainDate } from "./project";
 import { externalIdSource } from "./external-id";
 import { generatedFinancialTransactionFieldSchemas } from "./generated/entity-field-schemas.financialTransaction.gen";
 import {
+  type FinancialTransactionKind,
   financialTransactionKind,
   financialTransactionStatus,
   descriptorProcessor,
@@ -54,9 +55,9 @@ export {
 export {
   financialTransactionKind,
   financialTransactionStatus,
+  type FinancialTransactionKind,
   type FinancialTransactionStatus,
 } from "./financial-transaction-fields";
-export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
 
 /** The same bounded candidate set reaches retrieval and declared ranking. */
 export const SETTLEMENT_CANDIDATE_LIMIT = 20;
