@@ -408,7 +408,9 @@ Other Run checkpoints and progress events retain samples in live-progress
 metadata; samples use the checkpoint write time, while heartbeat-only events
 do not refresh a work sample. Timeline history
 retains its small event payload. Legacy records start sampling from their next
-checkpoint without rewriting earlier history. Target counts reuse the roster's
+checkpoint without rewriting earlier history. Mail Runs with no stored roster
+report an unknown total; progress delivery does not invent sources or change
+Mail membership validation. Target counts reuse the roster's
 latest applicable outcomes, and photo preparation includes device failures.
 Live reads resolve current outcomes rather than serving a cached count; Mail
 import, product enrichment, and purchase validation admit at most 50 sources

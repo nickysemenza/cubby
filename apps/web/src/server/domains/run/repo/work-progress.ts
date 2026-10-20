@@ -210,6 +210,24 @@ function targetWorkCounts(
   };
 }
 
+function frozenTargetTotal(
+  purpose: RunPurpose,
+  input: (typeof run.$inferSelect)["input"],
+  observed: number,
+) {
+  switch (purpose) {
+    case "mail_import":
+      return observed;
+    case "product_enrichment":
+      return productResearchRunInput.safeParse(input).data?.products.length;
+    case "purchase_validation":
+      return purchaseValidationResearchRunInput.safeParse(input).data?.purchases
+        .length;
+    default:
+      return undefined;
+  }
+}
+
 function checkpointWorkItems(
   owner: Pick<typeof run.$inferSelect, "progress" | "input">,
   purpose: RunPurpose,
@@ -386,8 +404,9 @@ export async function getRunWorkProgress(
   }
   const photos = photoCounts.parse(owner.photos);
   const source = countSources[purpose];
+  const missingMailRoster = purpose === "mail_import" && owner.input === null;
   const targetRows =
-    source === "targets" && purpose !== "photo_inventory"
+    source === "targets" && purpose !== "photo_inventory" && !missingMailRoster
       ? await (
           await import("~/server/domains/purchase-import/repo/run-service")
         ).readRunProgressTargets(db, owner.id)
@@ -399,15 +418,7 @@ export async function getRunWorkProgress(
   const useCalls =
     source === "calls" || (purpose === "background" && !operations.total);
   const counts = source === "targets" ? targets : useCalls ? calls : operations;
-  const targetTotal =
-    purpose === "mail_import"
-      ? targets.total
-      : purpose === "product_enrichment"
-        ? productResearchRunInput.safeParse(owner.input).data?.products.length
-        : purpose === "purchase_validation"
-          ? purchaseValidationResearchRunInput.safeParse(owner.input).data
-              ?.purchases.length
-          : undefined;
+  const targetTotal = frozenTargetTotal(purpose, owner.input, targets.total);
   let items: RunWorkItems = {
     phase: owner.phase ?? purpose,
     label: RUN_PURPOSE_LABEL[purpose],
@@ -421,7 +432,9 @@ export async function getRunWorkProgress(
             : "operations",
     processed: counts.processed,
     failures: counts.failures,
-    total: targetTotal ?? (status === "completed" ? counts.total : null),
+    total: missingMailRoster
+      ? null
+      : (targetTotal ?? (status === "completed" ? counts.total : null)),
   };
   if (purpose === "photo_inventory")
     items = {
