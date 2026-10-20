@@ -135,7 +135,9 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   expect(changed).not.toEqual(labels);
   await reloadAuthenticatedPage(page, table);
   await expect.poll(() => headers.allTextContents()).toEqual(labels);
-  await table.getByRole("columnheader", { name: /Quality/ }).click();
+  await table
+    .getByRole("button", { name: "Sort by Quality", exact: true })
+    .click();
   await expect(page).toHaveURL(/sort=.*dataQuality/);
   await expect(table.locator("tbody tr").first()).toContainText(lowerScoreName);
 
@@ -184,7 +186,9 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await expect(
     unassessedRow.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
   ).toHaveText("Not assessed");
-  await page.getByRole("columnheader", { name: /Quality/ }).click();
+  await page
+    .getByRole("button", { name: "Sort by Quality", exact: true })
+    .click();
   await expect(page).toHaveURL(/sort=.*dataQuality/);
   await openCellExplanation(unassessedRow, /How (data )?quality is determined/);
   await expect(popover).toContainText("Not assessed");

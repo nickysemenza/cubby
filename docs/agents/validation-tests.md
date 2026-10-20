@@ -356,3 +356,5 @@ further pass.
 Disclosure bodies mount only after opening. Explanation journeys open Technical details before asserting rule identifiers or descriptions; filter journeys use Clear all and drive inline presence controls directly. Table title subtitles can repeat category links, so scope category assertions to their declared column.
 
 Optional nested form controls stay unmounted until requested: mounting a numeric controller can expand a null parent into an object and mark an untouched bulk field dirty. The bulk-edit checkbox journey retains the regression that unrelated fields must stay out of the write.
+
+List sorting journeys click the named Sort by button; a column header also contains its menu trigger, so a center click can open the menu instead of sorting. Open Filters before clearing its active predicates.

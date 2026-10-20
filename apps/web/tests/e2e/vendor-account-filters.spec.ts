@@ -62,17 +62,15 @@ test("vendor accounts filter by member from the Filters menu", async ({
   await expect(chip).toBeVisible();
   await expect(account(birch)).toHaveCount(0);
 
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
   await page.getByRole("button", { name: "Clear all", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(account(birch)).toBeVisible();
   expect(new URL(page.url()).searchParams.has("ledgerPartyId")).toBe(false);
 
   // A filter no column hosts at all: the relation's presence predicate.
   const pickHasPurchases = async (answer: "Yes" | "No") => {
     await page.getByRole("button", { name: "Filters", exact: true }).click();
-    await page
-      .getByRole("button", { name: /^Has purchases(: |$)/ })
-      .last()
-      .click();
     // A presence filter edits as Any | Yes | No.
     await page
       .getByRole("group", { name: "Filter Has purchases" })
