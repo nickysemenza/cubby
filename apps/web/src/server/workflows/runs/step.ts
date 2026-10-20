@@ -16,6 +16,7 @@ export interface DurableSteps {
 }
 
 export type StepRetries = {
+  timeout?: `${number} ${"second" | "seconds" | "minute" | "minutes"}`;
   retries: {
     limit: number;
     delay: `${number} ${"second" | "seconds" | "minute" | "minutes"}`;

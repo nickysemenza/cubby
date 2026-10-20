@@ -42,7 +42,7 @@ export function Progress({
       {...props}
     >
       {indeterminate ? (
-        <div className="skeleton-shimmer h-full w-full" />
+        <div className="progress-indeterminate h-full w-1/3 bg-primary" />
       ) : (
         <div
           className="h-full rounded-none bg-primary transition-all duration-300"

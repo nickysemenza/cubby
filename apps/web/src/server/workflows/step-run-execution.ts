@@ -1,7 +1,11 @@
 import { MAX_STEP_RUN_INSTANCE_PAGES } from "@cubby/schemas/run-step";
 import { createLogger } from "@cubby/worker-tracing";
 
-import type { StepAdvance } from "~/server/domains/run/service/step-run";
+import type {
+  StepAdvance,
+  StepPagePlan,
+  StepPageSummary,
+} from "~/server/domains/run/service/step-run";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 import {
   BOOKKEEPING_RETRIES,
@@ -16,9 +20,14 @@ const log = createLogger("step-run-workflow");
 
 /** Effects whose invocation/database ownership stays with the Cloudflare adapter. */
 export interface StepRunWork {
+  inspect(): Promise<StepPagePlan | null>;
   elapsedMs?(): number;
   advance(): Promise<StepAdvance>;
-  boundary(name: string, force?: boolean): Promise<boolean>;
+  boundary(
+    name: string,
+    force?: boolean,
+    dashboard?: { nextInstanceId: string; summary: StepPageSummary | null },
+  ): Promise<boolean>;
   wait(page: number, seconds: number): Promise<void>;
   fail(message: string): Promise<boolean>;
   recover(): Promise<void>;
@@ -30,13 +39,34 @@ export async function runStepRunWorkflow(
 ) {
   try {
     const phasePages = new Map<string, number>();
+    let dashboard:
+      | { nextInstanceId: string; summary: StepPageSummary | null }
+      | undefined;
     for (let page = 0; page < MAX_STEP_RUN_INSTANCE_PAGES; page++) {
-      if (await work.boundary(`page:${page}`)) return;
+      // Names are memoization keys. Inspect once inside step.do: only this saved
+      // checkpoint (never live counts or wall time) may name the page on replay.
+      const plan = await steps.do(
+        `inspect checkpoint p${page + 1}`,
+        BOOKKEEPING_RETRIES,
+        () => work.inspect(),
+      );
+      if (!plan) return;
+      // Different ledger steps can share a phase and page ordinal.
+      const name = `${plan.name} · ${plan.scope}`;
+      dashboard = {
+        nextInstanceId: plan.nextInstanceId,
+        summary: plan.summary,
+      };
+      if (await work.boundary(name, false, dashboard)) return;
       const advance = await steps.do(
-        `page:${page}`,
-        { retries: { limit: 2, delay: "5 seconds", backoff: "exponential" } },
+        name,
+        {
+          timeout: "15 minutes",
+          retries: { limit: 2, delay: "5 seconds", backoff: "exponential" },
+        },
         () => work.advance(),
       );
+      dashboard.summary = advance.summary ?? dashboard.summary;
       if (advance.kind !== "continue" && advance.kind !== "wait") return;
       const execution =
         advance.kind === "continue" ? advance.execution : undefined;
@@ -46,15 +76,18 @@ export async function runStepRunWorkflow(
       if (advance.kind === "continue" && advance.waitSeconds)
         await steps.sleep(`capacity:${page}`, advance.waitSeconds * 1_000);
       const elapsed = await steps.do(
-        `elapsed:${page}`,
+        `instance budget · ${name}`,
         BOOKKEEPING_RETRIES,
-        async () => (work.elapsedMs?.() ?? 0) >= INSTANCE_ELAPSED_MS,
+        async () => ({
+          handoffDue: (work.elapsedMs?.() ?? 0) >= INSTANCE_ELAPSED_MS,
+          budgetMinutes: INSTANCE_ELAPSED_MS / 60_000,
+        }),
       );
       if (
-        elapsed ||
+        elapsed.handoffDue ||
         pages >= (execution?.pagesPerInstance ?? DEFAULT_PAGES_PER_INSTANCE)
       ) {
-        await work.boundary("continue", true);
+        await work.boundary("continue", true, dashboard);
         return;
       }
       if (advance.kind === "wait")
@@ -64,7 +97,7 @@ export async function runStepRunWorkflow(
           // SILENT: the event is a hint; the next page re-reads the child.
         }
     }
-    await work.boundary("continue", true);
+    await work.boundary("continue", true, dashboard);
   } catch (error) {
     let message = runFailureText(
       error instanceof Error ? error : String(error),

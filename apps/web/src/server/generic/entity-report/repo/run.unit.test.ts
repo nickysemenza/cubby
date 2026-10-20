@@ -934,7 +934,15 @@ describe("liveProgressBlocks", () => {
 
   // Report composition must select the right Workflow and preserve retry attempts;
   // the browser cannot verify Cloudflare destinations without dashboard authentication.
-  it.each([["mail_discovery", "cubby-mail-discovery"]] as const)(
+  it.each([
+    ["mail_discovery", "cubby-mail-discovery"],
+    ["ai_refresh", "cubby-ai-refresh"],
+    ["mail_reclassify", "cubby-ai-refresh"],
+    ["suggestion_sweep", "cubby-ai-refresh"],
+    ["maintenance", "cubby-step-run"],
+    ["derived_refresh", "cubby-step-run"],
+    ["sweep", "cubby-step-run"],
+  ] as const)(
     "deep-links %s to its current Workflow attempt",
     (purpose, name) => {
       const blocks = liveProgressBlocks(RUN_ID, {

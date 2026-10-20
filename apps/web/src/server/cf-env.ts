@@ -9,6 +9,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 
+import type { RUN_WORKFLOWS } from "~/lib/workflows/run-workflows";
+
 import type { PurchaseAgentQueueProducer } from "./domains/purchase-agent/service/purchase-agent-queue-types";
 import type { VectorizeIndexBinding } from "./generic/embedding/service/semantic/vector-store";
 import type { TelemetryQueueProducer } from "./observability/telemetry-queue-types";
@@ -66,9 +68,8 @@ export const getSearchIndexRepairWorkflow = ():
   | Env["SEARCH_INDEX_REPAIR"]
   | undefined => cfEnv?.SEARCH_INDEX_REPAIR;
 
-/** The Workflow that runs one scheduled `mail_discovery` pass. */
-export const getMailDiscoveryWorkflow = (): Env["MAIL_DISCOVERY"] | undefined =>
-  cfEnv?.MAIL_DISCOVERY;
+export const getRunWorkflow = (binding: keyof typeof RUN_WORKFLOWS) =>
+  cfEnv?.[binding];
 
 /**
  * The background queue producer (`env.BACKGROUND_QUEUE`) on local or deployed

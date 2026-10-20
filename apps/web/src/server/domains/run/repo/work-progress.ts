@@ -38,7 +38,40 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { run } from "~/server/db/schema";
 import type { readRunProgressTargets } from "~/server/domains/purchase-import/repo/run-service";
 
-import { listRunSteps, isTerminalStep } from "./run-step";
+import { listRunSteps, isTerminalStep, type RunStepRow } from "./run-step";
+
+/** First-phase samples can start after a deployment; the older ledger remains authoritative. */
+export function stepWorkSamples(step: RunStepRow) {
+  const work = step.meta?.work;
+  if (
+    !work ||
+    work.completed.length ||
+    work.current.total !== null ||
+    step.found <= 0
+  )
+    return work;
+  // A later phase may legitimately have no total; never borrow the mixed
+  // generation-plus-label ledger denominator for an in-flight label phase.
+  if (
+    work.current.phase !== step.key &&
+    !(
+      step.key === "statement_transaction" &&
+      work.current.phase === "statement_generate"
+    )
+  )
+    return work;
+  return {
+    ...work,
+    current: {
+      ...work.current,
+      processed: Math.max(
+        work.current.processed,
+        step.done + step.skipped + step.failed,
+      ),
+      total: step.found,
+    },
+  };
+}
 
 /** Samples are absolute, so child re-reads and Workflow handoffs never add counts twice. */
 export function sampleRunWork(
@@ -358,7 +391,7 @@ export async function getRunWorkProgress(
     steps.find((step) => !isTerminalStep(step.state)) ?? steps.at(-1);
   if (currentStep) {
     const samples =
-      currentStep.meta?.work ??
+      stepWorkSamples(currentStep) ??
       sampleRunWork(
         undefined,
         {

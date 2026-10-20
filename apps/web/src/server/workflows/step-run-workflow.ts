@@ -26,7 +26,8 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
     step: WorkflowStep,
   ) {
     setCfEnv(this.env);
-    const { advanceStepRun } = await import("../domains/run/service/step-run");
+    const { advanceStepRun, inspectStepRun } =
+      await import("../domains/run/service/step-run");
     const withDb = async <T>(
       work: (db: typeof import("../db").db) => Promise<T>,
     ) =>
@@ -35,18 +36,11 @@ export class StepRunWorkflow extends WorkflowEntrypoint<
       );
     await runStepRunWorkflow(
       {
-        do: (name, config, callback) =>
-          step.do(
-            name,
-            {
-              ...config,
-              ...(name.startsWith("page:") && { timeout: "15 minutes" }),
-            },
-            callback,
-          ),
+        do: (name, config, callback) => step.do(name, config, callback),
         sleep: (name, duration) => step.sleep(name, duration),
       },
       {
+        inspect: () => withDb((db) => inspectStepRun(db, event.payload)),
         elapsedMs: () => Math.max(0, Date.now() - event.timestamp.getTime()),
         boundary: runDeploymentBoundary(this.env, step, event.payload),
         advance: () => withDb((db) => advanceStepRun(db, event.payload)),

@@ -61,6 +61,12 @@ describe("Workflow failure recording", () => {
     try {
       await expect(
         runStepRunWorkflow(memoryDurableSteps().steps, {
+          inspect: async () => ({
+            name: "synthetic p1",
+            scope: "synthetic",
+            nextInstanceId: "RUN-4K7M-2",
+            summary: null,
+          }),
           advance: async () => {
             throw new Error("Synthetic original Workflow failure");
           },

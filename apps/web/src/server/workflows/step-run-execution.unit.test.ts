@@ -4,16 +4,107 @@ import { memoryDurableSteps } from "~/server/testing/durable-steps";
 
 import { runStepRunWorkflow, type StepRunWork } from "./step-run-execution";
 
-const work = (overrides: Partial<StepRunWork> = {}): StepRunWork => ({
-  advance: async () => ({ kind: "finished" }),
-  boundary: async () => false,
-  wait: async () => {},
-  fail: async () => false,
-  recover: async () => {},
-  ...overrides,
-});
+const work = (overrides: Partial<StepRunWork> = {}): StepRunWork => {
+  let page = 0;
+  return {
+    inspect: async () => ({
+      name: `synthetic p${++page}`,
+      scope: "synthetic",
+      nextInstanceId: "RUN-4K7M-2",
+      summary: null,
+    }),
+    advance: async () => ({ kind: "finished" }),
+    boundary: async () => false,
+    wait: async () => {},
+    fail: async () => false,
+    recover: async () => {},
+    ...overrides,
+  };
+};
 
 describe("step Run Workflow failure and invocation boundaries", () => {
+  // Different RunSteps may share a phase and position; one must never replay
+  // the other's completed page instead of executing its own work.
+  it("keeps identical phase/page labels in different durable scopes separate", async () => {
+    const plans = ["first", "second"].map((scope) => ({
+      name: "scan p1 · items 1–20",
+      scope,
+      nextInstanceId: "RUN-4K7M-2",
+      summary: null,
+    }));
+    let advanced = 0;
+    await runStepRunWorkflow(
+      memoryDurableSteps().steps,
+      work({
+        inspect: async () => plans.shift() ?? null,
+        advance: async () => {
+          advanced++;
+          return { kind: "continue" };
+        },
+      }),
+    );
+    expect(advanced).toBe(2);
+  });
+  // A dashboard page must describe its durable scope; replay must not rename it
+  // from a later checkpoint or run the paid page again.
+  it("memoizes page scope and retains compact page and handoff summaries", async () => {
+    const durable = memoryDurableSteps();
+    let inspected = 0;
+    let advanced = 0;
+    const summary = {
+      phase: "generate",
+      unit: "charges",
+      pageProcessed: 20,
+      pageFailures: 0,
+      cumulative: { processed: 80, total: 200, failures: 0 },
+      labels: { reused: 3, generated: 0 },
+      cursor: { stepId: "00000000-0000-4000-8000-000000000002", page: 4 },
+    };
+    const driver = work({
+      inspect: async () => {
+        inspected++;
+        return {
+          name: "generate p4 · charges 61–80",
+          scope: "statement_transaction",
+          nextInstanceId: "RUN-4K7M-3",
+          summary,
+        };
+      },
+      advance: async () => {
+        advanced++;
+        return {
+          kind: "continue",
+          execution: { phase: "generate", pagesPerInstance: 1 },
+          summary,
+        };
+      },
+      boundary: async (_name, force, dashboard) => {
+        if (force) {
+          await durable.steps.do(
+            `handoff → ${dashboard?.nextInstanceId}`,
+            { retries: { limit: 0, delay: "1 second", backoff: "constant" } },
+            async () => dashboard ?? null,
+          );
+        }
+        return Boolean(force);
+      },
+    });
+    await runStepRunWorkflow(durable.steps, driver);
+    await runStepRunWorkflow(durable.steps, driver);
+    expect(inspected).toBe(1);
+    expect(advanced).toBe(1);
+    expect(
+      durable.completed.get(
+        "generate p4 · charges 61–80 · statement_transaction",
+      ),
+    ).toMatchObject({
+      summary,
+    });
+    expect(durable.completed.get("handoff → RUN-4K7M-3")).toMatchObject({
+      nextInstanceId: "RUN-4K7M-3",
+      summary,
+    });
+  });
   // A capacity deferral at the final page must not become an immediate successor retry.
   it("retains durable capacity backoff before a bounded handoff", async () => {
     const durable = memoryDurableSteps();

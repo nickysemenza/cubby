@@ -8,6 +8,7 @@ import {
 import { fileURLToPath } from "node:url";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
+import { RUN_WORKFLOWS } from "./src/lib/workflows/run-workflows.ts";
 
 // Existing names and lifecycle tombstones preserve stored Durable Object namespaces.
 export const productionWorker = defineWorker({
@@ -160,26 +161,14 @@ export const productionWorker = defineWorker({
       worker: "cubby",
       exportName: "UsdaReleaseDurableObject",
     }),
-    AI_REFRESH: bindings.workflow({
-      name: "cubby-ai-refresh",
-      worker: "cubby",
-      exportName: "AiRefreshWorkflow",
-    }),
+    AI_REFRESH: bindings.workflow(RUN_WORKFLOWS.AI_REFRESH),
     SEARCH_INDEX_REPAIR: bindings.workflow({
       name: "cubby-search-index-repair",
       worker: "cubby",
       exportName: "SearchIndexRepairWorkflow",
     }),
-    MAIL_DISCOVERY: bindings.workflow({
-      name: "cubby-mail-discovery",
-      worker: "cubby",
-      exportName: "MailDiscoveryWorkflow",
-    }),
-    STEP_RUN: bindings.workflow({
-      name: "cubby-step-run",
-      worker: "cubby",
-      exportName: "StepRunWorkflow",
-    }),
+    MAIL_DISCOVERY: bindings.workflow(RUN_WORKFLOWS.MAIL_DISCOVERY),
+    STEP_RUN: bindings.workflow(RUN_WORKFLOWS.STEP_RUN),
     AI: bindings.ai({}),
     CF_VERSION_METADATA: bindings.versionMetadata(),
   },
@@ -209,16 +198,16 @@ export const productionWorker = defineWorker({
       storage: "sqlite",
     }),
     AiRefreshWorkflow: exports.workflow({
-      name: "cubby-ai-refresh",
+      name: RUN_WORKFLOWS.AI_REFRESH.name,
     }),
     SearchIndexRepairWorkflow: exports.workflow({
       name: "cubby-search-index-repair",
     }),
     MailDiscoveryWorkflow: exports.workflow({
-      name: "cubby-mail-discovery",
+      name: RUN_WORKFLOWS.MAIL_DISCOVERY.name,
     }),
     StepRunWorkflow: exports.workflow({
-      name: "cubby-step-run",
+      name: RUN_WORKFLOWS.STEP_RUN.name,
     }),
   },
 });

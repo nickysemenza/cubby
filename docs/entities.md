@@ -410,7 +410,14 @@ Other Run checkpoints and progress events retain samples in live-progress
 metadata; samples use the checkpoint write time, while heartbeat-only events
 do not refresh a work sample. Timeline history
 retains its small event payload. Legacy records start sampling from their next
-checkpoint without rewriting earlier history. Mail Runs with no stored roster
+checkpoint without rewriting earlier history. A missing first-phase total and
+earlier completed work can be recovered from the existing step ledger at read
+time; later phase totals are never inferred from mixed-phase counters. Statement
+generation counts the scoped candidate charges once at the start of the pass
+and carries that existing count across handoffs, including pre-sample work;
+progress adds no repeated candidate-count query. Account resolution can exclude
+some candidates during generation; those still count as scanned charges.
+Mail Runs with no stored roster
 report an unknown total; progress delivery does not invent sources or change
 Mail membership validation. Target counts reuse the roster's
 latest applicable outcomes, and photo preparation includes device failures.
