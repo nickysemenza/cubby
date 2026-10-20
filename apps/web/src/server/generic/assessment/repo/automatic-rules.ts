@@ -84,7 +84,7 @@ export const AUTOMATIC_RULES = {
   "statement_transaction.attach": {
     family: "statement_transaction",
     description:
-      "Attach a charge to its only candidate when no sibling could be the same money, the amounts match to the cent, and the decision model labels it the same charge with high confidence.",
+      "Attach a charge to its only candidate when no sibling could be the same money, no other charge already settles that candidate, the amounts match to the cent, and the decision model labels it the same charge with high confidence.",
     revision: () =>
       `${STATEMENT_SUGGESTION_REVISION}/${STATEMENT_CHARGE_IDENTITY_FEATURE.promptVersion}`,
     perModel: true,
@@ -93,6 +93,7 @@ export const AUTOMATIC_RULES = {
       return judgment.recommended === "attach" &&
         judgment.siblings.length === 0 &&
         only &&
+        !only.claimed &&
         judgment.create &&
         cents(only.amount) === cents(judgment.create.amount) &&
         only.label?.same === "same" &&

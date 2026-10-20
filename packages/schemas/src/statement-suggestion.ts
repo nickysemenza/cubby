@@ -97,6 +97,8 @@ export const statementTransactionCandidate = z.object({
   rawDescription: z.string().nullable(),
   diff: z.array(statementTransactionField),
   label: statementCandidateLabel.nullable(),
+  /** The transaction already settles another charge from this source. */
+  claimed: z.boolean().default(false),
 });
 
 export type StatementTransactionCandidate = z.infer<

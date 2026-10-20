@@ -263,7 +263,10 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
 3. A charge with `siblings` has a same-amount charge from another export: the
    pair may be one charge whose descriptor firmed up. Supersede the thinner row
    (`statement_rows.update` with `supersededByExternalId`) before creating
-   either.
+   either. A `claimed` candidate already settles another charge from the same
+   source, so it is never clean: attach only when this row is that charge
+   re-exported under a new descriptor; two visits for the same amount are two
+   creates.
 4. A person counterparty is never clean. An outgoing payment to a person is
    your share of a shared cost: create it as `purchase` and set the merchant.
    An incoming one is a repayment: create it, then book it with

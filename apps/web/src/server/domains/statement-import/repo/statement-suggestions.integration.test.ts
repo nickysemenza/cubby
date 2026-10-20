@@ -499,6 +499,8 @@ describe("statement Transaction suggestions", () => {
       recommended: "supersede",
       clean: false,
       supersedeTransactionId: expect.stringMatching(/^FTX-/),
+      // The hold's own pending refs never read as another charge's claim.
+      candidates: [expect.objectContaining({ claimed: false })],
     });
     await accept(ctx, posted!);
     const states = Object.fromEntries(
@@ -971,6 +973,120 @@ describe("statement Transaction suggestions", () => {
     });
     expect(twin!.rawDescription).not.toBe(first!.rawDescription);
   });
+
+  // Failure mode: once one of two same-amount charges is attached, the other
+  // has no unmatched sibling left, so a model "same" alone would bulk-attach a
+  // second real charge onto the transaction that already settles the first.
+  it("never cleans an attach to a transaction another charge already settles", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })]);
+    await record(
+      ctx,
+      [
+        rowInput({
+          rawDescription: "EXAMPLE CAFE 0002",
+          statementDate: "2026-05-05",
+        }),
+      ],
+      { fingerprint: "fp-second-visit" },
+    );
+    await generate(ctx);
+    const older = (await suggestions(ctx)).find(
+      (row) => row.rawDescription === "EXAMPLE CAFE 0001",
+    );
+    await accept(ctx, older!);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    const [second] = await suggestions(ctx);
+    expect(second).toMatchObject({
+      rawDescription: "EXAMPLE CAFE 0002",
+      recommended: "attach",
+      siblings: 0,
+      clean: false,
+      candidates: [
+        expect.objectContaining({
+          claimed: true,
+          label: expect.objectContaining({ same: "same", confidence: "high" }),
+        }),
+      ],
+    });
+  });
+
+  // Failure mode: a charge the member set aside (ignored, or superseded by the
+  // row under review) still claims the transaction holding its ref, so the
+  // canonical row can never go clean. The decision sits on another
+  // observation of the set-aside charge, which still settles it.
+  it.each(["superseded", "ignored"] as const)(
+    "lets a %s charge's transaction go to the charge under review",
+    async (decision) => {
+      await card(ctx);
+      await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })]);
+      await record(
+        ctx,
+        [
+          rowInput({
+            rawDescription: "EXAMPLE CAFE 0002",
+            statementDate: "2026-05-05",
+          }),
+        ],
+        { fingerprint: "fp-firmed-up" },
+      );
+      await generate(ctx);
+      const older = (await suggestions(ctx)).find(
+        (row) => row.rawDescription === "EXAMPLE CAFE 0001",
+      );
+      await accept(ctx, older!);
+      await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })], {
+        fingerprint: "fp-older-again",
+      });
+      const rowsOf = async (search: string) =>
+        (await listStatementRows(ctx.db, { search })).data;
+      const olderRows = await rowsOf("EXAMPLE CAFE 0001");
+      expect(olderRows).toHaveLength(2);
+      const [canonical] = await rowsOf("EXAMPLE CAFE 0002");
+      const original = olderRows.find(
+        (row) => row.importFingerprint === "fp-suggest-1",
+      )!;
+      const reobserved = olderRows.find(
+        (row) => row.importFingerprint === "fp-older-again",
+      )!;
+      // Another observation of the same charge, not the one the ref names.
+      expect(reobserved.externalId).not.toBe(original.externalId);
+      expect(reobserved.legacyExternalId ?? reobserved.externalId).toBe(
+        original.legacyExternalId ?? original.externalId,
+      );
+      await updateStatementRows(
+        ctx.db,
+        {
+          selector: {
+            source: "monarch",
+            externalIds: [reobserved.externalId],
+          },
+          data:
+            decision === "superseded"
+              ? { supersededByExternalId: canonical!.externalId }
+              : {
+                  disposition: "ignored",
+                  dispositionReason: "not_modeled",
+                  dispositionNote: "Synthetic duplicate.",
+                },
+        },
+        ctx.actor,
+      );
+      await generate(ctx);
+      await label(
+        ctx,
+        answering({ kind: "purchase", counterparty: "business" }),
+      );
+      const second = (await suggestions(ctx)).find(
+        (row) => row.rawDescription === "EXAMPLE CAFE 0002",
+      );
+      expect(second).toMatchObject({
+        recommended: "attach",
+        clean: true,
+        candidates: [expect.objectContaining({ claimed: false })],
+      });
+    },
+  );
 
   // Failure modes: a category rule alone makes a create bulk-acceptable; a
   // label that disagrees with the rule still leaves it clean.

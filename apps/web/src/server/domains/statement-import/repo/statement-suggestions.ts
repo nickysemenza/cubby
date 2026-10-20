@@ -76,7 +76,7 @@ export const STATEMENT_SUGGESTION_REVISION = "2026-10-18.3";
  * renaming the revision, which the automatic attach rule's measured windows
  * are keyed by.
  */
-const STATEMENT_CLEAN_POLICY = "2026-10-19.2";
+const STATEMENT_CLEAN_POLICY = "2026-10-20.1";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -424,6 +424,69 @@ async function siblingsFor(
   return result;
 }
 
+/**
+ * Candidates per charge that already hold a settlement ref of another live
+ * charge from the same source. Siblings only count unmatched charges, so once
+ * one of two same-amount charges is attached, this is what still tells the
+ * other one apart from a re-export of the same money.
+ */
+async function claimedCandidates(
+  db: Database,
+  pairs: readonly { charge: ChargeRef; transactionId: string }[],
+): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>();
+  if (!pairs.length) return result;
+  const values = sql.join(
+    pairs.map(
+      ({ charge, transactionId }) =>
+        sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${transactionId}::uuid)`,
+    ),
+    sql`, `,
+  );
+  const { rows } = await unwrapDb(db).execute<{
+    key: string;
+    transactionId: string;
+  }>(sql`
+    WITH p AS MATERIALIZED (
+      SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", "transactionId")
+    ),
+    refs AS MATERIALIZED (
+      SELECT p.key, p.source, p."chargeKey", p."transactionId", fx."externalId"
+      FROM p JOIN "EntityExternalId" fx ON fx."entityId" = p."transactionId"
+        AND fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
+        AND fx.source = p.source
+    ),
+    -- Two indexed probes rather than one OR join: a ref is either an
+    -- occurrence id or a charge key (a v1 hash stored as legacyExternalId).
+    hits AS MATERIALIZED (
+      SELECT refs.key, refs."transactionId", refs."chargeKey" AS own,
+        r.source, ${chargeKeyOf("r")} AS "claimKey"
+      FROM refs JOIN "StatementRow" r ON r.source = refs.source
+        AND r."externalId" = refs."externalId" AND r."deletedAt" IS NULL
+      UNION
+      SELECT refs.key, refs."transactionId", refs."chargeKey",
+        r.source, ${chargeKeyOf("r")}
+      FROM refs JOIN "StatementRow" r ON r.source = refs.source
+        AND ${chargeKeyOf("r")} = refs."externalId" AND r."deletedAt" IS NULL
+    ),
+    -- An ignored or superseded charge was set aside by the member, so it no
+    -- longer claims the transaction holding its ref.
+    cs AS MATERIALIZED ${chargeStateOf(
+      sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "claimKey" FROM hits)`,
+    )}
+    SELECT DISTINCT hits.key, hits."transactionId"
+    FROM hits JOIN cs ON cs.source = hits.source AND cs."chargeKey" = hits."claimKey"
+      AND NOT cs.ignored AND NOT cs.superseded
+    WHERE hits."claimKey" <> hits.own
+  `);
+  for (const row of rows) {
+    const set = result.get(row.key) ?? new Set<string>();
+    set.add(String(row.transactionId));
+    result.set(row.key, set);
+  }
+  return result;
+}
+
 /** Every live account, with the names a cash-out or funding descriptor may use. */
 async function ownAccounts(db: Database): Promise<OwnAccount[]> {
   const { rows } = await unwrapDb(db).execute<{
@@ -651,29 +714,41 @@ export async function buildChargeProposals(
       ),
     ),
   ];
-  const [pendingTransactions, siblings, accounts, history] = await Promise.all([
-    statementPendingTransactions(db, accountIds),
-    siblingsFor(db, grouped),
-    ownAccounts(db),
-    merchantHistory(
-      db,
-      grouped.flatMap(({ charge, canonical }) => {
-        const row = previewByKey.get(chargeId(charge));
-        const accountId = row?.accountId ? ids.get(row.accountId) : null;
-        return row && accountId
-          ? [
-              {
-                key: chargeId(charge),
-                accountId,
-                merchant: canonical.merchant,
-                date: canonical.statementDate,
-                amount: row.proposed.amount,
-              },
-            ]
-          : [];
-      }),
-    ),
-  ]);
+  const [pendingTransactions, siblings, claimed, accounts, history] =
+    await Promise.all([
+      statementPendingTransactions(db, accountIds),
+      siblingsFor(db, grouped),
+      claimedCandidates(
+        db,
+        grouped.flatMap(({ charge }) =>
+          (
+            previewByKey.get(chargeId(charge))?.existingTransactions ?? []
+          ).flatMap((existing) => {
+            const transactionId = ids.get(existing.id);
+            return transactionId ? [{ charge, transactionId }] : [];
+          }),
+        ),
+      ),
+      ownAccounts(db),
+      merchantHistory(
+        db,
+        grouped.flatMap(({ charge, canonical }) => {
+          const row = previewByKey.get(chargeId(charge));
+          const accountId = row?.accountId ? ids.get(row.accountId) : null;
+          return row && accountId
+            ? [
+                {
+                  key: chargeId(charge),
+                  accountId,
+                  merchant: canonical.merchant,
+                  date: canonical.statementDate,
+                  amount: row.proposed.amount,
+                },
+              ]
+            : [];
+        }),
+      ),
+    ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const pairsByCharge = await findTransferPairsForCharges(db, charges);
 
@@ -711,6 +786,8 @@ export async function buildChargeProposals(
                   date: canonical.statementDate,
                 }),
                 label: null,
+                claimed:
+                  claimed.get(chargeId(charge))?.has(transactionId) ?? false,
               },
             ]
           : [];
@@ -731,8 +808,11 @@ export async function buildChargeProposals(
               ),
           )
         : [];
-    for (const hold of holds)
-      if (!candidates.some((c) => c.transactionId === hold.id))
+    for (const hold of holds) {
+      const listed = candidates.find((c) => c.transactionId === hold.id);
+      // The hold carries its own pending rows' refs; that is what supersede settles.
+      if (listed) listed.claimed = false;
+      else
         candidates.push({
           transactionId: hold.id,
           amount: hold.amount,
@@ -754,7 +834,9 @@ export async function buildChargeProposals(
             },
           ),
           label: null,
+          claimed: false,
         });
+    }
     candidates.sort(
       (a, b) =>
         Number(cents(a.amount) !== cents(statementAmount)) -
@@ -858,6 +940,7 @@ export function isClean(
   if (judgment.recommended === "supersede") return true;
   return (
     judgment.recommended === "attach" &&
+    !only!.claimed &&
     only!.label?.same === "same" &&
     only!.label.confidence === "high"
   );
