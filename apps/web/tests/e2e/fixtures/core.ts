@@ -20,7 +20,7 @@ import {
   buildKernelContext,
   createFixtureWithContext,
 } from "../../../tooling/scenarios/context";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { e2eFaker } from "../support/e2e-helpers";
@@ -145,19 +145,23 @@ export async function createEntityFixture<E extends CreatableEntity>(
   return created;
 }
 
-/** Settle a fixture cohort once; intermediate rows need no materialized reads. */
+/** Commit a fixture cohort together, then settle its derived projections. */
 export async function createEntityFixtures<E extends CreatableEntity>(
   page: Page,
   entity: E,
   overrides: readonly EntityOverrides<E>[],
 ): Promise<CreatedEntity[]> {
-  const context = await fixtureKernelContext(page);
-  const created: CreatedEntity[] = [];
-  for (const input of overrides) {
-    created.push(
-      await createEntity(context, entity, input, { faker: e2eFaker() }),
-    );
-  }
+  const userId = await fixtureUserId(page);
+  const created = await withTransactionDatabase(getFixtureDb(), async (db) => {
+    const context = buildKernelContext(db, userId);
+    const rows: CreatedEntity[] = [];
+    for (const input of overrides) {
+      rows.push(
+        await createEntity(context, entity, input, { faker: e2eFaker() }),
+      );
+    }
+    return rows;
+  });
   await drainDerivedRefreshFrontier(getFixtureDb());
   return created;
 }
