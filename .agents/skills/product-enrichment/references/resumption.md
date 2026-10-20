@@ -33,7 +33,7 @@ outcomes. Validate artifacts before accepting a lane as complete.
 
 Save before/after snapshots for each write. Immediately before each mutation,
 read the full live Product again, preserve unrelated values and check that the
-proposal still applies. Read back facts, Sources, dataQuality and image results
+proposal still applies. Read back facts, notes, dataQuality and image results
 afterward. Never mutate merely to reconstruct a missing checkpoint. Report
 verified enrichment separately from exceptions, ambiguity, blocked source access
 and unresearched work.

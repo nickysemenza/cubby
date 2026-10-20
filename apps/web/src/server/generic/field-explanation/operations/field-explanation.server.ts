@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entitySourceRead } from "@cubby/schemas/entity-source";
 import {
   fieldExplanationInput,
   fieldExplanationOutput,
@@ -482,37 +481,6 @@ export function explainProjectionSources(
   }
 }
 
-/**
- * The field's recorded Sources, newest first, each marked by whether it still
- * supports the current value (the kernel detail read computes that).
- */
-async function fieldSources(
-  context: Parameters<typeof executeEntityAs>[0],
-  entity: Entity,
-  entityId: string,
-  fieldKey: string,
-) {
-  if (!kernelEntities.has(entity)) return [];
-  const result = await executeEntityAs(context, "get", {
-    entity: z.enum(ENTITY_KERNEL_ENTITIES).parse(entity),
-    id: entityId,
-    missing: "null",
-  });
-  const detail = z
-    .looseObject({ sources: z.array(entitySourceRead).default([]) })
-    .nullable()
-    .parse(result.item);
-  return (detail?.sources ?? [])
-    .filter((source) => source.fieldPath === fieldKey)
-    .slice(0, 50)
-    .map((source, index) => ({
-      ...source,
-      key: `${entityId}:${fieldKey}:${index}`,
-      observedAt: source.observedAt?.toISOString() ?? null,
-      createdAt: source.createdAt.toISOString(),
-    }));
-}
-
 async function loadProjection(
   context: Parameters<typeof executeEntityAs>[0],
   entity: Entity,
@@ -577,7 +545,6 @@ async function loadExplanationSnapshot(
       resolutionEvidence: null,
       resolutionEvidenceTruncated: false,
       qualityBreakdown: undefined,
-      verifications: [],
     };
   }
   return withFieldExplanationSnapshot(context.db, async (snapshotDb) => {
@@ -607,12 +574,6 @@ async function loadExplanationSnapshot(
     );
     return {
       projection,
-      verifications: await fieldSources(
-        snapshotContext,
-        entity,
-        input.entityId,
-        fieldKey,
-      ),
       qualityBreakdown:
         fieldKey === "dataQuality" &&
         z.enum(scoredEntities).safeParse(entity).success
@@ -841,14 +802,6 @@ export async function explainField(
     snapshot.qualityBreakdown,
     snapshot.resolutionEvidenceTruncated,
   );
-  if (
-    snapshot.verifications.some(
-      (verification) => verification.supportsCurrentValue === false,
-    )
-  )
-    interpretation.caveats.push(
-      "Some recorded Sources supported an earlier value of this field.",
-    );
   const linkedValues = await explanationReferenceValues(
     context.db,
     finalSources.sources.map((source) => source.value),
@@ -871,14 +824,12 @@ export async function explainField(
       description: explanation.description,
     },
     sources: linkedSources,
-    verifications: snapshot.verifications,
     resolution,
     resolutionEvidence: snapshot.resolutionEvidence,
     truncated: [
       finalSources.truncated,
       countEvidence?.truncated ?? false,
       snapshot.resolutionEvidenceTruncated,
-      snapshot.verifications.length >= 50,
     ].some(Boolean),
     actions,
   });

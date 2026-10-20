@@ -63,7 +63,7 @@ function InspectorCheckSections({
         <SectionHeading
           title={
             sections.find((section) => section.id === sectionId)?.title ??
-            (sectionId === "images" ? "Images" : "Sources")
+            (sectionId === "images" ? "Images" : sectionId)
           }
           actions={
             isBrowserRoutedEntity(entity) ? (

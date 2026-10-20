@@ -39,9 +39,8 @@ describe("summary mutation output demand", () => {
     queue = captureBackgroundQueue();
   });
   afterEach(() => queue.restore());
-  // Non-column scalars must retain normalized receipts and citation equality;
-  // inherited Source values can differ from the saved override in the receipt.
-  it("keeps linked Project URL citations current through unrelated saves and clearing", async () => {
+  // Non-column scalars retain normalized receipts; inherited reads remain dynamic.
+  it("retains linked Project URLs through unrelated saves and clearing", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -54,12 +53,6 @@ describe("summary mutation output demand", () => {
         entity: "project",
         id: subject.output.id,
         data: { googleDriveFolderUrl: url },
-        sources: [
-          {
-            fieldPath: "googleDriveFolderUrl",
-            quote: "Synthetic folder label",
-          },
-        ],
       },
       ["id", "googleDriveFolderUrl"],
     );
@@ -72,9 +65,7 @@ describe("summary mutation output demand", () => {
           missing: "error",
         })
       ).item;
-    expect(await read()).toMatchObject({
-      sources: [expect.objectContaining({ supportsCurrentValue: true })],
-    });
+
     await executeEntityMutationRead(
       context,
       {
@@ -82,23 +73,11 @@ describe("summary mutation output demand", () => {
         entity: "project",
         id: subject.output.id,
         data: { notes: "Synthetic unrelated edit" },
-        sources: [
-          {
-            fieldPath: "googleDriveFolderUrl",
-            quote: "Synthetic second observation",
-          },
-        ],
       },
       ["id"],
     );
-    expect(await read()).toMatchObject({
-      sources: expect.arrayContaining([
-        expect.objectContaining({
-          quote: "Synthetic second observation",
-          supportsCurrentValue: true,
-        }),
-      ]),
-    });
+
+    expect(await read()).toMatchObject({ googleDriveFolderUrl: url });
     await executeEntityMutationRead(
       context,
       {
@@ -111,16 +90,10 @@ describe("summary mutation output demand", () => {
     );
     expect(await read()).toMatchObject({
       googleDriveFolderUrl: null,
-      sources: expect.arrayContaining([
-        expect.objectContaining({
-          quote: "Synthetic folder label",
-          supportsCurrentValue: false,
-        }),
-      ]),
     });
   });
 
-  it("fingerprints inherited Project values while returning the saved override", async () => {
+  it("returns saved Project overrides while detail resolves inherited values", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -138,9 +111,6 @@ describe("summary mutation output demand", () => {
         entity: "project",
         id: child.output.id,
         data: { defaultTrade: null },
-        sources: [
-          { fieldPath: "defaultTrade", quote: "Synthetic inherited trade" },
-        ],
       },
       ["id", "defaultTrade"],
     );
@@ -155,7 +125,6 @@ describe("summary mutation output demand", () => {
       ).item;
     expect(await read()).toMatchObject({
       defaultTrade: "plumbing",
-      sources: [expect.objectContaining({ supportsCurrentValue: true })],
     });
     await executeEntityMutationRead(
       context,
@@ -167,12 +136,11 @@ describe("summary mutation output demand", () => {
       },
       ["id"],
     );
-    expect(await read()).toMatchObject({
-      sources: [expect.objectContaining({ supportsCurrentValue: false })],
-    });
+
+    expect(await read()).toMatchObject({ defaultTrade: "electrical" });
   });
 
-  it("returns and fingerprints card scalar projections instead of the identity object", async () => {
+  it("returns card scalar projections instead of the identity object", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -186,10 +154,6 @@ describe("summary mutation output demand", () => {
         entity: "financialAccount",
         id: account.output.id,
         data: { issuer: "Synthetic Bank", network: "visa" },
-        sources: [
-          { fieldPath: "issuer", quote: "Synthetic issuer label" },
-          { fieldPath: "network", quote: "Synthetic network label" },
-        ],
       },
       ["id", "issuer", "network"],
     );
@@ -197,25 +161,8 @@ describe("summary mutation output demand", () => {
       issuer: "Synthetic Bank",
       network: "visa",
     });
-    const read = await executeEntityAs(context, "get", {
-      entity: "financialAccount",
-      id: account.output.id,
-      missing: "error",
-    });
-    expect(read.item).toMatchObject({
-      sources: expect.arrayContaining([
-        expect.objectContaining({
-          fieldPath: "issuer",
-          supportsCurrentValue: true,
-        }),
-        expect.objectContaining({
-          fieldPath: "network",
-          supportsCurrentValue: true,
-        }),
-      ]),
-    });
   });
-  it("keeps Expense purchase scalar citations equal to the normalized detail values", async () => {
+  it("returns normalized Expense purchase scalars", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -234,36 +181,12 @@ describe("summary mutation output demand", () => {
           vendor: "Synthetic current merchant",
           orderId: "synthetic-order-two",
         },
-        sources: [
-          { fieldPath: "vendor", quote: "Synthetic merchant heading" },
-          { fieldPath: "orderId", quote: "Synthetic order heading" },
-        ],
       },
       ["id", "vendor", "orderId"],
     );
     expect(result.item).toMatchObject({
       vendor: "Synthetic current merchant",
       orderId: "synthetic-order-two",
-    });
-    const read = async () =>
-      (
-        await executeEntityAs(context, "get", {
-          entity: "expense",
-          id: subject.output.id,
-          missing: "error",
-        })
-      ).item;
-    expect(await read()).toMatchObject({
-      sources: expect.arrayContaining([
-        expect.objectContaining({
-          fieldPath: "vendor",
-          supportsCurrentValue: true,
-        }),
-        expect.objectContaining({
-          fieldPath: "orderId",
-          supportsCurrentValue: true,
-        }),
-      ]),
     });
     await executeEntityMutationRead(
       context,
@@ -275,17 +198,9 @@ describe("summary mutation output demand", () => {
       },
       ["id"],
     );
-    expect(await read()).toMatchObject({
-      sources: expect.arrayContaining([
-        expect.objectContaining({
-          fieldPath: "orderId",
-          supportsCurrentValue: false,
-        }),
-      ]),
-    });
   });
 
-  it("normalizes Inventory amount columns in receipts and scalar citations", async () => {
+  it("normalizes Inventory amount columns in receipts", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -316,7 +231,6 @@ describe("summary mutation output demand", () => {
         entity: "inventory",
         id: parseShortcodeFor("inventory", entry.id),
         data: { amount: { value: 2, unit: "each" } },
-        sources: [{ fieldPath: "amount", quote: "Synthetic counted amount" }],
       },
       ["id", "amount"],
     );
@@ -329,9 +243,7 @@ describe("summary mutation output demand", () => {
           missing: "error",
         })
       ).item;
-    expect(await read()).toMatchObject({
-      sources: [expect.objectContaining({ supportsCurrentValue: true })],
-    });
+
     await executeEntityMutationRead(
       context,
       {
@@ -342,9 +254,8 @@ describe("summary mutation output demand", () => {
       },
       ["id"],
     );
-    expect(await read()).toMatchObject({
-      sources: [expect.objectContaining({ supportsCurrentValue: false })],
-    });
+
+    expect(await read()).toMatchObject({ amount: { value: 3, unit: "each" } });
   });
 
   it("projects a single FinancialTransaction allocation as a Purchase identity", async () => {
@@ -375,9 +286,6 @@ describe("summary mutation output demand", () => {
         entity: "financialTransaction",
         id: transaction.output.id,
         data: { notes: "Synthetic allocation observation" },
-        sources: [
-          { fieldPath: "purchaseId", quote: "Synthetic single allocation" },
-        ],
       },
       ["id"],
     );
@@ -389,7 +297,6 @@ describe("summary mutation output demand", () => {
     });
     expect(read.item).toMatchObject({
       purchaseId: purchase.output.id,
-      sources: [expect.objectContaining({ supportsCurrentValue: true })],
     });
   });
 
@@ -491,7 +398,7 @@ describe("summary mutation output demand", () => {
       });
     }
   });
-  it("keeps owner Sources current on the survivor of a summary Inventory ownership merge", async () => {
+  it("returns the survivor of a summary Inventory ownership merge", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -542,12 +449,6 @@ describe("summary mutation output demand", () => {
           ownershipMode: "explicit",
           ownerLedgerPartyId: owner.output.id,
         },
-        sources: [
-          {
-            fieldPath: "ownerLedgerPartyId",
-            quote: "Synthetic ownership label",
-          },
-        ],
       },
       ["id"],
     );
@@ -557,14 +458,6 @@ describe("summary mutation output demand", () => {
       id: survivor.id,
       missing: "error",
     });
-    expect(read.item).toMatchObject({
-      sources: [
-        expect.objectContaining({
-          fieldPath: "ownerLedgerPartyId",
-          quote: "Synthetic ownership label",
-          supportsCurrentValue: true,
-        }),
-      ],
-    });
+    expect(read.item).toMatchObject({ id: survivor.id });
   });
 });

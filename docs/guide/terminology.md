@@ -800,7 +800,7 @@ An existing Product that already owns one of an imported line's identifiers, or 
 _Avoid_: fuzzy match, likely duplicate
 
 **Distinct-from decision**:
-A recorded judgment that an imported line is a different Product from an exact identity match, carrying a Source that shows the difference (model, size, pack or kit contents). Without one, an import may not create a Product beside its exact identity match.
+A recorded judgment that an imported line is a different Product from an exact identity match, retaining a URL and excerpt in notes that show the difference (model, size, pack or kit contents). Without one, an import may not create a Product beside its exact identity match.
 _Avoid_: force new, override
 
 **Email pipeline**:
@@ -836,9 +836,9 @@ Whose evidence or account authority a Work queue row needs: named members, Eithe
 _Avoid_: owner, assignee
 
 **Burn-down**:
-A member's Claude or Codex session working through the Research queue with ordinary writes that carry Sources.
+A member's Claude or Codex session working through the Research queue with ordinary writes that retain research in notes.
 _Avoid_: enrichment run, sweep
 
-**Source**:
-A record of where a fact about an entity was seen: its URL, relevant quoted text, observation time, selected variant and who recorded it, optionally scoped to one field.
-_Avoid_: evidence, caller observation, provenance, capture
+**Research notes**:
+Ordinary editable notes retaining useful links, record shortcodes, excerpts and observation or variant context. Notes do not certify a current field value; inherited values remain dynamic.
+_Avoid_: citation status, verified field

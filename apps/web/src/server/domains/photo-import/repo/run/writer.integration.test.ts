@@ -1,4 +1,3 @@
-import { entitySourceRead } from "@cubby/schemas/entity-source";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
@@ -269,31 +268,14 @@ describe("commitPhotoGroup", () => {
       entity: "product",
       id: existing.id,
       data: { notes: "SYNTHETIC WORKS / M / BLUE" },
-      sources: [
-        {
-          fieldPath: "notes",
-          quote: "SYNTHETIC WORKS / M / BLUE",
-          selectedVariant: "Blue, Medium",
-        },
-      ],
     });
     const detail = await executeEntityAs(context, "get", {
       entity: "product",
       id: existing.id,
       missing: "error",
     });
-    expect(
-      z
-        .object({ notes: z.string(), sources: z.array(entitySourceRead) })
-        .parse(detail.item),
-    ).toMatchObject({
+    expect(z.object({ notes: z.string() }).parse(detail.item)).toMatchObject({
       notes: "SYNTHETIC WORKS / M / BLUE",
-      sources: [
-        expect.objectContaining({
-          quote: "SYNTHETIC WORKS / M / BLUE",
-          supportsCurrentValue: true,
-        }),
-      ],
     });
   });
 

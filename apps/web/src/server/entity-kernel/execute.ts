@@ -244,7 +244,6 @@ export async function executeEntity(
     case "create": {
       return ENTITY_KERNEL_OPERATIONS[command.entity].create(ctx, {
         data: command.data,
-        sources: command.sources,
       });
     }
 
@@ -252,7 +251,6 @@ export async function executeEntity(
       return ENTITY_KERNEL_OPERATIONS[command.entity].update(ctx, {
         id: command.id,
         data: command.data,
-        sources: command.sources,
       });
     }
 
@@ -328,14 +326,12 @@ export async function executeEntityMutationRead(
   if (command.action === "create")
     return ENTITY_KERNEL_OPERATIONS[command.entity].createRead(context, {
       data: command.data,
-      sources: command.sources,
       fields,
     });
   if (command.action === "update")
     return ENTITY_KERNEL_OPERATIONS[command.entity].updateRead(context, {
       id: command.id,
       data: command.data,
-      sources: command.sources,
       fields,
     });
   throw new Error("Requested mutation output requires create or update");

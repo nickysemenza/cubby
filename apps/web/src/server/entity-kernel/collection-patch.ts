@@ -16,12 +16,9 @@ import { z } from "zod";
 import { project, wireValue } from "~/entity/editing/structured-value";
 import { readPathValue } from "~/entity/read-path";
 import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
-import {
-  canonicalJson,
-  entityDetailJson,
-} from "~/server/entity-kernel/repo/entity-source";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import type {
   EntityBindingSchemas,
@@ -86,7 +83,7 @@ function applyBulkCollectionPatch(
   // the same shared item different on each selected record or on retry.
   const content = (item: z.infer<ReturnType<typeof z.json>>) =>
     itemSchema
-      ? entityDetailJson.parse(
+      ? jsonSnapshot.parse(
           wireValue(
             project(item, itemSchema, { includeHidden: false }),
             itemSchema,
@@ -217,7 +214,7 @@ export async function resolveCollectionPatches<
       const schema = Object.entries(structuredValueSchemas).find(
         ([key]) => key === `${binding.entity}.${field.key}`,
       )?.[1];
-      const current = entityDetailJson.parse(value ?? []);
+      const current = jsonSnapshot.parse(value ?? []);
       const projected = schema
         ? wireValue(project(current, schema), schema)
         : current;

@@ -26,7 +26,7 @@ import {
 } from "~/server/db/schema";
 import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
 import { readStoredProductPair } from "~/server/domains/product/repo/match/product-pair-signals";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
   captureConnectionBasis,

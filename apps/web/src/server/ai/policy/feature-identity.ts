@@ -113,12 +113,12 @@ export function defineFeature<
   return { ...declaration, model };
 }
 
-export const PRODUCT_IDENTITY_RULE_REVISION = "identity-v6";
+export const PRODUCT_IDENTITY_RULE_REVISION = "identity-v7";
 export const PRODUCT_IDENTITY_FEATURE = defineFeature({
   feature: "product-identity",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-10-14.6",
+  promptVersion: "2026-10-20.1",
 }) satisfies AiDecisionFeature;
 
 /** `IMAGE_DESCRIPTION_FEATURE`'s stamp: cloud description jobs and caches key on it. */

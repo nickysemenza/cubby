@@ -5,8 +5,8 @@
 From a full Product read, use `entity_read.connections` to find its Expenses,
 read each Expense's `purchaseId`, then read the Purchase. List Email with
 `filters.purchaseId` and read retained Email for its `mailboxId` and `messageId`;
-pass those handles to `imports_read.mail` for the original. Purchase notes or
-existing Sources may already supply the Gmail message handle. An empty
+pass those handles to `imports_read.mail` for the original. Purchase research
+notes may already supply the Gmail message handle. An empty
 Purchase-scoped Email list is not proof that the original is missing:
 `imports_read.mail` can read a message Cubby already holds as an Email, at any
 Relevance, within the connected member's authorized mailbox. A known message

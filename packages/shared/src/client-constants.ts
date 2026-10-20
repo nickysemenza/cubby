@@ -48,3 +48,7 @@ export const PHOTO_RUN_IMAGE_LIMIT = 500;
 
 /** The longest reason for leaving a prepared import line's Product unresolved. */
 export const PRODUCT_DECISION_REASON_MAX = 1_000;
+
+/** Distinct-from evidence bounds shared by import validation and native entry. */
+export const DISTINCT_FROM_QUOTE_MAX = 2_000;
+export const DISTINCT_FROM_URL_MAX = 2_048;

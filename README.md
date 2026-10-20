@@ -279,7 +279,7 @@ Purchases arrive two ways ([ADR 0010](docs/adr/0010-mail-import-unattended-burn-
 Gmail discovery admits order Email into Mail import Runs that Pi works through
 the same public MCP tools a member uses, and a member's Claude or Codex session
 burns down the Research queue with its own browser. Follow the
-[Burn-down guide](docs/guide/burn-down.md) for Sources, collection patches, purchase
+[Burn-down guide](docs/guide/burn-down.md) for research notes, collection patches, purchase
 reconciliation and wardrobe details.
 
 ```sh
@@ -342,7 +342,7 @@ flowchart TB
   Approval -- "create or reuse" --> Product
   Approval -- "attach" --> Images["Item / label Images"]
   Approval -- "receive when ownership<br/>and location are settled" --> Inventory["Inventory<br/>Owned copies and location"]
-  Product --> TagReview["Follow-up MCP enrichment<br/>Transcribe tags with Sources"]
+  Product --> TagReview["Follow-up MCP enrichment<br/>Transcribe tags and research notes"]
 
   Purchase -- "exposes declared gaps / conflicts" --> Queue["Derived Research / reconciliation views"]
   Product -- "exposes declared identity gaps" --> Queue

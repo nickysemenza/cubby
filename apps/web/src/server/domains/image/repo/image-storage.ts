@@ -1,4 +1,3 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { ImageId, ImageShortcode } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
@@ -758,7 +757,6 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   ports: ImageStoragePorts<TDatabase>,
   db: TDatabase,
   input: McpAttachFileInput,
-  recorder?: ActorContext,
 ): Promise<AttachFileResponse> => {
   // Fail a bad target id before we touch R2, so we never orphan an object.
   const entityId = await ports.shortcode.resolveLive(
@@ -884,8 +882,6 @@ const attachFileToEntityWithPorts = async <TDatabase>(
         sourceAssetUrl: input.sourceAssetUrl ?? input.url ?? null,
         sourceName: input.sourceName ?? null,
         provenanceEvidence: input.url ? { basis: "import-url" } : null,
-        sources: input.sources,
-        recorder,
       },
       entity,
       input.documentKind,
@@ -1017,11 +1013,8 @@ export function createImageStorageService<TDatabase>(
         );
       return source.stagedImageId;
     },
-    attachFileToEntity: (
-      database: TDatabase,
-      input: McpAttachFileInput,
-      recorder?: ActorContext,
-    ) => attachFileToEntityWithPorts(ports, database, input, recorder),
+    attachFileToEntity: (database: TDatabase, input: McpAttachFileInput) =>
+      attachFileToEntityWithPorts(ports, database, input),
     cullPendingImageStorage: (database: TDatabase, olderThanHours: number) =>
       cullPendingImageStorageWithPorts(ports, database, olderThanHours),
     createFileUpload: (database: TDatabase, input: CreateFileUploadInput) =>

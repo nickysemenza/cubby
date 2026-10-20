@@ -15,7 +15,6 @@ import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
-import { QuotesIcon } from "@phosphor-icons/react/dist/csr/Quotes";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
@@ -86,7 +85,6 @@ import {
   planRelationSection,
   RelationSectionActions,
 } from "./entity-relation-table";
-import { EntitySourcesSection, recordSources } from "./entity-sources-section";
 import { RecordQualityProvider, QualitySectionChecks } from "./record-quality";
 
 const RecordProposals = lazy(() =>
@@ -616,23 +614,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         <DocumentViewerList documents={documents} />
       ) : null,
   });
-  const sources = recordSources(record);
-  sections.push({
-    id: "sources",
-    title: "Sources",
-    // The section reports its own count: documents shown plus related ones beyond them,
-    // not raw citations (several cite one document).
-    icon: QuotesIcon,
-    placement: "primary",
-    content: (
-      <EntitySourcesSection
-        entity={entity}
-        sourceId={bag.id}
-        sources={sources}
-      />
-    ),
-  });
-
   // `edit` is the page's own affordance (the hero button); every other
   // declared verb is offered from the registry, on the plate.
   const declaredVerbs = heroActions.filter(

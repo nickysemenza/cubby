@@ -4,17 +4,7 @@ import { emailAccuracyChildren } from "./email-accuracy.js";
 import { emailFinancialAssociationChildren } from "./email-financial-associations.js";
 import { importObservationChildren } from "./import-observations.js";
 import { imageProcessingChildren } from "./image-processing.js";
-import { AUDIT_CHANNELS } from "../context.js";
 import { defineChildTable } from "../entity-definitions/child-definition.js";
-
-/**
- * A Source quote is the relevant excerpt, not a page dump. Declared here, not
- * in entity-source.ts: the generator loads child tables before it writes the
- * shortcode registry that entity-source.ts reaches through `identifiers`.
- */
-export const ENTITY_SOURCE_QUOTE_MAX = 2000;
-/** Every Source write path shares one url bound, so a stored Source never depends on its writer. */
-export const ENTITY_SOURCE_URL_MAX = 2048;
 
 export const modulesChildren = [
   ...assessmentChildren,
@@ -23,104 +13,6 @@ export const modulesChildren = [
   ...emailAccuracyChildren,
   ...emailFinancialAssociationChildren,
   ...imageProcessingChildren,
-  /**
-   * Where a fact about any entity was seen (terminology "Source"), written in the
-   * same transaction as the mutation it supports. History: a merge moves the
-   * rows and cited targets to the survivor, a delete leaves them on the tombstone.
-   * Cited targets reference durable Entity identity, preserving even hard-deleted
-   * records without making citations live payload dependencies. `runId` and
-   * `deviceId` deliberately carry no FK, like `oauthClientId`: the recorder
-   * outlives a Run or Device removal, and an FK would make every Run and
-   * Device lifecycle policy own this table.
-   */
-  defineChildTable({
-    name: "EntitySource",
-    exportName: "entitySource",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      { key: "entityId", kind: "uuid", notNull: true },
-      { key: "entityKind", kind: "text", notNull: true, type: "Entity" },
-      { key: "fieldPath", kind: "text" },
-      { key: "url", kind: "text" },
-      { key: "sourceEntityId", kind: "uuid" },
-      { key: "sourceEntityKind", kind: "text", type: "Entity" },
-      { key: "quote", kind: "text" },
-      { key: "observedAt", kind: "timestamp" },
-      { key: "selectedVariant", kind: "text" },
-      // sha256 of the canonical field value right after the write.
-      { key: "valueFingerprint", kind: "text" },
-      {
-        key: "userId",
-        kind: "text",
-        notNull: true,
-        type: "UserId",
-        reference: { table: "user", column: "id" },
-      },
-      { key: "channel", kind: "text", notNull: true, type: "AuditChannel" },
-      { key: "oauthClientId", kind: "text" },
-      { key: "deviceId", kind: "uuid", type: "DeviceId" },
-      { key: "runId", kind: "uuid", type: "RunId" },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-    ],
-    types: [
-      { module: "@cubby/schemas/entity", exports: ["Entity"] },
-      { module: "@cubby/schemas/context", exports: ["AuditChannel"] },
-      {
-        module: "@cubby/schemas/identifiers",
-        exports: ["DeviceId", "RunId", "UserId"],
-      },
-    ],
-    indexes: [
-      { name: "EntitySource_entity_idx", on: ["entityId", "createdAt"] },
-      { name: "EntitySource_target_idx", on: ["sourceEntityId"] },
-    ],
-    checks: [
-      {
-        name: "EntitySource_target_pair_check",
-        sql: "({sourceEntityId} IS NULL) = ({sourceEntityKind} IS NULL)",
-      },
-      {
-        name: "EntitySource_target_or_quote_check",
-        sql: "{url} IS NOT NULL OR {sourceEntityId} IS NOT NULL OR {quote} IS NOT NULL",
-      },
-      {
-        name: "EntitySource_field_fingerprint_check",
-        sql: "{fieldPath} IS NOT NULL OR {valueFingerprint} IS NULL",
-      },
-      {
-        name: "EntitySource_quote_length_check",
-        sql: `{quote} IS NULL OR char_length({quote}) <= ${ENTITY_SOURCE_QUOTE_MAX}`,
-      },
-      {
-        name: "EntitySource_channel_check",
-        sql: `{channel} IN (${AUDIT_CHANNELS.map((channel) => `'${channel}'`).join(", ")})`,
-      },
-    ],
-    foreignKeys: [
-      {
-        name: "EntitySource_target_fk",
-        columns: ["sourceEntityId", "sourceEntityKind"],
-        table: "entityIdentity",
-        references: ["id", "kind"],
-      },
-      {
-        name: "EntitySource_entity_fk",
-        columns: ["entityId", "entityKind"],
-        table: "entityIdentity",
-        references: ["id", "kind"],
-      },
-    ],
-  }),
   /** Human-confirmed merchant routing; never inferred repeatedly at write time. */
   defineChildTable({
     name: "MerchantVendorRule",

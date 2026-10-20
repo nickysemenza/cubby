@@ -121,62 +121,6 @@ describe("derived field explanations against canonical records", () => {
 
   // A field's recorded Sources must stay visible after the value changes, but
   // must not read as supporting the new value.
-  it("shows a field's recorded Sources and flags them once the value is overwritten", async () => {
-    const item = await createProductFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Example verified product",
-        manufacturer: "Example Works",
-        model: "Q-16",
-      }),
-      ctx.actor,
-    );
-    const source = {
-      fieldPath: "model",
-      url: "https://shop.example.test/q17",
-      quote: "Model Q-17, small",
-      selectedVariant: "Small",
-    };
-    const update = (model: string, withSource: boolean) =>
-      executeEntity(context(), {
-        action: "update",
-        entity: "product",
-        id: item.id,
-        data: { model },
-        sources: withSource ? [source] : [],
-      });
-    const explain = () =>
-      explainField(context(), {
-        entityKind: "product",
-        entityId: item.id,
-        field: "model",
-        surface: "detail",
-      });
-
-    await update("Q-17", true);
-    const matching = await explain();
-    expect(matching.verifications).toMatchObject([
-      {
-        fieldPath: "model",
-        url: "https://shop.example.test/q17",
-        quote: "Model Q-17, small",
-        selectedVariant: "Small",
-        supportsCurrentValue: true,
-      },
-    ]);
-    expect(matching.interpretation?.caveats.join(" ") ?? "").not.toMatch(
-      /earlier value/,
-    );
-
-    await update("Q-18", false);
-    const stale = await explain();
-    expect(stale.verifications).toMatchObject([
-      { url: "https://shop.example.test/q17", supportsCurrentValue: false },
-    ]);
-    expect(stale.interpretation?.caveats).toContain(
-      "Some recorded Sources supported an earlier value of this field.",
-    );
-  });
 
   // Lazy explanations must expose the same winning ancestor and fallback as
   // canonical reads, even when an Expense override hides that mapping.

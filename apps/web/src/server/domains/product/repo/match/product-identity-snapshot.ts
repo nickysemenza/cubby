@@ -19,7 +19,6 @@ import {
 import {
   product,
   entityExternalId,
-  entitySource,
   entityAttachment,
   image,
 } from "~/server/db/schema";
@@ -31,9 +30,9 @@ import {
 import {
   readVariantVerification,
   variantVerification,
-  variantSourceSide,
+  productIdentitySide,
 } from "~/server/domains/product/repo/product-variant-evidence";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import { productIdentityEvidenceFence } from "./product-identity-fence";
 
@@ -75,23 +74,6 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
       entityExternalId.kind,
       entityExternalId.externalId,
     );
-  const sources = await client
-    .select({
-      id: entitySource.id,
-      field: entitySource.fieldPath,
-      valueFingerprint: entitySource.valueFingerprint,
-      selectedVariant: entitySource.selectedVariant,
-      url: entitySource.url,
-      quote: entitySource.quote,
-    })
-    .from(entitySource)
-    .where(
-      and(
-        eq(entitySource.entityKind, "product"),
-        eq(entitySource.entityId, id),
-      ),
-    )
-    .orderBy(entitySource.id);
   const photoRows = await client
     .select({
       id: image.id,
@@ -118,31 +100,8 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     ...row,
     description: descriptions.get(shortcode) ?? null,
   }));
-  // Verification is a current-value receipt, not title parsing or a source merely mentioning the model.
-  const modelFingerprint = await sha256Hex(canonicalJson(row.model));
-  const currentModelSources = sources.filter(
-    (source) =>
-      source.field === "model" && source.valueFingerprint === modelFingerprint,
-  );
-  const manufacturerFingerprint = await sha256Hex(
-    canonicalJson(row.manufacturer),
-  );
   const claims = await loadProductIdentifierClaims(db, id);
-  const snapshot = {
-    ...row,
-    identifiers,
-    claims,
-    sources,
-    photos,
-    verifiedModel: currentModelSources.length ? row.model : null,
-    verifiedManufacturer: sources.some(
-      (source) =>
-        source.field === "manufacturer" &&
-        source.valueFingerprint === manufacturerFingerprint,
-    )
-      ? row.manufacturer
-      : null,
-  };
+  const snapshot = { ...row, identifiers, claims, photos };
   return {
     snapshot: z.json().parse(snapshot),
     fingerprint: await sha256Hex(canonicalJson(z.json().parse(snapshot))),
@@ -167,8 +126,7 @@ const identityFacts = z
     identifiers: z.array(
       z.object({ source: z.string(), kind: z.string(), value: z.string() }),
     ),
-    verifiedModel: z.string().nullable(),
-    verifiedManufacturer: z.string().nullable(),
+    model: z.string().nullable(),
     claims: z.array(retainedProductIdentifierClaim),
   })
   .passthrough();
@@ -187,7 +145,6 @@ export async function prepareProductIdentityPair(
   db: Database,
   ids: readonly [ProductId, ProductId],
   options: {
-    variantEvidence?: z.infer<ReturnType<typeof z.json>>;
     includeExcluded?: boolean;
   } = {},
 ) {
@@ -227,15 +184,10 @@ export async function prepareProductIdentityPair(
         other.exactVariant,
     ),
   );
-  const guard = await readVariantVerification(
-    db,
-    [
-      variantSourceSide.parse(first.snapshot),
-      variantSourceSide.parse(second.snapshot),
-    ],
-    PRODUCT_IDENTITY_FEATURE.promptVersion,
-    options.variantEvidence,
-  );
+  const guard = await readVariantVerification(db, [
+    productIdentitySide.parse(first.snapshot),
+    productIdentitySide.parse(second.snapshot),
+  ]);
   return preparedProductIdentityPair.parse({
     productIds: [aId, bId],
     first: first.snapshot,
@@ -245,11 +197,6 @@ export async function prepareProductIdentityPair(
     ),
     exact,
     ...guard,
-    conflict:
-      (a.verifiedModel !== null &&
-        b.verifiedModel !== null &&
-        a.verifiedModel !== b.verifiedModel) ||
-      guard.conflict,
   });
 }
 /** Canonical work identity shares actual producer lineage and frozen pair input. */

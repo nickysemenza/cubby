@@ -173,7 +173,7 @@ same outcome without prescribing an agent runtime.
    shared mail, storefront, payment or relay domain never matches, and a name
    two Vendors share is refused. A new Vendor beside a similar-name or
    same-domain candidate is refused until `vendor.distinctFrom` names each
-   with a Source; prepare returns them as `vendorCandidates`. Merge real
+   with the URL and quoted text showing the difference; prepare returns them as `vendorCandidates`. Merge real
    duplicates, which keeps the merged names as aliases. Sender proof refuses a
    merchant name another Vendor already answers to; pass that order's
    `vendorId`. `entity.resolve {entity:"vendor", names}`
@@ -209,7 +209,7 @@ same outcome without prescribing an agent runtime.
    the difference (model, size, pack, kit
    contents). Browse the listings to find that difference; without one,
    resolve to the match. For a differently titled photo Product, compare its
-   own photos, labels and Sources against the purchased variant before
+   own photos, labels and research notes against the purchased variant before
    choosing a resolution, following [product identity](../product-enrichment/references/product-identity.md).
    Reuse a supported same-variant match; leave ambiguity `unresolved`; choose
    `new` only after distinguishing the reviewed candidates. Preserve the
@@ -406,8 +406,8 @@ coverage limits alongside accuracy.
 
 Pi's Mail import mounts only Email reads, `mail.*`, `purchase_import` and read
 tools; any other write needs a member's approval. A member's Claude or Codex
-session writes with the member's authority and records Sources on what it
-changes. Source-proven interactive duplicate cleanup follows
+session writes with the member's authority and preserves research in notes.
+Evidence-backed interactive duplicate cleanup follows
 [duplicate bookkeeping](references/duplicates.md) without another confirmation.
 Other financial corrections require the member's unresolved decisions and the
 writer's explicit reconciliation review. Receiving remains a human decision

@@ -1,5 +1,5 @@
 import { plainDate } from "@cubby/schemas/base-entity";
-import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
+import { buildActorContext } from "@cubby/schemas/context";
 import { type ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
@@ -84,8 +84,8 @@ import {
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
-import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import { createAppError } from "~/server/errors/app-error";
+import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -597,15 +597,13 @@ export async function resolveLineProduct(
   vendorId: string,
   productsByExternalIdentity: Map<string, string>,
   options: {
-    /** Records a Distinct-from decision's Source on the created Product. */
-    recorder: ActorContext;
     onCreated?: (productId: ProductId) => void;
     onIdentifierCollision?: (
       proposal: Parameters<typeof upsertAgentProductMatch>[1],
     ) => void;
   },
 ) {
-  const { recorder, onCreated, onIdentifierCollision } = options;
+  const { onCreated, onIdentifierCollision } = options;
   // A line decided to carry no Product (expense-only, or coarse-only) keeps
   // none, even when an earlier line with the same SKU resolved one.
   if (!decision.productId && !decision.promote && !decision.unresolvedReason)
@@ -653,16 +651,12 @@ export async function resolveLineProduct(
   const created = await insertWithShortcode(tx, "product", {
     name: line.title,
     manufacturer: "",
+    notes:
+      decision.distinctFrom
+        ?.map(({ url, quote }) => [quote, url].filter(Boolean).join("\n"))
+        .join("\n\n") || null,
   });
   onCreated?.(created.id);
-  if (decision.distinctFrom?.length) {
-    await recordEntitySources(tx, {
-      entityKind: "product",
-      entityId: created.id,
-      sources: decision.distinctFrom.map(({ url, quote }) => ({ url, quote })),
-      recorder,
-    });
-  }
   await learnLineIdentifiers(
     tx,
     created.id,
@@ -1164,13 +1158,6 @@ export async function importVendorOrder(
     "missing_total",
   ].includes(semanticPlan.writeBlockReason ?? "");
   const explicitResolutions = input.productResolutions ?? [];
-  const importActor = buildActorContext(
-    userIdSchema.parse(actorUserId),
-    "mcp",
-    {
-      runId: runEntityId.parse(input.runId),
-    },
-  );
   const identityDecisions =
     skipsLineWrites && !identityOnly
       ? []
@@ -1694,19 +1681,20 @@ export async function importVendorOrder(
     }
     const purchaseId = parseEntityId("purchase", target.id);
     if (usedFallbackDate && fallbackAt && dateMail) {
-      await recordEntitySources(tx, {
-        entityKind: "purchase",
-        entityId: purchaseId,
-        recorder: importActor,
-        detail: { date: orderDate },
-        sources: [
-          {
-            fieldPath: "date",
-            url: `https://mail.google.com/mail/u/0/#all/${dateMail.messageId}`,
-            quote: `Order date defaults to email receipt time (${fallbackAt}); no printed order date was supplied.`,
-          },
-        ],
-      });
+      const research = `Order date defaults to email receipt time (${fallbackAt}); no printed order date was supplied.\nhttps://mail.google.com/mail/u/0/#all/${dateMail.messageId}`;
+      await tx
+        .update(purchase)
+        .set({
+          notes: sql`concat_ws(E'\n\n', nullif(${purchase.notes}, ''), ${research}::text)`,
+        })
+        .where(eq(purchase.id, purchaseId));
+      await captureDerivedRefresh(tx, [
+        {
+          entityKind: "purchase",
+          entityId: purchaseId,
+          changedFields: ["notes"],
+        },
+      ]);
     }
 
     const findingIds: string[] = [];
@@ -1784,14 +1772,13 @@ export async function importVendorOrder(
           input.vendorId,
           productsByExternalIdentity,
           {
-            recorder: importActor,
             onIdentifierCollision,
             onCreated: (createdId) =>
               rowMutations.push({
                 targetKind: "product",
                 targetId: createdId,
                 mutationKind: "create",
-                fields: ["name", "externalIds"],
+                fields: ["name", "externalIds", "notes"],
               }),
           },
         );
@@ -1932,14 +1919,13 @@ export async function importVendorOrder(
             input.vendorId,
             productsByExternalIdentity,
             {
-              recorder: importActor,
               onIdentifierCollision,
               onCreated: (createdId) =>
                 rowMutations.push({
                   targetKind: "product",
                   targetId: createdId,
                   mutationKind: "create",
-                  fields: ["name", "externalIds"],
+                  fields: ["name", "externalIds", "notes"],
                 }),
             },
           );
@@ -1991,14 +1977,13 @@ export async function importVendorOrder(
             // Recorded on this run so its follow-up enrichment and Changes
             // list know which Products the import created.
             {
-              recorder: importActor,
               onIdentifierCollision,
               onCreated: (createdId) =>
                 rowMutations.push({
                   targetKind: "product",
                   targetId: createdId,
                   mutationKind: "create",
-                  fields: ["name", "externalIds"],
+                  fields: ["name", "externalIds", "notes"],
                 }),
             },
           );
@@ -2265,7 +2250,13 @@ export async function importVendorOrder(
           entityKind: "purchase",
           entityId: purchaseId,
           action: created ? "create" : "update",
-          fields: ["header", "documents", "expenses", "paymentEvidence"],
+          fields: [
+            "header",
+            "documents",
+            "expenses",
+            "paymentEvidence",
+            ...(usedFallbackDate && fallbackAt && dateMail ? ["notes"] : []),
+          ],
         },
         ...rowMutations.map(
           ({ targetKind, targetId, mutationKind, fields }) => ({

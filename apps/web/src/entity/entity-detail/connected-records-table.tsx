@@ -338,7 +338,7 @@ export function ConnectedRecordsSection({
       limit: PREVIEW_SIZE,
     }),
   );
-  const views = query.data?.views.filter((view) => !view.evidence) ?? [];
+  const views = query.data?.views ?? [];
   const found = views.filter((view) => view.totalCount > 0);
   const absent = views.filter((view) => view.totalCount === 0);
   useSectionCount(

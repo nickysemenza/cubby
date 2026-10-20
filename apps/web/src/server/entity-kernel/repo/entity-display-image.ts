@@ -17,7 +17,6 @@ import {
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
-import type { EntitySourceRead } from "@cubby/schemas/entity-source";
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import type {
   ImageRepresentations,
@@ -57,7 +56,6 @@ import {
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { withRecordEmoji } from "./entity-emoji";
-import { entityDetailJson, loadEntitySources } from "./entity-source";
 
 /** A private database identity used only while hydrating public read models. */
 export interface EntityDisplayImageRef {
@@ -677,7 +675,6 @@ export async function withUniversalEntityMedia<
       attachments?: EntityAttachmentRead[];
       redirectedFrom?: string | null;
       previousShortcodes?: string[];
-      sources?: EntitySourceRead[];
     }
   >
 > {
@@ -696,7 +693,7 @@ export async function withUniversalEntityMedia<
     return entityId === undefined ? [] : [{ entityKind, entityId }];
   });
   const entityIds = refs.map((ref) => ref.entityId);
-  const [lists, attachments, previousShortcodes, sources] = await Promise.all([
+  const [lists, attachments, previousShortcodes] = await Promise.all([
     resolveEntityDisplayImageLists(db, refs),
     detail
       ? resolveEntityAttachments(db, entityKind, entityIds)
@@ -704,18 +701,6 @@ export async function withUniversalEntityMedia<
     detail
       ? previousShortcodesFor(db, entityIds)
       : Promise.resolve(new Map<string, string[]>()),
-    detail
-      ? loadEntitySources(
-          db,
-          entityKind,
-          publicRows.flatMap((row, index) => {
-            const entityId = resolved.get(row.id);
-            return entityId === undefined
-              ? []
-              : [{ entityId, detail: entityDetailJson.parse(rows[index]) }];
-          }),
-        )
-      : Promise.resolve(new Map<string, EntitySourceRead[]>()),
   ]);
   return hydrateImageReadProjection(
     db,
@@ -734,7 +719,6 @@ export async function withUniversalEntityMedia<
         previousShortcodes: entityId
           ? (previousShortcodes.get(entityId) ?? [])
           : [],
-        sources: entityId ? (sources.get(entityId) ?? []) : [],
       };
       // Purchase documents and Product item/label galleries retain attachment
       // metadata in their specialized projections. Generic attachments still

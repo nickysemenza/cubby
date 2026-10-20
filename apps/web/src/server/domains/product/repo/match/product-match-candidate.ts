@@ -98,11 +98,7 @@ export async function publishProductPair(
   },
 ): Promise<ProductMatchCandidateRow & { created: boolean }> {
   return publishProductPairWithGuard(db, input, (transactionDb) => {
-    const suppliedSignals =
-      z.record(z.string(), z.json()).safeParse(input.signals).data ?? {};
-    return prepareProductIdentityPair(transactionDb, input.productIds, {
-      variantEvidence: suppliedSignals.variantEvidence,
-    });
+    return prepareProductIdentityPair(transactionDb, input.productIds);
   });
 }
 
@@ -119,11 +115,7 @@ export async function prepareProductPairPublication(
       "Product pair preparation requires a database outside a transaction",
     );
   const fence = await productIdentityEvidenceFence(db, input.productIds);
-  const suppliedSignals =
-    z.record(z.string(), z.json()).safeParse(input.signals).data ?? {};
-  const guard = await prepareProductIdentityPair(db, input.productIds, {
-    variantEvidence: suppliedSignals.variantEvidence,
-  });
+  const guard = await prepareProductIdentityPair(db, input.productIds);
   if (
     !guard ||
     (input.fingerprint && guard.fingerprint !== input.fingerprint) ||
@@ -175,7 +167,7 @@ async function publishProductPairWithGuard(
       conflict: proposedData.conflict || guard.conflict,
       evidence:
         guard.verification === "pending_verification"
-          ? "A historical variant conflict requires fresh current verification before merging"
+          ? "A historical identity conflict remains unresolved"
           : proposedData.evidence,
       signals: {
         ...suppliedSignals,
@@ -184,27 +176,13 @@ async function publishProductPairWithGuard(
         conflictLineage: guard.priorConflictIds,
       },
     });
-    const proof = guard.variantEvidence;
-    const semanticProof = z
-      .object({ producer: assessmentProducer })
-      .passthrough()
-      .safeParse(proof);
     const identityData = {
       ...data,
       signals: {
         ...suppliedSignals,
         conflictLineage: null,
         verification: guard.verification,
-        variantEvidence: semanticProof.success
-          ? {
-              ...semanticProof.data,
-              producer: {
-                ...semanticProof.data.producer,
-                runId: null,
-                evaluationId: null,
-              },
-            }
-          : null,
+        variantEvidence: null,
       },
     };
     const digest = await sha256Hex(

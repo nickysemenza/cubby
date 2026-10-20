@@ -17,7 +17,7 @@ import {
   type ResolvePlantsOutput,
   plantOut,
 } from "@cubby/schemas/plant";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
@@ -54,6 +54,7 @@ import {
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   finalizeMerge,
+  mergeNotes,
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
@@ -297,6 +298,18 @@ export async function mergePlants(
     ...input,
   });
   return withTransaction(db, async (tx) => {
+    const rows = await tx
+      .select({ id: plant.id, notes: plant.notes })
+      .from(plant)
+      .where(inArray(plant.id, [keepId, ...loserIds]))
+      .orderBy(plant.id)
+      .for("update");
+    const previousNotes = rows.find((row) => row.id === keepId)?.notes ?? null;
+    const notes = mergeNotes(
+      previousNotes,
+      ...loserIds.map((id) => rows.find((row) => row.id === id)?.notes),
+    );
+    await tx.update(plant).set({ notes }).where(eq(plant.id, keepId));
     const repointed = await applyMergePolicy(tx, {
       entity: "plant",
       policy: PLANT_MERGE_EDGE_POLICY,
@@ -311,7 +324,12 @@ export async function mergePlants(
       loserIds,
       removal: "soft",
       actor,
-      survivorChanges: { mergedFrom: { from: null, to: loserIds } },
+      survivorChanges: {
+        mergedFrom: { from: null, to: loserIds },
+        ...(notes !== previousNotes
+          ? { notes: { from: previousNotes, to: notes } }
+          : {}),
+      },
     });
     return {
       mergeSummary: {

@@ -14,7 +14,6 @@ export const derivedRefreshContext = z.enum([
   "EntityLink",
   "EntityAttachment",
   "EntityExternalId",
-  "EntitySource",
   "AiAnalysis",
   "FinancialTransactionAllocation",
   "ExpenseAttribution",

@@ -16,13 +16,13 @@ import {
 import { discoverAcquisitionCandidates } from "~/server/domains/connection/service/acquisition-discovery";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
 import {
   publishAssessment,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { canonicalJson } from "~/server/lib/canonical-json";
 import {
   createProductFixture,
   makeProductInput,

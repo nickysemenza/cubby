@@ -50,7 +50,6 @@ export async function productIdentityEvidenceFence(
     ), versions AS (
       SELECT 'identity-product' AS kind, id::text, xmin::text AS version FROM "Product" WHERE id IN (SELECT id FROM targets)
       UNION ALL SELECT 'external-id', id::text, xmin::text FROM "EntityExternalId" WHERE "entityKind" = ${entitySchema.enum.product} AND "entityId" IN (SELECT id FROM targets)
-      UNION ALL SELECT 'identity-source', id::text, xmin::text FROM "EntitySource" WHERE "entityKind" = ${entitySchema.enum.product} AND "entityId" IN (SELECT id FROM targets)
       UNION ALL SELECT 'identity-attachment', id::text, xmin::text FROM "EntityAttachment" WHERE "entityKind" = ${entitySchema.enum.product} AND "entityId" IN (SELECT id FROM targets)
       UNION ALL SELECT 'identity-image', id::text, xmin::text FROM "Image" WHERE id IN (SELECT id FROM photos)
       UNION ALL SELECT 'identity-analysis', id::text, xmin::text FROM "AiAnalysis" WHERE "entityKind" = ${entitySchema.enum.image} AND "entityId" IN (SELECT id FROM photos)

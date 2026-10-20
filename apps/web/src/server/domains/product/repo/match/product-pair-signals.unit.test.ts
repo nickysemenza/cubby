@@ -64,6 +64,21 @@ const stored = {
 // The keeper may be the canonical B side (a purchase-role Product); its values
 // must lead, or the card reads "Keep: red" for a blue keeper.
 describe("readStoredProductPair", () => {
+  it("shows current model contradictions without calling their text verified", () => {
+    expect(
+      readStoredProductPair(
+        {
+          signals: {
+            snapshots: [
+              { id: A, model: "SYN-A" },
+              { id: B, model: "SYN-B" },
+            ],
+          },
+        },
+        B,
+      ).conflictReasons,
+    ).toEqual(['Model: "SYN-B" vs "SYN-A"']);
+  });
   it("orders conflict values from the keeper's side", () => {
     expect(readStoredProductPair(stored, A).conflictReasons).toEqual([
       'Verified model: "SYN-A" vs "SYN-B"',

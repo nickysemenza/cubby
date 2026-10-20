@@ -4,14 +4,8 @@ import { financialAccountIdentityKind } from "@cubby/schemas/financial-account";
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { amountJsonSql } from "~/server/db/helpers";
 import { inventoryEntry } from "~/server/db/schema";
-import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
-import {
-  effectiveExpenseProjectSql,
-  effectiveExpenseTradeSql,
-} from "~/server/domains/expense/repo/expense-inheritance";
 
 /** Scalar adapters read only the saved row, a to-one link, or a two-row cardinality probe. */
 export function nonColumnMutationScalar(
@@ -39,25 +33,5 @@ export function nonColumnMutationScalar(
     return sql`(SELECT purchase."orderId" FROM "Purchase" purchase WHERE purchase.id=saved."purchaseId" AND purchase."deletedAt" IS NULL)`;
   if (entity === "financialTransaction" && key === "purchaseId")
     return sql`(SELECT CASE WHEN count(*)=1 THEN min(link.shortcode) END FROM (SELECT purchase.shortcode FROM "FinancialTransactionAllocation" allocation JOIN "Purchase" purchase ON purchase.id=allocation."purchaseId" AND purchase."deletedAt" IS NULL WHERE allocation."transactionId"=saved.id AND allocation."deletedAt" IS NULL LIMIT 2) link)`;
-  return undefined;
-}
-
-/** A citation follows the detail's effective value; a receipt preserves stored intent. */
-export function effectiveMutationSourceScalar(
-  entity: ShortcodeEntity,
-  key: string,
-): SQL | undefined {
-  if (
-    entity === "project" ||
-    entity === "task" ||
-    (entity === "spendingCategory" && key === "stockTracked")
-  )
-    return effectiveFieldSql(entity, key, "saved");
-  if (entity === "expense") {
-    if (key === "projectId") return effectiveExpenseProjectSql("saved");
-    if (key === "trade") return effectiveExpenseTradeSql("saved");
-    if (key === "spendingCategoryId")
-      return effectiveExpenseSpendingCategorySql("saved");
-  }
   return undefined;
 }

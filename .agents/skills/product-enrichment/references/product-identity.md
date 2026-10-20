@@ -68,7 +68,7 @@ issuer; identifiers stored there are invisible to exact matching and appear in
 Problems as "Product identifiers outside the issuer".
 
 **Descriptive match** — compare the existing Product's own photos, labels and
-Sources against the purchased variant before creating. A different title or
+research notes against the purchased variant before creating. A different title or
 missing identifier alone does not justify another Product. Reuse a candidate
 when brand, item, model, size, color and pack evidence support the same variant
 without contradictions. When identity remains ambiguous, leave the line
@@ -79,8 +79,7 @@ Similarity prompts comparison; it never proves identity or authorizes a merge.
 A missing search hit can reflect indexing delay: read live Products through
 `entity_read.list` with `filters.nameFilter` and inspect their full records.
 Keep unresolved size/color unknown, including when a retailer page defaults to
-one of several variants. Record tentative disposal recollections in Sources
-and notes; a disposal ledger event needs a confirmed item, quantity and date.
+one of several variants. Record tentative disposal recollections in notes; a disposal ledger event needs a confirmed item, quantity and date.
 
 **Purchase first, photos later** — when photo-inventory-import runs after a
 purchase already exists, check for the existing purchase Product before

@@ -74,11 +74,11 @@ Run-delegated tokens: a member OAuth session, including an automated routine
 holding a member token, can call every `member_decision` write.
 
 Burn-down works the Research queue (`research-queue` saved views) with the
-caller's own browser. Record where each fact was seen with `sources` on
-`entity.update` (field-scoped) and `image.attach_files` (record-level); a
-quote and external URL are enough, screenshots are optional. For evidence in
-Cubby, cite the existing record with `sourceEntity` (its shortcode) rather than
-a Cubby URL; quotes and field scope remain explicit citations. Read and resolve retained
+caller's own browser. Retain research in ordinary editable `notes` inside
+entity mutation `data`: preserve existing text, useful URLs or record shortcodes,
+excerpts, dates and selected-variant context. There is no separate citation input
+on entity writes or image attachment, and notes do not certify current values.
+Read and resolve retained
 Email with `imports_read.mail` and `mail.resolve`; recover a missing original
 with `mail.search`. The retained read's `acceptedSourceOrders` provides owned
 source-order handles, exact source identities and deleted-target status for
@@ -191,8 +191,10 @@ a link that does not resolve. Engineering skills stay repository-only.
 The repository is also a Claude plugin marketplace
 (`.claude-plugin/marketplace.json` → `plugins/cubby`). Its skills are pointer
 stubs that call `playbook.get`, so they change only when a playbook's name or
-description does; rerun `pnpm --dir apps/web generate:claude-plugin` when
-`claude-plugin.test.ts` reports drift. The plugin declares no MCP server:
+description does. Regenerate and commit them with
+`pnpm --dir apps/web generate:claude-plugin` in the same change as that metadata;
+ordinary generation leaves these committed stubs alone. `claude-plugin.test.ts`
+detects drift. The plugin declares no MCP server:
 each member adds the Cubby connector once. A member adds the marketplace in
 claude.ai under Customize › Plugins › Add marketplace (`nickysemenza/cubby`)
 with Sync automatically on; claude.ai plugins sync into Claude Code.

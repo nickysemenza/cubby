@@ -145,8 +145,6 @@ export interface EntityRepositoryWriteResult<
 > {
   output: TOutput;
   entityId: EntityInternalId<E>;
-  /** Authoritative write values, independent of a requested output projection. */
-  sourceSnapshot?: z.infer<ReturnType<typeof z.json>>;
   detachedImageKeys?: string[];
   /** Best-effort follow-up failures, surfaced as `sideEffects.warnings`. */
   warnings?: readonly string[];

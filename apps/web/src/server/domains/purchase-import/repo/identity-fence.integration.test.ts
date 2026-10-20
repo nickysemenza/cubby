@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
+  auditLog,
   entityExternalId,
-  entitySource,
   externalSource,
   expense,
   importSourceClaim,
@@ -269,13 +269,21 @@ describe("member prepare and commit identity fences", () => {
     expect(await vendorRows()).toEqual([
       { id: vendor.id, name: vendor.name, aliases: [storeName] },
     ]);
-    const sources = await getDb(ctx.db)
-      .select({ quote: entitySource.quote })
-      .from(entitySource)
-      .where(eq(entitySource.entityId, vendor.id));
-    expect(sources.map(({ quote }) => quote)).toEqual([
-      expect.stringContaining("orders@hardware.example"),
-    ]);
+    const [research] = await getDb(ctx.db)
+      .select({ notes: vendorTable.notes })
+      .from(vendorTable)
+      .where(eq(vendorTable.id, vendor.id));
+    expect(research?.notes).toContain("orders@hardware.example");
+    expect(
+      await getDb(ctx.db)
+        .select({ changes: auditLog.changes })
+        .from(auditLog)
+        .where(eq(auditLog.entityId, vendor.id)),
+    ).toEqual(
+      expect.arrayContaining([
+        { changes: expect.objectContaining({ notes: expect.anything() }) },
+      ]),
+    );
   });
 
   it("finds a Vendor by an exact alias apart from letter case", async () => {
@@ -416,16 +424,14 @@ describe("member prepare and commit identity fences", () => {
         ({ name }) => name === "Example",
       );
       expect(created).toBeDefined();
-      const sources = await getDb(ctx.db)
-        .select({ url: entitySource.url, quote: entitySource.quote })
-        .from(entitySource)
-        .where(eq(entitySource.entityId, created!.id));
-      expect(sources).toEqual([
-        {
-          url: "https://other-host.example/about",
-          quote: "Example is an independent bakery, not a guest service.",
-        },
-      ]);
+      const [research] = await getDb(ctx.db)
+        .select({ notes: vendorTable.notes })
+        .from(vendorTable)
+        .where(eq(vendorTable.id, created!.id));
+      expect(research?.notes).toContain("https://other-host.example/about");
+      expect(research?.notes).toContain(
+        "Example is an independent bakery, not a guest service.",
+      );
     });
   });
 
@@ -746,14 +752,22 @@ describe("member prepare and commit identity fences", () => {
     expect(committed.items[0]?.purchaseId).toBeTruthy();
     const created = (await liveProductIds()).filter((id) => id !== existing.id);
     expect(created).toHaveLength(1);
-    const sources = await getDb(ctx.db)
-      .select({ url: entitySource.url, quote: entitySource.quote })
-      .from(entitySource)
-      .where(eq(entitySource.entityId, created[0]!));
-    expect(sources).toContainEqual({
-      url: "https://example.com/listing/two-pack",
-      quote,
-    });
+    const [research] = await getDb(ctx.db)
+      .select({ notes: product.notes })
+      .from(product)
+      .where(eq(product.id, created[0]!));
+    expect(research?.notes).toContain("https://example.com/listing/two-pack");
+    expect(research?.notes).toContain(quote);
+    expect(
+      await getDb(ctx.db)
+        .select({ changes: auditLog.changes })
+        .from(auditLog)
+        .where(eq(auditLog.entityId, created[0]!)),
+    ).toEqual(
+      expect.arrayContaining([
+        { changes: expect.objectContaining({ notes: expect.anything() }) },
+      ]),
+    );
   });
 
   it("refuses a distinct Product that would reuse the identical name instead of failing on the name index", async () => {

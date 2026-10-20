@@ -17,7 +17,6 @@ import {
   PRODUCT_IDENTITY_FEATURE,
   PRODUCT_IDENTITY_RULE_REVISION,
 } from "~/server/ai/policy/feature-identity";
-import { groundProductIdentityVariants } from "~/server/ai/product-identity-grounding";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { product, entityExternalId } from "~/server/db/schema";
@@ -30,7 +29,6 @@ import {
   loadProductIdentifierClaims,
   type DroppedProductIdentifierClaim,
 } from "~/server/domains/product/repo/product-identity-claims";
-import { variantSourceSide } from "~/server/domains/product/repo/product-variant-evidence";
 import { findSimilarEntities } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
@@ -39,10 +37,10 @@ import { productionVectorStore } from "~/server/generic/embedding/service/semant
 export const productIdentityPrompt = (subject: string) => ({
   subject,
   rules:
-    "Compare two records of physical products. Exact identifiers and source-confirmed variant facts are evidence. Shared family, similar names or photos do not establish the same variant. Keep unknown sizes and colors unknown. Distinct verified variants outrank similarity. Judge only this pair; never infer identity through another pair.",
+    "Compare two records of physical products. Exact identifiers are evidence. Matching model text and research notes never verify identity. Shared family, similar names or photos do not establish the same variant. Keep unknown sizes and colors unknown. Differing current models and historical identity conflicts block merging. Judge only this pair; never infer identity through another pair.",
   choices: [
     "Same exact variant with supporting evidence",
-    "Distinct verified variants",
+    "Distinct variants",
     "Identity conflict in exact identifiers",
     "Insufficient evidence",
   ],
@@ -85,8 +83,6 @@ export async function retrieveProductIdentityCandidates(
         ne(product.id, id),
         or(
           exact,
-          sql`EXISTS (SELECT 1 FROM "EntitySource" own JOIN "EntitySource" other ON other.url=own.url WHERE own."entityKind"=${entitySchema.enum.product} AND own."entityId"=${id} AND own.url <> '' AND other."entityKind"=${entitySchema.enum.product} AND other."entityId"="Product".id)`,
-          sql`EXISTS (SELECT 1 FROM "EntitySource" own JOIN "EntitySource" other ON lower(btrim(other."selectedVariant"))=lower(btrim(own."selectedVariant")) WHERE own."entityKind"=${entitySchema.enum.product} AND own."entityId"=${id} AND btrim(own."selectedVariant") <> '' AND other."entityKind"=${entitySchema.enum.product} AND other."entityId"="Product".id)`,
           and(
             eq(product.manufacturer, seed.manufacturer),
             eq(product.model, seed.model ?? ""),
@@ -202,27 +198,7 @@ export async function evaluatePreparedProductIdentityPair(
   const model = supportedDecisionModelSchema.parse(
     options.model ?? selectDecisionModel(),
   );
-  let proposedGrounding = pair.variantEvidence;
-  if (pair.verification !== "current") {
-    try {
-      proposedGrounding = await groundProductIdentityVariants({
-        db,
-        runId,
-        evaluationId: options.evaluationId,
-        model,
-        first: variantSourceSide.parse(pair.first),
-        second: variantSourceSide.parse(pair.second),
-        priorConflictIds: pair.priorConflictIds,
-        decisionPort: options.decisionPort,
-        provenance: options.provenance,
-      });
-    } catch {
-      // SILENT: Exact identifier admission survives model outage; the historical conflict guard remains enforced.
-    }
-  }
-  const current = await prepareProductIdentityPair(db, pair.productIds, {
-    variantEvidence: proposedGrounding,
-  });
+  const current = await prepareProductIdentityPair(db, pair.productIds);
   if (!current || current.fingerprint !== pair.fingerprint)
     throw new Error("Product identity evidence changed during evaluation");
   const decision = pair.exact
@@ -239,11 +215,11 @@ export async function evaluatePreparedProductIdentityPair(
     source: "detector" as const,
     evidence:
       current.verification === "pending_verification"
-        ? "A historical source-grounded conflict requires fresh current verification before merging"
+        ? "A historical identity conflict remains unresolved"
         : pair.exact
           ? current.conflict
-            ? "An exact identifier conflicts with source-grounded variant judgments"
-            : "Retained source evidence binds both records to the same exact identifier"
+            ? "An exact identifier conflicts with current model values"
+            : "Retained identifier evidence binds both records to the same exact identifier"
           : "Candidate similarity requires member investigation",
     sourceUrls: [],
     fingerprint: pair.fingerprint,

@@ -13,7 +13,6 @@ import {
   derivedDiscoveryPass,
   derivedRefreshCursor,
   derivedRefreshWork,
-  entitySource,
   expense,
   run,
 } from "~/server/db/schema";
@@ -23,7 +22,6 @@ import { updateProduct } from "~/server/domains/product/repo/crud";
 import { scheduleDerivedDiscovery } from "~/server/domains/run/service/derived-discovery";
 import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
 import { executeEntity } from "~/server/entity-kernel";
-import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -273,51 +271,6 @@ describe("discovery epoch recovery", () => {
       ctx.actor,
     );
     await repair();
-    expect(await readVersion()).toBe(before);
-  }, 30_000);
-
-  it("repairs Source changes without recapturing unrelated records", async () => {
-    const edited = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic sourced root" }),
-      ctx.actor,
-    );
-    const unrelated = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic unrelated source root" }),
-      ctx.actor,
-    );
-    await repair();
-    await repair();
-    const readVersion = async () =>
-      (
-        await getDb(ctx.db)
-          .select({ version: derivedRefreshWork.version })
-          .from(derivedRefreshWork)
-          .where(eq(derivedRefreshWork.entityId, unrelated.entityId))
-      )[0]?.version;
-    const before = await readVersion();
-    await recordEntitySources(ctx.db, {
-      entityKind: "product",
-      entityId: edited.entityId,
-      recorder: ctx.actor,
-      sources: [{ quote: "Synthetic retained source evidence" }],
-    });
-    await repair();
-    expect(await readVersion()).toBe(before);
-    const [ownerBefore] = await getDb(ctx.db)
-      .select({ version: derivedRefreshWork.version })
-      .from(derivedRefreshWork)
-      .where(eq(derivedRefreshWork.entityId, edited.entityId));
-    await getDb(ctx.db)
-      .delete(entitySource)
-      .where(eq(entitySource.entityId, edited.entityId));
-    await repair();
-    const [ownerAfter] = await getDb(ctx.db)
-      .select({ version: derivedRefreshWork.version })
-      .from(derivedRefreshWork)
-      .where(eq(derivedRefreshWork.entityId, edited.entityId));
-    expect(ownerAfter?.version).toBeGreaterThan(ownerBefore?.version ?? 0);
     expect(await readVersion()).toBe(before);
   }, 30_000);
 

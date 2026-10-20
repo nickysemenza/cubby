@@ -8,14 +8,15 @@ import type {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { type ExpenseOut } from "@cubby/schemas/project";
 import { reconcilePurchase, splitExpenseInput } from "@cubby/schemas/purchase";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, insertAndReturn } from "~/server/db/helpers";
+import { getDb, insertAndReturn, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
   entityAttachment,
@@ -47,6 +48,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   deletePurchases,
   findOrCreatePurchase,
+  foldChargeInto,
   getPurchaseByID,
   getPurchaseByShortcode,
   getPurchaseExpenses,
@@ -446,6 +448,63 @@ describe("purchase repository — splitExpense", () => {
 describe("purchase repository — mergePurchases", () => {
   const ctx = withTestDb();
 
+  it("preserves research committed while an implicit Purchase fold waits", async () => {
+    const vendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Synthetic fold vendor",
+    );
+    const keeper = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      notes: "Keeper research",
+    });
+    const donor = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      notes: "Donor research",
+    });
+    const locked = Promise.withResolvers<number>();
+    const release = Promise.withResolvers<void>();
+    const editing = getDb(ctx.db).transaction(async (tx) => {
+      await tx
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(eq(purchase.id, keeper.entityId))
+        .for("update");
+      const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
+      locked.resolve(z.object({ pid: z.number() }).parse(result.rows[0]).pid);
+      await release.promise;
+      await tx
+        .update(purchase)
+        .set({ notes: sql`${purchase.notes} || E'\nConcurrent research'` })
+        .where(eq(purchase.id, keeper.entityId));
+    });
+    const pid = await locked.promise;
+    const folding = withTransaction(ctx.db, (tx) =>
+      foldChargeInto(tx, donor.entityId, keeper.entityId, ctx.actor),
+    );
+    try {
+      await expect
+        .poll(async () => {
+          const result = await getDb(ctx.db).execute(
+            sql`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE ${pid}::int = ANY(pg_blocking_pids(pid))) AS waiting`,
+          );
+          return z.object({ waiting: z.boolean() }).parse(result.rows[0])
+            .waiting;
+        })
+        .toBe(true);
+    } finally {
+      release.resolve();
+      await editing;
+    }
+    await folding;
+    const [saved] = await getDb(ctx.db)
+      .select({ notes: purchase.notes })
+      .from(purchase)
+      .where(eq(purchase.id, keeper.entityId));
+    expect(saved?.notes).toBe(
+      "Keeper research\nConcurrent research\n\nDonor research",
+    );
+  });
+
   const attachDocumentRow = async (
     purchaseShortcodeId: PurchaseShortcode,
     label: string,
@@ -465,6 +524,42 @@ describe("purchase repository — mergePurchases", () => {
     });
     return { imageId: img.id, joinId: join.id };
   };
+
+  it("preserves both notes in requested donor order without exact duplicates", async () => {
+    const vendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Synthetic research vendor",
+    );
+    const rows = [];
+    for (const notes of [
+      "  Keeper research\n",
+      "First donor research  ",
+      "Second donor research",
+      "First donor research  ",
+    ]) {
+      rows.push(
+        (
+          await createRepoEntity(ctx, "purchase", {
+            vendorId,
+            date: "2026-01-01",
+            notes,
+          })
+        ).output,
+      );
+    }
+    const [keeper, first, second, duplicate] = rows;
+    const result = await mergePurchases(
+      ctx.db,
+      {
+        keepId: keeper!.id,
+        mergeIds: [second!.id, first!.id, duplicate!.id],
+      },
+      ctx.actor,
+    );
+    expect(result.purchase.notes).toBe(
+      "  Keeper research\n\n\nSecond donor research\n\nFirst donor research  ",
+    );
+  });
 
   it("re-points expenses, moves documents, and soft-deletes the loser", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Merge Vendor");

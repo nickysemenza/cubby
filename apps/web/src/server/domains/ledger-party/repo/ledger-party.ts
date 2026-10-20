@@ -59,6 +59,7 @@ import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   finalizeMerge,
+  mergeNotes,
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import {
@@ -777,6 +778,16 @@ export async function mergeLedgerParties(
         "Only ledger parties of one non-household kind can be merged.",
       );
     await assertNoAccountHistory(tx, [keepId, ...loserIds]);
+    const previousNotes =
+      parties.find((party) => party.id === keepId)?.notes ?? null;
+    const notes = mergeNotes(
+      previousNotes,
+      ...loserIds.map((id) => parties.find((party) => party.id === id)?.notes),
+    );
+    await tx
+      .update(ledgerParty)
+      .set({ notes })
+      .where(eq(ledgerParty.id, keepId));
     const partyIds = [keepId, ...loserIds];
     const repointed = await applyMergePolicy(tx, {
       entity: "ledgerParty",
@@ -891,7 +902,12 @@ export async function mergeLedgerParties(
         loserIds,
         removal: "soft",
         actor,
-        survivorChanges: { mergedFrom: { from: null, to: loserIds } },
+        survivorChanges: {
+          mergedFrom: { from: null, to: loserIds },
+          ...(notes !== previousNotes
+            ? { notes: { from: previousNotes, to: notes } }
+            : {}),
+        },
       })
     ).removed;
   });

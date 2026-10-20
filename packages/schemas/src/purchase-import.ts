@@ -1,4 +1,8 @@
-import { PRODUCT_DECISION_REASON_MAX } from "@cubby/shared/client-constants";
+import {
+  DISTINCT_FROM_QUOTE_MAX,
+  DISTINCT_FROM_URL_MAX,
+  PRODUCT_DECISION_REASON_MAX,
+} from "@cubby/shared/client-constants";
 import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { agentImportRunPurpose } from "./import-run-agent";
@@ -7,10 +11,6 @@ import { plainDate } from "./base-entity";
 import { mailAdmissionPath, mailEvent } from "./mailbox-research";
 import { importSourceIdentity, importSourceKind } from "./import-source";
 export { importSourceIdentity, importSourceKind } from "./import-source";
-import {
-  ENTITY_SOURCE_QUOTE_MAX,
-  ENTITY_SOURCE_URL_MAX,
-} from "./child-tables/modules";
 import { money } from "./money";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { costTypeSchema } from "./expense-fields";
@@ -35,8 +35,8 @@ export const vendorOrderEvidence = z.enum([
 ]);
 /** The Source of a Distinct-from decision: its url and quoted difference. */
 export const distinctFromSource = z.object({
-  url: z.url().max(ENTITY_SOURCE_URL_MAX),
-  quote: z.string().trim().min(1).max(ENTITY_SOURCE_QUOTE_MAX),
+  url: z.url().max(DISTINCT_FROM_URL_MAX),
+  quote: z.string().trim().min(1).max(DISTINCT_FROM_QUOTE_MAX),
 });
 /**
  * A Distinct-from decision (terminology): the line is a different Product from

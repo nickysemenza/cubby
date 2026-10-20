@@ -4,7 +4,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
 import type { CapturedInput } from "~/server/ai/evaluation-inputs";
-import { canonicalJson } from "~/server/entity-kernel/repo/entity-source";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Match actual served evidence and the exact proposal across inference entry points. */
 export async function fieldReviewIdentity(input: {

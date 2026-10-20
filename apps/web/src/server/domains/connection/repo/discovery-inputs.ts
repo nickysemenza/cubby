@@ -13,7 +13,6 @@ const evidence = [
     "EntityLink",
     "EntityAttachment",
     "EntityExternalId",
-    "EntitySource",
     "AiAnalysis",
     "AssessmentState",
   ),

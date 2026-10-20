@@ -18,7 +18,6 @@ import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { notDeleted } from "~/server/db/helpers";
 import { runFinding } from "~/server/db/schema";
 import { recordMergeRedirects } from "~/server/entity-kernel/repo/entity-identity";
-import { repointEntitySources } from "~/server/entity-kernel/repo/entity-source";
 import { createAppError } from "~/server/errors/app-error";
 import { repointAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
@@ -27,6 +26,18 @@ import { parseLinkEdgeKey } from "~/server/generic/entity-links/repo/entity-link
 import type { RemovableEntity } from "~/server/generic/removal/repo/core";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+/** Preserve original text in keeper/donor order, deduplicating only exact note values. */
+export const mergeNotes = (
+  ...notes: readonly (string | null | undefined)[]
+): string | null => {
+  const texts = [
+    ...new Set(
+      notes.filter((note): note is string => note != null && note !== ""),
+    ),
+  ];
+  return texts.length ? texts.join("\n\n") : null;
+};
 
 type MergeableTable = PgTable & { id: PgColumn; deletedAt: PgColumn };
 
@@ -207,10 +218,6 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       }
     }
   }
-
-  // Sources are history about the merged record and follow it to the
-  // survivor; a source the survivor already has is not kept twice.
-  await repointEntitySources(tx, { keepId, loserIds: ids });
 
   // The row removal stays here rather than moving into `cascadeRemoval`:
   // removal differs per entity (soft for products/purchases/vendors, hard for

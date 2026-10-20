@@ -39,7 +39,6 @@ import {
 } from "~/ui/primitives/popover";
 import JsonRenderer from "~/ui/text/json-renderer";
 
-import { SourceTargetLink } from "../source-target-link";
 import { ExceptionControls } from "./field-explanation-exception";
 import {
   FieldResolutionEntityActions,
@@ -722,9 +721,6 @@ export function FieldExplanationContents({
               list.
             </p>
           ) : null}
-          <FieldVerificationEvidence
-            verifications={result.data.verifications}
-          />
           <ExplanationTechnicalDetails data={result.data} />
           <ExplanationFooter
             entity={entity}
@@ -737,53 +733,6 @@ export function FieldExplanationContents({
         </>
       )}
     </div>
-  );
-}
-
-/** The Sources recorded for this field: where each value was seen, and whether it still holds. */
-export function FieldVerificationEvidence({
-  verifications,
-}: Pick<FieldExplanationOutput, "verifications">) {
-  if (verifications.length === 0) return null;
-  return (
-    <section className="grid gap-3 border-t border-border pt-3">
-      <h3 className={sectionLabelClassName}>Sources</h3>
-      {verifications.map((source) => (
-        <div key={source.key} className="grid gap-1 text-sm leading-5">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
-            <span className="font-medium">
-              {source.supportsCurrentValue === false
-                ? "Earlier value"
-                : source.supportsCurrentValue === true
-                  ? "Current value"
-                  : "Recorded evidence"}
-            </span>
-            {source.selectedVariant ? (
-              <span className="text-muted-foreground">
-                Selected variant: {source.selectedVariant}
-              </span>
-            ) : null}
-            {source.recorder.runId ? (
-              <ExplanationEntityLink
-                entity="run"
-                id={source.recorder.runId}
-                name={source.recorder.runId}
-              />
-            ) : null}
-            <DateDisplay
-              timestamp={source.observedAt ?? source.createdAt}
-              className="text-muted-foreground"
-            />
-          </div>
-          {source.quote ? (
-            <blockquote className="break-words text-muted-foreground">
-              “{source.quote}”
-            </blockquote>
-          ) : null}
-          <SourceTargetLink source={source} />
-        </div>
-      ))}
-    </section>
   );
 }
 

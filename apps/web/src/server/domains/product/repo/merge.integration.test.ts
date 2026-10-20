@@ -96,6 +96,51 @@ describe("mergeProducts", () => {
     return parseEntityId("location", await resolveId(created.id, "location"));
   };
 
+  it("preserves both notes in requested donor order without exact duplicates", async () => {
+    const keeper = await seedProduct("Synthetic notes keeper", {
+      model: null,
+      notes: "  Keeper research\n",
+    });
+    const first = await seedProduct("Synthetic notes first", {
+      model: null,
+      notes: "First donor research  ",
+    });
+    const second = await seedProduct("Synthetic notes second", {
+      model: null,
+      notes: "Second donor research",
+    });
+    const duplicate = await seedProduct("Synthetic notes duplicate", {
+      model: null,
+      notes: "First donor research  ",
+    });
+    const preview = await previewProductMergeDecisions(ctx.db, {
+      keepId: keeper.id,
+      mergeId: first.id,
+    });
+    expect(preview.decisions).toContainEqual(
+      expect.objectContaining({
+        field: "Notes",
+        result: "  Keeper research\n\n\nFirst donor research  ",
+        action: "combine",
+      }),
+    );
+    await mergeProducts(
+      ctx.db,
+      {
+        keepId: keeper.shortcode,
+        mergeIds: [second.shortcode, first.shortcode, duplicate.shortcode],
+      },
+      TEST_ACTOR,
+    );
+    const [row] = await getDb(ctx.db)
+      .select({ notes: product.notes })
+      .from(product)
+      .where(eq(product.id, keeper.id));
+    expect(row?.notes).toBe(
+      "  Keeper research\n\n\nSecond donor research\n\nFirst donor research  ",
+    );
+  });
+
   it("previews kept names, filled attributes, and combined images before merge", async () => {
     const keeper = await seedProduct("ForgeWear pocket tee black small", {
       manufacturer: "ForgeWear",
@@ -748,7 +793,7 @@ describe("mergeProducts", () => {
     it("refuses to merge a kit into a part it contains, several hops down", async () => {
       const kit = await seedProduct("Combo Kit", { model: "KIT-1" });
       const mid = await seedProduct("Sub Assembly", { model: "KIT-2" });
-      const leaf = await seedProduct("Deep Part", { model: "KIT-3" });
+      const leaf = await seedProduct("Deep Part", { model: "KIT-1" });
       await attachProductComponents(
         ctx.db,
         kit.id,
@@ -787,7 +832,7 @@ describe("mergeProducts", () => {
 
     it("dedupes a component two merging kits list at the same quantity", async () => {
       const keeper = await seedProduct("Keeper Kit", { model: "DUP-1" });
-      const loser = await seedProduct("Loser Kit", { model: "DUP-2" });
+      const loser = await seedProduct("Loser Kit", { model: "DUP-1" });
       const shared = await seedProduct("Shared Bit", { model: "DUP-3" });
       const only = await seedProduct("Loser-only Bit", { model: "DUP-4" });
       await attachProductComponents(
@@ -832,7 +877,7 @@ describe("mergeProducts", () => {
 
     it("refuses when the two kits disagree on how many of the shared part", async () => {
       const keeper = await seedProduct("Keeper Set", { model: "CONF-1" });
-      const loser = await seedProduct("Loser Set", { model: "CONF-2" });
+      const loser = await seedProduct("Loser Set", { model: "CONF-1" });
       const shared = await seedProduct("Contested Bit", { model: "CONF-3" });
       await attachProductComponents(
         ctx.db,
@@ -871,7 +916,7 @@ describe("mergeProducts", () => {
     it("carries a deliberate stockTracked: false onto a survivor that has none", async () => {
       const keeper = await seedProduct("Undecided Kit", { model: "TRACK-1" });
       const loser = await seedProduct("Reviewed Kit", {
-        model: "TRACK-2",
+        model: "TRACK-1",
         stockTracked: false,
       });
 
@@ -910,7 +955,7 @@ describe("mergeProducts", () => {
         ],
       });
       const loser = await seedProduct("Bagged Onions, 32 oz", {
-        model: "ON-LOSE",
+        model: "ON-KEEP",
         unitMappings: [
           {
             a: { value: 1, unit: "each" },

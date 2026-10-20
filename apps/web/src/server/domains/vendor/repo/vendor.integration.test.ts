@@ -8,6 +8,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb, insertAndReturn, notDeleted } from "~/server/db/helpers";
 import {
@@ -232,6 +233,117 @@ describe("vendor repository — deletion guard", () => {
  */
 describe("vendor repository — mergeVendors", () => {
   const ctx = withTestDb();
+
+  it("preserves Purchase research committed while a Vendor merge waits for its row locks", async () => {
+    const keep = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic locked keeper",
+    });
+    const lose = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic locked donor",
+    });
+    const keeper = await createRepoEntity(ctx, "purchase", {
+      vendorId: keep.output.id,
+      orderId: "SYNTHETIC-LOCKED-ORDER",
+      notes: "Keeper research",
+    });
+    await createRepoEntity(ctx, "purchase", {
+      vendorId: lose.output.id,
+      orderId: "SYNTHETIC-LOCKED-ORDER",
+      notes: "Donor research",
+    });
+    const locked = Promise.withResolvers<number>();
+    const release = Promise.withResolvers<void>();
+    const editing = getDb(ctx.db).transaction(async (tx) => {
+      await tx
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(eq(purchase.id, keeper.entityId))
+        .for("update");
+      const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
+      locked.resolve(z.object({ pid: z.number() }).parse(result.rows[0]).pid);
+      await release.promise;
+      await tx
+        .update(purchase)
+        .set({ notes: sql`${purchase.notes} || E'\nConcurrent research'` })
+        .where(eq(purchase.id, keeper.entityId));
+    });
+    const pid = await locked.promise;
+    const merging = mergeVendors(
+      ctx.db,
+      { keepId: keep.output.id, mergeIds: [lose.output.id] },
+      ctx.actor,
+    );
+    try {
+      await expect
+        .poll(async () => {
+          const result = await getDb(ctx.db).execute(
+            sql`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE ${pid}::int = ANY(pg_blocking_pids(pid))) AS waiting`,
+          );
+          return z.object({ waiting: z.boolean() }).parse(result.rows[0])
+            .waiting;
+        })
+        .toBe(true);
+    } finally {
+      release.resolve();
+      await editing;
+    }
+    await merging;
+    const [saved] = await getDb(ctx.db)
+      .select({ notes: purchase.notes })
+      .from(purchase)
+      .where(eq(purchase.id, keeper.entityId));
+    expect(saved?.notes).toBe(
+      "Keeper research\nConcurrent research\n\nDonor research",
+    );
+  });
+
+  it("preserves both Vendor notes and folded Purchase notes without exact duplicates", async () => {
+    const vendors = [];
+    const purchases = [];
+    for (const [index, notes] of [
+      "  Keeper research\n",
+      "First donor research  ",
+      "Second donor research",
+      "First donor research  ",
+    ].entries()) {
+      const row = (
+        await createRepoEntity(ctx, "vendor", {
+          name: `Synthetic notes vendor ${index}`,
+          notes,
+        })
+      ).output;
+      vendors.push(row);
+      purchases.push(
+        (
+          await createRepoEntity(ctx, "purchase", {
+            vendorId: row.id,
+            orderId: "SYNTHETIC-SHARED-ORDER",
+            date: "2026-01-01",
+            notes,
+          })
+        ).output,
+      );
+    }
+    const [keeper, first, second, duplicate] = vendors;
+    const result = await mergeVendors(
+      ctx.db,
+      {
+        keepId: keeper!.id,
+        mergeIds: [second!.id, first!.id, duplicate!.id],
+      },
+      ctx.actor,
+    );
+    const expected =
+      "  Keeper research\n\n\nSecond donor research\n\nFirst donor research  ";
+    expect(result.vendor.notes).toBe(expected);
+    const [survivor] = await getDb(ctx.db)
+      .select({ notes: purchase.notes })
+      .from(purchase)
+      .where(
+        and(eq(purchase.shortcode, purchases[0]!.id), notDeleted(purchase)),
+      );
+    expect(survivor?.notes).toBe(expected);
+  });
 
   /** `SUM(cost)` over EVERY live expense in the database, charge or no charge. */
   const liveExpenseTotal = async (): Promise<number> => {

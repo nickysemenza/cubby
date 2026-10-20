@@ -32,6 +32,15 @@ deployment runner will verify that applied prefix. Keep the barrier until the
 matching deployment and preservation readback succeed. No other release or
 operator may overlap this cutover.
 
+When the member explicitly authorizes a non-graceful cutover with writers
+enabled, the normal Actions migration-before-deploy sequence may apply the
+preserving contraction before the matching Worker deploys. Old requests and
+Workflow attempts may fail during or after that cutover. Lock every retired
+copy source and destination against writes before reading them, hold those
+locks through the copy/drop commit, and refuse contraction unless all retained
+content has a verified destination. Verify preservation and deployment after
+release; do not overlap a manual schema application with Actions.
+
 For an expand/contract rollout, choose the exact last expand tag from
 `apps/web/drizzle/meta/_journal.json`, excluding the contract migration. Set
 `PRODUCTION_MIGRATION_THROUGH` to that tag before merge, then let Actions apply

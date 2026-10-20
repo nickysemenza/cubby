@@ -286,7 +286,7 @@ describe("generic bulk updates", () => {
       });
   });
 
-  it("fingerprints sourced summary writes from their snapshot without hydrating food", async () => {
+  it("returns summary writes without hydrating unrequested food", async () => {
     const product = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic cited product", fdc_id: 123456 }),
@@ -306,21 +306,10 @@ describe("generic bulk updates", () => {
         entity: "product",
         id: product.id,
         data: { manufacturer: "Synthetic Cited Maker" },
-        sources: [
-          { fieldPath: "manufacturer", quote: "Synthetic maker plate" },
-        ],
       },
       ["id"],
     );
     expect(result.item).toMatchObject({ id: product.id });
-    expect(await read("product", product.id)).toMatchObject({
-      sources: [
-        expect.objectContaining({
-          fieldPath: "manufacturer",
-          supportsCurrentValue: true,
-        }),
-      ],
-    });
   });
 
   it("recomputes recipe costs after bulk pantry planning changes", async () => {

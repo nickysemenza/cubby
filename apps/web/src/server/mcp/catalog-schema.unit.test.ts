@@ -193,7 +193,7 @@ describe("MCP catalog schemas", () => {
       }).success,
     ).toBe(false);
   });
-  it("accepts returned audit cursors and record-backed Sources in the published catalog", async () => {
+  it("accepts returned audit cursors, research notes and attachments in the published catalog", async () => {
     const tools = (await listMcpToolCatalog()).tools;
     const validator = new Ajv({ strict: false, validateFormats: true });
     const accepts = (name: string, input: JsonObject) => {
@@ -209,26 +209,19 @@ describe("MCP catalog schemas", () => {
         id: "00000000-0000-4000-8000-000000000001",
       }),
     });
-    const sources = [
-      {
-        sourceEntity: "EXP-4K7M",
-        quote: "Original order line",
-        observedAt: "2026-07-20T12:00:00Z",
-        selectedVariant: "Blue, single",
-      },
-    ];
     accepts("entity", {
       action: "update",
       entity: "product",
       id: "PRD-4K7M",
-      data: { manufacturer: "Example Maker" },
-      sources,
+      data: {
+        manufacturer: "Example Maker",
+        notes:
+          "EXP-4K7M: Original order line; observed 2026-07-20; Blue, single",
+      },
     });
     accepts("image", {
       action: "attach_files",
-      items: [
-        { entityId: "PRD-4K7M", url: "https://example.com/item.jpg", sources },
-      ],
+      items: [{ entityId: "PRD-4K7M", url: "https://example.com/item.jpg" }],
     });
   });
 

@@ -20,6 +20,7 @@ import {
   reviewedProductPairFingerprint,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { matchSurvivorImageOrder } from "~/server/domains/product/repo/match/product-match-ranking";
+import { historicalConflictInputsChanged } from "~/server/domains/product/repo/product-variant-evidence";
 import {
   type EntityKernelContext,
   executeEntity,
@@ -109,9 +110,16 @@ export async function mergeReviewedProductPair(
       throw new Error(
         "Current evidence does not support Product identity admission",
       );
-    if (currentPair.verification === "pending_verification")
+    if (
+      currentPair.verification === "pending_verification" &&
+      !(await historicalConflictInputsChanged(
+        transactionDb,
+        currentPair.priorConflictIds,
+        currentPair.fingerprint,
+      ))
+    )
       throw new Error(
-        "Historical variant conflict requires fresh current verification before merging",
+        "Historical identity conflict; review updated inputs before merging",
       );
     if (currentPair.conflict)
       throw new Error("Confirmed variant conflict prevents Product merging");

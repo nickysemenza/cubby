@@ -8,8 +8,7 @@ splits purchase work in two (vocabulary: [terminology](../../../../../../../docs
   and Email links. It reads only Email; there is no browser and no web search.
 - **Burn-down** (interactive): a member's Claude or Codex session works the
   Research queue (the `research-queue` saved views over existing data-quality
-  gaps) with its own browser, writing through ordinary MCP writes that carry
-  Sources (`entity-kernel/repo/entity-source.ts`).
+  gaps) with its own browser, writing through ordinary MCP writes that retain research in editable notes.
 
 Both use the same public tools. Cubby owns ownership, retained-Email checksums,
 replay, identifier collisions, money conservation, stock neutrality and safe
@@ -213,7 +212,6 @@ until a session itemizes it.
 | Gmail discovery, classification, retention | `gmail/`                                                               |
 | Pi host and services                       | `agent-host.ts`, `agent-services.ts`, `server/domains/purchase-agent/` |
 | Findings and their fixes                   | `findings.ts`                                                          |
-| Sources                                    | `server/entity-kernel/repo/entity-source.ts`                           |
 
 ## Hidden dependencies
 

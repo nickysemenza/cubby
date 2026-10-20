@@ -104,6 +104,7 @@ import {
 import { planSlotCollisions } from "~/server/generic/merge/repo/collisions";
 import {
   finalizeMerge,
+  mergeNotes,
   repointEdge,
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
@@ -1027,6 +1028,7 @@ type VendorMergePlan = {
     deadId: PurchaseId;
     survivorId: PurchaseId;
     vendorId: VendorId;
+    notes: string | null;
   }>;
   carried: { website?: string; notes?: string; logoImageId?: string };
 };
@@ -1038,7 +1040,7 @@ const planVendorMerge = async (
   losers: VendorId[],
 ): Promise<VendorMergePlan> => {
   // Carry vendor-level identity the keeper is missing. Same rule as
-  // `foldChargeInto`: fill a field the survivor DOESN'T have, never overwrite.
+  // `foldChargeInto`: fill missing identity fields; preserve both records' notes.
   // Without this, merging the row that HAS the website into the row with more
   // history silently discards it — which is the common shape, because the
   // better-populated duplicate is rarely the one with more charges. The real
@@ -1048,7 +1050,7 @@ const planVendorMerge = async (
     .from(vendor)
     .where(eq(vendor.id, keepId))
     .limit(1);
-  const loserRows = await dbClient
+  const loadedLosers = await dbClient
     .select({
       id: vendor.id,
       shortcode: vendor.shortcode,
@@ -1057,6 +1059,10 @@ const planVendorMerge = async (
     })
     .from(vendor)
     .where(inArray(vendor.id, losers));
+  const loserRows = losers.flatMap((id) => {
+    const row = loadedLosers.find((candidate) => candidate.id === id);
+    return row ? [row] : [];
+  });
   const logos = await singularAttachmentImageIds(
     dbClient,
     [keepId, ...losers],
@@ -1071,10 +1077,11 @@ const planVendorMerge = async (
     const found = loserRows.find((r) => r.website != null)?.website;
     if (found != null) carried.website = found;
   }
-  if (keeperRow?.notes == null) {
-    const found = loserRows.find((r) => r.notes != null)?.notes;
-    if (found != null) carried.notes = found;
-  }
+  const notes = mergeNotes(
+    keeperRow?.notes,
+    ...loserRows.map((row) => row.notes),
+  );
+  if (notes !== keeperRow?.notes && notes !== null) carried.notes = notes;
   if (!logos.has(keepId)) {
     const found = loserRows
       .map((row) => logos.get(row.id))
@@ -1087,6 +1094,7 @@ const planVendorMerge = async (
       id: purchase.id,
       vendorId: purchase.vendorId,
       orderId: purchase.orderId,
+      notes: purchase.notes,
     })
     .from(purchase)
     .where(
@@ -1096,6 +1104,12 @@ const planVendorMerge = async (
       ),
     );
 
+  const vendorOrder = [keepId, ...losers];
+  allPurchases.sort(
+    (a, b) =>
+      vendorOrder.indexOf(a.vendorId) - vendorOrder.indexOf(b.vendorId) ||
+      a.id.localeCompare(b.id),
+  );
   const slotted = planSlotCollisions({
     keeperRows: allPurchases.filter((p) => p.vendorId === keepId),
     loserRows: allPurchases.filter((p) => p.vendorId !== keepId),
@@ -1103,12 +1117,15 @@ const planVendorMerge = async (
   });
 
   const folded: VendorMergePlan["folded"] = slotted.absorb.flatMap(
-    ({ into, rows }) =>
-      rows.map((row) => ({
+    ({ into, rows }) => {
+      const notes = mergeNotes(into.notes, ...rows.map((donor) => donor.notes));
+      return rows.map((row) => ({
         deadId: row.id,
         survivorId: into.id,
         vendorId: row.vendorId,
-      })),
+        notes,
+      }));
+    },
   );
   const repointed = slotted.repoint.map((p) => ({
     id: p.id,
@@ -1141,6 +1158,18 @@ export const mergeVendors = async (
   const detachedImageKeys = await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
 
+    // The fold plan replaces notes; lock their rows before taking that snapshot.
+    await tx
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(
+        and(
+          inArray(purchase.vendorId, [keepId, ...losers]),
+          notDeleted(purchase),
+        ),
+      )
+      .orderBy(purchase.id)
+      .for("update");
     const plan = await planVendorMerge(tx, keepId, losers);
     planSummary = {
       deletedIds: plan.deletedIds,
@@ -1230,7 +1259,9 @@ export const mergeVendors = async (
       overrides: {
         "Purchase.vendorId": async () => {
           for (const fold of plan.folded)
-            await foldChargeInto(tx, fold.deadId, fold.survivorId, actor);
+            await foldChargeInto(tx, fold.deadId, fold.survivorId, actor, {
+              notes: fold.notes,
+            });
           // Everything still live moves to the keeper. The doomed charges are
           // already soft-deleted, so `liveOnly` keeps this from re-introducing
           // the collision the fold just resolved.

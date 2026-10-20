@@ -1,10 +1,10 @@
+import {
+  DISTINCT_FROM_QUOTE_MAX,
+  DISTINCT_FROM_URL_MAX,
+} from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import type { z } from "zod";
 
-import {
-  ENTITY_SOURCE_QUOTE_MAX,
-  ENTITY_SOURCE_URL_MAX,
-} from "./child-tables/modules";
 import type { CommitPreparedRequest, ReportChoice } from "./entity-report";
 import {
   distinctFromSource,
@@ -88,14 +88,14 @@ export function distinctFromSourceFeedback(source: {
 }) {
   const url = source.url.trim();
   return {
-    quoteLength: `${source.quote.trim().length.toLocaleString("en-US")} of ${ENTITY_SOURCE_QUOTE_MAX.toLocaleString("en-US")} characters.`,
+    quoteLength: `${source.quote.trim().length.toLocaleString("en-US")} of ${DISTINCT_FROM_QUOTE_MAX.toLocaleString("en-US")} characters.`,
     url:
       url && !distinctFromSource.shape.url.safeParse(url).success
-        ? `Enter a full URL of at most ${ENTITY_SOURCE_URL_MAX.toLocaleString("en-US")} characters.`
+        ? `Enter a full URL of at most ${DISTINCT_FROM_URL_MAX.toLocaleString("en-US")} characters.`
         : null,
     quote:
-      source.quote.trim().length > ENTITY_SOURCE_QUOTE_MAX
-        ? `Shorten the quote to at most ${ENTITY_SOURCE_QUOTE_MAX.toLocaleString("en-US")} characters.`
+      source.quote.trim().length > DISTINCT_FROM_QUOTE_MAX
+        ? `Shorten the quote to at most ${DISTINCT_FROM_QUOTE_MAX.toLocaleString("en-US")} characters.`
         : null,
   };
 }
