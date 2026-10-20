@@ -10,11 +10,10 @@ export function LabelSummary({
   labelsPerSheet: number;
 }) {
   const totalSlots = labelCount + skip;
-  const pages = totalSlots / labelsPerSheet;
-  const pagesDisplay = pages % 1 === 0 ? pages.toString() : pages.toFixed(1);
+  const pages = Math.ceil(totalSlots / labelsPerSheet);
   return (
     <Description>
-      {labelCount} label{labelCount !== 1 && "s"}, {pagesDisplay} page
+      {labelCount} label{labelCount !== 1 && "s"}, {pages} page
       {pages !== 1 && "s"}
     </Description>
   );

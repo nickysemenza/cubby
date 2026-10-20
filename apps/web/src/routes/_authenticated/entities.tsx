@@ -154,7 +154,7 @@ function EntitiesRoute() {
   );
 
   return (
-    <Page variant="list" title="Entities">
+    <Page variant="list" listChrome="workbench" title="Entities">
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
         <TabsList
           variant="line"

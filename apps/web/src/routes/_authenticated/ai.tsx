@@ -29,7 +29,7 @@ function AiRoute() {
     navigate({ to: ".", search: (previous) => ({ ...previous, tab: next }) }),
   );
   return (
-    <Page variant="list" title="AI">
+    <Page variant="list" listChrome="workbench" title="AI">
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
         <TabsList
           variant="line"

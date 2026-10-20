@@ -35,20 +35,20 @@ function AnnotationBadges({ tool }: { tool: CatalogTool }) {
   }> = [];
 
   if (annotations.readOnlyHint !== true) {
-    badges.push({ label: "WRITE", variant: "default" });
+    badges.push({ label: "Write", variant: "default" });
   }
   if (annotations.destructiveHint === true) {
-    badges.push({ label: "DESTRUCTIVE", variant: "destructive" });
+    badges.push({ label: "Destructive", variant: "destructive" });
   }
   if (annotations.openWorldHint === true) {
-    badges.push({ label: "OPEN WORLD", variant: "secondary" });
+    badges.push({ label: "Open world", variant: "secondary" });
   }
   if (!tool.outputSchema) {
-    badges.push({ label: "NO OUTPUT SCHEMA", variant: "outline" });
+    badges.push({ label: "No output schema", variant: "outline" });
   }
 
   if (badges.length === 0) {
-    return <Badge variant="outline">READ ONLY</Badge>;
+    return <Badge variant="outline">Read only</Badge>;
   }
 
   return (
@@ -167,7 +167,7 @@ function CatalogInspector() {
                   key={tool.name}
                   type="button"
                   onClick={() => setSelectedName(tool.name)}
-                  className={`block w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                  className={`block min-h-11 w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted md:min-h-8 ${
                     selected?.name === tool.name ? "bg-muted font-medium" : ""
                   }`}
                 >

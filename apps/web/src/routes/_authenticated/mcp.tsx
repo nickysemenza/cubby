@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/mcp")({
 
 function McpInspectorPage() {
   return (
-    <Page variant="list" title="MCP tools">
+    <Page variant="list" listChrome="workbench" title="MCP tools">
       <McpInspector />
     </Page>
   );

@@ -76,11 +76,11 @@ function CommandInput({
 }) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="bg-input/20 h-8!">
+      <InputGroup className="bg-input/20 h-7.5!">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            "w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
+            "w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
           {...props}
@@ -148,7 +148,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "data-selected:bg-primary/10 data-selected:text-foreground data-selected:*:[svg]:text-foreground group/command-item relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-xs/relaxed outline-hidden transition-colors duration-150 select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "data-selected:bg-primary/10 data-selected:text-foreground data-selected:*:[svg]:text-foreground group/command-item relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-hidden transition-colors duration-150 select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 max-md:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className,
       )}
       {...props}

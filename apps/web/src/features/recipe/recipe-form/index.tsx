@@ -502,6 +502,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="max-sm:min-h-11 max-sm:min-w-11"
+                      aria-label={`Move section ${sectionIndex + 1} up`}
                       onClick={() =>
                         moveSection(sectionIndex, Math.max(0, sectionIndex - 1))
                       }
@@ -513,6 +515,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="max-sm:min-h-11 max-sm:min-w-11"
+                      aria-label={`Move section ${sectionIndex + 1} down`}
                       onClick={() =>
                         moveSection(
                           sectionIndex,
@@ -527,6 +531,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="max-sm:min-h-11 max-sm:min-w-11"
+                      aria-label={`Remove section ${sectionIndex + 1}`}
                       onClick={() => removeSection(sectionIndex)}
                       disabled={sectionFields.length === 1}
                     >

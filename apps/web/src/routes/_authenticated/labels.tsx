@@ -187,7 +187,7 @@ function LabelsPage() {
                       },
                     })
                   }
-                  className="h-11 w-14 border border-border bg-input/20 px-2 text-center text-sm md:h-7"
+                  className="h-11 w-14 border border-border bg-input/20 px-2 text-center text-sm md:h-7.5"
                 />
               </label>
             )}
@@ -208,7 +208,7 @@ function LabelsPage() {
                     },
                   })
                 }
-                className="h-11 w-14 border border-input bg-background px-2 text-center text-sm md:h-8"
+                className="h-11 w-14 border border-input bg-background px-2 text-center text-sm md:h-7.5"
               />
             </label>
             {format !== "ptouch" ? (
@@ -286,9 +286,10 @@ function LabelsPage() {
                     variant="outline"
                     size="sm"
                     className="font-mono"
+                    aria-label={`Restore ${item.name} label (${item.shortcode})`}
                     onClick={() => toggleHidden(item.shortcode)}
                   >
-                    {item.shortcode}
+                    Restore {item.name}
                   </Button>
                 ))}
               </div>

@@ -44,7 +44,7 @@ function PopoverContent({
           data-slot="popover-content"
           className={cn(
             popoverElevationClassName,
-            "bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 border-[var(--border)] flex flex-col gap-2 rounded-lg border p-3 text-xs duration-150 z-50 w-72 origin-(--transform-origin) outline-hidden",
+            "bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 border-[var(--border)] flex flex-col gap-2 rounded-lg border p-3 text-sm duration-150 z-50 w-72 origin-(--transform-origin) outline-hidden",
             className
           )}
           {...props}
@@ -58,7 +58,7 @@ function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="popover-header"
-      className={cn("flex flex-col gap-1 text-xs", className)}
+      className={cn("flex flex-col gap-1 text-sm", className)}
       {...props}
     />
   )

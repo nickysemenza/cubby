@@ -140,7 +140,7 @@ const FORM_FOOTER_CLASS = {
   sticky:
     "sticky bottom-[calc(var(--app-chrome-bottom)+0.5rem)] z-20 flex items-center gap-2 border border-[var(--border)] bg-card px-2 py-2 md:bottom-4",
   dialog:
-    "flex shrink-0 flex-col-reverse gap-2 border-t bg-popover px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:pb-3",
+    "flex shrink-0 flex-col-reverse gap-2 border-t bg-popover px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:flex-row-reverse sm:justify-end sm:pb-3",
   inline: "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
 } as const;
 
@@ -321,7 +321,10 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
                 type="submit"
                 disabled={isPending}
                 variant={submitButtonVariant}
-                className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
+                className={cn(
+                  "h-7.5 max-sm:h-11",
+                  !stickyFooter && "w-full sm:w-auto",
+                )}
               >
                 {isPending && <Spinner size="sm" aria-hidden="true" />}
                 {submitText}
@@ -331,7 +334,10 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
                 variant={stickyFooter ? "ghost" : "outline"}
                 onClick={onCancel}
                 disabled={isPending}
-                className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
+                className={cn(
+                  "h-7.5 max-sm:h-11",
+                  !stickyFooter && "w-full sm:w-auto",
+                )}
               >
                 Cancel
               </Button>

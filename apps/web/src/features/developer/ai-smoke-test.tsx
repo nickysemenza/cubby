@@ -162,7 +162,7 @@ function ScenarioCard({
               className="text-sm text-primary underline-offset-2 hover:underline"
               href={`/runs/${encodeURIComponent(result.runShortcode)}`}
             >
-              View Run
+              View run
             </a>
           )}
         </Row>

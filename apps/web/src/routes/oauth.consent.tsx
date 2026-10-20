@@ -40,10 +40,25 @@ const SCOPE_DESCRIPTIONS = {
   offline_access: "Stay signed in without re-authorizing",
 } satisfies Record<"openid" | "profile" | "email" | "offline_access", string>;
 
+const SCOPE_LABELS = {
+  openid: "Sign-in identity",
+  profile: "Profile",
+  email: "Email address",
+  offline_access: "Keep access active",
+} satisfies Record<keyof typeof SCOPE_DESCRIPTIONS, string>;
+
+const isKnownScope = (
+  scopeName: string,
+): scopeName is keyof typeof SCOPE_DESCRIPTIONS =>
+  Object.hasOwn(SCOPE_DESCRIPTIONS, scopeName);
+
+const scopeLabel = (scopeName: string): string =>
+  isKnownScope(scopeName) ? SCOPE_LABELS[scopeName] : "Unrecognized permission";
+
 const scopeDescription = (scopeName: string): string =>
-  Object.entries(SCOPE_DESCRIPTIONS).find(
-    ([name]) => name === scopeName,
-  )?.[1] ?? "Additional access";
+  isKnownScope(scopeName)
+    ? SCOPE_DESCRIPTIONS[scopeName]
+    : "Cubby does not have a description for this permission.";
 
 function ConsentPage() {
   const { client_id: clientId, scope } = Route.useSearch();
@@ -140,19 +155,21 @@ function ConsentPage() {
       >
         <Stack gap="md">
           {clientState.kind === "verified" && clientId && (
-            <div className="font-mono text-2xs text-slate">{clientId}</div>
+            <div className="font-mono text-2xs text-muted-foreground">
+              {clientId}
+            </div>
           )}
           {clientState.kind === "invalid" && (
-            <p role="alert" className="text-xs text-destructive">
+            <p role="alert" className="text-sm text-destructive">
               {clientState.message}
             </p>
           )}
           {clientState.kind === "error" && (
             <Stack gap="sm">
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="text-sm text-destructive">
                 {clientState.message}
               </p>
-              <p className="text-2xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {clientState.detail}
               </p>
               <div>
@@ -164,12 +181,17 @@ function ConsentPage() {
           )}
           {scopes.length > 0 && (
             <Stack gap="sm">
-              <div className="text-xs text-slate">Permissions requested</div>
+              <div className="text-sm font-medium">Permissions requested</div>
               <Stack gap="xs" as="ul">
                 {scopes.map((s) => (
                   <Row key={s} align="center" gap="sm" as="li">
-                    <Badge variant="secondary">{s}</Badge>
-                    <span className="text-xs text-muted-foreground">
+                    <Badge variant={isKnownScope(s) ? "secondary" : "outline"}>
+                      {scopeLabel(s)}
+                    </Badge>
+                    {!isKnownScope(s) && (
+                      <code className="font-mono text-2xs">{s}</code>
+                    )}
+                    <span className="text-sm text-muted-foreground">
                       {scopeDescription(s)}
                     </span>
                   </Row>
@@ -178,13 +200,13 @@ function ConsentPage() {
             </Stack>
           )}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Approving also lets this application read and modify your inventory,
             recipes, and other Cubby data through the MCP API.
           </p>
 
           {decisionError && (
-            <p role="alert" className="text-xs text-destructive">
+            <p role="alert" className="text-sm text-destructive">
               {decisionError}
             </p>
           )}

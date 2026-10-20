@@ -45,6 +45,14 @@ const markdownModules = import.meta.glob<string>(
   { query: "?url", import: "default" },
 );
 
+function sectionTitle(filename: string): string {
+  const title = filename.replace(/\.md$/i, "");
+  if (title.toLowerCase() === "readme") return "Overview";
+  return title
+    .replaceAll("-", " ")
+    .replace(/^\p{L}/u, (letter) => letter.toUpperCase());
+}
+
 const markdownSections: DocSection[] = Object.entries(markdownModules)
   .sort(([left], [right]) => {
     const leftPath = left.slice(DOCS_PREFIX.length);
@@ -74,7 +82,7 @@ const markdownSections: DocSection[] = Object.entries(markdownModules)
 
     return {
       slug: docSlug(sourcePath),
-      title: parts.at(-1)!,
+      title: sectionTitle(parts.at(-1)!),
       group: parts.length > 1 ? parts[0]! : "Guide",
       sourcePath,
       render: () => <GuideSection />,

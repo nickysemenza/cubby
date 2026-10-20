@@ -21,6 +21,7 @@ import { statusTone } from "~/lib/status-tone";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
 import { DateDisplay } from "~/ui/common/date-display";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createCubbyColumnCollection,
@@ -46,21 +47,11 @@ const windows: Array<{ label: string; value: McpUsageWindow }> = [
 
 const isNumber = (value: unknown): value is number => typeof value === "number";
 
-function Metric({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="border border-border bg-card p-4">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">
-        {isNumber(value) ? formatCount(value) : value}
-      </div>
-    </div>
-  );
-}
-
 function StatusBadge({ status }: { status: McpToolUsageStatus }) {
+  const label = status.replaceAll("_", " ");
   return (
     <Badge variant={statusTone("mcpUsage", status)}>
-      {status.toUpperCase()}
+      {label.charAt(0).toUpperCase() + label.slice(1)}
     </Badge>
   );
 }
@@ -144,16 +135,16 @@ function ToolAnnotations({ tool }: { tool: ToolRow }) {
   return (
     <div className="flex flex-wrap gap-2">
       <Badge variant={annotations?.readOnlyHint ? "outline" : "default"}>
-        {annotations?.readOnlyHint ? "READ ONLY" : "WRITE"}
+        {annotations?.readOnlyHint ? "Read only" : "Write"}
       </Badge>
       {annotations?.destructiveHint ? (
-        <Badge variant="destructive">DESTRUCTIVE</Badge>
+        <Badge variant="destructive">Destructive</Badge>
       ) : null}
       {annotations?.openWorldHint ? (
-        <Badge variant="secondary">OPEN WORLD</Badge>
+        <Badge variant="secondary">Open world</Badge>
       ) : null}
       {annotations?.idempotentHint ? (
-        <Badge variant="outline">IDEMPOTENT</Badge>
+        <Badge variant="outline">Idempotent</Badge>
       ) : null}
     </div>
   );
@@ -704,21 +695,19 @@ export function McpUsageDashboard() {
       ) : null}
       <div className="space-y-4 pt-4">
         <ToolAnnotations tool={selected} />
-        <div className="grid gap-4 md:grid-cols-4">
-          <Metric label="Status" value={selected.status} />
-          <Metric
-            label="First used"
-            value={formatOrNever(selected.firstUsedAt)}
-          />
-          <Metric
-            label="Last used"
-            value={formatOrNever(selected.lastUsedAt)}
-          />
-          <Metric
-            label="Last release"
-            value={selected.lastRelease?.slice(0, 10) ?? "—"}
-          />
-        </div>
+        <KeyNumbers
+          layout="strip"
+          label={`${selected.toolName} usage`}
+          items={[
+            { label: "Status", value: selected.status },
+            { label: "First used", value: formatOrNever(selected.firstUsedAt) },
+            { label: "Last used", value: formatOrNever(selected.lastUsedAt) },
+            {
+              label: "Last release",
+              value: selected.lastRelease?.slice(0, 10) ?? "—",
+            },
+          ]}
+        />
       </div>
       <div className="grid gap-4">
         <ChartCard title="Selected-tool trend">
@@ -800,15 +789,19 @@ export function McpUsageDashboard() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        <Metric label="Registered" value={data.totals.registered} />
-        <Metric label="Active" value={data.totals.active} />
-        <Metric label="Inactive" value={data.totals.inactive} />
-        <Metric label="Never" value={data.totals.never} />
-        <Metric label="Retired" value={data.totals.retired} />
-        <Metric label="Calls" value={data.totals.calls} />
-        <Metric label="Error rate" value={errorRate} />
-      </div>
+      <KeyNumbers
+        layout="strip"
+        label="MCP usage summary"
+        items={[
+          { label: "Registered", value: formatCount(data.totals.registered) },
+          { label: "Active", value: formatCount(data.totals.active) },
+          { label: "Inactive", value: formatCount(data.totals.inactive) },
+          { label: "Never", value: formatCount(data.totals.never) },
+          { label: "Retired", value: formatCount(data.totals.retired) },
+          { label: "Calls", value: formatCount(data.totals.calls) },
+          { label: "Error rate", value: errorRate },
+        ]}
+      />
 
       <UsageCharts data={data} />
 

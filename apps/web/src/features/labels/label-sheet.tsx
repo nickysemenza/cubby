@@ -8,6 +8,8 @@ interface InteractiveLabelCellProps {
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   role?: "button";
   tabIndex?: number;
+  "aria-label"?: string;
+  "aria-pressed"?: boolean;
 }
 
 function getLabelColor(item: LabelItem): string {
@@ -39,6 +41,8 @@ function LabelCell({
     interactionProps.onClick = () => onToggle(item.shortcode);
     interactionProps.role = "button";
     interactionProps.tabIndex = 0;
+    interactionProps["aria-label"] = `Include ${item.name} on printed labels`;
+    interactionProps["aria-pressed"] = true;
     interactionProps.onKeyDown = (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
@@ -51,7 +55,8 @@ function LabelCell({
     <div
       className={[
         "flex break-inside-avoid items-center overflow-hidden",
-        interactive && "cursor-pointer transition-opacity hover:opacity-60",
+        interactive &&
+          "cursor-pointer transition-opacity hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         preview && "rounded-md border border-border/60",
       ]
         .filter(Boolean)
