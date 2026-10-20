@@ -1,0 +1,25 @@
+apps/web/src/entity/entity-list/board/entity-board.tsx
+  s_359d51740d6cee::t_fe232f5ad66f5d 46,165,226,232,295,561-562
+apps/web/src/ui/dnd/sensors.ts
+  s_359d51740d6cee::t_2bbc569946d768 16-17,125-126,155,158-162
+apps/web/tests/e2e/support/dnd-helpers.ts
+  s_359d51740d6cee::t_8dea6c0dfa3d08 1
+docs/entities.md
+  s_359d51740d6cee::t_4ff7cdf9a3116d 34-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e33d53c10ddc7c08a7581d8543ff77985fb354ff",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
