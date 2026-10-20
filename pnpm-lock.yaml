@@ -1769,7 +1769,7 @@ packages:
         optional: true
 
   '@cloudflare/vitest-plugin@1.4.3':
-    resolution: {integrity: sha512-GA0735VV3HgWRCO4sIXUL4uPDXbsaM4hA3Kj+8MqaLTgodeGt+VpcZYQUPg0hXBzkPeT/lxORPnWwIHRAmTavQ==, tarball: https://registry-gateway.cloudflare-ui.workers.dev/@cloudflare/vitest-plugin/-/vitest-plugin-1.4.3.tgz}
+    resolution: {integrity: sha512-GA0735VV3HgWRCO4sIXUL4uPDXbsaM4hA3Kj+8MqaLTgodeGt+VpcZYQUPg0hXBzkPeT/lxORPnWwIHRAmTavQ==}
     peerDependencies:
       '@types/vitest': '*'
       vitest: ^4.1.0 || ^5.0.0
