@@ -171,6 +171,12 @@
   justify-self: end;
   align-self: center;
 }
+/* Regression: in the two-column reflow, an explanation confined to the value
+ * track overflowed the viewport. It takes the whole row, as in compact facts. */
+.ledger[data-ledger="facts"] > .ledger-row > [data-ledger-slot="detail"] {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
 /* Review grows beneath the proposal without moving its field identity or rail. */
 .ledger[data-ledger="facts"]
   > .ledger-row:has(> [data-slot="basic-info-value"] .suggestion-review)
