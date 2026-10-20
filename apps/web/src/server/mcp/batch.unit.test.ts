@@ -81,6 +81,21 @@ describe("MCP batch actions", () => {
     expect(JSON.stringify(result)).toContain("sources");
   });
 
+  it("refuses retired research on an attachment instead of silently discarding it", async () => {
+    const result = await callMcpTool(createMcpServer(), "image", {
+      action: "attach_files",
+      items: [
+        {
+          entityId: "PRD-4K7M",
+          url: "https://example.com/synthetic-product.png",
+          sources: [{ quote: "Synthetic research" }],
+        },
+      ],
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain("sources");
+  });
+
   it("emits command entity attribution for an ordinary write", async () => {
     const emit = vi.fn(async (_event: McpToolCallTelemetry) => undefined);
     // Attribution precedes context resolution; no database is supplied, so

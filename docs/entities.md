@@ -2646,7 +2646,8 @@ table each (ADR 0007):
   Notes have no field-support or current/stale contract and do not verify identity.
   Inherited values resolve dynamically through field declarations independently
   of research. Merge preserves both records' notes, retaining original whitespace
-  and avoiding exact whole-note duplicates. Evidence-marked connected views
+  and avoiding exact whole-note duplicates. Purchase folds lock both records
+  before reading notes so concurrent research appends survive. Evidence-marked connected views
   remain live relationships in Connected records, including purchase documents
   and accepted/reviewed Emails; they never certify a researched field.
 

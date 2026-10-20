@@ -28,7 +28,7 @@ const {
 
 /** One file to attach; the target entity is named by its shortcode's prefix. */
 const attachFileItem = z
-  .object({
+  .strictObject({
     ...attachFileEntityless,
     entityId: attachFileEntityless.entityId.describe(
       `Shortcode of the target — its prefix picks the entity (${attachableImageEntity.options.join(", ")}).`,

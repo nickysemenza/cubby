@@ -20,7 +20,7 @@ prepare a bounded batch when each record is independently settled.
 3. Choose one record or a small bounded batch, then load the skill that owns
    the work:
    - [Product enrichment](../../.agents/skills/product-enrichment/SKILL.md) for
-     verified Product identity facts, identifiers, images and Sources.
+     researched Product identity facts, identifiers, images and notes.
    - [Purchase import](../../.agents/skills/purchase-import/SKILL.md) for order,
      receipt, Email and settlement evidence.
    - [Photo inventory import](../../.agents/skills/photo-inventory-import/SKILL.md)
@@ -49,9 +49,8 @@ facts. Keep competing variants separate until evidence selects one. Ask the
 member directly when ownership, identity, allocation or another material choice
 remains ambiguous; do not silently choose a candidate.
 
-Write only facts supported by evidence. Attach a Source to each researched
-field, with its source URL, a short relevant quote, observation time and the
-selected variant when applicable. For identifier collections, use the
+Write only facts supported by evidence. Keep useful URLs, excerpts, observation
+dates and variant context in ordinary notes. For identifier collections, use the
 supported add, replace or remove patch so unrelated identifiers remain intact;
 read collision information before adding an identifier. Re-read after each
 write and verify the stored value and its provenance. Batch settled writes only
@@ -79,9 +78,9 @@ When new source evidence conflicts with accepted facts, reconcile explicitly:
    claim the resolution was committed.
 
 Exact replay of unchanged evidence can follow the workflow's replay-safe path.
-Changed accepted financial facts require explicit reconciliation. Sources that
-support field values, import-source ownership and execution replay have
-different roles; do not substitute one for another.
+Changed accepted financial facts require explicit reconciliation. Research notes,
+import-source ownership and execution replay have different roles; do not
+substitute one for another.
 
 ## Photos and wardrobe
 
@@ -97,7 +96,7 @@ receiving remains a separate member decision.
 
 ## Report the outcome
 
-For each record, report what was verified, which Sources were added, any
+For each record, report what was researched, which notes were added, any
 unavailable facts or open ambiguity, and whether writes were committed. Keep
 partial research distinct from verified completion. For photo work, also report
 matched versus created Products, skipped images and reasons, and unresolved

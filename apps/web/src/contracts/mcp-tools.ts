@@ -930,7 +930,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   product_enrichment: {
     description:
-      "Product identity upkeep: image integrity and match proposals. Product facts and identifier slots are written with entity.update and its `sources`.",
+      "Product identity upkeep: image integrity and match proposals. Product facts and identifier slots are written with entity.update; preserve research in `notes` inside `data`.",
     actions: {
       verify_images: mcpAction({
         op: productContract.ops.verifyImages,

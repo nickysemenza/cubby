@@ -2252,6 +2252,13 @@ export const foldChargeInto = async (
   actor: ActorContext,
   options: { notes?: string | null } = {},
 ): Promise<void> => {
+  // Implicit folds from Expense corrections must read notes after concurrent edits commit.
+  await lockAndValidateForDelete(
+    tx,
+    purchase,
+    [deadId, survivorId],
+    "Purchase",
+  );
   // Purchase-level vendor truth has to come along, not just the lines and documents.
   // `statedTotal` especially: it is the reconciliation cue the whole `Purchase`
   // table exists to hold, and dropping it here meant a vendor typo-fix on a
