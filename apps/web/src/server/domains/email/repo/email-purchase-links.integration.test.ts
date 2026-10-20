@@ -985,8 +985,17 @@ describe("Email Purchase links", () => {
     const [review] = await getDb(ctx.db)
       .select()
       .from(feedback)
-      .where(eq(feedback.assessmentId, prediction.id));
-    expect(review?.actorUserId).toBe(ctx.actor.userId);
+      .where(
+        and(
+          eq(feedback.assessmentId, prediction.id),
+          eq(feedback.operationId, "synthetic-relevance-review"),
+        ),
+      );
+    expect(review).toMatchObject({
+      actorUserId: ctx.actor.userId,
+      authority: "member",
+      verdict: "wrong",
+    });
   });
   // Unsupported domain corrections must be refused before immutable member Feedback exists.
   it("prevalidates Email relevance applications before recording public Feedback", async () => {
@@ -1005,6 +1014,11 @@ describe("Email Purchase links", () => {
       model: "typesafe/jev",
     });
     const prediction = await ensureEmailAssessment(ctx.db, observation.id);
+    const existingFeedback = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, prediction.id))
+      .orderBy(feedback.id);
     for (const [index, command] of [
       { correction: { present: false as const }, reason: null },
       {
@@ -1034,8 +1048,9 @@ describe("Email Purchase links", () => {
         await getDb(ctx.db)
           .select()
           .from(feedback)
-          .where(eq(feedback.assessmentId, prediction.id)),
-      ).toEqual([]);
+          .where(eq(feedback.assessmentId, prediction.id))
+          .orderBy(feedback.id),
+      ).toEqual(existingFeedback);
     }
   });
   it("records the real member actor on link resolution Feedback", async () => {

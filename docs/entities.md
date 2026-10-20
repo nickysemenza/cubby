@@ -2733,8 +2733,10 @@ affected records for domain correction. Wrong and corrected decisions remain in 
 audit. Legacy Email predictions without application receipts are included with
 **Unverified application**, even if they disagree with the Email's current relevance.
 New ingestion records observation and application receipts atomically with routing;
-known unapplied predictions stay ordinary history. No status reset or backlog cleanup
-is needed. The former automatic-application URL redirects to this audit, and
+known unapplied predictions stay ordinary history. Observation receipts coexist
+with member Feedback: readers select the intended operation or authority instead
+of assuming Feedback row order. No status reset or backlog cleanup is needed.
+The former automatic-application URL redirects to this audit, and
 Workbench bookmarks redirect to the shared queue or informational Product detail.
 Apple queue/audit/list/detail parity is tracked separately in [#2654](https://github.com/nickysemenza/cubby/issues/2654).
 The `/ai`
