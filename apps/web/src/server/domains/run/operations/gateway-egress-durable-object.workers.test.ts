@@ -295,50 +295,38 @@ describe("shared Gateway admission", () => {
       await first.finish(token, 200, null, now);
     expect((await second.admit("unified", now + 60_001)).kind).toBe("admitted");
   });
-  // One Sweep: 64 suggestions/page, one cold decision/suggestion, 10s
-  // model latency, 25ms DB publications (four at once), and a conservative
-  // 10s queue handoff every two pages. Waits jump to durable wake time; no
-  // one-second admission polling is allowed in this workload.
-  it("labels 180 suggestions in a minute despite page, DB and handoff overhead", async () => {
+  // Capacity evidence counts actual requests, independently of how many
+  // questions the shared decision runner consolidates into each request.
+  it("admits 180 starts within a minute with ten-second model latency", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     const now = Date.now();
-    let elapsed = 0;
-    let pages = 0;
     let starts = 0;
-    let labelled = 0;
     let peak = 0;
-    let admissionCalls = 0;
-    while (elapsed < 60_000) {
+    const refusals: Awaited<ReturnType<typeof stub.admit>>[] = [];
+    for (let elapsed = 0; elapsed < 60_000; elapsed += 10_000) {
       const tokens: string[] = [];
-      let wakeAt = elapsed;
-      for (let suggestion = 0; suggestion < 64; suggestion++) {
+      for (let request = 0; request < 64; request++) {
         const admission = await stub.admit("unified", now + elapsed);
-        admissionCalls++;
-        if (admission.kind === "admitted") {
-          tokens.push(admission.token);
-          starts++;
-        } else if (admission.kind === "wait") {
-          wakeAt = Math.max(wakeAt, admission.until - now, elapsed + 15_000);
+        if (admission.kind === "admitted") tokens.push(admission.token);
+        else {
+          refusals.push(admission);
+          break;
         }
       }
+      starts += tokens.length;
       peak = Math.max(peak, tokens.length);
-      elapsed += 10_000;
       for (const token of tokens)
-        await stub.finish(token, 200, null, now + elapsed);
-      if (elapsed < 60_000) labelled += tokens.length;
-      elapsed += Math.ceil(tokens.length / 4) * 25;
-      elapsed = Math.max(elapsed, wakeAt);
-      if (++pages % 2 === 0) elapsed += 10_000;
+        await stub.finish(token, 200, null, now + elapsed + 10_000);
     }
+    for (const refusal of refusals)
+      expect(refusal).toEqual({ kind: "wait", until: now + 60_000 });
     expect(peak).toBeGreaterThanOrEqual(30);
     expect(starts).toBe(180);
-    expect(labelled).toBe(180);
-    // Three page attempts, including twelve one-shot admission deferrals.
-    expect(admissionCalls).toBe(192);
-    expect(await stub.admit("unified", now + 59_999)).toMatchObject({
+    expect(await stub.admit("unified", now + 59_999)).toEqual({
       kind: "wait",
       until: now + 60_000,
     });
+    expect((await stub.admit("unified", now + 60_000)).kind).toBe("admitted");
   });
 
   it("refuses request 181 across independent stubs until the rolling window expires", async () => {

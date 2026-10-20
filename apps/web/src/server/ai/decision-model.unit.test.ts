@@ -646,6 +646,94 @@ describe("runDecisionChoice", () => {
 });
 
 describe("runDecisionChoices", () => {
+  it("owns cooperative yielding for a finite decision set", async () => {
+    const { settleDecisionChoices } = await import("./decision-model");
+    const { AiWorkDeferredError, deferCooperativeAiWork } =
+      await import("./cooperative-work");
+    const results = await settleDecisionChoices(
+      ["synthetic-work"],
+      () => ({
+        ...base,
+        choices: ["one"],
+        port: async () => {
+          deferCooperativeAiWork(Date.now() + 30_000);
+          return answerFor("c0", { c0: 0.9, none: 0.1 });
+        },
+      }),
+      { cooperative: true },
+    );
+    expect(results[0]).toMatchObject({
+      item: "synthetic-work",
+      status: "rejected",
+      reason: expect.any(AiWorkDeferredError),
+    });
+  });
+
+  // Domain metadata must travel with each outcome, including an independent
+  // failure; callers must not reconstruct ownership from parallel indexes.
+  it("retains typed work items with independently settled decisions", async () => {
+    const { settleDecisionChoices } = await import("./decision-model");
+    const failure = new Error("Synthetic question failed");
+    const items = [{ owner: "healthy" }, { owner: "failed" }];
+    const results = await settleDecisionChoices(items, (item) => ({
+      ...base,
+      choices: ["one"],
+      port: async () => {
+        if (item.owner === "failed") throw failure;
+        return answerFor("c0", { c0: 0.9, none: 0.1 });
+      },
+    }));
+    expect(results).toMatchObject([
+      { item: items[0], status: "fulfilled", value: { selectedIndex: 0 } },
+      { item: items[1], status: "rejected", reason: failure },
+    ]);
+  });
+
+  // A failed question must not return while another question still owns a
+  // model call, cache lease, or the caller's database scope.
+  it("settles started sibling work before reporting a batch failure", async () => {
+    const { runDecisionChoices } = await import("./decision-model");
+    const release = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const failure = new Error("Synthetic independent question failure");
+    let finished = false;
+    const pending = runDecisionChoices([
+      {
+        ...base,
+        choices: ["one"],
+        port: async () => {
+          started.resolve();
+          await release.promise;
+          return answerFor("c0", { c0: 0.9, none: 0.1 });
+        },
+      },
+      {
+        ...base,
+        choices: ["one"],
+        port: async () => {
+          throw failure;
+        },
+      },
+    ])
+      .then(
+        () => null,
+        (error: unknown) => error,
+      )
+      .finally(() => {
+        finished = true;
+      });
+    try {
+      await started.promise;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(finished).toBe(false);
+      release.resolve();
+      expect(await pending).toBe(failure);
+    } finally {
+      release.resolve();
+      await pending;
+    }
+  });
+
   it("batches cold questions, maps answers by id, and retains individual cache entries", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();

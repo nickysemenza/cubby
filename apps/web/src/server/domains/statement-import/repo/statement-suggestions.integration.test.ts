@@ -16,6 +16,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
+import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -893,6 +895,85 @@ describe("statement Transaction suggestions", () => {
       ).toMatchObject({ labelled: 1 });
     },
   );
+
+  // The production adapter must receive multi-question Jev/Clef requests;
+  // a DecisionPort bypasses that consolidation and cannot detect this failure.
+  it("consolidates a label page through the shared model transport", async () => {
+    await card(ctx);
+    await record(
+      ctx,
+      Array.from({ length: 8 }, (_, index) =>
+        rowInput({
+          merchant: `Example Batch Merchant ${index}`,
+          rawDescription: `SYNTHETIC BATCH ${index}`,
+          providerAmount: -200 - index,
+        }),
+      ),
+    );
+    await generate(ctx);
+    await activateAiRefresh(ctx.db, "synthetic-batch-release", {
+      enabled: true,
+      manifest: {},
+      startDiscovery: false,
+    });
+    const requests: number[] = [];
+    const peer = vi.spyOn(cfEnv, "getTestAiGateway").mockReturnValue({
+      fetch: async (_url, init) => {
+        const input: {
+          questions: Record<string, { criteria: Record<string, string> }>;
+        } = JSON.parse(String(init?.body));
+        requests.push(Object.keys(input.questions).length);
+        return Response.json({
+          result: {
+            answers: Object.fromEntries(
+              Object.entries(input.questions).map(([id, question]) => {
+                const entries = Object.entries(question.criteria);
+                const choice =
+                  entries.find(
+                    ([, value]) => value === "purchase" || value === "business",
+                  )?.[0] ?? entries[0]![0];
+                return [
+                  id,
+                  {
+                    type: "choice",
+                    choice,
+                    confidence: 1,
+                    probabilities: Object.fromEntries(
+                      entries.map(([key]) => [key, key === choice ? 1 : 0]),
+                    ),
+                  },
+                ];
+              }),
+            ),
+          },
+        });
+      },
+    });
+    try {
+      const outcome = await labelStatementSuggestions(ctx.db, {
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      });
+      expect(outcome).toMatchObject({
+        labelled: 8,
+        failed: [],
+        labels: { generated: 16 },
+      });
+      expect(requests.reduce((total, questions) => total + questions, 0)).toBe(
+        16,
+      );
+      expect(Math.max(...requests)).toBeGreaterThan(1);
+      expect(requests.length).toBeLessThan(16);
+      expect(
+        (await suggestions(ctx)).every(
+          (row) =>
+            row.create?.votes.label === "purchase" &&
+            row.create.counterparty.label === "business",
+        ),
+      ).toBe(true);
+    } finally {
+      peer.mockRestore();
+    }
+  });
 
   // A single charge's identity shortlist must not keep its own four-call cap.
   it("fans out every candidate identity decision in one charge", async () => {

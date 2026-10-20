@@ -14,11 +14,14 @@ import {
 import { eq, isNull, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { AiWorkDeferredError } from "~/server/ai/cooperative-work";
 import type { DecisionPort } from "~/server/ai/decision-model";
+import type { DecisionQuestionsInput } from "~/server/ai/decision-request-batch";
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
+import * as cfEnv from "~/server/cf-env";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   financialAccount,
@@ -308,6 +311,68 @@ describe("transfer-pair suggestions", () => {
       next: null,
       waitingUntil: null,
     });
+  });
+
+  // Per-pair settlement prevents the transport runner from combining a page.
+  it("submits both legs of the whole page to one settled decision runner", async () => {
+    const member = await owner("Synthetic Member");
+    const from = await account("Synthetic Checking", member, checking);
+    const to = await account("Synthetic Savings", member, savings);
+    for (const amount of [110, 220, 330]) {
+      await transaction(from, -amount, "2026-05-04");
+      await transaction(to, amount, "2026-05-04");
+    }
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    await generateTransferPairSuggestions(ctx.db, { runId });
+    await activateAiRefresh(ctx.db, "synthetic-batch", {
+      enabled: true,
+      manifest: {},
+    });
+    const requests: DecisionQuestionsInput[] = [];
+    const gateway = vi.spyOn(cfEnv, "getTestAiGateway").mockReturnValue({
+      fetch: async (_url, init) => {
+        const input: DecisionQuestionsInput = JSON.parse(String(init?.body));
+        requests.push(input);
+        return Response.json({
+          result: {
+            answers: Object.fromEntries(
+              Object.entries(input.questions).map(([id, question]) => {
+                const choice = Object.keys(question.criteria).find(
+                  (key) => question.criteria[key] === "account_move",
+                )!;
+                return [
+                  id,
+                  {
+                    type: "choice",
+                    choice,
+                    confidence: 0.97,
+                    probabilities: Object.fromEntries(
+                      Object.keys(question.criteria).map((key) => [
+                        key,
+                        key === choice ? 0.97 : 0.01,
+                      ]),
+                    ),
+                  },
+                ];
+              }),
+            ),
+          },
+        });
+      },
+    });
+    try {
+      const outcome = await labelTransferPairSuggestions(ctx.db, { runId });
+      expect(outcome).toMatchObject({ labelled: 3, failed: [], next: null });
+      expect(
+        requests.flatMap((request) => Object.keys(request.questions)),
+      ).toHaveLength(6);
+      expect(requests.length).toBeLessThanOrEqual(2);
+      expect(
+        requests.some((request) => Object.keys(request.questions).length > 2),
+      ).toBe(true);
+    } finally {
+      gateway.mockRestore();
+    }
   });
 
   // Pending model calls must not occupy the four-slot DB publication lane.

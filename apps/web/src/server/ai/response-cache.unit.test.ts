@@ -70,6 +70,47 @@ describe("AI response cache", () => {
     }
   });
 
+  // Repeated invalidation races must not turn a bounded Workflow page into
+  // an unbounded stream of cache RPCs before the model can answer.
+  it("bounds recovery from repeatedly replaced invalid cache entries", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValue({ kind: "claimed", token: "synthetic-claim" });
+    for (let index = 0; index < 4; index++)
+      read.mockResolvedValueOnce({ kind: "hit", value: "{}" });
+    const invalidate = vi.fn().mockResolvedValue(false);
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () =>
+        fromPartial({
+          readOrClaim: read,
+          invalidate,
+          publish: async () => true,
+        }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    const compute = vi.fn(async () => ({ choice: "one" }));
+    try {
+      expect(
+        await withCooperativeAiWork(() =>
+          withAiResponseCache({
+            enabled: true,
+            keyInput: input("synthetic-invalid-race"),
+            validate,
+            compute,
+          }),
+        ),
+      ).toEqual({ choice: "one" });
+      expect(read.mock.calls.length).toBeLessThanOrEqual(3);
+      expect(compute).toHaveBeenCalledOnce();
+    } finally {
+      mock.mockRestore();
+    }
+  });
+
   // A contended cache lease must become durable Workflow waiting, not a polling loop.
   it("yields a Workflow on its first contended cache lookup", async () => {
     const read = vi

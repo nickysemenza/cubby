@@ -187,24 +187,3 @@ export function withFreeBudget<R>(
       : null;
   };
 }
-
-/**
- * Await every decision of a fan-out before failing, so none outlives the
- * caller's concurrency slot; a budget pause outranks any other failure.
- */
-export async function settleDecisions<T>(
-  work: readonly Promise<T>[],
-): Promise<T[]> {
-  const settled = await Promise.allSettled(work);
-  const failures = settled.flatMap((result) =>
-    result.status === "rejected" ? [result.reason] : [],
-  );
-  if (failures.length)
-    throw (
-      failures.find((error) => error instanceof AiBudgetExhaustedError) ??
-      failures[0]
-    );
-  return settled.flatMap((result) =>
-    result.status === "fulfilled" ? [result.value] : [],
-  );
-}

@@ -24,6 +24,7 @@
     "./sha256": "./src/sha256.ts",
     "./text-case": "./src/text-case.ts",
     "./upc": "./src/upc.ts",
+    "./workflow-limits": "./src/workflow-limits.ts",
     "./ai/models": "./src/ai/models.ts",
     "./ai/pricing": "./src/ai/pricing.ts",
     "./ai/gateway-request": "./src/ai/gateway-request.ts",
