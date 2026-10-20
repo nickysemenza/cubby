@@ -1,0 +1,23 @@
+apps/web/tooling/generator-bootstrap.unit.test.ts
+  s_359d51740d6cee::t_9624440f1665fa 7-18,29,31
+docs/entities.md
+  s_359d51740d6cee::t_ebebbeff74e954 159-160
+packages/schemas/src/pagination.ts
+  s_359d51740d6cee::t_aa39a87d1f0c75 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5e50039eacae9daa02d55da0bfa3a52e40c3edf9",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
