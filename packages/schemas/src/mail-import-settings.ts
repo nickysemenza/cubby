@@ -95,6 +95,7 @@ export const setMailImportInput = z.strictObject({
 });
 export type SetMailImportInput = z.infer<typeof setMailImportInput>;
 
+// A budget update replaces the complete stored settings, including its strict unknown-key policy.
 export const setCreditBudgetInput = aiBudgetSettings;
 
 /**

@@ -467,7 +467,7 @@ const refsIn = (value: OpenApiDocument["paths"] | JsonSchema | undefined) =>
  * consumer adapter. The server still validates their complete domain schemas;
  * the Apple document need not compile unused domain graphs into the client.
  */
-export const JSON_VALUE_COMPONENTS = [
+const JSON_VALUE_COMPONENTS = [
   "EntityListBaseOutput",
   "EntityListEnrichmentInput",
   "EntityListEnrichmentOutput",

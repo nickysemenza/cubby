@@ -126,9 +126,10 @@ export const productSummaryBatchInput = z.object({
 
 export const PRODUCT_QUANTITY_SUMMARY_BATCH_MAX = 5_000;
 
-export const productQuantitySummaryBatchInput = z.object({
+const productIdsBatchInput = z.object({
   ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
 });
+export const productQuantitySummaryBatchInput = productIdsBatchInput;
 
 /**
  * "Where does each of these products live" for a bounded set of ids — the
@@ -139,8 +140,7 @@ export const productQuantitySummaryBatchInput = z.object({
  * threading stock onto those row shapes would make every other producer of them
  * emit an empty array it never loaded.
  */
-export const productInventoryEntriesBatchInput =
-  productQuantitySummaryBatchInput;
+export const productInventoryEntriesBatchInput = productIdsBatchInput;
 
 export const productApplyUpcInput = z.object({
   id: productShortcode,

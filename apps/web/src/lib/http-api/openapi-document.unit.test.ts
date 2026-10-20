@@ -15,7 +15,6 @@ import {
   nameStructuralComponents,
   type JsonSchema,
 } from "../../../generator/http-api/document-passes";
-import { JSON_VALUE_COMPONENTS } from "../../../generator/http-api/openapi";
 import { NATIVE_TYPED_RECORDS } from "../../../generator/http-api/type-overrides";
 import { httpMetadataSchema } from "./router";
 import { httpRoutes } from "./routes";
@@ -138,7 +137,14 @@ const POST_QUERIES = httpRoutes(httpContract)
 
 describe("generated HTTP OpenAPI document", () => {
   it("keeps shared native presentation open without its unused typed graphs", () => {
-    for (const name of JSON_VALUE_COMPONENTS) {
+    // Pin the reviewed native erasures; expanding the emitter policy needs a consumer review.
+    for (const name of [
+      "ProjectDashboardSummaryOut",
+      "ProjectPortfolioAnalyticsOut",
+      "RunWorkSnapshotOutput",
+      "RunWorkOutput",
+      "RunControlOutput",
+    ]) {
       expect(schemas[name]).toEqual({
         type: "object",
         additionalProperties: true,

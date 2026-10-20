@@ -38,9 +38,10 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   in the App or the CLI. Entity screens use manifest rows and shared reports. Consumers that
   need typed domain logic read generated types; their derived values (`stableKey`,
   `manufacturerOrNil`, `MacroSummary`, …) live in `API/GeneratedTypeExtensions.swift`.
-  An erased response uses one consumer adapter for its required fields (`RunSnapshot` for
-  review authorization, `ReportPresentation.projectAnalytics` for portfolio figures), retaining
-  raw JSON and diagnostics. A wire type the generator gets wrong is fixed in the generator
+  An erased response uses one consumer adapter for its required fields, retaining raw JSON
+  and diagnostics. [Generic paths](../../docs/agents/generic-paths.md) owns report composition:
+  adapters validate and format server figures, never derive domain figures or disabled reasons.
+  Pin fields used by a JSON adapter at the server schema boundary so a rename fails validation. A wire type the generator gets wrong is fixed in the generator
   (`apps/web/generator/http-api/`), not re-typed by hand. The
   branded codes (`ProductCode`, `LocationCode`, `InventoryEntryCode`, `ImageCode`), `PlainDate`,
   and `EntityKey` live in `CubbyKit/Sources/CubbyAPISupport/` and are the generated client's own

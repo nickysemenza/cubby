@@ -53,7 +53,10 @@ export const removeMealFoodInput = z.object({
   mealId: mealShortcode,
   id: mealFoodEntryId,
 });
-export const mealFoodMutationOut = removeMealFoodInput;
+export const mealFoodMutationOut = removeMealFoodInput.pick({
+  mealId: true,
+  id: true,
+});
 export const mealNutritionInput = z.union([
   z.object({ mealId: mealShortcode }),
   z.object({ date: z.iso.date() }),

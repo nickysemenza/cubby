@@ -17,6 +17,7 @@ import {
 import { firstDisplayableImage, type ImageOut, imageOut } from "./image";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
+  locationRefOut,
   locationListRefOut,
   locationIdentityProductOut,
   locationType,
@@ -105,13 +106,7 @@ export type LocationValuation = z.infer<typeof locationValuation>;
 
 export const locationValuationSummaryOut = z.object({
   total: money,
-  locations: z.array(
-    z.object({
-      id: locationShortcode,
-      name: z.string(),
-      value: money,
-    }),
-  ),
+  locations: z.array(locationRefOut.extend({ value: money })),
 });
 export type LocationValuationSummaryOut = z.infer<
   typeof locationValuationSummaryOut
@@ -187,9 +182,7 @@ export type LocationInventoryBreakdownOut = {
 export const locationInventoryBreakdownOut: z.ZodType<LocationInventoryBreakdownOut> =
   z.lazy(() =>
     z.object({
-      id: locationShortcode,
-      name: z.string(),
-      type: locationType.nullable(),
+      ...locationListRefOut.shape,
       directItemCount: z.number().int().nonnegative(),
       totalItemCount: z.number().int().nonnegative(),
       children: z.array(locationInventoryBreakdownOut),
@@ -205,9 +198,7 @@ export const locationInventoryBreakdownOut: z.ZodType<LocationInventoryBreakdown
  * discards. Same split as `productPickerItemOut`.
  */
 const locationOptionItemFields = {
-  id: locationShortcode,
-  name: z.string(),
-  type: locationType.nullable(),
+  ...locationListRefOut.shape,
   aliases: z.array(z.string()).default([]),
   ancestors: z.array(locationAncestorOut),
 };
