@@ -93,8 +93,16 @@ describe("Workflow deployment continuation", () => {
       },
     ];
     expect(await boundary("page:0")).toBe(false);
-    expect(await advanceStepRun(ctx.db, params, drivers, launcher)).toEqual({
+    expect(
+      await advanceStepRun(ctx.db, params, drivers, launcher),
+    ).toMatchObject({
       kind: "continue",
+      summary: {
+        phase: "synthetic-pages",
+        pageProcessed: 1,
+        cumulative: { processed: 1, total: null, failures: 0 },
+        cursor: { page: 2 },
+      },
     });
     expect(await boundary("page:1")).toBe(true);
     await deliver(params, launcher);
@@ -110,7 +118,15 @@ describe("Workflow deployment continuation", () => {
         drivers,
         launcher,
       ),
-    ).toEqual({ kind: "continue" });
+    ).toMatchObject({
+      kind: "continue",
+      summary: {
+        phase: "synthetic-pages",
+        pageProcessed: 1,
+        cumulative: { processed: 2, total: null, failures: 0 },
+        cursor: { page: 3 },
+      },
+    });
     expect(published).toEqual([null, "page-two"]);
     expect(await readRunSteps(ctx.db, id)).toMatchObject([
       { done: 2, cursor: "finished" },

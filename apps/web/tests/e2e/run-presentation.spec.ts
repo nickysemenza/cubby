@@ -202,6 +202,7 @@ test("Run work shows phase progress, unknown totals, and expandable handoffs", a
     page.getByText("40 / 100 suggestions · 2 failed", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/Using paused rate/)).toBeVisible();
+  await expect(page.getByText(/40% · 60 suggestions left/)).toBeVisible();
   await expect(
     page.getByText("120 / 120 charges · 0 failed", { exact: true }),
   ).toBeVisible();
@@ -247,4 +248,70 @@ test("Run work shows phase progress, unknown totals, and expandable handoffs", a
   await expect(
     page.getByText("7 / unknown items · 0 failed", { exact: true }),
   ).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.screenshot({
+    path: testInfo.outputPath("run-indeterminate-progress-mobile.png"),
+    fullPage: true,
+  });
+  // Unknown work must remain visible and animate; skeletons deliberately do neither.
+  const indicator = unknown.locator(":scope > div");
+  await expect(indicator).not.toHaveCSS("animation-name", "none");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(indicator).toHaveCSS("animation-name", "none");
+  await expect(indicator).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const widths = await unknown.evaluate((track) => ({
+    track: track.getBoundingClientRect().width,
+    indicator: track.firstElementChild?.getBoundingClientRect().width ?? 0,
+  }));
+  expect(widths.indicator).toBeGreaterThan(0);
+  expect(widths.indicator).toBeLessThan(widths.track);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({
+    path: testInfo.outputPath("run-indeterminate-progress-reduced-motion.png"),
+    fullPage: true,
+  });
+  // A pre-sample generation checkpoint already knows its scope and completed work.
+  await getDb(db)
+    .update(runStep)
+    .set({
+      key: "statement_transaction",
+      label: "Statements",
+      found: 200,
+      done: 60,
+      skipped: 0,
+      failed: 0,
+      meta: {
+        work: {
+          completed: [],
+          current: {
+            phase: "statement_generate",
+            label: "Generating suggestions",
+            unit: "charges",
+            processed: 10,
+            total: null,
+            failures: 0,
+            sampledAt: at,
+            ratePerSecond: 2,
+            finished: false,
+          },
+        },
+      },
+    })
+    .where(eq(runStep.runId, owner.id));
+  await page.reload();
+  const generation = page.getByRole("progressbar", {
+    name: "Generating suggestions",
+  });
+  await expect(generation).toHaveAttribute("aria-valuenow", "60");
+  await expect(generation).toHaveAttribute("aria-valuemax", "200");
+  await expect(page.getByText(/30% · 140 charges left/)).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("run-resumed-generation.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: testInfo.outputPath("run-resumed-generation-mobile.png"),
+    fullPage: true,
+  });
 });

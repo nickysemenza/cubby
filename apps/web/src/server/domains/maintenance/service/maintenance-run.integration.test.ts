@@ -216,12 +216,22 @@ describe("maintenance Run", () => {
     const drivers = only("image-backfill", ports);
 
     const params = { runId: id, attempt: await attemptOf(id) };
-    expect(await advanceStepRun(ctx.db, params, drivers)).toEqual({
+    expect(await advanceStepRun(ctx.db, params, drivers)).toMatchObject({
       kind: "continue",
+      summary: {
+        phase: "image-backfill",
+        pageProcessed: 2,
+        cumulative: { processed: 2, total: 3, failures: 0 },
+      },
     });
     fundingOpen = false;
-    expect(await advanceStepRun(ctx.db, params, drivers)).toEqual({
+    expect(await advanceStepRun(ctx.db, params, drivers)).toMatchObject({
       kind: "paused",
+      summary: {
+        phase: "image-backfill",
+        pageProcessed: 0,
+        cumulative: { processed: 2, total: 3, failures: 0 },
+      },
     });
     const [paused] = await readRunSteps(ctx.db, id);
     expect(paused).toMatchObject({ state: "paused", done: 2 });

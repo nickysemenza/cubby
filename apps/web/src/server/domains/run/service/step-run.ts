@@ -9,6 +9,7 @@ import type {
 import type { RunWorkItems } from "@cubby/schemas/run-work-progress";
 import { createLogger } from "@cubby/worker-tracing";
 import { pick } from "es-toolkit";
+import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
@@ -17,6 +18,7 @@ import {
   STEP_RUN_PURPOSES,
   type StepRunPurpose,
   type WorkflowRunParams,
+  workflowInstanceId,
 } from "~/server/workflows/runs/contract";
 import {
   type WorkflowLauncher,
@@ -45,7 +47,7 @@ import {
   type RunStepRow,
   type StepRunOwner,
 } from "../repo/run-step";
-import { sampleRunWork } from "../repo/work-progress";
+import { sampleRunWork, stepWorkSamples } from "../repo/work-progress";
 
 type RunRow = StepRunOwner;
 
@@ -90,7 +92,11 @@ export type StepPage = (
       errors?: readonly RunStepError[];
       cursor?: unknown;
     }
-) & { work?: RunWorkItems & { finished?: boolean } };
+) & {
+  work?: RunWorkItems & { finished?: boolean };
+  labels?: { reused: number; generated: number };
+  pageProcessed?: number;
+};
 
 export type StepContext = {
   db: Database;
@@ -104,6 +110,13 @@ export type StepContext = {
 };
 
 export interface StepDriver extends RunStepDefinition {
+  /** Only declaration constants and the persisted checkpoint may define a name. */
+  describe?(step: RunStepRow): {
+    phase: string;
+    unit: string;
+    limit: number | null;
+    processed: number;
+  };
   page(context: StepContext): Promise<StepPage>;
 }
 
@@ -123,12 +136,95 @@ const registry = {
   sweep: async () => (await import("./sweep")).sweepDrivers,
 } satisfies Record<StepRunPurpose, () => Promise<StepRunDrivers>>;
 
-export type StepAdvance =
+export const stepPageSummary = z.object({
+  phase: z.string(),
+  unit: z.string(),
+  pageProcessed: z.number().nonnegative(),
+  pageFailures: z.number().nonnegative(),
+  cumulative: z.object({
+    processed: z.number(),
+    total: z.number().nullable(),
+    failures: z.number(),
+  }),
+  labels: z.object({ reused: z.number(), generated: z.number() }).nullable(),
+  // Checkpoint identity, never a driver's potentially private source keys or payload.
+  cursor: z.object({ stepId: z.string(), page: z.number() }),
+});
+export type StepPageSummary = z.infer<typeof stepPageSummary>;
+export type StepPagePlan = {
+  name: string;
+  scope: string;
+  nextInstanceId: string;
+  summary: StepPageSummary | null;
+};
+
+export type StepAdvance = (
   | { kind: "continue"; execution?: RunStepExecution; waitSeconds?: number }
   | { kind: "wait"; seconds: number }
   | { kind: "paused" }
   | { kind: "finished" }
-  | { kind: "lost" };
+  | { kind: "lost" }
+) & { summary?: StepPageSummary };
+
+/** Memoized by the Workflow before its page name is chosen; never runs a driver. */
+export async function inspectStepRun(
+  db: Database,
+  params: WorkflowRunParams,
+  drivers?: StepRunDrivers,
+): Promise<StepPagePlan | null> {
+  const owner = await claimWorkflowRun(db, params);
+  if (!owner || !isStepRunPurpose(owner.purpose)) return null;
+  const list = await (drivers ?? (await registry[owner.purpose]()))(db, owner);
+  let steps = await listRunSteps(db, owner.id);
+  if (!steps.length && list.length) {
+    await ensureRunSteps(db, owner.id, list);
+    steps = await listRunSteps(db, owner.id);
+  }
+  const current = steps.find((step) => !isTerminalStep(step.state));
+  const nextInstanceId = workflowInstanceId(
+    owner.shortcode,
+    params.attempt + 1,
+  );
+  if (!current)
+    return {
+      name: "finish Run",
+      scope: owner.purpose,
+      nextInstanceId,
+      summary: null,
+    };
+  const driver = list.find((entry) => entry.key === current.key);
+  const description = driver?.describe?.(current);
+  const work = stepWorkSamples(current);
+  const processed =
+    description?.processed ??
+    work?.current.processed ??
+    current.done + current.skipped + current.failed;
+  const unit = description?.unit ?? work?.current.unit ?? "items";
+  const phase = description?.phase ?? work?.current.phase ?? current.key;
+  const scope = description?.limit
+    ? `${unit} ${processed + 1}–${processed + description.limit}`
+    : `${processed} ${unit} processed`;
+  return {
+    name: `${phase} p${current.pages + 1} · ${scope}`,
+    scope: current.key,
+    nextInstanceId,
+    summary: {
+      phase: work?.current.phase ?? current.key,
+      unit: work?.current.unit ?? "items",
+      pageProcessed: 0,
+      pageFailures: 0,
+      cumulative: {
+        processed:
+          work?.current.processed ??
+          current.done + current.skipped + current.failed,
+        total: work ? work.current.total : current.found || null,
+        failures: work?.current.failures ?? current.failed,
+      },
+      labels: null,
+      cursor: { stepId: current.id, page: current.pages },
+    },
+  };
+}
 
 const CHILD_WAIT_SECONDS = 60;
 
@@ -144,7 +240,7 @@ function pageWork(
   page: StepPage,
   started: number,
   reset: boolean,
-): Pick<RunStepMeta, "work"> {
+) {
   const counts =
     page.kind === "child"
       ? page.counts
@@ -174,7 +270,7 @@ function pageWork(
     failures: counts.failed,
   };
   return {
-    work: sampleRunWork(step.meta?.work, items, {
+    work: sampleRunWork(stepWorkSamples(step), items, {
       startedAt: new Date(started),
       sampledAt: new Date(),
       finished: page.work?.finished ?? finished,
@@ -183,6 +279,54 @@ function pageWork(
         ? step.done + step.skipped + step.failed
         : undefined,
     }),
+  };
+}
+
+function summarizePage(
+  current: RunStepRow,
+  page: StepPage,
+  items: RunWorkItems,
+): StepPageSummary {
+  const previous = current.meta?.work?.current;
+  const baseline =
+    previous?.phase === items.phase
+      ? previous.processed
+      : page.work
+        ? 0
+        : current.done + current.skipped + current.failed;
+  return {
+    phase: items.phase,
+    unit: items.unit,
+    pageProcessed:
+      page.pageProcessed ?? Math.max(0, items.processed - baseline),
+    pageFailures: page.errors?.length ?? 0,
+    cumulative: {
+      processed: items.processed,
+      total: items.total,
+      failures: items.failures,
+    },
+    labels: page.labels ?? null,
+    cursor: {
+      stepId: current.id,
+      page:
+        current.pages +
+        (current.state === "queued" || current.state === "paused" ? 2 : 1),
+    },
+  };
+}
+
+function failedPageSummary(step: RunStepRow): StepPageSummary {
+  const items = stepWorkSamples(step)?.current ?? {
+    phase: step.key,
+    label: step.label,
+    unit: "items",
+    processed: step.done + step.skipped + step.failed,
+    total: step.found || null,
+    failures: step.failed,
+  };
+  return {
+    ...summarizePage(step, { kind: "progress", done: true }, items),
+    pageFailures: 1,
   };
 }
 
@@ -213,7 +357,7 @@ export async function advanceStepRun(
       state: "failed",
       errors: [failure(`No driver runs step ${current.key}`)],
     });
-    return { kind: "continue" };
+    return { kind: "continue", summary: failedPageSummary(current) };
   }
   const stamp = stampOf(params.attempt);
   // Only a reopened step is queued after it has already run pages.
@@ -280,11 +424,13 @@ export async function advanceStepRun(
       });
       throw new Error(combined, { cause: recordingError });
     }
-    return { kind: "continue" };
+    return { kind: "continue", summary: failedPageSummary(current) };
   }
   if (!(await claimWorkflowRun(db, params, "id")))
     return lostAfterPage(db, owner, launcher);
   const elapsed = Date.now() - started;
+  const sampledWork = pageWork(current, page, started, retrying);
+  const summary = summarizePage(current, page, sampledWork.work.current);
   const timing = {
     timing: {
       lastPageMs: elapsed,
@@ -297,7 +443,7 @@ export async function advanceStepRun(
         ...(page.delta && { delta: page.delta }),
         ...(page.errors && { errors: page.errors }),
         ...(page.cursor !== undefined && { cursor: page.cursor }),
-        meta: { ...timing, ...pageWork(current, page, started, retrying) },
+        meta: { ...timing, ...sampledWork },
       });
     await pauseStep(
       db,
@@ -307,7 +453,7 @@ export async function advanceStepRun(
       page.until,
       params.attempt,
     );
-    return { kind: "paused" };
+    return { kind: "paused", summary };
   }
   if (page.kind === "child") {
     const ended = page.state === "done" || page.state === "failed";
@@ -319,7 +465,7 @@ export async function advanceStepRun(
       meta: {
         ...page.meta,
         ...timing,
-        ...pageWork(current, page, started, retrying),
+        ...sampledWork,
       },
       state: ended
         ? page.state === "failed" || page.counts.failed > 0
@@ -336,15 +482,15 @@ export async function advanceStepRun(
         page.pausedUntil ?? null,
         params.attempt,
       );
-      return { kind: "paused" };
+      return { kind: "paused", summary };
     }
     if (ended) {
       await stepEnded(db, owner, current, page.counts, stamp);
-      return { kind: "continue" };
+      return { kind: "continue", summary };
     }
     return page.again
-      ? { kind: "continue" }
-      : { kind: "wait", seconds: CHILD_WAIT_SECONDS };
+      ? { kind: "continue", summary }
+      : { kind: "wait", seconds: CHILD_WAIT_SECONDS, summary };
   }
   const failed = current.failed + (page.delta?.failed ?? 0);
   await recordRunStepPage(db, owner.id, current.key, {
@@ -355,7 +501,7 @@ export async function advanceStepRun(
     meta: {
       ...page.meta,
       ...timing,
-      ...pageWork(current, page, started, retrying),
+      ...sampledWork,
     },
     ...(page.done && { state: failed > 0 ? "failed" : "done" }),
   });
@@ -367,6 +513,7 @@ export async function advanceStepRun(
   }
   return {
     kind: "continue",
+    summary,
     ...pick(page, ["execution", "waitSeconds"]),
   };
 }

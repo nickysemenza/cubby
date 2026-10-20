@@ -165,6 +165,21 @@ export const sweepDrivers: StepRunDrivers = async (_db, owner) =>
         case "statement_transaction":
           return {
             ...definition,
+            describe: (step) => {
+              const parsed = statementCursor.safeParse(step.cursor);
+              const generating =
+                !parsed.success || parsed.data.phase === "generate";
+              return {
+                phase: generating ? "generate" : "label",
+                unit: generating ? "charges" : "suggestions",
+                limit: generating ? 20 : 10,
+                processed: generating
+                  ? step.done + step.skipped + step.failed
+                  : step.meta?.work?.current.phase === "statement_label"
+                    ? step.meta.work.current.processed
+                    : 0,
+              };
+            },
             page: (context) => statementPage(context, entry.scope),
           };
         case "recommendation":
@@ -302,20 +317,21 @@ async function statementPage(
         phase: "statement_generate",
         label: "Generating suggestions",
         unit: "charges",
-        processed:
-          (previous?.phase === "statement_generate" ? previous.processed : 0) +
-          page.published +
-          page.unchanged +
-          page.outOfScope,
+        // Generation is the first phase: ledger counts carry work done before
+        // phase sampling was deployed, so a handoff cannot restart at zero.
+        processed: step.done + step.skipped + step.failed + page.processed,
         total:
           found ??
-          (previous?.phase === "statement_generate" ? previous.total : null),
+          (previous?.phase === "statement_generate" ? previous.total : null) ??
+          (step.found > 0 ? step.found : null),
         failures: 0,
         finished: page.next === null,
       },
+      labels: { reused: page.labelsReused, generated: 0 },
+      pageProcessed: page.processed,
       ...(found !== undefined && { found }),
       delta: {
-        done: page.published + page.unchanged,
+        done: page.processed - page.outOfScope,
         skipped: page.outOfScope,
       },
       cursor: page.next
@@ -350,6 +366,7 @@ async function statementPage(
   const previous = step.meta?.work?.current;
   const samePhase = previous?.phase === "statement_label";
   const checkpoint = {
+    labels: outcome.labels,
     work: {
       phase: "statement_label",
       label: "Labelling suggestions",

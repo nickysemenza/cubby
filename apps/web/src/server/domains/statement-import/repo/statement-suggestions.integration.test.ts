@@ -760,7 +760,11 @@ describe("statement Transaction suggestions", () => {
         fingerprint: "synthetic-reexport",
       },
     );
-    await generate(ctx);
+    const regenerated = await generateStatementSuggestionPage(ctx.db, {
+      after: null,
+      runId: null,
+    });
+    expect(regenerated).toMatchObject({ processed: 1, labelsReused: 2 });
     let calls = 0;
     const outcome = await label(ctx, async () => {
       calls++;
@@ -963,8 +967,12 @@ describe("statement Transaction suggestions", () => {
       .spyOn(statementSuggestionsRepo, "publishChargeProposal")
       .mockRejectedValueOnce(new Error("Synthetic publication failure"));
     try {
-      expect((await label(ctx, port)).failed).toHaveLength(1);
-      expect((await label(ctx, port)).labelled).toBe(1);
+      const first = await label(ctx, port);
+      expect(first.failed).toHaveLength(1);
+      expect(first.labels).toEqual({ reused: 0, generated: 2 });
+      const resumed = await label(ctx, port);
+      expect(resumed.labelled).toBe(1);
+      expect(resumed.labels).toEqual({ reused: 2, generated: 0 });
       expect(calls).toBe(2);
     } finally {
       publish.mockRestore();

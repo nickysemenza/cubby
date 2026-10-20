@@ -1,5 +1,7 @@
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 
+import type { StepPageSummary } from "~/server/domains/run/service/step-run";
+
 import { enqueueBackgroundTask } from "../background-tasks/publish";
 import { workflowDeploymentBoundary } from "../deployment-boundary";
 import type { WorkflowRunParams } from "./contract";
@@ -13,11 +15,16 @@ export function runDeploymentBoundary(
 ) {
   const current = () => env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID);
   let initial = true;
-  return (name: string, force = false) => {
+  return (
+    name: string,
+    force = false,
+    dashboard?: { nextInstanceId: string; summary: StepPageSummary | null },
+  ) => {
     const first = initial;
     initial = false;
     return workflowDeploymentBoundary(steps, {
       name,
+      dashboard,
       version: env.CF_VERSION_METADATA.id,
       currentVersion: () => current().currentDeploymentVersion(),
       continue: async () => {

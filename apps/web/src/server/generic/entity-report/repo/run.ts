@@ -27,6 +27,7 @@ import {
   formatCurrency,
   formatPercent,
 } from "~/lib/number-format";
+import { workflowForPurpose } from "~/lib/workflows/run-workflows";
 import { PRODUCT_IDENTITY_REVIEW_REASON } from "~/server/domains/product/repo/resolve-names";
 import { runHasCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
@@ -831,7 +832,7 @@ function workflowBlocks(
         row("workflow", {
           externalLink: {
             label: "Open in Cloudflare",
-            url: `https://dash.cloudflare.com/${CF_ACCOUNT_ID}/workers/workflows/cubby-mail-discovery/instance/${encodeURIComponent(workflow.instanceId)}`,
+            url: `https://dash.cloudflare.com/${CF_ACCOUNT_ID}/workers/workflows/${workflowForPurpose(workflow.purpose).name}/instance/${encodeURIComponent(workflow.instanceId)}`,
           },
           title: `Attempt ${workflow.attempt} · ${workflow.instanceId}`,
           body: `Workflow instance ${instance}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
@@ -1035,6 +1036,9 @@ function workProgressBlocks(
       summary: summary(phase),
       detail: [
         phaseLabel(phase.state),
+        phase.total !== null && !phase.finished
+          ? `${formatPercent(phase.total > 0 ? Math.min(1, phase.processed / phase.total) : phase.finished ? 1 : 0, { maximumFractionDigits: 0 })} · ${formatCount(Math.max(0, phase.total - phase.processed))} ${phase.unit} left`
+          : null,
         rate,
         estimate,
         phase.estimateState === "paused" || phase.estimateState === "stale"

@@ -39,12 +39,29 @@ describe("Workflow deployment boundaries", () => {
       runId: "00000000-0000-4000-8000-000000000001",
       attempt: 1,
     };
-    const boundary = runDeploymentBoundary(
-      env,
-      memoryDurableSteps().steps,
-      params,
-    );
-    await expect(boundary("continue", true)).resolves.toBe(true);
+    const durable = memoryDurableSteps();
+    const boundary = runDeploymentBoundary(env, durable.steps, params);
+    const summary = {
+      phase: "generate",
+      unit: "charges",
+      pageProcessed: 20,
+      pageFailures: 0,
+      cumulative: { processed: 80, total: 200, failures: 0 },
+      labels: { reused: 2, generated: 0 },
+      cursor: { stepId: "00000000-0000-4000-8000-000000000002", page: 4 },
+    };
+    await expect(
+      boundary("continue", true, { nextInstanceId: "RUN-4K7M-2", summary }),
+    ).resolves.toBe(true);
+    expect(durable.completed.get("handoff → RUN-4K7M-2 · continue")).toEqual({
+      queued: true,
+      nextInstanceId: "RUN-4K7M-2",
+      summary,
+    });
+    expect(durable.completed.get("deployment guard · continue")).toMatchObject({
+      handoff: true,
+      reason: "instance budget",
+    });
     expect(inlineLaunches).toBe(0);
     expect(accepted).toEqual([
       expect.objectContaining({
