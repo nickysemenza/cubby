@@ -25,7 +25,12 @@ test("moves a task between statuses with the keyboard and persists it", async ({
     `/tasks?view=board&searchQuery=${encodeURIComponent(name)}`,
     source,
   );
-  const committed = waitForDndMutation(page, "task", "entity.list");
+  const committed = waitForDndMutation(
+    page,
+    "task",
+    "entity.list",
+    "task.bulkReorder",
+  );
   await dragByKeyboard(source, ["ArrowRight"]);
   await committed;
   await reloadAuthenticatedPage(page, taskDropTarget(page, "Later"));
@@ -46,7 +51,12 @@ test("keyboard dragging reaches the last position in the same group", async ({
     `/tasks?view=board&searchQuery=${encodeURIComponent(prefix)}`,
     source,
   );
-  const committed = waitForDndMutation(page, "task", "entity.list");
+  const committed = waitForDndMutation(
+    page,
+    "task",
+    "entity.list",
+    "task.bulkReorder",
+  );
   await dragByKeyboard(source, ["ArrowDown", "ArrowDown", "ArrowDown"]);
   await committed;
   await reloadAuthenticatedPage(page, taskDropTarget(page, "Not started"));

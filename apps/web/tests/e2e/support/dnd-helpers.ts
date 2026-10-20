@@ -59,6 +59,7 @@ export async function waitForDndMutation(
   page: Page,
   entity: string,
   refetchOperation?: string,
+  mutationOperation?: string,
 ) {
   let committed = false;
   const settled = await page.waitForResponse((response) => {
@@ -67,7 +68,9 @@ export async function waitForDndMutation(
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === BROWSER_OPERATION_PATH &&
       operationHeader(response, "-kind") === "mutation" &&
-      operationHeader(response, "-entity") === entity &&
+      (mutationOperation
+        ? operationHeader(response) === mutationOperation
+        : operationHeader(response, "-entity") === entity) &&
       response.ok()
     ) {
       committed = true;
