@@ -102,7 +102,7 @@ function PinnedViewTile({ entity, view }: PinnedView) {
     <Link
       to={entityListHref(entity, view)}
       aria-label={`${view.label}${total === undefined ? "" : `, ${total}`}`}
-      className="group flex min-h-24 flex-col justify-between gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="group flex min-h-20 flex-col justify-between gap-2 rounded-md border border-border p-2.5 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
@@ -125,7 +125,7 @@ function PinnedViewTile({ entity, view }: PinnedView) {
             alt=""
             loading="lazy"
             decoding="async"
-            className="size-10 rounded-md bg-muted object-contain ring-2 ring-card"
+            className="size-10 rounded-md bg-muted object-contain ring-2 ring-background"
             style={{ zIndex: THUMBNAILS - index }}
           />
         ))}

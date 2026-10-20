@@ -408,7 +408,7 @@ function RelationLoadingSkeleton<TItem extends RowData>({
             {headerGroup.headers.map((header) => (
               <th
                 key={header.id}
-                className="h-8 border-b border-border px-2 text-left font-mono text-2xs font-medium tracking-wider text-muted-foreground uppercase"
+                className="h-8 border-b border-border px-2 text-left text-xs font-medium text-muted-foreground"
               >
                 {header.isPlaceholder
                   ? null

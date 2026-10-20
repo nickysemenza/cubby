@@ -64,7 +64,7 @@ function NativeAuthCompletion({
   }, [authClient]);
 
   return (
-    <Card>
+    <Card variant="panel">
       <CardHeader>
         <CardTitle>Returning to Cubby</CardTitle>
         <CardDescription>
@@ -146,7 +146,7 @@ function NativeAuthStart({
   }, [googleError, signIn, validRequest]);
 
   return (
-    <Card>
+    <Card variant="panel">
       <CardHeader>
         <CardTitle>Sign in to the Cubby app</CardTitle>
         <CardDescription>

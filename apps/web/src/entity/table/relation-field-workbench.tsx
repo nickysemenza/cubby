@@ -71,7 +71,7 @@ function RelatedRecords({
       {branches.map((branch) => (
         <section key={branch.relationshipKey} aria-label={branch.label}>
           <Row align="center" justify="between" className="mb-1">
-            <h3 className="font-mono text-2xs tracking-wider text-muted-foreground uppercase">
+            <h3 className="text-xs font-semibold text-foreground-strong">
               {branch.label}
             </h3>
             <span className="font-mono text-2xs text-muted-foreground tabular-nums">

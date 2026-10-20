@@ -129,7 +129,7 @@ styling. Share lower-level behavior and tokens where the contracts agree:
 - Apple keeps native SwiftUI controls and platform geometry; shared semantic
   tokens and declarations do not require a shared rendering implementation.
 
-Dashboard frames use `Section` with the same compact heading band and body
+Dashboard frames use `Section` with the same flat heading row and body
 inset as page and form regions. Heading actions are siblings of disclosure
 triggers, so using an action never opens or closes its section. Canvas text uses the shared system font token;
 web typography needs no bundled font faces.
@@ -155,7 +155,7 @@ read-only and expandable through `ui/text/json-renderer.tsx`.
 
 ### Shared headings and actions
 
-`Page` is the sole list/detail shell; `src/entity/page/page-hero.tsx` owns contextual headers. Detail identity is an open header with a structural bottom divider, thumbnail, wayfinding, readable title, quiet metadata, and inline stats. Keep Edit and the main workflow action visible; remaining review and destructive actions use accessible overflow. `SectionHeading` owns the wrapping gray heading band for details, forms, and home. `Section` uses it with sentence-case headings, explicit heading levels and a shared disclosure trigger; forms use the same interface.
+`Page` is the sole list/detail shell; `src/entity/page/page-hero.tsx` owns contextual headers. Detail identity is an open header with a structural bottom divider, thumbnail, wayfinding, readable title, quiet metadata, and inline stats. Keep Edit and the main workflow action visible; remaining review and destructive actions use accessible overflow. `SectionHeading` owns the flat heading row (strong text over a hairline rule) for details, forms, and home. `Card` defaults to the same flat `section` treatment; `variant="panel"` keeps a bordered card only for focused flows (sign-in, consent, triage stops) and repeated list items. `Section` uses it with sentence-case headings, explicit heading levels and a shared disclosure trigger; forms use the same interface.
 
 ### Controls and suggestions
 

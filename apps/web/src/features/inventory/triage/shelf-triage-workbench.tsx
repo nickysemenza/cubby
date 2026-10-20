@@ -241,7 +241,7 @@ function TriagePass({
 
   if (pass.complete) {
     return (
-      <Card className="mx-auto w-full max-w-2xl">
+      <Card variant="panel" className="mx-auto w-full max-w-2xl">
         <CardHeader>
           <Row align="center" gap="sm">
             <CheckCircleIcon className="size-6 text-positive" />
@@ -302,7 +302,7 @@ function TriagePass({
             onSkip={() => pass.settle(current.id, "skipped")}
           />
         )}
-        <Card className="overflow-hidden">
+        <Card variant="panel" className="overflow-hidden">
           <CardHeader className="border-b p-4">
             <CardTitle>Queue</CardTitle>
           </CardHeader>

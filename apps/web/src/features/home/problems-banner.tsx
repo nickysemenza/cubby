@@ -81,7 +81,7 @@ function ProblemsBannerContent({
     return (
       <Link
         to="/problems"
-        className="flex min-h-11 min-w-0 items-center gap-2 border border-destructive/60 bg-destructive/10 px-2 py-1 text-xs text-foreground transition-colors hover:bg-destructive/20 sm:min-h-0"
+        className="flex min-h-11 min-w-0 items-center gap-2 rounded-md bg-destructive/10 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-destructive/20 sm:min-h-0"
       >
         <span className="shrink-0 font-medium">
           Couldn't load problem counts:
@@ -99,10 +99,10 @@ function ProblemsBannerContent({
     <Link
       to="/problems"
       className={cn(
-        "flex min-h-11 items-center gap-2 border px-2 py-1 transition-colors sm:min-h-0",
+        "flex min-h-11 items-center gap-2 rounded-md px-3 py-1.5 transition-colors sm:min-h-0",
         defects > 0
-          ? "border-destructive/60 bg-destructive/10 text-foreground hover:bg-destructive/20"
-          : "border-border bg-muted/40 text-muted-foreground hover:bg-muted",
+          ? "bg-destructive/10 text-foreground hover:bg-destructive/15"
+          : "bg-muted text-muted-foreground hover:bg-accent",
       )}
     >
       {defects > 0 ? (

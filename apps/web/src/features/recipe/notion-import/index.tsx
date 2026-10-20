@@ -259,7 +259,7 @@ export function NotionImport() {
       )}
 
       {items.length > 0 && (
-        <Card size="sm">
+        <Card variant="panel" size="sm">
           <CardHeader className="flex-row items-center gap-2 space-y-0">
             <Checkbox
               aria-label="Select all visible new and changed recipes"

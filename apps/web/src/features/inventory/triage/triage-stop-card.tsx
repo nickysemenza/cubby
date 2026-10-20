@@ -87,7 +87,7 @@ export function TriageStopCard({
   const cover = product.displayImages[0]?.url;
 
   return (
-    <Card>
+    <Card variant="panel">
       <CardContent className="p-4">
         <Stack gap="md">
           <Row align="start" gap="md" className="min-w-0">

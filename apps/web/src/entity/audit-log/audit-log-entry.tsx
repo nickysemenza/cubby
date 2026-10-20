@@ -225,7 +225,7 @@ function LedgerChangeSummary({
     <Row align="baseline" gap="sm" className="min-w-0 text-xs">
       {shown.map(({ field, from, to }) => (
         <Row key={field} align="baseline" gap="tight" className="min-w-0">
-          <span className="shrink-0 font-mono text-2xs text-slate uppercase">
+          <span className="shrink-0 text-muted-foreground">
             {humanizeChangeField(field)}
           </span>
           {from && (

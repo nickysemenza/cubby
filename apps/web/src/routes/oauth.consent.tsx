@@ -126,7 +126,7 @@ function ConsentPage() {
 
   return (
     <AuthEntryFrame>
-      <Card>
+      <Card variant="panel">
         <CardHeader>
           <div className="text-xs text-slate">Authorize access</div>
           <CardTitle>{appName}</CardTitle>

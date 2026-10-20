@@ -32,7 +32,7 @@ export function QueuePassProgress({
   trailing?: ReactNode;
 }) {
   return (
-    <Card>
+    <Card variant="panel">
       <CardContent className="px-4 py-2">
         <Stack gap="xs">
           <Row align="center" justify="between" gap="sm">
@@ -100,7 +100,7 @@ export function QueuePassResumePrompt<TExtra>({
   onStartNew: () => void;
 }) {
   return (
-    <Card className="mx-auto w-full max-w-xl">
+    <Card variant="panel" className="mx-auto w-full max-w-xl">
       <CardContent className="p-4">
         <Stack gap="md">
           <div className="text-base font-medium">{title}</div>
