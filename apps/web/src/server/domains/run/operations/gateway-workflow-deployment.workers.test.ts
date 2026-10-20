@@ -1,9 +1,8 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 
-// A pinned caller and the stored AI activation observation can both be old.
-// The version authority must be the DO's currently running code, and a lost
-// create response must reuse the same search successor rather than duplicate it.
+// Legacy metadata RPCs remain diagnostics for pinned callers. Search successor
+// dispatch crosses the queue boundary before activated code creates an instance.
 describe("Workflow deployment authority", () => {
   it("can await its own recovery-scheduling RPC without holding a concurrency gate", async () => {
     const name = crypto.randomUUID();
@@ -36,28 +35,18 @@ describe("Workflow deployment authority", () => {
     });
   });
 
-  it("uses documented batch duplicates and propagates other provider failures", async () => {
+  it("queues legacy search successors for a fresh activated invocation", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (instance) => {
       const createBatch = vi.fn(async () => ({
-        created: [],
-        errors: [
-          {
-            index: 0,
-            id: "synthetic-repair-next",
-            code: 10405,
-            message: "Synthetic duplicate result",
-          },
-        ],
+        created: [{ id: "synthetic-repair-next" }],
+        errors: [],
       }));
+      const sendBatch = vi.fn(async () => {});
       Object.defineProperty(instance, "env", {
         value: {
-          SEARCH_INDEX_REPAIR: {
-            createBatch,
-            create: async () => {
-              throw new Error("Synthetic opaque duplicate refusal");
-            },
-          },
+          SEARCH_INDEX_REPAIR: { createBatch },
+          BACKGROUND_QUEUE: { sendBatch },
         },
       });
       const input = {
@@ -65,27 +54,20 @@ describe("Workflow deployment authority", () => {
         params: { requestedAt: "2026-10-01T00:00:00Z" },
       };
       await instance.continueSearchIndexRepair(input);
-      expect(createBatch).toHaveBeenCalledWith({
-        instances: [
-          {
-            ...input,
-            retention: { successRetention: "1 day", errorRetention: "7 days" },
-          },
-        ],
-      });
-      createBatch.mockResolvedValueOnce({
-        created: [],
-        errors: [
-          {
-            index: 0,
-            id: input.id,
-            code: 10000,
-            message: "Synthetic Workflow service unavailable",
-          },
-        ],
-      });
+      expect(createBatch).not.toHaveBeenCalled();
+      expect(sendBatch).toHaveBeenCalledWith([
+        expect.objectContaining({
+          body: expect.objectContaining({
+            task: expect.objectContaining({
+              kind: "search-repair.continue",
+              ...input,
+            }),
+          }),
+        }),
+      ]);
+      sendBatch.mockRejectedValueOnce(new Error("Synthetic queue unavailable"));
       await expect(instance.continueSearchIndexRepair(input)).rejects.toThrow(
-        "Synthetic Workflow service unavailable",
+        "Synthetic queue unavailable",
       );
     });
   });

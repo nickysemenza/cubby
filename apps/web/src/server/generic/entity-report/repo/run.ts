@@ -1027,7 +1027,7 @@ function workProgressBlocks(
       ? phase.total === null
         ? "Total unknown"
         : "Estimating…"
-      : `About ${formatDuration(Math.ceil(phase.etaSeconds / 30) * 30_000)} remaining`;
+      : `Phase ETA: about ${formatDuration(Math.ceil(phase.etaSeconds / 30) * 30_000)} remaining`;
   return [
     {
       kind: "progress",
@@ -1037,6 +1037,15 @@ function workProgressBlocks(
       summary: summary(phase),
       detail: [
         phaseLabel(phase.state),
+        !phase.finished && phase.activity
+          ? {
+              computing: "Computing decisions",
+              publishing: "Publishing results",
+              capacity: "Waiting for AI capacity",
+              retry: "Waiting to retry",
+              handoff: "Adopting deployment",
+            }[phase.activity]
+          : null,
         phase.total !== null && !phase.finished
           ? `${formatPercent(phase.total > 0 ? Math.min(1, phase.processed / phase.total) : phase.finished ? 1 : 0, { maximumFractionDigits: 0 })} · ${formatCount(Math.max(0, phase.total - phase.processed))} ${phase.unit} left`
           : null,

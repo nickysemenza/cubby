@@ -344,6 +344,9 @@ export async function processDerivedRefreshPage(
         : null;
     const selectedScope = scope;
     await withTransactionDatabase(db, async (tx) => {
+      await (
+        await import("~/server/workflows/runs/execution")
+      ).assertWorkflowEffect(tx);
       const scope = selectedScope;
       await getDb(tx).execute(sql`SET LOCAL lock_timeout='100ms'`);
       await getDb(tx).execute(sql`SET LOCAL statement_timeout='1s'`);
@@ -547,6 +550,17 @@ export async function processDerivedRefreshPage(
       errors: work.hasFailures ? [] : publicationErrors,
     };
   } catch (error) {
+    if (
+      (await import("~/server/workflows/runs/execution")).isWorkflowInterrupted(
+        error,
+      )
+    ) {
+      await getDb(db)
+        .update(derivedRefreshWork)
+        .set({ leaseToken: null, leaseExpiresAt: null })
+        .where(owned);
+      throw error;
+    }
     if (
       error instanceof DerivedInputsChanged ||
       ["55P03", "40P01"].includes(findPgError(error)?.code ?? "")

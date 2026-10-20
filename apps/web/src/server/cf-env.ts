@@ -62,6 +62,8 @@ export const setCfEnv = (env?: Env): void => {
 
 /** True after the request has entered the Cloudflare Worker adapter. */
 export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
+export const getWorkerVersion = (): string | undefined =>
+  cfEnv?.CF_VERSION_METADATA?.id;
 
 /** Durable search-index repair binding when configured in the Worker environment. */
 export const getSearchIndexRepairWorkflow = ():

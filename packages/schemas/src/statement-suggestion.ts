@@ -169,6 +169,12 @@ export const statementLabelCheckpoint = z.object({
 });
 export type StatementLabelCheckpoint = z.infer<typeof statementLabelCheckpoint>;
 
+/** Publication retains its input position until ordered automatic application settles. */
+export const statementApplicationOrder = z.object({
+  createdAt: z.string(),
+  id: z.uuid(),
+});
+
 /**
  * The member's chosen action. A choice that differs from the recommendation is
  * reviewed as Wrong with this application as its correction.

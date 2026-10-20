@@ -25,6 +25,7 @@ import {
   financialTransaction,
   statementRow,
   statementImport,
+  vendor,
 } from "~/server/db/retained-tables";
 import {
   statementRowExternalId,
@@ -99,7 +100,47 @@ export type FinancialStatementPreviewOptions = {
   candidatePolicy?: "import" | "suggestion";
   /** Server-only: a stored StatementRow account outranks alias/last4 resolution, keyed by row key. */
   accountHints?: ReadonlyMap<string, string>;
+  /** One synchronous preparation scope; never retain across model latency or another page. */
+  preparation?: FinancialStatementPreviewPreparation;
 };
+
+/** Account metadata and shortcode resolution shared within one proposal build. Ledger evidence stays fresh. */
+export async function prepareFinancialStatementPreview(db: Database) {
+  const accounts = await unwrapDb(db)
+    .select({
+      id: financialAccount.id,
+      shortcode: financialAccount.shortcode,
+      name: financialAccount.name,
+      identity: financialAccount.identity,
+      sourceAliases: financialAccount.sourceAliases,
+      cardNumbers: financialAccount.cardNumbers,
+      ledgerPartyId: financialAccount.ledgerPartyId,
+      vendorName: vendor.name,
+    })
+    .from(financialAccount)
+    .leftJoin(
+      vendor,
+      and(
+        sql`${vendor.id} = ${financialAccount.providerVendorId}`,
+        notDeleted(vendor),
+      ),
+    )
+    .where(notDeleted(financialAccount));
+  return {
+    accounts: accounts.map((account) => ({
+      ...account,
+      identity: financialAccountIdentity.parse(account.identity),
+      sourceAliases: financialAccountSourceAliases.parse(account.sourceAliases),
+      cardNumbers: financialAccountCardNumbers.parse(account.cardNumbers),
+    })),
+    ids: new Map<string, string>(
+      accounts.map((account) => [account.shortcode, account.id]),
+    ),
+  };
+}
+type FinancialStatementPreviewPreparation = Awaited<
+  ReturnType<typeof prepareFinancialStatementPreview>
+>;
 
 /**
  * Preview only: client-parsed rows become a decision worklist. It intentionally
@@ -212,18 +253,8 @@ export async function previewFinancialStatementImport(
               sql` OR `,
             )})
         )`;
-  const [accounts, transactions] = await Promise.all([
-    unwrapDb(db)
-      .select({
-        id: financialAccount.id,
-        shortcode: financialAccount.shortcode,
-        name: financialAccount.name,
-        identity: financialAccount.identity,
-        sourceAliases: financialAccount.sourceAliases,
-        cardNumbers: financialAccount.cardNumbers,
-      })
-      .from(financialAccount)
-      .where(notDeleted(financialAccount)),
+  const [preparation, transactions] = await Promise.all([
+    options.preparation ?? prepareFinancialStatementPreview(db),
     unwrapDb(db)
       .select({
         id: financialTransaction.id,
@@ -255,12 +286,9 @@ export async function previewFinancialStatementImport(
   for (const ref of sourceRefIds)
     fingerprintCounts.set(ref, (fingerprintCounts.get(ref) ?? 0) + 1);
 
-  const parsedAccounts = accounts.map((account) => ({
-    ...account,
-    identity: financialAccountIdentity.parse(account.identity),
-    sourceAliases: financialAccountSourceAliases.parse(account.sourceAliases),
-    cardNumbers: financialAccountCardNumbers.parse(account.cardNumbers),
-  }));
+  const parsedAccounts = preparation.accounts;
+  for (const transaction of transactions)
+    preparation.ids.set(transaction.shortcode, transaction.id);
   const refsByTransaction = await settlementRefsFor(
     db,
     transactions.map((transaction) => transaction.id),

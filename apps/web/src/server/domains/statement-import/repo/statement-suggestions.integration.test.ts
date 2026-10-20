@@ -1,3 +1,4 @@
+import { AUTOMATIC_RULE_MIN_REVIEWS } from "@cubby/schemas/automatic-rule";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
@@ -5,13 +6,17 @@ import {
   type StatementImportInput,
   type StatementRowInput,
 } from "@cubby/schemas/statement-row";
-import type {
-  StatementSuggestionOut,
-  StatementTransactionApplication,
+import {
+  STATEMENT_LABEL_REVISION,
+  type StatementSuggestionOut,
+  type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
-import { eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import {
+  DECISION_MODEL,
+  supportedDecisionModelSchema,
+} from "@cubby/shared/ai/models";
+import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -23,13 +28,23 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { spendingCategory } from "~/server/db/schema";
+import {
+  assessment,
+  assessmentState,
+  feedback,
+  spendingCategory,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/statement-import/repo/statement-suggestions";
-import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import {
+  labelStatementSuggestions as runStatementLabels,
+  precomputeStatementSuggestionLabels as runStatementPrecompute,
+} from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
@@ -37,6 +52,7 @@ import {
 import { processStatementRetirementPage } from "~/server/generic/derived-refresh/repo/statement-retirement";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import {
   getStatementRowSummary,
@@ -47,6 +63,7 @@ import {
 import {
   buildChargeProposals,
   generateStatementSuggestionPage,
+  generateStatementHoldVoidPage,
   labelledProposal,
   publishChargeProposal,
   pendingPostedMatch,
@@ -86,24 +103,40 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
   db,
   input,
 ) => {
+  return runStatementLabels(db, {
+    ...input,
+    spendingAdvice: await statementSpendingAdvice(db),
+  });
+};
+
+const precomputeStatementSuggestionLabels: typeof runStatementPrecompute = async (
+  db,
+  input,
+) =>
+  runStatementPrecompute(db, {
+    ...input,
+    spendingAdvice: await statementSpendingAdvice(db),
+  });
+
+async function statementSpendingAdvice(db: Parameters<typeof runStatementLabels>[0]) {
   const category = await getDb(db).query.spendingCategory.findFirst({
     where: eq(spendingCategory.name, "Synthetic statement spending"),
   });
-  return runStatementLabels(db, {
-    ...input,
-    spendingAdvice: async ({ judgment }) =>
-      financialSpendingAdvice.parse({
-        spendingCategoryId: category?.shortcode,
-        categoryConfidence: "high",
-        vendorName:
-          judgment.create?.merchant ??
-          judgment.create?.rawDescription ??
-          "Synthetic reviewed business",
-        vendorConfidence: "high",
-        counterparty: "business",
-      }),
-  });
-};
+  const advice: NonNullable<
+    Parameters<typeof runStatementLabels>[1]
+  >["spendingAdvice"] = async ({ judgment }) =>
+    financialSpendingAdvice.parse({
+      spendingCategoryId: category?.shortcode,
+      categoryConfidence: "high",
+      vendorName:
+        judgment.create?.merchant ??
+        judgment.create?.rawDescription ??
+        "Synthetic reviewed business",
+      vendorConfidence: "high",
+      counterparty: "business",
+    });
+  return advice;
+}
 
 const record = (
   ctx: Ctx,
@@ -157,8 +190,18 @@ const generate = async (ctx: Ctx) => {
       runId: null,
     });
     published += page.published;
-    if (!page.next) return published;
+    if (!page.next) break;
     after = page.next;
+  }
+  let holdAfter: string | null = null;
+  for (;;) {
+    const page = await generateStatementHoldVoidPage(ctx.db, {
+      after: holdAfter,
+      runId: null,
+    });
+    published += page.published;
+    if (!page.next) return published;
+    holdAfter = page.next;
   }
 };
 
@@ -242,6 +285,98 @@ const label = async (ctx: Ctx, port: DecisionPort) =>
     port,
     runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
   });
+
+/** Reviewed synthetic history enables the real automatic attach path for either sampled model. */
+async function enableStatementAttach(ctx: Ctx) {
+  await createSystemUserFixture(ctx.db);
+  const reviews = supportedDecisionModelSchema.options.flatMap((model) =>
+    Array.from({ length: AUTOMATIC_RULE_MIN_REVIEWS }, () => ({
+      id: crypto.randomUUID(),
+      recordId: crypto.randomUUID(),
+      stamp: `${ruleBase("statement_transaction.attach")}@${model}`,
+    })),
+  );
+  const client = getDb(ctx.db);
+  await client.insert(assessment).values(
+    reviews.map((row) => ({
+      id: row.id,
+      publicationKey: `synthetic-ordered-attach-review:${row.id}`,
+      family: "statement_transaction" as const,
+      subject: {
+        kind: "statement_transaction" as const,
+        entity: "statementRow" as const,
+        recordId: row.recordId,
+        source: "synthetic",
+        chargeKey: `synthetic-${row.id}`,
+      },
+      judgment: {
+        recommended: "attach",
+        candidates: [{ transactionId: crypto.randomUUID() }],
+      },
+      fingerprint: "synthetic-reviewed-attach",
+    })),
+  );
+  await client.insert(assessmentState).values(
+    reviews.map((row) => ({
+      id: row.id,
+      family: "statement_transaction" as const,
+      entity: "statementRow",
+      recordId: row.recordId,
+      status: "resolved",
+      active: false,
+      data: { matchedRules: [row.stamp] },
+    })),
+  );
+  await client.insert(feedback).values(
+    reviews.map((row) => ({
+      assessmentId: row.id,
+      operationId: "synthetic-ordered-attach-review",
+      verdict: "correct" as const,
+      correction: { present: false as const },
+      intent: "history" as const,
+      authority: "member" as const,
+      actorUserId: ctx.actor.userId,
+    })),
+  );
+  await setAutomaticRule(ctx.db, ctx.actor, {
+    ruleKey: "statement_transaction.attach",
+    enabled: true,
+  });
+}
+
+/** A real PostgreSQL publication refusal leaves the other pooled writers usable. */
+async function rejectStatementPublication(ctx: Ctx, chargeKey: string) {
+  const client = getDb(ctx.db);
+  await client.execute(
+    sql`CREATE TABLE "SyntheticStatementPublicationFailure" ("chargeKey" text PRIMARY KEY)`,
+  );
+  await client.execute(
+    sql`INSERT INTO "SyntheticStatementPublicationFailure" VALUES (${chargeKey})`,
+  );
+  await client.execute(sql`
+    CREATE FUNCTION synthetic_statement_publication_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM "SyntheticStatementPublicationFailure" f WHERE f."chargeKey" = NEW.subject->>'chargeKey') THEN
+        RAISE EXCEPTION 'Synthetic statement publication failure';
+      END IF;
+      RETURN NEW;
+    END;
+    $$
+  `);
+  await client.execute(sql`CREATE TRIGGER synthetic_statement_publication_failure BEFORE INSERT ON "Assessment"
+    FOR EACH ROW EXECUTE FUNCTION synthetic_statement_publication_failure()`);
+  return async () => {
+    await client.execute(
+      sql`DROP TRIGGER synthetic_statement_publication_failure ON "Assessment"`,
+    );
+    await client.execute(
+      sql`DROP FUNCTION synthetic_statement_publication_failure()`,
+    );
+    await client.execute(
+      sql`DROP TABLE "SyntheticStatementPublicationFailure"`,
+    );
+  };
+}
 
 describe("statement Transaction suggestions", () => {
   const ctx = withTestDb();
@@ -602,6 +737,202 @@ describe("statement Transaction suggestions", () => {
     );
   });
 
+  it("continues statement generation after an item publication failure with a stable retry frontier", async () => {
+    await card(ctx);
+    await record(
+      ctx,
+      Array.from({ length: 7 }, (_, index) =>
+        rowInput({
+          rawDescription: `SYNTHETIC GENERATION CHARGE ${index}`,
+          providerAmount: -(index + 1),
+        }),
+      ),
+    );
+    const { rows: charges } = await getDb(ctx.db).execute<{
+      source: string;
+      chargeKey: string;
+    }>(sql`
+      SELECT source, COALESCE("legacyExternalId", "externalId") AS "chargeKey"
+      FROM "StatementRow" WHERE "deletedAt" IS NULL ORDER BY source, "chargeKey"
+    `);
+    const removeFailure = await rejectStatementPublication(
+      ctx,
+      charges[0]!.chargeKey,
+    );
+    try {
+      const first = await generateStatementSuggestionPage(ctx.db, {
+        after: null,
+        runId: null,
+        limit: 5,
+      });
+      expect(first).toMatchObject({
+        found: 5,
+        processed: 5,
+        published: 4,
+        unchanged: 0,
+        next: charges[4],
+      });
+      expect(first.failed).toHaveLength(1);
+      expect(first.failed[0]!.message).toContain(
+        "Synthetic statement publication failure",
+      );
+      const repeated = await generateStatementSuggestionPage(ctx.db, {
+        after: null,
+        runId: null,
+        limit: 5,
+      });
+      expect(repeated).toMatchObject({
+        found: 5,
+        processed: 5,
+        published: 0,
+        unchanged: 4,
+        next: first.next,
+      });
+      expect(repeated.failed).toHaveLength(1);
+      const later = await generateStatementSuggestionPage(ctx.db, {
+        after: first.next,
+        runId: null,
+        limit: 5,
+      });
+      expect(later).toMatchObject({
+        found: 2,
+        processed: 2,
+        published: 2,
+        failed: [],
+        next: null,
+      });
+      await getDb(ctx.db).execute(
+        sql`DELETE FROM "SyntheticStatementPublicationFailure"`,
+      );
+      const recovered = await generateStatementSuggestionPage(ctx.db, {
+        after: null,
+        runId: null,
+        limit: 5,
+      });
+      expect(recovered).toMatchObject({
+        found: 5,
+        processed: 5,
+        published: 1,
+        unchanged: 4,
+        failed: [],
+        next: first.next,
+      });
+      expect(await suggestions(ctx)).toHaveLength(7);
+    } finally {
+      await removeFailure();
+    }
+  });
+
+  it("continues vanished hold generation after an item publication failure with a stable retry frontier", async () => {
+    await card(ctx);
+    await record(
+      ctx,
+      Array.from({ length: 7 }, (_, index) =>
+        rowInput({
+          providerStatus: "pending",
+          providerAmount: -(100 + index * 25),
+          statementDate: "2026-05-01",
+          rawDescription: `SYNTHETIC VANISHED HOLD ${index}`,
+          merchant: `Synthetic Hold Merchant ${index}`,
+        }),
+      ),
+      { fingerprint: "synthetic-seven-holds" },
+    );
+    await generate(ctx);
+    for (const hold of await suggestions(ctx)) await accept(ctx, hold);
+    await record(
+      ctx,
+      [
+        rowInput({
+          statementDate: "2026-05-12",
+          rawDescription: "SYNTHETIC HOLD COVERAGE",
+          providerAmount: -1,
+        }),
+      ],
+      { fingerprint: "synthetic-seven-holds-coverage" },
+    );
+    const { rows: holds } = await getDb(ctx.db).execute<{
+      id: string;
+      chargeKey: string;
+    }>(sql`
+      SELECT ft.id::text AS id, COALESCE(sr."legacyExternalId", sr."externalId") AS "chargeKey"
+      FROM "FinancialTransaction" ft
+      JOIN "EntityExternalId" fx ON fx."entityId" = ft.id AND fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
+      JOIN "StatementRow" sr ON sr.source = fx.source AND sr."externalId" = fx."externalId" AND sr."deletedAt" IS NULL
+      WHERE ft."deletedAt" IS NULL ORDER BY ft.id
+    `);
+    const removeFailure = await rejectStatementPublication(
+      ctx,
+      holds[0]!.chargeKey,
+    );
+    try {
+      const first = await generateStatementHoldVoidPage(ctx.db, {
+        after: null,
+        runId: null,
+        limit: 5,
+      });
+      expect(first).toMatchObject({
+        found: 5,
+        processed: 5,
+        published: 4,
+        unchanged: 0,
+        next: holds[4]!.id,
+      });
+      expect(first.failed).toHaveLength(1);
+      expect(first.failed[0]!.message).toContain(
+        "Synthetic statement publication failure",
+      );
+      const repeated = await generateStatementHoldVoidPage(ctx.db, {
+        after: null,
+        runId: null,
+        limit: 5,
+      });
+      expect(repeated).toMatchObject({
+        found: 5,
+        processed: 5,
+        published: 0,
+        unchanged: 4,
+        next: first.next,
+      });
+      expect(repeated.failed).toHaveLength(1);
+      expect(
+        await generateStatementHoldVoidPage(ctx.db, {
+          after: first.next,
+          runId: null,
+          limit: 5,
+        }),
+      ).toMatchObject({
+        found: 2,
+        processed: 2,
+        published: 2,
+        failed: [],
+        next: null,
+      });
+      await getDb(ctx.db).execute(
+        sql`DELETE FROM "SyntheticStatementPublicationFailure"`,
+      );
+      expect(
+        await generateStatementHoldVoidPage(ctx.db, {
+          after: null,
+          runId: null,
+          limit: 5,
+        }),
+      ).toMatchObject({
+        found: 5,
+        processed: 5,
+        published: 1,
+        unchanged: 4,
+        failed: [],
+        next: first.next,
+      });
+      expect(
+        (await suggestions(ctx)).filter((row) => row.recommended === "void"),
+      ).toHaveLength(7);
+    } finally {
+      await removeFailure();
+    }
+  });
+
   // Failure modes: a hold that vanished keeps its pending transaction forever;
   // a void is offered before a covering export exists.
   it("proposes voiding a hold a later export no longer contains", async () => {
@@ -635,7 +966,24 @@ describe("statement Transaction suggestions", () => {
       ],
       { fingerprint: "fp-later" },
     );
-    await generate(ctx);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    expect(
+      (await suggestions(ctx)).filter((row) => row.recommended === "void"),
+    ).toEqual([]);
+    const holds = await generateStatementHoldVoidPage(ctx.db, {
+      after: null,
+      runId: null,
+      limit: 1,
+    });
+    expect(holds).toMatchObject({ processed: 1, published: 1 });
+    expect(holds.next).not.toBeNull();
+    expect(
+      await generateStatementHoldVoidPage(ctx.db, {
+        after: holds.next,
+        runId: null,
+        limit: 1,
+      }),
+    ).toMatchObject({ processed: 0, published: 0, next: null });
     const voids = (await suggestions(ctx)).filter(
       (row) => row.recommended === "void",
     );
@@ -1267,6 +1615,351 @@ describe("statement Transaction suggestions", () => {
   });
 
   // Publication failure must not discard a completely paid judgment before retry.
+  it("resumes automatic application after a crash following model publication", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput(),
+      rowInput({
+        rawDescription: "EXAMPLE GROCER SECOND",
+        providerAmount: -12,
+      }),
+    ]);
+    await generate(ctx);
+    const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      10,
+    );
+    const charges = (await suggestions(ctx)).map(({ source, chargeKey }) => ({
+      source,
+      chargeKey,
+    }));
+    const proposals = await buildChargeProposals(ctx.db, charges);
+    // Publication can settle in reverse order; recovery must retain the input order.
+    for (const row of [...before].reverse()) {
+      const proposal = proposals.find(
+        (entry) => entry.evidenceFingerprint === row.evidenceFingerprint,
+      )!;
+      const judgment = structuredClone(proposal!.judgment);
+      judgment.create!.votes.label = "purchase";
+      judgment.create!.counterparty.label = "business";
+      // Stop at the durable boundary that precedes automatic application.
+      await publishChargeProposal(
+        ctx.db,
+        await labelledProposal(proposal!, judgment),
+        {
+          kind: "model",
+          model: DECISION_MODEL,
+          revision: STATEMENT_LABEL_REVISION,
+          runId: null,
+          evaluationId: null,
+        },
+      );
+    }
+    const receipts = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      10,
+    );
+    expect(receipts.map((row) => row.subject)).toEqual(
+      before.map((row) => row.subject),
+    );
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+    ).toBe(2);
+    const resumed = await label(ctx, async () => {
+      throw new Error(
+        "Published labels must not be recomputed during application recovery",
+      );
+    });
+    expect(resumed.failed).toEqual([]);
+    expect(resumed.completed).toBe(2);
+    expect(resumed.labelled).toBe(0);
+    expect(resumed.labels.generated).toBe(0);
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+    ).toBe(0);
+  });
+
+  it("precomputes labels without publishing conclusions or applying rules", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [before] = await suggestions(ctx);
+    const bounded = await precomputeStatementSuggestionLabels(ctx.db, {
+      limit: 1,
+      maxBytes: 1,
+      maxMs: 30_000,
+      port: async () => {
+        throw new Error("Byte-exhausted preparation must not ask a question");
+      },
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    expect(bounded.labels.generated).toBe(0);
+    expect(bounded.next).toMatchObject({ inclusive: true });
+    const computed = await precomputeStatementSuggestionLabels(ctx.db, {
+      limit: 1,
+      maxBytes: 64_000,
+      maxMs: 30_000,
+      after: bounded.next,
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    expect(computed.labels.generated).toBe(3);
+    expect(computed.next).toBeNull();
+    expect(computed.through).not.toBeNull();
+    const caughtUp = await precomputeStatementSuggestionLabels(ctx.db, {
+      limit: 1,
+      maxBytes: 64_000,
+      maxMs: 30_000,
+      after: computed.through,
+      port: async () => {
+        throw new Error(
+          "Caught-up speculation must not repeat model admission",
+        );
+      },
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    expect(caughtUp).toMatchObject({
+      computed: 0,
+      next: null,
+      through: null,
+      labels: { generated: 0 },
+    });
+    expect(await suggestions(ctx)).toEqual([before]);
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+    ).toBe(1);
+    await record(
+      ctx,
+      [
+        rowInput({
+          rawDescription: "EXAMPLE PIPELINED CHARGE",
+          providerAmount: -10,
+        }),
+      ],
+      { fingerprint: "synthetic-pipelined-page" },
+    );
+    await generate(ctx);
+    const added = await precomputeStatementSuggestionLabels(ctx.db, {
+      limit: 1,
+      maxBytes: 64_000,
+      maxMs: 30_000,
+      after: computed.through,
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+    });
+    expect(added).toMatchObject({
+      computed: 1,
+      labels: { generated: 3, reused: 0 },
+    });
+    const published = await label(ctx, async () => {
+      throw new Error("Precomputed labels must be retained");
+    });
+    expect(published).toMatchObject({
+      labelled: 2,
+      failed: [],
+      labels: { generated: 0, reused: 6 },
+    });
+  });
+
+  it.each([
+    { failure: "model", resolution: "retry" },
+    { failure: "publication", resolution: "retry" },
+    { failure: "model", resolution: "exhausted" },
+    { failure: "publication", resolution: "exhausted" },
+  ])(
+    "keeps competing automatic applications ordered across $failure failure and $resolution",
+    async ({ failure, resolution }) => {
+      await enableStatementAttach(ctx);
+      const account = (await card(ctx)).output;
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 42.5,
+        postedDate: "2026-05-05",
+        merchant: "Older import label",
+        rawDescription: "EXMPL GRCR #1 SYNTHETIC",
+        sourceRefs: [],
+      });
+      await record(ctx, [
+        rowInput({
+          rawDescription: "EXAMPLE GROCER 0001",
+          statementDate: "2026-05-04",
+          rowPosition: 1,
+        }),
+      ]);
+      await generate(ctx);
+      await record(ctx, [
+        rowInput({
+          rawDescription: "EXAMPLE GROCER 0002",
+          statementDate: "2026-05-06",
+          rowPosition: 2,
+        }),
+      ]);
+      await generate(ctx);
+      const originalOrder =
+        await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10);
+      expect(originalOrder).toHaveLength(2);
+      const [earlier] = await suggestions(ctx).then((rows) =>
+        rows.filter((row) => row.rawDescription === "EXAMPLE GROCER 0001"),
+      );
+      let failing = true;
+      let laterCalls = 0;
+      const answer = answering({ kind: "purchase", counterparty: "business" });
+      const port: DecisionPort = async (request) => {
+        if (request.state.includes("EXAMPLE GROCER 0002")) laterCalls++;
+        if (
+          failure === "model" &&
+          failing &&
+          request.state.includes("EXAMPLE GROCER 0001")
+        )
+          throw new Error("Synthetic earlier model failure");
+        return answer(request);
+      };
+      const originalPublish = statementSuggestionsRepo.publishChargeProposal;
+      const publish = vi
+        .spyOn(statementSuggestionsRepo, "publishChargeProposal")
+        .mockImplementation(async (...args) => {
+          if (
+            failure === "publication" &&
+            failing &&
+            args[1].charge.chargeKey === earlier!.chargeKey
+          )
+            throw new Error("Synthetic earlier publication failure");
+          return originalPublish(...args);
+        });
+      try {
+        const first = await label(ctx, port);
+        expect(first).toMatchObject({ labelled: 1, completed: 0 });
+        expect(first.failed).toHaveLength(1);
+        // The failure stays in the original-input retry budget. Only the later
+        // durable receipt advances after that budget is exhausted.
+        expect(first.next).toEqual({
+          createdAt: originalOrder[1]!.createdAt,
+          id: originalOrder[1]!.cursorId,
+          inclusive: true,
+        });
+        expect(
+          (await listStatementRows(ctx.db, {})).data.every(
+            (row) => row.matchState === "unmatched",
+          ),
+        ).toBe(true);
+        const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
+          ctx.db,
+          10,
+        );
+        expect(pending).toHaveLength(2);
+        expect(pending[1]!.applicationPending).toBe(true);
+        const retainedLaterCalls = laterCalls;
+        failing = resolution === "exhausted";
+        const resumed = await labelStatementSuggestions(ctx.db, {
+          port,
+          runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+          ...(resolution === "exhausted" && { after: first.next }),
+        });
+        expect(resumed.failed).toEqual([]);
+        expect(resumed.next).toBeNull();
+        expect(laterCalls).toBe(retainedLaterCalls);
+        const rows = (await listStatementRows(ctx.db, {})).data;
+        const winner =
+          resolution === "retry"
+            ? "EXAMPLE GROCER 0001"
+            : "EXAMPLE GROCER 0002";
+        const loser =
+          resolution === "retry"
+            ? "EXAMPLE GROCER 0002"
+            : "EXAMPLE GROCER 0001";
+        expect(
+          rows.find((row) => row.rawDescription === winner)?.matchState,
+        ).toBe("matched");
+        expect(
+          rows.find((row) => row.rawDescription === loser)?.matchState,
+        ).toBe("unmatched");
+      } finally {
+        publish.mockRestore();
+      }
+    },
+  );
+
+  it("does not persist empty checkpoints when no label questions are admitted", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const port: DecisionPort = async () => {
+      throw new Error("A zero-question budget must not admit model work");
+    };
+    const normal = await labelStatementSuggestions(ctx.db, {
+      runId,
+      port,
+      decisionLimit: 0,
+    });
+    expect(normal).toMatchObject({
+      labelled: 0,
+      completed: 0,
+      failed: [],
+      labels: { generated: 0 },
+    });
+    expect(normal.next).toMatchObject({ inclusive: true });
+    expect(
+      (await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1))[0]!
+        .checkpoint,
+    ).toBeNull();
+    const speculative = await precomputeStatementSuggestionLabels(ctx.db, {
+      runId,
+      port,
+      decisionLimit: 0,
+      maxBytes: 64_000,
+      maxMs: 30_000,
+    });
+    expect(speculative).toMatchObject({
+      computed: 0,
+      failed: [],
+      labels: { generated: 0 },
+    });
+    expect(speculative.next).toMatchObject({ inclusive: true });
+    expect(
+      (await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1))[0]!
+        .checkpoint,
+    ).toBeNull();
+    expect(
+      await label(
+        ctx,
+        answering({ kind: "purchase", counterparty: "business" }),
+      ),
+    ).toMatchObject({
+      labelled: 1,
+      completed: 1,
+      failed: [],
+      labels: { generated: 3 },
+    });
+  });
+
+  it("rejects model publication when generation replaces its evidence during computation", async () => {
+    await card(ctx);
+    const original = rowInput();
+    await record(ctx, [original]);
+    await generate(ctx);
+    let moved = false;
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    const outcome = await label(ctx, async (request) => {
+      if (!moved) {
+        moved = true;
+        await record(
+          ctx,
+          [{ ...original, providerNotes: "Synthetic replacement evidence" }],
+          { fingerprint: "synthetic-mid-label-replacement" },
+        );
+        await generate(ctx);
+      }
+      return answer(request);
+    });
+    expect(outcome).toMatchObject({ labelled: 0, completed: 0 });
+    expect(outcome.failed).toHaveLength(1);
+    expect((await suggestions(ctx))[0]!.create!.votes.label).toBeNull();
+    expect(await label(ctx, answer)).toMatchObject({ labelled: 1, failed: [] });
+  });
+
   it("retains completed decisions when model publication fails", async () => {
     await card(ctx);
     await record(ctx, [rowInput()]);
@@ -1284,6 +1977,18 @@ describe("statement Transaction suggestions", () => {
       const first = await label(ctx, port);
       expect(first.failed).toHaveLength(1);
       expect(first.labels).toEqual({ reused: 0, generated: 3 });
+      const [retained] =
+        await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1);
+      expect(retained!.checkpoint).toMatchObject({
+        kind: true,
+        counterparty: true,
+        judgment: {
+          create: {
+            votes: { label: "purchase" },
+            counterparty: { label: "business" },
+          },
+        },
+      });
       const resumed = await label(ctx, port);
       expect(resumed.labelled).toBe(1);
       expect(resumed.labels).toEqual({ reused: 3, generated: 0 });

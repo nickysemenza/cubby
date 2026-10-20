@@ -7,7 +7,10 @@ import {
 } from "@cubby/shared/ai/models";
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 
-import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
+import {
+  createConcurrencyLimiter,
+  forEachConcurrently,
+} from "~/lib/concurrency-limiter";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import {
@@ -23,11 +26,13 @@ import {
   buildTransferPair,
   labelTransferPair,
   publishTransferPair,
+  refreshTransferPairStatements,
   transferPairEvidenceFingerprint,
   transferPairsNeedingLabels,
   type TransferPairLabelCursor,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
+import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many pairs. */
@@ -89,8 +94,11 @@ export async function labelTransferPairSuggestions(
   } = {},
 ): Promise<{
   labelled: number;
+  /** Finished label work, including a resumed dependent statement refresh. */
+  completed: number;
   /** Pairs whose evidence moved since publication; regeneration relabels them. */
   stale: number;
+  skippedIds: string[];
   failed: RunStepError[];
   next: TransferPairLabelCursor | null;
   /** False when the automatic-work switch is off, so nothing was asked. */
@@ -99,7 +107,9 @@ export async function labelTransferPairSuggestions(
 }> {
   const empty = {
     labelled: 0,
+    completed: 0,
     stale: 0,
+    skippedIds: [],
     failed: [],
     next: null,
     waitingUntil: null,
@@ -121,8 +131,11 @@ export async function labelTransferPairSuggestions(
     (await ensureRun(db, systemActor(), { purpose: "background" }));
   const usage = { db, runId, operation: "transfer-pair-label" };
   const failed: RunStepError[] = [];
+  const skippedIds: string[] = [];
   const pauses: AiBudgetExhaustedError[] = [];
+  const interruptions: unknown[] = [];
   let labelled = 0;
+  let completed = 0;
   let stale = 0;
   const page = rows.slice(0, limit);
   let unfinished = Infinity;
@@ -130,6 +143,10 @@ export async function labelTransferPairSuggestions(
   const database = createConcurrencyLimiter(TRANSFER_PAIR_PUBLISH_CONCURRENCY);
   const signal = new AbortController().signal;
   const recordFailure = (index: number, error: unknown) => {
+    if (isWorkflowInterrupted(error)) {
+      interruptions.push(error);
+      return;
+    }
     const row = page[index]!;
 
     const deferred = aiWorkDeferral(error);
@@ -150,6 +167,14 @@ export async function labelTransferPairSuggestions(
   const prepared = await Promise.all(
     page.map(async (row, index) => {
       try {
+        if (row.data.statementRefreshPending) {
+          await database.run(
+            () => refreshTransferPairStatements(db, row.data.pairKey),
+            signal,
+          );
+          completed++;
+          return null;
+        }
         const current = await database.run(
           () => buildTransferPair(db, row.data.pairKey),
           signal,
@@ -160,6 +185,7 @@ export async function labelTransferPairSuggestions(
             row.data.evidenceFingerprint
         ) {
           stale++;
+          skippedIds.push(row.id);
           return null;
         }
         const model = selectDecisionModel({ key: row.data.pairKey });
@@ -170,6 +196,7 @@ export async function labelTransferPairSuggestions(
       }
     }),
   );
+  if (interruptions.length) throw interruptions[0];
   const ready = prepared
     .filter((item) => item !== null)
     .map((item) => {
@@ -209,15 +236,19 @@ export async function labelTransferPairSuggestions(
       ? { choice, confidence: answer.value.confidence, model: pair.model }
       : null;
   }
-  await Promise.all(
-    ready.map(async (item) => {
+  await forEachConcurrently(
+    ready,
+    TRANSFER_PAIR_PUBLISH_CONCURRENCY,
+    async (item) => {
       const { current, model, index } = item;
       try {
         if (item.errors.length)
           throw (
+            item.errors.find(isWorkflowInterrupted) ??
             item.errors.find(
               (error) => error instanceof AiBudgetExhaustedError,
-            ) ?? item.errors[0]
+            ) ??
+            item.errors[0]
           );
         await database.run(async () => {
           const outcome = await publishTransferPair(
@@ -237,22 +268,20 @@ export async function labelTransferPairSuggestions(
               evaluationId: null,
             },
           );
-          if (outcome === "published") {
-            labelled++;
-            const charges = [
-              current.judgment.outflow,
-              current.judgment.inflow,
-            ].flatMap((leg) => (leg.charge ? [leg.charge] : []));
-            const { regenerateCharges } =
-              await import("~/server/domains/statement-import/repo/statement-suggestions");
-            await regenerateCharges(db, charges);
-          }
+          if (outcome === "published") labelled++;
+          const refreshed =
+            current.judgment.outflow.charge || current.judgment.inflow.charge
+              ? await refreshTransferPairStatements(db, current.judgment.key)
+              : false;
+          if (outcome === "published" || refreshed) completed++;
         }, signal);
       } catch (error) {
+        if (isWorkflowInterrupted(error)) throw error;
         recordFailure(index, error);
       }
-    }),
+    },
   );
+  if (interruptions.length) throw interruptions[0];
   if (pauses[0]) throw pauses[0];
   const last = page.at(-1);
   // Resume before the earliest deferred pair. A null cursor with a wake time
@@ -260,7 +289,9 @@ export async function labelTransferPairSuggestions(
   const before = page[unfinished - 1];
   return {
     labelled,
+    completed,
     stale,
+    skippedIds,
     failed,
     next: Number.isFinite(unfinished)
       ? before

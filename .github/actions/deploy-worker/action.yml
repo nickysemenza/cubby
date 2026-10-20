@@ -39,7 +39,7 @@ inputs:
     description: "Cloudflare account ID"
     required: true
   production-direct-database-url:
-    description: "Direct Neon URL for production migrations"
+    description: "Direct Neon URL for production migrations and Workflow activation"
     required: true
   production-migration-through:
     description: "Optional exact migration boundary for an operator-managed staged cutover"
@@ -104,4 +104,5 @@ runs:
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        PRODUCTION_DIRECT_DATABASE_URL: ${{ inputs.production-direct-database-url }}
       run: ${{ inputs.deploy-command }}

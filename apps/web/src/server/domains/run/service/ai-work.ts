@@ -195,6 +195,12 @@ export async function executeAiWorkTarget(
       await executeSuggestionSweepTarget(db, item, { ...ports.sweep, context });
     }
   } catch (error) {
+    if (
+      (await import("~/server/workflows/runs/execution")).isWorkflowInterrupted(
+        error,
+      )
+    )
+      throw error;
     const message = runFailureText(
       error instanceof Error ? error : String(error),
     );

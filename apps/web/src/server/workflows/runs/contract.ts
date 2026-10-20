@@ -36,6 +36,8 @@ const workflowRunParams = z.object({
   runId: z.uuid(),
   /** Steps act only while Run.progress.attempt still equals this. */
   attempt: z.number().int().nonnegative(),
+  deploymentVersion: z.string().optional(),
+  activationEpoch: z.number().int().positive().optional(),
 });
 export type WorkflowRunParams = Readonly<z.infer<typeof workflowRunParams>>;
 

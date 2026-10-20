@@ -145,7 +145,9 @@ function phaseRead(
           : "completed"
         : paused
           ? "paused"
-          : waiting
+          : waiting ||
+              sample.activity === "capacity" ||
+              sample.activity === "retry"
             ? "waiting"
             : "running";
   const etaSeconds =
@@ -164,7 +166,10 @@ function phaseRead(
         ? null
         : paused
           ? "paused"
-          : stale
+          : stale ||
+              waiting ||
+              sample.activity === "capacity" ||
+              sample.activity === "retry"
             ? "stale"
             : "current",
   };

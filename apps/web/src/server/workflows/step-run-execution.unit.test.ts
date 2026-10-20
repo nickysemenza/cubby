@@ -1,5 +1,5 @@
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { memoryDurableSteps } from "~/server/testing/durable-steps";
 
@@ -24,6 +24,33 @@ const work = (overrides: Partial<StepRunWork> = {}): StepRunWork => {
 };
 
 describe("step Run Workflow failure and invocation boundaries", () => {
+  it("executes again after a deadline wait leaves the inspected checkpoint unchanged", async () => {
+    let calls = 0;
+    const sleeps: number[] = [];
+    await runStepRunWorkflow(
+      memoryDurableSteps().steps,
+      work({
+        inspect: async () => ({
+          name: "same checkpoint",
+          scope: "synthetic",
+          nextInstanceId: "RUN-4K7M-2",
+          summary: null,
+        }),
+        advance: async () =>
+          ++calls === 1
+            ? { kind: "continue", waitSeconds: 60 }
+            : { kind: "finished" },
+        waitUntil: async (_name, dueAt) => {
+          sleeps.push(dueAt);
+          return false;
+        },
+        boundary: async (_name, force) => Boolean(force),
+      }),
+    );
+    expect(calls).toBe(2);
+    expect(sleeps).toHaveLength(1);
+  });
+
   // Cheap and partially filled label pages still use the driver's static budget.
   it("keeps cheap label pages in one instance beyond the former two-page cap", async () => {
     let advanced = 0;
@@ -180,7 +207,7 @@ describe("step Run Workflow failure and invocation boundaries", () => {
     expect(advanced).toBe(1);
     expect(
       durable.completed.get(
-        "generate p4 · charges 61–80 · statement_transaction",
+        "generate p4 · charges 61–80 · statement_transaction · iteration 1",
       ),
     ).toMatchObject({
       summary,
@@ -212,29 +239,36 @@ describe("step Run Workflow failure and invocation boundaries", () => {
       { name: "capacity:0", durationMs: 60_000 },
     ]);
   });
-  // A slow committed page must yield before the next page, even below its page cap.
-  it("hands off after a committed page reaches the elapsed-time bound", async () => {
-    let committed = false;
-    let handedOff = false;
-    await expect(
-      runStepRunWorkflow(
+  // Wall time and durable waits do not spend an instance's resource allowance.
+  // Deployment and resource fences still decide continuation independently.
+  it("continues useful work beyond ten minutes without rotating the instance", async () => {
+    let pages = 0;
+    let forced = 0;
+    vi.useFakeTimers();
+    try {
+      await runStepRunWorkflow(
         memoryDurableSteps().steps,
         work({
-          elapsedMs: () => (committed ? 600_001 : 0),
           advance: async () => {
-            if (committed)
-              throw new Error("Synthetic page started after elapsed bound");
-            committed = true;
-            return { kind: "continue" };
+            vi.setSystemTime(Date.now() + 3_600_000);
+            return ++pages === 3
+              ? { kind: "finished" }
+              : {
+                  kind: "continue",
+                  execution: { phase: "generation", pagesPerInstance: 100 },
+                };
           },
           boundary: async (_name, force) => {
-            handedOff = Boolean(force);
-            return handedOff;
+            if (force) forced++;
+            return Boolean(force);
           },
         }),
-      ),
-    ).resolves.toBeUndefined();
-    expect(handedOff).toBe(true);
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(pages).toBe(3);
+    expect(forced).toBe(0);
   });
 
   // The SQL wrapper must not replace the original error, or hide the
@@ -313,7 +347,7 @@ describe("step Run Workflow failure and invocation boundaries", () => {
         ...driver,
         advance: async () => {
           requests += 100;
-          if (requests > 1_000)
+          if (requests > 4_000)
             throw new Error("Synthetic invocation subrequest cap");
           return advance();
         },

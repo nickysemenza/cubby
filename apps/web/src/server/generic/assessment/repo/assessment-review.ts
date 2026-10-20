@@ -446,6 +446,9 @@ export async function reviewAssessment(
   return withSnapshotWriteDatabase(
     db,
     async (transactionDb) => {
+      await (
+        await import("~/server/workflows/runs/execution")
+      ).assertWorkflowEffect(transactionDb);
       await assertAutomaticRuleOn(
         transactionDb,
         automatic.rule.key,

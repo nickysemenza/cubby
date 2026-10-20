@@ -11,6 +11,31 @@ import { runDeploymentBoundary } from "./runs/deployment";
 // rollback; only a new boundary observes the replacement deployment. A lookup
 // failure must not silently authorize another page of pinned code.
 describe("Workflow deployment boundaries", () => {
+  it("forces a retained current boundary to hand off exactly once", async () => {
+    const durable = memoryDurableSteps();
+    const resume = vi.fn(async () => {});
+    const input = {
+      name: "synthetic-same-checkpoint",
+      version: "synthetic-a",
+      epoch: 1,
+      currentVersion: async () => ({ version: "synthetic-a", epoch: 1 }),
+      continue: resume,
+    };
+    expect(await workflowDeploymentBoundary(durable.steps, input)).toBe(false);
+    expect(
+      await workflowDeploymentBoundary(durable.steps, {
+        ...input,
+        force: true,
+      }),
+    ).toBe(true);
+    expect(
+      await workflowDeploymentBoundary(durable.steps, {
+        ...input,
+        force: true,
+      }),
+    ).toBe(true);
+    expect(resume).toHaveBeenCalledOnce();
+  });
   // Creating a successor in the predecessor's RPC ancestry can carry the
   // Worker loop depth forward. Queue acceptance must precede a fresh launch.
   it("queues successor launch without creating it in the predecessor invocation", async () => {
@@ -58,7 +83,9 @@ describe("Workflow deployment boundaries", () => {
       nextInstanceId: "RUN-4K7M-2",
       summary,
     });
-    expect(durable.completed.get("deployment guard · continue")).toMatchObject({
+    expect(
+      durable.completed.get("deployment guard · continue · forced"),
+    ).toMatchObject({
       handoff: true,
       reason: "instance budget",
     });
@@ -75,33 +102,51 @@ describe("Workflow deployment boundaries", () => {
     ]);
   });
 
-  // A current Workflow can initially reach the preceding DO deployment.
-  // Startup must make progress without a settle sleep or successor storm;
-  // the next committed-page boundary still detects a deploy or rollback.
-  it("starts without waiting for a stale DO and hands off after a committed page", async () => {
+  // Startup uses the activated deployment, including on the first checkpoint.
+  it("admits a current fresh instance without sleeping and rejects obsolete startup", async () => {
     const { steps, sleeps } = memoryDurableSteps();
     const resume = vi.fn(async () => {});
-    const currentVersion = vi.fn(async () => "synthetic-old-do");
-    const input = {
+    const currentVersion = vi.fn(async () => ({
       version: "synthetic-current",
-      currentVersion,
-      continue: resume,
-    };
+      epoch: 1,
+    }));
     expect(
       await workflowDeploymentBoundary(steps, {
-        ...input,
-        name: "page:0",
-        initial: true,
+        name: "current-start",
+        version: "synthetic-current",
+        currentVersion,
+        continue: resume,
       }),
     ).toBe(false);
+    expect(currentVersion).toHaveBeenCalledOnce();
     expect(sleeps).toEqual([]);
     expect(resume).not.toHaveBeenCalled();
     expect(
       await workflowDeploymentBoundary(steps, {
-        ...input,
-        name: "page:1",
+        name: "obsolete-start",
+        version: "synthetic-old",
+        currentVersion,
+        continue: resume,
       }),
     ).toBe(true);
+    expect(resume).toHaveBeenCalledOnce();
+  });
+
+  it("adopts a rollback epoch even when its Worker version is unchanged", async () => {
+    const { steps } = memoryDurableSteps();
+    let epoch = 1;
+    const resume = vi.fn(async () => {});
+    const check = (name: string) =>
+      workflowDeploymentBoundary(steps, {
+        name,
+        version: "synthetic-a",
+        epoch: 1,
+        currentVersion: async () => ({ version: "synthetic-a", epoch }),
+        continue: resume,
+      });
+    expect(await check("before")).toBe(false);
+    epoch = 3;
+    expect(await check("after-rollback")).toBe(true);
     expect(resume).toHaveBeenCalledOnce();
   });
 
@@ -115,7 +160,7 @@ describe("Workflow deployment boundaries", () => {
     const handedOff = await workflowDeploymentBoundary(steps, {
       name: "page:1",
       version: "synthetic-a",
-      currentVersion: async () => deployed,
+      currentVersion: async () => ({ version: deployed }),
       continue: async () => {
         successors.add("synthetic-successor");
         if (!replyLost) {
@@ -129,10 +174,9 @@ describe("Workflow deployment boundaries", () => {
     expect([...successors]).toEqual(["synthetic-successor"]);
   });
 
-  // Cloudflare exceptions can permanently break one stub; retrying the RPC
-  // on that same stub must not turn transient unavailability into a failed Run.
-  it("acquires a fresh authority stub after a broken RPC", async () => {
-    let first = true;
+  // A failed authoritative lookup must retry a fresh read, never a stale DO.
+  it("retries activation reads without consulting a Durable Object version", async () => {
+    let reads = 0;
     let launches = 0;
     const env = fromPartial<Env>({
       CF_VERSION_METADATA: { id: "synthetic-a" },
@@ -141,35 +185,22 @@ describe("Workflow deployment boundaries", () => {
           launches += 1;
         },
       },
-      AI_GATEWAY_EGRESS: {
-        getByName: () => {
-          let broken = false;
-          return fromPartial<ReturnType<Env["AI_GATEWAY_EGRESS"]["getByName"]>>(
-            {
-              currentDeploymentVersion: async () => {
-                if (broken) throw new Error("Synthetic broken stub");
-                if (first) {
-                  first = false;
-                  broken = true;
-                  throw new Error("Synthetic transient RPC failure");
-                }
-                return "synthetic-b";
-              },
-              continueWorkflowRun: async () => {
-                launches += 1;
-              },
-            },
-          );
-        },
-      },
     });
     const { steps } = memoryDurableSteps();
-    const boundary = runDeploymentBoundary(env, steps, {
-      runId: "00000000-0000-4000-8000-000000000001",
-      attempt: 1,
-    });
-    await expect(boundary("page:0")).resolves.toBe(false);
-    await expect(boundary("page:1")).resolves.toBe(true);
+    const boundary = runDeploymentBoundary(
+      env,
+      steps,
+      {
+        runId: "00000000-0000-4000-8000-000000000001",
+        attempt: 1,
+      },
+      async () => {
+        if (++reads === 1) throw new Error("Synthetic activation unavailable");
+        return { version: "synthetic-b" };
+      },
+    );
+    await expect(boundary("page:0")).resolves.toBe(true);
+    expect(reads).toBe(2);
     expect(launches).toBe(1);
   });
 
@@ -181,7 +212,7 @@ describe("Workflow deployment boundaries", () => {
       workflowDeploymentBoundary(steps, {
         name,
         version: "synthetic-b",
-        currentVersion: async () => version,
+        currentVersion: async () => ({ version }),
         continue: resume,
       });
     expect(await check("page:0")).toBe(false);
@@ -194,7 +225,7 @@ describe("Workflow deployment boundaries", () => {
 
   it("fails closed on an unavailable version and still rotates at the instance bound", async () => {
     const { steps } = memoryDurableSteps();
-    const currentVersion = vi.fn(async (): Promise<string> => {
+    const currentVersion = vi.fn(async (): Promise<{ version: string }> => {
       throw new Error("Synthetic version RPC unavailable");
     });
     const resume = vi.fn(async () => {});

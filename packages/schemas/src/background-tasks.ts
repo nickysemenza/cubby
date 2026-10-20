@@ -9,6 +9,7 @@ import {
 } from "./identifiers";
 import { imageProcessingResult } from "./image-processing";
 import { derivedRefreshWakeupTask } from "./derived-refresh";
+import { searchRepairWorkflowParams } from "./maintenance";
 
 /**
  * Background tasks are self-contained queue payloads: the message carries
@@ -23,6 +24,7 @@ import { derivedRefreshWakeupTask } from "./derived-refresh";
 export const backgroundTaskKinds = [
   "derived-refresh.wakeup",
   "workflow.continue",
+  "search-repair.continue",
   "recipe-totals.recompute",
   "entity-embedding.refresh",
   "location-ai.description.refresh",
@@ -134,7 +136,14 @@ export const workflowContinuationTaskSchema = z.object({
   kind: z.literal("workflow.continue"),
   ...taskEnvelopeFields,
   runId: runEntityId,
-  attempt: z.number().int().positive(),
+  /** Zero is a retained initial dispatch awaiting release activation. */
+  attempt: z.number().int().nonnegative(),
+});
+export const searchRepairContinuationTaskSchema = z.object({
+  kind: z.literal("search-repair.continue"),
+  ...taskEnvelopeFields,
+  id: z.string().min(1),
+  params: searchRepairWorkflowParams,
 });
 
 export const maintenancePurchaseDiscoveryTaskSchema = z.object({
@@ -178,6 +187,7 @@ export const statementSuggestionsLabelTaskSchema = z.object({
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   derivedRefreshWakeupTask,
   workflowContinuationTaskSchema,
+  searchRepairContinuationTaskSchema,
   recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,

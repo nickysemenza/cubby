@@ -816,6 +816,12 @@ describe("liveProgressBlocks", () => {
         detail: expect.stringContaining("paused"),
       }),
     );
+    expect(blocks).toContainEqual(
+      expect.objectContaining({
+        kind: "progress",
+        detail: expect.stringContaining("Phase ETA"),
+      }),
+    );
   });
 
   it("does not estimate already completed zero-item work", () => {

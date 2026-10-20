@@ -56,10 +56,12 @@ import {
   suggestionsNeedingLabels,
   type LabelCursor,
   recordStatementLabelCheckpoint,
+  completeStatementApplications,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { canonicalJson } from "~/server/lib/canonical-json";
+import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 export const STATEMENT_LABEL_BATCH =
@@ -91,7 +93,8 @@ async function buildPage(
   try {
     for (const proposal of await buildChargeProposals(db, charges))
       byCharge.set(chargeId(proposal.charge), proposal);
-  } catch {
+  } catch (error) {
+    if (isWorkflowInterrupted(error)) throw error;
     // SILENT: the per-charge builds below record each failing charge's own error.
     await forEachConcurrently(
       charges,
@@ -101,6 +104,7 @@ async function buildPage(
           const [proposal] = await buildChargeProposals(db, [charge]);
           if (proposal) byCharge.set(chargeId(charge), proposal);
         } catch (error) {
+          if (isWorkflowInterrupted(error)) throw error;
           onFailure(charge, error);
         }
       },
@@ -118,7 +122,10 @@ function prepareLabelledJudgment(
     spendingAdvice?: SpendingAdvicePort;
     usage: DecisionChoiceArgs["usage"];
     checkpoint: StatementLabelCheckpoint | null;
-    reserve(count: number): () => boolean;
+    reserve(
+      questions: readonly DecisionChoiceArgs[],
+      additional?: number,
+    ): () => boolean;
   },
 ) {
   const previous =
@@ -176,6 +183,7 @@ function prepareLabelledJudgment(
   const errors: unknown[] = [];
   let waitingUntil: number | null = null;
   const retainError = (error: unknown) => {
+    if (isWorkflowInterrupted(error)) throw error;
     const deferred = aiWorkDeferral(error);
     if (deferred)
       waitingUntil = Math.min(waitingUntil ?? Infinity, deferred.until);
@@ -265,7 +273,10 @@ function prepareLabelledJudgment(
   // charge synchronously, so a small allowance completes earlier charges first.
   const spendingReserved =
     !checkpoint.spending && needsSpendingAdvice(judgment);
-  const reserved = input.reserve(decisions.length + Number(spendingReserved));
+  const reserved = input.reserve(
+    decisions.map((decision) => decision.args),
+    Number(spendingReserved),
+  );
   return {
     decisions: decisions.filter(() => reserved()),
     retainError,
@@ -294,7 +305,7 @@ function prepareLabelledJudgment(
         !checkpoint.spending &&
         !errors.length &&
         waitingUntil === null &&
-        (spendingReserved ? reserved() : input.reserve(1)())
+        (spendingReserved ? reserved() : input.reserve([], 1)())
       ) {
         try {
           const advice = await adviseSpending(db, {
@@ -331,6 +342,46 @@ function prepareLabelledJudgment(
   };
 }
 
+/** A complete publication owns durability; a failed one retains only newly computed answers. */
+async function publishStatementLabels(
+  db: Database,
+  input: {
+    proposal: ChargeProposal;
+    checkpoint: Parameters<typeof recordStatementLabelCheckpoint>[1];
+    producer: Parameters<typeof publishChargeProposal>[2];
+    retainProgress: () => Promise<boolean>;
+  },
+) {
+  try {
+    return await publishChargeProposal(
+      db,
+      await labelledProposal(
+        input.proposal,
+        input.checkpoint.checkpoint.judgment,
+      ),
+      input.producer,
+      input.checkpoint,
+    );
+  } catch (publicationError) {
+    if (isWorkflowInterrupted(publicationError)) throw publicationError;
+    try {
+      if (!(await input.retainProgress())) return null;
+    } catch (checkpointError) {
+      if (isWorkflowInterrupted(checkpointError)) throw checkpointError;
+      throw new AggregateError(
+        [publicationError, checkpointError],
+        [publicationError, checkpointError]
+          .map((error) =>
+            runFailureText(error instanceof Error ? error : String(error)),
+          )
+          .join("\n"),
+        { cause: checkpointError },
+      );
+    }
+    throw publicationError;
+  }
+}
+
 /**
  * Label pending rule suggestions with the decision model: whether each attach
  * candidate is the same charge, and every create's kind and counterparty.
@@ -342,7 +393,7 @@ function prepareLabelledJudgment(
  * transaction another charge on the page proposed, so the page's remaining
  * charges are rebuilt and any whose evidence moved are labelled again.
  */
-export async function labelStatementSuggestions(
+async function runStatementLabelBatch(
   db: Database,
   input: {
     limit?: number;
@@ -355,25 +406,44 @@ export async function labelStatementSuggestions(
     after?: LabelCursor | null;
     /** Label only this import's charges (an import-scoped Sweep). */
     importId?: string | null;
+    /** Precompute may overlap generation's model-free work, but must await its write lane here. */
+    beforeCheckpoint?: () => Promise<void>;
   } = {},
+  mode:
+    | { kind: "publish" }
+    | { kind: "precompute"; maxBytes: number; maxMs: number } = {
+    kind: "publish",
+  },
 ): Promise<{
   labelled: number;
+  /** Label/application stages settled, including recovered publication receipts. */
+  completed: number;
+  computed: number;
+  preparedBytes: number;
   labels: { reused: number; generated: number };
   /** Suggestions whose evidence moved since publication; regeneration relabels them. */
   stale: number;
+  skippedIds: string[];
   failed: RunStepError[];
   next: LabelCursor | null;
+  through: LabelCursor | null;
   /** False when the automatic-work switch is off, so nothing was asked. */
   active: boolean;
   waitingUntil: number | null;
   paused: { reason: string; until: string } | null;
 }> {
+  const skippedIds: string[] = [];
   const empty = {
     labelled: 0,
+    completed: 0,
+    computed: 0,
+    preparedBytes: 0,
     labels: { reused: 0, generated: 0 },
     stale: 0,
+    skippedIds,
     failed: [],
     next: null,
+    through: null,
     waitingUntil: null,
     paused: null,
   };
@@ -383,6 +453,15 @@ export async function labelStatementSuggestions(
     input.limit ?? STATEMENT_LABEL_BATCH,
     STATEMENT_LABEL_BATCH,
   );
+  const deadline =
+    mode.kind === "precompute"
+      ? Date.now() + Math.max(0, mode.maxMs)
+      : Infinity;
+  const byteLimit =
+    mode.kind === "precompute" ? Math.max(0, mode.maxBytes) : Infinity;
+  const encoder = new TextEncoder();
+  let preparedBytes = 0;
+  let admissionStopped = false;
   const rows = await suggestionsNeedingLabels(
     db,
     limit + 1,
@@ -404,6 +483,7 @@ export async function labelStatementSuggestions(
   const failed: RunStepError[] = [];
   const failedCharges = new Set<string>();
   const fail = (charge: ChargeRef | null, error: unknown) => {
+    if (isWorkflowInterrupted(error)) throw error;
     if (charge) failedCharges.add(chargeId(charge));
     failed.push({
       at: new Date().toISOString(),
@@ -417,20 +497,45 @@ export async function labelStatementSuggestions(
       WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
     WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
   );
-  const reserve = (count: number) => {
-    let left = Math.min(decisionsLeft, count);
-    decisionsLeft -= left;
-    return () => {
-      if (left <= 0) return false;
-      left--;
+  const reserve = (questions: readonly DecisionChoiceArgs[], additional = 0) => {
+    const admitted = questions.map((question) => {
+      const bytes = encoder.encode(
+        JSON.stringify({
+          subject: question.subject,
+          rules: question.rules,
+          choices: question.choices,
+          allowNone: question.allowNone,
+          images: question.images,
+        }),
+      ).byteLength;
+      if (
+        admissionStopped ||
+        decisionsLeft <= 0 ||
+        Date.now() >= deadline ||
+        preparedBytes + bytes > byteLimit
+      ) {
+        if (mode.kind === "precompute") admissionStopped = true;
+        return false;
+      }
+      decisionsLeft--;
+      preparedBytes += bytes;
       return true;
+    });
+    for (let index = 0; index < additional; index++) {
+      const allowed =
+        !admissionStopped && decisionsLeft > 0 && Date.now() < deadline;
+      if (allowed) decisionsLeft--;
+      else if (mode.kind === "precompute") admissionStopped = true;
+      admitted.push(allowed);
+    }
+    let index = 0;
+    return () => {
+      return admitted[index++] ?? false;
     };
   };
-  let unfinished: LabelCursor | null = null;
+  const unfinished = new Set<string>();
   const retainUnfinished = (row: (typeof page)[number]) => {
-    const previous = page.findIndex((entry) => entry.id === unfinished?.id);
-    if (previous < 0 || page.indexOf(row) < previous)
-      unfinished = { createdAt: row.createdAt, id: row.id, inclusive: true };
+    unfinished.add(row.cursorId);
   };
   let waitingUntil: number | null = null;
   let targets = page.flatMap((row) => {
@@ -449,15 +554,24 @@ export async function labelStatementSuggestions(
   let stale = 0;
   const skipped = new Set<string>();
   const labelled = new Set<string>();
+  const completed = new Set<string>();
+  const computedCharges = new Set<string>();
   const labels = { reused: 0, generated: 0 };
   const pauses: AiBudgetExhaustedError[] = [];
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
     const proposals = await buildPage(
       db,
-      targets.map((target) => target.charge),
+      targets
+        .filter(
+          (target) =>
+            !target.row.applicationPending &&
+            !failedCharges.has(chargeId(target.charge)),
+        )
+        .map((target) => target.charge),
       fail,
     );
     const ready = targets.flatMap((target) => {
+      if (target.row.applicationPending) return [];
       const key = chargeId(target.charge);
       const current = proposals.get(key);
       if (failedCharges.has(key)) return [];
@@ -465,6 +579,7 @@ export async function labelStatementSuggestions(
       // Stale evidence waits for the next generation pass to republish it.
       if (round === 0 && moved) {
         stale++;
+        skippedIds.push(target.row.id);
         skipped.add(key);
         return [];
       }
@@ -473,7 +588,16 @@ export async function labelStatementSuggestions(
         ? [{ target, current, moved }]
         : [];
     });
-    const published = new Map<string, string>();
+    const published = new Map(
+      targets
+        .filter((target) => target.row.applicationPending)
+        .map((target) => [chargeId(target.charge), target.expected]),
+    );
+    const receipts = new Map(
+      targets
+        .filter((target) => target.row.applicationPending)
+        .map((target) => [chargeId(target.charge), target.row.id]),
+    );
     log.info("Statement label round", {
       round: round + 1,
       charges: ready.length,
@@ -492,6 +616,24 @@ export async function labelStatementSuggestions(
     // before checkpoint/publication, whose separate DB fan-out stays at four.
     const prepared = ready.map(({ current, target }) => {
       try {
+        if (mode.kind === "precompute") {
+          const bytes = encoder.encode(
+            JSON.stringify({
+              judgment: current.judgment,
+              checkpoint: target.row.checkpoint,
+            }),
+          ).byteLength;
+          if (
+            admissionStopped ||
+            Date.now() >= deadline ||
+            preparedBytes + bytes > byteLimit
+          ) {
+            admissionStopped = true;
+            retainUnfinished(target.row);
+            return { status: "skipped" as const };
+          }
+          preparedBytes += bytes;
+        }
         return {
           status: "fulfilled" as const,
           value: prepareLabelledJudgment(db, current, {
@@ -525,7 +667,7 @@ export async function labelStatementSuggestions(
     }
     const computed = await Promise.all(
       prepared.map(async (result) => {
-        if (result.status === "rejected") return result;
+        if (result.status !== "fulfilled") return result;
         try {
           return {
             status: "fulfilled" as const,
@@ -536,6 +678,7 @@ export async function labelStatementSuggestions(
         }
       }),
     );
+    if (mode.kind === "precompute") await input.beforeCheckpoint?.();
     await forEachConcurrently(
       ready.map((entry, index) => ({
         ...entry,
@@ -544,24 +687,42 @@ export async function labelStatementSuggestions(
       STATEMENT_PUBLISH_CONCURRENCY,
       async ({ current, target, computed }) => {
         try {
+          if (computed.status === "skipped") return;
           if (computed.status === "rejected") throw computed.reason;
           const result = computed.value;
           labels.reused += result.labels.reused;
           labels.generated += result.labels.generated;
           target.row.checkpoint = result.checkpoint;
-          const saved = await recordStatementLabelCheckpoint(db, {
+          const checkpointInput = {
             charge: current.charge,
             evidenceFingerprint: target.expected,
             checkpoint: result.checkpoint,
-          });
-          if (saved === "settled") {
-            skipped.add(chargeId(current.charge));
-            return;
-          }
-          if (saved === "moved")
-            throw new Error(
-              "Statement label checkpoint lost its active evidence fence",
+          };
+          const retainProgress = async () => {
+            // A deferred/zero-budget charge has no new answers to persist.
+            // Reused answers are already durable on the selected checkpoint.
+            if (!result.labels.generated) return true;
+            const saved = await recordStatementLabelCheckpoint(
+              db,
+              checkpointInput,
             );
+            if (saved === "settled") {
+              skipped.add(chargeId(current.charge));
+              return false;
+            }
+            if (saved === "moved")
+              throw new Error(
+                "Statement label checkpoint lost its active evidence fence",
+              );
+            return true;
+          };
+          if (
+            mode.kind === "precompute" ||
+            !result.complete ||
+            result.errors.length
+          ) {
+            if (!(await retainProgress())) return;
+          }
           if (!result.complete || result.errors.length) {
             if (result.errors.length) {
               const pause = result.errors.find(
@@ -593,15 +754,27 @@ export async function labelStatementSuggestions(
               );
             return;
           }
-          const outcome = await publishChargeProposal(
-            db,
-            await labelledProposal(current, result.checkpoint.judgment),
-            producer(result.model),
-          );
-          if (outcome.outcome !== "published") return;
+          computedCharges.add(chargeId(current.charge));
+          if (mode.kind === "precompute") return;
+          const outcome = await publishStatementLabels(db, {
+            proposal: current,
+            checkpoint: checkpointInput,
+            producer: producer(result.model),
+            retainProgress,
+          });
+          if (!outcome) return;
+          if (outcome.outcome !== "published") {
+            skipped.add(chargeId(current.charge));
+            unfinished.delete(target.row.cursorId);
+            return;
+          }
           labelled.add(chargeId(current.charge));
           published.set(chargeId(current.charge), current.evidenceFingerprint);
+          receipts.set(chargeId(current.charge), outcome.assessmentId);
+          target.row.id = outcome.assessmentId;
+          target.row.applicationPending = true;
         } catch (error) {
+          if (isWorkflowInterrupted(error)) throw error;
           // The budget pauses the whole pass; any other failure is this charge's.
           if (error instanceof AiBudgetExhaustedError) {
             pauses.push(error);
@@ -610,31 +783,94 @@ export async function labelStatementSuggestions(
         }
       },
     );
-    // Rules run even when a pause ends the page: a published charge has left
-    // the label queue, so a skipped rule would never be applied.
+    if (mode.kind === "precompute") break;
+    // Model work may finish out of order; effects admit only the original
+    // ready prefix. Later publications keep their receipts for durable resume.
     const applied = new Set<string>();
-    for (const { current } of ready) {
-      const key = chargeId(current.charge);
-      if (!published.has(key)) continue;
+    const settledReceipts: string[] = [];
+    const settledCharges: string[] = [];
+    const rebuild = new Set<string>();
+    const reconsidered = new Set(
+      ready.map(({ current }) => chargeId(current.charge)),
+    );
+    // A prior-round completion is resolved unless changed evidence required publication again.
+    const awaitsPublication = (key: string) =>
+      !completed.has(key) || reconsidered.has(key);
+    let applicationBlocked = false;
+    for (const target of targets) {
+      const key = chargeId(target.charge);
+      if (skipped.has(key)) {
+        unfinished.delete(target.row.cursorId);
+        continue;
+      }
+      if (failedCharges.has(key)) {
+        // Root retries the original input while attempts remain. After
+        // exhaustion next must advance past this failure, not reset its budget.
+        unfinished.delete(target.row.cursorId);
+        applicationBlocked = true;
+        continue;
+      }
+      if (!published.has(key)) {
+        if (awaitsPublication(key)) applicationBlocked = true;
+        continue;
+      }
+      if (applicationBlocked) {
+        retainUnfinished(target.row);
+        continue;
+      }
       try {
-        if (input.importId) await regenerateCharges(db, [current.charge]);
+        if (input.importId) await regenerateCharges(db, [target.charge]);
         const outcome = await applyAutomaticRulesForCharge(
           db,
-          current.charge,
+          target.charge,
           Boolean(input.importId),
         );
+        if (outcome.refused.length) {
+          const [fresh] = await buildChargeProposals(db, [target.charge]);
+          if (fresh && fresh.evidenceFingerprint !== published.get(key)) {
+            // An earlier application can consume this charge's candidate.
+            // Rebuild through the existing ordered rounds instead of retrying
+            // an obsolete application receipt forever.
+            target.row.applicationPending = false;
+            rebuild.add(key);
+            applicationBlocked = true;
+            continue;
+          }
+          throw new Error(
+            `Automatic statement application refused: ${JSON.stringify(outcome.refused)}`,
+          );
+        }
+        // Newly published rows replaced the selected row; clear the active
+        // receipt only after this charge's ordered application has settled.
+        settledReceipts.push(receipts.get(key)!);
+        settledCharges.push(key);
+        target.row.applicationPending = false;
+        unfinished.delete(target.row.cursorId);
         if (outcome.applied.length) applied.add(key);
       } catch (error) {
-        fail(current.charge, error);
+        fail(target.charge, error);
+        unfinished.delete(target.row.cursorId);
+        applicationBlocked = true;
       }
+    }
+    await completeStatementApplications(db, settledReceipts);
+    for (const key of settledCharges) completed.add(key);
+    if (rebuild.size && round === MAX_LABEL_ROUNDS - 1) {
+      const remaining = targets.filter((target) =>
+        rebuild.has(chargeId(target.charge)),
+      );
+      await regenerateCharges(
+        db,
+        remaining.map((target) => target.charge),
+      );
+      for (const target of remaining) retainUnfinished(target.row);
     }
     targets = targets.flatMap((target) => {
       const key = chargeId(target.charge);
-      if (applied.has(key) || skipped.has(key) || failedCharges.has(key))
-        return [];
+      if (applied.has(key) || skipped.has(key)) return [];
       return [{ ...target, expected: published.get(key) ?? target.expected }];
     });
-    if (pauses[0] || unfinished) {
+    if (pauses[0] || (unfinished.size && !rebuild.size)) {
       // Without labels, a rule's moved evidence still republishes as rule
       // output, so the resumed pass labels it instead of skipping it as stale.
       if (
@@ -651,23 +887,71 @@ export async function labelStatementSuggestions(
       if (pauses[0] && !input.cooperative) throw pauses[0];
       break;
     }
-    if (!applied.size) break;
+    if (!applied.size && !rebuild.size) break;
   }
   const last = page.at(-1);
+  const firstUnfinished = page.find((row) => unfinished.has(row.cursorId));
   return {
     labelled: labelled.size,
+    completed: completed.size,
+    computed: computedCharges.size,
+    preparedBytes,
     labels,
     stale,
+    skippedIds,
     failed,
+    through: last ? { createdAt: last.createdAt, id: last.cursorId } : null,
     next:
-      unfinished ??
+      (firstUnfinished
+        ? {
+            createdAt: firstUnfinished.createdAt,
+            id: firstUnfinished.cursorId,
+            inclusive: true,
+          }
+        : null) ??
       (rows.length > limit && last
-        ? { createdAt: last.createdAt, id: last.id }
+        ? { createdAt: last.createdAt, id: last.cursorId }
         : null),
     active: true,
     waitingUntil,
     paused: pauses[0]
       ? { reason: pauses[0].message, until: pauses[0].resumeAt }
       : null,
+  };
+}
+
+export function labelStatementSuggestions(
+  db: Database,
+  input: Parameters<typeof runStatementLabelBatch>[1] = {},
+) {
+  return runStatementLabelBatch(db, input);
+}
+
+/** Bounds admission by charges, questions, serialized evidence/context bytes and elapsed preparation time.
+ * Started model calls settle and checkpoint even after the admission deadline. No conclusions publish here.
+ */
+export async function precomputeStatementSuggestionLabels(
+  db: Database,
+  input: Parameters<typeof runStatementLabelBatch>[1] & {
+    maxBytes: number;
+    maxMs: number;
+  },
+) {
+  const result = await runStatementLabelBatch(db, input, {
+    kind: "precompute",
+    maxBytes: input.maxBytes,
+    maxMs: input.maxMs,
+  });
+  return {
+    computed: result.computed,
+    labels: result.labels,
+    preparedBytes: result.preparedBytes,
+    failed: result.failed,
+    skippedIds: result.skippedIds,
+    next: result.next,
+    through: result.through,
+    active: result.active,
+    waitingUntil: result.waitingUntil,
+    paused: result.paused,
   };
 }

@@ -13,6 +13,7 @@ import {
   product,
   searchDocument,
 } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
 import { executeEntity } from "~/server/entity-kernel";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -21,6 +22,8 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { activateWorkflowDeployment } from "~/server/workflows/runs/activation";
+import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import { captureDerivedRefresh, foldDerivedRefreshCaptures } from "./capture";
 import { reconcileDerivedRefreshPage } from "./reconcile";
@@ -48,6 +51,54 @@ describe("durable derived refresh", () => {
       makeProductInput({ name: "Synthetic repair subject" }),
       ctx.actor,
     );
+
+  it("fences derived publication and releases its claim when execution is obsolete", async () => {
+    const subject = await fixture();
+    await foldDerivedRefreshCaptures(ctx.db);
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      trigger: "manual",
+      progress: {
+        attempt: 1,
+        total: 0,
+        done: 0,
+        applied: 0,
+        queued: 0,
+        failed: 0,
+        diagnostics: [],
+      },
+    });
+    await activateWorkflowDeployment(ctx.db, {
+      deploymentId: "synthetic-derived-b",
+      workerVersion: "synthetic-derived-version-b",
+      expectedEpoch: 0,
+    });
+    await expect(
+      withWorkflowExecution(
+        {
+          runId: id,
+          attempt: 1,
+          version: "synthetic-derived-version-a",
+          database: ctx.db,
+        },
+        () => processDerivedRefreshPage(ctx.db),
+      ),
+    ).rejects.toMatchObject({ reason: "deployment" });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(searchDocument)
+        .where(eq(searchDocument.entityId, subject.entityId)),
+    ).toEqual([]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(derivedRefreshWork)
+          .where(eq(derivedRefreshWork.entityId, subject.entityId))
+      )[0]?.leaseToken,
+    ).toBeNull();
+  });
 
   it("repairs documents missed while embeddings were unconfigured without another edit", async () => {
     const subject = await fixture();

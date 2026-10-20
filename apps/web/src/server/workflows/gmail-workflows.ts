@@ -13,6 +13,8 @@ import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import { runDeploymentBoundary } from "~/server/workflows/runs/deployment";
 import type { DurableSteps } from "~/server/workflows/runs/step";
 
+import { assertWorkflowCurrent, withWorkflowExecution } from "./runs/execution";
+
 /**
  * Every step opens its own database client — a Hyperdrive connection must
  * not outlive the step that opened it — and records the write so cached
@@ -49,6 +51,19 @@ export class MailDiscoveryWorkflow
         const params = event.payload;
         const withDb = stepDb(this.env, "mail-discovery");
         const boundary = runDeploymentBoundary(this.env, step, params);
+        const admitted = <T>(work: (db: Database) => Promise<T>) =>
+          withWorkflowExecution(
+            {
+              ...params,
+              version: this.env.CF_VERSION_METADATA.id,
+              epoch: params.activationEpoch,
+            },
+            () =>
+              withDb(async (db) => {
+                await assertWorkflowCurrent();
+                return work(db);
+              }),
+          );
         const [
           { runMailDiscovery },
           {
@@ -64,15 +79,18 @@ export class MailDiscoveryWorkflow
           import("~/server/domains/purchase-import/operations/gmail/discovery"),
         ]);
         await runMailDiscovery(durableSteps(step), {
-          begin: () => withDb((db) => beginMailDiscovery(db, params)),
+          begin: () => admitted((db) => beginMailDiscovery(db, params)),
           boundary: (index) => boundary(`page:${index}`),
-          list: () => withDb((db) => listMailDiscovery(db, params)),
+          list: () => admitted((db) => listMailDiscovery(db, params)),
           batch: (index) =>
-            withDb((db) => saveMailDiscoveryBatch(db, params, index)),
-          finish: () => withDb((db) => finishMailDiscovery(db, params)),
+            admitted((db) => saveMailDiscoveryBatch(db, params, index)),
+          finish: () => admitted((db) => finishMailDiscovery(db, params)),
           continue: () => withDb((db) => continueMailDiscovery(db, params)),
           fail: (stepError) =>
             withDb((db) => failMailDiscovery(db, params, stepError)),
+          interrupted: async () => {
+            await boundary("execution interrupted", true);
+          },
         });
         return { runId: params.runId };
       },

@@ -19,7 +19,12 @@ import {
   AI_REFRESH_SCHEDULING_LOCK,
 } from "~/server/domains/run/repo/ai-refresh-admission";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
+import {
+  stepRunOwnerColumns,
+  type StepRunOwner,
+} from "~/server/domains/run/repo/run-step";
 
+import { enqueueBackgroundTask } from "../background-tasks/publish";
 import {
   WORKFLOW_RUN_PURPOSES,
   isWorkflowRunPurpose,
@@ -27,6 +32,7 @@ import {
   type WorkflowRunParams,
   type WorkflowRunPurpose,
 } from "./contract";
+import { workflowInterruption } from "./execution";
 import {
   ENDED_INSTANCE_STATES,
   productionWorkflowLauncher,
@@ -109,7 +115,11 @@ type LaunchWorkflowRunInput = {
   /** A bounded instance hands off only while it still owns this attempt. */
   expectedAttempt?: number;
 };
-type LaunchedWorkflowRun = { attempt: number; instanceId: string };
+type LaunchedWorkflowRun = {
+  attempt: number;
+  instanceId: string;
+  pending?: true;
+};
 
 export async function launchWorkflowRun(
   db: Database,
@@ -126,6 +136,41 @@ export async function launchWorkflowRun(
   input: LaunchWorkflowRunInput,
   launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<LaunchedWorkflowRun | null> {
+  let deployment:
+    | Awaited<ReturnType<NonNullable<WorkflowLauncher["prepare"]>>>
+    | undefined;
+  try {
+    deployment = await launcher.prepare?.(db);
+  } catch (error) {
+    if (
+      workflowInterruption(error)?.reason !== "activation_pending" ||
+      input.automatic
+    )
+      throw error;
+    const [waiting] = await getDb(db)
+      .select({
+        shortcode: runTable.shortcode,
+        attempt: attemptOf,
+        status: runTable.status,
+      })
+      .from(runTable)
+      .where(eq(runTable.id, input.runId));
+    if (!waiting || waiting.status !== "running") throw error;
+    await enqueueBackgroundTask(
+      {
+        kind: "workflow.continue",
+        runId: input.runId,
+        attempt: waiting.attempt,
+        requestedAt: new Date().toISOString(),
+      },
+      { source: "workflow.activation" },
+    );
+    return {
+      attempt: waiting.attempt,
+      instanceId: workflowInstanceId(waiting.shortcode, waiting.attempt),
+      pending: true,
+    };
+  }
   let refusal = "This Run is already running; wait for it or cancel it.";
   let admissionRefused = false;
   const reopened = await withTransactionDatabase(db, async (tx) => {
@@ -233,6 +278,7 @@ export async function launchWorkflowRun(
     await launcher.create(input.purpose, instanceId, {
       runId: input.runId,
       attempt: reopened.attempt,
+      ...deployment,
     });
   } catch (error) {
     await failWorkflowRun(
@@ -256,6 +302,11 @@ export async function launchWorkflowRun(
 export function claimWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
+  projection: "step",
+): Promise<StepRunOwner | null>;
+export function claimWorkflowRun(
+  db: Database,
+  params: WorkflowRunParams,
   projection: "id",
 ): Promise<{ id: RunId } | null>;
 export function claimWorkflowRun(
@@ -265,11 +316,15 @@ export function claimWorkflowRun(
 export async function claimWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
-  projection?: "id",
+  projection?: "id" | "step",
 ) {
   const [row] = await getDb(db)
     .select(
-      projection === "id" ? { id: runTable.id } : getTableColumns(runTable),
+      projection === "id"
+        ? { id: runTable.id }
+        : projection === "step"
+          ? stepRunOwnerColumns
+          : getTableColumns(runTable),
     )
     .from(runTable)
     .where(

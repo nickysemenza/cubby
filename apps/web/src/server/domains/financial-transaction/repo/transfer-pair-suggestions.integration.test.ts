@@ -28,6 +28,7 @@ import {
   financialTransaction,
   ledgerParty,
   ledgerTransfer,
+  run,
   statementRow,
 } from "~/server/db/schema";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
@@ -38,6 +39,11 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
+import { activateWorkflowDeployment } from "~/server/workflows/runs/activation";
+import {
+  isWorkflowInterrupted,
+  withWorkflowExecution,
+} from "~/server/workflows/runs/execution";
 
 import {
   applyTransferPair,
@@ -46,7 +52,9 @@ import {
   discoverTransferPairs,
   findTransferPairForCharge,
   fingerprintTransferPair,
+  generateTransferPairSuggestionsPage,
   generateTransferPairSuggestions,
+  transferPairGenerationCursor,
   transferPairEvidenceFingerprint,
 } from "./transfer-pair-suggestions";
 
@@ -67,6 +75,16 @@ import {
  * - Pending, allocated, already-paired or soft-deleted records (or records
  *   on a deleted account or owner) become legs.
  * - A created statement leg carries only one of its charge's refs.
+ * - A discovery page misses a competing leg outside its seeds, publishes a
+ *   pair twice, or retires a live pair before all discovery pages finish.
+ * - Replaying a discovery cursor duplicates publications, or retirement
+ *   treats an unvisited or newly restored candidate as absent.
+ * - Model publication leaves the label queue before its dependent statement
+ *   publications commit, so a crash loses the statement regeneration.
+ * - A cancelled Workflow publishes a model result after computation returns,
+ *   or hides its control interruption as a per-pair failure.
+ * - One publication failure blocks independent pairs, or replay repeats
+ *   already committed successes instead of retrying only unfinished effects.
  */
 describe("transfer-pair suggestions", () => {
   const ctx = withTestDb();
@@ -244,6 +262,163 @@ describe("transfer-pair suggestions", () => {
         judgment.inflow.accountId === accountId,
     );
 
+  it("resumes bounded discovery with complete competitors and verifies absence only after coverage", async () => {
+    const member = await owner("Synthetic paging member");
+    const checking = await account("Synthetic paging checking", member);
+    const savings = await account("Synthetic paging savings", member);
+    const other = await account("Synthetic paging other", member);
+    for (const amount of [100, 200, 300]) {
+      await transaction(checking, amount, "2026-05-04");
+      await transaction(savings, -amount, "2026-05-04");
+    }
+    await generateTransferPairSuggestions(ctx.db, { runId: null });
+    const original = await pendingOn(checking);
+    const absent = original.find(({ judgment }) => judgment.amount === 300)!;
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(
+        eq(
+          financialTransaction.shortcode,
+          absent.judgment.inflow.transactionId!,
+        ),
+      );
+    await transaction(other, -100, "2026-05-04");
+
+    const first = await generateTransferPairSuggestionsPage(ctx.db, {
+      runId: null,
+      limit: 1,
+      maxBytes: 1,
+    });
+    expect(first.found).toBeLessThanOrEqual(1);
+    expect(first.next?.kind).toBe("discover");
+    expect(
+      (await pendingOn(checking)).some(
+        ({ judgment }) => judgment.key === absent.judgment.key,
+      ),
+    ).toBe(true);
+
+    // Replaying the same persisted cursor after a lost acknowledgement must
+    // reuse committed publications and reach exactly the same continuation.
+    const replay = await generateTransferPairSuggestionsPage(ctx.db, {
+      runId: null,
+      limit: 1,
+      maxBytes: 1,
+    });
+    expect(replay.published).toBe(0);
+    expect(replay.next).toEqual(first.next);
+    expect(replay.found).toBe(first.found);
+    expect(replay.processed).toBe(first.processed);
+    expect(replay.bytes).toBe(first.bytes);
+    let cursor = first.next;
+    let found = first.found;
+    for (let page = 0; cursor?.kind === "discover" && page < 30; page++) {
+      const result = await generateTransferPairSuggestionsPage(ctx.db, {
+        runId: null,
+        limit: 1,
+        maxBytes: 1,
+        after: transferPairGenerationCursor.parse(
+          JSON.parse(JSON.stringify(cursor)),
+        ),
+      });
+      expect(result.found).toBeLessThanOrEqual(1);
+      expect(result.retired).toBe(0);
+      found += result.found;
+      cursor = result.next;
+    }
+    expect(cursor?.kind).toBe("retire");
+    expect(found).toBe(3);
+    const discovered = await pendingOn(checking);
+    const competing = discovered.filter(
+      ({ judgment }) => judgment.amount === 100,
+    );
+    expect(competing).toHaveLength(2);
+    expect(
+      competing.every(
+        ({ judgment }) => judgment.competitors.length === 1 && !judgment.clean,
+      ),
+    ).toBe(true);
+    expect(
+      discovered.some(({ judgment }) => judgment.key === absent.judgment.key),
+    ).toBe(true);
+
+    // Restore one candidate after discovery. Fresh retirement verification
+    // must retain it even though this pass never discovered it.
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: null })
+      .where(
+        eq(
+          financialTransaction.shortcode,
+          absent.judgment.inflow.transactionId!,
+        ),
+      );
+    for (let page = 0; cursor && page < 30; page++) {
+      const result = await generateTransferPairSuggestionsPage(ctx.db, {
+        runId: null,
+        limit: 1,
+        after: cursor,
+      });
+      cursor = result.next;
+    }
+    expect(cursor).toBeNull();
+    expect(
+      (await pendingOn(checking)).map(({ judgment }) => judgment.key),
+    ).toContain(absent.judgment.key);
+
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(
+        eq(
+          financialTransaction.shortcode,
+          absent.judgment.inflow.transactionId!,
+        ),
+      );
+    const secondAbsent = original.find(
+      ({ judgment }) => judgment.amount === 200,
+    )!;
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(
+        eq(
+          financialTransaction.shortcode,
+          secondAbsent.judgment.inflow.transactionId!,
+        ),
+      );
+    let removalCursor: z.infer<typeof transferPairGenerationCursor> | null =
+      null;
+    let retired = 0;
+    type GenerationPage = Awaited<
+      ReturnType<typeof generateTransferPairSuggestionsPage>
+    >;
+    const retirementReplays: {
+      result: GenerationPage;
+      replay: GenerationPage;
+    }[] = [];
+    for (let page = 0; page < 40; page++) {
+      const input = { runId: null, limit: 16, after: removalCursor };
+      const result = await generateTransferPairSuggestionsPage(ctx.db, input);
+      retired += result.retired;
+      if (result.retired) {
+        const replay = await generateTransferPairSuggestionsPage(ctx.db, input);
+        retirementReplays.push({ result, replay });
+      }
+      removalCursor = result.next;
+      if (!removalCursor) break;
+    }
+    expect(removalCursor).toBeNull();
+    expect(retired).toBe(2);
+    for (const { result, replay } of retirementReplays) {
+      expect(replay.retired).toBe(0);
+      expect(replay.processed).toBe(result.processed);
+      expect(replay.bytes).toBe(result.bytes);
+      expect(replay.next).toEqual(result.next);
+    }
+    expect(await pendingOn(checking)).toHaveLength(2);
+  });
+
   const liveTransactions = () =>
     unwrapDb(ctx.db)
       .select()
@@ -271,6 +446,187 @@ describe("transfer-pair suggestions", () => {
       expectedFingerprint: pair.fingerprint,
       ...(reviewed === undefined ? {} : { reviewed }),
     });
+
+  it("retains independent generation successes while a failed pair remains retryable", async () => {
+    const member = await owner("Synthetic retry member");
+    const checking = await account("Synthetic retry checking", member);
+    const savings = await account("Synthetic retry savings", member);
+    for (const amount of [80, 90]) {
+      await transaction(checking, amount, "2026-05-04");
+      await transaction(savings, -amount, "2026-05-04");
+    }
+    await unwrapDb(ctx.db).execute(sql`
+      CREATE FUNCTION synthetic_transfer_publication_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.family = '${sql.raw(assessmentFamily.enum.transfer_pair)}' AND (NEW.data->>'amount')::numeric = 80 THEN
+          RAISE EXCEPTION 'synthetic independent transfer publication failure';
+        END IF;
+        RETURN NEW;
+      END
+      $$
+    `);
+    await unwrapDb(ctx.db).execute(sql`
+      CREATE TRIGGER synthetic_transfer_publication_failure
+      BEFORE INSERT ON "AssessmentState"
+      FOR EACH ROW EXECUTE FUNCTION synthetic_transfer_publication_failure()
+    `);
+    try {
+      const failed = await generateTransferPairSuggestionsPage(ctx.db, {
+        runId: null,
+        limit: 16,
+      });
+      expect(failed.published).toBe(1);
+      expect(failed.failed).toHaveLength(1);
+      expect(failed.failed[0]?.message).toContain(
+        "synthetic independent transfer publication failure",
+      );
+      expect(
+        (await pendingOn(checking)).map(({ judgment }) => judgment.amount),
+      ).toEqual([90]);
+    } finally {
+      await unwrapDb(ctx.db).execute(
+        sql`DROP TRIGGER synthetic_transfer_publication_failure ON "AssessmentState"`,
+      );
+      await unwrapDb(ctx.db).execute(
+        sql`DROP FUNCTION synthetic_transfer_publication_failure()`,
+      );
+    }
+    const replay = await generateTransferPairSuggestionsPage(ctx.db, {
+      runId: null,
+      limit: 16,
+    });
+    expect(replay).toMatchObject({ published: 1, unchanged: 1, failed: [] });
+    expect(await pendingOn(checking)).toHaveLength(2);
+  });
+
+  it("discards completed movement computation after cancellation and preserves the replayable rule state", async () => {
+    const member = await owner("Synthetic cancellation member");
+    const checking = await account("Synthetic cancellation checking", member);
+    const savings = await account("Synthetic cancellation savings", member);
+    await transaction(checking, 64, "2026-05-04");
+    await transaction(savings, -64, "2026-05-04");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      trigger: "manual",
+      status: "running",
+      progress: {
+        attempt: 1,
+        total: 0,
+        done: 0,
+        applied: 0,
+        queued: 0,
+        failed: 0,
+        diagnostics: [],
+      },
+    });
+    await generateTransferPairSuggestions(ctx.db, { runId });
+    await activateWorkflowDeployment(ctx.db, {
+      deploymentId: "synthetic-transfer-deployment",
+      workerVersion: "synthetic-transfer-version",
+      expectedEpoch: 0,
+    });
+    const answer = movementPort(byDescriptor);
+    let interrupted: unknown;
+    let computations = 0;
+    try {
+      await withWorkflowExecution(
+        { runId, attempt: 1, version: "synthetic-transfer-version" },
+        () =>
+          labelTransferPairSuggestions(ctx.db, {
+            runId,
+            port: async (input) => {
+              computations++;
+              await unwrapDb(ctx.db)
+                .update(run)
+                .set({ status: "failed", failureCode: "user_cancelled" })
+                .where(eq(run.id, runId));
+              return answer(input);
+            },
+          }),
+      );
+    } catch (error) {
+      interrupted = error;
+    }
+    expect(computations).toBeGreaterThan(0);
+    expect(isWorkflowInterrupted(interrupted)).toBe(true);
+    expect(await countTransferPairsNeedingLabels(ctx.db, { runId })).toBe(1);
+    expect(
+      (await pendingOn(checking))[0]?.judgment.outflow.movementLabel,
+    ).toBeNull();
+  });
+
+  it("retains movement labels and retries dependent statement publication without another model call", async () => {
+    const member = await owner("Synthetic atomic member");
+    await account("Synthetic atomic checking", member);
+    await account("Synthetic atomic savings", member, savings);
+    await statement([
+      {
+        account: "Synthetic atomic checking",
+        amount: 54,
+        date: "2026-05-04",
+        description: "ONLINE TRANSFER TO SAVINGS",
+      },
+      {
+        account: "Synthetic atomic savings",
+        amount: -54,
+        date: "2026-05-04",
+        description: "ONLINE TRANSFER FROM CHECKING",
+      },
+    ]);
+    await generateTransferPairSuggestions(ctx.db, { runId: null });
+    await unwrapDb(ctx.db).execute(sql`
+      CREATE FUNCTION synthetic_transfer_refresh_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.family = '${sql.raw(assessmentFamily.enum.statement_transaction)}' THEN
+          RAISE EXCEPTION 'synthetic dependent statement publication failure';
+        END IF;
+        RETURN NEW;
+      END
+      $$
+    `);
+    await unwrapDb(ctx.db).execute(sql`
+      CREATE TRIGGER synthetic_transfer_refresh_failure
+      BEFORE INSERT OR UPDATE ON "AssessmentState"
+      FOR EACH ROW EXECUTE FUNCTION synthetic_transfer_refresh_failure()
+    `);
+    try {
+      const failed = await labelTransferPairSuggestions(ctx.db, {
+        port: movementPort(byDescriptor),
+      });
+      expect(failed.labelled).toBe(1);
+      expect(failed.completed).toBe(0);
+      expect(
+        failed.failed.map((failure) => failure.message).join(" "),
+      ).toContain("synthetic dependent statement publication failure");
+      expect(await countTransferPairsNeedingLabels(ctx.db)).toBe(1);
+      expect((await pending())[0]?.judgment.outflow.movementLabel?.choice).toBe(
+        "account_move",
+      );
+    } finally {
+      await unwrapDb(ctx.db).execute(
+        sql`DROP TRIGGER synthetic_transfer_refresh_failure ON "AssessmentState"`,
+      );
+      await unwrapDb(ctx.db).execute(
+        sql`DROP FUNCTION synthetic_transfer_refresh_failure()`,
+      );
+    }
+    const retried = await labelTransferPairSuggestions(ctx.db, {
+      port: async () => {
+        throw new Error("Completed movement labels must not run again");
+      },
+    });
+    expect(retried).toMatchObject({
+      labelled: 0,
+      completed: 1,
+      failed: [],
+      next: null,
+    });
+    expect(await countTransferPairsNeedingLabels(ctx.db)).toBe(0);
+    const statements = await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+    });
+    expect(statements.items).toHaveLength(2);
+  });
 
   // A wide Workflow page must checkpoint accepted pairs and yield on the
   // first admission refusal instead of polling inside the page invocation.

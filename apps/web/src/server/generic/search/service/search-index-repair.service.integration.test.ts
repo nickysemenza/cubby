@@ -1,3 +1,4 @@
+import { searchRepairCheckpoint } from "@cubby/schemas/maintenance";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -9,12 +10,15 @@ import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
+import { memoryDurableSteps } from "~/server/testing/durable-steps";
 import {
   createProductFixture as createProduct,
   makeProductInput,
   seedSearchDocumentsFixtureRaw,
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
+import { runSearchRepairSourcePage } from "~/server/workflows/runs/search-repair-page";
+import type { DurableSteps } from "~/server/workflows/runs/step";
 
 import {
   applySearchIndexRepairOrphanPage,
@@ -41,6 +45,170 @@ describe("search index repair stream", () => {
     );
     return published;
   };
+
+  it("retains a selected repair page after a committed projection loses its acknowledgment", async () => {
+    const { activateWorkflowDeployment } =
+      await import("~/server/workflows/runs/activation");
+    const { createSearchIndexRepairCounters } =
+      await import("./search-index-repair.service");
+    const missing = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic lost repair acknowledgment" }),
+      ctx.actor,
+    );
+    const refs = [
+      { entityKind: "product" as const, entityId: missing.entityId },
+    ];
+    const published = recordingQueue();
+    await activateWorkflowDeployment(ctx.db, {
+      deploymentId: "synthetic-repair-a",
+      workerVersion: "synthetic-a",
+      expectedEpoch: 0,
+    });
+    const durable = memoryDurableSteps();
+    let loseAcknowledgment = true;
+    const steps: DurableSteps = {
+      ...durable.steps,
+      do: (name, config, callback) =>
+        durable.steps.do(name, config, async () => {
+          const value = await callback();
+          if (name.endsWith(".apply") && loseAcknowledgment) {
+            loseAcknowledgment = false;
+            await activateWorkflowDeployment(ctx.db, {
+              deploymentId: "synthetic-repair-b",
+              workerVersion: "synthetic-b",
+              expectedEpoch: 1,
+            });
+            throw new Error(
+              "Synthetic Workflow acknowledgment lost after commit",
+            );
+          }
+          return value;
+        }),
+    };
+    const result = await runSearchRepairSourcePage({
+      name: "synthetic-source-page",
+      requestedAt: new Date().toISOString(),
+      pending: {
+        stage: "apply",
+        page: {
+          refs,
+          nextCursor: null,
+          delta: { scanned: 1, missing: 1, stale: 0 },
+        },
+      },
+      identity: { version: "synthetic-a", epoch: 1 },
+      steps,
+      database: (work) => work(ctx.db),
+    });
+    expect(
+      await getSearchDocumentEmbeddingText(ctx.db, "product", missing.entityId),
+    ).not.toBeNull();
+    expect(published).toEqual([]);
+    expect(result).toMatchObject({
+      kind: "interrupted",
+      pending: { stage: "apply", page: { refs } },
+    });
+    if (result.kind !== "interrupted" || !result.pending)
+      throw new Error("Repair selection was not retained");
+    const checkpoint = searchRepairCheckpoint.parse(
+      JSON.parse(
+        JSON.stringify({
+          phase: "sources",
+          cursor: null,
+          counters: createSearchIndexRepairCounters(),
+          pendingSource: result.pending,
+        }),
+      ),
+    );
+    if (!checkpoint.pendingSource)
+      throw new Error("Repair handoff lost its selected page");
+    const resumed = await runSearchRepairSourcePage({
+      name: "synthetic-successor-page",
+      requestedAt: new Date().toISOString(),
+      pending: checkpoint.pendingSource,
+      identity: { version: "synthetic-b", epoch: 2 },
+      steps: memoryDurableSteps().steps,
+      database: (work) => work(ctx.db),
+    });
+    expect(resumed).toMatchObject({
+      kind: "done",
+      nextCursor: null,
+      delta: { published: 1, scanned: 1 },
+    });
+    expect(published.map((message) => message.task.entityId)).toContain(
+      missing.entityId,
+    );
+  });
+
+  it("rejects repair effects retried after a deployment and resumes on the activated epoch", async () => {
+    const { activateWorkflowDeployment } =
+      await import("~/server/workflows/runs/activation");
+    const { withWorkflowDeploymentEffect } =
+      await import("~/server/workflows/runs/execution");
+    const {
+      applySearchIndexRepairSourcePage,
+      publishSearchIndexRepairSourcePage,
+    } = await import("./search-index-repair.service");
+    const missing = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic deployment repair" }),
+      ctx.actor,
+    );
+    const refs = [
+      { entityKind: "product" as const, entityId: missing.entityId },
+    ];
+    const published = recordingQueue();
+    await activateWorkflowDeployment(ctx.db, {
+      deploymentId: "synthetic-repair-a",
+      workerVersion: "synthetic-a",
+      expectedEpoch: 0,
+    });
+    await activateWorkflowDeployment(ctx.db, {
+      deploymentId: "synthetic-repair-b",
+      workerVersion: "synthetic-b",
+      expectedEpoch: 1,
+    });
+    await activateWorkflowDeployment(ctx.db, {
+      deploymentId: "synthetic-repair-rollback",
+      workerVersion: "synthetic-a",
+      expectedEpoch: 2,
+    });
+    const stale = { version: "synthetic-a", epoch: 1 };
+    await expect(
+      withWorkflowDeploymentEffect(ctx.db, stale, (tx) =>
+        applySearchIndexRepairOrphanPage(tx, refs),
+      ),
+    ).rejects.toMatchObject({ reason: "deployment" });
+    await expect(
+      withWorkflowDeploymentEffect(ctx.db, stale, (tx) =>
+        applySearchIndexRepairSourcePage(tx, refs),
+      ),
+    ).rejects.toMatchObject({ reason: "deployment" });
+    await expect(
+      withWorkflowDeploymentEffect(ctx.db, stale, (tx) =>
+        publishSearchIndexRepairSourcePage(tx, refs, new Date().toISOString()),
+      ),
+    ).rejects.toMatchObject({ reason: "deployment" });
+    expect(
+      await getSearchDocumentEmbeddingText(ctx.db, "product", missing.entityId),
+    ).toBeNull();
+    expect(published).toEqual([]);
+    const current = { version: "synthetic-a", epoch: 3 };
+    await expect(
+      withWorkflowDeploymentEffect(ctx.db, current, (tx) =>
+        applySearchIndexRepairSourcePage(tx, refs),
+      ),
+    ).resolves.toEqual({ rebuilt: 1 });
+    await expect(
+      withWorkflowDeploymentEffect(ctx.db, current, (tx) =>
+        publishSearchIndexRepairSourcePage(tx, refs, new Date().toISOString()),
+      ),
+    ).resolves.toEqual({ published: 1 });
+    expect(published.map((message) => message.task.entityId)).toContain(
+      missing.entityId,
+    );
+  });
 
   it("retires orphans, rebuilds missing and stale projections, publishes embeddings, and pages", async () => {
     // Orphans: documents with no source, more than one page of them.

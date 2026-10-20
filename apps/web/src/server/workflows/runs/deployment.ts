@@ -1,32 +1,38 @@
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-
+import { withInvocationDb } from "~/server/db";
 import type { StepPageSummary } from "~/server/domains/run/service/step-run";
 
 import { enqueueBackgroundTask } from "../background-tasks/publish";
 import { workflowDeploymentBoundary } from "../deployment-boundary";
+import { readWorkflowDeployment } from "./activation";
 import type { WorkflowRunParams } from "./contract";
 import type { DurableSteps } from "./step";
 
-/** The DO follows deploys eventually; Workflow metadata remains pinned. */
+/** Activation is written after verified deployment; DO code is not release authority. */
 export function runDeploymentBoundary(
   env: Env,
   steps: DurableSteps,
   params: WorkflowRunParams,
+  currentVersion: () => Promise<{ version: string; epoch?: number }> = () =>
+    withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
+      const activation = await readWorkflowDeployment(
+        (await import("~/server/db")).db,
+      );
+      if (!activation)
+        throw new Error("Workflow deployment has not been activated");
+      return { version: activation.workerVersion, epoch: activation.epoch };
+    }),
 ) {
-  const current = () => env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID);
-  let initial = true;
   return (
     name: string,
     force = false,
     dashboard?: { nextInstanceId: string; summary: StepPageSummary | null },
   ) => {
-    const first = initial;
-    initial = false;
     return workflowDeploymentBoundary(steps, {
       name,
       dashboard,
       version: env.CF_VERSION_METADATA.id,
-      currentVersion: () => current().currentDeploymentVersion(),
+      epoch: params.activationEpoch,
+      currentVersion,
       continue: async () => {
         await enqueueBackgroundTask(
           {
@@ -38,7 +44,6 @@ export function runDeploymentBoundary(
         );
       },
       force,
-      initial: first,
     });
   };
 }

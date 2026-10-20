@@ -7,7 +7,6 @@ import {
   feedbackEvent,
   feedbackVerdict,
 } from "@cubby/schemas/assessment";
-import { financialAccountIdentity } from "@cubby/schemas/financial-account-fields";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
@@ -18,6 +17,7 @@ import {
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
+import type { RunStepError } from "@cubby/schemas/run-step";
 import { statementRowProviderStatus } from "@cubby/schemas/statement-row";
 import {
   type StatementCounterparty,
@@ -28,9 +28,11 @@ import {
   STATEMENT_LABEL_REVISION,
   statementLabelCheckpoint,
   type StatementLabelCheckpoint,
+  statementApplicationOrder,
 } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -43,7 +45,10 @@ import {
   unwrapDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import {
+  previewFinancialStatementImport,
+  prepareFinancialStatementPreview,
+} from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { findTransferPairsForCharges } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   CHARGE_STATE,
@@ -72,6 +77,11 @@ import {
   statementSubjectKey,
 } from "~/server/generic/assessment/repo/automatic-rules";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+import {
+  assertWorkflowEffect,
+  isWorkflowInterrupted,
+} from "~/server/workflows/runs/execution";
+import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 import { prepareStatementSpending } from "./statement-spending";
 
@@ -323,6 +333,7 @@ type PendingTransaction = {
 async function statementPendingTransactions(
   db: Database,
   accountIds: readonly string[],
+  page?: { after: string | null; limit: number },
 ): Promise<PendingTransaction[]> {
   if (!accountIds.length) return [];
   const { rows } = await unwrapDb(db).execute<
@@ -337,6 +348,7 @@ async function statementPendingTransactions(
     JOIN "StatementRow" sr ON sr.source = fx.source AND sr."externalId" = fx."externalId"
       AND sr."deletedAt" IS NULL AND sr."providerStatus" = ${statementRowProviderStatus.enum.pending}
     WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
+      ${page?.after ? sql`AND ft.id > ${page.after}::uuid` : sql``}
       AND ft."accountId" IN (${sql.join(
         accountIds.map((id) => sql`${id}::uuid`),
         sql`, `,
@@ -352,6 +364,8 @@ async function statementPendingTransactions(
           )
       )
     GROUP BY ft.id
+    ORDER BY ft.id
+    ${page ? sql`LIMIT ${page.limit}` : sql``}
   `);
   return rows.map((row) => ({
     id: String(row.id),
@@ -507,38 +521,6 @@ async function claimedCandidates(
   return result;
 }
 
-/** Every live account, with the names a cash-out or funding descriptor may use. */
-async function ownAccounts(db: Database): Promise<OwnAccount[]> {
-  const { rows } = await unwrapDb(db).execute<{
-    id: string;
-    identity: unknown;
-    ledgerPartyId: string | null;
-    vendorName: string | null;
-  }>(sql`
-    SELECT fa.id, fa.identity, fa."ledgerPartyId", v.name AS "vendorName"
-    FROM "FinancialAccount" fa
-    LEFT JOIN "Vendor" v ON v.id = fa."providerVendorId" AND v."deletedAt" IS NULL
-    WHERE fa."deletedAt" IS NULL
-  `);
-  return rows.map((row) => {
-    const identity = financialAccountIdentity.parse(row.identity);
-    const names = [
-      identity.kind === "stored_value" ? identity.provider : null,
-      identity.kind === "bank_account" || identity.kind === "other"
-        ? identity.institution
-        : null,
-      row.vendorName,
-    ].filter((name): name is string => Boolean(name));
-    return {
-      id: String(row.id),
-      kind: identity.kind,
-      names,
-      ledgerPartyId:
-        row.ledgerPartyId === null ? null : String(row.ledgerPartyId),
-    };
-  });
-}
-
 type MerchantHistory = {
   kind: StatementKindVotes["history"];
   counterparty: StatementCounterparty["history"];
@@ -692,6 +674,7 @@ export async function buildChargeProposals(
   const matchedByCharge = new Map(
     matchedCharges.map((row) => [chargeId(row), row.shortcode]),
   );
+  const preparation = await prepareFinancialStatementPreview(db);
   const preview = await previewFinancialStatementImport(
     db,
     {
@@ -702,6 +685,7 @@ export async function buildChargeProposals(
     undefined,
     {
       candidatePolicy: "suggestion",
+      preparation,
       accountHints: new Map(
         grouped.flatMap(({ charge, observations: rows }) => {
           const stored = rows.find((row) => row.accountId)?.accountId;
@@ -711,28 +695,17 @@ export async function buildChargeProposals(
     },
   );
   const previewByKey = new Map(preview.rows.map((row) => [row.key, row]));
-  const shortcodes = [
-    ...new Set([
-      ...matchedCharges.map((row) => row.shortcode),
-      ...preview.rows.flatMap((row) => [
-        ...row.existingTransactionIds,
-        ...(row.accountId ? [row.accountId] : []),
-      ]),
-    ]),
-  ];
-  const ids = new Map<string, string>();
-  if (shortcodes.length) {
+  const ids = preparation.ids;
+  const matchedCodes = matchedCharges
+    .map((row) => row.shortcode)
+    .filter((code) => !ids.has(code));
+  if (matchedCodes.length) {
     const { rows } = await unwrapDb(db).execute<{
       id: string;
       shortcode: string;
     }>(sql`
       SELECT id, shortcode FROM "FinancialTransaction" WHERE shortcode IN (${sql.join(
-        shortcodes.map((code) => sql`${code}`),
-        sql`, `,
-      )})
-      UNION ALL
-      SELECT id, shortcode FROM "FinancialAccount" WHERE shortcode IN (${sql.join(
-        shortcodes.map((code) => sql`${code}`),
+        matchedCodes.map((code) => sql`${code}`),
         sql`, `,
       )})
     `);
@@ -747,41 +720,54 @@ export async function buildChargeProposals(
       ),
     ),
   ];
-  const [pendingTransactions, siblings, claimed, accounts, history] =
-    await Promise.all([
-      statementPendingTransactions(db, accountIds),
-      siblingsFor(db, grouped),
-      claimedCandidates(
-        db,
-        grouped.flatMap(({ charge }) =>
-          (
-            previewByKey.get(chargeId(charge))?.existingTransactions ?? []
-          ).flatMap((existing) => {
-            const transactionId = ids.get(existing.id);
-            return transactionId ? [{ charge, transactionId }] : [];
-          }),
-        ),
-      ),
-      ownAccounts(db),
-      merchantHistory(
-        db,
-        grouped.flatMap(({ charge, canonical }) => {
-          const row = previewByKey.get(chargeId(charge));
-          const accountId = row?.accountId ? ids.get(row.accountId) : null;
-          return row && accountId
-            ? [
-                {
-                  key: chargeId(charge),
-                  accountId,
-                  merchant: canonical.merchant,
-                  date: canonical.statementDate,
-                  amount: row.proposed.amount,
-                },
-              ]
-            : [];
+  const accounts: OwnAccount[] = preparation.accounts.map((account) => ({
+    id: account.id,
+    kind: account.identity.kind,
+    names: [
+      account.identity.kind === "stored_value"
+        ? account.identity.provider
+        : null,
+      account.identity.kind === "bank_account" ||
+      account.identity.kind === "other"
+        ? account.identity.institution
+        : null,
+      account.vendorName,
+    ].filter((name): name is string => Boolean(name)),
+    ledgerPartyId: account.ledgerPartyId,
+  }));
+  const [pendingTransactions, siblings, claimed, history] = await Promise.all([
+    statementPendingTransactions(db, accountIds),
+    siblingsFor(db, grouped),
+    claimedCandidates(
+      db,
+      grouped.flatMap(({ charge }) =>
+        (
+          previewByKey.get(chargeId(charge))?.existingTransactions ?? []
+        ).flatMap((existing) => {
+          const transactionId = ids.get(existing.id);
+          return transactionId ? [{ charge, transactionId }] : [];
         }),
       ),
-    ]);
+    ),
+    merchantHistory(
+      db,
+      grouped.flatMap(({ charge, canonical }) => {
+        const row = previewByKey.get(chargeId(charge));
+        const accountId = row?.accountId ? ids.get(row.accountId) : null;
+        return row && accountId
+          ? [
+              {
+                key: chargeId(charge),
+                accountId,
+                merchant: canonical.merchant,
+                date: canonical.statementDate,
+                amount: row.proposed.amount,
+              },
+            ]
+          : [];
+      }),
+    ),
+  ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const pairsByCharge = await findTransferPairsForCharges(db, charges);
 
@@ -1093,43 +1079,59 @@ export async function buildHoldVoidProposals(
       `)
     ).rows.map((row) => String(row.id));
   const holds = await statementPendingTransactions(db, accounts);
+  return buildHoldVoidProposalsForHolds(db, holds);
+}
+
+async function buildHoldVoidProposalsForHolds(
+  db: Database,
+  holds: readonly PendingTransaction[],
+  onFailure?: (hold: PendingTransaction, error: unknown) => void,
+) {
   const proposals: ChargeProposal[] = [];
   for (const hold of holds) {
-    const date = hold.transactionDate ?? hold.postedDate;
-    if (!date) continue;
-    const rows = await loadObservationsById(db, hold.pendingRowIds);
-    if (!rows.length) continue;
-    const canonical = rows[0]!;
-    const coverage = await laterCoveringImport(db, {
-      source: canonical.source,
-      accountDescriptor: canonical.accountDescriptor,
-      after: rows
-        .map((row) => row.createdAt)
-        .sort()
-        .at(-1)!,
-      coveredThrough: date,
-      rowIds: hold.pendingRowIds,
-    });
-    if (!coverage) continue;
-    const posted = await postedTwinExists(db, hold, date);
-    if (posted) continue;
-    const charge = { source: canonical.source, chargeKey: canonical.chargeKey };
-    proposals.push(
-      await finishProposal(charge, canonical, rows, {
-        recommended: "void",
-        accountId: hold.accountId,
-        statementDate: canonical.statementDate,
-        providerStatus: "pending",
-        create: null,
-        candidates: [],
-        supersede: null,
-        void: { transactionId: hold.id, coverageImportId: coverage },
-        siblings: [],
-        transfer: null,
-        transferPair: null,
-        clean: false,
-      }),
-    );
+    try {
+      const date = hold.transactionDate ?? hold.postedDate;
+      if (!date) continue;
+      const rows = await loadObservationsById(db, hold.pendingRowIds);
+      if (!rows.length) continue;
+      const canonical = rows[0]!;
+      const coverage = await laterCoveringImport(db, {
+        source: canonical.source,
+        accountDescriptor: canonical.accountDescriptor,
+        after: rows
+          .map((row) => row.createdAt)
+          .sort()
+          .at(-1)!,
+        coveredThrough: date,
+        rowIds: hold.pendingRowIds,
+      });
+      if (!coverage) continue;
+      const posted = await postedTwinExists(db, hold, date);
+      if (posted) continue;
+      const charge = {
+        source: canonical.source,
+        chargeKey: canonical.chargeKey,
+      };
+      proposals.push(
+        await finishProposal(charge, canonical, rows, {
+          recommended: "void",
+          accountId: hold.accountId,
+          statementDate: canonical.statementDate,
+          providerStatus: "pending",
+          create: null,
+          candidates: [],
+          supersede: null,
+          void: { transactionId: hold.id, coverageImportId: coverage },
+          siblings: [],
+          transfer: null,
+          transferPair: null,
+          clean: false,
+        }),
+      );
+    } catch (error) {
+      if (!onFailure || isWorkflowInterrupted(error)) throw error;
+      onFailure(hold, error);
+    }
   }
   return proposals;
 }
@@ -1232,7 +1234,14 @@ export async function publishChargeProposal(
   db: Database,
   proposal: ChargeProposal,
   producer: AssessmentProducer,
-): Promise<{ outcome: PublishOutcome; labelsReused: number }> {
+  labelPublication?: {
+    evidenceFingerprint: string;
+    checkpoint: StatementLabelCheckpoint;
+  },
+): Promise<
+  | { outcome: "published"; labelsReused: number; assessmentId: string }
+  | { outcome: Exclude<PublishOutcome, "published">; labelsReused: number }
+> {
   const { charge } = proposal;
   const ruleGeneration = producer.kind === "rule";
   const countLabels = (value: typeof proposal.judgment) =>
@@ -1242,6 +1251,7 @@ export async function publishChargeProposal(
         Number(value.create.counterparty.label !== null)
       : 0);
   return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
     let retainedSpendingCheckpoint: StatementLabelCheckpoint | undefined;
     const client = getDb(tx);
     await client.execute(
@@ -1258,10 +1268,14 @@ export async function publishChargeProposal(
       producer: unknown;
       needsLabel: string | null;
       checkpoint: unknown;
+      createdAt: string;
+      applicationOrder: unknown;
     }>(sql`
       SELECT s.id, s.status, s.fingerprint, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
         s.suppression, s.active, a.judgment, a.producer,
-        ${suggestionField("needsLabel")} AS "needsLabel", s.data->'labelCheckpoint' AS checkpoint
+        ${suggestionField("needsLabel")} AS "needsLabel", s.data->'labelCheckpoint' AS checkpoint,
+        to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
+        s.data->'applicationOrder' AS "applicationOrder"
       FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
       WHERE s.family = ${assessmentFamily.enum.statement_transaction}
         AND ${suggestionField("source")} = ${charge.source}
@@ -1273,6 +1287,9 @@ export async function publishChargeProposal(
       ...row,
       producer: assessmentProducer.nullable().parse(row.producer),
       checkpoint: statementLabelCheckpoint.nullable().parse(row.checkpoint),
+      applicationOrder: statementApplicationOrder
+        .nullable()
+        .parse(row.applicationOrder),
     }));
     if (prior.some((row) => row.suppression !== null))
       return { outcome: "suppressed", labelsReused: 0 };
@@ -1301,6 +1318,20 @@ export async function publishChargeProposal(
         return { outcome: "settled", labelsReused: 0 };
       }
     }
+    // Complete labels publish their checkpoint in this transaction instead of
+    // first rewriting the rule row. Preserve that writer's active-input fence.
+    if (
+      labelPublication &&
+      !prior.some(
+        (row) =>
+          row.active &&
+          row.status === suggestionStatus.enum.pending &&
+          row.evidenceFingerprint === labelPublication.evidenceFingerprint,
+      )
+    )
+      throw new Error(
+        "Statement label publication lost its active evidence fence",
+      );
     // A rule re-run never displaces labels a model added to the same evidence.
     const unchanged = prior.find(
       (row) =>
@@ -1404,6 +1435,16 @@ export async function publishChargeProposal(
         )})
       `);
     const { judgment } = proposal;
+    const inputPosition = prior.find(
+      (row) => row.active && row.status === "pending",
+    );
+    const applicationOrder =
+      producer.kind === "model" && inputPosition
+        ? (inputPosition.applicationOrder ?? {
+            createdAt: inputPosition.createdAt,
+            id: inputPosition.id,
+          })
+        : null;
     const checkpoint =
       retainedSpendingCheckpoint ??
       (producer.kind === "rule"
@@ -1415,7 +1456,15 @@ export async function publishChargeProposal(
                 canonicalJson(statementLabelSubject(saved.judgment)) ===
                   canonicalJson(statementLabelSubject(judgment)),
             )
-        : undefined);
+        : labelPublication
+          ? statementLabelCheckpoint.parse(labelPublication.checkpoint)
+          : statementLabelCheckpoint.safeParse({
+              revision: producer.revision,
+              model: producer.model,
+              judgment,
+              kind: true,
+              counterparty: true,
+            }).data);
     const published = await publishAssessment(
       tx,
       {
@@ -1452,6 +1501,8 @@ export async function publishChargeProposal(
           // Rule output awaits the decision model's labels: candidate
           // identity, and the kind and counterparty of every create.
           needsLabel: producer.kind === "rule" && judgment.create !== null,
+          applicationPending: producer.kind === "model",
+          ...(applicationOrder && { applicationOrder }),
           ...(checkpoint && { labelCheckpoint: checkpoint }),
           ...(await automaticRuleStamp(
             "statement_transaction",
@@ -1466,9 +1517,11 @@ export async function publishChargeProposal(
     // could not see the new row. Recheck once both are committed.
     if (judgment.recommended !== "void")
       await runAfterCommit(tx, (committed) =>
-        getDb(committed)
-          .execute(
-            sql`UPDATE "AssessmentState" SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
+        withTransactionDatabase(committed, async (retirement) => {
+          await assertWorkflowEffect(retirement);
+          await getDb(retirement)
+            .execute(
+              sql`UPDATE "AssessmentState" SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
             WHERE id = ${published.id}::uuid AND status = ${suggestionStatus.enum.pending}
               AND EXISTS (
                 SELECT 1 FROM ${chargeStateOf(
@@ -1476,11 +1529,13 @@ export async function publishChargeProposal(
                 )} cs
                 WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${judgment.recommended !== "book"})
               )`,
-          )
-          .then(() => undefined),
+            )
+            .then(() => undefined);
+        }),
       );
     return {
       outcome: "published",
+      assessmentId: published.id,
       labelsReused:
         ruleGeneration && producer.kind === "model" ? countLabels(judgment) : 0,
     };
@@ -1494,6 +1549,48 @@ const ruleProducer = (runId: string | null): AssessmentProducer => ({
   runId,
   evaluationId: null,
 });
+
+const statementGenerationFailure = (
+  ref: string,
+  error: unknown,
+): RunStepError => ({
+  at: new Date().toISOString(),
+  ref,
+  message: runFailureText(error instanceof Error ? error : String(error)),
+});
+
+/** A failed batch read isolates malformed evidence without slowing healthy preparation. */
+async function prepareStatementGenerationPage(
+  db: Database,
+  charges: readonly ChargeRef[],
+  failed: RunStepError[],
+) {
+  try {
+    return await buildChargeProposals(db, charges);
+  } catch (error) {
+    if (isWorkflowInterrupted(error)) throw error;
+    const prepared = new Map<string, ChargeProposal>();
+    await forEachConcurrently(
+      charges,
+      STATEMENT_PUBLISH_CONCURRENCY,
+      async (charge) => {
+        try {
+          const [proposal] = await buildChargeProposals(db, [charge]);
+          if (proposal) prepared.set(chargeId(charge), proposal);
+        } catch (itemError) {
+          if (isWorkflowInterrupted(itemError)) throw itemError;
+          failed.push(
+            statementGenerationFailure(`charge:${chargeId(charge)}`, itemError),
+          );
+        }
+      },
+    );
+    return charges.flatMap((charge) => {
+      const proposal = prepared.get(chargeId(charge));
+      return proposal ? [proposal] : [];
+    });
+  }
+}
 
 /** Recompute and publish named charges, e.g. the siblings of an applied one. */
 export async function regenerateCharges(
@@ -1514,15 +1611,23 @@ export async function generateStatementSuggestionPage(
     scope?: StatementSuggestionScope;
   },
 ): Promise<{
+  found: number;
   published: number;
   processed: number;
   labelsReused: number;
   unchanged: number;
   /** Charges read but resolved to an account outside the scope. */
   outOfScope: number;
+  failed: RunStepError[];
   next: ChargeRef | null;
 }> {
-  const limit = input.limit ?? STATEMENT_SUGGESTION_PAGE;
+  const limit = Math.max(
+    1,
+    Math.min(
+      input.limit ?? STATEMENT_SUGGESTION_PAGE,
+      WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+    ),
+  );
   const charges = await nextUnmatchedCharges(db, {
     after: input.after,
     limit,
@@ -1531,55 +1636,145 @@ export async function generateStatementSuggestionPage(
   let published = 0;
   let labelsReused = 0;
   let unchanged = 0;
+  const failed: RunStepError[] = [];
   const accountIds = input.scope?.accountIds;
-  const built = await buildChargeProposals(db, charges);
+  const built = await prepareStatementGenerationPage(db, charges, failed);
   const proposals = accountIds?.length
     ? built.filter((proposal) =>
         accountIds.includes(proposal.judgment.accountId),
       )
     : built;
   const outOfScope = built.length - proposals.length;
-  // The final page also judges vanished holds, whose charges are matched.
-  if (charges.length < limit)
-    proposals.push(...(await buildHoldVoidProposals(db)));
   // Publish independent charges first; import applications then recheck the
   // current ledger sequentially, including reused labels on unchanged imports.
   await forEachConcurrently(
     proposals,
     STATEMENT_PUBLISH_CONCURRENCY,
     async (proposal) => {
-      const outcome = await publishChargeProposal(
-        db,
-        proposal,
-        ruleProducer(input.runId),
-      );
-      labelsReused += outcome.labelsReused;
-      if (outcome.outcome === "published") published++;
-      else unchanged++;
+      try {
+        const outcome = await publishChargeProposal(
+          db,
+          proposal,
+          ruleProducer(input.runId),
+        );
+        labelsReused += outcome.labelsReused;
+        if (outcome.outcome === "published") published++;
+        else unchanged++;
+      } catch (error) {
+        if (isWorkflowInterrupted(error)) throw error;
+        failed.push(
+          statementGenerationFailure(
+            `charge:${chargeId(proposal.charge)}`,
+            error,
+          ),
+        );
+      }
     },
   );
   if (input.scope?.importId) {
     const { applyAutomaticRulesForCharge } =
       await import("~/server/generic/assessment/repo/automatic-rule-runtime");
     for (const proposal of proposals) {
-      await regenerateCharges(db, [proposal.charge]);
-      await applyAutomaticRulesForCharge(db, proposal.charge, true);
+      const ref = `charge:${chargeId(proposal.charge)}`;
+      if (failed.some((failure) => failure.ref === ref)) continue;
+      try {
+        await regenerateCharges(db, [proposal.charge]);
+        await applyAutomaticRulesForCharge(db, proposal.charge, true);
+      } catch (error) {
+        if (isWorkflowInterrupted(error)) throw error;
+        failed.push(statementGenerationFailure(ref, error));
+      }
     }
   }
   return {
+    found: charges.length,
     published,
     processed: charges.length,
     labelsReused,
     unchanged,
     outOfScope,
+    failed,
     next: charges.length === limit ? charges.at(-1)! : null,
   };
 }
 
+/** Vanished holds use their own bounded transaction-ID cursor, including non-voidable holds. */
+export async function generateStatementHoldVoidPage(
+  db: Database,
+  input: {
+    after: string | null;
+    runId: string | null;
+    limit?: number;
+    scope?: StatementSuggestionScope;
+  },
+) {
+  const limit = Math.max(
+    1,
+    Math.min(
+      input.limit ?? STATEMENT_SUGGESTION_PAGE,
+      WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+    ),
+  );
+  const accounts =
+    input.scope?.accountIds ??
+    (
+      await unwrapDb(db).execute<{ id: string }>(sql`
+      SELECT DISTINCT ft."accountId" AS id FROM "FinancialTransaction" ft
+      WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
+    `)
+    ).rows.map((row) => String(row.id));
+  const holds = await statementPendingTransactions(db, accounts, {
+    after: input.after,
+    limit,
+  });
+  const failed: RunStepError[] = [];
+  const proposals = await buildHoldVoidProposalsForHolds(
+    db,
+    holds,
+    (hold, error) => {
+      failed.push(
+        statementGenerationFailure(`statement_hold:${hold.id}`, error),
+      );
+    },
+  );
+  let published = 0;
+  let labelsReused = 0;
+  let unchanged = 0;
+  await forEachConcurrently(
+    proposals,
+    STATEMENT_PUBLISH_CONCURRENCY,
+    async (proposal) => {
+      try {
+        const outcome = await publishChargeProposal(
+          db,
+          proposal,
+          ruleProducer(input.runId),
+        );
+        labelsReused += outcome.labelsReused;
+        if (outcome.outcome === "published") published++;
+        else unchanged++;
+      } catch (error) {
+        if (isWorkflowInterrupted(error)) throw error;
+        const ref = proposal.judgment.void
+          ? `statement_hold:${proposal.judgment.void.transactionId}`
+          : `charge:${chargeId(proposal.charge)}`;
+        failed.push(statementGenerationFailure(ref, error));
+      }
+    },
+  );
+  return {
+    found: holds.length,
+    processed: holds.length,
+    published,
+    labelsReused,
+    unchanged,
+    failed,
+    next: holds.length === limit ? holds.at(-1)!.id : null,
+  };
+}
+
 /** A label pass's position in `(createdAt, id)` order. */
-export type LabelCursor = {
-  createdAt: string;
-  id: string;
+export type LabelCursor = z.infer<typeof statementApplicationOrder> & {
   inclusive?: boolean;
 };
 
@@ -1593,7 +1788,9 @@ export async function recordStatementLabelCheckpoint(
   },
 ): Promise<"saved" | "settled" | "moved"> {
   const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
-  const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
+  return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
+    const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`
     UPDATE "AssessmentState" s
     SET data = jsonb_set(coalesce(s.data, '{}'::jsonb), '{labelCheckpoint}', ${JSON.stringify(checkpoint)}::jsonb),
       "updatedAt" = now()
@@ -1603,8 +1800,8 @@ export async function recordStatementLabelCheckpoint(
       AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
     RETURNING s.id
   `);
-  if (rows.length) return "saved";
-  const { rows: settled } = await unwrapDb(db).execute(sql`
+    if (rows.length) return "saved";
+    const { rows: settled } = await unwrapDb(tx).execute(sql`
     SELECT 1 FROM "AssessmentState" s
     WHERE s.family = ${assessmentFamily.enum.statement_transaction}
       AND ${suggestionField("source")} = ${input.charge.source}
@@ -1616,7 +1813,26 @@ export async function recordStatementLabelCheckpoint(
       AND (cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${checkpoint.judgment.recommended !== "book"}))
     LIMIT 1
   `);
-  return settled.length ? "settled" : "moved";
+    return settled.length ? "settled" : "moved";
+  });
+}
+
+/** Clear only the receipt whose application settled; a replacement owns its own receipt. */
+export async function completeStatementApplications(
+  db: Database,
+  assessmentIds: readonly string[],
+) {
+  if (!assessmentIds.length) return;
+  await withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
+    await unwrapDb(tx).execute(sql`
+      UPDATE "AssessmentState" SET data = data - 'applicationPending' - 'applicationOrder', "updatedAt" = now()
+      WHERE id IN (${sql.join(
+        assessmentIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+    `);
+  });
 }
 
 /**
@@ -1630,21 +1846,27 @@ export async function suggestionsNeedingLabels(
   after: LabelCursor | null = null,
   importId: string | null = null,
 ) {
+  const positionAt = sql`coalesce((s.data->'applicationOrder'->>'createdAt')::timestamp, s."createdAt")`;
+  const positionId = sql`coalesce((s.data->'applicationOrder'->>'id')::uuid, s.id)`;
   const { rows } = await unwrapDb(db).execute<{
     id: string;
     createdAt: string;
     subject: unknown;
     evidenceFingerprint: string;
     checkpoint: unknown;
+    applicationPending: boolean;
+    cursorId: string;
   }>(sql`
-    SELECT s.id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
+    SELECT s.id, to_char(${positionAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", ${positionId} AS "cursorId",
       a.subject, ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
-      s.data->'labelCheckpoint' AS checkpoint
+      s.data->'labelCheckpoint' AS checkpoint,
+      coalesce((s.data->>'applicationPending')::boolean, false) AS "applicationPending"
     FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
-    WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
+    WHERE ${pendingSuggestion()} AND ((${suggestionField("needsLabel")})::boolean
+      OR coalesce((s.data->>'applicationPending')::boolean, false))
       ${importScope(importId)}
-      ${after ? sql`AND (s."createdAt", s.id) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
-    ORDER BY s."createdAt", s.id
+      ${after ? sql`AND (${positionAt}, ${positionId}) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
+    ORDER BY ${positionAt}, ${positionId}
     LIMIT ${limit}
   `);
   return rows.map((row) => ({
@@ -1672,7 +1894,8 @@ export async function countSuggestionsNeedingLabels(
 ) {
   const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
     SELECT count(*)::int AS count FROM "AssessmentState" s
-    WHERE ${pendingSuggestion()} AND (${suggestionField("needsLabel")})::boolean
+    WHERE ${pendingSuggestion()} AND ((${suggestionField("needsLabel")})::boolean
+      OR coalesce((s.data->>'applicationPending')::boolean, false))
       ${importScope(importId)}
   `);
   return rows[0]?.count ?? 0;

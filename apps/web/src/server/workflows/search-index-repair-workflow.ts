@@ -6,7 +6,6 @@ import {
   type SearchRepairCheckpoint,
   type SearchRepairContinuation,
 } from "@cubby/schemas/maintenance";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   WorkflowEntrypoint,
@@ -24,7 +23,14 @@ import type {
   SearchIndexRepairWorkflowParams,
 } from "~/server/worker-bindings";
 
+import { enqueueBackgroundTask } from "./background-tasks/publish";
 import { workflowDeploymentBoundary } from "./deployment-boundary";
+import { readWorkflowDeployment } from "./runs/activation";
+import {
+  isWorkflowInterrupted,
+  withWorkflowDeploymentEffect,
+} from "./runs/execution";
+import { runSearchRepairSourcePage } from "./runs/search-repair-page";
 
 const REPAIR_PAGES_PER_INSTANCE = 128;
 
@@ -68,10 +74,8 @@ export class SearchIndexRepairWorkflow
         setCfEnv(this.env);
         const {
           applySearchIndexRepairOrphanPage,
-          applySearchIndexRepairSourcePage,
           createSearchIndexRepairCounters,
           foldSearchIndexRepairCounters,
-          publishSearchIndexRepairSourcePage,
           SEARCH_INDEX_REPAIR_PAGE_SIZE,
           selectSearchIndexRepairOrphanPage,
           selectSearchIndexRepairSourcePage,
@@ -86,24 +90,78 @@ export class SearchIndexRepairWorkflow
           checkpoint?.phase === "orphans" ? checkpoint.cursor : null;
         let page = 0;
         let completedPages = 0;
-        const current = () =>
-          this.env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID);
+        let pendingSource = checkpoint?.pendingSource;
+        const epoch = await step.do("deployment epoch", RETRIES, () =>
+          withFreshDb(this.env, async (db) => {
+            const activation = await readWorkflowDeployment(db);
+            if (!activation)
+              throw new Error("Workflow deployment has not been activated");
+            return event.payload.activationEpoch ?? activation.epoch;
+          }),
+        );
         const nextInstanceId = await sha256Hex(`${event.instanceId}:continue`);
-        const boundary = (phase: SearchRepairCheckpoint["phase"]) =>
+        const boundary = (
+          phase: SearchRepairCheckpoint["phase"],
+          force = false,
+        ) =>
           workflowDeploymentBoundary(step, {
             name: `${phase}:${page}`,
             version: this.env.CF_VERSION_METADATA.id,
-            currentVersion: () => current().currentDeploymentVersion(),
-            force: completedPages >= REPAIR_PAGES_PER_INSTANCE,
-            initial: completedPages === 0,
-            continue: () =>
-              current().continueSearchIndexRepair({
-                id: nextInstanceId,
-                params: {
-                  requestedAt: event.payload.requestedAt,
-                  checkpoint: { phase, cursor, counters },
-                },
+            epoch,
+            currentVersion: () =>
+              withFreshDb(this.env, async (db) => {
+                const activation = await readWorkflowDeployment(db);
+                if (!activation)
+                  throw new Error("Workflow deployment has not been activated");
+                return {
+                  version: activation.workerVersion,
+                  epoch: activation.epoch,
+                };
               }),
+            force: force || completedPages >= REPAIR_PAGES_PER_INSTANCE,
+            continue: async () => {
+              await enqueueBackgroundTask(
+                {
+                  kind: "search-repair.continue",
+                  requestedAt: new Date().toISOString(),
+                  id: nextInstanceId,
+                  params: {
+                    requestedAt: event.payload.requestedAt,
+                    checkpoint: {
+                      phase,
+                      cursor,
+                      counters,
+                      ...(pendingSource && { pendingSource }),
+                    },
+                  },
+                },
+                {
+                  source: "search-repair.continue",
+                  queue: this.env.BACKGROUND_QUEUE,
+                },
+              );
+            },
+          });
+        const orphanEffect = (
+          name: string,
+          work: (
+            db: Database,
+          ) => Promise<Pick<SearchIndexRepairCounters, "retired">>,
+        ) =>
+          step.do(name, RETRIES, async () => {
+            try {
+              return await withFreshDb(this.env, (db) =>
+                withWorkflowDeploymentEffect(
+                  db,
+                  { version: this.env.CF_VERSION_METADATA.id, epoch },
+                  work,
+                ),
+              );
+            } catch (error) {
+              // Return a durable interruption marker rather than retrying old code.
+              if (isWorkflowInterrupted(error)) return null;
+              throw error;
+            }
           });
 
         if (checkpoint?.phase !== "sources") {
@@ -117,19 +175,21 @@ export class SearchIndexRepairWorkflow
                   selectSearchIndexRepairOrphanPage(db, cursor ?? undefined),
                 ),
             );
-            const delta = await step.do(
+            const delta = await orphanEffect(
               `search-index-repair.orphans.apply.${page}`,
-              RETRIES,
-              () =>
-                withFreshDb(this.env, async (db) => {
-                  const result = await applySearchIndexRepairOrphanPage(
-                    db,
-                    selection.refs,
-                  );
-                  await recordDatabaseWrite("search-index-repair.orphans");
-                  return result;
-                }),
+              async (db) => {
+                const result = await applySearchIndexRepairOrphanPage(
+                  db,
+                  selection.refs,
+                );
+                await recordDatabaseWrite("search-index-repair.orphans");
+                return result;
+              },
             );
+            if (delta === null) {
+              await boundary("orphans", true);
+              return { nextInstanceId };
+            }
             counters = foldSearchIndexRepairCounters(
               foldSearchIndexRepairCounters(counters, selection.delta),
               delta,
@@ -161,44 +221,27 @@ export class SearchIndexRepairWorkflow
             `search-index-repair.sources.select.${page}`,
             RETRIES,
             () =>
-              withFreshDb(this.env, (db) =>
-                selectSearchIndexRepairSourcePage(db, cursor ?? undefined),
-              ),
+              pendingSource
+                ? Promise.resolve(pendingSource.page)
+                : withFreshDb(this.env, (db) =>
+                    selectSearchIndexRepairSourcePage(db, cursor ?? undefined),
+                  ),
           );
-          const delta = await step.do(
-            `search-index-repair.sources.apply.${page}`,
-            RETRIES,
-            () =>
-              withFreshDb(this.env, async (db) => {
-                const result = await applySearchIndexRepairSourcePage(
-                  db,
-                  selection.refs,
-                );
-                await recordDatabaseWrite("search-index-repair.sources");
-                return result;
-              }),
-          );
-          counters = foldSearchIndexRepairCounters(
-            foldSearchIndexRepairCounters(counters, selection.delta),
-            delta,
-          );
-          const published = await step.do(
-            `search-index-repair.sources.publish.${page}`,
-            RETRIES,
-            () =>
-              withFreshDb(this.env, async (db) => {
-                const result = await publishSearchIndexRepairSourcePage(
-                  db,
-                  selection.refs,
-                  event.payload.requestedAt,
-                );
-                await recordDatabaseWrite(
-                  "search-index-repair.sources.publish",
-                );
-                return result;
-              }),
-          );
-          counters = foldSearchIndexRepairCounters(counters, published);
+          const result = await runSearchRepairSourcePage({
+            name: `search-index-repair.sources.${page}`,
+            requestedAt: event.payload.requestedAt,
+            pending: pendingSource ?? { stage: "apply", page: selection },
+            identity: { version: this.env.CF_VERSION_METADATA.id, epoch },
+            steps: step,
+            database: (work) => withFreshDb(this.env, work),
+          });
+          if (result.kind === "interrupted") {
+            pendingSource = result.pending;
+            await boundary("sources", true);
+            return { nextInstanceId };
+          }
+          pendingSource = undefined;
+          counters = foldSearchIndexRepairCounters(counters, result.delta);
           await step.do(
             `search-index-repair.sources.progress.${page}`,
             RETRIES,

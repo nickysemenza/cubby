@@ -1,3 +1,4 @@
+import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import {
   BOOKKEEPING_RETRIES,
   PROVIDER_RETRIES,
@@ -24,6 +25,7 @@ export interface MailDiscoveryWork {
   finish(): Promise<{ kind: "stopped" } | { kind: "done" }>;
   continue(): Promise<void>;
   fail(stepError: string): Promise<null>;
+  interrupted?(): Promise<void>;
 }
 
 export async function runMailDiscovery(
@@ -62,6 +64,10 @@ export async function runMailDiscovery(
     if (finished.kind === "done")
       await steps.do("continue", BOOKKEEPING_RETRIES, () => work.continue());
   } catch (error) {
+    if (isWorkflowInterrupted(error) && work.interrupted) {
+      await work.interrupted();
+      return;
+    }
     const stepError = error instanceof Error ? error.message : String(error);
     await steps.do("fail", BOOKKEEPING_RETRIES, () => work.fail(stepError));
     throw error;

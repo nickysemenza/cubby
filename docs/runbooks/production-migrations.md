@@ -11,6 +11,58 @@ requirements and [CI](../ci.md#deployment) for workflow execution and retries.
 Do not run production migrations by hand while a Deploy run is queued or
 running; Actions serialization does not cover operator shells.
 
+## Deployment activation, repair, and rollback
+
+The existing Deploy action runs `pnpm --filter @cubby/web run deploy:worker`
+after building and migrating. Local `pnpm --filter @cubby/web deploy:cf` builds
+first, then uses that same CLI. Both paths require
+`PRODUCTION_DIRECT_DATABASE_URL`, `CLOUDFLARE_ACCOUNT_ID`, and
+`CLOUDFLARE_API_TOKEN` in the environment. The database URL must be explicit
+and direct; `DATABASE_URL` is never a fallback. The CLI owns one database
+connection and closes it on success or failure.
+
+The CLI reads the prior activation epoch before deployment. It verifies the
+built output's provenance, invokes the package-local `cf deploy --prebuilt
+--mode production`, then verifies Cloudflare's actual latest serving
+deployment through its list/get APIs. Exactly one version must receive 100%
+of traffic, match the version reported by `cf`, and carry the build's source
+commit and fingerprints. It rechecks the serving deployment immediately before
+the activation compare-and-set. A stale activator cannot overwrite a newer
+epoch. [Cloudflare defines the first listed deployment as the serving one.](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/)
+
+After activation commits, the CLI sends `execution-control` events to active
+instances of the declared Run Workflows. It enumerates unfiltered instance
+pages of at most 100, using the provider's opaque cursor and the activation
+time as a fixed upper bound. Completing instances therefore cannot shrink a
+status-filtered page and skip its successors. A page's cursor advances only
+after every required event succeeds. Wake progress lives in the activation's
+`wakes`; already committed Run work and history remain intact.
+
+A wake failure reports **Workflow cutover incomplete** and exits unsuccessfully.
+Repair the latest serving deployment using the deployment and version IDs
+printed in that failure:
+
+```sh
+pnpm --filter @cubby/web run deploy:worker --activate-only=10000000-0000-4000-8000-000000000001 --version=20000000-0000-4000-8000-000000000001
+```
+
+Those IDs are synthetic examples. Repeating repair for the same serving
+deployment retains its epoch and resumes its incomplete page; duplicate wake
+events are harmless. Completed pages and Workflows are skipped. Repair refuses
+a deployment that is no longer the latest serving deployment.
+
+To roll back locally, select a known Worker version compatible with the
+current database and activation protocol, then run:
+
+```sh
+pnpm --filter @cubby/web run deploy:worker --rollback=20000000-0000-4000-8000-000000000001
+```
+
+Rollback creates a new 100% provider deployment and uses the same verification,
+activation, and wake path. Returning from version A to B to A advances the
+epoch each time; it never restores an earlier activation or database schema.
+Do not overlap operator deployment or rollback with the serialized Deploy job.
+
 ## Staged and breaking cutovers
 
 One exclusive operator owns a staged cutover, including Actions and local
