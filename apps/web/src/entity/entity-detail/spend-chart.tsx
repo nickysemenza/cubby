@@ -76,7 +76,10 @@ export function MonthlySpendChart({
         ))}
       </div>
       {first && last ? (
-        <div className="mt-1 flex justify-between font-mono text-2xs text-muted-foreground">
+        <div
+          aria-hidden
+          className="mt-1 flex justify-between font-mono text-2xs text-muted-foreground"
+        >
           <span>{monthLabel(first.month)}</span>
           <span>{monthLabel(last.month)}</span>
         </div>

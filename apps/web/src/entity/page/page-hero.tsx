@@ -338,39 +338,40 @@ function DetailPlate({
       {strip && (
         // Key numbers run edge to edge between hairlines; the chart takes
         // what the numbers leave.
-        <div
+        <section
+          aria-label="Key numbers"
           className="-mx-2 mt-3 flex flex-wrap border-y border-border md:-mx-4"
           data-testid="detail-key-numbers"
         >
           {heroStats?.map((stat) => (
-            <div
+            <dl
               key={stat.label}
               className="min-w-36 flex-[0_1_11rem] border-r border-border px-2 py-2.5 md:px-4"
             >
-              <div className="text-sm font-medium text-muted-foreground">
+              <dt className="text-sm font-medium text-muted-foreground">
                 {stat.label}
-              </div>
-              <div
+              </dt>
+              <dd
                 className={cn(
                   "mt-0.5 min-w-0 text-xl leading-7 font-semibold tracking-[-0.02em] text-foreground-strong tabular-nums [&_*]:text-inherit",
                   stat.tone === "warning" && "text-warning",
                 )}
               >
                 {stat.value}
-              </div>
+              </dd>
               {stat.caption ? (
-                <div className="mt-0.5 text-xs text-muted-foreground">
+                <dd className="mt-0.5 text-xs text-muted-foreground">
                   {stat.caption}
-                </div>
+                </dd>
               ) : null}
-            </div>
+            </dl>
           ))}
           {heroChart ? (
             <div className="min-w-64 flex-1 px-2 py-2.5 md:px-4">
               {heroChart}
             </div>
           ) : null}
-        </div>
+        </section>
       )}
     </header>
   );

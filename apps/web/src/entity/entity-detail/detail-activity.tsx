@@ -68,7 +68,7 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
     >
       <SectionHeading title="Activity" />
       <RecordList
-        aria-label="Activity"
+        aria-label="Recent changes and spend"
         state={
           activity.isError
             ? { status: "error", error: activity.error, title: "activity" }
