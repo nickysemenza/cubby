@@ -96,6 +96,8 @@ export default defineEntity({
       ],
     },
     list: {
+      titleSubtitle: true,
+      shelfSubtitleOverride: ["defaultSpendingCategoryId"],
       savedViews: [
         {
           id: "research-queue",

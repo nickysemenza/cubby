@@ -1450,6 +1450,11 @@ const buildMetadataSchemas = () => {
           /** Replaces the subtitle inferred from mobile card placement. */
           shelfSubtitleOverride: z.array(fieldKey).optional(),
           /**
+           * The table's identity column takes a muted second line: the first
+           * `shelf.subtitle` field with a value. Opt-in; rows stay 32px.
+           */
+          titleSubtitle: z.boolean().optional().default(false),
+          /**
            * The filter a fresh list opens with, as column filters (`id` is a
            * field key, the value what its filter control would hold). Applies
            * only while the URL names no filter of its own; clearing it writes
@@ -1674,6 +1679,7 @@ const buildMetadataSchemas = () => {
             totals,
             read,
             shelfSubtitleOverride,
+            titleSubtitle,
             initialFilter,
             savedViews,
             primarySearch,
@@ -1692,6 +1698,7 @@ const buildMetadataSchemas = () => {
               shelfSubtitleOverride === undefined
                 ? null
                 : { subtitle: shelfSubtitleOverride },
+            titleSubtitle,
             initialFilter,
             primarySearch,
             scope,

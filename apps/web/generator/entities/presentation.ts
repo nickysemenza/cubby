@@ -620,6 +620,7 @@ export const compilePresentation = (
       totals: list.totals,
       read: list.read,
       shelf: { subtitle: shelfSubtitle },
+      titleSubtitle: list.titleSubtitle,
       initialFilter: list.initialFilter,
       savedViews: list.savedViews,
       primarySearch: list.primarySearch,

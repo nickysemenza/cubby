@@ -345,18 +345,17 @@ describe("rendered column fit", () => {
     );
   });
 
-  // Regression: a one-line "Itemization coverage" header set its pill
-  // column's width; the label now wraps to two lines and fits beside it.
-  it("fits a long header at its two-line width", async () => {
+  // Headers are one line: a long label sets its column's width, capped, rather
+  // than wrapping beside a narrow pill.
+  it("fits a long header on one line", async () => {
     await page.viewport(1440, 900);
     const header = "Itemization coverage";
     const view = render(<FitFixture qualityHeader={header} />);
-    await waitFor(() =>
-      expect(width(view.getByTestId("quality"))).toBeLessThan(120),
-    );
     const label = view.getByText(header);
-    expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
-    expect(label.scrollHeight).toBeLessThanOrEqual(label.clientHeight);
+    await waitFor(() =>
+      expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth),
+    );
+    expect(width(view.getByTestId("quality"))).toBeLessThan(184);
   });
 
   // Regression: chip clusters were never measured, so a single related

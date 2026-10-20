@@ -142,6 +142,8 @@ export default defineEntity({
       ],
     },
     list: {
+      titleSubtitle: true,
+      shelfSubtitleOverride: ["vendorId", "displayLabel"],
       savedViews: [
         {
           id: "research-queue",

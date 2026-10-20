@@ -589,11 +589,10 @@
     );
   }
 
-  /* Full-height column rules stay quieter than the header boundary. */
-  .table-grid-lines th:not(:last-child):not(.table-pinned-boundary-start),
-  .table-grid-lines td:not(:last-child):not(.table-pinned-boundary-start) {
-    border-right: 1px solid
-      color-mix(in oklab, var(--brand-hairline) 40%, transparent);
+  /* Amounts in table cells read in mono so columns of money align by digit. */
+  [data-slot="table-cell"] .money {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
   }
 
   /* Pinned boundaries are functional depth cues, not table dividers: a single
@@ -607,16 +606,6 @@
   .table-pinned-boundary-end {
     border-inline-start: 1px solid var(--brand-hairline);
     box-shadow: -4px 0 8px -8px rgb(23 26 33 / 0.32);
-  }
-
-  /* Trailing gutter cell. It renders AFTER the actions column, so the content
-     block ends with the actions column's own border-right as the terminating
-     grid rule. The header copy is pinned to `w-0` (see Table.tsx) — left
-     unsized it's the only auto cell under table-fixed and swallows the table's
-     entire surplus width, leaving dead space beside clipping columns. */
-  .table-grid-lines th[data-spacer],
-  .table-grid-lines td[data-spacer] {
-    border-right: 0;
   }
 
   /* Active nav gets a crisp cobalt route line. */

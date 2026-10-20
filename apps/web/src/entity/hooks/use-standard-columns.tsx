@@ -10,8 +10,16 @@ import { z } from "zod";
 
 import type { EntityActionSubject } from "~/entity/actions/entity-actions";
 import { createEntityDisplayColumns } from "~/entity/display/entity-display";
-import { browserEntityDefinition, getSortableFields } from "~/entity/entities";
+import {
+  browserEntityDefinition,
+  getSortableFields,
+  isBrowserRoutedEntity,
+} from "~/entity/entities";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
+import {
+  captionRowSchema,
+  recordCaption,
+} from "~/entity/entity-list/record-caption";
 import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
@@ -204,6 +212,19 @@ export function useStandardColumns<TData extends BaseListRow>({
       titleField: resolvedTitleField,
     };
   }, [entity, hasUnitMappings]);
+  // Declared per entity (`list.titleSubtitle`): the identity's second line
+  // is the record's caption, as on its shelf card.
+  const titleCaption = useMemo(() => {
+    if (
+      !isBrowserRoutedEntity(entity) ||
+      !entitySummary[entity].list.titleSubtitle
+    )
+      return undefined;
+    return (row: TData) => {
+      const parsed = captionRowSchema.safeParse(row);
+      return parsed.success ? recordCaption(entity, parsed.data) : undefined;
+    };
+  }, [entity]);
   const identityWidth = useMemo(() => {
     const titleFieldModel = entityFieldModels[entity].fields.find(
       (field) => field.key === titleField,
@@ -246,6 +267,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         editable: nameEditable,
         nameSuffix,
         namePrefix,
+        caption: titleCaption,
         expandable,
         rowLink,
         getValue: (row: TData) =>
@@ -289,6 +311,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     nameEditable,
     nameSuffix,
     namePrefix,
+    titleCaption,
     expandable,
   ]);
   const baseColumns = useMemo(

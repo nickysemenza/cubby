@@ -6,8 +6,6 @@ import type { CubbyTable } from "./table-features";
 
 const SAMPLE_ROWS = 12;
 const HEADER_CAP = 160;
-/** A two-line header's widest line is at least about half its label. */
-const HEADER_LINE_SHARE = 0.55;
 const INHERITED_TYPOGRAPHY = [
   "font-family",
   "font-size",
@@ -68,36 +66,10 @@ function naturalCell(cell: HTMLElement) {
   return clone;
 }
 
-const labelOf = (clone: HTMLElement) =>
-  clone.querySelector<HTMLElement>("[data-header-label]");
-
-/** The header clone with its label shrunk to its longest word. */
-function wrappedHeaderClone(cell: HTMLElement) {
-  const clone = naturalCell(cell);
-  const label = clone && labelOf(clone);
-  if (!clone || !label) return undefined;
-  label.style.width = "min-content";
-  label.style.flex = "0 0 auto";
-  return clone;
-}
-
-/**
- * Header labels wrap to two lines, so the label's share of the width is its
- * longest word or about half its one-line width, whichever is wider.
- */
-function twoLineHeaderWidth(clone: HTMLElement, wrapped: HTMLElement) {
-  const painted = clone.getBoundingClientRect().width;
-  const label = labelOf(clone)?.getBoundingClientRect().width ?? 0;
-  const word = labelOf(wrapped)?.getBoundingClientRect().width ?? 0;
-  return Math.ceil(painted - label + Math.max(word, label * HEADER_LINE_SHARE));
-}
-
 type FitSample = {
   id: string;
   header: boolean;
   clone: HTMLElement;
-  /** A header's label wrapped at its longest word. */
-  wrapped?: HTMLElement;
 };
 
 /** The offscreen clones that measure one cell, or none for unfit content. */
@@ -114,22 +86,14 @@ function fitSample(id: string, cell: HTMLElement): FitSample | null {
     for (const more of wrap.querySelectorAll("[data-chip-overflow]"))
       more.remove();
   }
-  const header = cell.tagName === "TH";
-  return {
-    id,
-    header,
-    clone,
-    wrapped: header ? wrappedHeaderClone(cell) : undefined,
-  };
+  return { id, header: cell.tagName === "TH", clone };
 }
 
 function sampleWidth(sample: FitSample) {
   const painted = Math.ceil(sample.clone.getBoundingClientRect().width);
+  // Headers are one line; a label past the cap truncates with its title.
   if (painted === 0 || !sample.header) return painted;
-  const header = sample.wrapped
-    ? twoLineHeaderWidth(sample.clone, sample.wrapped)
-    : painted;
-  return Math.min(header, HEADER_CAP);
+  return Math.min(painted, HEADER_CAP);
 }
 
 export function renderedColumnFitScope<TData extends RowData>(
@@ -205,7 +169,6 @@ export function useRenderedColumnWidths<TData extends RowData>(
         const sample = fitSample(id, cell);
         if (!sample) continue;
         host.append(sample.clone);
-        if (sample.wrapped) host.append(sample.wrapped);
         samples.push(sample);
       }
       // All writes precede all layout reads; remove the inert batch only after
