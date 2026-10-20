@@ -1,0 +1,19 @@
+apps/web/src/ui/common/key-numbers.tsx
+  s_d793e3f7b2a5b3::t_0508b65e91b7a6 117-118,128,136,183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "076a3576849bb8e25464ae85d7fc9525d7b25dc2",
+  "prompts": {},
+  "sessions": {
+    "s_d793e3f7b2a5b3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b46-21f6-7731-9062-d844652da9af",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
