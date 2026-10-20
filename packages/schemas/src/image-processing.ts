@@ -89,17 +89,17 @@ const isoDateTime = z.iso.datetime({ offset: true });
 const positiveInt = z.int().positive();
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/i);
 
+/** Availability and optional installed revision of a native image processor. */
+export const imageProcessorAvailability = z.object({
+  available: z.boolean(),
+  revision: z.int().positive().optional(),
+});
+
 export const imageProcessingCapabilities = z.object({
   /** True only when the native Vision subject-lift runtime can execute now. */
-  visionSubjectLift: z.object({
-    available: z.boolean(),
-    revision: z.int().positive().optional(),
-  }),
+  visionSubjectLift: imageProcessorAvailability,
   /** Actual-image Foundation Models evaluation, never a text-only surrogate. */
-  actualImageDescription: z.object({
-    available: z.boolean(),
-    revision: z.int().positive().optional(),
-  }),
+  actualImageDescription: imageProcessorAvailability,
   /** Checksum-verified JPEG preparation, independent of a native language model. */
   jpegNormalization: z
     .object({

@@ -874,7 +874,7 @@ private actor PreviewEntityRelationshipsClient: EntityRelationshipsClient {
     func discoverConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
         try await waitOrThrow()
     }
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
         throw URLError(.resourceUnavailable)
     }
     func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {

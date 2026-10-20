@@ -39,7 +39,7 @@ import {
 } from "@cubby/schemas/ai";
 import {
   aiFundingStatus,
-  setCreditBudgetInput,
+  aiBudgetSettings,
 } from "@cubby/schemas/mail-import-settings";
 import { z as zod } from "zod";
 
@@ -253,7 +253,7 @@ export const aiFundingContract = defineContract("aiFunding", {
     cache: { tags: [["run"]], profile: "live-status" },
   }),
   setCreditBudget: mutation({
-    input: setCreditBudgetInput,
+    input: aiBudgetSettings,
     output: aiFundingStatus,
     invalidates: ["runOnly"],
   }),

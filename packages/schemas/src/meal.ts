@@ -12,7 +12,7 @@ export {
 export * from "./meal-nutrition";
 export * from "./meal-amount";
 import { mealFoodAmount } from "./meal-amount";
-import { recipeYieldSchema } from "./recipe-shared";
+import { recipeYieldSchema, recipeRefOut } from "./recipe-shared";
 import { uniqueBy } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
@@ -29,7 +29,7 @@ import {
   mealShortcode,
   recipeShortcode,
 } from "./identifiers";
-import { ledgerPartyKind } from "./ledger-party";
+import { ledgerPartyPersonSummary } from "./ledger-party-fields";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { mealDate, mealScale, mealYieldGrams } from "./meal-shared";
 import {
@@ -200,11 +200,7 @@ const mealPreparationTargetMealOut = mealPreparationSourceMealOut.extend({
   mealKind: mealKindSchema,
 });
 
-const mealPreparationEaterOut = z.object({
-  id: ledgerPartyShortcode,
-  name: z.string(),
-  kind: ledgerPartyKind.exclude(["household"]),
-});
+const mealPreparationEaterOut = ledgerPartyPersonSummary;
 
 export const mealRecipePreparationPortionOut = z.object({
   targetMeal: mealPreparationTargetMealOut,
@@ -239,7 +235,7 @@ const mealRecipePreparationFields = {
   mealRecipeId,
   preparedHere: z.boolean(),
   sourceMeal: mealPreparationSourceMealOut,
-  recipe: z.object({ id: recipeShortcode, name: z.string() }),
+  recipe: recipeRefOut,
   scale: mealScale,
   recipeServings: z.number().positive().nullable(),
   recipeYield: recipeYieldSchema.nullable(),

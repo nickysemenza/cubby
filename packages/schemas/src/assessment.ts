@@ -155,16 +155,17 @@ const publicAssessmentTarget = z.object({
   entity: z.enum(shortcodeEntities),
   recordId: z.uuid(),
 });
+const emailAssessmentTarget = publicAssessmentTarget.extend({
+  entity: z.literal("email"),
+});
+
 export const assessmentProjectionTargets = {
   field: publicAssessmentTarget,
-  email_relevance: z.object({ entity: z.literal("email"), recordId: z.uuid() }),
-  mail_import_outcome: z.object({
-    entity: z.literal("email"),
-    recordId: z.uuid(),
-  }),
+  email_relevance: emailAssessmentTarget,
+  mail_import_outcome: emailAssessmentTarget,
   email_link: z
     .discriminatedUnion("entity", [
-      z.object({ entity: z.literal("email"), recordId: z.uuid() }),
+      emailAssessmentTarget,
       z.object({
         entity: z.literal("orderMailEvent"),
         recordId: z.uuid(),

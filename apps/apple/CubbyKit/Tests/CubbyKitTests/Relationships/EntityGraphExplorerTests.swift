@@ -116,7 +116,7 @@ struct EntityGraphExplorerTests {
 }
 
 private actor GraphExplorerClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
         throw URLError(.unsupportedURL)
     }
 

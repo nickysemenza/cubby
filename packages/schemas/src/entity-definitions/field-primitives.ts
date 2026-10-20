@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productImagePurpose } from "../image-summary";
 import { imageIdentificationResult } from "../image-identification";
 import imageDefinition from "./18-image.entity";
 import { readFieldSchemas } from "./definition";
@@ -27,7 +28,7 @@ export type ImageAnalysisSummary = z.infer<typeof imageAnalysisSummarySchema>;
  * layer so Product read schemas carry attachment evidence without importing
  * the canonical Image module into entity declarations. */
 export const productAttachmentImageOut = imageOut.extend({
-  purpose: z.enum(["item", "label"]).nullable(),
+  purpose: productImagePurpose.nullable(),
   // Populated only on a Product detail/get read (see `dbProductToAPI`); a
   // list read leaves this absent to keep list cost flat.
   analysisSummary: imageAnalysisSummarySchema.nullable().optional(),

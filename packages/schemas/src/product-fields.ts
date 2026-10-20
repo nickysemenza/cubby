@@ -1,9 +1,21 @@
 import { productCategorySummary } from "./product-category-fields";
 import { z } from "zod";
+import { productShortcode } from "./identifier-fields";
 import { moneyNullable, positiveMoneyNullable } from "./money";
 
 /** Cycle-safe Product field schemas used by generated contracts. */
 export const productCategory = productCategorySummary;
+
+/** Product identity in linked-record and recommendation responses. */
+export const productRefOut = z.object({
+  id: productShortcode,
+  name: z.string(),
+});
+
+/** Thin Product identity with a thumbnail for cookbook and import review. */
+export const productSummaryWithCover = productRefOut.extend({
+  coverUrl: z.string().nullable(),
+});
 
 export const productPricingOut = z.object({
   derivedPrice: moneyNullable,

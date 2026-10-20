@@ -247,8 +247,13 @@ public actor CubbyClient {
 
     // MARK: - Entity relationships
 
-    public func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunWorkSnapshotOutput {
-        try await runWorkSnapshot(.init(runId: runID))
+    public func runSnapshot(runID: RunShortcode) async throws -> RunSnapshot {
+        let snapshot = try await runWorkSnapshot(.init(runId: runID))
+        return try RunSnapshot(JSONValue(encoding: snapshot))
+    }
+
+    public func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunSnapshot {
+        try await runSnapshot(runID: runID)
     }
 
     public func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
@@ -693,7 +698,7 @@ public actor CubbyClient {
     }
 
     public func projectAnalytics(filters: EntityFilterState) async throws
-        -> (ProjectDashboardSummaryOut, ProjectPortfolioAnalyticsOut)
+        -> (summary: JSONValue, analytics: JSONValue)
     {
         let search = filters["search"]?.first
         let from = filters["dateFrom"]?.first
@@ -727,7 +732,7 @@ public actor CubbyClient {
                     completionYear: completionYear)
             )
             .ok.body.json
-            return (summary, analytics)
+            return try (JSONValue(encoding: summary), JSONValue(encoding: analytics))
         }
     }
 
@@ -805,14 +810,12 @@ public actor CubbyClient {
     }
 
     /// The meals planned for one household calendar day.
-    public func meals(on date: Date) async throws -> [MealListItem] {
+    public func meals(on date: Date) async throws -> [EntityRow] {
         let day = HouseholdDay.string(for: date)
-        return try await perform {
-            try await EntityCatalog[.meal].listPage(
-                client: api, page: 1, pageSize: 20, sort: "date",
-                filters: EntityFilterState(["from": [day], "to": [day]])
-            ).items.map { try $0.decoded() }
-        }
+        return try await list(
+            EntityCatalog[.meal], page: 1, pageSize: 20, sort: "date",
+            filters: EntityFilterState(["from": [day], "to": [day]])
+        ).items
     }
 
     public func mealNutrition(mealID: String) async throws -> MealNutritionOut {

@@ -1,5 +1,5 @@
 import { vendorSpendingProfile } from "../spending-classification.js";
-import { productCategoryShortcode } from "../identifier-fields";
+import { purchasedCategorySummary } from "../product-category-fields";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
@@ -134,17 +134,7 @@ export default defineEntity({
         reference: { entity: "productCategory", multiple: true },
         display: { detail: true, referencePreviewLimit: 2 },
         validation: {
-          read: z
-            .array(
-              z.object({
-                id: productCategoryShortcode,
-                name: z.string(),
-                emoji: z.string().nullable(),
-                principalLineCount: z.number().int(),
-                distinctPurchaseCount: z.number().int(),
-              }),
-            )
-            .optional(),
+          read: z.array(purchasedCategorySummary).optional(),
           create: null,
           update: null,
         },

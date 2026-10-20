@@ -7,6 +7,8 @@ import { defineEntity } from "./definition.js";
 import { displayItemsField, labelField } from "./label-field.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
+  financialTransactionKind,
+  financialTransactionStatus,
   financialTransactionAllocations,
   financialTransactionItemization,
   financialTransactionNonZeroAmount,
@@ -21,23 +23,10 @@ import {
   purchaseShortcode,
 } from "../identifier-fields.js";
 import { z } from "zod";
-export const generatedFinancialTransactionKindValues = [
-  "purchase",
-  "refund",
-  "account_transfer",
-  "credit_card_payment",
-  "fee",
-  "interest",
-  "income",
-  "adjustment",
-  "other",
-] as const;
-export const generatedFinancialTransactionStatusValues = [
-  "expected",
-  "pending",
-  "posted",
-  "void",
-] as const;
+export const generatedFinancialTransactionKindValues =
+  financialTransactionKind.options;
+export const generatedFinancialTransactionStatusValues =
+  financialTransactionStatus.options;
 export default defineEntity({
   key: "financialTransaction",
   names: { singular: "Financial Transaction", plural: "Transactions" },
@@ -515,9 +504,9 @@ export default defineEntity({
           width: "sm",
         },
         validation: {
-          read: z.enum(generatedFinancialTransactionKindValues),
-          create: z.enum(generatedFinancialTransactionKindValues),
-          update: z.enum(generatedFinancialTransactionKindValues).optional(),
+          read: financialTransactionKind,
+          create: financialTransactionKind,
+          update: financialTransactionKind.optional(),
         },
       },
       {
@@ -539,9 +528,9 @@ export default defineEntity({
           mobile: { slot: "meta", priority: 20 },
         },
         validation: {
-          read: z.enum(generatedFinancialTransactionStatusValues),
-          create: z.enum(generatedFinancialTransactionStatusValues),
-          update: z.enum(generatedFinancialTransactionStatusValues).optional(),
+          read: financialTransactionStatus,
+          create: financialTransactionStatus,
+          update: financialTransactionStatus.optional(),
         },
       },
       {

@@ -56,40 +56,44 @@ export const recipeSectionInput = z.object({
 
 export const recipeSectionsInput = z.array(recipeSectionInput);
 
-const sectionLineFields = {
+export const sectionLineFields = {
+  // Section and line rows have UUIDs, not public entity shortcodes.
   id: z.uuid(),
   amounts: z.array(amount),
-  rawLine: z.string().nullish(),
-  modifier: z.string().nullish(),
+  ...ingredientProvenance,
   ...timestampedFields,
 };
 const sectionIngredientRef = z.object({
   id: ingredientShortcode,
   name: z.string(),
   ...timestampedFields,
+  // The editor needs aliases to distinguish parser drift from a valid alias.
   aliases: z.array(z.string()).optional(),
 });
-const ingredientLine = z.object({
+export const ingredientSectionLineOut = z.object({
   ...sectionLineFields,
   type: z.literal("ingredient"),
   recipe: z.null(),
   ingredient: sectionIngredientRef,
 });
-const recipeLine = z.object({
+export const recipeSectionLineOut = z.object({
   ...sectionLineFields,
   type: z.literal("recipe"),
   recipe: z.lazy(() => recipeTopLevel),
   ingredient: z.null(),
 });
 export const recipeSectionIngredientOut = z.discriminatedUnion("type", [
-  ingredientLine,
-  recipeLine,
+  ingredientSectionLineOut,
+  recipeSectionLineOut,
 ]);
-export const recipeSectionOut = z.object({
+export const recipeSectionFields = {
   id: z.uuid(),
   name: z.string().nullable(),
-  instructions: z.array(z.object({ instruction: z.string() })),
+  instructions: z.array(recipeInstructionInput.omit({ id: true })),
   ...timestampedFields,
+};
+export const recipeSectionOut = z.object({
+  ...recipeSectionFields,
   ingredients: z.array(recipeSectionIngredientOut),
 });
 export const recipeSectionsOut = z.array(recipeSectionOut);

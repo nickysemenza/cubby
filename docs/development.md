@@ -19,6 +19,11 @@ JSONL routes    →  cancellable workflow streams
   kernel capabilities and contract cases. `pnpm generate` rejects invalid
   declarations, and `pnpm check:clean` proves generation leaves the tree
   unchanged. New-entity work starts at [entities](entities.md).
+- Shared Zod concepts belong to their domain's leaf schema module in
+  `packages/schemas/src`; consumers import that owner rather than redeclare its
+  enum or object. Compose related projections with `extend`, `pick`, and `omit`,
+  keeping read/write constraints, defaults, nullability, and unknown-key behavior
+  explicit. Identical shapes alone do not make unrelated domain concepts shared.
 - `executeEntity` is the baseline CRUD, filter, search and relation interface.
   Every other operation is a contract in `apps/web/src/contracts/`, implemented
   once in a domain's `operations` module

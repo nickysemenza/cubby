@@ -1,12 +1,12 @@
 import { z } from "zod";
+import { ledgerPartyRefOut } from "./ledger-party-fields";
 
 import { plainDate } from "./base-entity";
-import { generatedFinancialTransactionKindValues } from "./generated/entity-field-schemas.financialTransaction.gen";
+import { financialTransactionKind } from "./financial-transaction-fields";
 import { financialTransactionSourceRef } from "./financial-transaction-fields";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
-  ledgerPartyShortcode,
 } from "./identifiers";
 
 /**
@@ -51,7 +51,7 @@ export type TransferPairMovement = z.infer<typeof transferPairMovement>;
 /** Recorded and provider values that retrieved the leg; they never make it explicit. */
 export const transferPairLegSignals = z.object({
   /** The recorded kind, or the provider-category rule's kind for a charge. */
-  kind: z.enum(generatedFinancialTransactionKindValues).nullable(),
+  kind: financialTransactionKind.nullable(),
   providerCategory: z.string().nullable(),
 });
 
@@ -74,10 +74,7 @@ export const transferPairOverlap = z.object({
   description: z.string().nullable(),
 });
 
-export const transferPairOwner = z.object({
-  id: ledgerPartyShortcode,
-  name: z.string(),
-});
+export const transferPairOwner = ledgerPartyRefOut;
 
 export const transferPairLeg = z.object({
   /** Stable identity: `ftx:<FTX code>`, `stmt:<source>:<chargeKey>` or `cash:<FAC code>:<outflow key>`. */
@@ -97,7 +94,7 @@ export const transferPairLeg = z.object({
   merchant: z.string().nullable(),
   description: z.string().nullable(),
   /** The kind the leg is recorded as, or will be created as. */
-  kind: z.enum(generatedFinancialTransactionKindValues),
+  kind: financialTransactionKind,
   signals: transferPairLegSignals,
   movementLabel: transferPairMovementLabel.nullable(),
   movement: transferPairMovement,

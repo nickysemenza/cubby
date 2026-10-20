@@ -11,6 +11,8 @@ import { inventoryPlacementValues } from "@cubby/shared";
 import { upc } from "@cubby/shared/upc";
 import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
+import { locationRefOut } from "./location-fields";
+import { productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
   dateBound,
@@ -32,7 +34,11 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { imageOut, imageAnalysisSummarySchema } from "./image";
+import {
+  imageOut,
+  imageAnalysisSummarySchema,
+  productImagePurpose,
+} from "./image";
 import { displayImagesField } from "./display-images";
 import { imageUrlSummary } from "./image-summary";
 import {
@@ -120,9 +126,10 @@ export const productSummaryBatchInput = z.object({
 
 export const PRODUCT_QUANTITY_SUMMARY_BATCH_MAX = 5_000;
 
-export const productQuantitySummaryBatchInput = z.object({
+const productIdsBatchInput = z.object({
   ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
 });
+export const productQuantitySummaryBatchInput = productIdsBatchInput;
 
 /**
  * "Where does each of these products live" for a bounded set of ids — the
@@ -133,9 +140,7 @@ export const productQuantitySummaryBatchInput = z.object({
  * threading stock onto those row shapes would make every other producer of them
  * emit an empty array it never loaded.
  */
-export const productInventoryEntriesBatchInput = z.object({
-  ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
-});
+export const productInventoryEntriesBatchInput = productIdsBatchInput;
 
 export const productApplyUpcInput = z.object({
   id: productShortcode,
@@ -505,7 +510,7 @@ export const productDiscardPreviewOut = z.object({
     z.object({
       id: inventoryShortcode,
       amount,
-      location: z.object({ id: locationShortcode, name: z.string() }),
+      location: locationRefOut,
     }),
   ),
   /** Not stocked anywhere: the discard only records the ledger exit. */
@@ -515,7 +520,7 @@ export const productDiscardPreviewOut = z.object({
     .object({
       id: inventoryShortcode,
       amount,
-      location: z.object({ id: locationShortcode, name: z.string() }),
+      location: locationRefOut,
     })
     .nullable(),
   /**
@@ -1159,7 +1164,7 @@ export const productMcpImageOut = imageOut
   })
   .extend({
     /** The ProductImage join role; null is distinct from an explicit item role. */
-    purpose: z.enum(["item", "label"]).nullable(),
+    purpose: productImagePurpose.nullable(),
     displayPosition: z.number().int().positive().nullable(),
     isCover: z.boolean(),
     // Populated only on a Product detail/get read, not list, to keep list cost
@@ -1194,7 +1199,7 @@ export const productExternalIdCollisionsOut = z.object({
        * unchanged.
        */
       status: z.enum(["missing", "unique", "owned_by_this", "owned_by_other"]),
-      products: z.array(z.object({ id: productShortcode, name: z.string() })),
+      products: z.array(productRefOut),
     }),
   ),
 });

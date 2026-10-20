@@ -109,7 +109,10 @@ enum PreviewFixtures {
         blockedCount: 1, overdueCount: 0, dueThisWeekCount: 2)
 
     /// Today's meal list rows, for `TodayView`'s preview.
-    static let sampleTodayMeals: [MealListItem] = fixture("sampleTodayMeals")
+    static let sampleTodayMeals: [EntityRow] = {
+        let raw: [JSONValue] = fixture("sampleTodayMeals")
+        return raw.compactMap { EntityCatalog[.meal].row(from: $0) }
+    }()
 
     /// `PhotoDiagnosticsView`'s preview: one entity passing its routing policy, one missing, and a
     /// Foundation Models decision — enough to exercise every section without a real Vision run.

@@ -151,52 +151,71 @@ const stable = (value: JsonBody): JsonBody => {
     : value;
 };
 
-/**
- * A body's identity up to its own name: a recursive schema references itself
- * by component name, so the name is replaced before comparing.
- */
-const canonical = (name: string, schema: JsonSchema): string => {
-  const { description: _description, $id: _id, ...rest } = schema;
-  return JSON.stringify(stable(z.json().parse(rest))).replaceAll(
-    `"${COMPONENT_PREFIX}${name}"`,
-    '"#self"',
-  );
-};
+export const isAnonymousComponentName = (name: string): boolean =>
+  isPositional(name) || /^(?:Input|Output)Shared[0-9A-F]{16}$/u.test(name);
 
 /**
- * A positional component whose body equals a named component (a `.describe()`
- * at a use site clones the schema, which loses the export's identity) folds
- * onto the named one, and one that equals an earlier positional folds onto
- * that (`z.json()` mints a fresh recursive schema per call). Runs to a fixed
- * point because folding one can make another equal.
+ * Fold clones before and after shape normalization, before structural naming.
+ * Accept hashed anonymous names so later normalization can reuse the pass. Named
+ * domain types survive even when their bodies coincide. Keep validation keywords
+ * (especially additionalProperties) in the identity; only annotations are ignored.
+ * Self-recursion is compared symbolically without expanding reference graphs.
  */
-export function foldPositionalDuplicates(components: Components): Components {
+export function foldAnonymousDuplicates(components: Components): Components {
   let current = components;
   for (;;) {
     const survivors = new Map<string, string>();
     const folded = new Map<string, string>();
-    // Named components first, so a positional always folds onto a name when
-    // one exists; then positionals in emission order.
     const ordered = Object.entries(current).sort(
-      ([a], [b]) => Number(isPositional(a)) - Number(isPositional(b)),
+      ([a], [b]) =>
+        Number(isAnonymousComponentName(a)) -
+          Number(isAnonymousComponentName(b)) || a.localeCompare(b),
     );
     for (const [name, schema] of ordered) {
-      const key = canonical(name, schema);
+      const normalized = mapSchemas(schema, (node) => {
+        const {
+          description: _description,
+          $id: _id,
+          $schema: _schema,
+          ...body
+        } = node;
+        return body.$ref === `${COMPONENT_PREFIX}${name}`
+          ? { ...body, $ref: "#self" }
+          : body;
+      });
+      const key = JSON.stringify(stable(z.json().parse(normalized)));
       const target = survivors.get(key);
-      if (target !== undefined && isPositional(name)) folded.set(name, target);
-      else if (!survivors.has(key)) survivors.set(key, name);
+      if (target !== undefined && isAnonymousComponentName(name))
+        folded.set(name, target);
+      else if (target === undefined) survivors.set(key, name);
     }
     if (folded.size === 0) return current;
-    const visit = (node: JsonSchema): JsonSchema => {
-      const target = folded.get(componentName(node.$ref) ?? "");
-      return target === undefined
-        ? node
-        : { ...node, $ref: `${COMPONENT_PREFIX}${target}` };
+    const rewriteRef = (ref: string): string => {
+      const target = folded.get(componentName(ref) ?? "");
+      return target === undefined ? ref : `${COMPONENT_PREFIX}${target}`;
     };
     current = Object.fromEntries(
       Object.entries(current)
         .filter(([name]) => !folded.has(name))
-        .map(([name, schema]) => [name, mapSchemas(schema, visit)]),
+        .map(([name, schema]) => [
+          name,
+          mapSchemas(schema, (node) => ({
+            ...node,
+            ...(node.$ref === undefined ? {} : { $ref: rewriteRef(node.$ref) }),
+            ...(node.discriminator?.mapping === undefined
+              ? {}
+              : {
+                  discriminator: {
+                    ...node.discriminator,
+                    mapping: Object.fromEntries(
+                      Object.entries(node.discriminator.mapping).map(
+                        ([tag, ref]) => [tag, rewriteRef(ref)],
+                      ),
+                    ),
+                  },
+                }),
+          })),
+        ]),
     );
   }
 }
@@ -513,6 +532,21 @@ export function nameStructuralComponents(components: Components): Components {
       const referenced = componentName(body.$ref);
       if (referenced !== undefined && isPositional(referenced))
         body.$ref = `${COMPONENT_PREFIX}${fingerprint(referenced)}`;
+      if (body.discriminator?.mapping !== undefined)
+        body.discriminator = {
+          ...body.discriminator,
+          mapping: Object.fromEntries(
+            Object.entries(body.discriminator.mapping).map(([tag, ref]) => {
+              const target = componentName(ref);
+              return [
+                tag,
+                target !== undefined && isPositional(target)
+                  ? `${COMPONENT_PREFIX}${fingerprint(target)}`
+                  : ref,
+              ];
+            }),
+          ),
+        };
       return body;
     });
     active.delete(name);
@@ -535,9 +569,26 @@ export function nameStructuralComponents(components: Components): Components {
       const referenced = componentName(node.$ref);
       const renamed =
         referenced === undefined ? undefined : fingerprints.get(referenced);
-      return renamed === undefined
-        ? node
-        : { ...node, $ref: `${COMPONENT_PREFIX}${renamed}` };
+      const rewritten =
+        renamed === undefined
+          ? node
+          : { ...node, $ref: `${COMPONENT_PREFIX}${renamed}` };
+      if (node.discriminator?.mapping === undefined) return rewritten;
+      return {
+        ...rewritten,
+        discriminator: {
+          ...node.discriminator,
+          mapping: Object.fromEntries(
+            Object.entries(node.discriminator.mapping).map(([tag, ref]) => {
+              const target = fingerprints.get(componentName(ref) ?? "");
+              return [
+                tag,
+                target === undefined ? ref : `${COMPONENT_PREFIX}${target}`,
+              ];
+            }),
+          ),
+        },
+      };
     });
   const result = new Map<string, JsonSchema>();
   const owners = new Map<string, boolean>();

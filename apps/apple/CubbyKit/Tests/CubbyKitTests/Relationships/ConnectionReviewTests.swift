@@ -389,29 +389,17 @@ private actor ConnectionClient: EntityRelationshipsClient {
         return result
     }
 
-    func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunSnapshot {
         runSnapshots += 1
         if let snapshotGate { await snapshotGate.hold() }
         let status = try #require(discoveryRunStatuses.first)
         if discoveryRunStatuses.count > 1 { discoveryRunStatuses.removeFirst() }
-        return .init(
-            runId: runID, purpose: .aiRefresh, status: status, startedAt: .distantPast,
-            endedAt: status == .running ? nil : .distantPast,
-            coordinatorModel: nil, agentModelMs: 0, ordersSeen: 0, imported: 0, updated: 0,
-            skipped: 0, findings: [], targetsTotal: 0, targetsCompleted: 0,
-            workProgress: .init(
-                current: .init(
-                    phase: "evaluate", label: "Evaluating", unit: "items",
-                    processed: 0, total: nil, failures: 0, sampledAt: .distantPast,
-                    ratePerSecond: nil, finished: false, state: .running, etaSeconds: nil,
-                    estimateState: nil), completed: []), targets: [], progress: [],
-            operations: status == .failed
-                ? [
-                    .init(
-                        kind: "discovery", state: "failed", startedAt: .distantPast,
-                        completedAt: .distantPast, error: "SQLSTATE 23505: synthetic discovery failure")
-                ]
-                : [])
+        return try RunSnapshot([
+            "runId": .string(runID), "purpose": "ai_refresh", "status": .string(status.rawValue),
+            "findings": [],
+            "operations": status == .failed
+                ? [["error": "SQLSTATE 23505: synthetic discovery failure"]] : [],
+        ])
     }
 
     func reviewAssessment(_ input: AssessmentReviewInput) async throws -> AssessmentReviewOut {

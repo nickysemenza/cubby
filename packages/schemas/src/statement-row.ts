@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { externalIdSource } from "./external-id";
 import { money } from "./money";
+import { financialTransactionProviderStatus } from "./financial-transaction-fields";
 import { createSortPaginationFields } from "./pagination";
 import {
   financialAccountShortcode,
@@ -115,7 +116,7 @@ export type StatementRowDispositionReason = z.infer<
   typeof statementRowDispositionReason
 >;
 
-export const statementRowProviderStatus = z.enum(["posted", "pending"]);
+export const statementRowProviderStatus = financialTransactionProviderStatus;
 
 /**
  * Derived from whether a live transaction carries the row's `(source,

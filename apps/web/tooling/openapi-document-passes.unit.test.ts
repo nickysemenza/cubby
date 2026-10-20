@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  foldPositionalDuplicates,
+  foldAnonymousDuplicates,
   integerLiterals,
   openTupleItems,
   type JsonSchema,
@@ -19,7 +19,7 @@ import {
  * committed document because of this.
  */
 
-describe("foldPositionalDuplicates", () => {
+describe("foldAnonymousDuplicates", () => {
   it("keeps distinct anyOf members apart even though the replacer-array bug erased them", () => {
     const components = {
       output_schema1: {
@@ -29,7 +29,7 @@ describe("foldPositionalDuplicates", () => {
         anyOf: [{ type: "string", format: "uri" }, { type: "null" }],
       },
     } satisfies Record<string, JsonSchema>;
-    const result = foldPositionalDuplicates(components);
+    const result = foldAnonymousDuplicates(components);
     expect(Object.keys(result).sort()).toEqual([
       "output_schema1",
       "output_schema2",
@@ -51,7 +51,7 @@ describe("foldPositionalDuplicates", () => {
         properties: { id: { $ref: "#/components/schemas/B" } },
       },
     } satisfies Record<string, JsonSchema>;
-    const result = foldPositionalDuplicates(components);
+    const result = foldAnonymousDuplicates(components);
     expect(Object.keys(result).sort()).toEqual([
       "A",
       "B",
@@ -71,7 +71,7 @@ describe("foldPositionalDuplicates", () => {
         properties: { field: { $ref: "#/components/schemas/output_schema2" } },
       },
     } satisfies Record<string, JsonSchema>;
-    const result = foldPositionalDuplicates(components);
+    const result = foldAnonymousDuplicates(components);
     expect(Object.keys(result).sort()).toEqual(["Consumer", "output_schema1"]);
     expect(result.Consumer).toEqual({
       type: "object",

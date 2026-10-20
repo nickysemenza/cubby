@@ -1,5 +1,6 @@
 import { enumRoles } from "@cubby/shared/enum-palette";
 import { z } from "zod";
+import { sortDirection } from "../pagination";
 import {
   dataQualityCheckKind,
   dataQualityFacetName,
@@ -7,6 +8,13 @@ import {
 import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
+
+const entityReadCapability = z.enum([
+  "media",
+  "quality",
+  "relations",
+  "derived",
+]);
 
 /** The scalar shapes the entity compiler can persist and project. */
 export const entityFieldKinds = [
@@ -845,7 +853,7 @@ const buildMetadataSchemas = () => {
       /** Defaults to `createdAt` when sortable, otherwise the first field. */
       defaultOverride: nonEmptyString().optional(),
       /** Text and enum defaults open ascending; other fields open descending. */
-      directionOverride: z.enum(["asc", "desc"]).optional(),
+      directionOverride: sortDirection.optional(),
     })
     .strict()
     .transform(({ defaultOverride, directionOverride, ...sort }) => ({
@@ -1147,7 +1155,7 @@ const buildMetadataSchemas = () => {
         sort: z
           .object({
             field: nonEmptyString(),
-            direction: z.enum(["asc", "desc"]),
+            direction: sortDirection,
           })
           .strict()
           .nullable()
@@ -1376,8 +1384,8 @@ const buildMetadataSchemas = () => {
               derived: z.array(nonEmptyString()).default([]),
               dependencies: z
                 .partialRecord(
-                  z.enum(["media", "quality", "relations", "derived"]),
-                  z.array(z.enum(["media", "quality", "relations", "derived"])),
+                  entityReadCapability,
+                  z.array(entityReadCapability),
                 )
                 .default({}),
             })

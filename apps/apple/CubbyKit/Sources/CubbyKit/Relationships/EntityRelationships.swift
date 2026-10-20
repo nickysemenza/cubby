@@ -196,7 +196,7 @@ public struct RelationshipAcceptance: Sendable, Hashable {
 public protocol EntityRelationshipsClient: Sendable {
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
     func discoverConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
-    func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunWorkSnapshotOutput
+    func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunSnapshot
     func reviewAssessment(_ input: AssessmentReviewInput) async throws -> AssessmentReviewOut
     func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph
     func relationshipPage(
@@ -375,7 +375,7 @@ public final class EntityRelationshipsModel {
                 guard generation == requestGeneration, self.source == source else {
                     throw CancellationError()
                 }
-                guard snapshot.runId == runID else { throw ConnectionReviewError.discoveryRunMismatch }
+                guard snapshot.runID == runID else { throw ConnectionReviewError.discoveryRunMismatch }
                 discoveryRunStatus = snapshot.status.rawValue
                 if snapshot.status != .running {
                     let document = try await client.storedConnections(source.graphRootInput)
@@ -388,7 +388,7 @@ public final class EntityRelationshipsModel {
                     }
                     connectionDocument = document
                     guard snapshot.status == .completed else {
-                        let errors = snapshot.operations.compactMap(\.error)
+                        let errors = snapshot.operationErrors
                         throw ConnectionReviewError.discoveryStopped(
                             (["Discovery Run \(runID) stopped with status \(snapshot.status.rawValue)."]
                                 + errors)

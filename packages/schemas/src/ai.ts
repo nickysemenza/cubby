@@ -20,10 +20,10 @@ import {
   inventoryShortcode,
   locationShortcode,
   productShortcode,
-  productCategoryShortcode,
   spendingCategoryShortcode,
 } from "./identifiers";
 import { productCategory } from "./product-fields";
+import { purchasedCategorySummary } from "./product-category-fields";
 import {
   aiUsageTransport,
   aiUsageTransportValues,
@@ -466,15 +466,7 @@ export const suggestionPurchaseEvidenceSchema = z.object({
   distinctPurchaseCount: z.number().int(),
   unknownCategoryLineCount: z.number().int(),
   truncated: z.boolean(),
-  categories: z.array(
-    z.object({
-      id: productCategoryShortcode,
-      name: z.string(),
-      emoji: z.string().nullable(),
-      principalLineCount: z.number().int(),
-      distinctPurchaseCount: z.number().int(),
-    }),
-  ),
+  categories: z.array(purchasedCategorySummary),
 });
 export const financeCategoryReviewSchema = z.object({
   evidence: suggestionPurchaseEvidenceSchema.optional(),

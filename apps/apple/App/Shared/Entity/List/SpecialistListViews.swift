@@ -26,6 +26,7 @@ private final class SpecialistLoader<Value> {
         do {
             phase = .ready(try await fetch(filters))
         } catch {
+            Diagnostics.report(error, context: "Load specialist view")
             phase = .failed(error.userMessage)
         }
     }
@@ -41,6 +42,7 @@ private final class SpecialistLoader<Value> {
             try await action()
             await reload()
         } catch {
+            Diagnostics.report(error, context: "Update specialist view")
             phase = .failed(error.userMessage)
         }
     }
@@ -433,34 +435,13 @@ struct ProjectAnalyticsListView: View {
             loadingLabel: "Loading analytics", filters: filters,
             fetch: { filters in
                 let (summary, analytics) = try await client.projectAnalytics(filters: filters)
-                return (summary: wire(summary), analytics: wire(analytics))
+                return try ReportPresentation.projectAnalytics(summary: summary, analytics: analytics)
             }
-        ) { data, _ in
+        ) { report, _ in
             List {
-                let summary = data.summary["summary"]
-                Section("Portfolio") {
-                    LabeledContent(
-                        "Active projects", value: "\(Int(summary?["activeProjectCount"]?.doubleValue ?? 0))")
-                    LabeledContent("Open tasks", value: "\(Int(summary?["openTaskCount"]?.doubleValue ?? 0))")
-                    LabeledContent("Actual spend", value: dollars(summary?["actualSpend"]))
-                }
-                Section("Cost against estimate") {
-                    ForEach(
-                        Array((data.analytics["costVsEstimate"]?.arrayValue ?? []).enumerated()),
-                        id: \.offset
-                    ) { _, row in
-                        if let id = row["projectId"]?.stringValue {
-                            NavigationLink(value: Route.entityDetail(.project, id: id)) {
-                                VStack(alignment: .leading) {
-                                    Text(row["projectName"]?.stringValue ?? id)
-                                    Text("Actual \(dollars(row["actual"]))")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
+                ReportBlocksView(report: report)
             }
+            .fieldGuideDetailDensity()
         }
     }
 }

@@ -15,8 +15,11 @@ export type RecipeFlowInstructionRef = z.infer<
   typeof recipeFlowInstructionRefSchema
 >;
 
+/** The same annotation vocabulary in canonical and provider flow plans. */
+export const recipeFlowAnnotationKind = z.enum(["time", "temperature", "cue"]);
+
 export const recipeFlowAnnotationSchema = z.object({
-  kind: z.enum(["time", "temperature", "cue"]),
+  kind: recipeFlowAnnotationKind,
   text: z.string().min(1).max(160),
 });
 export type RecipeFlowAnnotation = z.infer<typeof recipeFlowAnnotationSchema>;
@@ -107,7 +110,7 @@ const recipeFlowAiInstructionRefSchema = z.object({
 });
 
 const recipeFlowAiAnnotationSchema = z.object({
-  kind: z.enum(["time", "temperature", "cue"]),
+  kind: recipeFlowAnnotationKind,
   text: z.string(),
 });
 

@@ -1,5 +1,6 @@
 import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
+import { locationRefOut } from "./location-fields";
 import { amount, baseKind } from "./codec";
 import { money, moneyNullable } from "./money";
 import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
@@ -86,12 +87,7 @@ const coverageFields = {
 export const duplicateUniqueProductSchema = z.object({
   ...productProblemFields,
   expectedQuantity: z.number().nullable(),
-  locations: z.array(
-    z.object({
-      id: locationShortcode,
-      name: z.string(),
-    }),
-  ),
+  locations: z.array(locationRefOut),
 });
 
 export const orphanedProductSchema = z.object({
@@ -1372,12 +1368,15 @@ export const dryRunPruneAliasesOut = z.object({
   ingredients: z.number().int(),
 });
 
+// These existing streams accept general numbers, unlike integer batch progress.
+const problemMaintenanceProgressEvent = z.object({
+  type: z.literal("progress"),
+  done: z.number(),
+  total: z.number(),
+});
+
 export const problemsReparseEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("progress"),
-    done: z.number(),
-    total: z.number(),
-  }),
+  problemMaintenanceProgressEvent,
   z.object({
     type: z.literal("done"),
     result: z.object({ updated: z.number(), recipesAffected: z.number() }),
@@ -1385,11 +1384,7 @@ export const problemsReparseEventSchema = z.discriminatedUnion("type", [
 ]);
 
 export const problemsPruneAliasesEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("progress"),
-    done: z.number(),
-    total: z.number(),
-  }),
+  problemMaintenanceProgressEvent,
   z.object({
     type: z.literal("done"),
     result: z.object({ pruned: z.number() }),

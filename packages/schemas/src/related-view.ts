@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Entity } from "./entity";
 import { localRelationshipByKey } from "./entity-manifest";
 import { money } from "./money";
-import { partyFilter } from "./pagination";
+import { partyFilter, sortDirection } from "./pagination";
 import { entitySchema } from "./entity";
 import { imageUrlSummary } from "./image-summary";
 import {
@@ -640,7 +640,7 @@ export const relatedSummaryInput = z
     sort: z
       .object({
         field: relatedSummarySortFieldSchema,
-        direction: z.enum(["asc", "desc"]),
+        direction: sortDirection,
       })
       .strict()
       .optional(),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ledgerPartyRefOut } from "./ledger-party-fields";
 import { mealFoodAmount } from "./meal-amount";
 import { nutrientKey } from "./nutrition";
 import {
@@ -52,9 +53,9 @@ export const removeMealFoodInput = z.object({
   mealId: mealShortcode,
   id: mealFoodEntryId,
 });
-export const mealFoodMutationOut = z.object({
-  mealId: mealShortcode,
-  id: mealFoodEntryId,
+export const mealFoodMutationOut = removeMealFoodInput.pick({
+  mealId: true,
+  id: true,
 });
 export const mealNutritionInput = z.union([
   z.object({ mealId: mealShortcode }),
@@ -105,7 +106,7 @@ export const mealNutritionFood = z.discriminatedUnion("sourceKind", [
 ]);
 export type MealNutritionFood = z.infer<typeof mealNutritionFood>;
 export const mealNutritionPerson = z.object({
-  eater: z.object({ id: ledgerPartyShortcode, name: z.string() }),
+  eater: ledgerPartyRefOut,
   totals: nutritionTotals,
   meals: z.array(z.object({ meal: nutritionMeal, totals: nutritionTotals })),
   foods: z.array(mealNutritionFood),

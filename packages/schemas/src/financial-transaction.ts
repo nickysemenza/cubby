@@ -28,13 +28,13 @@ import {
 } from "./pagination";
 import { plainDate } from "./project";
 import { externalIdSource } from "./external-id";
+import { generatedFinancialTransactionFieldSchemas } from "./generated/entity-field-schemas.financialTransaction.gen";
 import {
-  generatedFinancialTransactionFieldSchemas,
-  generatedFinancialTransactionKindValues,
-  generatedFinancialTransactionStatusValues,
-} from "./generated/entity-field-schemas.financialTransaction.gen";
-import {
+  type FinancialTransactionKind,
+  financialTransactionKind,
+  financialTransactionStatus,
   descriptorProcessor,
+  financialTransactionProviderStatus,
   financialTransactionAllocation,
   financialTransactionItemization,
   financialTransactionNonZeroAmount as nonZeroAmount,
@@ -52,10 +52,12 @@ export {
   type FinancialTransactionSourceRef,
 } from "./financial-transaction-fields";
 
-export const financialTransactionKind = z.enum(
-  generatedFinancialTransactionKindValues,
-);
-export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
+export {
+  financialTransactionKind,
+  financialTransactionStatus,
+  type FinancialTransactionKind,
+  type FinancialTransactionStatus,
+} from "./financial-transaction-fields";
 
 /** The same bounded candidate set reaches retrieval and declared ranking. */
 export const SETTLEMENT_CANDIDATE_LIMIT = 20;
@@ -215,13 +217,6 @@ export const purchaseSettlementCheckExpression = (columns: {
   `${columns.purchaseId} IS NULL OR (${purchaseSettlementKindAllowedExpression(
     columns.kind,
   )} AND ${purchaseSettlementSignSatisfiedExpression(columns)})`;
-
-export const financialTransactionStatus = z.enum(
-  generatedFinancialTransactionStatusValues,
-);
-export type FinancialTransactionStatus = z.infer<
-  typeof financialTransactionStatus
->;
 
 export const financialTransactionAllocationOut = financialTransactionAllocation;
 export const financialTransactionAllocationInput =
@@ -433,7 +428,7 @@ export const financialStatementImportRow = z.strictObject({
   importFingerprint: z.string().min(1).optional(),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
-  providerStatus: z.enum(["pending", "posted"]).optional(),
+  providerStatus: financialTransactionProviderStatus.optional(),
   key: z.string().min(1),
   source: externalIdSource
     .default("monarch")

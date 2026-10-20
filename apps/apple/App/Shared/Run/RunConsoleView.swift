@@ -40,7 +40,7 @@ struct RunConsoleView: View {
     private var descriptor: EntityDescriptor { EntityCatalog[.run] }
 
     /// The fields the slot registry reads (purpose, status); the title is the purpose's label.
-    private func row(_ snapshot: RunWorkSnapshotOutput) -> EntityRow {
+    private func row(_ snapshot: RunSnapshot) -> EntityRow {
         let raw: JSONValue = .object([
             "id": .string(runID),
             "purpose": .string(snapshot.purpose.rawValue),
@@ -234,22 +234,10 @@ struct RunPhotoBatchSlot: View {
                     openBatchCount: 0, finalizedImageCount: 2, describedImageCount: 2,
                     failedImageIds: [], skippedImageCount: 0, proposedGroupCount: 1,
                     committedGroupCount: 0, dispatchError: nil))
-            let run = RunWorkSnapshotOutput(
-                runId: runID, purpose: .photoInventory, status: .running,
-                startedAt: .now.addingTimeInterval(-12), endedAt: nil,
-                coordinatorModel: "gpt-6-sol", agentModelMs: 4_200,
-                ordersSeen: 0, imported: 0, updated: 0, skipped: 0, findings: [],
-                targetsTotal: 2, targetsCompleted: 0,
-                workProgress: .init(
-                    current: .init(
-                        phase: "grouping", label: "Grouping images", unit: "images",
-                        processed: 2, total: 2, failures: 0, sampledAt: .now,
-                        ratePerSecond: nil, finished: false, state: .running, etaSeconds: nil,
-                        estimateState: nil), completed: []), targets: [],
-                progress: [
-                    .init(phase: "grouping", detail: "Identified one shirt and its label", createdAt: .now)
-                ],
-                operations: [])
+            let run = try! RunSnapshot([
+                "runId": .string(runID), "purpose": "photo_inventory", "status": "running",
+                "findings": [], "operations": [],
+            ])
             return RunReviewSession(snapshot: run, review: review)
         }
     }

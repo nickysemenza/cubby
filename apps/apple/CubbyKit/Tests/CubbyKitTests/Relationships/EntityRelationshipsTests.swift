@@ -311,7 +311,7 @@ struct EntityRelationshipsTests {
 }
 
 private actor RelationshipClientStub: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
         throw URLError(.unsupportedURL)
     }
 
@@ -359,7 +359,7 @@ private actor RelationshipClientStub: EntityRelationshipsClient {
 }
 
 private actor SuspendedRelationshipClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
         throw URLError(.unsupportedURL)
     }
 
@@ -410,7 +410,7 @@ private actor SuspendedRelationshipClient: EntityRelationshipsClient {
 }
 
 private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
         throw URLError(.unsupportedURL)
     }
 
@@ -458,7 +458,7 @@ private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
 }
 
 private actor RetryingAcceptanceClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
         throw URLError(.unsupportedURL)
     }
 
@@ -524,7 +524,7 @@ private actor RetryingAcceptanceClient: EntityRelationshipsClient {
 }
 
 private actor MergedInventoryAcceptanceClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunWorkSnapshotOutput {
+    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
         throw URLError(.unsupportedURL)
     }
 

@@ -370,7 +370,7 @@ schemes:
         - Cubby-macOS-Tests
     run:
       config: Debug
-  # Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white
+  # Launching under LLDB indexes the generated client and shows a 10-30s white
   # screen on device. These schemes launch without the debugger for fast UI iteration.
   Cubby-iOS-NoDebugger:
     build:

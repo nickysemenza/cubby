@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { ingredientShortcode, recipeShortcode } from "./identifiers";
+import { ingredientShortcode } from "./identifiers";
+import { recipeRefOut } from "./recipe-shared";
 
 const ingredientNodeSchema = z.object({
   id: ingredientShortcode,
@@ -11,7 +12,7 @@ const ingredientEdgeSchema = z.object({
   source: ingredientShortcode,
   target: ingredientShortcode,
   weight: z.number(),
-  recipes: z.array(z.object({ id: recipeShortcode, name: z.string() })),
+  recipes: z.array(recipeRefOut),
 });
 
 export const ingredientCooccurrenceSchema = z.object({

@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import { locationRefOut } from "./location-fields";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { amount, positiveAmount } from "./codec";
 import {
@@ -46,7 +47,7 @@ export type ScanAtLocationInput = z.infer<typeof scanAtLocationInput>;
  */
 export const scanStrayOut = z.object({
   entryId: inventoryShortcode,
-  location: z.object({ id: locationShortcode, name: z.string() }),
+  location: locationRefOut,
   amount,
   ambiguousQuantity: z
     .boolean()

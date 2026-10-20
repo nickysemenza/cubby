@@ -125,7 +125,7 @@ struct TodayModelTests {
         await model.refreshTasks()
 
         #expect(Self.loadedTaskName(model.tasks) == "Water seedlings")
-        #expect(model.tasksError == "Still offline")
+        #expect(model.tasksError == "TEST: Still offline")
         #expect(model.tasksIsLoading == false)
     }
 

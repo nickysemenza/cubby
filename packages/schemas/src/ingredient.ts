@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { generatedIngredientFieldSchemas } from "./generated/entity-field-schemas.ingredient.gen";
 import {
@@ -311,7 +312,7 @@ export const ingredientMcpOut = z.object({
   aliases: ingredientOutFields.aliases,
   naKinds: ingredientOutFields.naKinds,
   usuallyOnHand: ingredientOutFields.usuallyOnHand,
-  products: z.array(z.object({ id: productShortcode, name: z.string() })),
+  products: z.array(productRefOut),
   recipeCount: z.number().int().nonnegative(),
 });
 export type IngredientMcpOut = z.infer<typeof ingredientMcpOut>;

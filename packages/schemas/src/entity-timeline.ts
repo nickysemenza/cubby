@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { plainDate } from "./base-entity";
+import { sortDirection } from "./pagination";
 
 /**
  * `resources.<entity>.timeline`: the entity's dated history over a list
@@ -9,7 +10,7 @@ import { plainDate } from "./base-entity";
  * timeline with `ids: [record.id]`), `from`/`to` bound the window, and the
  * input's `pagination` (beside the window) selects one page of records.
  */
-export const entityTimelineOrder = z.enum(["asc", "desc"]);
+export const entityTimelineOrder = sortDirection;
 export type EntityTimelineOrder = z.infer<typeof entityTimelineOrder>;
 
 export const entityTimelineWindowFor = <Id extends z.ZodType<string>>(id: Id) =>

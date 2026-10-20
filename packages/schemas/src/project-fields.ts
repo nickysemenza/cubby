@@ -66,6 +66,16 @@ export const projectStatusValues = [
 export const projectStatusSchema = z.enum(projectStatusValues);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 
+/** Live projects are the non-completed members of the status vocabulary. */
+export const LIVE_PROJECT_STATUSES = projectStatusSchema.exclude([
+  "done",
+]).options;
+const liveProjectStatuses: ReadonlySet<ProjectStatus> = new Set(
+  LIVE_PROJECT_STATUSES,
+);
+export const isLiveProjectStatus = (status: ProjectStatus): boolean =>
+  liveProjectStatuses.has(status);
+
 export const PROJECT_STATUS_LABELS = {
   planning: "Planning",
   not_started: "Not started",

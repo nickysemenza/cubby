@@ -32,12 +32,13 @@ let package = Package(
         ),
         // The hand-written types the generated client is configured to use instead of its own
         // (`typeOverrides` in Sources/CubbyAPI/openapi-generator-config.yaml): branded shortcodes
-        // and PlainDate. Kept apart from CubbyKit so CubbyAPI can depend on it.
+        // and PlainDate, plus the shared mutation-result codec. Kept apart from CubbyKit
+        // so CubbyAPI can depend on it.
         .target(name: "CubbyAPISupport"),
         // swift-openapi-generator's build plugin generates the typed client from the
         // `openapi.json` and `openapi-generator-config.yaml` that `pnpm generate` writes into
         // Sources/CubbyAPI (both gitignored). Isolated from the hand-written code so an edit to
-        // CubbyKit does not recompile ~58k generated lines. Generated symbols are
+        // CubbyKit does not recompile the generated client. Generated symbols are
         // `accessModifier: public`, named outside CubbyAPI only through the generated aliases in
         // CubbyKit/Generated/APITypes.swift.
         .target(
@@ -49,7 +50,7 @@ let package = Package(
             // The provenance note beside the generated inputs is documentation, not a resource.
             exclude: ["README.md"],
             // Line tables only: nothing here is ever stepped through, and full debug info for
-            // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/AGENTS.md's
+            // the generated client is what makes LLDB stall on launch (see apps/apple/AGENTS.md's
             // "Debugging on device"). `unsafeFlags` is safe because CubbyKit is only ever
             // consumed as a local path dependency, never as a versioned remote package.
             // Forward to the frontend so the driver's later default -g cannot override this.

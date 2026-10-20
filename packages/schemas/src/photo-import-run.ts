@@ -1,5 +1,6 @@
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
+import { productSummaryWithCover } from "./product-fields";
 
 import {
   imageShortcode,
@@ -39,15 +40,7 @@ export const runTargetDeviceWorkState = z.enum([
 ]);
 export type RunTargetDeviceWorkState = z.infer<typeof runTargetDeviceWorkState>;
 
-export const photoRunImageState = z.enum([
-  "pending",
-  "prepared",
-  "completed",
-  "skipped",
-  "unresolved",
-  "needs_evidence",
-  "unavailable",
-]);
+export const photoRunImageState = runTargetState;
 export type PhotoRunImageState = z.infer<typeof photoRunImageState>;
 export const photoRunImageOutcome = z.enum(["attached", "skipped"]);
 export type PhotoRunImageOutcome = z.infer<typeof photoRunImageOutcome>;
@@ -112,12 +105,14 @@ export const photoGroupReview = z.object({
 });
 export type PhotoGroupReview = z.infer<typeof photoGroupReview>;
 
+const photoGroupCreateProductSelection = z.object({
+  kind: z.literal("create"),
+  create: commitPhotoGroupProductCreate,
+});
+
 export const commitPhotoGroupProduct = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("existing"), existingId: productShortcode }),
-  z.object({
-    kind: z.literal("create"),
-    create: commitPhotoGroupProductCreate,
-  }),
+  photoGroupCreateProductSelection,
 ]);
 export type CommitPhotoGroupProduct = z.infer<typeof commitPhotoGroupProduct>;
 
@@ -324,14 +319,16 @@ export const proposePhotoGroupsInput = z
   });
 export type ProposePhotoGroupsInput = z.infer<typeof proposePhotoGroupsInput>;
 
-const proposalProductSummary = z.object({
-  id: productShortcode,
-  name: z.string(),
-  coverUrl: z.string().nullable(),
-});
+const proposalProductSummary = productSummaryWithCover;
 export type PhotoGroupProposalProductSummary = z.infer<
   typeof proposalProductSummary
 >;
+
+export const photoFieldAgreement = z.enum([
+  "agree",
+  "disagree-or-missing",
+  "unknown",
+]);
 
 export const photoFieldCrossCheck = z.object({
   field: z.enum([
@@ -342,12 +339,12 @@ export const photoFieldCrossCheck = z.object({
     "color",
     "size",
   ]),
-  mark: z.enum(["agree", "disagree-or-missing", "unknown"]),
+  mark: photoFieldAgreement,
   source: z.enum(["deterministic", "model"]),
   tokens: z.array(
     z.object({
       text: z.string(),
-      mark: z.enum(["agree", "disagree-or-missing", "unknown"]),
+      mark: photoFieldAgreement,
     }),
   ),
   // Normalized values compared for this field (e.g. label "9M" vs product
@@ -381,10 +378,7 @@ export const photoGroupProposal = z.object({
       /** Null only when the chosen Product was deleted after proposing. */
       existing: proposalProductSummary.nullable(),
     }),
-    z.object({
-      kind: z.literal("create"),
-      create: commitPhotoGroupProductCreate,
-    }),
+    photoGroupCreateProductSelection,
   ]),
   /** The Product the approved group attached to (existing or newly created). */
   committedProduct: proposalProductSummary.nullable(),

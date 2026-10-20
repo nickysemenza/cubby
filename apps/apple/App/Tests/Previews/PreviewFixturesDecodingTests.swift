@@ -18,7 +18,9 @@ import Testing
         switch fixture {
         case .timeline: try decode(EntityTimelineOut.self, "sampleTimeline")
         case .todayTasks: try decode([TaskTodayBriefingItemOut].self, "sampleTodayTasks")
-        case .todayMeals: try decode([MealListItem].self, "sampleTodayMeals")
+        case .todayMeals:
+            try decode([JSONValue].self, "sampleTodayMeals")
+            #expect(PreviewFixtures.sampleTodayMeals.allSatisfy { !$0.id.isEmpty && !$0.title.isEmpty })
         case .todayProblems: try decode(ProblemsCount.self, "sampleTodayProblems")
         case .mealNutrition: try decode(MealNutritionOut.self, "sampleMealNutrition")
         }

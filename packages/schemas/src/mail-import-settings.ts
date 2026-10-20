@@ -95,10 +95,6 @@ export const setMailImportInput = z.strictObject({
 });
 export type SetMailImportInput = z.infer<typeof setMailImportInput>;
 
-export const setCreditBudgetInput = z.strictObject({
-  creditLimitUsd: creditBudgetLimitUsd,
-});
-
 /**
  * A member's one-Run paid grant: it resumes a paused Run now and lets it spend
  * past the paid budget by the confirmed `paidOverBudgetUsd` for the window

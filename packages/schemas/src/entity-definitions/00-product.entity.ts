@@ -22,6 +22,7 @@ import {
   productCategoryShortcode,
 } from "../identifier-fields.js";
 import { productAttachmentImageOut } from "./field-primitives.js";
+import { productImagePurpose } from "../image-summary.js";
 import { money } from "@cubby/schemas/money";
 import {
   optionalFieldResolutionsSchema,
@@ -1309,12 +1310,8 @@ Rules:
         kind: "json",
         validation: {
           read: null,
-          create: z
-            .record(imageShortcode, z.enum(["item", "label"]))
-            .optional(),
-          update: z
-            .record(imageShortcode, z.enum(["item", "label"]))
-            .optional(),
+          create: z.record(imageShortcode, productImagePurpose).optional(),
+          update: z.record(imageShortcode, productImagePurpose).optional(),
         },
       },
       {

@@ -1,16 +1,19 @@
 import {
   CURRENT_MEMBER_FILTER,
   UNRESOLVABLE_ENTITY_FILTER,
-} from "@cubby/shared";
+} from "../../shared/src/filter.ts";
 import { z } from "zod";
 
 /** The one page-size ceiling and default every list boundary shares. */
 export const MAX_PAGE_SIZE = 500;
 export const DEFAULT_PAGE_SIZE = 10;
 
+/** Direction shared by ordered lists, timelines, and related views. */
+export const sortDirection = z.enum(["asc", "desc"]);
+
 const sortParams = z.object({
   orderBy: z.string().default("createdAt"),
-  direction: z.enum(["asc", "desc"]).default("asc"),
+  direction: sortDirection.default("asc"),
 });
 
 export const MAX_SORTS = 3;
@@ -58,7 +61,7 @@ export const createSortParamsSchema = <
 ) => {
   const single = z.object({
     orderBy: z.enum(fields).default(defaultOrderBy),
-    direction: z.enum(["asc", "desc"]).default("asc"),
+    direction: sortDirection.default("asc"),
   });
   return z.array(single).min(1).max(MAX_SORTS);
 };

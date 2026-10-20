@@ -2,10 +2,11 @@ import { z } from "zod";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 
 import {
-  generatedFinancialTransactionKindValues,
-  generatedFinancialTransactionStatusValues,
-} from "./generated/entity-field-schemas.financialTransaction.gen";
-import { financialTransactionSourceRef } from "./financial-transaction-fields";
+  financialTransactionKind as kind,
+  financialTransactionStatus as status,
+  financialTransactionSourceRef,
+  financialTransactionProviderStatus,
+} from "./financial-transaction-fields";
 import {
   financialAccountShortcode,
   ledgerPartyShortcode,
@@ -13,9 +14,6 @@ import {
 } from "./identifiers";
 import { plainDate } from "./project";
 import { statementTransferPairRef } from "./transfer-pair-suggestion";
-
-const kind = z.enum(generatedFinancialTransactionKindValues);
-const status = z.enum(generatedFinancialTransactionStatusValues);
 
 /** Bump with any statement label prompt/model-policy change; retained votes carry this revision. */
 export const STATEMENT_LABEL_REVISION = "2026-10-17.1";
@@ -115,7 +113,7 @@ export const statementTransactionCreate = z.object({
     history: null,
     storedValue: false,
   }),
-  status: z.enum(["posted", "pending"]),
+  status: financialTransactionProviderStatus,
   amount: z.number(),
   transactionDate: plainDate.nullable(),
   postedDate: plainDate.nullable(),
@@ -130,7 +128,7 @@ export const statementTransactionJudgment = z.object({
   recommended: statementTransactionAction,
   accountId: z.uuid(),
   statementDate: plainDate,
-  providerStatus: z.enum(["posted", "pending"]),
+  providerStatus: financialTransactionProviderStatus,
   create: statementTransactionCreate.nullable(),
   candidates: z.array(statementTransactionCandidate),
   supersede: z
@@ -209,7 +207,7 @@ export const statementSuggestionOut = z.object({
   merchant: z.string().nullable(),
   rawDescription: z.string(),
   sourceCategory: z.string().nullable(),
-  providerStatus: z.enum(["posted", "pending"]),
+  providerStatus: financialTransactionProviderStatus,
   recommended: statementTransactionAction,
   clean: z.boolean(),
   create: statementTransactionCreate.omit({ sourceRef: true }).nullable(),

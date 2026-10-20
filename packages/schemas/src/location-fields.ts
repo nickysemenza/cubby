@@ -3,7 +3,7 @@ import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
 
 import { imageOut } from "./entity-definitions/field-primitives";
-import { productShortcode } from "./identifier-fields";
+import { productShortcode, locationShortcode } from "./identifier-fields";
 import { money, moneyNullable } from "./money";
 
 export const locationType = z
@@ -11,35 +11,33 @@ export const locationType = z
   .describe("type of location (room, container, etc)");
 export type LocationType = z.infer<typeof locationType>;
 
+/** Location identity for stock, scan, and recommendation responses. */
+export const locationRefOut = z.object({
+  id: locationShortcode,
+  name: z.string(),
+});
+export const locationListRefOut = locationRefOut.extend({
+  type: locationType.nullable(),
+});
+
 const pricingCounts = z.object({
   priced: z.number().int().nonnegative(),
   missingPricing: z.number().int().nonnegative(),
   miscNoPrice: z.number().int().nonnegative(),
 });
 
-export const locationValuation = z.object({
+export const locationValuationTotals = z.object({
   directValuation: money,
   totalValuation: money,
   directItemCount: z.number().int().nonnegative(),
   totalItemCount: z.number().int().nonnegative(),
+});
+
+export const locationValuation = locationValuationTotals.extend({
   direct: pricingCounts,
   total: pricingCounts,
-  installed: z
-    .object({
-      directValuation: money,
-      totalValuation: money,
-      directItemCount: z.number().int().nonnegative(),
-      totalItemCount: z.number().int().nonnegative(),
-    })
-    .optional(),
-  container: z
-    .object({
-      directValuation: money,
-      totalValuation: money,
-      directItemCount: z.number().int().nonnegative(),
-      totalItemCount: z.number().int().nonnegative(),
-    })
-    .optional(),
+  installed: locationValuationTotals.optional(),
+  container: locationValuationTotals.optional(),
 });
 export type LocationValuation = z.infer<typeof locationValuation>;
 

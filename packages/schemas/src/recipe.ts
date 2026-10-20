@@ -1,11 +1,8 @@
 import { z } from "zod";
+import { batchProgressEvent } from "./batch";
 import { listLabel } from "./entity-definitions/label-field";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import {
-  auditDateFilterFields,
-  numericRangeFields,
-  timestampedFields,
-} from "./base-entity";
+import { auditDateFilterFields, numericRangeFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
   generatedCookbookFieldSchemas,
@@ -25,8 +22,22 @@ import {
   recipeTopLevelFields,
   recipeTopLevel,
   recipeTotals,
+  recipeRefOut,
 } from "./recipe-shared";
-import { recipeIngredientInput, recipeSectionsOut } from "./recipe-fields";
+import {
+  recipeIngredientInput,
+  recipeSectionsOut,
+  recipeSectionOut,
+  ingredientSectionLineOut,
+  recipeSectionLineOut,
+  recipeSectionIngredientOut as sectionIngredientOut,
+} from "./recipe-fields";
+export {
+  sectionLineFields,
+  recipeSectionFields,
+  recipeSectionOut,
+  recipeSectionIngredientOut as sectionIngredientOut,
+} from "./recipe-fields";
 import { recipeBaseFilterFields } from "./generated/recipe.gen";
 
 export {
@@ -48,21 +59,6 @@ export * from "./recipe-shared";
 
 export type RecipeSortField = GeneratedEntitySortField<"recipe">;
 
-// The section-ingredient's ingredient carries its aliases so the editor can tell
-// real parser drift from a re-parse that just hit one of this ingredient's
-// aliases (e.g. "large eggs" → the "large brown eggs" ingredient that aliases it).
-const sectionIngredientRefFields = {
-  name: z.string(),
-  ...timestampedFields,
-  aliases: z.array(z.string()).optional(),
-};
-
-const sectionIngredientIngredientOut = z.object({
-  id: ingredientShortcode,
-  ...sectionIngredientRefFields,
-});
-
-export const recipeRefOut = z.object({ id: recipeShortcode, name: z.string() });
 export type RecipeRef = z.infer<typeof recipeRefOut>;
 
 // One row per RecipeSectionIngredient — the same recipe repeats when it uses the
@@ -102,36 +98,6 @@ export const recipeUsageRefMcpEntityOut = recipeUsageMcpEntityOut.extend({
   recipe: recipeRefMcpEntityOut,
 });
 
-export const sectionLineFields = {
-  // Declared exception: a recipe section/line id has no shortcode.
-  id: z.uuid(),
-  amounts: z.array(amount),
-  // Provenance from import: the original unparsed line and the parser-derived
-  // modifier. Null for rows created before capture, or manual/UI edits.
-  rawLine: z.string().nullish(),
-  modifier: z.string().nullish(),
-  ...timestampedFields,
-};
-
-const ingredientSectionLineOut = z.object({
-  ...sectionLineFields,
-  type: z.literal("ingredient"),
-  recipe: z.null(),
-  ingredient: sectionIngredientIngredientOut,
-});
-
-const recipeSectionLineOut = z.object({
-  ...sectionLineFields,
-  type: z.literal("recipe"),
-  recipe: recipeTopLevel,
-  ingredient: z.null(),
-});
-
-export const sectionIngredientOut = z.discriminatedUnion("type", [
-  ingredientSectionLineOut,
-  recipeSectionLineOut,
-]);
-
 /** Public entity-tool projection; section-line rows have no public shortcode. */
 export const sectionIngredientMcpEntityOut = z.discriminatedUnion("type", [
   ingredientSectionLineOut.omit({ id: true }),
@@ -139,19 +105,6 @@ export const sectionIngredientMcpEntityOut = z.discriminatedUnion("type", [
 ]);
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
-
-export const recipeSectionFields = {
-  // Declared exception: section ids have no shortcode.
-  id: z.uuid(),
-  name: z.string().nullable(),
-  instructions: z.array(z.object({ instruction: z.string() })),
-  ...timestampedFields,
-};
-
-export const recipeSectionOut = z.object({
-  ...recipeSectionFields,
-  ingredients: z.array(sectionIngredientOut),
-});
 
 /** Public entity-tool projection; section rows have no public shortcode. */
 export const recipeSectionMcpEntityOut = recipeSectionOut
@@ -225,11 +178,7 @@ export const recipeRecomputeAllOut = z.object({
 });
 
 export const recipeRecomputeDurableEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("progress"),
-    done: z.number().int().nonnegative(),
-    total: z.number().int().nonnegative(),
-  }),
+  batchProgressEvent,
   z.object({ type: z.literal("done"), result: z.unknown() }),
 ]);
 

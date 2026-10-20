@@ -1,4 +1,5 @@
 import { IMAGE_FIELD_KEYS } from "./image-field-keys";
+import { productImagePurpose } from "./image-summary";
 import {
   imageOut,
   imageAnalysisSummarySchema,
@@ -292,7 +293,7 @@ export const attachableImageEntity = z.enum(
 );
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 
-export const productImagePurpose = z.enum(["item", "label"]);
+export { productImagePurpose } from "./image-summary";
 export type ProductImagePurpose = z.infer<typeof productImagePurpose>;
 
 const attachableImageEntities = nonEmptyTuple<ShortcodeEntity>(
@@ -539,18 +540,17 @@ export const imageHashIndexSchema = z.object({
 });
 export type ImageHashIndex = z.infer<typeof imageHashIndexSchema>;
 
+export const imagePerceptualHash = z.object({
+  id: imageShortcode,
+  perceptualHash: perceptualHashSchema,
+});
+
 export const setPerceptualHashesInputSchema = z.object({
   algorithmRevision: z.literal(1),
-  items: z
-    .array(
-      z.object({ id: imageShortcode, perceptualHash: perceptualHashSchema }),
-    )
-    .max(50),
+  items: z.array(imagePerceptualHash).max(50),
 });
 export const setPerceptualHashesOutputSchema = z.object({
-  items: z.array(
-    z.object({ id: imageShortcode, perceptualHash: perceptualHashSchema }),
-  ),
+  items: z.array(imagePerceptualHash),
   unavailable: z.array(imageShortcode),
 });
 export type SetPerceptualHashesInput = z.infer<

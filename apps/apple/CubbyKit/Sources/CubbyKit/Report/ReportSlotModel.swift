@@ -144,7 +144,7 @@ extension CubbyClient: ReportServing {
 
     public func controlRun(_ input: RunControlInput) async throws -> String? {
         let out: RunControlOutput = try await controlRun(input)
-        return out.successor?.publicId
+        return try RunSnapshot.successorID(in: JSONValue(encoding: out))
     }
 
     public func retryRunStep(_ input: RunRetryStepInput) async throws {

@@ -5,11 +5,51 @@ import {
   expenseAnalyzeInput,
   expenseCreateInput,
   expenseFiltersSchema,
+  projectDashboardSummaryOut,
+  projectPortfolioAnalyticsOut,
   projectCreateInput,
   projectOut,
   type ProjectAttentionDescribable,
   projectUpdateData,
 } from "./project";
+
+// Native's JSON adapter formats these server-owned figures. Keep its field paths pinned here
+// so a server rename cannot ship successfully while the installed adapter expects the old key.
+describe("native project analytics contract", () => {
+  it("keeps required summary figures and unknown estimates readable by the native adapter", () => {
+    const figures = projectDashboardSummaryOut.shape.summary.pick({
+      activeProjectCount: true,
+      openTaskCount: true,
+      actualSpend: true,
+    });
+    expect(
+      figures.parse({
+        activeProjectCount: 2,
+        openTaskCount: 3,
+        actualSpend: 125,
+      }),
+    ).toEqual({
+      activeProjectCount: 2,
+      openTaskCount: 3,
+      actualSpend: 125,
+    });
+    const row = projectPortfolioAnalyticsOut.shape.costVsEstimate.element.pick({
+      projectId: true,
+      projectName: true,
+      actual: true,
+      committed: true,
+      estimate: true,
+    });
+    const known = {
+      projectId: "PRJ-2345",
+      projectName: "Fixture renovation",
+      actual: 125,
+      committed: 25,
+    };
+    expect(row.parse({ ...known, estimate: null }).estimate).toBeNull();
+    expect(row.safeParse(known).success).toBe(false);
+  });
+});
 
 describe("expense analyzer input", () => {
   it("rejects the same dimension on both axes", () => {

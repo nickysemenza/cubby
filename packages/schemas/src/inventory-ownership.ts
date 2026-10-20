@@ -6,7 +6,10 @@ import {
   ledgerPartyShortcode,
   purchaseShortcode,
 } from "./identifier-fields";
-import { ledgerAttributionInput, ledgerPartyKind } from "./ledger-party-fields";
+import {
+  ledgerAttributionInput,
+  ledgerPartyPersonSummary,
+} from "./ledger-party-fields";
 
 /** The shared inheritance-mode vocabulary: `explicit` with a null owner is
  * household stock (no individual owner). */
@@ -14,11 +17,7 @@ export const inventoryOwnershipModeValues = ["inherit", "explicit"] as const;
 export const inventoryOwnershipMode = z.enum(inventoryOwnershipModeValues);
 export type InventoryOwnershipMode = z.infer<typeof inventoryOwnershipMode>;
 
-export const inventoryOwner = z.object({
-  id: ledgerPartyShortcode,
-  name: z.string(),
-  kind: ledgerPartyKind.exclude(["household"]),
-});
+export const inventoryOwner = ledgerPartyPersonSummary;
 export type InventoryOwner = z.infer<typeof inventoryOwner>;
 
 export const inventoryOwnershipSourceValues = [

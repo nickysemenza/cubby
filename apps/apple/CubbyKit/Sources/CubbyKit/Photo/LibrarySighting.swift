@@ -256,9 +256,9 @@ public enum LibrarySightingBuilder {
 
     private static func locationInput(
         _ location: LibraryAssetMetadata.Location?
-    ) -> ImageSightingLocationInput? {
+    ) -> ImageCaptureLocationInput? {
         location.map {
-            ImageSightingLocationInput(
+            ImageCaptureLocationInput(
                 lat: $0.latitude, lng: $0.longitude, altitude: $0.altitude,
                 horizontalAccuracy: $0.horizontalAccuracy)
         }

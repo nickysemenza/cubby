@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { batchProgressEvent } from "./batch";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import {
@@ -76,11 +77,7 @@ const productCreateManyResult = z.object({
 });
 export type CreateManyProductResult = z.output<typeof productCreateManyResult>;
 
-const progressEvent = z.object({
-  type: z.literal("progress"),
-  done: z.number().int().nonnegative(),
-  total: z.number().int().nonnegative(),
-});
+const progressEvent = batchProgressEvent;
 export const productCreateManyEvent = z.discriminatedUnion("type", [
   progressEvent,
   z.object({ type: z.literal("done"), result: productCreateManyResult }),

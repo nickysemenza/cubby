@@ -13,6 +13,7 @@ import {
   financialTransactionSettlementViolation,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
+import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import {
   parseShortcodeFor,
@@ -343,7 +344,7 @@ const observationRow = z.object({
   merchant: z.string().nullable(),
   rawDescription: z.string(),
   sourceCategory: z.string().nullable(),
-  providerStatus: z.enum(["posted", "pending"]).nullable(),
+  providerStatus: financialTransactionProviderStatus.nullable(),
   providerNotes: z.string().nullable(),
   accountId: z.string().nullable(),
   importFingerprint: z.string(),

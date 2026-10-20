@@ -156,6 +156,8 @@ vocabulary such as `activity-fields.ts` owns primitive enums and labels so runti
 and native generation share exhaustive labels without a bootstrap cycle.
 Cross-client input limits live in bootstrap-safe `shared/client-constants.ts`;
 native constant rendering must not import an identifier-dependent input schema.
+Declaration helpers such as pagination import shared constants from their leaf
+owners, because the shared barrel also loads generated shortcode schemas.
 Existing specialist list columns declare `route.listColumns: { module, export }`;
 the generated index route passes that synchronous override to `listPage`. Its
 component split owns the import, so other entities do not load that specialist
