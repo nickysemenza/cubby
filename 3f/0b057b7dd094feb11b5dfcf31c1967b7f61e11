@@ -1,0 +1,21 @@
+apps/web/DESIGN.md
+  s_a14da84a78b0eb::t_a4adf92ab82204 50,62,137-149,171,201
+docs/agents/generic-paths.md
+  s_a14da84a78b0eb::t_e947ad8c0358ff 195-197,239-240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3f0b057b7dd094feb11b5dfcf31c1967b7f61e11",
+  "prompts": {},
+  "sessions": {
+    "s_a14da84a78b0eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4251b55-9ed3-4f78-92dd-cdc1a554513c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
