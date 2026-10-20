@@ -1,0 +1,27 @@
+apps/apple/App/Shared/Entity/List/EntityBoardListView.swift
+  s_359d51740d6cee::t_7c8d33d017363e 70-72,81-87,92,106
+apps/web/src/entity/entity-list/board/entity-board.tsx
+  s_359d51740d6cee::t_9e268de1e94377 6,10,170-171,251,257-262,322-336,352,392,405,432,436,469,473,488,505-512,524-526,583,599,636-659
+apps/web/src/server/entity-kernel/repo/repository.ts
+  s_359d51740d6cee::t_c09dfe63364ffe 1
+apps/web/tests/e2e/dnd-interactions.spec.ts
+  s_359d51740d6cee::t_43ea1f95fa7bb4 35-55
+docs/entities.md
+  s_359d51740d6cee::t_ba6b8ca3ad1570 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "577c0b67fd12c9cb20de4f8659cfb762d88bd46e",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
