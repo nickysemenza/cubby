@@ -1,0 +1,39 @@
+apps/web/src/entity/audit-log/audit-log-entry.tsx
+  s_a14da84a78b0eb::t_6696bbdc56a195 20,454,456
+apps/web/src/entity/platform/entity-integrity-tab.tsx
+  s_a14da84a78b0eb::t_a2817c21a6155e 26,126-141
+apps/web/src/entity/timeline/entity-timeline.tsx
+  s_a14da84a78b0eb::t_b546ffd90215bc 40,835-843
+apps/web/src/features/expense/expense-summary-strip.tsx
+  s_a14da84a78b0eb::t_4ee433007d0add 2,36-50
+apps/web/src/features/finance/cash-flow-view.tsx
+  s_a14da84a78b0eb::t_0f493036aec9b2 28,410-442
+apps/web/src/features/finance/household-contribution-ledger.tsx
+  s_a14da84a78b0eb::t_3e80dc9876a809 18,116-141
+apps/web/src/features/project/projects-dashboard.tsx
+  s_a14da84a78b0eb::t_0a2e09eab211aa 41,320,322-323,326-328,346-347,358-360,375-379,381
+apps/web/src/features/statement-import/statement-row-list.tsx
+  s_a14da84a78b0eb::t_dc5a3de823a22f 30,189-197,211-214,227
+apps/web/src/features/task/tasks-stats-strip.tsx
+  s_a14da84a78b0eb::t_e5b67ea444a52e 5,19-27,48-51
+apps/web/src/ui/data-table/debug-dialog.tsx
+  s_a14da84a78b0eb::t_067caa6a2ef97f 3,29,31
+apps/web/src/ui/visualizations/nutrition-bars.tsx
+  s_a14da84a78b0eb::t_ab40af7202854c 11,157-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "98b82b0272b003e6928188cdaaa7ed38b7a5fc6e",
+  "prompts": {},
+  "sessions": {
+    "s_a14da84a78b0eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4251b55-9ed3-4f78-92dd-cdc1a554513c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
