@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -10,6 +11,7 @@ import {
   derivedRefreshCursor,
   derivedRefreshWork,
   entitySource,
+  expense,
   run,
 } from "~/server/db/schema";
 import { connectionDiscoveryFingerprint } from "~/server/domains/connection/repo/discovery-fingerprint";
@@ -93,6 +95,57 @@ describe("discovery epoch recovery", () => {
     }
     throw new Error("Synthetic repair exceeded its page budget");
   }
+
+  it("repairs SQL endpoint changes without traversing unrelated Project members", async () => {
+    const previous = await createRepoEntity(ctx, "project", {
+      name: "Synthetic previous SQL project",
+      defaultTrade: "other",
+    });
+    const next = await createRepoEntity(ctx, "project", {
+      name: "Synthetic next SQL project",
+      defaultTrade: "other",
+    });
+    const untouched = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic independent SQL line",
+      lineKind: "principal",
+      trade: "other",
+      cost: 10,
+      projectId: next.output.id,
+    });
+    const moved = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic moved SQL line",
+      lineKind: "principal",
+      trade: "other",
+      cost: 10,
+      projectId: previous.output.id,
+    });
+    await repair();
+    await repair();
+    const versions = async () =>
+      await getDb(ctx.db)
+        .select({
+          id: derivedRefreshWork.entityId,
+          version: derivedRefreshWork.version,
+        })
+        .from(derivedRefreshWork)
+        .where(eq(derivedRefreshWork.entityKind, "project"));
+    const before = await versions();
+    const [unrelatedBefore] = await getDb(ctx.db)
+      .select()
+      .from(derivedRefreshWork)
+      .where(eq(derivedRefreshWork.entityId, untouched.entityId));
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ projectId: next.entityId })
+      .where(eq(expense.id, moved.entityId));
+    await repair();
+    expect(await versions()).toEqual(before);
+    const [unrelatedAfter] = await getDb(ctx.db)
+      .select()
+      .from(derivedRefreshWork)
+      .where(eq(derivedRefreshWork.entityId, untouched.entityId));
+    expect(unrelatedAfter?.version).toBe(unrelatedBefore?.version);
+  }, 30_000);
 
   it("does not recapture unrelated records after an ordinary edit", async () => {
     const edited = await createProductFixture(

@@ -1930,8 +1930,11 @@ maintenance action.
 The full repair pass runs hourly. Ordinary entity edits do not advance the
 repair-wide snapshot clocks: own-row changes traverse their dependency pages.
 Observations retain direct owner identities, including child owners. Context
-edits refresh those owners, and endpoint changes or removals refresh the old
-and current owners. Only input rows without a recognizable owner use conservative
+edits refresh those owners. Entity endpoint changes or removals retain the changed
+entity as the root and refresh old/current endpoints as projection leaves,
+except endpoints declared as transitive dependencies, such as Product pricing.
+Reassigning a reference must not traverse unrelated members of its old/new Project
+or Vendor. Only input rows without a recognizable owner use conservative
 repair clocks that can revisit a broader corpus. This backstop scans full
 authoritative row contents in bounded pages, including opaque imported data.
 

@@ -217,8 +217,16 @@ export async function reconcileDerivedRefreshPage(
             const endpointsChanged =
               old !== undefined &&
               old.fingerprint.split(":")[1] !== row.fingerprint.split(":")[1];
-            return entity && !endpointsChanged
-              ? [{ entityKind: entitySchema.parse(entity), entityId: row.id }]
+            return entity
+              ? [
+                  {
+                    entityKind: entitySchema.parse(entity),
+                    entityId: row.id,
+                    scopes: endpointsChanged
+                      ? [...(old?.owners ?? []), ...row.owners]
+                      : [],
+                  },
+                ]
               : [...(old?.owners ?? []), ...row.owners];
           });
           await advanceInputRevisions(tx, [
@@ -292,7 +300,19 @@ export async function reconcileDerivedRefreshPage(
         ]);
         await captureDerivedRefresh(
           tx,
-          removed.flatMap((row) => row.owners),
+          removed.flatMap((row) => {
+            const [table, id] = row.key.split(":");
+            const entity = table ? entityByTable.get(table) : undefined;
+            return entity && id
+              ? [
+                  {
+                    entityKind: entitySchema.parse(entity),
+                    entityId: id,
+                    scopes: row.owners,
+                  },
+                ]
+              : row.owners;
+          }),
           { invalidate: false },
         );
         await getDb(tx)

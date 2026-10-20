@@ -45,6 +45,77 @@ describe("bounded entity writes", () => {
   });
   afterEach(() => queue.restore());
 
+  it("does not traverse Project endpoints when an Expense changes Projects", async () => {
+    const projects = await Promise.all(
+      ["Synthetic previous project", "Synthetic next project"].map((name) =>
+        createRepoEntity(ctx, "project", { name, defaultTrade: "other" }),
+      ),
+    );
+    const [previous, next] = projects;
+    if (!previous || !next) throw new Error("Synthetic projects missing");
+    const untouched = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic untouched project line",
+      lineKind: "principal",
+      trade: "other",
+      cost: 10,
+      projectId: next.output.id,
+    });
+    const moved = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic moved project line",
+      lineKind: "principal",
+      trade: "other",
+      cost: 10,
+      projectId: previous.output.id,
+    });
+    const drain = async (frontierOnly = false) => {
+      for (let page = 0; page < 500; page++) {
+        const result = await processDerivedRefreshPage(ctx.db, undefined, {
+          frontierOnly,
+        });
+        expect(result.errors).toEqual([]);
+        if (result.done) return;
+      }
+      throw new Error("Synthetic endpoint refresh did not terminate");
+    };
+    await drain();
+    await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
+      action: "update",
+      entity: "expense",
+      id: moved.output.id,
+      data: { projectId: next.output.id },
+    });
+    await drain(true);
+    const [work] = await getDb(ctx.db)
+      .select()
+      .from(derivedRefreshWork)
+      .where(eq(derivedRefreshWork.entityId, moved.entityId));
+    if (!work) throw new Error("Synthetic moved Expense work missing");
+    const endpointScopes = await getDb(ctx.db)
+      .select()
+      .from(derivedRefreshScope)
+      .where(
+        and(
+          eq(derivedRefreshScope.workId, work.id),
+          eq(derivedRefreshScope.entityKind, "project"),
+        ),
+      );
+    expect(endpointScopes.map((scope) => scope.traverse)).toEqual([
+      false,
+      false,
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(derivedRefreshScope)
+        .where(
+          and(
+            eq(derivedRefreshScope.workId, work.id),
+            eq(derivedRefreshScope.entityId, untouched.entityId),
+          ),
+        ),
+    ).toEqual([]);
+  });
+
   it("refreshes adjustment project text when a principal Expense's Project is renamed", async () => {
     const project = await createRepoEntity(ctx, "project", {
       name: "Synthetic Studio",

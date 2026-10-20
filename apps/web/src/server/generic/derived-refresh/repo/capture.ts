@@ -20,6 +20,7 @@ import {
 import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
 import { publishInBackground } from "~/server/workflows/background-tasks/publish";
 
+import { refreshDependencyRoutes } from "./dependencies";
 import { refreshInputKeys } from "./input-keys";
 
 export type RefreshCapture = DerivedRefreshCapture;
@@ -176,8 +177,20 @@ async function flushDerivedRefresh(
       throw new Error("Derived refresh root disappeared during capture");
     const capture = byRoot.get(`${value.entityKind}:${value.entityId}`);
     const scopes = [
-      { entityKind: value.entityKind, entityId: value.entityId },
-      ...(capture?.scopes ?? []),
+      {
+        entityKind: value.entityKind,
+        entityId: value.entityId,
+        traverse: true,
+      },
+      ...(capture?.scopes ?? []).map((scope) => ({
+        ...scope,
+        // Endpoint identity changed; the endpoint's own inputs did not.
+        // Only declared reverse dependencies (for example Product pricing)
+        // may continue through its graph.
+        traverse: refreshDependencyRoutes(value.entityKind).some(
+          (route) => route.entity === scope.entityKind && route.transitive,
+        ),
+      })),
     ]
       .sort((a, b) =>
         `${a.entityKind}:${a.entityId}`.localeCompare(
