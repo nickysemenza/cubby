@@ -1,0 +1,21 @@
+apps/web/tests/e2e/dnd-interactions.spec.ts
+  s_359d51740d6cee::t_54be7b2d0765d0 28-33,54-59
+apps/web/tests/e2e/support/dnd-helpers.ts
+  s_359d51740d6cee::t_48c5158a1c803a 62,71-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "06b99282e49912c516f3e1e829c3e6f7b21b9b09",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
