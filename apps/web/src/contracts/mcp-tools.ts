@@ -114,17 +114,17 @@ export const MCP_TOOLS = defineMcpTools({
       suggestion_queue: mcpAction({
         op: suggestionsContract.ops.list,
         description:
-          "Pending Suggestions of every family (field; statement_transaction = Transaction suggestions from unmatched statement charges; recommendation = typed connections; transfer_pair = opposite money movements across accounts) as uniform rows: record/other refs, structured summary, strength (strong/medium/weak from the family's own evidence), clean (bulk-acceptable as is), impact (data-quality checks or outcomes acceptance restores), allowed actions and the family's evidence. Filters compose: family, entity, recordIds (any shortcodes; a connection lists under both endpoints), runId, and where {<column>: {in, min, max, search}} over the columns each row returns (common: family, strength, clean, createdAt, impact; field: entity, field, kind, confidence; statement_transaction: date, month, account, owner, merchant, amount, action, kind, kindSource, providerCategory, providerStatus, candidate, modelLabel; recommendation: relation, entityKind, source, target; transfer_pair: date, amount, dateGapDays, account, owner, merchant). order is a stack of {by: ready | impact | <column>, direction}; facets count chip values; pass next back as cursor. groups account_month returns statement sections per account and month with clean counts. status defaults to pending; other statuses read field history with correctValue (the decision-eval label set) and applied statement rows. appliedAutomatically: true lists only what an Automatic rule applied, each row naming it in automaticRule (<ruleKey>@<revision>); matchedRules lists the rule stamps a row matched when published (see entity_read.suggestion_rules). Review through entity.review_assessment(s) with assessmentId and fingerprint as expectedFingerprint. Field accept = verdict correct, intent apply; a corrected value = verdict wrong with correction. Statement accept as is = verdict correct, intent apply, application {kind: statement_transaction, action: recommended, transactionId: first candidate for an attach}; another choice = verdict wrong with correction {present: true, value: <that application>}; dismiss = verdict dismissed with suppression {scope: statement_transaction, candidateKey: `<source>:<chargeKey>`, fingerprint}, permanent. Transfer-pair accept = verdict correct, intent apply, application {kind: transfer_pair}; apply creates missing legs with statement refs and pairs them atomically; dismiss = verdict dismissed with suppression {scope: transfer_pair, candidateKey: evidence.key, fingerprint}, which keeps that pair from republishing. Cross-owner, unresolved-overlap and proposed cash-leg pairs require review; unresolved overlap blocks leg creation. Connections are never clean; an ownerOnly accept is the Email owner's (agents use mail.resolve) and product-pair rows open the Workbench. Labels and confidence alone never authorize anything.",
+          "The shared proposal queue: fields, statement transactions, connections and tag additions, Product pairs, image descriptions, and transfer pairs. Non-actionable candidates and already-applied automatic decisions are excluded. Scope by family, entity, recordIds (every touched endpoint), runId and column filters. Rows declare evidence, Strength, clean, actions, merge confirmation data and suppression. Review through entity.review_assessment(s), preserving expectedFingerprint and the declared application. Product merges require survivor choice and impact review; only clean rows qualify for bulk acceptance. Confidence never authorizes apply.",
+      }),
+      automatic_decisions: mcpAction({
+        op: suggestionsContract.ops.automaticDecisions,
+        description:
+          "Already-applied decisions, newest first: Email relevance, automatic Email links, mail-import outcomes, and automatic-rule applications. Filter by family, recordIds and reviewStatus. Wrong records member Feedback through entity.review_assessment. Declared correction options use verdict wrong, intent apply, correction and expectedFingerprint; without a correction use intent history. Mail-import outcomes are history only; correct affected records through their domain actions. Decisions stay in this audit after review.",
       }),
       suggestion_rules: mcpAction({
         op: suggestionsContract.ops.rules,
         description:
           "Automatic rules: named, versioned family rules that apply matching Suggestions without review (field.addition; statement_transaction.attach, measured per decision model). Each returns enabled, eligible and precision windows (stamp, model, n, hits, precision, correctedAutomatic) over the latest 200 member-reviewed matches that were served for review; eligible needs n >= 50 at >= 98%. Automatic applications later marked Wrong count as correctedAutomatic, outside the ratio.",
-      }),
-      connection_candidates: mcpAction({
-        op: connectionContract.ops.read,
-        description:
-          "Stored typed connection candidates from either endpoint. Reading performs no discovery or model calls. Review each original Assessment through entity.review_assessment; similarity alone establishes no relationship.",
       }),
       inventory_ownership_context: mcpAction({
         op: expenseContract.ops.inventoryOwnershipContext,
@@ -788,11 +788,6 @@ export const MCP_TOOLS = defineMcpTools({
           problemReportWantsCounts(input) ? "strong" : "context",
         description:
           'Data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses). countsOnly=true is the cheap triage; type="duplicateInventory" finds unique Products stored in more than one location; type="purchasesNotReconciling" holds only the unexplained Purchase differences.',
-      }),
-      product_matches: mcpAction({
-        op: recommendationsContract.ops.productMatches,
-        description:
-          "Stored same-item Product pair Assessments, optionally for one productId or candidateId. Apply a reviewed pair with product_enrichment.merge_match; record wrong, uncertain or scoped presentation dismissal with entity.review_assessment.",
       }),
     },
   },

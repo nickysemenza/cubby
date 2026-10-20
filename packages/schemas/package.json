@@ -173,6 +173,8 @@
     "./transfer-pair-suggestion": "./src/transfer-pair-suggestion.ts",
     "./suggestion-list": "./src/suggestion-list.ts",
     "./automatic-rule": "./src/automatic-rule.ts",
+    "./automatic-decision": "./src/automatic-decision.ts",
+    "./assessment-review-family": "./src/assessment-review-family.ts",
     "./wish": "./src/wish.ts",
     "./wish-fields": "./src/wish-fields.ts",
     "./entity-fields": "./src/entity-fields.ts",

@@ -18,6 +18,7 @@ import {
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { ingestGmailMessages } from "../../service/gmail/ingest";
@@ -65,6 +66,31 @@ describe("immutable Email observations", () => {
     expect(predictions).toHaveLength(1);
     const prediction = predictions[0];
     if (!email || !prediction) throw new Error("Synthetic prediction missing");
+    // A saved prediction alone cannot establish that routing used it. Ingest
+    // must record application in the same publication transaction.
+    expect(
+      await listFeedbackByKind(ctx.db, "email_classification_application"),
+    ).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          predictionId: prediction.id,
+          applied: true,
+        }),
+      }),
+    ]);
+    expect(
+      (
+        await listAutomaticDecisions(ctx.db, {
+          family: "email_relevance",
+          recordIds: [email.shortcode],
+        })
+      ).items,
+    ).toEqual([
+      expect.objectContaining({
+        applicationVerified: true,
+        decision: { classification: "uncertain", stage: "decision" },
+      }),
+    ]);
     expect(prediction).toMatchObject({
       emailId: email.id,
       classification: "uncertain",
@@ -164,6 +190,18 @@ describe("immutable Email observations", () => {
         classification: "unrelated",
         conflict: { kind: "accepted_unrelated" },
       });
+      const audit = await listAutomaticDecisions(ctx.db, {
+        family: "email_relevance",
+      });
+      expect(
+        audit.items.some(
+          (row) =>
+            row.decision &&
+            typeof row.decision === "object" &&
+            "classification" in row.decision &&
+            row.decision.classification === "unrelated",
+        ),
+      ).toBe(false);
       const findings = await getDb(ctx.db).select().from(runFinding);
       expect(findings).toMatchObject(
         withRun

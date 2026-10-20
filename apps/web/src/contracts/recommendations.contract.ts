@@ -4,20 +4,10 @@ import {
 } from "@cubby/schemas/entity-recommendations";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import {
-  duplicateProductRecommendationInput,
-  duplicateProductRecommendationOut,
   mergeProductMatchInput,
-  placementRecommendationInput,
-  productMatchQueueInput,
-  productMatchQueueOut,
   proposeProductMatchInput,
   proposeProductMatchOut,
-  placementRecommendationOut,
   recommendationOkSchema,
-  recommendationWorkbenchInput,
-  recommendationWorkbenchOut,
-  tagPropagationRecommendationInput,
-  tagPropagationRecommendationOut,
 } from "@cubby/schemas/recommendations";
 import { relatednessOutSchema } from "@cubby/schemas/relatedness";
 
@@ -49,34 +39,6 @@ export const recommendationsContract = defineContract("recommendations", {
         ["relatedness"],
       ],
     },
-  }),
-  placement: query({
-    mcp: { omit: "client_view" },
-    input: placementRecommendationInput,
-    output: placementRecommendationOut,
-  }),
-  product: query({
-    mcp: { omit: "client_view" },
-    input: recommendationWorkbenchInput,
-    output: recommendationWorkbenchOut,
-  }),
-  duplicateProduct: query({
-    mcp: {
-      omit: "client_view",
-      note: "Agents rank duplicates with search.similar",
-    },
-    input: duplicateProductRecommendationInput,
-    output: duplicateProductRecommendationOut,
-  }),
-  tagPropagation: query({
-    mcp: { omit: "client_view" },
-    input: tagPropagationRecommendationInput,
-    output: tagPropagationRecommendationOut,
-  }),
-  productMatches: query({
-    input: productMatchQueueInput,
-    output: productMatchQueueOut,
-    cache: { tags: [["recommendations", "productMatches"], ["product"]] },
   }),
   proposeProductMatch: mutation({
     input: proposeProductMatchInput,

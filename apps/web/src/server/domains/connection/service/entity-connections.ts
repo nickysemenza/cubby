@@ -31,6 +31,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -114,6 +115,13 @@ export async function prepareEntityConnections(
   }
   await captureCandidates(candidates);
   if (source.entityKind === "product") {
+    publishers.push(
+      ...(await prepareTagSuggestions(db, source.entityId)).map(
+        (publish) => async (transactionDb: Database) => {
+          await publish(transactionDb);
+        },
+      ),
+    );
     const runId = await ensureRun(db, context.actorContext, {
       purpose: "ai_suggest",
     });

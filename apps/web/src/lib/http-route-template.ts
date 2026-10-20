@@ -42,6 +42,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/mcp",
   "/api/native-workspace/session",
   "/auth/native",
+  "/automatic-decisions",
   "/calendar",
   "/cash-flow",
   "/collections",

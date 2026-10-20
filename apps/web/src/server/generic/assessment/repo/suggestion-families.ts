@@ -63,6 +63,12 @@ import {
   suggestionCounts,
 } from "~/server/generic/assessment/repo/suggestion-review";
 
+import {
+  productPairFamily,
+  imageDescriptionFamily,
+} from "./stored-suggestion-families";
+import { tagSuggestionKeys, tagSuggestionRows } from "./tag-suggestions";
+
 type ShortcodeEntity = SuggestionRecordRef["entity"];
 type Columns = Record<string, SuggestionColumnValue | SuggestionColumnValue[]>;
 
@@ -114,7 +120,7 @@ type SuggestionOutcomes = {
  * rechecks and apply authority stay with the family's review handler in
  * `assessment-review.ts`; this adds listing, Strength, Impact and clean.
  */
-type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
+export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
   keys: (
     db: Database,
     query: SuggestionFamilyQuery,
@@ -145,7 +151,7 @@ const outcome = (label: string): SuggestionImpact => ({
   label,
 });
 
-const keyBase = (key: SuggestionKey) => ({
+export const keyBase = (key: SuggestionKey) => ({
   id: key.assessmentId,
   assessmentId: key.assessmentId,
   fingerprint: key.fingerprint,
@@ -527,8 +533,7 @@ const connectionStrength = (
 };
 
 const connectionActions = (proposal: ConnectionProposal): Action[] => {
-  if (proposal.integration.kind === "product-pair-review")
-    return verbs("open_workbench");
+  if (proposal.integration.kind === "product-pair-review") return [];
   const ownerOnly =
     proposal.relation === "email-purchase" ||
     proposal.integration.kind === "email-link-review";
@@ -580,7 +585,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         ${filters.entity ? sql`AND (${side("source", "entityKind")} = ${filters.entity} OR ${side("target", "entityKind")} = ${filters.entity})` : sql``}
         ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}
     `);
-    return rows.flatMap((row) => {
+    const connectionKeys = rows.flatMap((row) => {
       const parsed = connectionCandidate.safeParse(row.candidate);
       if (!parsed.success) return [];
       const candidate = parsed.data;
@@ -612,6 +617,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         },
       ];
     });
+    return [...connectionKeys, ...(await tagSuggestionKeys(db, query))];
   },
   rows: async (db, keys) => {
     if (!keys.length) return new Map();
@@ -623,12 +629,12 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       SELECT DISTINCT a.evidence->'candidate'->${"source"}->>'entityKind' AS "entityKind",
         a.evidence->'candidate'->${"source"}->>'entityId' AS "entityId"
       FROM "Assessment" a
-      WHERE a.id IN (${sql.join(
+      WHERE a.subject->>'scope' LIKE 'connection.%' AND a.id IN (${sql.join(
         keys.map((key) => sql`${key.assessmentId}::uuid`),
         sql`, `,
       )})
     `);
-    const found = new Map<string, RowOf<"recommendation">>();
+    const found = await tagSuggestionRows(db, keys);
     // Stored only: readEntityConnectionsBatch rechecks evidence, never discovers.
     for (let start = 0; start < sources.length; start += READ_BATCH) {
       const groups = await readEntityConnectionsBatch(
@@ -942,6 +948,8 @@ export const suggestionFamilies = {
   statement_transaction: statementTransaction,
   recommendation,
   transfer_pair: transferPair,
+  product_pair: productPairFamily,
+  image_description: imageDescriptionFamily,
 } satisfies {
   [F in SuggestionListFamily]: SuggestionFamilyPresentation<F>;
 };

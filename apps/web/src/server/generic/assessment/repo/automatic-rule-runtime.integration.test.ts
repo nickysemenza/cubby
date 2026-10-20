@@ -25,13 +25,13 @@ import {
 } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import {
   applyAutomaticRules,
   listAutomaticRules,
   setAutomaticRule,
 } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 type Ctx = ReturnType<typeof withTestDb>;
@@ -685,15 +685,13 @@ describe("Automatic rules", () => {
     ).rows;
     expect(transaction?.postedDate).toBe("2026-05-05");
 
-    const view = await listSuggestionPage(ctx.db, {
+    const view = await listAutomaticDecisions(ctx.db, {
       family: "statement_transaction",
-      appliedAutomatically: true,
     });
     expect(view.items).toEqual([
       expect.objectContaining({
-        assessmentId: suggestion.id,
+        id: suggestion.id,
         automaticRule: `${ruleBase(ATTACH)}`,
-        matchedRules: [stamp],
       }),
     ]);
 

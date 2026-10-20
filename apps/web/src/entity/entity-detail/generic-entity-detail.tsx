@@ -16,7 +16,7 @@ import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { QuotesIcon } from "@phosphor-icons/react/dist/csr/Quotes";
 import { Link } from "@tanstack/react-router";
-import { Suspense, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
@@ -86,6 +86,17 @@ import {
 } from "./entity-relation-table";
 import { EntitySourcesSection, recordSources } from "./entity-sources-section";
 import { RecordQualityProvider, QualitySectionChecks } from "./record-quality";
+
+const RecordProposals = lazy(() =>
+  import("~/entity/suggestions/queue/record-proposals").then((module) => ({
+    default: module.RecordProposals,
+  })),
+);
+const AutomaticDecisions = lazy(() =>
+  import("~/entity/suggestions/queue/automatic-decisions").then((module) => ({
+    default: module.AutomaticDecisions,
+  })),
+);
 
 /** What every detail read carries that the generic page reads by name. */
 const detailRecordSchema = z.looseObject({
@@ -536,6 +547,29 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       content: <ConnectedRecordsSection source={entity} sourceId={bag.id} />,
     });
   }
+
+  sections.push({
+    id: "suggestions",
+    title: "Suggestions",
+    icon: InfoIcon,
+    placement: "primary",
+    content: (
+      <Suspense fallback={<SlotFallback />}>
+        <RecordProposals key={bag.id} id={bag.id} />
+      </Suspense>
+    ),
+  });
+  sections.push({
+    id: "automatic-decisions",
+    title: "Review automatic decisions",
+    icon: InfoIcon,
+    placement: "primary",
+    content: (
+      <Suspense fallback={<SlotFallback />}>
+        <AutomaticDecisions key={bag.id} id={bag.id} />
+      </Suspense>
+    ),
+  });
 
   // Derived from capabilities, never declared: a gallery's photos edit
   // inline; a cover/logo shows what is attached; documents get a viewer.

@@ -48,7 +48,6 @@ import { financialTransactionListRenderers } from "~/features/finance/list-rende
 import { EntityPhotosSection } from "~/features/image/entity-photos-section";
 import { discardInventoryActionDefinition } from "~/features/inventory/discard-inventory-action";
 import { inventoryLocationEntityActionDefinitions } from "~/features/inventory/inventory-location-entity-actions";
-import { useInventoryPlacementAction } from "~/features/inventory/inventory-placement-suggestion";
 import { locationListRenderers } from "~/features/location/list-renderers";
 import { addToInventoryActionDefinition } from "~/features/product/add-to-inventory-action";
 import { ProductDiscardDialog } from "~/features/product/product-discard-dialog";
@@ -576,7 +575,6 @@ export function installFeatures(): void {
       FinancialTransactionFormFields,
       EntityPhotosSection,
       createUnitMappingsColumn,
-      useInventoryPlacementAction,
       useUpcAwareCreate,
     },
   });

@@ -1,3 +1,4 @@
+import type { AssessmentReviewOut } from "@cubby/schemas/assessment";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
@@ -87,9 +88,13 @@ export function useSuggestionReview(): ReviewContext {
 export function SuggestionReviewProvider({
   scope,
   children,
+  onApplied,
 }: {
   scope: string;
   children: ReactNode;
+  onApplied?: (
+    result: NonNullable<AssessmentReviewOut["applicationResult"]>,
+  ) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<ReviewState>(() => freshState(scope));
@@ -117,6 +122,8 @@ export function SuggestionReviewProvider({
             const pair = batch[index];
             if (pair && !result.ok)
               failures.push({ row: pair.row, error: result.error });
+            if (result.ok && result.applicationResult)
+              await onApplied?.(result.applicationResult);
           }
         } catch (error) {
           const message = getErrorMessage(error);
@@ -153,7 +160,7 @@ export function SuggestionReviewProvider({
       );
       return failures;
     },
-    [queryClient],
+    [queryClient, onApplied],
   );
 
   const value = useMemo<ReviewContext>(() => {

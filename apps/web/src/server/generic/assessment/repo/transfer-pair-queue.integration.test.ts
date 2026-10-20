@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { dismissItem } from "~/features/suggestions/suggestion-review";
+import { dismissItem } from "~/entity/suggestions/queue/suggestion-review";
 import {
   databaseForTransaction,
   getDb,

@@ -294,7 +294,10 @@ separately on cash, with its supplied amount, and never infer it.
 
 ## Amendment: Sweeps, the Suggestions page and Automatic rules (2026-10)
 
-Every Suggestion family now reports to one Suggestions page and one Sweep. A
+Every actionable proposal family reports to one Suggestions page; discovery
+families report to one Sweep. Automatic decisions have a separate audit view,
+as described in [the entity review contract](../entities.md#shared-proposal-queue-and-automatic-decisions).
+Stored pending status alone does not imply a proposal. A
 member's Sweep is a parent Run with one child Run per family; automatic passes
 are routine Sweeps. Family registry entries still own candidate matching,
 stale-evidence rechecks, apply authority and identity or financial safeguards.
@@ -310,7 +313,7 @@ precision across at least 50 items in a rolling window of the latest 200. A
 member then turns it on. While on, a 5% audit sample of matches stays pending,
 and the rule turns itself off when audited precision falls below the bar.
 Every automatic application records `automatic` Feedback that names the rule
-and revision, and stays listed as applied automatically. Wrong on an automatic
+and revision, and stays listed in Review automatic decisions. Wrong on an automatic
 application records a Miss and opens the normal correction; it is not an undo,
 since the household has no restore or undo. The field family's existing
 Addition auto-apply becomes its first rule and keeps running under audit.

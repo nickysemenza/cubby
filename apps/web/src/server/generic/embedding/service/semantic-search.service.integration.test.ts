@@ -9,10 +9,10 @@ import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { countUnembeddedEntities } from "~/server/domains/maintenance/service/maintenance.service";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
-import { getDuplicateProductRecommendationWorkflow } from "~/server/domains/recommendation/operations/recommendations.server";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getActiveAssessmentSuppressionKeys } from "~/server/generic/assessment/repo/assessment-state";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -201,33 +201,37 @@ describe("semantic search background tasks", () => {
       evidence: "Synthetic retained exact identity",
       sourceUrls: [],
     });
-    const recommendation = await getDuplicateProductRecommendationWorkflow(
-      ctx.db,
-      { sourceId: source.id },
-    );
-    expect(recommendation?.review).toBeTruthy();
-    expect(
-      await getDuplicateProductRecommendationWorkflow(ctx.db, {
-        sourceId: source.id,
-      }),
-    ).not.toBeNull();
+    const [recommendation] = (
+      await listSuggestionPage(ctx.db, {
+        family: "product_pair",
+        recordIds: [source.id],
+      })
+    ).items;
+    if (!recommendation?.review?.suppression)
+      throw new Error("Synthetic pair review missing");
     await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      ...recommendation!.review!,
+      assessmentId: recommendation.assessmentId,
+      expectedFingerprint: recommendation.fingerprint,
+      suppression: recommendation.review.suppression,
       operationId: crypto.randomUUID(),
       verdict: "dismissed",
       intent: "history",
     });
-    expect(
-      await getDuplicateProductRecommendationWorkflow(ctx.db, {
-        sourceId: source.id,
-      }),
-    ).toBeNull();
-    const keys = await getActiveAssessmentSuppressionKeys(ctx.db, {
-      entityKind: "product",
-      entityId: source.entityId,
-      suggestionKind: "product.duplicate",
+    await publishProductPair(ctx.db, {
+      productIds: [source.entityId, duplicate.entityId],
+      source: "detector",
+      actionable: true,
+      evidence: "Synthetic retained exact identity",
+      sourceUrls: [],
     });
-    expect(keys.size).toBe(1);
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "product_pair",
+          recordIds: [source.id],
+        })
+      ).items,
+    ).toEqual([]);
   });
 
   it("rejects stale recommendation dismissals without storing them", async () => {
@@ -242,10 +246,13 @@ describe("semantic search background tasks", () => {
       ctx.actor,
     );
     expect(
-      await getDuplicateProductRecommendationWorkflow(ctx.db, {
-        sourceId: source.id,
-      }),
-    ).toBeNull();
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "product_pair",
+          recordIds: [source.id],
+        })
+      ).items,
+    ).toEqual([]);
     await expect(
       reviewAssessment(ctx.db, kernelCtx(ctx), {
         assessmentId: crypto.randomUUID(),

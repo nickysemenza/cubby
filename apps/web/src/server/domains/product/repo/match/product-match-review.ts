@@ -92,7 +92,11 @@ function candidate(
 /** Browse stored pairs; discovery and model calls belong to durable AI refresh. */
 export async function getProductMatchQueue(
   db: Database,
-  input: { productId?: ProductShortcode; candidateId?: ProductShortcode },
+  input: {
+    productId?: ProductShortcode;
+    candidateId?: ProductShortcode;
+    assessmentIds?: readonly string[];
+  },
 ): Promise<ProductMatchQueueOut> {
   const focus = input.productId
     ? await resolveOrThrow(db, "product", input.productId)
@@ -103,6 +107,7 @@ export async function getProductMatchQueue(
   const rows = (
     await listProductMatchRows(db, focus, {
       reviewableOnly: true,
+      assessmentIds: input.assessmentIds,
       candidateId: other,
       limit: 200,
     })

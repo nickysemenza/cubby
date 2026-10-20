@@ -1,13 +1,15 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
-import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
+import { isBrowserRoutedEntity } from "~/entity/entities";
+import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { formatCurrency } from "~/lib/number-format";
 import type { CubbyRow } from "~/ui/data-table/table-features";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -20,6 +22,7 @@ import {
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import { Textarea } from "~/ui/primitives/textarea";
 
 import {
   acceptItem,
@@ -101,52 +104,25 @@ export function SuggestionActionsCell({
 }: {
   row: CubbyRow<SuggestionListRow>;
 }) {
-  const suggestion = row.original;
+  return <SuggestionActions suggestion={row.original} />;
+}
+
+export function SuggestionActions({
+  suggestion,
+}: {
+  suggestion: SuggestionListRow;
+}) {
+  const [merging, setMerging] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+  const [correctionValue, setCorrectionValue] = useState(
+    suggestion.review?.correction?.value ?? "",
+  );
   const { review, outcome, statementChoice, draft, toggleOpen } =
     useSuggestionReview();
   const state = outcome(suggestion.id);
   const busy = state?.state === "pending";
   const run = (build: Parameters<typeof review>[1]) =>
     void review([suggestion], build);
-
-  if (
-    offers(suggestion, "open_workbench") &&
-    suggestion.family === "recommendation"
-  ) {
-    const proposal = suggestion.evidence;
-    return (
-      <div className="flex items-center justify-end gap-1">
-        <Button
-          size="xs"
-          variant="outline"
-          render={
-            <Link
-              to="/recommendations/workbench"
-              search={{
-                kind: "product-match",
-                source: parseShortcodeFor("product", proposal.source.entityId),
-                candidate: parseShortcodeFor(
-                  "product",
-                  proposal.target.entityId,
-                ),
-              }}
-            />
-          }
-          nativeButton={false}
-        >
-          Open Workbench
-        </Button>
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => run(dismissItem)}
-        >
-          Dismiss
-        </Button>
-      </div>
-    );
-  }
 
   const acceptOwnerOnly = suggestion.actions.some(
     (action) => action.verb === "accept" && action.ownerOnly,
@@ -155,10 +131,8 @@ export function SuggestionActionsCell({
     suggestion.family === "statement_transaction" ? suggestion.evidence : null;
   const rowDraft = draft(suggestion.id);
   const wrong = wrongItem(suggestion);
-  const never =
-    suggestion.family === "recommendation"
-      ? neverSuggestItem(suggestion)
-      : null;
+  const never = neverSuggestItem(suggestion);
+  const merge = suggestion.review?.merge;
   const alternatives = statement
     ? statement.candidates.filter(
         (_, index) => statement.recommended !== "attach" || index > 0,
@@ -174,6 +148,74 @@ export function SuggestionActionsCell({
 
   return (
     <div className="flex min-w-0 items-center justify-end gap-1">
+      {offers(suggestion, "correct") && suggestion.review?.correction ? (
+        <Button
+          size="xs"
+          variant="outline"
+          disabled={busy}
+          onClick={() => setCorrecting(true)}
+        >
+          Correct…
+        </Button>
+      ) : null}
+      {suggestion.review?.correction ? (
+        <Overlay
+          open={correcting}
+          onOpenChange={setCorrecting}
+          title={suggestion.review.correction.label}
+          primary={{
+            label: "Save correction",
+            pending: busy,
+            disabled: !correctionValue.trim(),
+            onClick: async () => {
+              const failures = await review([suggestion], (target) => ({
+                assessmentId: target.assessmentId,
+                operationId: crypto.randomUUID(),
+                verdict: "wrong",
+                intent: "apply",
+                expectedFingerprint: target.fingerprint,
+                correction: { present: true, value: correctionValue.trim() },
+              }));
+              if (!failures.length) setCorrecting(false);
+            },
+          }}
+        >
+          <Textarea
+            aria-label={suggestion.review.correction.label}
+            value={correctionValue}
+            onChange={(event) => setCorrectionValue(event.target.value)}
+          />
+        </Overlay>
+      ) : null}
+      {offers(suggestion, "review_merge") && merge ? (
+        <Button size="xs" disabled={busy} onClick={() => setMerging(true)}>
+          Review merge
+        </Button>
+      ) : null}
+      {merging && merge && isBrowserRoutedEntity(merge.entity) ? (
+        <EntityMergeDialog
+          entity={merge.entity}
+          rows={merge.rows}
+          open
+          onOpenChange={setMerging}
+          isPending={busy}
+          onConfirm={async (keepId, aliasIds) => {
+            const mergeId = aliasIds[0];
+            if (!mergeId) return;
+            const failures = await review([suggestion], (target) =>
+              assessmentReviewInput.parse({
+                assessmentId: target.assessmentId,
+                operationId: crypto.randomUUID(),
+                verdict: "correct",
+                intent: "apply",
+                expectedFingerprint: target.fingerprint,
+                application: { ...target.review?.application, keepId, mergeId },
+              }),
+            );
+            if (!failures.length) setMerging(false);
+          }}
+        />
+      ) : null}
       {state?.state === "failed" ? (
         <span
           role="alert"

@@ -48,8 +48,6 @@ export type RippleKey =
   | "vendorAccountOnly"
   | "memberLogins"
   | "productOnly"
-  | "recommendationPlacement"
-  | "recommendationTagPropagation"
   | "product"
   | "productCategory"
   | "productMerge"

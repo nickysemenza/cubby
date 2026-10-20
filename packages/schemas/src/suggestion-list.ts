@@ -3,7 +3,11 @@ import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
 import { assessmentChildHandle } from "./assessment-reference";
-import { assessmentReviewBatchOut } from "./assessment";
+import {
+  assessmentReviewBatchOut,
+  assessmentReviewInput,
+  assessmentSuppression,
+} from "./assessment";
 import { dataCheck } from "./data-quality";
 import { connectionProposal, connectionRelation } from "./entity-connections";
 import { shortcodeEntities } from "./entity-manifest";
@@ -26,6 +30,8 @@ export const suggestionListFamily = z.enum([
   "statement_transaction",
   "recommendation",
   "transfer_pair",
+  "product_pair",
+  "image_description",
 ]);
 export type SuggestionListFamily = z.infer<typeof suggestionListFamily>;
 
@@ -73,7 +79,7 @@ export const suggestionActionVerb = z.enum([
   "reject",
   "dismiss",
   "never_suggest",
-  "open_workbench",
+  "review_merge",
 ]);
 export type SuggestionActionVerb = z.infer<typeof suggestionActionVerb>;
 /** `ownerOnly`: only the record's owner may take this action. */
@@ -177,6 +183,12 @@ export const suggestionColumns = {
     owner: { type: "ref", entity: "ledgerParty", facet: true },
     merchant: { type: "text" },
   },
+  product_pair: {
+    entityKind: { type: "enum", values: shortcodeEntities, facet: true },
+  },
+  image_description: {
+    entityKind: { type: "enum", values: shortcodeEntities, facet: true },
+  },
 } as const satisfies Record<
   "common" | SuggestionListFamily,
   Record<string, ColumnType & { facet?: true }>
@@ -190,6 +202,19 @@ const rowBase = {
   fingerprint: z.string().nullable(),
   record: suggestionRecordRef,
   other: suggestionRecordRef.optional(),
+  review: z
+    .object({
+      application: assessmentReviewInput.shape.application,
+      suppression: assessmentSuppression.optional(),
+      correction: z.object({ label: z.string(), value: z.string() }).optional(),
+      merge: z
+        .object({
+          entity: shortcodeEntity,
+          rows: z.array(z.object({ id: z.string(), name: z.string() })).min(2),
+        })
+        .optional(),
+    })
+    .optional(),
   summary: z.array(suggestionSummaryPart),
   strength: suggestionStrength,
   /** Bulk-acceptable as is through `suggestions.acceptClean`. */
@@ -208,6 +233,16 @@ const rowBase = {
   ),
 };
 
+/** Server-owned evidence for additional proposal scopes; clients share one renderer. */
+export const declaredSuggestionEvidence = z.object({
+  kind: z.literal("declared"),
+  description: z.string(),
+  facts: z.array(z.object({ label: z.string(), value: z.json() })),
+});
+export type DeclaredSuggestionEvidence = z.infer<
+  typeof declaredSuggestionEvidence
+>;
+
 export const fieldSuggestionRow = z.object({
   ...rowBase,
   family: z.literal("field"),
@@ -221,12 +256,22 @@ export const statementSuggestionRow = z.object({
 export const recommendationSuggestionRow = z.object({
   ...rowBase,
   family: z.literal("recommendation"),
-  evidence: connectionProposal,
+  evidence: z.union([connectionProposal, declaredSuggestionEvidence]),
 });
 export const transferPairSuggestionRow = z.object({
   ...rowBase,
   family: z.literal("transfer_pair"),
   evidence: transferPairJudgment,
+});
+export const productPairSuggestionRow = z.object({
+  ...rowBase,
+  family: z.literal("product_pair"),
+  evidence: declaredSuggestionEvidence,
+});
+export const imageDescriptionSuggestionRow = z.object({
+  ...rowBase,
+  family: z.literal("image_description"),
+  evidence: declaredSuggestionEvidence,
 });
 /** One Suggestion of any family; `evidence` is the family's own payload. */
 export const suggestionListRow = z.discriminatedUnion("family", [
@@ -234,6 +279,8 @@ export const suggestionListRow = z.discriminatedUnion("family", [
   statementSuggestionRow,
   recommendationSuggestionRow,
   transferPairSuggestionRow,
+  productPairSuggestionRow,
+  imageDescriptionSuggestionRow,
 ]);
 export type SuggestionListRow = z.infer<typeof suggestionListRow>;
 
@@ -258,8 +305,6 @@ export const suggestionListFilters = z.object({
     .optional(),
   /** Reviewed history: field rows in every status (the decision-eval label set), statement rows applied. */
   status: suggestionStatus.default("pending"),
-  /** Only Suggestions an Automatic rule applied; implies status applied. */
-  appliedAutomatically: z.boolean().optional(),
   runId: runShortcode.optional(),
   /** Conditions on `suggestionColumns`, by column key. */
   where: z.record(z.string(), suggestionColumnFilter).default({}),
@@ -341,7 +386,6 @@ export type SuggestionFieldCount = z.infer<typeof suggestionFieldCount>;
 
 export const suggestionCountsInput = suggestionListFilters.omit({
   status: true,
-  appliedAutomatically: true,
 });
 const count = z.number().int().nonnegative();
 /**
@@ -372,9 +416,7 @@ export const SUGGESTION_ACCEPT_CLEAN_MAX = 100;
 /** Failed ids one bulk accept may carry forward as `skip`. */
 export const SUGGESTION_ACCEPT_SKIP_MAX = 5000;
 export const acceptCleanSuggestionsInput = z.object({
-  filters: suggestionListFilters
-    .omit({ status: true, appliedAutomatically: true })
-    .default({ where: {} }),
+  filters: suggestionListFilters.omit({ status: true }).default({ where: {} }),
   limit: z.number().int().min(1).max(SUGGESTION_ACCEPT_CLEAN_MAX).default(100),
   /** Already attempted ids; a failed accept stays pending and clean. */
   skip: z

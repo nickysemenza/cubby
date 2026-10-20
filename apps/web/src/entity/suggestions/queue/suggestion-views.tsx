@@ -130,12 +130,20 @@ const VIEW_FILTERS = {
     { columnId: "clean", kind: "multiselect", value: "boolean" },
   ],
   applied: [],
-} satisfies Record<SuggestionView, readonly ColumnFilterSpec[]>;
+} satisfies Partial<Record<SuggestionView, readonly ColumnFilterSpec[]>>;
 
 /** The filter codec's specs for a view (URL keys are the column ids). */
 export const viewFilterSpecs = (
   view: SuggestionView,
-): readonly FilterSpecCore[] => VIEW_FILTERS[view];
+): readonly FilterSpecCore[] => viewSetting(VIEW_FILTERS, view) ?? [];
+
+/** Specialized views override the generic defaults only where their columns differ. */
+export function viewSetting<Value>(
+  registry: Partial<Record<SuggestionView, Value>>,
+  view: SuggestionView,
+): Value | undefined {
+  return registry[view];
+}
 
 /** `a..b`, `a..` or `..b`; a bare value is the lower bound. */
 function parseRange(raw: string, numeric: boolean) {
@@ -158,7 +166,7 @@ export function buildWhere(
   state: TableStateReturn,
 ): SuggestionListFilters["where"] {
   const where: SuggestionListFilters["where"] = {};
-  for (const spec of VIEW_FILTERS[view]) {
+  for (const spec of viewSetting(VIEW_FILTERS, view) ?? []) {
     if (spec.value === "range") {
       const raw = state.getColumnFilter(spec.columnId);
       if (!raw) continue;
@@ -935,7 +943,9 @@ function statementColumns(
 
 function recommendationColumns() {
   const evidence = (row: Row) =>
-    row.family === "recommendation" ? row.evidence : null;
+    row.family === "recommendation" && !("kind" in row.evidence)
+      ? row.evidence
+      : null;
   return createCubbyColumnCollection<Row>((add) => {
     leadingColumns(add);
     add(recordColumn);
@@ -1086,8 +1096,6 @@ export function viewColumns(
   providerCategoryLabel: string,
 ): CubbyColumnCollection<Row> {
   switch (view) {
-    case "all":
-      return allColumns();
     case "field":
       return fieldColumns();
     case "statement_transaction":
@@ -1098,6 +1106,8 @@ export function viewColumns(
       return transferPairColumns(rosters);
     case "applied":
       return appliedColumns();
+    default:
+      return allColumns();
   }
 }
 
@@ -1115,4 +1125,4 @@ export const VIEW_HIDDEN_COLUMNS = {
   recommendation: { entityKind: false },
   transfer_pair: { account: false, merchant: false },
   applied: {},
-} satisfies Record<SuggestionView, Record<string, false>>;
+} satisfies Partial<Record<SuggestionView, Record<string, false>>>;

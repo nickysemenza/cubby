@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { ProposalCount } from "~/entity/suggestions/proposal-counts";
 import {
   RecordRowSuggestions,
   RecordSuggestionBoundary,
@@ -376,6 +377,7 @@ function RowContent<TItem extends RowData>({
           <span className={titleClass}>{title}</span>
         )}
         <RowSubtitle parts={subtitleParts} />
+        <ProposalCount record={row.original} />
       </span>
       <RowTrailingValues entries={trailingEntries} />
       {rowActions && (
