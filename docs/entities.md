@@ -1933,6 +1933,9 @@ Observations retain direct owner identities, including child owners. Context
 edits refresh those owners. Entity endpoint changes or removals retain the changed
 entity as the root and refresh old/current endpoints as projection leaves,
 except endpoints declared as transitive dependencies, such as Product pricing.
+Saved Purchase endpoints of an Expense have a narrower paged frontier: project
+text on adjustment lines refreshes without traversing principal lines or their
+Products, including after reassignment or physical source removal.
 Reassigning a reference must not traverse unrelated members of its old/new Project
 or Vendor. Only input rows without a recognizable owner use conservative
 repair clocks that can revisit a broader corpus. This backstop scans full

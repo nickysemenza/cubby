@@ -1,5 +1,6 @@
 import {
   derivedRefreshState,
+  derivedRefreshPhase,
   type DerivedRefreshCapture,
 } from "@cubby/schemas/derived-refresh";
 import type { Entity } from "@cubby/schemas/entity-core";
@@ -20,7 +21,10 @@ import {
 import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
 import { publishInBackground } from "~/server/workflows/background-tasks/publish";
 
-import { refreshDependencyRoutes } from "./dependencies";
+import {
+  refreshDependencyRoutes,
+  refreshEndpointDependencyRoutes,
+} from "./dependencies";
 import { refreshInputKeys } from "./input-keys";
 
 export type RefreshCapture = DerivedRefreshCapture;
@@ -176,20 +180,34 @@ async function flushDerivedRefresh(
     if (!owner)
       throw new Error("Derived refresh root disappeared during capture");
     const capture = byRoot.get(`${value.entityKind}:${value.entityId}`);
+    const endpointScopes = new Map(
+      (capture?.scopes ?? [])
+        .filter(
+          (scope) =>
+            scope.entityKind !== value.entityKind ||
+            scope.entityId !== value.entityId,
+        )
+        .map((scope) => [`${scope.entityKind}:${scope.entityId}`, scope]),
+    );
     const scopes = [
       {
         entityKind: value.entityKind,
         entityId: value.entityId,
         traverse: true,
       },
-      ...(capture?.scopes ?? []).map((scope) => ({
+      ...[...endpointScopes.values()].map((scope) => ({
         ...scope,
         // Endpoint identity changed; the endpoint's own inputs did not.
         // Only declared reverse dependencies (for example Product pricing)
-        // may continue through its graph.
-        traverse: refreshDependencyRoutes(value.entityKind).some(
-          (route) => route.entity === scope.entityKind && route.transitive,
-        ),
+        // or a narrower saved-endpoint frontier may continue through its graph.
+        traverse:
+          refreshEndpointDependencyRoutes(
+            value.entityKind,
+            scope.entityKind,
+          ) !== undefined ||
+          refreshDependencyRoutes(value.entityKind).some(
+            (route) => route.entity === scope.entityKind && route.transitive,
+          ),
       })),
     ]
       .sort((a, b) =>
@@ -201,7 +219,21 @@ async function flushDerivedRefresh(
     await client
       .insert(derivedRefreshScope)
       .values(scopes)
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [
+          derivedRefreshScope.workId,
+          derivedRefreshScope.entityKind,
+          derivedRefreshScope.entityId,
+        ],
+        set: {
+          traverse: true,
+          phase: sql`CASE WHEN ${derivedRefreshScope.done} THEN ${derivedRefreshPhase.enum.dependencies} ELSE ${derivedRefreshScope.phase} END`,
+          route: sql`CASE WHEN ${derivedRefreshScope.done} THEN 0 ELSE ${derivedRefreshScope.route} END`,
+          after: sql`CASE WHEN ${derivedRefreshScope.done} THEN NULL ELSE ${derivedRefreshScope.after} END`,
+          done: false,
+        },
+        setWhere: sql`NOT ${derivedRefreshScope.traverse} AND excluded.traverse`,
+      });
     if (created) {
       scheduled = true;
       continue;

@@ -4,6 +4,7 @@ import {
   derivedRefreshPhase,
 } from "@cubby/schemas/derived-refresh";
 import { entityRefKey } from "@cubby/schemas/entity";
+import type { Entity } from "@cubby/schemas/entity-core";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   isEmbeddableEntity,
@@ -41,6 +42,7 @@ import {
 import {
   readRefreshDependencyPage,
   refreshDependencyRoutes,
+  refreshEndpointDependencyRoutes,
 } from "./dependencies";
 import {
   currentInputRevision,
@@ -125,6 +127,7 @@ async function prepareFrontierPage(
   db: Database,
   scope: typeof derivedRefreshScope.$inferSelect | undefined,
   version: number,
+  rootKind: Entity,
 ) {
   const searchable =
     scope && searchableEntitySchema.safeParse(scope.entityKind);
@@ -144,7 +147,8 @@ async function prepareFrontierPage(
     scope?.phase === "dependencies" &&
     scope.version === version &&
     scope.traverse
-      ? refreshDependencyRoutes(scope.entityKind)[scope.route]
+      ? (refreshEndpointDependencyRoutes(rootKind, scope.entityKind) ??
+          refreshDependencyRoutes(scope.entityKind))[scope.route]
       : undefined;
   const dependencyRefs =
     route && scope
@@ -292,7 +296,7 @@ export async function processDerivedRefreshPage(
         ),
       };
     const { prepared, retirement, route, dependencyRefs } =
-      await prepareFrontierPage(db, scope, work.version);
+      await prepareFrontierPage(db, scope, work.version, work.entityKind);
     if (!work.publishing)
       failureInput = {
         ...failureInput,

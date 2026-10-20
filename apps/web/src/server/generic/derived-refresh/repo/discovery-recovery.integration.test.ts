@@ -1,6 +1,9 @@
+import { testUserId } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
+import { TEST_USER_ID } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
@@ -19,7 +22,9 @@ import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { updateProduct } from "~/server/domains/product/repo/crud";
 import { scheduleDerivedDiscovery } from "~/server/domains/run/service/derived-discovery";
 import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
+import { executeEntity } from "~/server/entity-kernel";
 import { recordEntitySources } from "~/server/entity-kernel/repo/entity-source";
+import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
@@ -95,6 +100,97 @@ describe("discovery epoch recovery", () => {
     }
     throw new Error("Synthetic repair exceeded its page budget");
   }
+
+  it.each(["reassign", "sql-reassign", "hard-remove"] as const)(
+    "repairs old Purchase adjustment text after principal %s",
+    async (operation) => {
+      const project = await createRepoEntity(ctx, "project", {
+        name: "Synthetic departed principal project",
+        defaultTrade: "other",
+      });
+      const vendor = await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic endpoint vendor",
+      });
+      const first = await createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        orderId: "SYNTHETIC-OLD-ENDPOINT",
+        defaultProjectId: null,
+      });
+      const second = await createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        orderId: "SYNTHETIC-NEW-ENDPOINT",
+        defaultProjectId: null,
+      });
+      const principal = await createRepoEntity(ctx, "expense", {
+        name: "Synthetic departing principal",
+        lineKind: "principal",
+        trade: "other",
+        cost: 100,
+        purchaseId: first.output.id,
+        projectId: project.output.id,
+      });
+      const tax = await createRepoEntity(ctx, "expense", {
+        name: "Synthetic retained adjustment",
+        lineKind: "tax",
+        trade: "other",
+        cost: 10,
+        purchaseId: first.output.id,
+        projectId: null,
+      });
+      await repair();
+      const text = async () =>
+        (await getSearchDocumentEmbeddingText(ctx.db, "expense", tax.entityId))
+          ?.embeddingText;
+      expect(await text()).toContain("Synthetic departed principal project");
+      const drain = async (frontierOnly = false) => {
+        for (let page = 0; page < 500; page++) {
+          const result = await processDerivedRefreshPage(ctx.db, undefined, {
+            frontierOnly,
+          });
+          expect(result.errors).toEqual([]);
+          if (result.done) return;
+        }
+        throw new Error("Synthetic saved endpoint refresh did not terminate");
+      };
+      if (operation === "reassign") {
+        await executeEntity(
+          buildKernelContext(ctx.db, testUserId(TEST_USER_ID)),
+          {
+            action: "update",
+            entity: "expense",
+            id: principal.output.id,
+            data: { notes: "Synthetic refresh awaiting provider publication" },
+          },
+        );
+        await drain(true);
+        await executeEntity(
+          buildKernelContext(ctx.db, testUserId(TEST_USER_ID)),
+          {
+            action: "update",
+            entity: "expense",
+            id: principal.output.id,
+            data: { purchaseId: second.output.id },
+          },
+        );
+        await drain();
+      } else if (operation === "sql-reassign") {
+        await getDb(ctx.db)
+          .update(expense)
+          .set({ purchaseId: second.entityId })
+          .where(eq(expense.id, principal.entityId));
+        await repair();
+      } else {
+        await getDb(ctx.db)
+          .delete(expense)
+          .where(eq(expense.id, principal.entityId));
+        await repair();
+      }
+      expect(await text()).not.toContain(
+        "Synthetic departed principal project",
+      );
+    },
+    30_000,
+  );
 
   it("repairs SQL endpoint changes without traversing unrelated Project members", async () => {
     const previous = await createRepoEntity(ctx, "project", {

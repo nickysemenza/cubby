@@ -158,6 +158,34 @@ const dependencies = {
   planting: [linked("gardenEntry", "gardenEntryPlanting")],
 } satisfies Partial<Record<Entity, readonly Route[]>>;
 
+// Saved endpoints can own narrower frontiers than an edit to the endpoint
+// itself. In particular, a moved/deleted principal cannot find old siblings
+// through its current Expense row, and must not walk every Purchase line.
+const endpointDependencies = {
+  expense: {
+    purchase: [
+      {
+        entity: "expense",
+        select: (id) => sql`SELECT id FROM "Expense"
+        WHERE "purchaseId"=${id}::uuid AND "deletedAt" IS NULL
+        AND "lineKind" NOT IN (${expenseLineKindSchema.enum.principal},${expenseLineKindSchema.enum.unclassified})`,
+      },
+    ],
+  },
+} satisfies Partial<Record<Entity, Partial<Record<Entity, readonly Route[]>>>>;
+
+export function refreshEndpointDependencyRoutes(
+  root: Entity,
+  endpoint: Entity,
+): readonly Route[] | undefined {
+  const routes = Object.entries(endpointDependencies).find(
+    ([kind]) => kind === root,
+  )?.[1];
+  return routes
+    ? Object.entries(routes).find(([kind]) => kind === endpoint)?.[1]
+    : undefined;
+}
+
 export function refreshDependencyRoutes(entity: Entity): readonly Route[] {
   if (entity === "image")
     return searchableEntities.map((owner) => ({
