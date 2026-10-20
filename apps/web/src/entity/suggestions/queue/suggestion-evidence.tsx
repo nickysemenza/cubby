@@ -89,7 +89,7 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
           ))
         : null}
       {plan.status === "ready" ? (
-        <Facts
+        <EvidenceFacts
           rows={[
             [
               "Effect",
