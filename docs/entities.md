@@ -123,6 +123,31 @@ on the effective value, reset restores inheritance, and source changes update
 inherited values while preserving explicit choices. Extend the shared contract
 when a required state is missing rather than adding a parallel override path.
 
+## Detail summary data
+
+`presentation.detail.hero.stats` selects up to four readable field keys. The
+resolved keys live in `entitySummary[entity].detail.hero.stats`; their field
+metadata and values use the same field model and detail read as the rest of the
+page. No separate summary query or entity-specific stat map is needed.
+
+`detail.hero.chart: { kind: "monthlyExpenseSpend", viewKey }` selects an existing
+connection view (or `relation:<key>`). Every path must end at Expense. The
+`entity.monthlyExpenseSpend` read returns the current household calendar month
+and eleven predecessors, oldest first, zero-filled. It sums distinct live actual
+Expense costs (including credits), rounds dollars to cents after summing, and
+excludes planned lines. Location charts describe stored products' expense
+history through the declared connection, not expenses incurred at that location.
+
+`detail.activityRelations: [{ relation, dateField }]` opts traversable many
+relations into `entity.detailActivity`. The date must be a stored date or
+timestamp on the target; undated records are absent. Audits of the source record
+join the selected records before sorting and cursor pagination. The entity filter
+applies to both record and change events. Record ids deduplicate multiple paths;
+only Expense events carry `amountCents`. Cursors preserve database timestamp
+precision and use the event id to break ties. Data-only web consumers use
+`useMonthlyExpenseSpend` and `useDetailActivity` in
+`apps/web/src/entity/entity-detail/use-detail-data.ts`.
+
 ## Declaration contracts
 
 Compiled default fact sections reuse the declaration's edit groups, with

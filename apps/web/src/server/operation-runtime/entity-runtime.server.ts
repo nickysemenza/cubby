@@ -25,6 +25,10 @@ import {
   entityBrowserMutationResultSchema,
 } from "~/server/entity-kernel/contracts";
 import { listEntityRecords } from "~/server/entity-kernel/repo/entity-records";
+import {
+  getDetailActivity,
+  getMonthlyExpenseSpend,
+} from "~/server/generic/entity-detail/repo/detail-data";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/generic/entity-graph/repo/entity-graph-explore";
 import { getEntityGraphPaths } from "~/server/generic/entity-graph/repo/entity-graph-paths";
@@ -95,6 +99,9 @@ export const entityFilterOptionsHandlers = implementOperationDomain(
 export const entityGraphHandlers = implementOperationDomain(
   entityGraphContract,
   {
+    monthlyExpenseSpend: (context, input) =>
+      getMonthlyExpenseSpend(context.db, input),
+    detailActivity: (context, input) => getDetailActivity(context.db, input),
     records: (context, input) => listEntityRecords(context.db, input),
     connectedRecords: (context, input) =>
       getConnectedRecords(context.db, input),
