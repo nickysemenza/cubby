@@ -211,17 +211,18 @@ export function AiFundingSettings() {
                     : "ChatGPT plan usage limit reached; ChatGPT didn’t say when it resets"}
                 </p>
                 <Button
+                  variant="outline"
+                  nativeButton={false}
                   render={
                     <a
-                      aria-label="Manage usage"
                       href={CHATGPT_USAGE_URL}
                       target="_blank"
                       rel="noreferrer"
-                    />
+                    >
+                      Manage usage
+                    </a>
                   }
-                >
-                  Manage usage
-                </Button>
+                />
               </Row>
             ) : null}
             {budget.plan.state !== "available" && budget.plan.reason ? (

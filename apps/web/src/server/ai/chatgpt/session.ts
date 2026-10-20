@@ -16,6 +16,24 @@ import { chatGptRequest } from "./transport";
 
 const log = createLogger("chatgpt-plan");
 
+const INVALID_CLIENT =
+  "OpenAI no longer accepts Cubby’s registration — connect again.";
+
+// Leave five seconds after backoff for the retried upstream request to respond.
+const RETRY_HEADROOM_MS = 5000;
+
+function retryDelay(attempt: number, deadlineAt: number): number | null {
+  const delay = [2000, 8000, 30000][attempt];
+  return delay !== undefined &&
+    Date.now() + delay + RETRY_HEADROOM_MS < deadlineAt
+    ? delay
+    : null;
+}
+
+class RevocationNetworkError extends Error {
+  override name = "RevocationNetworkError";
+}
+
 const AUTH = "https://auth.openai.com";
 const TOKEN = `${AUTH}/api/accounts/oauth/token`;
 const API = "https://api.openai.com/v1";
@@ -53,12 +71,6 @@ export interface CredentialStore {
   get(key: string): Promise<StoredCredentialValue | undefined>;
   put(key: string, value: StoredCredentialValue): Promise<void>;
   delete(key: string): Promise<boolean>;
-}
-
-async function checkedJson(response: Response) {
-  if (!response.ok)
-    throw new Error(`OpenAI HTTP ${response.status}: ${await response.text()}`);
-  return response.json();
 }
 
 function permission(scope: string | undefined) {
@@ -160,10 +172,11 @@ export class ChatGptSession {
   dismissWelcome(): Promise<ChatGptStatus> {
     return this.serial(async () => {
       const saved = await this.read();
-      if (saved?.connected)
+      if (saved)
         await this.store.put("connection", {
           ...saved,
-          welcomeDismissed: true,
+          issue: saved.connected ? saved.issue : null,
+          welcomeDismissed: saved.connected ? true : saved.welcomeDismissed,
         });
       return this.status();
     });
@@ -181,6 +194,9 @@ export class ChatGptSession {
         hostId,
         clientId: saved?.clientId ?? null,
         loginHint: saved?.email ?? null,
+        permissionRecovery:
+          saved?.scopes !== undefined &&
+          !saved.scopes.split(" ").includes("chatgpt.tokens.use.direct"),
       };
     });
   }
@@ -188,22 +204,38 @@ export class ChatGptSession {
   async connect(raw: ChatGptAuthorization): Promise<ChatGptStatus> {
     const saved = await this.serial(async () => {
       const input = chatGptAuthorization.parse(raw);
-      const result = tokens.parse(
-        await checkedJson(
-          await this.upstream(TOKEN, {
-            method: "POST",
-            body: new URLSearchParams({
-              grant_type: "authorization_code",
-              client_id: input.clientId,
-              code: input.code,
-              code_verifier: input.verifier,
-              redirect_uri: input.redirectUri,
-              resource: API,
-            }),
-            signal: AbortSignal.timeout(30_000),
-          }),
-        ),
-      );
+      const response = await this.upstream(TOKEN, {
+        method: "POST",
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: input.clientId,
+          code: input.code,
+          code_verifier: input.verifier,
+          redirect_uri: input.redirectUri,
+          resource: API,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        if (refreshFailureCode(body) === "invalid_client") {
+          const previous = await this.read();
+          if (previous?.clientId === input.clientId)
+            await this.store.put("connection", {
+              ...previous,
+              clientId: null,
+              accessToken: null,
+              refreshToken: null,
+              expiresAt: 0,
+              issue: INVALID_CLIENT,
+            });
+          throw new Error(
+            `${INVALID_CLIENT} OpenAI HTTP ${response.status}: ${body}`,
+          );
+        }
+        throw new Error(`OpenAI HTTP ${response.status}: ${body}`);
+      }
+      const result = tokens.parse(await response.json());
       if (!result.scope)
         throw new Error("OpenAI did not return granted scopes");
       permission(result.scope);
@@ -289,7 +321,7 @@ export class ChatGptSession {
             clientId: code === "invalid_client" ? null : saved.clientId,
             issue:
               code === "invalid_client"
-                ? "OpenAI no longer accepts Cubby’s registration — connect again."
+                ? INVALID_CLIENT
                 : "Reconnect ChatGPT in Settings to renew plan access.",
             accessToken: null,
             refreshToken: null,
@@ -372,11 +404,22 @@ export class ChatGptSession {
       if (!saved) return;
       let issue: string | null = null;
       if (saved.refreshToken && saved.clientId) {
+        const deadlineAt = Date.now() + 90_000;
         const signal = AbortSignal.timeout(90_000);
+        const fetchRevocation: typeof fetch = async (input, init) => {
+          try {
+            return await this.upstream(input, init);
+          } catch (error) {
+            throw new RevocationNetworkError(
+              error instanceof Error ? error.message : String(error),
+              { cause: error },
+            );
+          }
+        };
         try {
           const response = await retryWithBackoff(
             async () => {
-              const discovered = await this.upstream(
+              const discovered = await fetchRevocation(
                 `${AUTH}/.well-known/openid-configuration`,
                 { signal },
               );
@@ -386,7 +429,7 @@ export class ChatGptSession {
                 .parse(await discovered.json());
               if (new URL(discovery.revocation_endpoint).origin !== AUTH)
                 throw new Error("Unexpected OpenAI revocation endpoint");
-              return this.upstream(discovery.revocation_endpoint, {
+              return fetchRevocation(discovery.revocation_endpoint, {
                 method: "POST",
                 body: new URLSearchParams({
                   token: saved.refreshToken ?? "",
@@ -399,9 +442,12 @@ export class ChatGptSession {
             {
               signal,
               delayFor: (outcome, attempt) => {
-                const delay = [2000, 8000, 30000][attempt];
-                if (delay === undefined || signal.aborted) return null;
-                if (!outcome.ok) return delay;
+                const delay = retryDelay(attempt, deadlineAt);
+                if (delay === null || signal.aborted) return null;
+                if (!outcome.ok)
+                  return outcome.error instanceof RevocationNetworkError
+                    ? delay
+                    : null;
                 if (outcome.value.status < 500) return null;
                 void outcome.value.body?.cancel();
                 return delay;
@@ -413,8 +459,7 @@ export class ChatGptSession {
               `OpenAI revocation HTTP ${response.status}: ${await response.text()}`,
             );
         } catch (error) {
-          issue =
-            "Cubby cleared its tokens but couldn't confirm OpenAI revoked them; disconnect Cubby in ChatGPT settings to be sure.";
+          issue = `Cubby cleared its tokens but couldn't confirm OpenAI revoked them; disconnect Cubby in ChatGPT settings to be sure. ${scrubErrorMessage(String(error))}`;
           log.warn("plan revocation unconfirmed", {
             error: scrubErrorMessage(String(error)),
           });
@@ -435,12 +480,14 @@ export class ChatGptSession {
     body: GatewayQuery,
     model: string,
     signal?: AbortSignal,
+    deadlineAt = Date.now() + 5 * 60_000,
   ): Promise<Response> {
     signal?.throwIfAborted();
     const saved = await this.active();
     signal?.throwIfAborted();
     const request = (breakpoints: boolean) =>
       JSON.stringify(chatGptRequest(body, model, { breakpoints }));
+    let retries = 0;
     const send = (payload: string) =>
       retryWithBackoff(
         () =>
@@ -455,14 +502,11 @@ export class ChatGptSession {
           }),
         {
           signal,
-          delayFor: (outcome, attempt) => {
-            const delay = [2000, 8000, 30000][attempt];
-            if (
-              delay === undefined ||
-              !outcome.ok ||
-              outcome.value.status !== 503
-            )
+          delayFor: (outcome) => {
+            const delay = retryDelay(retries, deadlineAt);
+            if (delay === null || !outcome.ok || outcome.value.status !== 503)
               return null;
+            retries += 1;
             void outcome.value.body?.cancel();
             return delay;
           },

@@ -84,11 +84,21 @@ describe("ChatGPT credential ownership", () => {
         throw new Error("Missing registration");
       // invalid_client forgets only the mapping. A fresh registration for the
       // verified subject succeeds, while a different subject stays refused.
+      // Reconnecting after removed direct scope must clear permission recovery.
       records.set("connection", {
         ...registered,
+        scopes: "resource.invoke",
+        issue: "Example removed permission",
+      });
+      expect((await session.authorizationHost()).permissionRecovery).toBe(true);
+      records.set("connection", {
+        ...registered,
+        scopes: "resource.invoke",
         clientId: null,
         accessToken: null,
         refreshToken: null,
+        connected: false,
+        issue: "Example unconfirmed revocation warning",
       });
       expect(
         await session.connect({
@@ -98,7 +108,10 @@ describe("ChatGPT credential ownership", () => {
           nonce: "example-nonce-value",
           redirectUri: "http://127.0.0.1:12345/auth/callback",
         }),
-      ).toMatchObject({ connected: true, welcomeDismissed: true });
+      ).toMatchObject({ connected: true, welcomeDismissed: true, issue: null });
+      expect((await session.authorizationHost()).permissionRecovery).toBe(
+        false,
+      );
       records.set("connection", {
         ...registered,
         clientId: null,

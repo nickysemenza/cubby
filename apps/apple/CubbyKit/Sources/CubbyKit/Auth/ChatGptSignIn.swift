@@ -10,7 +10,7 @@
             switch self {
             case .invalidServer: "Cubby must use an HTTPS origin, except a local development server."
             case .invalidCallback: "ChatGPT authorization returned an invalid callback or registration."
-            case .accessDenied: "You declined ChatGPT plan access"
+            case .accessDenied: "You declined ChatGPT plan access."
             case .browserUnavailable: "macOS could not open ChatGPT sign-in."
             case .timedOut: "ChatGPT sign-in timed out."
             }
@@ -70,6 +70,7 @@
             ]
             if host.clientId == nil { values["agent_name_hint"] = "Cubby" }
             if let email = host.loginHint { values["login_hint"] = email }
+            if host.permissionRecovery == true { values["prompt"] = "consent" }
             components.queryItems = values.sorted { $0.key < $1.key }.map {
                 .init(name: $0.key, value: $0.value)
             }

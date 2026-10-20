@@ -63,6 +63,23 @@
             }
         }
 
+        // Consent must be requested only when the saved direct permission was removed.
+        @Test("Only permission recovery requests consent", arguments: [false, true])
+        func permissionRecovery(_ recovery: Bool) throws {
+            let host = try JSONDecoder().decode(
+                ChatGptAuthorizationHost.self,
+                from: Data(
+                    "{\"hostId\":\"urn:uuid:example\",\"clientId\":\"oaiapp_example\",\"permissionRecovery\":\(recovery)}"
+                        .utf8))
+            let attempt = ChatGptAuthorizationAttempt(host: host)
+            let url = try attempt.authorizationURL(
+                redirect: URL(string: "http://127.0.0.1:12345/auth/callback")!)
+            let prompt = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.first {
+                $0.name == "prompt"
+            }?.value
+            #expect(prompt == (recovery ? "consent" : nil))
+        }
+
         @Test("Forged state cannot consume the real loopback callback")
         @MainActor func callback() async throws {
             let listener = try ChatGptLoopbackCallback(state: "expected")

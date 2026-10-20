@@ -70,3 +70,23 @@ describe("ChatGPT inference request ownership", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+// The token owner must receive the same deadline as RPC cancellation so it can
+// return a 503 before an unaffordable backoff erases the provider diagnostic.
+it("passes the request deadline to the token owner", async () => {
+  vi.useFakeTimers();
+  const upstream = vi.fn(async () => new Response("example"));
+  const requests = new ChatGptInferenceRequests(upstream);
+  const deadlineAt = Date.now() + 5000;
+  const response = await requests.infer({}, "gpt-6-sol", {
+    requestId: "example",
+    timeoutMs: 5000,
+  });
+  expect(upstream).toHaveBeenCalledWith(
+    {},
+    "gpt-6-sol",
+    expect.any(AbortSignal),
+    deadlineAt,
+  );
+  await response.text();
+});

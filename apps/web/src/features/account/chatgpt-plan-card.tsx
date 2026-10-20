@@ -75,18 +75,41 @@ export function ChatGptPlanSettings() {
         purchase-import agent. Cubby keeps its current Luna and Sol models.
       </p>
 
-      {budget.data ? (
+      {budget.data && connected && !status.data?.needsReauthorization ? (
         <p className="text-sm text-muted-foreground">
           When your plan’s usage limit or Cubby’s{" "}
           {formatCurrency(budget.data.plan.limitUsd)} per 6-hour plan cap is
-          reached, background work continues on paid billing within{" "}
-          {formatCurrency(budget.data.paid.limitUsd)} per 6 hours.
+          reached, background work continues on paid billing within the
+          household’s {formatCurrency(budget.data.paid.limitUsd)} per 6-hour
+          paid budget.
         </p>
       ) : null}
 
       <Stack gap="md">
         {status.data?.issue ? (
-          <StatusText tone="destructive">{status.data.issue}</StatusText>
+          <Stack gap="sm">
+            <StatusText tone="destructive">{status.data.issue}</StatusText>
+            <Row align="center" gap="sm" wrap>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  <a href={CHATGPT_USAGE_URL} target="_blank" rel="noreferrer">
+                    ChatGPT settings
+                  </a>
+                }
+              />
+              {!connected ? (
+                <Button
+                  variant="outline"
+                  disabled={dismiss.isPending}
+                  onClick={() => dismiss.mutate()}
+                >
+                  Dismiss warning
+                </Button>
+              ) : null}
+            </Row>
+          </Stack>
         ) : null}
         {connected &&
         !status.data?.needsReauthorization &&
@@ -103,11 +126,6 @@ export function ChatGptPlanSettings() {
             >
               Got it
             </Button>
-            {dismiss.isError ? (
-              <StatusText tone="destructive">
-                {getErrorMessage(dismiss.error)}
-              </StatusText>
-            ) : null}
           </Stack>
         ) : null}
         {!hydrated || status.isPending ? (
@@ -146,38 +164,44 @@ export function ChatGptPlanSettings() {
               </Button>
             </Row>
             <p className="text-sm text-muted-foreground">
-              This connection powers the household’s Workers calls. Subscription
-              limits apply. Embeddings and other providers retain their existing
-              billing.
+              {status.data?.needsReauthorization
+                ? "Cubby skips this plan until you reconnect and uses the next available funding source. Subscription-only tasks remain unavailable."
+                : "This connection powers the household’s Workers calls. Subscription limits apply. Embeddings and other providers retain their existing billing."}
             </p>
-            <Row align="center" justify="between" gap="sm" wrap>
-              <a
-                className="inline-flex min-h-11 items-center text-sm underline underline-offset-4"
-                href={CHATGPT_USAGE_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Manage usage
-              </a>
-              <Button
-                variant="outline"
-                disabled={models.isFetching}
-                onClick={() => void models.refetch()}
-              >
-                Refresh models
-              </Button>
-            </Row>
-            <div>
-              <h3 className="mb-2 text-sm font-medium">Available models</h3>
-              <AvailableModels
-                models={models.data}
-                pending={models.isPending}
-                error={models.error}
-                needsReauthorization={
-                  status.data?.needsReauthorization ?? false
-                }
-              />
-            </div>
+            {!status.data?.needsReauthorization ? (
+              <>
+                <Row align="center" justify="between" gap="sm" wrap>
+                  <Button
+                    variant="outline"
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={CHATGPT_USAGE_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Manage usage
+                      </a>
+                    }
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={models.isFetching}
+                    onClick={() => void models.refetch()}
+                  >
+                    Refresh models
+                  </Button>
+                </Row>
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">Available models</h3>
+                  <AvailableModels
+                    models={models.data}
+                    pending={models.isPending}
+                    error={models.error}
+                  />
+                </div>
+              </>
+            ) : null}
           </>
         ) : (
           <Row align="center" justify="between" gap="sm" wrap>
@@ -221,6 +245,11 @@ export function ChatGptPlanSettings() {
             </Row>
           </Stack>
         ) : null}
+        {dismiss.isError ? (
+          <StatusText tone="destructive">
+            {getErrorMessage(dismiss.error)}
+          </StatusText>
+        ) : null}
         {disconnect.isError ? (
           <StatusText tone="destructive">
             {getErrorMessage(disconnect.error)}
@@ -235,21 +264,15 @@ function AvailableModels({
   models,
   pending,
   error,
-  needsReauthorization,
 }: {
   models: z.infer<typeof modelList> | undefined;
   pending: boolean;
   error: Error | null;
-  needsReauthorization: boolean;
 }) {
   return (
     <>
       {" "}
-      {needsReauthorization ? (
-        <StatusText>
-          Reconnect ChatGPT to load models and resume tasks.
-        </StatusText>
-      ) : pending ? (
+      {pending ? (
         <StatusText>Loading available models…</StatusText>
       ) : error !== null ? (
         <StatusText tone="destructive">{getErrorMessage(error)}</StatusText>

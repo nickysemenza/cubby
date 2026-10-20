@@ -31,7 +31,7 @@ export async function chatGptInference(
 }
 
 /**
- * Null only when the plan is not connected. A connected plan's failure throws:
+ * Null when the plan is disconnected or needs reauthorization. Other failures throw:
  * generic callers preserve it. Explicit budgeted research may route a definitive
  * quota refusal through its admitted paid transport before consuming output.
  */
@@ -40,9 +40,17 @@ export async function connectedChatGptInference(
   body: GatewayQuery,
   options: ChatGptCallOptions = {},
 ): Promise<Response | null> {
-  if (!(await plan.status()).connected) return null;
+  const status = await plan.status();
+  if (!status.connected || status.needsReauthorization) return null;
   options.onSelected?.();
-  return inferChatGptPlan(plan, body, options);
+  try {
+    return await inferChatGptPlan(plan, body, options);
+  } catch (error) {
+    // Refresh may discover removed permission or a rejected registration only
+    // after selection. Advance the ladder once that state has been persisted.
+    if ((await plan.status()).needsReauthorization) return null;
+    throw error;
+  }
 }
 
 export async function inferChatGptPlan(

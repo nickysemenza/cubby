@@ -82,6 +82,7 @@ type Inference = (
   body: GatewayQuery,
   model: string,
   signal: AbortSignal,
+  deadlineAt: number,
 ) => Promise<Response>;
 
 /** Request IDs cross RPC; AbortSignals stay with the upstream token owner. */
@@ -91,6 +92,7 @@ export class ChatGptInferenceRequests {
     {
       controller: AbortController;
       timer: ReturnType<typeof setTimeout>;
+      deadlineAt: number;
     }
   >();
 
@@ -104,7 +106,7 @@ export class ChatGptInferenceRequests {
       controller.abort(new Error("ChatGPT inference exceeded its deadline"));
       this.requests.delete(requestId);
     }, timeoutMs);
-    const request = { controller, timer };
+    const request = { controller, timer, deadlineAt: Date.now() + timeoutMs };
     this.requests.set(requestId, request);
     return request;
   }
@@ -123,7 +125,7 @@ export class ChatGptInferenceRequests {
     raw: ChatGptInferenceOptions,
   ): Promise<Response> {
     const options = chatGptInferenceOptions.parse(raw);
-    const { controller, timer } = this.request(
+    const { controller, timer, deadlineAt } = this.request(
       options.requestId,
       options.timeoutMs,
     );
@@ -133,7 +135,12 @@ export class ChatGptInferenceRequests {
     };
     try {
       controller.signal.throwIfAborted();
-      const response = await this.upstream(body, model, controller.signal);
+      const response = await this.upstream(
+        body,
+        model,
+        controller.signal,
+        deadlineAt,
+      );
       return chatGptResponseLifetime(response, controller.signal, finish, () =>
         controller.abort(new Error("ChatGPT inference stream cancelled")),
       );
