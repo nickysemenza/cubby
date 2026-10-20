@@ -43,10 +43,7 @@ test("linked Expense categories display their readable label and transaction exp
     date: "2026-09-10",
     itemizationExpectation: "not_expected",
   });
-  const { id: productId } = await createEntityFixture(page, "product", {
-    name: `${tag} item`,
-    manufacturer: "Synthetic",
-  });
+  // Category coverage counts Expense lines independently of Product links.
   await createEntityFixtures(
     page,
     "expense",
@@ -54,8 +51,6 @@ test("linked Expense categories display their readable label and transaction exp
       name: `${tag} meal`,
       purchaseId,
       cost: -2,
-      productId,
-      productQuantity: -1,
       date: "2026-09-10",
       costType: "materials",
       trade: "other",
