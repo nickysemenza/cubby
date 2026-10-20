@@ -1,0 +1,19 @@
+apps/web/src/ui/common/ledger.css
+  s_9b829d577c7e4c::t_d0633ddf8895b9 174-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "403fa6c48db9ec9e845d5c00eaaf8fbdfc259463",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
