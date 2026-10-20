@@ -48,7 +48,6 @@ import {
   SidebarRailLeaf as RailLeaf,
 } from "../../entity/navigation/sidebar-rail-group";
 import { WorkspaceNavigator } from "../../entity/navigation/workspace-navigator";
-import { domainWayfinding } from "../../ui/navigation/domain-wayfinding";
 import { createInAppHistory } from "../../ui/navigation/in-app-history";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 
@@ -265,8 +264,8 @@ function WorkspaceSidebar({
           onFocus={preloadCommandMenu}
           onTouchStart={preloadCommandMenu}
           className={cn(
-            "size-7 p-0 text-muted-foreground",
-            expanded && "lg:w-full lg:justify-start lg:px-2",
+            "size-7 rounded-lg bg-background p-0 text-muted-foreground",
+            expanded && "lg:h-7.5 lg:w-full lg:justify-start lg:px-2",
           )}
           aria-label="Search"
           title="Search Cubby"
@@ -429,7 +428,7 @@ function SidebarGroup({
 
 /**
  * The expanded rail is a direct route index whose sections fold; collapsed
- * mode keeps the flyout. The domain dot carries the domain mark.
+ * mode keeps the flyout.
  */
 function SidebarExpandedDomainGroup({
   group,
@@ -442,27 +441,17 @@ function SidebarExpandedDomainGroup({
   folded: boolean;
   onToggleFolded: () => void;
 }) {
-  const domain = group.domain ? domainWayfinding(group.domain) : null;
   const routesId = useId();
 
   return (
-    <section className="mt-3" aria-label={group.label}>
+    <section className="mt-2.5" aria-label={group.label}>
       <button
         type="button"
         onClick={onToggleFolded}
         aria-expanded={!folded}
         aria-controls={routesId}
-        className="flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="flex h-6 w-full items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
-        <span
-          className="size-1.5 shrink-0 rounded-full bg-muted-foreground"
-          style={
-            domain
-              ? { backgroundColor: `var(${domain.accentToken})` }
-              : undefined
-          }
-          aria-hidden="true"
-        />
         {group.label}
         <CaretDownIcon
           className={cn(
@@ -510,9 +499,9 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "flex h-6.5 min-w-0 items-center gap-2 rounded-md px-2 text-[0.8125rem] transition-colors hover:bg-muted/60 hover:text-foreground",
-        !active && "text-foreground/80",
-        active && "bg-muted font-medium text-foreground hover:bg-muted",
+        "flex h-7 min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors hover:bg-black/[0.04] hover:text-foreground-strong",
+        active &&
+          "bg-sidebar-accent font-medium text-foreground-strong hover:bg-sidebar-accent",
       )}
     >
       <Icon

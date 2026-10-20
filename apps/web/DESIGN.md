@@ -1,31 +1,31 @@
 ---
 name: Cubby Dense Utility
-description: Dense light desktop workspaces with open sections and continuous record navigation.
+description: Dense, flat, light desktop workspaces with a white working surface, ink controls, and record context beside every list.
 ---
 
 # Design System: Cubby
 
 ## Overview
 
-Cubby is a very dense, light desktop utility. Open content, compact contextual identity, aligned facts, and subtle gray section bands make household records easy to inspect and edit. Mobile web remains usable; native Swift apps own fieldwork. Web has no dark mode.
+Cubby is a very dense, light desktop utility. A flat white working surface, a quiet #FAFAFA sidebar, 1px dividers, aligned facts and tinted status pills make household records easy to scan and edit. Mobile web remains usable; native Swift apps own fieldwork. Web has no dark mode.
 
 **Key Characteristics:**
 
-- Dense desktop workspaces with visible information and actions.
-- One continuous record column beside contents navigation.
-- Restrained color, system typography, and flat structural separators.
+- Dense desktop workspaces with visible information and actions: 13px body, 28px navigation items, 32px table rows.
+- Lists open records in a side inspector; the full record page leads with key numbers, what needs attention, and a merged activity timeline.
+- Restrained color, Inter with Geist Mono figures, and flat 1px separators instead of floating cards.
 
-The canonical token source is `packages/design-tokens/tokens.json` owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
+The canonical token source is `packages/design-tokens/tokens.json` owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme and carries the web workspace palette (white surface, #333 ink, #737373 secondary ink, #EBEBEB hairline, #EDEDED current row, #0077E6 link), which overrides the shared light colors on web only. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
 
 ## Colors
 
 ### Primary
 
-Ink identifies primary controls and current navigation, with light labels. Citron is a sparse attention signal or selected-row wash; it never means success, warning, or domain identity.
+Near-black ink (#202020) fills primary controls, with light labels. Blue (#0077E6) is reserved for links, focus rings and batch selection, so blue always means "go there". The current navigation item and the inspected table row use a flat grey (#EDEDED). Citron remains a sparse attention mark for needs-input steps; it never means success, warning, or domain identity.
 
 ### Secondary
 
-Cook, Pantry, Plan, House, and Finance retain declaration-driven domain marks on navigation and record identity. Positive, warning, destructive, info (in progress, running) and neutral-status (not started, none) communicate condition with text or icons, each with a matching quiet `*-surface` tint.
+Cook, Pantry, Plan, House, and Finance retain declaration-driven domain marks on record identity; the sidebar groups carry no colored dots, so color in the shell always means condition. Positive, warning, destructive, info (in progress, running) and neutral-status (not started, none) communicate condition with text or icons, each with a matching quiet `*-surface` tint.
 
 ### Option roles
 
@@ -37,29 +37,29 @@ Action color marks the outcome of a pending decision: create is blue, link/attac
 
 ### Neutral
 
-Canvas, white surface, gray inset, secondary ink, and hairline borders separate regions without decorating every record. Gray section bands use the shared muted surface.
+White surface, #FAFAFA sidebar, #F5F5F5 hover and inset, secondary ink and #EBEBEB hairlines separate regions without decorating every record.
 
 ## Typography
 
-Use the platform system sans for identity, body, labels, controls, and tables. Hierarchy comes from size and weight. Detail titles use the shared title role; section headings are compact semibold text (13px). Shortcodes use system mono; quantities and money use tabular figures. Stacked table values use a primary line (13px type, 15px line height) and muted secondary line (11px type, 13px line height).
+Inter (self-hosted `@fontsource-variable/inter`) for identity, body, labels, controls, and tables; Geist Mono (`@fontsource-variable/geist-mono`) for shortcodes, money, counts and other tabular figures in tables, timelines and facts. Body text is 13px (`text-sm`), section titles 15px (`text-base`) or compact 13px semibold, page titles 20px semibold, captions 12px. Hierarchy comes from size and weight, never uppercase eyebrows. Key-number strips use 20px semibold Inter with tabular figures. Stacked table values use a primary line (13px type, 15px line height) and muted secondary line (11px type, 13px line height).
 
 ## Layout
 
 The desktop shell has a collapsible navigation sidebar containing global search and create, with contextual identity and actions in the page itself. There is no global desktop command header. Preserve sidebar preferences, search, account, utilities, and Settings. Domain headings fold with persisted preferences; counts remain quiet tabular text. The modeless inspector is direct record context, with a sheet at intermediate widths and full detail navigation on phone. Preserve safe areas, virtual-keyboard behavior, and browser history.
 
-Detail content is one scrolling column. Keep the sticky, independently scrolling ToC alongside wide content and the same hierarchy in phone “Jump to”; the switch follows available record width (800px). All empty fields and sections stay visible. A small identity thumbnail (48px) sits beside the title; the full gallery appears later in Images. Header actions wrap before squeezing identity. Lists retain compact workbench controls and horizontal table overflow rather than horizontal page overflow. Ownership evidence uses the shared RecordList in one content column.
+A list row opens the record in the side inspector (J/K steps through rows, Enter opens the full page). The full detail page stacks: identity header, a key-numbers strip (up to four declared `detail.hero.stats` plus the declared monthly spend chart), then three columns on wide screens — the contents index, a center column with Needs you (suggestions, quality findings and declared workflow prompts in one block that reserves its space while loading) above the merged Activity timeline and the declared sections, and a right column of compact facts and section status. Below the three-column width the columns stack in that order, and the index becomes the phone “Jump to”. All empty fields stay visible as quiet "Add…" values; wide fact sections reflow into two columns. Field info icons appear on row hover or focus; a row with a quality finding keeps a visible marker. A small identity thumbnail (48px) sits beside the title; the full gallery appears later in Images. Header actions wrap before squeezing identity. Lists retain compact workbench controls and horizontal table overflow rather than horizontal page overflow. Ownership evidence uses the shared RecordList in one content column.
 
 Settings and long analytical workspaces (expense analytics, portfolio analytics, and cash flow) use `IndexedSections`: a continuous column with sticky contents navigation at 800px available width and phone “Jump to”, stable section hashes that preserve search parameters, and mounted drafts. Embedded expense analytics stays inside the record’s existing contents navigation. Keep controls and summaries above the indexed body. Settings groups connections, mail and purchases, household access, and maintenance; connection diagnostics remain behind an explicit disclosure. Use tabs for distinct workflows rather than sections of the same page.
 
-Today/Home uses open dashboard frames and shared section bands. Current work leads, household context follows, and exploration stays behind disclosure. Summaries report existing query values; never invent progress scores, risk predictions, or AI panels.
+Today/Home uses open dashboard sections separated by hairlines. Current work leads, household context follows, and exploration stays behind disclosure. Summaries report existing query values; never invent progress scores, risk predictions, or AI panels.
 
 ## Elevation & Depth
 
-Resting page and detail sections are open and flat, separated by tone and hairlines. Section headings use a subtle gray band rather than enclosing every section in a card. Floating overlays retain the shared overlay shadow; pinned table boundaries retain their functional edge treatment. Motion explains state, respects reduced motion, and stays immediate for frequent search, navigation, and table work. Do not add page-load or media entrance animation.
+Resting page and detail sections are open and flat, separated by 1px hairlines and whitespace. Section headings are plain semibold text; no gray bands and no cards around resting content. Rounded, shadowed containers are reserved for things that float: the inspector, popovers, menus and dialogs. Floating overlays retain the shared overlay shadow; pinned table boundaries retain their functional edge treatment. Motion explains state, respects reduced motion, and stays immediate for frequent search, navigation, and table work. Do not add page-load or media entrance animation.
 
 ## Shapes
 
-Web controls, chips and panels use their shared token radii. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Images use a faint neutral outline.
+Web controls use 8px radii (30px tall buttons, 28px navigation items), chips 6px (20px tall), floating panels 12px. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Images use a faint neutral outline.
 
 ## Components
 
@@ -302,7 +302,7 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 
 ### Do:
 
-- **Do** keep all declared empty fields and sections visible, with usable actions.
+- **Do** keep all declared empty fields visible as quiet "Add…" values, with usable actions.
 - **Do** preserve continuous section navigation, mounted drafts, and URL history.
 - **Do** use shared page, heading, ledger, table, and control primitives.
 - **Do** keep Edit and the main workflow visible and overflow actions keyboard accessible.
@@ -310,7 +310,8 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 ### Don't:
 
 - **Don't** restore the global desktop header, rounded detail title card, or duplicate Overview gallery.
-- **Don't** split detail sections into desktop columns or substitute tabs for continuous content.
+- **Don't** substitute tabs for continuous record content, or wrap resting sections in cards.
+- **Don't** make table rows taller than 32px; a second line under a title is opt-in per table where it carries real context.
 - **Don't** use decorative cards, invented metrics, or unrelated placeholder illustrations to fill space.
 - **Don't** trade readable text, visible focus, or phone touch targets for density.
 
