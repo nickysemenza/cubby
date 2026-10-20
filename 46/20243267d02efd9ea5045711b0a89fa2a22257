@@ -1,0 +1,83 @@
+apps/web/cloudflare.config.ts
+  s_359d51740d6cee::t_be3008f225f6f4 8,12-27
+apps/web/src/entity/entities.tsx
+  s_6db2f90a3878ac::t_7f1ef1d41e429e 45,659-660,674-677
+apps/web/src/entity/navigation/application-directory.tsx
+  s_6db2f90a3878ac::t_9cf249f6e24b7f 147
+apps/web/src/entity/platform/entity-manifest-grid.tsx
+  s_6db2f90a3878ac::t_b72721ad84885a 118
+apps/web/src/features/tools/tool-gallery-page.tsx
+  s_6db2f90a3878ac::t_2dba79f94943db 182,397,655,673,957
+apps/web/src/lib/auth.ts
+  s_6db2f90a3878ac::t_cf7169cb44a230 26-28,96-107
+apps/web/src/lib/workflows/run-workflows.ts
+  s_6db2f90a3878ac::t_0af18a46d3ea68 1-2,4-5
+apps/web/src/server/entity-kernel/repo/repository.ts
+  s_27c27917d3f17b::t_d1130dbfd6a5c2 377-426
+apps/web/src/server/workflows/runs/launcher.ts
+  s_9b829d577c7e4c::t_b2c242860aea8e 2
+apps/web/src/ui/data-table/rendered-column-fit.preview.test.tsx
+  s_6db2f90a3878ac::t_f5bb770c18e8e1 312-331,333-339
+apps/web/DESIGN.md
+  s_6db2f90a3878ac::t_e82d54f9d9b90b 24,28,36
+apps/web/src/entity/components/entity-identity-mark.unit.test.tsx
+  s_359d51740d6cee::t_93fa61c168a5d5 14
+apps/web/src/entity/components/record-mark.unit.test.tsx
+  s_359d51740d6cee::t_461e35760505cf 47,89
+apps/web/src/entity/navigation/sidebar-rail-group.tsx
+  s_359d51740d6cee::t_73be4cbe3cef31 62-64,66
+apps/web/src/entity/navigation/workspace-navigator.tsx
+  s_359d51740d6cee::t_40072ec653ed94 113,115
+apps/web/src/features/design/sections/basics-section.tsx
+  s_359d51740d6cee::t_43d0f47c29bc4f 40-45,57,60,62-67
+apps/web/src/features/design/sections/records-section.tsx
+  s_359d51740d6cee::t_2dae835d5020a4 45-46
+apps/web/src/features/project/project-schedule-model.ts
+  s_359d51740d6cee::t_4f401dac8e4d24 14,16,22
+apps/web/src/lib/workflows/run-workflows.json
+  s_6db2f90a3878ac::t_c19bcca7341c2b 1-17
+apps/web/src/styles.css
+  s_6db2f90a3878ac::t_3f497c56b34b92 5-6,278,280-284
+apps/web/tests/e2e/filters-menu.spec.ts
+  s_9b829d577c7e4c::t_65082945218819 28-30,32-43,45-48,279-281,369-371,373-382,385,387
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4620243267d02efd9ea5045711b0a89fa2a22257",
+  "prompts": {},
+  "sessions": {
+    "s_27c27917d3f17b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15af5-d3a7-72c3-b5f3-79f2f2d292b7",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_6db2f90a3878ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15af6-15b5-7b32-8c83-1635aa743f3c",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
