@@ -481,7 +481,7 @@ test("list pills accept immediately without unloading another row's suggestion",
   });
   await gotoAuthenticatedPage(
     page,
-    `/products?search=${encodeURIComponent(prefix)}`,
+    `/products?q=${encodeURIComponent(prefix)}`,
   );
   const table = page.getByRole("table", { name: /Products table/i });
   const first = table.getByRole("row").filter({ hasText: names[0] });

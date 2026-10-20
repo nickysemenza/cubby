@@ -653,7 +653,10 @@ test("suggests an existing variant and previews every merge decision for a creat
     .click();
   await page.locator(`a[href*="candidate=${existing.id}"]`).click();
   await expect(page).toHaveURL(
-    /suggestions\?family=product_pair&record=product:/,
+    (url) =>
+      url.pathname === "/suggestions" &&
+      url.searchParams.get("family") === "product_pair" &&
+      url.searchParams.get("record") === `product:${createdId}`,
   );
   await expect(page.getByText(candidateName).first()).toBeVisible();
   await expect(page.getByText(evidence)).toBeVisible();

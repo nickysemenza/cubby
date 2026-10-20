@@ -44,10 +44,7 @@ test("RTable connection review binds the chosen Expense and settles both endpoin
   const saved = () =>
     readExpense(page, line.id, z.object({ productId: z.string().nullable() }));
   expect((await saved()).productId).toBeNull();
-  await gotoAuthenticatedPage(
-    page,
-    `/products?search=${encodeURIComponent(name)}`,
-  );
+  await gotoAuthenticatedPage(page, `/products?q=${encodeURIComponent(name)}`);
   const row = page.getByRole("row").filter({ hasText: name });
   await row
     .getByRole("button", { name: "1 pending suggestion", exact: true })
@@ -99,10 +96,7 @@ test("Purchase title column exposes inverse acquisition review", async ({
       unknowns: ["Amount and quantity remain unknown"],
     },
   });
-  await gotoAuthenticatedPage(
-    page,
-    `/purchases?search=${encodeURIComponent(name)}`,
-  );
+  await gotoAuthenticatedPage(page, `/purchases?q=${encodeURIComponent(name)}`);
   const row = page.getByRole("row").filter({ hasText: name });
   await row
     .getByRole("button", { name: "1 pending suggestion", exact: true })
