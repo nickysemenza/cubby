@@ -1,0 +1,23 @@
+apps/web/src/features/project/project-portfolio-analytics-view.tsx
+  s_359d51740d6cee::t_c54bdc68a153b6 47-53
+apps/web/tests/e2e/gmail.input-first-settlement.spec.ts
+  s_359d51740d6cee::t_7be11e1d7263cc 231-236
+docs/entities.md
+  s_359d51740d6cee::t_6c47576ee6670c 443-444
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cc5306f6fd626eeb177d9d5bd62f8020c2d51f55",
+  "prompts": {},
+  "sessions": {
+    "s_359d51740d6cee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15a5b-cd3e-7de2-9758-1362bd955be4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
