@@ -57,7 +57,7 @@ function host(storage: DurableMemoryStorage, opened = (_pi: Harness) => {}) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("pi session recovery", () => {
-  it("reopens a failed cached session and retains its persisted provider identity", async () => {
+  it("retains persisted provider identity after disposing and reopening a failed session", async () => {
     const storage = new DurableMemoryStorage();
     const harness = host(storage);
     const first = await harness.pi();
@@ -70,6 +70,7 @@ describe("pi session recovery", () => {
     );
     await first.closed;
     storage.failReads = false;
+    await harness.dispose();
     const second = await harness.pi();
     expect(second === first).toBe(false);
     expect(await second.snapshot(ProviderDoc, root.id, context)).toEqual(

@@ -281,8 +281,10 @@ are created or updated by `cf deploy` from the checked-in configuration's Build 
 ### Purchase agent
 
 The purchase agent coordinates import runs inside Worker `cubby`: an Agents
-SDK `Agent` hosting a pi-durable conversation through `PiHarness`. Its
-checked-in configuration is part of `apps/web/cloudflare.config.ts`:
+SDK `Agent` hosting a pi-durable conversation through `PiHarness`. It uses the
+upstream lifecycle: a failed cached session requires explicit disposal or Durable
+Object recreation before reopening; Cubby does not override the SDK's cache.
+Its checked-in configuration is part of `apps/web/cloudflare.config.ts`:
 
 - SQLite Durable Object class `PurchaseImportRunAgent` (binding
   `PURCHASE_IMPORT_RUN`), one instance named `import-run:<Run.id>` or
@@ -999,6 +1001,9 @@ The production Cloudflare configuration owns Workers Observability trace persist
 and sampling. Cloudflare is the only trace
 destination; no Jaeger, Grafana Tempo, or Sentry trace exporter is configured.
 Sentry continues to capture errors on web, Apple, and auxiliary Workers.
+The web build excludes Sentry tracing and SDK debug statements through the
+upstream bundler options; error capture, raw application diagnostics, and source
+maps remain enabled.
 
 Worker logs also reference the account-level `grafana-logs` destination for
 Grafana Cloud Loki. The calendar-test Worker is a local test harness and does

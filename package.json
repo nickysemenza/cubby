@@ -55,11 +55,11 @@
   "devDependencies": {
     "@oxlint/plugins": "1.88.0",
     "@redocly/cli": "^2.64.0",
-    "@tanstack/router-generator": "1.167.44",
+    "@tanstack/router-generator": "1.167.45",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "@types/node": "^26.6.5",
     "@types/proper-lockfile": "^4.1.4",
-    "agent-device": "0.21.28",
+    "agent-device": "0.21.29",
     "concurrently": "^10.0.6",
     "knip": "^6.41.0",
     "lint-staged": "^17.6.0",

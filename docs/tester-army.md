@@ -94,28 +94,16 @@ Model calls, tokens, reported cost, and timings are evidence, not a promise of
 equal reliability or savings. The existing deterministic simulator product-edit
 journey must also pass after the agent-device upgrade.
 
-The CLI and mobile SDK share patched `agent-device` through a workspace
-override. Its iOS runner stops inspecting windows after finding a usable one
-and avoids retaining full snapshot responses in its command journal. Hosted
-startup and journey timings determine whether these changes improve this lane.
-
-The pinned `agent-device` patch preserves the macOS infinite-bounds guard and
-ignores an empty Toolbar whose bounds equal its entire enclosing panel during
-occlusion checks, including flat iOS floating-bar nodes covering at least 95%
-of the window width and 85% of its height. SwiftUI sheets expose that phantom Toolbar alongside their
-form content; treating it as an opaque overlay blocks semantic field editing.
-Toolbars with controls or smaller bounds still block covered targets. The iOS
-rename journey exercises this regression through real semantic agent actions.
-
-The patch also keeps text entry on the input that was tapped. The runner binds a
-coordinate-chosen or tapped input by query index; when focusing it opens the
-keyboard or scrolls the form, that index resolves to a neighboring input, and
-XCTest then typed into an unfocused field until the runner watchdog fired (a
-Product's external-ID Source resolved to URL; External id to ISBN). The runner
-now re-queries such an input by its accessibility identifier when that is unique,
-which stays bound to the same input. The runner's focused-input lookup cannot
-recover it: it returns nil on iOS. The external-ID and recipe-line journeys
-exercise it.
+The CLI and mobile SDK share the upstream `agent-device` release through a
+workspace override. Native journeys validate that stock driver; Cubby does not
+modify its snapshot occlusion, input focus, or remote-element handling. Upstream
+limitations in these paths are test outcomes, not locally patched behavior.
+A full-panel empty SwiftUI Toolbar can block visible fields in upstream occlusion
+checks, and keyboard-driven form scrolling can retarget an index-bound input.
+The rename, external-ID, and recipe-line journeys exercise these risks.
+A scroll-until match can still sit beneath the native tab bar. Use paced,
+settled gestures to bring the row clear without momentum carrying it offscreen;
+keep the stock driver's occlusion check enabled.
 
 ## Configuration and commands
 
@@ -175,7 +163,7 @@ Preflight checks a real Jev choice and the text tier's image/function-call
 capability before builds or test services. Missing credentials fail early.
 Bundles name both models; exact database read-backs decide correctness.
 
-Compatible SDK versions and the shared `agent-device` patch are owned by
+Compatible SDK versions and the shared `agent-device` release are owned by
 `apps/web/package.json`, `pnpm-workspace.yaml`, and the lockfile. Paid hosted
 engines are not installed.
 
