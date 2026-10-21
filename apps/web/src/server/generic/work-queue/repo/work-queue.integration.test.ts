@@ -15,16 +15,13 @@ import type { z } from "zod";
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import {
-  assessment,
-  expense,
-  run,
-  runFinding,
-  assessmentState as suggestion,
-} from "~/server/db/schema";
+import { assessment, expense, run, runFinding } from "~/server/db/schema";
 import * as connections from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { publishAssessment, publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
+import {
+  publishAssessment,
+  publishFieldAssessment,
+} from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
