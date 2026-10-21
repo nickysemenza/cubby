@@ -18,7 +18,6 @@ import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { TrayIcon } from "@phosphor-icons/react/dist/csr/Tray";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
-import { useQueries } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
   type MouseEvent,
@@ -569,7 +568,7 @@ function WorkQueue() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [currentHref, navigate]);
 
-  const tabCounts = useViewCounts(buildQueueFilters(tableState));
+  const tabCounts = list.pages?.[0]?.meta.viewCounts;
   const sentinelRef = useInfiniteScrollSentinel(list.infiniteScroll, "600px");
   const isLoading = useHydratedLoading(list.isLoading);
   const isTransitioning = list.infiniteScroll.isTransitioning;
@@ -646,7 +645,7 @@ function WorkQueue() {
             >
               {VIEW_TABS.map((tab) => {
                 const active = tab.view === view;
-                const count = tabCounts.get(tab.view ?? "all");
+                const count = tabCounts?.[tab.view ?? "all"];
                 return (
                   <button
                     key={tab.label}
@@ -780,30 +779,6 @@ function WorkQueue() {
       />
       <PreviewSheet />
     </div>
-  );
-}
-
-/**
- * Each view's count under the current filters: the queue's own total for
- * that view, read one row deep so no tab's figure is a client estimate.
- */
-function useViewCounts(filters: QueueFilters) {
-  const results = useQueries({
-    queries: VIEW_TABS.map((tab) =>
-      workQueue.list.queryOptions(
-        workQueueHouseholdInput.parse({
-          ...filters,
-          view: tab.view,
-          pageSize: 1,
-        }),
-      ),
-    ),
-  });
-  return new Map(
-    VIEW_TABS.map((tab, index) => [
-      tab.view ?? "all",
-      results[index]?.data?.meta.totalCount,
-    ]),
   );
 }
 

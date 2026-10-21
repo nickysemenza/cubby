@@ -32,6 +32,7 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
+import { processConnectionRetirementPage } from "~/server/generic/derived-refresh/repo/connection-retirement";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
@@ -496,7 +497,7 @@ describe("connection preparation and publication authority", () => {
     ).toEqual([]);
   });
 
-  it("removes stale field connections from Relations and the household Work aggregate", async () => {
+  it("rejects stale field evidence immediately and retires household Work in the background", async () => {
     const { source, item } = await fixture();
     const publish = await prepareCombinedConnections(
       ctx.db,
@@ -555,7 +556,22 @@ describe("connection preparation and publication authority", () => {
       false,
       ctx.actor,
     );
-    expect(after.items).not.toContainEqual(
+    expect(after.items).toContainEqual(
+      expect.objectContaining({
+        key: "suggestions:field",
+        suggestionFamily: "field",
+      }),
+    );
+    await processConnectionRetirementPage(ctx.db);
+    const retired = await readWorkQueueWith(
+      async () => [],
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({ pageSize: 100 }),
+      false,
+      ctx.actor,
+    );
+    expect(retired.items).not.toContainEqual(
       expect.objectContaining({
         key: "suggestions:field",
         suggestionFamily: "field",

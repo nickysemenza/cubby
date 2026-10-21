@@ -29,6 +29,7 @@ function retirementCandidatesWhere(
   return and(
     eq(assessmentState.active, true),
     sql`((${assessmentState.family}=${assessmentFamily.enum.field} AND ${assessmentState.status}=${suggestionStatus.enum.pending}
+      AND NOT (${assessmentState.data} ? 'connectionEvidence')
       AND ${assessmentState.entity}=${subject.entityKind} AND ${assessmentState.recordId}=${subject.entityId}::uuid
       AND ${assessmentState.field}=ANY(ARRAY[${sql.join(
         fields.map((field) => sql`${field}`),

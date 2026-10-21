@@ -13,6 +13,7 @@ import {
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { processConnectionRetirementPage } from "~/server/generic/derived-refresh/repo/connection-retirement";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readRecordWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import {
@@ -96,7 +97,7 @@ describe("connection application through generic Feedback", () => {
       first,
     );
   });
-  it("hides stale candidates from Work before pagination", async () => {
+  it("retires stale Work candidates in the background before counting and pagination", async () => {
     const item = await createProduct(
       ctx.db,
       makeProductInput({ name: "Synthetic stale wrench" }),
@@ -133,7 +134,19 @@ describe("connection application through generic Feedback", () => {
       false,
       ctx.actor,
     );
-    expect(work.items).not.toContainEqual(
+    expect(work.items).toContainEqual(
+      expect.objectContaining({ key: `connection:${item.id}` }),
+    );
+    await processConnectionRetirementPage(ctx.db);
+    const retired = await readRecordWorkQueueWith(
+      async () => [],
+      ctx.db,
+      null,
+      item.id,
+      false,
+      ctx.actor,
+    );
+    expect(retired.items).not.toContainEqual(
       expect.objectContaining({ key: `connection:${item.id}` }),
     );
   });

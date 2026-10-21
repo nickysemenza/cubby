@@ -1,3 +1,4 @@
+import { assessmentPublication } from "@cubby/schemas/assessment";
 import { dataCheckMessage } from "@cubby/schemas/data-quality";
 import { testUserId } from "@cubby/schemas/testing";
 import {
@@ -5,20 +6,24 @@ import {
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
+  assessment,
   expense,
   run,
   runFinding,
   assessmentState as suggestion,
 } from "~/server/db/schema";
+import * as connections from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -45,6 +50,89 @@ import {
 // results, declaration order and the one shared Project-attention snapshot.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
+
+  // Listing must not reconstruct every pending connection's evidence before
+  // pagination. Background retirement owns display freshness; apply still fences it.
+  it("lists stored pending connections without synchronous freshness reconstruction", async () => {
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic queue connection" }),
+      ctx.actor,
+    );
+    const line = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic connection charge",
+      trade: "electrical",
+      costType: "tools",
+      cost: 20,
+    });
+    const proposal = await connections.publishEntityConnection(ctx.db, {
+      relation: "product-expense",
+      source: { entityKind: "product", entityId: item.id },
+      target: { entityKind: "expense", entityId: line.output.id },
+      label: "Synthetic acquisition",
+      evidence: { reasons: [], contradictions: [], unknowns: [] },
+    });
+    const [original] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    if (!original) throw new Error("Synthetic connection assessment missing");
+    // Removing read-time reconstruction must retain the served-only gate:
+    // an unserved trial is not household work, even with identical evidence.
+    await publishAssessment(
+      ctx.db,
+      assessmentPublication.parse({
+        ...original,
+        publicationKey: "synthetic-unserved-queue-trial",
+        served: false,
+      }),
+    );
+    await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: "synthetic-inactive-guarded-field",
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: "expense",
+          recordId: line.entityId,
+          field: "productId",
+        },
+        judgment: { value: item.id },
+        fingerprint: "synthetic-inactive-field",
+        producer: null,
+        evidence: {},
+      },
+      {
+        active: false,
+        suggestedValue: item.id,
+        data: { connectionEvidence: original.evidence },
+      },
+    );
+    const expensive = vi
+      .spyOn(connections, "readEntityConnectionsBatch")
+      .mockRejectedValue(
+        new Error("Synthetic full-population evidence rebuild"),
+      );
+    try {
+      const page = await readWorkQueue(
+        ctx.db,
+        null,
+        workQueueHouseholdInput.parse({ source: "suggestion", pageSize: 1 }),
+        false,
+      );
+      expect(page.items).toContainEqual(
+        expect.objectContaining({
+          key: "suggestions:recommendation",
+          reason: "1 pending connection suggestion",
+        }),
+      );
+      expect(expensive).not.toHaveBeenCalled();
+      expect(page.meta.totalCount).toBe(1);
+    } finally {
+      expensive.mockRestore();
+    }
+  });
 
   const merchandiseOrder = async (prefix: string) => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
@@ -170,6 +258,17 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     expect(automatic.items).toEqual([]);
     expect(automatic.meta.totalCount).toBe(0);
     const review = await read({ query: prefix, view: "review" });
+    const all = await read({ query: prefix });
+    const waiting = await read({ query: prefix, view: "waiting" });
+    expect(page.meta).toMatchObject({
+      viewCounts: {
+        all: all.meta.totalCount,
+        research: page.meta.totalCount,
+        automatic: automatic.meta.totalCount,
+        review: review.meta.totalCount,
+        waiting: waiting.meta.totalCount,
+      },
+    });
     expect(review.items.some((row) => row.source === "reconciliation")).toBe(
       true,
     );
