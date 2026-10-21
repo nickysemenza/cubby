@@ -27,7 +27,7 @@ test("settings section navigation preserves drafts, feedback, and diagnostic dis
     "Synthetic merchant draft",
   );
   await index
-    .getByRole("link", { name: "Developer / Diagnostics", exact: true })
+    .getByRole("link", { name: "Developer diagnostics", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Re-run", exact: true }),

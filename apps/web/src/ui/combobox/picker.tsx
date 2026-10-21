@@ -362,8 +362,8 @@ const fieldFrameClass = (compact: boolean | undefined) =>
     "focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30",
     "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 data-[hydrating]:has-[:disabled]:opacity-100",
     compact
-      ? "min-h-7 text-xs/relaxed max-sm:min-h-11 max-sm:text-base"
-      : "min-h-8 text-sm max-sm:min-h-11 max-sm:text-base",
+      ? "min-h-7.5 text-xs/relaxed max-sm:min-h-11 max-sm:text-base"
+      : "min-h-7.5 text-sm max-sm:min-h-11 max-sm:text-base",
   );
 
 /**
@@ -404,10 +404,11 @@ const listClass =
 
 const rowClass = (meta: boolean, custom: boolean) =>
   cn(
-    "relative flex min-h-7 cursor-default items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-sm outline-none select-none max-sm:min-h-11",
+    "relative flex min-h-7.5 cursor-default items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-sm outline-none select-none max-sm:min-h-11",
     "data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[selected]:bg-accent/60",
     "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground",
-    meta && "min-h-6 text-xs font-medium text-slate max-sm:min-h-11",
+    meta &&
+      "min-h-7.5 text-xs font-medium text-muted-foreground max-sm:min-h-11",
     custom && "items-start py-1 whitespace-normal",
   );
 
@@ -714,7 +715,7 @@ function SearchPickerPopup<TId extends string>({
             <button
               type="button"
               aria-label={clearLabel}
-              className="flex min-h-7 w-full shrink-0 items-center gap-2 border-b border-[var(--border)] px-2.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground max-sm:min-h-11"
+              className="flex min-h-7.5 w-full shrink-0 items-center gap-2 border-b border-[var(--border)] px-2.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground max-sm:min-h-11"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -785,7 +786,7 @@ function SearchPickerPopup<TId extends string>({
             <button
               type="button"
               disabled={isCreating}
-              className="flex min-h-7 w-full shrink-0 items-center border-t border-[var(--border)] px-2.5 text-left text-sm hover:bg-accent disabled:opacity-50 max-sm:min-h-11"
+              className="flex min-h-7.5 w-full shrink-0 items-center border-t border-[var(--border)] px-2.5 text-left text-sm hover:bg-accent disabled:opacity-50 max-sm:min-h-11"
               onClick={handleCreate}
             >
               {isCreating

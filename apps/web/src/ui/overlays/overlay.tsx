@@ -194,7 +194,7 @@ export function Overlay({
               // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to focus and scroll the bounded raw diagnostic.
               tabIndex={0}
               aria-label="Error details"
-              className="mx-4 my-2 max-h-[30dvh] shrink-0 overflow-y-auto overscroll-contain border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-xs [overflow-wrap:anywhere] text-destructive focus-visible:outline-ring"
+              className="mx-4 my-2 max-h-[30dvh] shrink-0 overflow-y-auto overscroll-contain border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm [overflow-wrap:anywhere] text-destructive focus-visible:outline-ring"
             >
               {diagnostic}
             </div>
@@ -210,11 +210,16 @@ export function Overlay({
               variant="outline"
               onClick={cancel}
               disabled={busy}
+              className="h-7.5 max-md:min-h-11"
             >
               {cancelLabel ?? "Cancel"}
             </Button>
             {primary && (
-              <Button {...submitProps} variant={primary.variant}>
+              <Button
+                {...submitProps}
+                variant={primary.variant}
+                className="h-7.5 max-md:min-h-11"
+              >
                 {busy && <Spinner size="sm" aria-hidden="true" />}
                 {submitLabel}
               </Button>

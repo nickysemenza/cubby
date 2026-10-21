@@ -96,8 +96,16 @@ export const auth = betterAuth({
   logger: {
     log(level, message, ...args) {
       // Workers may initialize auth before a request-scoped database exists;
-      // the OAuth provider retries this resource seed on first access.
-      if (level === "error" && message === OAUTH_RESOURCE_SEED_RETRY_MESSAGE)
+      // the OAuth provider retries this resource seed on first access. It
+      // passes the original cause in args, so keep reporting connection,
+      // permission, and every other seed failure.
+      if (
+        level === "error" &&
+        message === OAUTH_RESOURCE_SEED_RETRY_MESSAGE &&
+        args[0] instanceof Error &&
+        args[0].message ===
+          "No database instance available. On CF Workers, wrap the handler with withRequestDb()."
+      )
         return;
       if (level === "error") console.error(`[Better Auth] ${message}`, ...args);
       else if (level === "warn")

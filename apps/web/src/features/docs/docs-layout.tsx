@@ -96,7 +96,7 @@ export function DocsLayout() {
         <DocsNavigation activeSlug={currentSlug} />
       </nav>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 text-sm leading-6 [&_li]:leading-6 [&_p]:max-w-prose [&_p]:leading-6">
         <Outlet />
       </div>
     </div>

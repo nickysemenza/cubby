@@ -72,14 +72,14 @@ function ConnectedAppsPage() {
 
   return (
     <Page variant="list" title="Connected apps">
-      <p className="text-xs text-muted-foreground">
-        Applications you've authorized to reach cubby's MCP API over OAuth.
+      <p className="max-w-prose text-sm text-muted-foreground">
+        Applications you've authorized to reach Cubby's MCP API over OAuth.
         Revoking kills the app's tokens immediately; it can reconnect by signing
         in again.
       </p>
 
       {isLoading ? (
-        <p className="text-xs text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : error ? (
         <Stack gap="sm">
           <ErrorDisplay error={error} />
@@ -88,8 +88,8 @@ function ConnectedAppsPage() {
           </Button>
         </Stack>
       ) : !apps?.length ? (
-        <p className="text-xs text-muted-foreground">
-          Nothing connected. Add cubby as a connector in Claude (or any MCP
+        <p className="max-w-prose text-sm text-muted-foreground">
+          Nothing connected. Add Cubby as a connector in Claude (or any MCP
           client) pointing at <code>/api/mcp</code> to authorize one.
         </p>
       ) : (
@@ -114,7 +114,7 @@ function ConnectedAppsPage() {
                     <div className="font-medium">
                       {app.name ?? "Unnamed client"}
                     </div>
-                    <div className="font-mono text-2xs text-slate">
+                    <div className="font-mono text-2xs text-muted-foreground">
                       {app.clientId}
                     </div>
                   </Stack>
@@ -128,21 +128,21 @@ function ConnectedAppsPage() {
                     ))}
                   </Row>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
+                <TableCell className="text-sm text-muted-foreground">
                   {app.grantedAt ? (
                     <DateDisplay timestamp={app.grantedAt} stacked />
                   ) : (
                     "—"
                   )}
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
+                <TableCell className="text-sm text-muted-foreground">
                   {app.lastActiveAt ? (
                     <DateDisplay timestamp={app.lastActiveAt} stacked />
                   ) : (
                     "never"
                   )}
                 </TableCell>
-                <TableCell className="font-mono text-xs">
+                <TableCell className="font-mono text-sm">
                   {app.activeTokens}
                 </TableCell>
                 <TableCell>

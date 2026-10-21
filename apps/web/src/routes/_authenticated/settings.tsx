@@ -150,7 +150,7 @@ function SettingsPage() {
             sections: [
               {
                 id: "diagnostics",
-                title: "Developer / Diagnostics",
+                title: "Developer diagnostics",
                 icon: WrenchIcon,
                 overflowVisible: true,
                 content: (

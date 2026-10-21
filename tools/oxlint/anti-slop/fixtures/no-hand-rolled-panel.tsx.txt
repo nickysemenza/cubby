@@ -12,3 +12,8 @@ const control = <Button className="rounded-md border" />;
 const panelLink = <Link className="rounded-md border" />;
 const unrounded = <div className="rounded-none border" />;
 const descendants = <div className="[&_pre]:rounded-md [&_pre]:border" />;
+const exclusiveTernary = <div className={active ? "rounded-lg" : "border"} />;
+const exclusiveBuilder = cn(active ? "rounded-lg" : "border");
+const combinedBuilder = cn("rounded-lg", active ? "border" : "bg-muted");
+const combinedTemplate = <div className={`rounded-lg ${active ? "border" : "bg-muted"}`} />;
+const exclusiveTemplate = <div className={`${active ? "rounded-lg" : "border"}`} />;

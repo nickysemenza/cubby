@@ -67,7 +67,7 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           popoverElevationClassName,
-          "bg-popover data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border-[var(--border)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border p-4 text-xs/relaxed duration-150 outline-none",
+          "bg-popover data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border-[var(--border)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border p-4 text-sm/relaxed duration-150 outline-none",
           dialogSizes[size],
           className,
         )}
@@ -81,7 +81,7 @@ function DialogContent({
             render={
               <Button
                 variant="outline"
-                className="absolute top-2 right-2"
+                className="absolute top-2 right-2 max-md:min-h-11 max-md:min-w-11"
                 size="icon-sm"
               />
             }

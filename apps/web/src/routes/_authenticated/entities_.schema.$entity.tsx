@@ -28,6 +28,7 @@ function EntitySchemaPage() {
   return (
     <Page
       variant="list"
+      listChrome="workbench"
       title="Entity schema"
       bodyGutter="standard"
       actions={

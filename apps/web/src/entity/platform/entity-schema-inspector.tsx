@@ -11,6 +11,7 @@ import {
 } from "~/entity/entities";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { cn } from "~/lib/utils";
+import { Facts as SharedFacts } from "~/ui/common/facts";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
 import { Badge } from "~/ui/primitives/badge";
 import { buttonVariants } from "~/ui/primitives/button";
@@ -37,7 +38,7 @@ import {
 const dash = <span className="text-muted-foreground/40">—</span>;
 const cell = "border-b border-border/60 px-2 py-1 align-top";
 const head =
-  "h-7 border-b border-border bg-muted px-2 text-left text-2xs font-medium text-muted-foreground";
+  "h-7 border-b border-border bg-muted px-2 text-left text-sm font-medium text-muted-foreground";
 
 /** Selecting another entity inside the panel keeps the user in the sheet;
  * the full page navigates between schema pages instead. */
@@ -67,7 +68,7 @@ const pageTarget: EntityTarget = (entity) => (
 
 function Heading({ title, count }: { title: string; count?: number }) {
   return (
-    <h3 className="flex items-baseline gap-2 text-xs font-semibold">
+    <h3 className="flex items-baseline gap-2 text-sm font-semibold">
       {title}
       {count !== undefined && (
         <span className="font-mono font-normal text-muted-foreground tabular-nums">
@@ -93,7 +94,7 @@ export function SavedViewChips({ entity }: { entity: Entity }) {
 }
 
 /** A two-column property sheet: label column, value column, hairline rows. */
-function Facts({ entity, wide }: { entity: Entity; wide?: boolean }) {
+function SchemaFacts({ entity, wide }: { entity: Entity; wide?: boolean }) {
   const row = schemaRow(entity, undefined);
   const metadata = metadataFor(entity);
   const route = isBrowserRoutedEntity(entity)
@@ -144,22 +145,18 @@ function Facts({ entity, wide }: { entity: Entity; wide?: boolean }) {
     ],
   ];
   return (
-    <dl
+    <SharedFacts
+      layout="inline"
+      facts={facts.map(([label, value]) => ({
+        label,
+        value,
+        className: "min-w-0 break-words font-mono text-sm",
+      }))}
       className={cn(
-        "grid border-t border-border/60 text-xs",
-        wide && "lg:grid-cols-2 lg:gap-x-6",
+        "grid grid-cols-1 gap-x-6 border-y border-border/60 py-1",
+        wide && "lg:grid-cols-2",
       )}
-    >
-      {facts.map(([label, value]) => (
-        <div
-          key={label}
-          className="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 border-b border-border/60 py-1"
-        >
-          <dt className="text-muted-foreground">{label}</dt>
-          <dd className="min-w-0 font-mono text-2xs/5 break-words">{value}</dd>
-        </div>
-      ))}
-    </dl>
+    />
   );
 }
 
@@ -187,7 +184,7 @@ function Overrides({ entity, full }: { entity: Entity; full?: boolean }) {
     );
   if (!full)
     return (
-      <ul className="border-t border-border/60 text-xs">
+      <ul className="border-t border-border/60 text-sm">
         {overrides.map((override) => (
           <li
             key={override.path}
@@ -210,7 +207,7 @@ function Overrides({ entity, full }: { entity: Entity; full?: boolean }) {
       </ul>
     );
   return (
-    <Table className="w-full table-fixed border-collapse text-xs">
+    <Table className="w-full table-fixed border-collapse text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className={cn(head, "w-[26%]")}>Override path</TableHead>
@@ -275,7 +272,7 @@ function Relations({
       </p>
     );
   return (
-    <Table className="w-full table-auto border-collapse text-2xs">
+    <Table className="w-full table-auto border-collapse text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className={head}>Key</TableHead>
@@ -333,7 +330,7 @@ function Filters({ entity }: { entity: Entity }) {
   if (filters.length === 0)
     return <p className="text-xs text-muted-foreground">No filters.</p>;
   return (
-    <Table className="w-full table-auto border-collapse text-2xs">
+    <Table className="w-full table-auto border-collapse text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className={head}>URL key</TableHead>
@@ -365,7 +362,7 @@ function Filters({ entity }: { entity: Entity }) {
 function DetailSectionsTable({ entity }: { entity: Entity }) {
   const sections = metadataFor(entity).detail.sections;
   return (
-    <Table className="w-full table-auto border-collapse text-2xs">
+    <Table className="w-full table-auto border-collapse text-sm">
       <TableHeader>
         <TableRow>
           <TableHead className={head}>Section</TableHead>
@@ -458,7 +455,7 @@ export function EntitySchemaPanel({
           </Link>
         )}
       </div>
-      <Facts entity={entity} />
+      <SchemaFacts entity={entity} />
       <section className="space-y-1.5">
         <Heading title="Declaration overrides" count={overrides} />
         <Overrides entity={entity} />
@@ -478,7 +475,7 @@ export function EntitySchemaDetail({ entity }: { entity: Entity }) {
   return (
     <div className="space-y-6">
       <Identity entity={entity} />
-      <Facts entity={entity} wide />
+      <SchemaFacts entity={entity} wide />
       <section className="space-y-1.5">
         <Heading
           title="Relations"

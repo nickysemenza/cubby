@@ -47,6 +47,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
                 remove={remove}
                 index={instructionIndex}
                 fieldsLength={fields.length}
+                itemLabel="instruction step"
               />
             </Row>
           ))}
@@ -61,7 +62,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
           onClick={() => append({ instruction: "" })}
         >
           <PlusIcon className="mr-2 size-4" />
-          Add Instruction
+          Add instruction
         </Button>
       </Row>
     </Stack>

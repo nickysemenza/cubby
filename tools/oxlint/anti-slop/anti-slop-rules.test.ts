@@ -460,7 +460,10 @@ test("visual conventions cover JSX, nested builders, CVA variants and template f
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 21],
   );
   assert.deepEqual(linesFor("no-large-radius"), [13, 14]);
-  assert.deepEqual(linesFor("no-shadow-utility"), [15, 16]);
+  assert.deepEqual(
+    linesFor("no-shadow-utility"),
+    [15, 16, 22, 23, 24, 25, 26, 27],
+  );
   assert.deepEqual(linesFor("no-arbitrary-font-size"), [17, 18]);
   assert.deepEqual(linesFor("no-dark-variant"), [19, 20]);
 });
@@ -486,6 +489,6 @@ test("hand-rolled panels flag content blocks, not framed controls or primitives"
   );
   assert.deepEqual(
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1, 2, 3, 12],
+    [1, 2, 3, 12, 17, 18],
   );
 });
