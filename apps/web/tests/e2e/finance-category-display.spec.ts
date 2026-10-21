@@ -525,8 +525,10 @@ test("expense category pills agree with quality for direct, allocated, and missi
     name: `1 more: ${hiddenName}`,
     exact: true,
   });
-  await overflow.focus();
-  await expect(page.getByRole("tooltip")).toHaveText(hiddenName);
+  await overflow.hover();
+  await expect(
+    page.locator('[data-slot="tooltip-content"]').filter({ visible: true }),
+  ).toHaveText(hiddenName);
   const row = page.getByRole("row").filter({ hasText: `${tag} unclassified` });
   await expect(row).not.toContainText("100/100");
 

@@ -10,6 +10,7 @@ import { Picker } from "~/entity/picker/picker";
 import type { FieldSuggestionSource } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
 import { cn } from "~/lib/utils";
+import { useDenseCell } from "~/ui/common/stacked-value";
 import { Button } from "~/ui/primitives/button";
 
 import type {
@@ -20,6 +21,8 @@ import type { CellClipboardSpec } from "../../ui/data-table/cell-clipboard";
 import { CellEditTrigger } from "../../ui/data-table/cell-edit-trigger";
 import { CellEditorOverlay } from "../../ui/data-table/cell-editor-overlay";
 import {
+  CellFrame,
+  CELL_RAIL_BUTTON_CLASS,
   CELL_EDIT_GROUP_CLASS,
   CELL_EDIT_PENCIL_CLASS,
 } from "../../ui/data-table/cell-frame";
@@ -91,6 +94,7 @@ export function EditableEntityCell<TId extends string>({
   );
   const edit = useCellEditState(clipboard, setOptimisticValue);
   const rowActive = useRowActive();
+  const dense = useDenseCell();
 
   const editor = edit.isEditing && (
     <CellEditorOverlay
@@ -113,6 +117,31 @@ export function EditableEntityCell<TId extends string>({
       />
     </CellEditorOverlay>
   );
+
+  if (trigger === "pencil" && dense) {
+    return (
+      <>
+        <CellFrame
+          overlay
+          trailing={
+            <CellEditTrigger
+              ref={edit.triggerRef}
+              onStartEdit={edit.open}
+              clipboard={edit.clipboard}
+              hidePencilIcon
+              aria-label={`Edit ${entityLabel(label).toLowerCase()}`}
+              className={cn(CELL_RAIL_BUTTON_CLASS, "p-0")}
+            >
+              <PencilIcon className="size-3 text-muted-foreground" />
+            </CellEditTrigger>
+          }
+        >
+          {renderValue(displayValue)}
+        </CellFrame>
+        {editor}
+      </>
+    );
+  }
 
   if (trigger === "pencil") {
     return (
