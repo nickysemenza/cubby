@@ -196,8 +196,7 @@ export function ProductExternalIdsField({
     !schema ||
     !collection ||
     !("primary" in collection) ||
-    !collection.primary ||
-    collection.key === "value"
+    !collection.primary
   )
     throw new Error("Identifier controls need declared collection metadata.");
   const labeled =
