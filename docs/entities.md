@@ -1111,7 +1111,11 @@ shown in details also requires one of these display projections. Allocation rows
 keep their Purchase link and server-formatted allocated amount. Structured histories naming other entities
 use `itemsPath` so each party remains navigable beside its server-worded dates;
 do not flatten references into `detailLabelPath` text. Clients print what the record carries;
-none restates the structure. A legacy field override and
+none restates the structure. A generic native list renderer also declares
+`display.labelPath` for scalar fields, using the field's own key when it already
+carries the value. A date or timestamp self-label retains native date
+presentation and formatted spoken text; a composed label from another path is displayed as text.
+A legacy field override and
 a manifest renderer may not claim the same surface; the compiler or registry
 test fails instead of choosing one silently. `control.renderer` follows the
 same contract for form controls. `display.columnId` preserves an existing computed column identity when
