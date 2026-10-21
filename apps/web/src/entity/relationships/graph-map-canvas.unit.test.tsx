@@ -12,7 +12,12 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { graphRefKey } from "./entity-graph-state";
 import { GraphMapCanvas, type GraphMapCamera } from "./graph-map-canvas";
-import { graphMapLayoutInputSchema, placeGraphMap } from "./graph-map-layout";
+import {
+  GRAPH_CARD_WIDTH,
+  GRAPH_CARD_HEIGHT,
+  graphMapLayoutInputSchema,
+  placeGraphMap,
+} from "./graph-map-layout";
 
 // jsdom has no Worker runtime; exercise the real layout through its message boundary.
 class LayoutWorker extends EventTarget {
@@ -91,7 +96,10 @@ it("reorganizes retained positions only when clicked and anchors later expansion
   fireEvent.click(screen.getByRole("button", { name: "Map options" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "Reorganize" }));
   await waitFor(() =>
-    expect(camera.positions[root]).toMatchObject({ x: 0, y: 0 }),
+    expect(camera.positions[root]).toMatchObject({
+      x: -GRAPH_CARD_WIDTH / 2,
+      y: -GRAPH_CARD_HEIGHT / 2,
+    }),
   );
   expect(camera.positions).not.toHaveProperty("purchase:PUR-3456");
   expect(camera.viewport).toEqual({ x: 32, y: 32, zoom: 1 });

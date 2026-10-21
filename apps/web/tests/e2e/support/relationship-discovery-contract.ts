@@ -69,8 +69,7 @@ export function relationshipDiscoveryContract() {
     await showRecords.click();
     await expect(
       records.getByRole("button", {
-        name: `Inspect ${name} supporting expense`,
-        exact: true,
+        name: new RegExp(`^Inspect ${escapeRegExp(name)} supporting expense`),
       }),
     ).toBeVisible();
     await records
