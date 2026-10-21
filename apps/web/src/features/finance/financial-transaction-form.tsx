@@ -17,7 +17,6 @@ import {
   renderIntentField,
   requiredFieldModel,
 } from "~/entity/editing/entity-primitive-fields";
-import { entities, entityDetailParams } from "~/entity/entities";
 import { PickerField } from "~/entity/forms/picker-field";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -161,12 +160,11 @@ export function FinancialTransactionFormFields({
             <span className="text-xs text-muted-foreground">
               Suggested purchases · Showing purchases from{" "}
               <EntityRefLink
-                variant="table"
-                to={entities.vendor.routes.detail}
-                params={entityDetailParams(scopedVendorId)}
-              >
-                {suggested.vendorName}
-              </EntityRefLink>
+                variant="chip"
+                entity="vendor"
+                id={scopedVendorId}
+                name={suggested.vendorName}
+              />
             </span>
             <Button
               type="button"

@@ -66,7 +66,13 @@ function ExpensePurchaseCell({ expense }: { expense: ExpenseOut }) {
     columns,
     getRowId: (row) => row.id,
   });
-  return <RTable table={table} ariaLabel="Expense purchase" />;
+  return (
+    <RTable
+      table={table}
+      ariaLabel="Expense purchase"
+      withoutImages="Fixture: only the Purchase column is under test."
+    />
+  );
 }
 
 let harness: ReturnType<typeof createBrowserTestHarness>;

@@ -32,7 +32,10 @@ import { Description } from "~/ui/primitives/description";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import { getIngredientName } from "../../entity/presentation/recipe-utils";
-import { createActionsColumnBase } from "../../entity/table/column-helpers";
+import {
+  createActionsColumnBase,
+  createImageColumn,
+} from "../../entity/table/column-helpers";
 import RTable from "../../entity/table/table";
 import { useTableColumnLayout } from "../../ui/data-table/column-layout";
 import {
@@ -223,6 +226,21 @@ export const RecipeIngredientList: React.FC<{
   const columnHelper = createCubbyColumnHelper<ScalingRow>();
 
   const columns = createCubbyColumnCollection<ScalingRow>((add) => {
+    add(
+      createImageColumn(columnHelper, {
+        imageRef: (row) =>
+          match(row)
+            .with({ type: "ingredient" }, (r) => ({
+              entityKind: "ingredient" as const,
+              entityId: r.ingredient.id,
+            }))
+            .with({ type: "recipe" }, (r) => ({
+              entityKind: "recipe" as const,
+              entityId: r.recipe.id,
+            }))
+            .exhaustive(),
+      }),
+    );
     add(
       columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
         id: "ing name",

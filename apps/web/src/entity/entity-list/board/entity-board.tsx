@@ -18,7 +18,6 @@ import { useMemo, useState, type ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderCompactFieldValue } from "~/entity/display/entity-display";
-import { entities, entityDetailParams } from "~/entity/entities";
 import { useReportCommands } from "~/entity/entity-detail/report-commands";
 import { entityListFor } from "~/entity/entity-list";
 import {
@@ -567,12 +566,11 @@ function BoardCard({
           </button>
         )}
         <EntityRefLink
-          variant="table"
-          to={entities[entity].routes.detail}
-          params={entityDetailParams(row.id)}
-        >
-          {String(row[entitySummary[entity].titleField] ?? row.id)}
-        </EntityRefLink>
+          variant="chip"
+          entity={entity}
+          id={row.id}
+          name={String(row[entitySummary[entity].titleField] ?? row.id)}
+        />
       </div>
       <dl className="space-y-1">
         {view.cardFields.map((key) => {

@@ -22,6 +22,7 @@ import {
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import {
   createCurrencyColumn,
+  createImageColumn,
   createNameColumn,
 } from "~/entity/table/column-helpers";
 import {
@@ -209,6 +210,11 @@ export function LinkExpensesDialog({
     () =>
       createCubbyColumnCollection<Candidate>((add) => {
         add(buildSelectColumn<Candidate>());
+        add(
+          createImageColumn(helper, {
+            imageRef: (row) => ({ entityKind: "expense", entityId: row.id }),
+          }),
+        );
         add(createNameColumn(helper, "expense", "name", { header: "Expense" }));
         add(
           helper.accessor((row) => row.date, {

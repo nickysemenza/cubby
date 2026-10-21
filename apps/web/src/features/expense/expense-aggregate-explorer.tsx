@@ -650,6 +650,7 @@ function ExpenseAnalyzeOneDimension({
         embedded
         showColumnMenu
         ariaLabel="Expense analysis"
+        withoutImages="Rows are aggregate groups of expenses."
         emptyState="No aggregate buckets match the current ledger filters."
       />
       <ReconciliationNote

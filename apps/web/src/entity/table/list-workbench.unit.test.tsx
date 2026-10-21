@@ -20,6 +20,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
+import { createImageColumn } from "./column-helpers";
 import { ListWorkbench } from "./list-workbench";
 import { useChildListWorkbench } from "./use-child-list-workbench";
 import { useTableState } from "./use-table-state";
@@ -33,6 +34,7 @@ interface TestRow {
 
 const helper = createCubbyColumnHelper<TestRow>();
 const columns = helper.columns([
+  createImageColumn(helper, { entity: "product", getImages: () => [] }),
   helper.accessor("name", {
     header: "Name",
     id: "name",

@@ -97,6 +97,7 @@ function RelatedRecords({
                   {isBrowserRoutedEntity(item.entityKind) ? (
                     <EntityRefLink
                       variant="table"
+                      tone="muted"
                       // SAFETY: the browser-routed guard establishes that this entity has a detail route.
                       to={
                         browserEntityDefinition(item.entityKind).routes

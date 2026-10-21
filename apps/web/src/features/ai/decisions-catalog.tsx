@@ -704,6 +704,7 @@ export function DecisionsCatalog({
         <RTable
           table={table}
           ariaLabel="Decisions"
+          withoutImages="Rows are decision families, not records."
           isLoading={catalog.isLoading}
           error={catalog.error}
           toolbarMode="none"

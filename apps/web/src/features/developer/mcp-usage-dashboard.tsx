@@ -455,6 +455,7 @@ function ToolRosterTable({
     <RTable
       table={table}
       ariaLabel="MCP tool pruning worklist"
+      withoutImages="Rows are MCP tools."
       embedded
       showColumnMenu
       additionalToolbarContent={additionalToolbarContent}
@@ -638,6 +639,7 @@ function ActivityTable({
           ariaLabel={
             toolName ? `Recent calls for ${toolName}` : "Global activity"
           }
+          withoutImages="Rows are MCP calls."
           embedded
           showColumnMenu
           isLoading={query.isLoading}

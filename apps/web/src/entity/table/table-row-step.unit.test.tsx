@@ -46,6 +46,7 @@ function Harness({ onRowClick }: { onRowClick: (id: string) => void }) {
     <RTable
       table={table}
       ariaLabel="Synthetic rows"
+      withoutImages="Fixture: row stepping needs no columns beyond a name."
       currentRowId="row-150"
       onRowClick={(row) => onRowClick(row.id)}
       desktopInspector={<StepButtons />}

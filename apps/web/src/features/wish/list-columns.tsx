@@ -24,6 +24,7 @@ import { rangeMidpoint } from "~/lib/format-range";
 import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/number-format";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { ROW_DENSITY } from "~/ui/data-table/density";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -171,13 +172,15 @@ export const wishListOverride = defineListOverride<
           add(
             columnHelper.display({
               id: "image",
+              size: ROW_DENSITY.rowHeight + 1,
               header: () => (
                 <ImageIcon className="size-3 text-muted-foreground" />
               ),
               enableSorting: false,
               meta: {
+                entityColumnRole: "image",
                 provenance: relationshipFieldProvenance("wish", "candidates"),
-                className: "h-px w-16 overflow-hidden px-0 py-0",
+                className: "h-px w-8 overflow-hidden px-0 py-0",
                 mobile: { slot: "image", priority: -10 },
               },
               cell: (info) => <WishRowCover row={info.row.original} />,
