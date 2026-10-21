@@ -1,5 +1,7 @@
 import type { ExternalIdOut } from "@cubby/schemas/external-id";
 
+import { ProductGtin, productGtinLabel } from "./product-gtin";
+
 export function ProductExternalIds({
   identifiers,
 }: {
@@ -13,11 +15,20 @@ export function ProductExternalIds({
       {identifiers.map((identifier) => {
         const kind =
           identifier.kind === "asin"
-            ? "ASIN"
+            ? "Amazon ASIN"
             : identifier.kind === "gtin_14"
-              ? "GTIN"
+              ? productGtinLabel(identifier.externalId)
               : identifier.kind.replaceAll("_", " ");
         const label = `${identifier.source} · ${kind}: ${identifier.externalId}`;
+        if (identifier.kind === "gtin_14")
+          return (
+            <span
+              key={label}
+              className="inline-flex min-w-0 items-baseline gap-1"
+            >
+              {kind}: <ProductGtin gtin={identifier.externalId} />
+            </span>
+          );
         return identifier.url ? (
           <a
             key={label}

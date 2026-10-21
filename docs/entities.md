@@ -2956,7 +2956,11 @@ A field declared with `collection: { key }` accepts patch items on
 "remove", key, value?, expect?}`. All preconditions are checked before any
 change. Text arrays (Product `aliases`, `tags`) patch in the kernel; Product
 `externalIds` patches through the Product repository, which keeps primary and
-secondary slots, GTIN normalization and global identifier ownership.
+secondary slots, GTIN normalization and global identifier ownership. Canonical
+GTIN digits do not establish the observed UPC/EAN encoding: barcode displays use
+GTIN and preserve canonical digits unless encoding evidence is available. Validated
+book identities may display ISBN-13. Primary and secondary barcode displays share
+one renderer; provider lookup links belong to the applicable lookup workflow.
 
 ## Classification field policies
 
