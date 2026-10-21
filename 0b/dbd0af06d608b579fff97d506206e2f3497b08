@@ -1,0 +1,37 @@
+apps/web/src/entity/table/data-table-toolbar.tsx
+  s_ccb4b815169f0b::t_966f9a2bc8c20f 287-292
+apps/web/src/entity/table/data-table-views.tsx
+  s_ccb4b815169f0b::t_ea13f1f86d15ca 184-242,265-287
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_ccb4b815169f0b::t_2b13cf0479654c 2,12,32,37,54,60-62,81-85,93,114,117,121-122,129,136,143-144,156-162,185-186,188-196,255-258,272-273,279-340,343,348-367,372-373,375-376,383-400,402-406,408-413,417,423-428,430,433,445-451,453,472-475,479,484-494,507-521,528,537,546-548,552,555-556,560-561,565,592-603,613-614,616,618-624,650,652-654,657,659,665-668,670,679,683,687-699,701,706,711-718,722-785,787-788,806,809
+apps/web/src/routes/_authenticated/work-queue.tsx
+  s_ccb4b815169f0b::t_130c0dc5c83cab 14,16,23
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_ccb4b815169f0b::t_a29880553fa764 3,52,274-294
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_ccb4b815169f0b::t_13c0bb80e33090 19,130-131,780-782,904-908,912,980-987,1003,1025
+apps/web/tests/e2e/work-queue.spec.ts
+  s_ccb4b815169f0b::t_d108301add728c 67,180-181,209,224,330-333,345,371,373,436
+docs/guide/work-queue.md
+  s_ccb4b815169f0b::t_ba4db2920760f8 103-104
+packages/schemas/src/work-queue.ts
+  s_ccb4b815169f0b::t_533012fe9b49c9 18,242-248,264-266,283-284,298
+apps/web/DESIGN.md
+  s_ccb4b815169f0b::t_a0837508cbfb76 223-241
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0bdbd0af06d608b579fff97d506206e2f3497b08",
+  "prompts": {},
+  "sessions": {
+    "s_ccb4b815169f0b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dbcd31ce-11f3-4079-ac11-3706d17309fc",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
