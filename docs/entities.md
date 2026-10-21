@@ -2995,7 +2995,8 @@ The shortcut builds a collection add/promotion or targeted remove; it shares
 the collection writer's collision checks and primary repair.
 Find-or-create recovers both database and domain identity conflicts by rereading
 the exact requested GTIN after rollback; explicit create/update still refuses
-collisions. Provider lookups compact formatting while retaining the supplied
+collisions. Provider lookups compact Unicode whitespace and hyphens, matching
+the writer while retaining the supplied
 barcode width, and translate validated book identity to ISBN-13. The native
 specialized barcode control retains ordinary text entry.
 Books inference comes from validated ISBN identity in the collection, with

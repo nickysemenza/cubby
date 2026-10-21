@@ -522,7 +522,7 @@ describe("product create cover-photo warnings", () => {
       entity: "product",
       data: makeProductInput({
         name: "Coverless widget",
-        barcode: "0-88888-88888-0",
+        barcode: "0-88888\u0085-88888-0",
       }),
     });
 
