@@ -48,6 +48,8 @@ Filter/sort SQL-plan matrices use production progressive core reads when
 available, retaining full kernel baselines and unmatched-identity checks.
 `list-read.integration.test.ts` owns complete-row/enrichment equivalence;
 plan probes do not need unrelated media or quality hydration.
+Filter-oracle tests that compare only row identities likewise use core reads;
+retain their real PostgreSQL predicates and expected-ID assertions.
 Reconcile derived inputs once after a mutation boundary before reading several
 fingerprints of that same state, rather than repeating a full reconciliation
 for each read.
