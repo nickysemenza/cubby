@@ -41,6 +41,60 @@ struct EntityRowPresentationTests {
         #expect(presentation.imageURL?.absoluteString == "https://example.invalid/meal.jpg")
     }
 
+    @Test func titleSubtitleUsesPurchaseCaptionAndVendorContextFact() throws {
+        let purchase = EntityCatalog[.purchase]
+        let purchaseRow = try #require(
+            purchase.row(
+                from: [
+                    "id": "PUR-1001", "displayName": "Fixture purchase",
+                    "displayLabel": "Fixture replacement parts", "vendorId": "VEN-1001",
+                    "vendorName": "Fixture supplier",
+                ]))
+        #expect(purchase.presentation.titleSubtitle)
+        #expect(
+            (EntityRowPresentation.titleSubtitle(descriptor: purchase, row: purchaseRow)?.value
+                ?? purchaseRow.subtitle) == "Fixture replacement parts")
+
+        let vendor = EntityCatalog[.vendor]
+        let vendorRow = try #require(
+            vendor.row(
+                from: [
+                    "id": "VEN-1002", "name": "Fixture supplier",
+                    "defaultSpendingCategoryId": "SPC-1002",
+                    "defaultSpendingCategoryName": "Fixture hardware",
+                ]))
+        #expect(vendor.presentation.titleSubtitle)
+        let vendorPresentation = EntityRowPresentation.resolve(
+            descriptor: vendor, row: vendorRow, columns: ["defaultSpendingCategoryId"])
+        #expect(
+            vendorPresentation.facts.contains {
+                $0.id == "defaultSpendingCategoryId" && $0.value == "Fixture hardware"
+            })
+    }
+
+    @Test func composedTitleMovesADeclaredReferenceSuffixToTheSubtitle() {
+        let descriptor = EntityCatalog[.inventory]
+        let title = "Synthetic flour bag · Synthetic pantry shelf"
+        let row = EntityRow(
+            id: "INV-1001", title: title, subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "INV-1001", "displayName": .string(title),
+                "productId": "PRD-1001", "locationId": "LOC-1001",
+                "product": ["id": "PRD-1001", "name": "Synthetic flour bag"],
+                "location": ["id": "LOC-1001", "name": "Synthetic pantry shelf"],
+            ])
+
+        let parts = EntityRowPresentation.titleParts(
+            descriptor: descriptor, row: row, subtitle: "Not recorded")
+
+        #expect(parts.title == "Synthetic flour bag")
+        #expect(parts.subtitle == "Synthetic pantry shelf")
+        #expect(!EntityRowPresentation.isVisibleListFactValue(" Unknown "))
+        #expect(!EntityRowPresentation.isVisibleListFactValue("Not recorded"))
+        #expect(!EntityRowPresentation.isVisibleListFactValue("  "))
+        #expect(EntityRowPresentation.isVisibleListFactValue("Stock"))
+    }
+
     @Test func qualityLeadsSupportingFactsAndDistinguishesUnassessed() {
         let row = EntityRow(
             id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
@@ -50,7 +104,8 @@ struct EntityRowPresentationTests {
             ])
         let presentation = EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
         #expect(presentation.facts.first?.id == "dataQuality")
-        #expect(presentation.facts.first?.value == "75/100 · Needs data")
+        #expect(presentation.facts.first?.value == "Needs data")
+        #expect(EntityRowPresentation.needsData(in: row))
         let category = EntityRow(
             id: "SPC-1001", title: "Synthetic tools", subtitle: nil, imageURL: nil,
             raw: [
@@ -60,6 +115,7 @@ struct EntityRowPresentationTests {
         let unassessed = EntityRowPresentation.resolve(
             descriptor: EntityCatalog[.spendingCategory], row: category)
         #expect(unassessed.facts.first?.value == "Not assessed")
+        #expect(!EntityRowPresentation.needsData(in: category))
     }
 
     /// A Product's owners read comma-joined; only the inherited item carries the marker.
@@ -120,7 +176,7 @@ struct EntityRowPresentationTests {
 
     /// A scored entity's record can itself be unassessed (null score), and an exceptions-only
     /// record must not read as a plain complete 100.
-    @Test func qualityShowsNullScoresAndExceptionsOnlyCompleteness() {
+    @Test func qualityShowsStatusWithoutScores() {
         func quality(_ dataQuality: JSONValue) -> String? {
             let row = EntityRow(
                 id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
@@ -129,10 +185,8 @@ struct EntityRowPresentationTests {
                 .facts.first?.value
         }
         #expect(quality(["score": .null, "status": "not_assessed"]) == "Not assessed")
-        #expect(
-            quality(["score": 100, "status": "complete_with_exceptions"])
-                == "100/100 · Complete with exceptions")
-        #expect(quality(["score": 99, "status": "defect"]) == "99/100 · Defect")
+        #expect(quality(["score": 100, "status": "complete_with_exceptions"]) == "Complete with exceptions")
+        #expect(quality(["score": 99, "status": "defect"]) == "Defect")
     }
 
     @Test func resolvesOnlyDeclaredFactsInMetadataOrder() throws {

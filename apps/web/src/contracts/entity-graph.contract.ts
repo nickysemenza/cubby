@@ -42,12 +42,14 @@ import {
 export const entityGraphContract = defineContract("entity", {
   monthlyExpenseSpend: query({
     mcp: { omit: "client_view" },
+    native: "Native generic detail monthly expense chart",
     input: monthlyExpenseSpendInputSchema,
     output: monthlyExpenseSpendOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   detailActivity: query({
     mcp: { omit: "client_view" },
+    native: "Native generic detail activity timeline",
     input: detailActivityInputSchema,
     output: detailActivityOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },

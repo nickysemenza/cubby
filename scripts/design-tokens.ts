@@ -15,11 +15,6 @@ const assetRoles = {
   Surface: "surface",
   Inset: "inset",
   Hairline: "hairline",
-  Cook: "domain-cook",
-  Pantry: "domain-pantry",
-  Plan: "domain-plan",
-  House: "domain-house",
-  Finance: "domain-finance",
   Positive: "positive",
   Warning: "warning",
   Destructive: "destructive",
@@ -174,7 +169,8 @@ export function renderMetricsSwift(values: Record<string, string>) {
     "",
     "    static func optionColor(_ token: String?) -> Color? {",
     "        switch token {",
-    // Option colors describe domain/condition; pending actions use their assets directly.
+    // Option colors describe condition or category; pending actions use their assets directly.
+    // Domain tokens have no native asset, so a domain-tinted option renders as a neutral chip.
     ...Object.entries(assetRoles)
       .filter(([, role]) => !role.startsWith("action-"))
       .map(

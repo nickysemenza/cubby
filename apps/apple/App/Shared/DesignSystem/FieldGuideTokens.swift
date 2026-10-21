@@ -37,17 +37,6 @@ enum FieldGuideTokens {
     /// Kinds that are not states: cycled in declaration order (`colorizeEnumOptions`).
     static let categoryRamp: [Color] = (1...8).map { Color("Category\($0)") }
 
-    // Domain lines. Marks only — a dot, an icon tint, or a single hairline. Never a fill.
-    static let cookSaffron = Color("Cook")
-    static let pantryGreen = Color("Pantry")
-    static let planViolet = Color("Plan")
-    static let houseCyan = Color("House")
-    static let financeMagenta = Color("Finance")
-
-    /// A category-agnostic chart ramp: a photo category is tinted by its *index* into this array
-    /// (`PhotoCategoryTint`), never by its key, so a category rename never touches this list.
-    static let chartRamp: [Color] = [cookSaffron, pantryGreen, planViolet, houseCyan, financeMagenta]
-
     // Geometry comes from the same source as web CSS.
     static let radiusControl = FieldGuideMetrics.radiusControl
     static let radiusPanel = FieldGuideMetrics.radiusPanel
@@ -90,16 +79,6 @@ enum AppDomain: String, CaseIterable, Identifiable {
     }
 
     var title: String { wayfinding.title }
-
-    var color: Color {
-        switch self {
-        case .house: FieldGuideTokens.houseCyan
-        case .cook: FieldGuideTokens.cookSaffron
-        case .pantry: FieldGuideTokens.pantryGreen
-        case .plan: FieldGuideTokens.planViolet
-        case .finance: FieldGuideTokens.financeMagenta
-        }
-    }
 
     /// The group glyph, used where a domain itself is the subject (a Browse header, a Mac sidebar
     /// row) rather than one entity within it.

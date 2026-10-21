@@ -93,17 +93,19 @@ struct CopyDiagnosticsButton<Payload: Encodable>: View {
 
 /// Layer 6: `RootView`'s bottom strip, one line naming the last request `CubbyAuthMiddleware`
 /// observed through `AppModel.requestTrace`.
-struct RequestTraceStrip: View {
-    let entry: RequestTrace.Entry
+#if DEBUG
+    struct RequestTraceStrip: View {
+        let entry: RequestTrace.Entry
 
-    var body: some View {
-        DevOverlayText("\(entry.operationID) · \(Int(entry.ms))ms · \(entry.status)")
-            .padding(.horizontal, FieldGuideTokens.Space.md)
-            .padding(.vertical, FieldGuideTokens.Space.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.bar)
+        var body: some View {
+            DevOverlayText("\(entry.operationID) · \(Int(entry.ms))ms · \(entry.status)")
+                .padding(.horizontal, FieldGuideTokens.Space.md)
+                .padding(.vertical, FieldGuideTokens.Space.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.bar)
+        }
     }
-}
+#endif
 
 /// Layer 3's per-row diagnostic (`PhotoEntityChooser`/`PhotoRelatedDestinationChooser`): rank
 /// position, the winning `combined` score, and which evidence lane it came from.
@@ -118,8 +120,10 @@ struct PhotoChooserRowDiagnostic: Encodable {
     VStack(spacing: 12) {
         DevOverlayText("142ms · plant")
         CopyDiagnosticsButton { ["ok": true] }
-        RequestTraceStrip(
-            entry: RequestTrace.Entry(operationID: "entity.list", ms: 142, status: 200))
+        #if DEBUG
+            RequestTraceStrip(
+                entry: RequestTrace.Entry(operationID: "entity.list", ms: 142, status: 200))
+        #endif
     }
     .padding()
 }

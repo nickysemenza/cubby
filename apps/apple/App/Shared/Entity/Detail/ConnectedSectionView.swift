@@ -82,7 +82,7 @@ struct ConnectedRecordsSection: View {
     let model: ConnectedRecordsPreviewModel
 
     var body: some View {
-        ContinuousDetailSection(title: "Connected records") {
+        Group {
             if let error = model.error, model.preview == nil {
                 InlineLoadFailure(message: error) { await model.refresh() }
             } else if let preview = model.preview {
@@ -123,13 +123,6 @@ struct ConnectedRecordsPreviewContent: View {
                     }
                     .accessibilityLabel("\(view.totalCount - view.items.count) more \(view.title)")
                 }
-            }
-            let empty = preview.views.filter { $0.totalCount == 0 }.map(\.title)
-            if !empty.isEmpty {
-                Text(
-                    "No connections: \(empty.joined(separator: ", "))"
-                )
-                .font(.caption).foregroundStyle(.secondary)
             }
         }
     }

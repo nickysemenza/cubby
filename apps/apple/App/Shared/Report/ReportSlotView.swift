@@ -430,7 +430,7 @@ private struct ReportScheduleView: View {
                 ForEach(row.segments) { segment in
                     if let end = segment.end {
                         Capsule()
-                            .fill(FieldGuideTokens.planViolet)
+                            .fill(Color.accentColor)
                             .frame(width: max(x(end) - x(segment.start), 6), height: 10)
                             .position(
                                 x: (x(segment.start) + max(x(end), x(segment.start) + 6)) / 2,
@@ -438,7 +438,7 @@ private struct ReportScheduleView: View {
                     } else {
                         Image(systemName: "diamond.fill")
                             .font(.caption2)
-                            .foregroundStyle(FieldGuideTokens.planViolet)
+                            .foregroundStyle(Color.accentColor)
                             .position(x: x(segment.start), y: proxy.size.height / 2)
                     }
                 }

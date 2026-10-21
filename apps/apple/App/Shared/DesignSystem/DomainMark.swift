@@ -1,8 +1,8 @@
 import CubbyKit
 import SwiftUI
 
-/// Where am I? An 8pt dot, or the entity's own glyph tinted, in the domain's line color. Never a
-/// fill and never a status: a green pantry mark is not a success state.
+/// Where am I? An 8pt dot, or the entity's own glyph, in secondary ink. Domains carry no color:
+/// the glyph and the section title identify them, matching the web.
 struct DomainMark: View {
     enum Style {
         case dot
@@ -34,13 +34,13 @@ struct DomainMark: View {
         switch style {
         case .dot:
             Circle()
-                .fill(domain.color)
+                .fill(.tertiary)
                 .frame(width: size, height: size)
                 .accessibilityHidden(true)
         case .symbol:
             Image(systemName: glyph ?? domain.symbol)
                 .font(.system(size: size * symbolScale))
-                .foregroundStyle(domain.color)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
     }
