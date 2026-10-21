@@ -12,6 +12,7 @@ import { entityDetailLink } from "~/entity/entities";
 import { PickerField } from "~/entity/forms/picker-field";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { formatCurrency } from "~/lib/number-format";
+import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   FormWrapper,
@@ -317,18 +318,25 @@ function ReadOnlyCalendarItem({
       <div className="border-y py-2">
         <CalendarItemPresentation item={item} variant="rich" />
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
-        <dt className="text-xs font-medium text-slate">Dates</dt>
-        <dd>
-          {item.startDate} – {item.endDateExclusive}
-        </dd>
-        {item.kind === "expense" && item.cost != null && (
-          <>
-            <dt className="text-xs font-medium text-slate">Amount</dt>
-            <dd>{formatCurrency(item.cost)}</dd>
-          </>
-        )}
-      </dl>
+      <FactsDensityProvider density="compact">
+        <Facts
+          layout="list"
+          facts={[
+            {
+              label: "Dates",
+              value: `${item.startDate} – ${item.endDateExclusive}`,
+            },
+            {
+              label: "Amount",
+              value:
+                item.kind === "expense" && item.cost != null
+                  ? formatCurrency(item.cost)
+                  : undefined,
+              className: "tabular-nums",
+            },
+          ]}
+        />
+      </FactsDensityProvider>
       <p className="text-muted-foreground">{reason}</p>
       <OpenFullRecord item={item} />
     </Stack>

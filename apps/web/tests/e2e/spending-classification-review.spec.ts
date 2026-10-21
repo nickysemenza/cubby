@@ -258,7 +258,7 @@ test("reviews historical item classification and preserves explicit purpose", as
       .getByRole("button");
     if ((await disclosure.getAttribute("aria-expanded")) !== "true")
       await disclosure.click();
-    await expect(popover.getByText("Rule:", { exact: true })).toBeVisible();
+    await expect(popover.getByText("Rule", { exact: true })).toBeVisible();
   }).toPass();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });

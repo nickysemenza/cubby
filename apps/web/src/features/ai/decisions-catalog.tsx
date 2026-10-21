@@ -15,6 +15,7 @@ import RTable from "~/entity/table/table";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
+import { Facts } from "~/ui/common/facts";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createCubbyColumnCollection,
@@ -510,16 +511,15 @@ function DecisionDetail({ row }: { row: DecisionCatalogRow }) {
             chosen per record; Try shows a real one.
           </p>
         ) : (
-          <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-3 gap-y-1 text-xs">
-            {row.options.map((option) => (
-              <div key={option.value} className="contents">
-                <dt className="font-medium">{option.label}</dt>
-                <dd className="text-muted-foreground">
-                  {option.description ?? option.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <Facts
+            layout="list"
+            className="text-xs"
+            facts={row.options.map((option) => ({
+              id: option.value,
+              label: option.label,
+              value: option.description ?? option.value,
+            }))}
+          />
         )}
       </section>
       <section>

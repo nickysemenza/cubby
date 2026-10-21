@@ -23,6 +23,7 @@ import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalo
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
+import { Facts } from "~/ui/common/facts";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
 import { ExternalLinkText } from "~/ui/external-link";
@@ -761,27 +762,29 @@ function ExplanationTechnicalDetails({
       </h3>
       <DisclosureBody className="grid gap-2 pt-2">
         <p className="text-xs leading-5">{data.rule.description}</p>
-        <dl className="grid gap-1 text-xs text-muted-foreground">
-          <div>
-            <dt className="inline">Rule: </dt>
-            <dd className="inline font-mono break-all">
-              {data.rule.id} · r{data.rule.revision}
-            </dd>
-          </div>
-          {z.string().safeParse(data.value).success &&
-          data.interpretation?.result !== data.value ? (
-            <div>
-              <dt className="inline">Result code: </dt>
-              <dd className="inline font-mono">{String(data.value)}</dd>
-            </div>
-          ) : null}
-          <div>
-            <dt className="inline">Evaluated: </dt>
-            <dd className="inline">
-              <DateDisplay timestamp={data.evaluatedAt} />
-            </dd>
-          </div>
-        </dl>
+        <Facts
+          layout="inline"
+          className="text-xs"
+          facts={[
+            {
+              label: "Rule",
+              value: `${data.rule.id} · r${data.rule.revision}`,
+              className: "font-mono break-all",
+            },
+            {
+              label: "Result code",
+              value: String(data.value),
+              className: "font-mono",
+              hide:
+                !z.string().safeParse(data.value).success ||
+                data.interpretation?.result === data.value,
+            },
+            {
+              label: "Evaluated",
+              value: <DateDisplay timestamp={data.evaluatedAt} />,
+            },
+          ]}
+        />
         {data.qualityBreakdown ? (
           <>
             {data.interpretation?.caveats.map((caveat) => (

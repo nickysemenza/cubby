@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
+import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -223,14 +224,16 @@ export function ResolutionExplanation({
         />
       ) : null}
       {stats.length > 0 ? (
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-          {stats.map((stat) => (
-            <div key={stat.label} className="contents">
-              <dt className="text-muted-foreground">{stat.label}</dt>
-              <dd className="min-w-0">{stat.content}</dd>
-            </div>
-          ))}
-        </dl>
+        <FactsDensityProvider density="compact">
+          <Facts
+            layout="list"
+            className="text-xs"
+            facts={stats.map((stat) => ({
+              label: stat.label,
+              value: stat.content,
+            }))}
+          />
+        </FactsDensityProvider>
       ) : null}
       <ResolutionEvidence evidence={evidence} />
     </div>

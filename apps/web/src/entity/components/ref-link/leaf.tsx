@@ -21,6 +21,7 @@ import {
   type EntityDetailRoute,
 } from "~/entity/entities";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
+import { SpendingCategoryPill } from "~/entity/presentation/spending-category-pill";
 import {
   hoverPreviewEntities,
   type HoverPreviewEntity,
@@ -330,6 +331,9 @@ export function ChipRefLink({
       </TableRefLink>
     );
   }
+  // Spending categories have one presentation wherever they are compact.
+  if (compact && entity === "spendingCategory")
+    return <SpendingCategoryPill id={id} label={label} emoji={emoji} />;
   if (compact) {
     const chip = "inline-flex max-w-full min-w-0";
     const text = (

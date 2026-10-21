@@ -1,5 +1,6 @@
 import type { RunDetail } from "~/contracts/run.contract";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
@@ -43,17 +44,21 @@ export function RunFindingActions({
               : "Receipt replacement needs a fresh server review before it can be applied."}
           </p>
           {snapshot ? (
-            <p className="text-xs text-muted-foreground">
-              {[
-                snapshot.date,
-                snapshot.projectName,
-                snapshot.categoryName,
-                snapshot.costType,
-                snapshot.trade,
-                snapshot.notes,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+              {snapshot.categoryName ? (
+                <SpendingCategoryLabel name={snapshot.categoryName} />
+              ) : null}
+              <span>
+                {[
+                  snapshot.date,
+                  snapshot.projectName,
+                  snapshot.costType,
+                  snapshot.trade,
+                  snapshot.notes,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
             </p>
           ) : null}
           {reviewLines.map((line) => (
