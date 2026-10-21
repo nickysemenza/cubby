@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
@@ -1503,7 +1504,7 @@ Rules:
   search: "semantic",
   capabilities: {
     images: {
-      storage: "gallery",
+      storage: imageAssociationStorage.shape.project.value,
       displaySources: [
         {
           relationPath: ["tasks"],

@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
 import { purchasedCategorySummary } from "../product-category-fields";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
@@ -1298,7 +1299,7 @@ export default defineEntity({
   search: "semantic",
   capabilities: {
     images: {
-      storage: "logo",
+      storage: imageAssociationStorage.shape.vendor.value,
       ingress: [
         { kind: "self", routeId: "vendor-logo" },
         {

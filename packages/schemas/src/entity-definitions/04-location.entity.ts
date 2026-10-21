@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { locationReadSchemas } from "../location-fields";
 import { labelField } from "./label-field.js";
 import { defineEntity } from "./definition.js";
@@ -1075,7 +1076,7 @@ Rules:
     search: "semantic",
     capabilities: {
       images: {
-        storage: "gallery",
+        storage: imageAssociationStorage.shape.location.value,
         displaySources: [
           {
             relationPath: ["product"],

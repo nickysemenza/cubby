@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { recipeReadSchemas } from "../recipe-fields";
 import { recipeChildren } from "../child-tables/recipe.js";
 import { defineEntity } from "./definition.js";
@@ -1261,7 +1262,7 @@ export default defineEntity(
     search: "semantic",
     capabilities: {
       images: {
-        storage: "gallery",
+        storage: imageAssociationStorage.shape.recipe.value,
         displaySources: [
           {
             relationPath: ["meals"],

@@ -784,7 +784,10 @@ update route or multi-select delete UI.
 table, bound in `apps/web/src/server/db/helpers/crud.ts`
 `imageJoinBindings`, whose keys are checked against `GalleryEntity`),
 `"cover"` (a single `coverImageId` column, cookbook), or `"logo"` (a single
-direct logo FK, vendor). The manifest keeps the storage boolean `hasImages`
+direct logo FK, vendor). The source-only `entity-definitions/image-associations.ts`
+facet owns association targets and their storage modes; entity declarations and
+Image validators consume it directly, without generated policy imports.
+The manifest keeps the storage boolean `hasImages`
 (`gallery`/`cover`) alongside `imageStorage`. Every public entity list and
 detail read carries server-resolved `displayImages: [{ id, url }]`; details
 also carry directly owned `attachments` with their role and position.

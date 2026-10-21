@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
 import { defineEntity } from "./definition.js";
@@ -886,7 +887,7 @@ Rules:
     search: "semantic",
     capabilities: {
       images: {
-        storage: "gallery",
+        storage: imageAssociationStorage.shape.meal.value,
         displaySources: [
           {
             relationPath: ["recipes"],

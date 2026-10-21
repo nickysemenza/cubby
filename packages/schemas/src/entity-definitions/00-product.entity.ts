@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { productReadSchemas } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
 import { defineEntity } from "./definition.js";
@@ -3572,7 +3573,7 @@ Rules:
         ],
       },
       images: {
-        storage: "gallery",
+        storage: imageAssociationStorage.shape.product.value,
         ingress: [
           { kind: "self", routeId: "product-self" },
           { kind: "createSelf", routeId: "product-new", enabled: true },

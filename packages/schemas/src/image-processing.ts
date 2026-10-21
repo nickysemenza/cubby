@@ -487,25 +487,11 @@ export const releaseCompanionImageProcessingOutput = z.object({
 });
 
 import { runShortcode } from "./identifier-fields";
-import { imagePolicyCatalog } from "./generated/image-policy.gen";
+import { imageAssociationStorage } from "./entity-definitions/image-associations";
 import { runTargetState } from "./activity-fields";
 import { imageAnalysisSummarySchema } from "./image-identification";
 export const imageProcessingIssue = z.enum(["failed", "review_needed"]);
-type AssociationEntity = {
-  [
-    K in keyof typeof imagePolicyCatalog
-  ]: (typeof imagePolicyCatalog)[K]["storage"] extends false ? never : K;
-}[keyof typeof imagePolicyCatalog];
-export const imageAssociationEntity = z.enum(
-  (["gallery", "cover", "logo"] as const).flatMap((storage) =>
-    Object.entries(imagePolicyCatalog)
-      .filter(([, policy]) => policy.storage === storage)
-      .map(([key]) => {
-        // SAFETY: these are keys of imagePolicyCatalog filtered to storage-bearing AssociationEntity members, in the existing gallery/cover/logo order.
-        return key as AssociationEntity;
-      }),
-  ),
-);
+export const imageAssociationEntity = imageAssociationStorage.keyof();
 export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
 export const imageAssociationSchema = z.object({
   entityKind: imageAssociationEntity,

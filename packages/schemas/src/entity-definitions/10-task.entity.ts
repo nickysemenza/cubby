@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
 import { MAX_PROJECT_TREE_DEPTH } from "../project-fields.js";
 import { selectControlOptions } from "./select-control-options.js";
@@ -1253,7 +1254,7 @@ export default defineEntity({
   capabilities: {
     timeline: "default",
     images: {
-      storage: "gallery",
+      storage: imageAssociationStorage.shape.task.value,
       displaySources: [
         {
           relationPath: ["subject"],

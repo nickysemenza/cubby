@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { cookbookReadSchemas } from "../cookbook-fields";
 import { defineEntity } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
@@ -395,7 +396,7 @@ export default defineEntity(
     search: "semantic",
     capabilities: {
       images: {
-        storage: "cover",
+        storage: imageAssociationStorage.shape.cookbook.value,
         displaySources: [
           {
             relationPath: ["product"],

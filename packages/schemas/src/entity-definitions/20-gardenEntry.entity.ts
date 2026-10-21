@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -504,7 +505,7 @@ export default defineEntity({
   capabilities: {
     timeline: "default",
     images: {
-      storage: "gallery",
+      storage: imageAssociationStorage.shape.gardenEntry.value,
       ingress: [
         { kind: "self", routeId: "garden-entry-self" },
         {

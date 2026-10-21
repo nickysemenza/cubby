@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
@@ -2164,7 +2165,7 @@ export default defineEntity({
       ],
     },
     images: {
-      storage: "gallery",
+      storage: imageAssociationStorage.shape.purchase.value,
       displaySources: [
         {
           relationPath: ["products"],
