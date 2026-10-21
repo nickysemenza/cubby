@@ -25,7 +25,7 @@ Near-black ink (#202020) fills primary controls, with light labels. Blue (#0077E
 
 ### Secondary
 
-Record identity glyphs default to color (explicit monochrome contexts may opt out). Identity and navigation use shared domain hues: ochre for Cook, teal for Pantry, purple for Plan, olive for House, and blue for Finance. Labels and active-route surfaces keep their existing ink and gray treatment; utility marks inherit the surrounding idle, hover and active ink. Positive, warning, destructive, info (in progress, running) and neutral-status (not started, none) communicate condition with text or icons, each with a matching quiet `*-surface` tint.
+Record identity glyphs use color. Identity and navigation use shared domain hues: ochre for Cook, teal for Pantry, purple for Plan, olive for House, and blue for Finance. Labels and active-route surfaces keep their existing ink and gray treatment; utility marks inherit the surrounding idle, hover and active ink. Positive, warning, destructive, info (in progress, running) and neutral-status (not started, none) communicate condition with text or icons, each with a matching quiet `*-surface` tint.
 
 ### Option roles
 

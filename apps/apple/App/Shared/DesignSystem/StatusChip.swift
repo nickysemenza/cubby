@@ -34,7 +34,7 @@ struct StatusChip: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            if let symbol = symbol ?? (category ? "square.on.circle" : nil) {
+            if let symbol {
                 Image(systemName: symbol)
                     .imageScale(.small)
                     .foregroundStyle(ink)

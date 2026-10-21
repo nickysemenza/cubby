@@ -664,18 +664,17 @@ export type EntityDetailParams = ReturnType<typeof entityDetailParams>;
  */
 export const EntityIcon = ({
   entity,
-  colored = true,
   className,
   ...props
-}: { entity: Entity; colored?: boolean } & IconProps) => {
+}: { entity: Entity } & IconProps) => {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
-  const domain = colored ? domainForEntity(entity) : null;
+  const domain = domainForEntity(entity);
   return (
     <def.phosphorIcon
       {...props}
       className={cn(
-        colored && (domain ? domainIconClass(domain) : def.color.text),
+        domain ? domainIconClass(domain) : def.color.text,
         className,
       )}
     />
