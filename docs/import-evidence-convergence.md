@@ -340,6 +340,8 @@ planner as acceptance. It writes no aliases or records. The preview identifies
 transaction changes, vendor reuse/creation and alias effects, Purchase/Expense
 and settlement effects, purchaser basis and the explicit vendor-account state.
 Changing a draft refreshes the result; acceptance still replans inside its write
-boundary. Provider category is evidence, not a Cubby spending-category assignment:
+boundary. Kind controls apply only to a Create draft; an attachment first uses
+Preview new transaction to review that alternative. Provider category is evidence,
+not a Cubby spending-category assignment:
 retain each provider/category observation, joining other provider charges only
 through authoritative settlement references to the same transaction.

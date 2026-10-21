@@ -406,8 +406,18 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
 
   await labelSpending();
   await gotoAuthenticatedPage(page, view);
+  await rowFor(hardware)
+    .getByRole("button", { name: "More review choices" })
+    .click();
+  await expect(
+    page.getByRole("menuitem", { name: "Change kind…" }),
+  ).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Preview new transaction" }).click();
+  await expect(
+    page.getByRole("combobox", { name: "Transaction kind" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Use recommendation" }).click();
   // The attach names its candidate in the review it sends.
-  await rowFor(hardware).getByRole("button", { name: "Show evidence" }).click();
   await expect(
     page.getByRole("list", { name: "Candidate transactions" }),
   ).toContainText("61.07");

@@ -261,7 +261,8 @@ export function SuggestionActions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-52">
             <DropdownMenuGroup>
-              {statement?.create ? (
+              {statement?.create &&
+              statementChoice(suggestion)?.action === "create" ? (
                 // The kind is a value: its Picker lives in the evidence.
                 <DropdownMenuItem
                   onClick={() => toggleOpen(suggestion.id, true)}
