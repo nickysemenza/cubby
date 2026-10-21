@@ -20,6 +20,8 @@ struct EntityRelationshipsSection: View {
                 connections
                 recommendations
                 if let graph = model.graph {
+                    ConnectionsWorkspaceLink(
+                        entity: graph.root.entityKind.rawValue, recordID: graph.root.entityId)
                     RelationshipDepthPicker(model: model)
                     EmbeddedGraphExplorer(graph: graph).id(graph)
                     completion

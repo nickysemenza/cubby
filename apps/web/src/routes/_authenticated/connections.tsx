@@ -1,74 +1,145 @@
 import { connectedViews } from "@cubby/schemas/connected-views";
 import { entitySchema } from "@cubby/schemas/entity";
+import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { z } from "zod";
 
-import {
-  entityDetailParams,
-  entities,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
+import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { ConnectedRecordsTable } from "~/entity/entity-detail/connected-records-table";
+import { Page } from "~/entity/page/page";
+import { EntityConnectionContext } from "~/entity/relationships/entity-connection-context";
+import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
+import { GraphExplorer } from "~/entity/relationships/graph-explorer";
 import { pageTitle } from "~/lib/page-title";
+import { Stack, Row } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
-// A hand-typed or truncated link renders the unknown-view message instead of
-// failing search validation into a route error.
+// A partial or stale link still offers a starting-record picker.
 const searchSchema = z.object({
   source: entitySchema.optional().catch(undefined),
   id: z.string().min(1).optional().catch(undefined),
   view: z.string().min(1).optional().catch(undefined),
+  mode: z.enum(["map", "records"]).optional().catch(undefined),
+  selected: z.string().optional().catch(undefined),
+  destination: z.string().optional().catch(undefined),
+  start: z.string().optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/connections")({
   validateSearch: searchSchema,
-  head: () => ({ meta: [{ title: pageTitle("Connected records") }] }),
+  head: () => ({ meta: [{ title: pageTitle("Connections") }] }),
   component: ConnectionsPage,
 });
 
 function ConnectionsPage() {
-  const { source, id, view } = Route.useSearch();
-  if (!source || !id || !view) return <UnknownConnectionView />;
-  const relation = view.startsWith("relation:")
-    ? entityManifest[source].relationships.find(
-        (item) => item.key === view.slice(9) && item.cardinality === "many",
-      )
+  const { source, id, view, mode, selected, destination, start } =
+    Route.useSearch();
+  const navigate = Route.useNavigate();
+  const root = useMemo(
+    () =>
+      entityGraphRootSchema.safeParse({ entityKind: source, entityId: id })
+        .data,
+    [source, id],
+  );
+  const relation =
+    source && view?.startsWith("relation:")
+      ? entityManifest[source].relationships.find(
+          (item) => item.key === view.slice(9) && item.cardinality === "many",
+        )
+      : undefined;
+  const curated = source
+    ? connectedViews[source].find((item) => item.key === view)
     : undefined;
-  const curated = connectedViews[source].find((item) => item.key === view);
   const target = relation?.target ?? curated?.target;
+  const showRecords =
+    mode === "records" || (mode === undefined && Boolean(view));
   const title =
     curated?.title ??
     (target && isBrowserRoutedEntity(target)
       ? entities[target].pluralLabel
       : "Connected records");
-  if (!target) return <UnknownConnectionView />;
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-5 p-4 md:p-8">
-      {isBrowserRoutedEntity(source) ? (
-        <Link
-          to={entities[source].routes.detail}
-          params={entityDetailParams(id)}
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          ← Back to record
-        </Link>
-      ) : null}
-      <h1 className="text-3xl font-semibold">{title}</h1>
-      <ConnectedRecordsTable
-        key={`${source}:${id}:${view}`}
-        source={source}
-        sourceId={id}
-        viewKey={view}
-        target={target}
-      />
-    </main>
-  );
-}
-
-function UnknownConnectionView() {
-  return (
-    <main className="p-6">
-      <h1 className="text-2xl font-semibold">Unknown connection view</h1>
-    </main>
+    <Page variant="bare" layout="viewport">
+      <Stack gap="md" className="h-full min-h-0 p-3 md:p-4">
+        <Row gap="md" wrap>
+          <h1 className="text-xl font-semibold">Connections</h1>
+          <div className="min-w-0 flex-1">
+            <EntityGraphPicker
+              placeholder="Find a starting record…"
+              onSelect={(value) =>
+                void navigate({
+                  search: { source: value.entity, id: value.id },
+                })
+              }
+            />
+          </div>
+          {target ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void navigate({
+                  search: (old) => ({
+                    ...old,
+                    mode: showRecords ? "map" : "records",
+                  }),
+                })
+              }
+            >
+              {showRecords ? "Show map" : title}
+            </Button>
+          ) : null}
+        </Row>
+        {root ? (
+          <>
+            <EntityConnectionContext
+              entity={root.entityKind}
+              id={root.entityId}
+            />
+            {showRecords && target && view ? (
+              <div className="min-h-0 overflow-auto">
+                <h2 className="mb-3 text-base font-semibold">{title}</h2>
+                <ConnectedRecordsTable
+                  key={`${source}:${id}:${view}`}
+                  source={root.entityKind}
+                  sourceId={root.entityId}
+                  viewKey={view}
+                  target={target}
+                />
+              </div>
+            ) : (
+              <GraphExplorer
+                fill
+                initialDepth={2}
+                key={`${root.entityKind}:${root.entityId}`}
+                root={root}
+                initialSelected={selected}
+                initialDestination={destination}
+                initialPathStart={start}
+                onRootChange={(value) =>
+                  void navigate({
+                    search: { source: value.entityKind, id: value.entityId },
+                  })
+                }
+                onNavigationChange={(state) =>
+                  void navigate({
+                    search: (old) => ({ ...old, ...state }),
+                    replace: true,
+                  })
+                }
+              />
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Choose a record to explore its purchases, placement, work, and
+            source records. Select a connection to inspect its facts and
+            evidence.
+          </p>
+        )}
+      </Stack>
+    </Page>
   );
 }

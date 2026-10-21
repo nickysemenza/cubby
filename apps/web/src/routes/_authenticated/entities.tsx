@@ -94,7 +94,7 @@ const searchSchema = z.object({
   collapsed: z.array(z.string()).optional().catch(undefined),
   destination: graphRefSearchSchema.optional().catch(undefined),
   depth: z
-    .union([z.literal(1), z.literal(2), z.literal(3)])
+    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
     .optional()
     .catch(undefined),
 });

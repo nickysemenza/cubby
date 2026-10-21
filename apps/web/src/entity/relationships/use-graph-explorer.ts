@@ -43,9 +43,10 @@ export function useGraphExplorer(
   root: EntityRef,
   operations: GraphExplorerOperations,
   initialSelected?: string,
+  depth: 1 | 2 | 3 | 4 = 1,
 ) {
   const queryClient = useQueryClient();
-  const initial = useQuery(operations.explore.queryOptions({ root, depth: 1 }));
+  const initial = useQuery(operations.explore.queryOptions({ root, depth }));
   const loading = useHydratedLoading(initial.isPending);
   const rootKey = graphRefKey(root);
   const [restored] = useState(() =>

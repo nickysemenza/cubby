@@ -51,7 +51,10 @@ struct GraphWorkspaceView: View {
             }
         }
         .navigationTitle("Graph")
-        .toolbar { Button("Starting record", systemImage: "magnifyingglass") { pickingRoot = true } }
+        .toolbar {
+            Button("Starting record", systemImage: "magnifyingglass") { pickingRoot = true }
+            ConnectionsWorkspaceLink()
+        }
         .sheet(isPresented: $pickingRoot) {
             GraphStartingRecordPicker { reference in
                 pickingRoot = false

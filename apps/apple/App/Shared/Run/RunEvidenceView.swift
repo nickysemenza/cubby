@@ -2,7 +2,7 @@ import CubbyKit
 import SwiftUI
 import WebKit
 
-/// The sole hosted pilot. Overview, actions and photo review remain native.
+/// Record overview and actions remain native; complex workspaces share the web UI.
 struct RunEvidenceLink: View {
     let runID: String
     @State private var showing = false
@@ -16,32 +16,54 @@ struct RunEvidenceLink: View {
 
 struct RunEvidenceView: View {
     let runID: String
+    var body: some View { HostedWorkspaceView(surface: .runEvidence(runID), title: "Run evidence") }
+}
+
+struct ConnectionsWorkspaceLink: View {
+    var entity: String?
+    var recordID: String?
+    @State private var showing = false
+    var body: some View {
+        Button("Open shared connections", systemImage: "point.3.connected.trianglepath.dotted") {
+            showing = true
+        }
+        .sheet(isPresented: $showing) {
+            NavigationStack {
+                HostedWorkspaceView(surface: .connections(entity: entity, id: recordID), title: "Connections")
+            }
+        }
+    }
+}
+
+private struct HostedWorkspaceView: View {
+    let surface: NativeWorkspaceSurface
+    let title: String
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @State private var host: RunEvidenceHost?
+    @State private var host: HostedWorkspaceHost?
 
     var body: some View {
         ZStack {
             if let host {
-                RunEvidenceWebView(host: host)
+                HostedWorkspaceWebView(host: host)
                     .id(ObjectIdentifier(host))
                 if let error = host.error {
-                    LoadFailureView(title: "Couldn’t load Run evidence", message: error) { start() }
+                    LoadFailureView(title: "Couldn’t load \(title.lowercased())", message: error) { start() }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(FieldGuideTokens.canvas)
                 } else if !host.ready {
-                    LoadingIndicator.screen(label: "Loading Run evidence")
+                    LoadingIndicator.screen(label: "Loading \(title.lowercased())")
                         .background(FieldGuideTokens.canvas)
                 }
             }
         }
-        .navigationTitle("Run evidence")
+        .navigationTitle(title)
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
-        .task(id: "\(model.baseURL)|\(runID)") { start() }
+        .task(id: "\(model.baseURL)|\(surface)") { start() }
         .onChange(of: model.entityMutationRevision) { _, _ in host?.nativeContextChanged() }
         .onDisappear { host?.stop() }
         #if os(macOS)
@@ -50,7 +72,7 @@ struct RunEvidenceView: View {
     }
     private func start() {
         host?.stop()
-        let next = RunEvidenceHost(model: model, runID: runID, externalURL: { openURL($0) }) {
+        let next = HostedWorkspaceHost(model: model, surface: surface, externalURL: { openURL($0) }) {
             selection, replace in
             dismiss()
             if replace {
@@ -66,10 +88,10 @@ struct RunEvidenceView: View {
 }
 
 @MainActor
-final class NativeRunEvidenceContext {
-    private var hosts: [ObjectIdentifier: RunEvidenceHost] = [:]
-    func register(_ host: RunEvidenceHost) { hosts[ObjectIdentifier(host)] = host }
-    func release(_ host: RunEvidenceHost) { hosts[ObjectIdentifier(host)] = nil }
+final class NativeWorkspaceContext {
+    private var hosts: [ObjectIdentifier: HostedWorkspaceHost] = [:]
+    func register(_ host: HostedWorkspaceHost) { hosts[ObjectIdentifier(host)] = host }
+    func release(_ host: HostedWorkspaceHost) { hosts[ObjectIdentifier(host)] = nil }
     func reset() {
         let active = Array(hosts.values)
         hosts.removeAll()
@@ -79,12 +101,12 @@ final class NativeRunEvidenceContext {
 
 @MainActor
 @Observable
-final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
+final class HostedWorkspaceHost: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
     let webView: WKWebView
     private(set) var ready = false
     private(set) var error: String?
     private let model: AppModel
-    private let runID: String
+    private let surface: NativeWorkspaceSurface
     private let baseURL: URL
     private let credentials: CredentialProvider
     private let policy: NativeWorkspacePolicy
@@ -100,11 +122,11 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
     private var mutationRevision: Int
 
     init(
-        model: AppModel, runID: String, externalURL: @escaping (URL) -> Void,
+        model: AppModel, surface: NativeWorkspaceSurface, externalURL: @escaping (URL) -> Void,
         navigate: @escaping (RecordSelection, Bool) -> Void
     ) {
         self.model = model
-        self.runID = runID
+        self.surface = surface
         baseURL = model.baseURL
         credentials = model.credentials
         policy = NativeWorkspacePolicy(baseURL: model.baseURL)
@@ -122,7 +144,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
             ClientIdentity.currentApp(
                 product: "cubby-apple", installationID: AppInstallationID.current
             ).userAgent
-        model.nativeRunEvidence.register(self)
+        model.nativeWorkspaces.register(self)
     }
 
     private var current: Bool {
@@ -168,7 +190,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
                     await store.httpCookieStore.setCookie(cookie)
                     guard await authorized(attempt), !Task.isCancelled else { return }
                 }
-                webView.load(URLRequest(url: policy.evidenceURL(id: runID)))
+                webView.load(URLRequest(url: policy.workspaceURL(surface)))
                 readinessTask = Task { [weak self] in
                     do { try await Task.sleep(for: .seconds(20)) } catch { return }
                     guard let self, await authorized(attempt), !ready else { return }
@@ -199,7 +221,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
         webView.uiDelegate = nil
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "cubbyWorkspace")
         webView.loadHTMLString("", baseURL: nil)
-        model.nativeRunEvidence.release(self)
+        model.nativeWorkspaces.release(self)
         let store = webView.configuration.websiteDataStore
         Task {
             await store.removeData(
@@ -227,7 +249,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
         readinessTask?.cancel()
         ready = false
         error = failure.localizedDescription
-        Diagnostics.report(failure, context: "nativeRunEvidence.load")
+        Diagnostics.report(failure, context: "nativeWorkspaces.load")
     }
     private func requireUpdate() {
         readinessTask?.cancel()
@@ -242,7 +264,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
         guard current, documentCommitted, responseFailureStatus == nil, message.frameInfo.isMainFrame,
             origin.protocol == baseURL.scheme, origin.host == baseURL.host(),
             (origin.port == 0 ? defaultPort : origin.port) == (baseURL.port ?? defaultPort),
-            let url = message.frameInfo.request.url, policy.isEvidenceDocument(url, id: runID),
+            let url = message.frameInfo.request.url, policy.isWorkspaceDocument(url, surface: surface),
             let body = message.body as? [String: Any]
         else { return }
         do {
@@ -287,7 +309,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
             return .cancel
         }
         if url.path == "/auth" || url.path.hasPrefix("/auth/") { await model.signOut(); return .cancel }
-        if policy.isEvidence(url, id: runID) {
+        if policy.isWorkspaceEntry(url, surface: surface) {
             if action.targetFrame == nil { webView.load(URLRequest(url: url)); return .cancel }
             return .allow
         }
@@ -302,7 +324,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
                 URLError(
                     .unsupportedURL,
                     userInfo: [
-                        NSLocalizedDescriptionKey: "Unexpected Run evidence route: \(url.absoluteString)"
+                        NSLocalizedDescriptionKey: "Unexpected hosted workspace route: \(url.absoluteString)"
                     ]))
         }
         return .cancel
@@ -312,7 +334,7 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
         -> WKNavigationResponsePolicy
     {
         guard await authorized(attempt), response.isForMainFrame,
-            let url = response.response.url, policy.isEvidenceDocument(url, id: runID)
+            let url = response.response.url, policy.isWorkspaceDocument(url, surface: surface)
         else { return .cancel }
         if let http = response.response as? HTTPURLResponse {
             if http.statusCode == 401 { await model.signOut(); return .cancel }
@@ -355,7 +377,8 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
                 URLError(
                     .cannotLoadFromNetwork,
                     userInfo: [
-                        NSLocalizedDescriptionKey: "Run evidence web process terminated. Retry to reconnect."
+                        NSLocalizedDescriptionKey:
+                            "Hosted workspace web process terminated. Retry to reconnect."
                     ]))
         }
     }
@@ -376,14 +399,14 @@ final class RunEvidenceHost: NSObject, WKNavigationDelegate, WKScriptMessageHand
 }
 
 #if os(iOS)
-    private struct RunEvidenceWebView: UIViewRepresentable {
-        let host: RunEvidenceHost
+    private struct HostedWorkspaceWebView: UIViewRepresentable {
+        let host: HostedWorkspaceHost
         func makeUIView(context: Context) -> WKWebView { host.webView }
         func updateUIView(_ view: WKWebView, context: Context) {}
     }
 #else
-    private struct RunEvidenceWebView: NSViewRepresentable {
-        let host: RunEvidenceHost
+    private struct HostedWorkspaceWebView: NSViewRepresentable {
+        let host: HostedWorkspaceHost
         func makeNSView(context: Context) -> WKWebView { host.webView }
         func updateNSView(_ view: WKWebView, context: Context) {}
     }

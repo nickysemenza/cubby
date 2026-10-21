@@ -38,6 +38,12 @@ export const connectedViews = {
   imageJob: [],
   product: [
     {
+      key: "purchase-projects",
+      title: "Purchase projects",
+      target: "project",
+      routes: [["expenses", "project"]],
+    },
+    {
       key: "source-emails",
       title: "Related Emails",
       target: "email",

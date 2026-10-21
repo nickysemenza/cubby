@@ -143,7 +143,7 @@ const uniqueBranches = (
 // completion causes share one state machine so partial output stays honest.
 export async function exploreEntityGraph(
   root: EntityRef,
-  requestedDepth: 1 | 2 | 3,
+  requestedDepth: 1 | 2 | 3 | 4,
   readFrontier: GraphExploreReader,
   options: {
     limits?: Partial<GraphExploreLimits>;

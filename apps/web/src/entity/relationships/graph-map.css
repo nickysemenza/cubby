@@ -1,7 +1,7 @@
 .graph-map {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--muted);
+  background: var(--workspace-sidebar, var(--muted));
 }
 .graph-map .react-flow {
   --xy-background-color-default: var(--muted);
@@ -15,14 +15,67 @@
 .graph-map-record {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px;
-  width: 196px;
-  height: 104px;
+  position: relative;
+  padding: 10px 12px;
+  width: 280px;
+  height: 272px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card);
   color: var(--foreground);
+}
+.graph-record-depth {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.graph-record-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 8px;
+  min-height: 76px;
+}
+.graph-record-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+  overflow: auto;
+  min-height: 0;
+}
+.graph-record-facts dt {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.graph-record-facts dd {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.graph-record-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+.graph-map[data-compact="true"] .graph-record-facts,
+.graph-map[data-compact="true"] .graph-record-links {
+  display: none;
+}
+.graph-map[data-compact="true"] .graph-map-record {
+  height: auto;
+}
+.graph-map-record > .graph-record-facts {
+  max-height: 130px;
 }
 .graph-map-record[data-selected="true"] {
   border-color: var(--primary);

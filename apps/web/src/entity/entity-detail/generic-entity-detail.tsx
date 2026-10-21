@@ -69,6 +69,7 @@ import {
 } from "../actions/action-verbs";
 import { EntityActionButtons } from "../actions/entity-actions";
 import EntityImageList from "../components/entity-image-list";
+import { EntityConnectionContext } from "../relationships/entity-connection-context";
 import { type DetailSection, DetailSections } from "../table/detail-page";
 import {
   EntityTimeline,
@@ -703,6 +704,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
           chain={breadcrumbChain}
           current={title}
         />
+        <EntityConnectionContext entity={entity} id={bag.id} />
         <NeedsYouProvider>
           <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
             <DetailSuggestions

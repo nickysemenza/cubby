@@ -40,7 +40,20 @@ Photo and label text lead on narrow layouts and sit beside the steps when space 
 
 Identity shows every pending Product edit with its current and proposed values and a Remove control that saves through `saveGroups`. The approval effect sentence also enumerates the edits, including when Identity is collapsed. Rejecting the selected Product switches to a create draft named from the observed label, clears Product edits, and drops any inventory link to the rejected Product. Candidate reads track group keys and proposal revisions; changes during a read coalesce into one replacement refresh, and superseded results are not published.
 
-## Run evidence pilot
+## Hosted workspaces
+
+Connections is available as a shared React workspace from the native Graph
+toolbar and a record's Relationships section. It opens an authenticated sheet
+at `/connections?nativeWorkspace=connections`, optionally scoped by `source`
+and `id`. The native title, Done action and record navigator remain native.
+The inspector's suggestion review uses the same React queue actions as web.
+The existing native graph remains available for device comparison; this hosted
+entry does not replace its canvas until device acceptance establishes parity.
+Only `/connections` retains this mode; navigation search and record selection
+may change within that document, while record links hand off to native.
+Connections and Run evidence share one host, session bootstrap, lifecycle and
+strict origin/frame checks. A different route or duplicated mode does not gain
+bridge authority.
 
 Every entity retains its native detail renderer. A Run’s native console and detail offer one hosted destination for transcript, logs, and AI usage. Native overview, actions, photo review, editors, routing, and coverage remain in place. The evidence sheet has native Done and hands record links back to the native navigator; it does not own record history.
 

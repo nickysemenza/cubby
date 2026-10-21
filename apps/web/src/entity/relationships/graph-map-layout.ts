@@ -17,9 +17,11 @@ export const graphMapLayoutOutputSchema = z.object({
 export type GraphMapRect = z.infer<typeof graphMapRectSchema>;
 export type GraphMapLayoutInput = z.infer<typeof graphMapLayoutInputSchema>;
 
-const WIDTH = 196;
-const HEIGHT = 104;
-const GAP = 32;
+export const GRAPH_CARD_WIDTH = 280;
+export const GRAPH_CARD_HEIGHT = 272;
+const WIDTH = GRAPH_CARD_WIDTH;
+const HEIGHT = GRAPH_CARD_HEIGHT;
+const GAP = 48;
 
 const overlaps = (a: GraphMapRect, b: GraphMapRect) =>
   a.x < b.x + b.width + GAP &&
@@ -64,9 +66,9 @@ export function placeGraphMap(input: GraphMapLayoutInput) {
     };
     let placed = false;
     for (let radius = 0; !placed; radius++) {
-      for (let y = -radius; y <= radius && !placed; y++) {
-        for (let x = -radius; x <= radius && !placed; x++) {
-          if (Math.max(Math.abs(x), Math.abs(y)) !== radius) continue;
+      for (const y of radius === 0 ? [0] : [radius, -radius]) {
+        if (placed) break;
+        for (const x of [0]) {
           const rect = {
             x: origin.x + x * (WIDTH + GAP),
             y: origin.y + y * (HEIGHT + GAP),

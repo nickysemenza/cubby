@@ -3,6 +3,7 @@ import type {
   EntityGraphNode,
 } from "@cubby/schemas/entity-graph";
 import {
+  Background,
   Controls,
   Handle,
   MiniMap,
@@ -20,18 +21,22 @@ import { EntityIcon, entityLabel } from "~/entity/entities";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Image } from "~/ui/primitives/image";
 
 import { graphRefKey } from "./entity-graph-state";
 import {
   graphMapLayoutOutputSchema,
   type GraphMapRect,
 } from "./graph-map-layout";
+import { GraphRecordContent, GraphRecordLink } from "./graph-record-content";
 
 import "@xyflow/react/dist/style.css";
 import "./graph-map.css";
 
-type RecordNode = Node<{ record: EntityGraphNode }>;
+type RecordNode = Node<{
+  record: EntityGraphNode;
+  related: EntityGraphNode[];
+  depth: number;
+}>;
 const GraphRecord = memo(function GraphRecord({
   data,
   selected,
@@ -51,25 +56,20 @@ const GraphRecord = memo(function GraphRecord({
         <EntityIcon entity={data.record.entityKind} className="size-3.5" />
         <span>{entityLabel(data.record.entityKind)}</span>
       </Row>
-      <Row gap="sm" align="start">
-        {data.record.image && (
-          <Image
-            src={data.record.image.url}
-            alt=""
-            displayWidth={32}
-            className="size-8 shrink-0 rounded object-cover"
-          />
-        )}
-        <span
-          className="line-clamp-2 text-sm font-medium"
-          title={data.record.label}
-        >
-          {data.record.label}
-        </span>
-      </Row>
-      <span className="font-mono text-2xs text-muted-foreground">
-        {data.record.entityId}
+      <span className="graph-record-depth">
+        {data.depth === 0 ? "Focus" : `${data.depth} links`}
       </span>
+      <GraphRecordContent node={data.record} />
+      <div className="graph-record-links nodrag nopan">
+        {data.related.slice(0, 2).map((node) => (
+          <GraphRecordLink key={graphRefKey(node)} node={node} />
+        ))}
+        {data.related.length > 2 ? (
+          <span className="text-2xs text-muted-foreground">
+            +{data.related.length - 2} linked records
+          </span>
+        ) : null}
+      </div>
       {Object.values(Position).map((position) => (
         <Handle
           key={`source-${position}`}
@@ -120,6 +120,7 @@ export function GraphMapCanvas({
   useEffect(() => {
     positionsRef.current = positions;
   }, [positions]);
+  const [compact, setCompact] = useState(false);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<unknown>(null);
   const [layingOut, setLayingOut] = useState(false);
@@ -175,6 +176,44 @@ export function GraphMapCanvas({
       previous: positionsRef.current,
     });
   }, [topology, revision]);
+  const relatedRecords = useMemo(() => {
+    const byKey = new Map(nodes.map((node) => [graphRefKey(node), node]));
+    const related = new Map<string, EntityGraphNode[]>();
+    for (const edge of edges) {
+      for (const [from, to] of [
+        [edge.source, edge.target],
+        [edge.target, edge.source],
+      ]) {
+        if (!from || !to) continue;
+        const node = byKey.get(graphRefKey(to));
+        const key = graphRefKey(from);
+        if (
+          node &&
+          !(related.get(key) ?? []).some(
+            (item) => graphRefKey(item) === graphRefKey(node),
+          )
+        )
+          related.set(key, [...(related.get(key) ?? []), node]);
+      }
+    }
+    return related;
+  }, [nodes, edges]);
+  const depths = useMemo(() => {
+    const first = nodes[0];
+    const result = new Map<string, number>();
+    if (!first) return result;
+    const queue = [graphRefKey(first)];
+    result.set(queue[0] ?? "", 0);
+    for (const key of queue)
+      for (const next of relatedRecords.get(key) ?? []) {
+        const nextKey = graphRefKey(next);
+        if (!result.has(nextKey)) {
+          result.set(nextKey, (result.get(key) ?? 0) + 1);
+          queue.push(nextKey);
+        }
+      }
+    return result;
+  }, [nodes, relatedRecords]);
   const baseNodes: RecordNode[] = useMemo(
     () =>
       nodes.flatMap((record) => {
@@ -188,14 +227,18 @@ export function GraphMapCanvas({
                 position: { x: position.x, y: position.y },
                 width: position.width,
                 height: position.height,
-                data: { record },
+                data: {
+                  record,
+                  related: relatedRecords.get(id) ?? [],
+                  depth: depths.get(id) ?? 0,
+                },
                 ariaLabel: `Inspect ${record.label}`,
                 draggable: false,
               },
             ]
           : [];
       }),
-    [nodes, positions],
+    [nodes, positions, relatedRecords, depths],
   );
   const recordNodes = useMemo(
     () =>
@@ -211,7 +254,7 @@ export function GraphMapCanvas({
         const b = positions[target];
         const dx = (b?.x ?? 0) - (a?.x ?? 0);
         const dy = (b?.y ?? 0) - (a?.y ?? 0);
-        const horizontal = Math.abs(dx) / 196 > Math.abs(dy) / 104;
+        const horizontal = Math.abs(dx) / 280 > Math.abs(dy) / 272;
         const sourceSide = horizontal
           ? dx >= 0
             ? Position.Right
@@ -235,7 +278,7 @@ export function GraphMapCanvas({
           id: edge.id,
           source,
           target,
-          type: "straight",
+          type: "smoothstep",
           sourceHandle: `source-${sourceSide}`,
           targetHandle: `target-${targetSide}`,
           selected: edge.id === selectedEdge,
@@ -270,6 +313,23 @@ export function GraphMapCanvas({
   return (
     <Stack gap="sm" className="h-full min-h-0">
       <Row gap="sm" wrap>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-pressed={compact}
+          onClick={() => setCompact((value) => !value)}
+        >
+          Compact cards
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            void flow.current?.fitView({ padding: 0.15, maxZoom: 1 })
+          }
+        >
+          Fit map
+        </Button>
         <Button variant="outline" size="sm" onClick={center}>
           Center selection
         </Button>
@@ -289,7 +349,11 @@ export function GraphMapCanvas({
           </output>
         )}
       </Row>
-      <div className="graph-map min-h-0 flex-1" aria-label="Relationship graph">
+      <div
+        className="graph-map min-h-0 flex-1"
+        data-compact={compact}
+        aria-label="Relationship graph"
+      >
         <ReactFlow<RecordNode>
           nodes={recordNodes}
           edges={flowEdges}
@@ -331,6 +395,7 @@ export function GraphMapCanvas({
           zoomOnDoubleClick={false}
           fitView={false}
         >
+          <Background gap={16} size={1} />
           <Controls showInteractive={false} />
           <MiniMap pannable zoomable className="hidden md:block" />
         </ReactFlow>

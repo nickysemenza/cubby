@@ -25,7 +25,6 @@ import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
@@ -47,6 +46,8 @@ import type {
   GraphMapCanvas as GraphMapCanvasComponent,
 } from "./graph-map-canvas";
 import { graphBranchCount, parseGraphRecord } from "./graph-map-state";
+import { GraphPathsList } from "./graph-paths-list";
+import { GraphRecordContent } from "./graph-record-content";
 import { PhysicalConnectionsPanel } from "./physical-connections";
 import {
   useGraphExplorer,
@@ -54,6 +55,15 @@ import {
 } from "./use-graph-explorer";
 
 const GraphLoading = () => <output>Loading graph…</output>;
+
+const RecordProposals = browserOnlyLazy<{ id: string }>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("~/entity/suggestions/queue/record-proposals").then(
+          (module) => ({ default: module.RecordProposals }),
+        ),
+);
 
 const GraphMapCanvas = browserOnlyLazy<
   ComponentProps<typeof GraphMapCanvasComponent>
@@ -77,6 +87,7 @@ export function GraphExplorer({
   onList,
   embedded = false,
   fill = false,
+  initialDepth = embedded ? 2 : 1,
   operations = entityGraph,
 }: {
   root: EntityRef;
@@ -93,9 +104,11 @@ export function GraphExplorer({
   /** Drawn inside a detail page: offers the full graph workspace. */
   embedded?: boolean;
   fill?: boolean;
+  initialDepth?: 1 | 2 | 3 | 4;
   operations?: GraphExplorerOperations;
 }) {
-  const model = useGraphExplorer(root, operations, initialSelected);
+  const [depth, setDepth] = useState<1 | 2 | 3 | 4>(initialDepth);
+  const model = useGraphExplorer(root, operations, initialSelected, depth);
   const queryClient = useQueryClient();
   const rootKey = graphRefKey(root);
   const [camera] = useState<GraphMapCamera>(
@@ -116,6 +129,7 @@ export function GraphExplorer({
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("");
   const [showList, setShowList] = useState(false);
+  const [showInspector, setShowInspector] = useState(true);
   const listing = showList || Boolean(query.trim());
   const [reveal, setReveal] = useState(0);
   const [canvasGeneration, setCanvasGeneration] = useState(0);
@@ -306,6 +320,45 @@ export function GraphExplorer({
         )}
       </Row>
       <Row gap="sm" wrap>
+        <Picker
+          mode="choose"
+          label="Relationship depth"
+          className="w-36"
+          value={String(depth)}
+          options={[
+            { value: "1", label: "1 link" },
+            { value: "2", label: "2 links" },
+            { value: "3", label: "3 links" },
+            { value: "4", label: "4 links" },
+          ]}
+          onValueChange={(value) => {
+            const next = ([1, 2, 3, 4] as const).find(
+              (item) => String(item) === value,
+            );
+            if (next && next !== depth) {
+              model.restart();
+              setDepth(next);
+            }
+          }}
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          aria-pressed={showList}
+          onClick={() => setShowList((value) => !value)}
+        >
+          Paths list
+        </Button>
+        {!isMobile ? (
+          <Button
+            variant="outline"
+            size="sm"
+            aria-pressed={showInspector}
+            onClick={() => setShowInspector((value) => !value)}
+          >
+            Inspector
+          </Button>
+        ) : null}
         <span className="text-xs text-muted-foreground">
           {displayed.nodes.length} visible · {model.data.nodes.length} loaded ·{" "}
           {displayed.edges.length} connections
@@ -328,7 +381,8 @@ export function GraphExplorer({
       )}
       <div
         className={cn(
-          "grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_280px]",
+          "grid min-w-0 gap-3",
+          showInspector && "md:grid-cols-[minmax(0,1fr)_280px]",
           frame.grid,
         )}
       >
@@ -364,43 +418,21 @@ export function GraphExplorer({
               className="absolute inset-0 overflow-auto"
               aria-label="Map records"
             >
-              <div className="px-3 py-1">
-                <RecordList>
-                  {matches.map((node) => (
-                    <RecordRow
-                      key={graphRefKey(node)}
-                      primary={
-                        <button
-                          type="button"
-                          className="min-w-0 truncate text-left hover:underline focus-visible:underline"
-                          onClick={() => {
-                            select(graphRefKey(node), true);
-                            setQuery("");
-                            setShowList(false);
-                          }}
-                        >
-                          {node.label}
-                          {/* The kind stays in the button's name; the trailing copy is visual. */}
-                          <span className="sr-only">
-                            {" "}
-                            {entityLabel(node.entityKind)}
-                          </span>
-                        </button>
-                      }
-                      trailing={
-                        <span aria-hidden>{entityLabel(node.entityKind)}</span>
-                      }
-                    />
-                  ))}
-                </RecordList>
-              </div>
-              {!matches.length && (
-                <p className="p-4 text-sm">No explored records match.</p>
-              )}
+              <GraphPathsList
+                root={root}
+                nodes={displayed.nodes}
+                edges={displayed.edges}
+                matches={matches}
+                onSelect={(key) => {
+                  select(key, true);
+                  setQuery("");
+                  setShowList(false);
+                }}
+              />
             </Panel>
           )}
         </div>
-        {!isMobile && (
+        {!isMobile && showInspector && (
           <aside
             className="overflow-auto border-l border-border pl-4"
             aria-label="Graph inspector"
@@ -475,9 +507,8 @@ function GraphRecordInspector({
               {entityLabel(selected.entityKind)} · {selected.entityId}
             </span>
             {/* On its own detail page the root record is already the page heading. */}
-            <Title className="text-base font-semibold break-words">
-              {selected.label}
-            </Title>
+            <Title className="sr-only">{selected.label}</Title>
+            <GraphRecordContent node={selected} />
             {recordLink(selected) && (
               <Link
                 to={recordLink(selected)}
@@ -595,6 +626,9 @@ function GraphRecordInspector({
             subject={selected}
             operations={operations}
           />
+          <Disclosure summary="Review suggestions" defaultOpen={false}>
+            <RecordProposals id={selected.entityId} />
+          </Disclosure>
         </>
       ) : (
         <p className="text-sm text-muted-foreground">

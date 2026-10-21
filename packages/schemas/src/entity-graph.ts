@@ -44,6 +44,8 @@ export const entityGraphNodeSchema = entityRefSchema.extend({
   label: z.string(),
   metadata: z.record(z.string(), z.string()),
   image: imageUrlSummary.optional(),
+  /** Selected canonical list fields, hydrated once per entity kind, not per card. */
+  preview: z.record(z.string(), z.json()).optional(),
 });
 export type EntityGraphNode = z.infer<typeof entityGraphNodeSchema>;
 
@@ -88,7 +90,9 @@ export type EntityGraphOutput = z.infer<typeof entityGraphOutputSchema>;
 
 export const entityGraphExploreInputSchema = z.object({
   root: entityGraphRootSchema,
-  depth: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
+  depth: z
+    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+    .default(1),
 });
 export type EntityGraphExploreInput = z.input<
   typeof entityGraphExploreInputSchema
@@ -101,8 +105,8 @@ export const entityGraphExploreCompletionSchema = z.object({
     "pagination-limit",
     "budget-limit",
   ]),
-  requestedDepth: z.number().int().min(1).max(3),
-  reachedDepth: z.number().int().min(0).max(3),
+  requestedDepth: z.number().int().min(1).max(4),
+  reachedDepth: z.number().int().min(0).max(4),
 });
 export type EntityGraphExploreCompletion = z.infer<
   typeof entityGraphExploreCompletionSchema
