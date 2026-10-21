@@ -25,6 +25,7 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import {
   publishAssessment,
+  publishFieldAssessment,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
@@ -49,6 +50,7 @@ describe("shared Assessment history", () => {
       "utf8",
     );
     await getDb(ctx.db).execute(sql.raw(predecessor));
+    await getDb(ctx.db).execute(sql`CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"()`);
     const item = await productFixture(ctx, "Synthetic legacy serving");
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
     await getDb(ctx.db)
@@ -179,6 +181,68 @@ describe("shared Assessment history", () => {
         message: "Paired field assessments require an explicit served flag",
       },
     });
+  });
+  it("preserves populated field evidence while retiring implicit publication", async () => {
+    const item = await productFixture(ctx, "Synthetic publication cutover");
+    const target = await recordId(ctx.db, item.id, "product");
+    const migration = (name: string) =>
+      readFileSync(
+        new URL(`../../../../../drizzle/${name}.sql`, import.meta.url),
+        "utf8",
+      );
+    await getDb(ctx.db).execute(
+      sql.raw(migration("0001_explicit_served_decisions")),
+    );
+    await getDb(ctx.db).execute(
+      sql`CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"()`,
+    );
+    const [legacy] = await getDb(ctx.db)
+      .insert(assessmentState)
+      .values({
+        entity: "product",
+        recordId: target,
+        field: "notes",
+        currentValue: null,
+        suggestedValue: "Synthetic retained proposal",
+        confidence: 0.7,
+        model: "typesafe/jev",
+        data: { served: false },
+      })
+      .returning();
+    if (!legacy) throw new Error("Synthetic predecessor proposal missing");
+    const before = await getDb(ctx.db).select().from(assessment);
+    for (const statement of migration("0003_explicit_field_publication").split(
+      "--> statement-breakpoint",
+    ))
+      await getDb(ctx.db).execute(sql.raw(statement));
+    expect(await getDb(ctx.db).select().from(assessment)).toEqual(before);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.id, legacy.id)),
+    ).toEqual([legacy]);
+    const published = await publishFieldAssessment(
+      ctx.db,
+      {
+        entity: "product",
+        recordId: target,
+        field: "manufacturer",
+        suggestedValue: "Synthetic explicit producer",
+        model: "typesafe/jev",
+      },
+      false,
+    );
+    expect(published).toMatchObject({
+      served: false,
+      judgment: { value: "Synthetic explicit producer" },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: assessmentState.id })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, published.id)),
+    ).toEqual([{ id: published.id }]);
   });
   const publication = () => ({
     publicationKey: "synthetic:assessment:retry",

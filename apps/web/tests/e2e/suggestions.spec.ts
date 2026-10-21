@@ -1,3 +1,4 @@
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
@@ -19,11 +20,7 @@ import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { user } from "~/server/db/auth.schema";
-import {
-  product as productTable,
-  assessmentState as suggestionTable,
-  feedback,
-} from "~/server/db/schema";
+import { product as productTable, feedback } from "~/server/db/schema";
 import {
   publishEntityConnection,
   readEntityConnections,
@@ -342,9 +339,9 @@ test("Suggestions lists every family with named records and category pills, and 
   await generateStatementSuggestions(db, importId);
   await drainDerivedRefreshFrontier(db);
   const seedCategoryAdvice = async () =>
-    getDb(db)
-      .insert(suggestionTable)
-      .values({
+    publishFieldAssessment(
+      db,
+      {
         runId,
         entity: "product",
         recordId: itemId,
@@ -365,7 +362,9 @@ test("Suggestions lists every family with named records and category pills, and 
             "categoryId",
           ),
         },
-      });
+      },
+      true,
+    );
   await seedCategoryAdvice();
   await gotoAuthenticatedPage(page, "/suggestions");
   const families = page.getByRole("group", { name: "Suggestion families" });
@@ -783,11 +782,11 @@ test("list pills accept immediately without unloading another row's suggestion",
   if (!firstRecordId) throw new Error("Synthetic first Product is missing");
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
   await drainDerivedRefreshFrontier(db);
-  await getDb(db)
-    .insert(suggestionTable)
-    .values(
-      await Promise.all(
-        recordIds.map(async (recordId) => ({
+  await Promise.all(
+    recordIds.map(async (recordId) =>
+      publishFieldAssessment(
+        db,
+        {
           runId,
           entity: "product",
           recordId,
@@ -808,9 +807,11 @@ test("list pills accept immediately without unloading another row's suggestion",
               "categoryId",
             ),
           },
-        })),
+        },
+        true,
       ),
-    );
+    ),
+  );
   const acceptance = Promise.withResolvers<void>();
   await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (

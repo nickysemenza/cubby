@@ -24,7 +24,7 @@ import {
 } from "~/server/db/schema";
 import * as connections from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { publishAssessment, publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -677,9 +677,9 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       { ...ctx.actor, runId: null },
       { purpose: "ai_suggest" },
     );
-    await getDb(ctx.db)
-      .insert(suggestion)
-      .values({
+    await publishFieldAssessment(
+      ctx.db,
+      {
         runId,
         entity: "product",
         recordId: await resolveOrThrow(ctx.db, "product", product.id),
@@ -690,7 +690,9 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         model: "typesafe/jev",
         kind: "addition",
         status: "pending",
-      });
+      },
+      true,
+    );
     // The household's Work has one row for the family; the record's own Work
     // counts the record's own Suggestions, never the family aggregate.
     const queue = await read({});

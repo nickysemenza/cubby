@@ -144,7 +144,10 @@ changes include the derived-DDL migration, not only the table migration.
 Field producers call `publishFieldAssessment`, which delegates to the shared
 transactional `publishAssessment` writer for immutable evidence and its current
 projection. The producer supplies serving explicitly; paired trials do not gain
-member authority by inheriting a Run's model pin.
+member authority by inheriting a Run's model pin. Projection inserts do not
+synthesize history through a trigger; the history foreign key rejects a writer
+that omits publication. The cutover drops only the old trigger and function,
+preserving existing evidence and projection handles.
 
 A typed family registry owns subject and judgment schemas, fingerprints,
 authority checks, supported review actions and projection invalidation.

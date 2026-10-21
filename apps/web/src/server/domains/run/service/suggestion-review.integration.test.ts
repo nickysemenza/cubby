@@ -19,6 +19,7 @@ import { loadFinanceSuggestionContext } from "~/server/domains/financial-transac
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { executeEntity } from "~/server/entity-kernel";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import {
   reviewAssessment,
@@ -405,9 +406,9 @@ describe("Suggestion review", () => {
         recordId: product.id,
       }),
     ]);
-    const [sibling] = await getDb(ctx.db)
-      .insert(suggestionTable)
-      .values({
+    const sibling = await publishFieldAssessment(
+      ctx.db,
+      {
         runId,
         entity: "product",
         recordId: await recordId(ctx.db, product.id, "product"),
@@ -418,13 +419,14 @@ describe("Suggestion review", () => {
         model: PRIMARY_MODEL,
         kind: "correction",
         status: "pending",
-      })
-      .returning({ id: suggestionTable.id });
+      },
+      true,
+    );
 
     await acceptSuggestion(ctx.db, context, { id: row.id });
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await suggestionStatus(ctx.db, row.id)).toBe("applied");
-    expect(await suggestionStatus(ctx.db, sibling!.id)).toBe("superseded");
+    expect(await suggestionStatus(ctx.db, sibling.id)).toBe("superseded");
     expect(await productCategoryId(ctx.db, product.id)).toBe(
       taxonomyId(SUGGESTED_CATEGORY),
     );
@@ -447,24 +449,27 @@ describe("Suggestion review", () => {
     const runId = await sweepCategories([product.id]);
     const pairKey = crypto.randomUUID();
     const uuid = await recordId(ctx.db, product.id, "product");
-    await getDb(ctx.db)
-      .insert(suggestionTable)
-      .values(
-        [0.99, 0.98, 0.97].map((confidence) => ({
-          runId,
-          entity: "product" as const,
-          recordId: uuid,
-          field: "categoryId",
-          currentValue: taxonomyShortcode("tools"),
-          suggestedValue: taxonomyShortcode("household"),
-          confidence,
-          model: "synthetic/unserved-trial",
-          data: { served: false },
-          kind: "correction" as const,
-          status: "pending" as const,
-          pairKey,
-        })),
-      );
+    await Promise.all(
+      [0.99, 0.98, 0.97].map((confidence) =>
+        publishFieldAssessment(
+          ctx.db,
+          {
+            runId,
+            entity: "product" as const,
+            recordId: uuid,
+            field: "categoryId",
+            currentValue: taxonomyShortcode("tools"),
+            suggestedValue: taxonomyShortcode("household"),
+            confidence,
+            model: "synthetic/unserved-trial",
+            kind: "correction" as const,
+            status: "pending" as const,
+            pairKey,
+          },
+          false,
+        ),
+      ),
+    );
     const page = await listSuggestions(ctx.db, {
       entity: "product",
       recordIds: [product.id],

@@ -1,4 +1,4 @@
-/** Histories are append-only even for SQL writers; projection inserts publish field evidence atomically. */
+/** Histories are append-only even for SQL writers; application publishers own projection creation. */
 export const assessmentHistoryDdl = () => `
 CREATE OR REPLACE VIEW "AssessmentEmailLink" AS
 SELECT id,(data->>'eventId')::uuid AS "eventId",(data->>'purchaseId')::uuid AS "purchaseId",
@@ -42,26 +42,6 @@ DROP TRIGGER IF EXISTS "Assessment_immutable" ON "Assessment";
 CREATE TRIGGER "Assessment_immutable" BEFORE UPDATE OR DELETE ON "Assessment" FOR EACH ROW EXECUTE FUNCTION "assessment_history_immutable"();
 DROP TRIGGER IF EXISTS "Feedback_immutable" ON "Feedback";
 CREATE TRIGGER "Feedback_immutable" BEFORE UPDATE OR DELETE ON "Feedback" FOR EACH ROW EXECUTE FUNCTION "assessment_history_immutable"();
-CREATE OR REPLACE FUNCTION "publish_field_assessment"() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF NEW.family = 'field' AND NEW."pairKey" IS NOT NULL AND jsonb_typeof(NEW.data->'served') IS DISTINCT FROM 'boolean' THEN
-    RAISE EXCEPTION 'Paired field assessments require an explicit served flag';
-  END IF;
-  IF NEW.family = 'field' AND NOT EXISTS (SELECT 1 FROM "Assessment" WHERE id = NEW.id) THEN
-    INSERT INTO "Assessment" (id, "publicationKey", family, subject, judgment, fingerprint, producer, evidence, served, "createdAt")
-    VALUES (NEW.id, 'field:' || NEW.id::text, 'field',
-      jsonb_build_object('kind','field','entity',NEW.entity,'recordId',NEW."recordId",'field',NEW.field,'draft',false),
-      jsonb_build_object('value',NEW."suggestedValue",'confidence',NEW.confidence,'runnerUpValue',NEW."runnerUpValue",'runnerUpConfidence',NEW."runnerUpConfidence",'kind',NEW.kind),
-      COALESCE(NEW.provenance->>'inputFingerprint',NEW."financeReviewFingerprint"),
-      CASE WHEN NEW.model = 'unknown' THEN NULL ELSE jsonb_build_object('kind','model','model',NEW.model,'revision',NULL,'runId',NEW."runId",'evaluationId',NEW."evaluationId") END,
-      jsonb_build_object('currentValue',NEW."currentValue",'provenance',NEW.provenance),
-      COALESCE((NEW.data->>'served')::boolean, true), NEW."createdAt");
-  END IF;
-  RETURN NEW;
-END;
-$$;
-DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState";
-CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"();
 `;
 
 /** Inactive statement revisions retain suppression and paid labels, so history lookups cannot use an active-only index. */

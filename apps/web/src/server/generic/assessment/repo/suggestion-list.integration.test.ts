@@ -30,6 +30,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { publishFieldAssessment } from "./assessment";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
@@ -108,9 +109,9 @@ async function fieldSuggestion(
   confidence: number,
   createdAt: Date,
 ) {
-  const [row] = await getDb(ctx.db)
-    .insert(assessmentState)
-    .values({
+  const row = await publishFieldAssessment(
+    ctx.db,
+    {
       entity: "product",
       recordId: product.entityId,
       field,
@@ -121,9 +122,10 @@ async function fieldSuggestion(
       kind: "addition",
       status: "pending",
       createdAt,
-    })
-    .returning({ id: assessmentState.id });
-  return row!.id;
+    },
+    true,
+  );
+  return row.id;
 }
 
 async function connection(ctx: Ctx) {

@@ -12,6 +12,7 @@ import {
 } from "~/server/db/schema";
 import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
 import { executeEntity } from "~/server/entity-kernel";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -51,9 +52,9 @@ describe("assessment invalidation boundaries", () => {
       subject.entityId,
       "tags",
     );
-    const [advice] = await getDb(ctx.db)
-      .insert(assessmentState)
-      .values({
+    const advice = await publishFieldAssessment(
+      ctx.db,
+      {
         entity: "product",
         recordId: subject.entityId,
         field: "tags",
@@ -64,9 +65,9 @@ describe("assessment invalidation boundaries", () => {
         kind: "correction",
         status: "pending",
         data: { liveInputFingerprint: fingerprint },
-      })
-      .returning();
-    if (!advice) throw new Error("Synthetic advice missing");
+      },
+      true,
+    );
     await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
       action: "update",
       entity: "product",
@@ -187,23 +188,26 @@ describe("assessment invalidation boundaries", () => {
       subject.entityId,
       "tags",
     );
-    const rows = await getDb(ctx.db)
-      .insert(assessmentState)
-      .values(
-        [fingerprint, "synthetic-old-basis"].map((liveInputFingerprint) => ({
-          entity: "product",
-          recordId: subject.entityId,
-          field: "tags",
-          currentValue: ["Alpha"],
-          suggestedValue: [],
-          confidence: 0.5,
-          model: "synthetic-model",
-          kind: "correction",
-          status: "pending",
-          data: { liveInputFingerprint },
-        })),
-      )
-      .returning();
+    const rows = await Promise.all(
+      [fingerprint, "synthetic-old-basis"].map((liveInputFingerprint) =>
+        publishFieldAssessment(
+          ctx.db,
+          {
+            entity: "product",
+            recordId: subject.entityId,
+            field: "tags",
+            currentValue: ["Alpha"],
+            suggestedValue: [],
+            confidence: 0.5,
+            model: "synthetic-model",
+            kind: "correction",
+            status: "pending",
+            data: { liveInputFingerprint },
+          },
+          true,
+        ),
+      ),
+    );
     const current = rows[0],
       stale = rows[1];
     if (!current || !stale) throw new Error("Synthetic judgments missing");

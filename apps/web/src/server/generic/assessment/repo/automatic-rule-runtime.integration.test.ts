@@ -71,6 +71,8 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-review";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
+import { publishFieldAssessment } from "./assessment";
+
 type Ctx = ReturnType<typeof withTestDb>;
 
 const labelStatementSuggestions: typeof runStatementLabels = async (
@@ -124,23 +126,27 @@ async function seedReviews(
   }));
   const status = input.automatic ? "applied" : "resolved";
   const data = { matchedRules: [input.stamp] };
-  if (input.family === "field")
-    // The field publication trigger writes each Assessment.
-    await client.insert(assessmentState).values(
-      rows.map((row) => ({
-        id: row.id,
-        family: "field" as const,
-        entity: "product",
-        recordId: crypto.randomUUID(),
-        field: "categoryId",
-        kind: "addition",
-        confidence: 0.97,
-        model: "typesafe/jev",
-        data,
-        status,
-      })),
+  if (input.family === "field") {
+    await Promise.all(
+      rows.map(async (row) => {
+        const history = await publishFieldAssessment(
+          ctx.db,
+          {
+            entity: "product",
+            recordId: crypto.randomUUID(),
+            field: "categoryId",
+            kind: "addition",
+            confidence: 0.97,
+            model: "typesafe/jev",
+            data,
+            status,
+          },
+          true,
+        );
+        row.id = history.id;
+      }),
     );
-  else {
+  } else {
     await client.insert(assessment).values(
       rows.map((row) => ({
         id: row.id,

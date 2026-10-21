@@ -23,7 +23,6 @@ import {
   photoGroupProposal,
   runFinding,
   statementRow,
-  assessmentState as suggestion,
   vendorAccount,
 } from "~/server/db/schema";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/image-processing";
@@ -33,6 +32,7 @@ import { resolveRunFinding } from "~/server/domains/purchase-import/repo/finding
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
@@ -1486,11 +1486,11 @@ describe("member actionable Work queue", () => {
       { ...ctx.actor, runId: null },
       { purpose: "ai_suggest" },
     );
-    await getDb(ctx.db)
-      .insert(suggestion)
-      .values(
-        await Promise.all(
-          products.map(async (product) => ({
+    await Promise.all(
+      products.map(async (product) =>
+        publishFieldAssessment(
+          ctx.db,
+          {
             runId,
             entity: "product",
             recordId: await resolveOrThrow(ctx.db, "product", product.id),
@@ -1501,9 +1501,11 @@ describe("member actionable Work queue", () => {
             model: "typesafe/jev",
             kind: "addition" as const,
             status: "pending" as const,
-          })),
+          },
+          true,
         ),
-      );
+      ),
+    );
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic receipt policy vendor",
       itemizationExpectation: "required",
