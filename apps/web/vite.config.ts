@@ -475,6 +475,11 @@ export default defineConfig(async ({ command }) => {
               telemetry: false,
               autoInstrumentMiddleware: false,
               buildTimeInstrumentation: false,
+              // Cloudflare owns spans; both Sentry runtimes capture errors only.
+              bundleSizeOptimizations: {
+                excludeTracing: true,
+                excludeDebugStatements: true,
+              },
               release: {
                 name: `cubby@${gitCommit}`, // must equal the runtime `release` in router.tsx and worker-sentry.ts
                 // Both runtimes set `release` explicitly. Injecting it would

@@ -75,6 +75,8 @@ and list slot fills stay `lazy` in their registries (`detail-slots.tsx`,
 `list-slots.ts`): every generic list route shares one closure, so one static
 slot import ships to every list.
 Specialist list columns are declared as `route.listColumns` source references.
+The account menu loads after hydration behind its existing SSR placeholder;
+its session-dependent controls do not belong in the Worker render closure.
 Interaction-only registry dialogs stay lazy with a local Suspense boundary
 inside their open/selected state. Loading a dialog must not suspend the action
 host or page. Feature installation stays synchronous and idempotent so child

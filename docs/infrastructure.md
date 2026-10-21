@@ -1001,6 +1001,9 @@ The production Cloudflare configuration owns Workers Observability trace persist
 and sampling. Cloudflare is the only trace
 destination; no Jaeger, Grafana Tempo, or Sentry trace exporter is configured.
 Sentry continues to capture errors on web, Apple, and auxiliary Workers.
+The web build excludes Sentry tracing and SDK debug statements through the
+upstream bundler options; error capture, raw application diagnostics, and source
+maps remain enabled.
 
 Worker logs also reference the account-level `grafana-logs` destination for
 Grafana Cloud Loki. The calendar-test Worker is a local test harness and does
