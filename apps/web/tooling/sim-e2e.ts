@@ -22,7 +22,6 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { request } from "@playwright/test";
 import { type Pool } from "pg";
@@ -65,8 +64,6 @@ Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --headless                 Swift CubbyKit CLI against the Worker, no simulator
     --photo [--purchase]     synthetic photo-inventory (+ wardrobe purchase) run
     --statement-csv          Swift CSV statement preview/import
-    --watch                  stay up; press Enter to rerun
-  --watch                    simulator app against real API data; Enter replays
   --extended-journey         full native edit, view-switch and filter journey
   --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
@@ -114,16 +111,15 @@ const inputJourney = flags.includes("--input-journey");
 const photoOnly = flags.includes("--photo-only");
 if (photoOnly && !inputJourney)
   throw new Error("--photo-only requires --input-journey");
-const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
 const extendedJourney = flags.includes("--extended-journey");
 const productClarity = flags.includes("--product-clarity");
 const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
-if (process.env.CUBBY_E2E_AGENT_DEVICE && (testerArmy || watch))
+if (process.env.CUBBY_E2E_AGENT_DEVICE && testerArmy)
   throw new Error(
-    "Shared device launcher supports finite simulator journeys; watch and AI lanes own their driver lifecycle",
+    "Shared device launcher supports finite simulator journeys; AI lanes own their driver lifecycle",
   );
 if (process.env.CUBBY_E2E_AGENT_DEVICE) {
   const driver = sharedDeviceCommand("pnpm", [
@@ -150,7 +146,6 @@ if (
     emojiReview ||
     testerArmy ||
     inputJourney ||
-    watch ||
     qa)
 )
   throw new Error(
@@ -174,7 +169,6 @@ if (
       photo ||
       purchase ||
       statementCsv ||
-      watch ||
       layout ||
       productClarity)) ||
   (testerArmy &&
@@ -183,19 +177,16 @@ if (
       photo ||
       purchase ||
       statementCsv ||
-      watch ||
       video ||
       layout ||
       productClarity)) ||
   ((testerArmyReplay || wrongName) && !testerArmy) ||
-  (watch && video) ||
   (video && headless) ||
-  (layout && (headless || photo || purchase || watch || productClarity)) ||
-  (productClarity &&
-    (headless || photo || purchase || watch || statementCsv)) ||
-  (photo && (!headless || watch)) ||
+  (layout && (headless || photo || purchase || productClarity)) ||
+  (productClarity && (headless || photo || purchase || statementCsv)) ||
+  (photo && !headless) ||
   (purchase && !photo) ||
-  (statementCsv && (!headless || photo || purchase || watch)) ||
+  (statementCsv && (!headless || photo || purchase)) ||
   flags.some(
     (argument) =>
       ![
@@ -204,7 +195,6 @@ if (
         "--input-journey",
         "--photo-only",
         "--headless",
-        "--watch",
         "--video",
         "--photo",
         "--purchase",
@@ -222,7 +212,7 @@ if (
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -244,9 +234,7 @@ const lane = qa
                   ? "headless-photo-e2e"
                   : headless
                     ? "headless-e2e"
-                    : watch
-                      ? "sim-dev"
-                      : "sim-e2e";
+                    : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -287,44 +275,11 @@ let simulatorName: string | undefined;
 let simulatorRuntime: string | undefined;
 let interrupted: NodeJS.Signals | undefined;
 let activeChild: ReturnType<typeof spawn> | undefined;
-let stopWatch: (() => void) | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     interrupted = signal;
     activeChild?.kill("SIGTERM");
-    stopWatch?.();
   });
-}
-
-function swiftSourceVersion(): string {
-  const sourceRoot = path.join(kitRoot, "Sources");
-  const files = walkFiles(sourceRoot).filter((entry) =>
-    entry.endsWith(".swift"),
-  );
-  files.push(path.join(kitRoot, "Package.swift"));
-  return files
-    .sort()
-    .map((file) => {
-      const stat = statSync(file);
-      return `${file}:${stat.mtimeMs}:${stat.size}`;
-    })
-    .join("|");
-}
-
-function appleSourceVersion(): string {
-  const appRoot = path.join(appleRoot, "App");
-  const files = walkFiles(appRoot).filter((entry) => entry.endsWith(".swift"));
-  files.push(
-    path.join(appleRoot, "project.yml"),
-    path.join(appleRoot, "packages.yml"),
-  );
-  return [
-    swiftSourceVersion(),
-    ...files.sort().map((file) => {
-      const stat = statSync(file);
-      return `${file}:${stat.mtimeMs}:${stat.size}`;
-    }),
-  ].join("|");
 }
 
 function nativeSourceFingerprint(includeApp: boolean): string {
@@ -746,139 +701,6 @@ async function recordSimulatorVideo(
   };
 }
 
-async function runWarmSimulator(options: {
-  deviceID: string;
-  common: string[];
-  session: string;
-  productId: string;
-  userId: string;
-  install: () => Promise<void>;
-  launch: () => Promise<void>;
-}): Promise<void> {
-  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
-    await import("./scenarios/simulator-product-fixture");
-  const { seedSimulatorScenario } = await import("./scenarios/simulator");
-  const { deviceID, common, session, productId, userId, install, launch } =
-    options;
-  const stateDir = path.join(artifacts, "agent-device-state");
-  const sessionArgs = [
-    ...common,
-    "--session",
-    session,
-    "--state-dir",
-    stateDir,
-  ];
-  let builtVersion = appleSourceVersion();
-  let sessionActive = false;
-  const input = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  input.on("SIGINT", () => {
-    interrupted = "SIGINT";
-    activeChild?.kill("SIGTERM");
-    input.close();
-  });
-  stopWatch = () => input.close();
-  const replay = async (
-    id: string,
-    originalName: string,
-    updatedName: string,
-  ) => {
-    const started = performance.now();
-    try {
-      if (appleSourceVersion() !== builtVersion) {
-        await run("pnpm", [
-          "exec",
-          "agent-device",
-          "close",
-          ...sessionArgs,
-        ]).catch(() => {});
-        sessionActive = false;
-        await install();
-        builtVersion = appleSourceVersion();
-        await launch();
-      }
-      console.log(`[${lane}] Product ${id}; cubby://entity/${id}`);
-      sessionActive = true;
-      await run("pnpm", [
-        "exec",
-        "agent-device",
-        "replay",
-        "apps/apple/e2e/product-edit-warm.ad",
-        ...sessionArgs,
-        "--timeout",
-        "120000",
-        "-e",
-        `PRODUCT_ID=${id}`,
-        "-e",
-        `PRODUCT_NAME=${originalName}`,
-        "-e",
-        `UPDATED_NAME=${updatedName}`,
-      ]);
-      await assertNativeEdit(id, updatedName);
-      console.log(
-        `[${lane}] Simulator replay ${(performance.now() - started).toFixed(0)}ms`,
-      );
-    } catch (error) {
-      if (interrupted) throw error;
-      await run("pnpm", [
-        "exec",
-        "agent-device",
-        "screenshot",
-        ...sessionArgs,
-        "--out",
-        path.join(artifacts, "failure.png"),
-      ]).catch(() => {});
-      await run(
-        "pnpm",
-        ["exec", "agent-device", "snapshot", "-i", ...sessionArgs],
-        repoRoot,
-        path.join(artifacts, "failure-ui-tree.txt"),
-      ).catch(() => {});
-      console.error(
-        `[${lane}] Replay failed: ${String(error)}; inspect ${artifacts}`,
-      );
-    }
-  };
-  console.log(
-    `[${lane}] Simulator ${deviceID}; agent-device session ${session}; state ${stateDir}`,
-  );
-  try {
-    await replay(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
-    let iteration = 0;
-    console.log(
-      `[${lane}] Press Enter to seed and replay; Ctrl-C drops ${simName}`,
-    );
-    for await (const _ of input) {
-      if (interrupted) break;
-      iteration += 1;
-      const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
-      const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-      const nextPool = createPostgresPool({ connectionString: databaseURL });
-      let nextID: string;
-      try {
-        nextID = await seedSimulatorScenario(nextPool, userId, originalName);
-      } finally {
-        await nextPool.end();
-      }
-      await replay(nextID, originalName, updatedName);
-      console.log(`[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`);
-    }
-  } finally {
-    stopWatch = undefined;
-    input.close();
-    if (sessionActive)
-      await run(
-        "pnpm",
-        ["exec", "agent-device", "close", ...sessionArgs],
-        repoRoot,
-        undefined,
-        true,
-      ).catch(console.error);
-  }
-}
-
 function startDatabaseWatchdog(): void {
   const watchdog = spawn(
     process.execPath,
@@ -888,11 +710,6 @@ function startDatabaseWatchdog(): void {
       simName,
       String(process.pid),
       path.join(artifacts, "watchdog.log"),
-      // The watchdog accepts a session to close only for the simulator watch
-      // lane (artifacts/sim-dev); every other run gets database-only cleanup.
-      ...(headless || !watch
-        ? []
-        : [`cubby-sim-${simName}`, path.join(artifacts, "agent-device-state")]),
     ],
     { cwd: webRoot, detached: true, stdio: "ignore" },
   );
@@ -1090,84 +907,30 @@ async function runHeadlessPhotoScenario(
 async function runHeadlessProductScenario(
   url: URL,
   productId: string,
-  userId: string,
 ): Promise<void> {
   const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
     await import("./scenarios/simulator-product-fixture");
-  let builtVersion: string | undefined;
-  const runNative = async (
-    id: string,
-    originalName: string,
-    updatedName: string,
-  ) => {
-    const started = performance.now();
-    const args = [
-      "headless-product-edit",
-      "--base-url",
-      url.origin,
-      "--product-id",
-      id,
-      "--original-name",
-      originalName,
-      "--updated-name",
-      updatedName,
-    ];
-    const sourceVersion = swiftSourceVersion();
-    const sourceFingerprint = nativeSourceFingerprint(false);
-    if (sourceVersion === builtVersion) {
-      await run(path.join(kitRoot, ".build/debug/cubby"), args);
-    } else {
-      await run("pnpm", ["apple", "cli", ...args]);
-      builtVersion = sourceVersion;
-    }
-    nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
-    nativeBuildSourceVersion = sourceFingerprint;
-    currentNativeSourceVersion = () => nativeSourceFingerprint(false);
-    nativeBuildReady = true;
-    await assertNativeEdit(id, updatedName);
-    console.log(
-      `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
-    );
-  };
-  await runNative(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
-  if (watch) {
-    const input = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    input.on("SIGINT", () => {
-      interrupted = "SIGINT";
-      activeChild?.kill("SIGTERM");
-      input.close();
-    });
-    stopWatch = () => input.close();
-    let iteration = 0;
-    console.log(
-      `[${lane}] Press Enter to seed a fresh product and rerun; Ctrl-C drops ${simName}`,
-    );
-    try {
-      for await (const _ of input) {
-        if (interrupted) break;
-        iteration += 1;
-        const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
-        const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-        const nextPool = createPostgresPool({ connectionString: databaseURL });
-        let nextID: string;
-        try {
-          const { seedSimulatorScenario } =
-            await import("./scenarios/simulator");
-          nextID = await seedSimulatorScenario(nextPool, userId, originalName);
-        } finally {
-          await nextPool.end();
-        }
-        await runNative(nextID, originalName, updatedName);
-        console.log(`[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`);
-      }
-    } finally {
-      stopWatch = undefined;
-      input.close();
-    }
-  }
+  const started = performance.now();
+  const args = [
+    "headless-product-edit",
+    "--base-url",
+    url.origin,
+    "--product-id",
+    productId,
+    "--original-name",
+    SIM_PRODUCT_NAME,
+    "--updated-name",
+    SIM_PRODUCT_UPDATED_NAME,
+  ];
+  nativeBuildSourceVersion = nativeSourceFingerprint(false);
+  await run("pnpm", ["apple", "cli", ...args]);
+  nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
+  currentNativeSourceVersion = () => nativeSourceFingerprint(false);
+  nativeBuildReady = true;
+  await assertNativeEdit(productId, SIM_PRODUCT_UPDATED_NAME);
+  console.log(
+    `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
+  );
 }
 
 async function runHeadlessStatementCsvScenario(url: URL, userId: string) {
@@ -1303,7 +1066,6 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
 }
 
 function finishE2ERun(failure: Error | undefined): Error | undefined {
-  if (watch) return failure;
   try {
     const { build, runtime } = nativeBuildMetadata();
     const status = failure === undefined ? "passed" : "failed";
@@ -2028,7 +1790,7 @@ async function main(): Promise<void> {
             `[${lane}] Purchase and Product convergence ${(performance.now() - convergenceStarted).toFixed(0)}ms`,
           );
         }
-      } else await runHeadlessProductScenario(url, productId, userId);
+      } else await runHeadlessProductScenario(url, productId);
     } else {
       // Every worktree drives the same simulators; build and Worker startup
       // above still run concurrently.
@@ -2256,16 +2018,6 @@ async function main(): Promise<void> {
           } finally {
             await journeyPool.end();
           }
-        } else if (watch) {
-          await runWarmSimulator({
-            deviceID: device.udid,
-            common,
-            session,
-            productId,
-            userId,
-            install,
-            launch,
-          });
         } else if (qa) {
           await runQaJourneys(common, launch);
         } else {
