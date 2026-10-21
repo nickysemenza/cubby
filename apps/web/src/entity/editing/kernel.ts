@@ -84,7 +84,8 @@ export function resolveEntityEdit<E extends EditableEntity>(
         (field) =>
           field.key === key &&
           "collection" in field &&
-          field.collection?.primary,
+          "primary" in field.collection &&
+          field.collection.primary,
       ),
   );
   const requestedFields =
@@ -214,7 +215,7 @@ export function buildEntityEdit<E extends EditableEntity>(
       );
       const collection =
         model && "collection" in model ? model.collection : undefined;
-      if (collection?.primary) {
+      if (collection && "primary" in collection && collection.primary) {
         const local = collectionEditSchema.safeParse(value);
         if (
           local.success &&

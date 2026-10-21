@@ -192,7 +192,13 @@ export function ProductExternalIdsField({
   });
   const schema = structuredSchemaFor(entity, field.key);
   const collection = "collection" in field ? field.collection : undefined;
-  if (!schema || !collection?.primary || collection.key === "value")
+  if (
+    !schema ||
+    !collection ||
+    !("primary" in collection) ||
+    !collection.primary ||
+    collection.key === "value"
+  )
     throw new Error("Identifier controls need declared collection metadata.");
   const labeled =
     "array" in schema.node && "object" in schema.node.array.item.node
