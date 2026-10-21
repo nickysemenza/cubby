@@ -34,6 +34,38 @@ describe("previewEntity field suggestions", () => {
     mocks.ensureRun.mockResolvedValue(fixtureRunId);
   });
 
+  // Failure: a preview commits a high bucket below the automatic threshold.
+  it.each([0.94, 0.95])(
+    "fills an empty preview field only at the automatic threshold (%s)",
+    async (probability) => {
+      mocks.suggestFields.mockResolvedValue({
+        suggestions: {
+          emoji: {
+            value: "🔧",
+            label: "🔧",
+            detail: null,
+            confidence: "high",
+            probability,
+            reasoning: "Synthetic tool identity",
+            alternatives: [],
+            operation: "set",
+            removals: [],
+          },
+        },
+      });
+      const result = await previewEntity(
+        kernelContext,
+        {
+          entity: "product",
+          data: { name: "Synthetic wrench" },
+          context: { targets: ["emoji"] },
+        },
+        ports,
+      );
+      expect(result.suggestions.emoji?.applied).toBe(probability >= 0.95);
+    },
+  );
+
   // Creating from a preview must not bypass a field's mandatory member review.
   it("keeps high-confidence account suggestions out of the proposed create body", async () => {
     const choice = (value: string) => ({

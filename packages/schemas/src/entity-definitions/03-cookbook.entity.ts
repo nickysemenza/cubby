@@ -106,6 +106,7 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "entity-select",
+          // The Product link identifies the owned copy of this cookbook.
           suggest: { basis: ["name", "author"], reviewRequired: true },
         },
       },

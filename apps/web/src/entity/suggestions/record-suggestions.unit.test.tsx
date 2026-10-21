@@ -143,6 +143,52 @@ function Surface({
 }
 
 describe("record suggestions", () => {
+  it("explains an empty cell skipped for insufficient basis without asking", async () => {
+    const asked = vi.fn();
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async () => {
+        asked();
+        return { suggestions: {}, outcomes: {} };
+      }),
+    };
+    const record = {
+      id,
+      name: "",
+      manufacturer: null,
+      model: null,
+      notes: null,
+      classificationEvidence: null,
+      categoryId: null,
+    };
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["categoryId"]}
+        operations={operations}
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
+      >
+        <RecordFieldSuggestion
+          record={record}
+          field="categoryId"
+          surface="cell"
+        >
+          Empty category
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: /Not checked.*nothing to go on/,
+      }),
+    ).toHaveTextContent("No evidence");
+    expect(
+      screen.queryByRole("button", { name: /Evaluation status unavailable/ }),
+    ).not.toBeInTheDocument();
+    expect(asked).not.toHaveBeenCalled();
+  });
+
   it.each([
     { field: "categoryId", readKey: "categoryId", proposal: food },
     {
@@ -684,7 +730,7 @@ describe("record suggestions", () => {
     expect(calls).toHaveLength(3);
   });
 
-  it("shows a confident live answer as a ghost pill and a weak one in the review menu", async () => {
+  it("shows a confident live answer as a ghost pill and explains a weak empty-field answer", async () => {
     const answers = {
       "red apple": 0.97,
       "green pear": 0.97,
@@ -790,16 +836,17 @@ describe("record suggestions", () => {
     view.rerender(<Cell name="steel wrench" />);
     await screen.findByText("No suggestions · 1 field checked");
     expect(screen.getByText("row scoped")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Food/)).toBeNull();
+    const status = screen.getByRole("button", { name: /Leaning Food/ });
+    expect(status).toHaveTextContent("Below threshold");
     expect(
       screen.queryByRole("button", { name: /^Accept suggested value/ }),
     ).toBeNull();
-    // A weak proposal remains inspectable without becoming the inline action.
-    fireEvent.click(screen.getByRole("button", { name: "Suggestion actions" }));
+    // A weak proposal's evidence remains inspectable without an apply action.
+    fireEvent.click(status);
     expect(
       await screen.findByText("Synthetic category evidence"),
     ).toBeVisible();
-    expect(screen.getByText(/Alternative: Tools \/ Drivers/)).toBeVisible();
+    expect(screen.getByText(/Tools \/ Drivers/)).toBeVisible();
   });
 
   it("opens the normal editor with the saved value after acceptance fails", async () => {

@@ -2,7 +2,7 @@ import { assessmentChildHandle } from "./assessment-reference";
 import { workflowRecoveryProgress } from "./workflow-runs";
 import { z } from "zod";
 
-export const SUGGESTION_AUTO_APPLY_THRESHOLD = 0.85;
+export const SUGGESTION_AUTO_APPLY_THRESHOLD = 0.95;
 
 export const aiDependencyStamp = z.object({
   feature: z.string().min(1),

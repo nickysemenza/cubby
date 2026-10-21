@@ -8,7 +8,11 @@ import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import {
+  basisValueOf,
+  requiresSuggestionReview,
+} from "@cubby/schemas/field-suggestion";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
@@ -28,7 +32,7 @@ import {
 } from "~/server/db/schema";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
-import { executeEntity } from "~/server/entity-kernel";
+import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
@@ -37,6 +41,7 @@ import {
   matchedRulesOf,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import {
   currentInputRevision,
@@ -46,8 +51,12 @@ import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
-import { fieldInputFingerprint } from "./field-input-fence";
+import {
+  fieldInputFingerprint,
+  fieldInputFingerprintIfLive,
+} from "./field-input-fence";
 
 /** Shared executions publish one suggestion history; every live requester can inspect it. */
 const requestedSuggestionRun = (code: string) => sql`(
@@ -415,6 +424,111 @@ async function applySuggestionValue(
   return receipt;
 }
 
+/** Automatic fill never turns a proposal into authority over a member decision. */
+async function automaticFieldFillRefusal(
+  db: Database,
+  context: EntityKernelContext,
+  row: typeof suggestionTable.$inferSelect,
+) {
+  const entity = fieldSuggestionsInput.shape.entity.parse(row.entity);
+  const policy = entityFieldByKey(entity, row.field)?.control?.suggest;
+  const empty = (value: unknown) => value == null || value === "";
+  if (
+    !row.active ||
+    row.suppression ||
+    row.kind !== "addition" ||
+    policy?.mode !== "fill" ||
+    requiresSuggestionReview(entity, row.field) ||
+    row.confidence < SUGGESTION_AUTO_APPLY_THRESHOLD ||
+    !empty(row.currentValue) ||
+    empty(row.suggestedValue) ||
+    (row.runnerUpConfidence !== null &&
+      row.confidence - row.runnerUpConfidence < 0.1)
+  )
+    return `Field ${row.entity}.${row.field} is not eligible for automatic fill`;
+  const [served] = await getDb(db)
+    .select({ id: suggestionTable.id })
+    .from(suggestionTable)
+    .where(and(eq(suggestionTable.id, row.id), reviewableSuggestionSql));
+  if (!served) return "Only a served field suggestion can apply automatically";
+  const table = SHORTCODE_TABLE[entity];
+  const [record] = await getDb(db)
+    .select({ shortcode: table.shortcode })
+    .from(table)
+    .where(eq(table.id, row.recordId))
+    .limit(1);
+  if (!record) return "Automatic fill subject no longer exists";
+  const result = await executeEntityAs({ ...context, db }, "get", {
+    entity,
+    id: record.shortcode,
+    missing: "null",
+  });
+  if (!result.item) return "Automatic fill subject no longer exists";
+  const live = z.record(z.string(), z.unknown()).parse(result.item);
+  if (!empty(live[row.field]))
+    return "Automatic fill preserves populated effective values";
+  if (
+    !policy.basis.some(
+      (key) => key !== row.field && basisValueOf(live[key]) !== null,
+    )
+  )
+    return "Automatic fill requires supporting field evidence";
+  // A saved clear is intentional too; unchanged saves advance the fingerprint.
+  if (await latestFieldWrite(db, entity, row.recordId, row.field))
+    return "Automatic fill preserves an existing field decision";
+  const rejected = await getDb(db)
+    .select({ value: suggestionTable.suggestedValue })
+    .from(suggestionTable)
+    .where(
+      and(
+        eq(suggestionTable.family, "field"),
+        eq(suggestionTable.entity, row.entity),
+        eq(suggestionTable.recordId, row.recordId),
+        eq(suggestionTable.field, row.field),
+        eq(suggestionTable.status, "rejected"),
+      ),
+    );
+  if (
+    rejected.some(
+      (previous) =>
+        canonicalJson(z.json().parse(previous.value)) ===
+        canonicalJson(z.json().parse(row.suggestedValue)),
+    )
+  )
+    return "Automatic fill preserves a rejected value";
+  return null;
+}
+
+/** Cheap read-only preflight; acceptance repeats all checks inside its write fence. */
+export async function canAutomaticallyFillField(
+  db: Database,
+  context: EntityKernelContext,
+  id: string,
+) {
+  const [row] = await getDb(db)
+    .select()
+    .from(suggestionTable)
+    .where(
+      and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
+    );
+  if (!row) return false;
+  const fence = z
+    .object({ liveInputFingerprint: z.string() })
+    .safeParse(row.data);
+  if (
+    !fence.success ||
+    fence.data.liveInputFingerprint !==
+      (await fieldInputFingerprintIfLive(
+        db,
+        row.entity,
+        row.recordId,
+        row.field,
+      ))
+  )
+    return false;
+  return (await automaticFieldFillRefusal(db, context, row)) === null;
+}
+
 export async function acceptSuggestion(
   db: Database,
   context: EntityKernelContext,
@@ -450,10 +564,14 @@ export async function acceptSuggestion(
       throw new Error(
         "Suggestion inputs changed; evaluate this field again before applying",
       );
-    if (automatic && requiresSuggestionReview(parsed.entity, parsed.field))
-      throw new Error(
-        `Field ${parsed.entity}.${parsed.field} requires member review`,
+    if (automatic) {
+      const refusal = await automaticFieldFillRefusal(
+        transactionDb,
+        context,
+        row,
       );
+      if (refusal) throw new Error(refusal);
+    }
     // The shared write path excludes this row by status while superseding its
     // pending siblings. A failed application rolls the status transition back.
     await getDb(transactionDb)

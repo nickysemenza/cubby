@@ -51,7 +51,7 @@ type Declaration<F extends AutomaticRuleFamily> = {
    * measured model never authorizes another.
    */
   perModel: boolean;
-  execution: "measured" | "import_clean";
+  execution: "measured" | "import_clean" | "field_policy";
   /** The match's model qualifier (null unless `perModel`), or undefined for no match. */
   match: (facts: FactsOf[F]) => { model: string | null } | undefined;
   application: (facts: FactsOf[F]) => RuleApplication;
@@ -63,24 +63,23 @@ const soleCandidate = (judgment: StatementTransactionJudgment) =>
 /**
  * Automatic rules, keyed by `<family>.<name>`. Each reads its family's
  * published evidence directly and deterministically; model confidence is part
- * of a definition but never authorizes one alone. Connections have none.
+ * of a definition but never authorizes one alone. Field application also checks
+ * live emptiness, evidence, winner margin and member intent. Connections have none.
  */
 export const AUTOMATIC_RULES = {
   "field.addition": {
-    execution: "measured",
+    execution: "field_policy",
     family: "field",
     description:
-      "A confident addition or correction from the Sweep's pinned decision model to a declared assignment field that does not require review.",
+      "Fill an empty declared assignment field at 95% confidence with current evidence and a clear winner, preserving member decisions.",
     revision: () => FIELD_ASSIGNMENT_REVISION,
     perModel: false,
     match: (facts) =>
-      (facts.kind === "addition" || facts.kind === "correction") &&
+      facts.kind === "addition" &&
       entityFieldByKey(facts.entity, facts.field)?.control?.suggest?.mode ===
         "fill" &&
       !requiresSuggestionReview(facts.entity, facts.field) &&
-      facts.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD &&
-      facts.pinnedModel !== null &&
-      facts.model === facts.pinnedModel
+      facts.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD
         ? { model: null }
         : undefined,
     application: () => ({ kind: "accept_as_is" }),

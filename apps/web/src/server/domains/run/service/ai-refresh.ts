@@ -65,6 +65,7 @@ import { prepareProductPairPublication } from "~/server/domains/product/repo/mat
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import {
@@ -381,6 +382,15 @@ export async function discoverAiRefresh(
   }
   for (const rows of grouped.values()) {
     try {
+      // Current pending advice is reconsidered even when its inference inputs
+      // have not changed. Applied/rejected rows cannot re-enter this path.
+      const pendingIds = rows
+        .filter((row) => row.status === "pending")
+        .map((row) => row.id);
+      const automatic = await applyAutomaticRules(db, pendingIds, {
+        context: ports.context,
+      });
+      if (automatic.applied.length) continue;
       const first = rows[0]!;
       const target = aiEvaluationTarget.parse({
         kind: "field",

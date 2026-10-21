@@ -1,3 +1,4 @@
+import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
@@ -195,11 +196,23 @@ async function applyPreviewSuggestions(args: {
         suggestions[field] = null;
         continue;
       }
+      const fieldModel = args.model.fields.find((item) => item.key === field);
+      const probability = suggestion.probability;
+      const currentValue = args.proposed[field];
       const applied =
         basisMode === "suggested" &&
         !requiresSuggestionReview(args.entity, field) &&
         args.explicit[field] === undefined &&
-        suggestion.confidence === "high" &&
+        (currentValue == null || currentValue === "") &&
+        probability !== null &&
+        probability >= SUGGESTION_AUTO_APPLY_THRESHOLD &&
+        suggestion.alternatives.every(
+          (other) => probability - other.probability >= 0.1,
+        ) &&
+        // A declared resolution needs an authoritative draft result before
+        // preview can establish that the effective value is empty.
+        (!fieldModel?.resolution ||
+          args.fieldResolutions[field] !== undefined) &&
         // A `remove` proposal is always a review-and-approve action, never a
         // silent auto-apply — even at high confidence.
         suggestion.operation !== "remove";

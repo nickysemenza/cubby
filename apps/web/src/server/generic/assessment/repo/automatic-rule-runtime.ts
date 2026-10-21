@@ -46,6 +46,7 @@ import {
   matchStatementRules,
   ruleBase,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { canAutomaticallyFillField } from "~/server/generic/assessment/repo/suggestion-review";
 
 const log = createLogger("automatic-rules");
 
@@ -137,6 +138,7 @@ async function storedRules(db: Database) {
 type StoredRule = typeof automaticRule.$inferSelect;
 /** On for the code's current revision; a missing row is off. */
 const isOn = (key: AutomaticRuleKey, row: StoredRule | undefined) =>
+  AUTOMATIC_RULES[key].execution === "field_policy" ||
   AUTOMATIC_RULES[key].execution === "import_clean" ||
   Boolean(row?.enabled && row.revision === AUTOMATIC_RULES[key].revision());
 
@@ -152,9 +154,9 @@ export async function assertAutomaticRuleOn(
   key: AutomaticRuleKey,
   stamp: string,
 ) {
-  if (AUTOMATIC_RULES[key].execution === "import_clean") {
+  if (AUTOMATIC_RULES[key].execution !== "measured") {
     if (stamp !== ruleBase(key))
-      throw new Error("Import booking policy changed; refresh the suggestion");
+      throw new Error("Automatic policy changed; refresh the suggestion");
     return;
   }
   const [row] = await getDb(db)
@@ -233,10 +235,10 @@ export async function setAutomaticRule(
       "Only a member turns an Automatic rule on or off",
     );
   const rule = AUTOMATIC_RULES[input.ruleKey];
-  if (rule.execution === "import_clean")
+  if (rule.execution !== "measured")
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "Clean import booking is an execution policy, not an optional measured rule.",
+      "This automatic policy is not an optional measured rule.",
     );
   const stored = await storedRules(db);
   const before = await ruleSummary(
@@ -428,11 +430,12 @@ export async function applyAutomaticRules(
   for (const row of rows) {
     if (!row.active || row.status !== "pending" || !row.served) continue;
     const stamp = ruleStamps.safeParse(row.data).data;
-    if (!stamp?.matchedRules.length) continue;
-    const matches = currentMatches(row, stamp.pinnedModel)
+    if (row.family !== "field" && !stamp?.matchedRules.length) continue;
+    const matches = currentMatches(row, stamp?.pinnedModel ?? null)
       .filter(
         (match) =>
-          stamp.matchedRules.includes(match.stamp) &&
+          (row.family === "field" ||
+            stamp?.matchedRules.includes(match.stamp)) &&
           (AUTOMATIC_RULES[match.key].execution !== "import_clean" ||
             options.importClean === true) &&
           isOn(match.key, stored.get(match.key)),
@@ -454,7 +457,7 @@ export async function applyAutomaticRules(
     const [match] = eligible;
     if (!match) continue;
     if (
-      stamp.auditSample &&
+      stamp?.auditSample &&
       AUTOMATIC_RULES[match.key].execution === "measured"
     ) {
       outcome.audited.push(row.id);
@@ -506,6 +509,13 @@ export async function applyAutomaticRules(
           runId: row.runId ? runEntityId.parse(row.runId) : null,
         },
       };
+      // Ineligible or stale field work stays reviewable/refreshable without
+      // reporting an expected policy hold as an application error every pass.
+      if (
+        row.family === "field" &&
+        !(await canAutomaticallyFillField(db, context, row.id))
+      )
+        continue;
       await reviewAssessment(
         db,
         context,

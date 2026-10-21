@@ -78,22 +78,22 @@ describe("field.addition", () => {
   const facts = {
     entity: "product" as const,
     field: "categoryId",
-    kind: "correction",
+    kind: "addition",
     confidence: 0.97,
     model: "typesafe/jev",
     pinnedModel: "typesafe/jev",
   };
 
-  it("matches additions and corrections through the same declared assignment policy", () => {
+  // Failure: a confident correction overwrites a member value, or ordinary
+  // additions remain gated on a Sweep model rather than current evidence.
+  it("matches only additions at 95 percent without requiring a Sweep", () => {
     expect(matchFieldRules(facts)[0]?.key).toBe("field.addition");
-    expect(matchFieldRules({ ...facts, kind: "addition" })[0]?.key).toBe(
-      "field.addition",
-    );
-    expect(matchFieldRules({ ...facts, confidence: 0.6 })).toEqual([]);
-    expect(matchFieldRules({ ...facts, pinnedModel: null })).toEqual([]);
-    expect(matchFieldRules({ ...facts, model: "synthetic-unpinned" })).toEqual(
-      [],
-    );
+    expect(matchFieldRules({ ...facts, kind: "correction" })).toEqual([]);
+    expect(matchFieldRules({ ...facts, confidence: 0.949 })).toEqual([]);
+    expect(
+      matchFieldRules({ ...facts, confidence: 0.95, pinnedModel: null })[0]
+        ?.key,
+    ).toBe("field.addition");
   });
 
   it("keeps review-required fields and pruning out of automatic assignments", () => {

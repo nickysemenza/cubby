@@ -415,7 +415,12 @@ export const inferFieldAssessments = async (
       .parse(withheldResult.rows);
     if (withheld) {
       output.suggestions[field] = null;
-      if (output.outcomes) delete output.outcomes[field];
+      if (output.outcomes)
+        output.outcomes[field] = {
+          ...outcome,
+          assessmentId: prediction.id,
+          reviewStatus: "rejected",
+        };
       continue;
     }
     const original = z

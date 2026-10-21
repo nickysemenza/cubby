@@ -105,6 +105,14 @@ describe("settled suggestion questions", () => {
     basis: { name, manufacturer: null },
   });
 
+  // Failure: a first read reports unknown despite an unusable source basis.
+  it("returns a source status before any remembered answer exists", async () => {
+    expect((await readAnswer(gadget(""))).outcome).toEqual({
+      kind: "skipped",
+      reason: "no_signal",
+    });
+  });
+
   it("remembers a decline until its basis changes or a member records a miss", async () => {
     const answer = await ask(
       gadget("Synthetic unplaceable gadget"),
@@ -286,7 +294,9 @@ describe("settled suggestion questions", () => {
     expect(missed.revision).toMatch(/^miss:/u);
     // The live retry repeats the rejected assessment and is withheld.
     const retry = await ask(question);
-    expect(retry.outcomes?.locationId).toBeUndefined();
+    expect(retry.outcomes?.locationId).toMatchObject({
+      reviewStatus: "rejected",
+    });
     expect((await readAnswer(question)).revision).toBe(missed.revision);
 
     await insertWithShortcode(ctx.db, "location", {

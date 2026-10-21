@@ -98,6 +98,72 @@ describe("targeted prompt refresh", () => {
       targets.some((target) => target.runId === id),
     );
   }
+  // Failure: unchanged pending backlog is skipped forever; a saved clear or
+  // populated value is overwritten; replay applies the same advice twice.
+  it.each(["empty", "cleared", "populated"] as const)(
+    "reconsiders retained high-confidence backlog while preserving %s intent",
+    async (state) => {
+      const item = await productFixture(ctx, "Synthetic backlog product");
+      const [subject] = await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.shortcode, item.id));
+      if (!subject) throw new Error("Synthetic backlog subject missing");
+      if (state !== "empty") {
+        await executeEntity(kernelCtx(ctx), {
+          action: "update",
+          entity: "product",
+          id: item.id,
+          data: { categoryId: taxonomyShortcode("tools") },
+        });
+        if (state === "cleared")
+          await executeEntity(kernelCtx(ctx), {
+            action: "update",
+            entity: "product",
+            id: item.id,
+            data: { categoryId: null },
+          });
+      }
+      const pending = await seedPending(ctx, {
+        entity: "product",
+        recordId: subject.id,
+        field: "categoryId",
+        currentValue: state === "populated" ? taxonomyId("tools") : null,
+        suggestedValue: taxonomyShortcode("food"),
+        kind: state === "populated" ? "correction" : "addition",
+      });
+      await getDb(ctx.db)
+        .update(suggestion)
+        .set({ confidence: 0.97 })
+        .where(eq(suggestion.id, pending.id));
+      await activateAiRefresh(ctx.db, "synthetic-backlog-policy", {
+        enabled: true,
+      });
+      const ports = {
+        context: kernelCtx(ctx),
+        suggestPorts: categoryPorts().suggestPorts,
+      };
+      await discoverAiRefresh(ctx.db, ports);
+      await discoverAiRefresh(ctx.db, ports);
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(suggestion)
+        .where(eq(suggestion.id, pending.id));
+      const [live] = await getDb(ctx.db)
+        .select({ categoryId: product.categoryId })
+        .from(product)
+        .where(eq(product.id, subject.id));
+      expect(saved?.status).toBe(state === "empty" ? "applied" : "pending");
+      expect(live?.categoryId).toBe(
+        state === "empty"
+          ? taxonomyId("food")
+          : state === "cleared"
+            ? null
+            : taxonomyId("tools"),
+      );
+    },
+  );
+
   // A two-target inference cap cannot bound one Workflow/Run per catalog record.
   it("joins Product discovery targets to one active refresh Run across repeated passes", async () => {
     await productFixture(ctx, "Synthetic refresh hammer");
@@ -503,7 +569,17 @@ describe("targeted prompt refresh", () => {
         .where(fieldRefreshTarget);
       expect(evaluation).toBeDefined();
       await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
-      expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+      expect(await productCategoryId(ctx.db, item.id)).toBe(
+        taxonomyId("tools"),
+      );
+      const [replacement] = await getDb(ctx.db)
+        .select()
+        .from(suggestion)
+        .where(eq(suggestion.status, "pending"));
+      expect(replacement).toMatchObject({
+        kind: "correction",
+        acceptanceReceipt: null,
+      });
       expect(calls).toBe(1);
       expect(
         (

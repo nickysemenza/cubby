@@ -174,6 +174,7 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "entity-select",
+          // The Product link identifies the physical device used for activity attribution.
           suggest: { basis: ["name", "platform"], reviewRequired: true },
         },
         display: { detail: true },

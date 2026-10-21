@@ -719,10 +719,12 @@ export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
 export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("skipped"),
+    reviewStatus: z.literal("rejected").optional(),
     reason: z.enum(["no_signal", "no_candidates", "resolved"]),
   }),
   z.object({
     kind: z.literal("evaluated"),
+    reviewStatus: z.literal("rejected").optional(),
     assessmentId: assessmentChildHandle.optional(),
     answer: z.enum(["pick", "none"]),
     confidence,

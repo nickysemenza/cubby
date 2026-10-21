@@ -496,6 +496,7 @@ export default defineEntity({
           suggest: {
             basis: [...EXPENSE_LINE_ROLE_EVIDENCE_FIELDS],
             allowNone: true,
+            // Changes which line contributes principal versus fee/tax accounting.
             reviewRequired: true,
             rules: [EXPENSE_LINE_ROLE_RULES],
           },
