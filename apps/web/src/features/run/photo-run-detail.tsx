@@ -372,6 +372,7 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
         key={run.publicId}
         runId={run.publicId}
         query={review}
+        hasAgent={runHasAgent(run)}
       />
     </Stack>
   );

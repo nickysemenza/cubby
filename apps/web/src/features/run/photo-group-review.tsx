@@ -1582,6 +1582,75 @@ function ProductPanel({
   ) => {
     return saveGroup(() => selectPhotoProduct(proposal, next), onSaved);
   };
+  const renderCreateField = (
+    field: "manufacturer" | "model" | "notes" | "tags",
+  ) => {
+    if (product.kind !== "create") return null;
+    const presentation = entityFieldPresentation("product", field, "create");
+    if (!presentation.editable) return null;
+    const value = product.create[field];
+    return (
+      <CommitInput
+        label={
+          field === "notes"
+            ? "Product notes"
+            : field === "tags"
+              ? "Tags (comma separated)"
+              : presentation.label
+        }
+        value={Array.isArray(value) ? value.join(", ") : (value ?? "")}
+        crossCheck={
+          field === "manufacturer" || field === "model"
+            ? checks.find((check) => check.field === field)
+            : undefined
+        }
+        className={
+          field === "manufacturer" || field === "model" ? "flex-1" : undefined
+        }
+        options={
+          field === "manufacturer"
+            ? (manufacturers.data?.map((entry) => ({
+                value: entry.manufacturer,
+                count: entry.count,
+              })) ?? [])
+            : undefined
+        }
+        optionsLoading={field === "manufacturer" && manufacturers.isPending}
+        disabled={busy}
+        onCommit={(next, onSaved) =>
+          saveProduct(
+            {
+              kind: "create",
+              create: {
+                ...product.create,
+                [field]:
+                  field === "tags"
+                    ? next
+                        .split(",")
+                        .map((tag) => tag.trim())
+                        .filter(Boolean)
+                    : field === "manufacturer"
+                      ? next
+                      : next || null,
+              },
+            },
+            onSaved,
+          )
+        }
+      />
+    );
+  };
+  const productIdentifiers = currentProduct.data ? (
+    currentProduct.data.externalIds.length ? (
+      <ProductExternalIds identifiers={currentProduct.data.externalIds} />
+    ) : (
+      "Not recorded"
+    )
+  ) : currentProduct.isError ? (
+    "Current product unavailable"
+  ) : (
+    "Loading identifier types…"
+  );
   const attachExisting = (existingId: ProductShortcode) =>
     saveProduct({ kind: "existing", existingId });
   const reject = useMutation({
@@ -1734,85 +1803,14 @@ function ProductPanel({
               </WithProductCategorySearch>
             </label>
             <Stack gap="sm" className="min-w-0">
-              <CommitInput
-                label="Manufacturer"
-                crossCheck={checks.find(
-                  (check) => check.field === "manufacturer",
-                )}
-                options={
-                  manufacturers.data?.map((entry) => ({
-                    value: entry.manufacturer,
-                    count: entry.count,
-                  })) ?? []
-                }
-                optionsLoading={manufacturers.isPending}
-                className="flex-1"
-                value={product.create.manufacturer ?? ""}
-                disabled={busy}
-                onCommit={(manufacturer, onSaved) =>
-                  saveProduct(
-                    {
-                      kind: "create",
-                      create: { ...product.create, manufacturer },
-                    },
-                    onSaved,
-                  )
-                }
-              />
-              <CommitInput
-                label="Model"
-                crossCheck={checks.find((check) => check.field === "model")}
-                className="flex-1"
-                value={product.create.model ?? ""}
-                disabled={busy}
-                onCommit={(model, onSaved) =>
-                  saveProduct(
-                    {
-                      kind: "create",
-                      create: { ...product.create, model: model || null },
-                    },
-                    onSaved,
-                  )
-                }
-              />
+              {renderCreateField("manufacturer")}
+              {renderCreateField("model")}
             </Stack>
           </Stack>
           <Disclosure summary="Notes and tags" className="text-xs" keepMounted>
             <Stack gap="xs">
-              <CommitInput
-                label="Product notes"
-                value={product.create.notes ?? ""}
-                disabled={busy}
-                onCommit={(notes, onSaved) =>
-                  saveProduct(
-                    {
-                      kind: "create",
-                      create: { ...product.create, notes: notes || null },
-                    },
-                    onSaved,
-                  )
-                }
-              />
-              <CommitInput
-                label="Tags (comma separated)"
-                value={(product.create.tags ?? []).join(", ")}
-                disabled={busy}
-                onCommit={(tags, onSaved) =>
-                  saveProduct(
-                    {
-                      kind: "create",
-                      create: {
-                        ...product.create,
-                        tags: tags
-                          .split(",")
-                          .map((tag) => tag.trim())
-                          .filter(Boolean),
-                      },
-                    },
-                    onSaved,
-                  )
-                }
-              />
+              {renderCreateField("notes")}
+              {renderCreateField("tags")}
             </Stack>
           </Disclosure>
         </>
@@ -1822,21 +1820,7 @@ function ProductPanel({
             checks={checks}
             product={currentProduct.data}
             unavailable={currentProduct.isError}
-            identifiers={
-              currentProduct.data ? (
-                currentProduct.data.externalIds.length ? (
-                  <ProductExternalIds
-                    identifiers={currentProduct.data.externalIds}
-                  />
-                ) : (
-                  "Not recorded"
-                )
-              ) : currentProduct.isError ? (
-                "Current product unavailable"
-              ) : (
-                "Loading identifier types…"
-              )
-            }
+            identifiers={productIdentifiers}
           />
           {currentProduct.isError ? (
             <StatusText tone="destructive">
@@ -1853,11 +1837,9 @@ function ProductPanel({
                   !checks.some(
                     (check) =>
                       check.field === "identifiers" && check.labelValue,
-                  ) ? (
-                    <ProductExternalIds
-                      identifiers={currentProduct.data.externalIds}
-                    />
-                  ) : null
+                  )
+                    ? productIdentifiers
+                    : null
                 }
               />
             ) : !currentProduct.isError ? (
@@ -3319,8 +3301,10 @@ const photoNavGlyphs = {
 export function PhotoGroupReview({
   runId,
   query,
+  hasAgent,
 }: {
   runId: string;
+  hasAgent: boolean;
   query: ReturnType<typeof usePhotoRunReview>;
 }) {
   const [session] = useState(() => new PhotoReviewDraftSession());
