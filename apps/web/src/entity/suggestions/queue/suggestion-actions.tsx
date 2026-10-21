@@ -29,7 +29,6 @@ import {
   dismissItem,
   neverSuggestItem,
   offers,
-  statementApplyItem,
   wrongItem,
 } from "./suggestion-review";
 import { useSuggestionReview } from "./suggestion-review-context";
@@ -117,7 +116,7 @@ export function SuggestionActions({
   const [correctionValue, setCorrectionValue] = useState(
     suggestion.review?.correction?.value ?? "",
   );
-  const { review, outcome, statementChoice, draft, toggleOpen } =
+  const { review, outcome, statementChoice, toggleOpen, setDraft } =
     useSuggestionReview();
   const state = outcome(suggestion.id);
   const busy = state?.state === "pending";
@@ -129,7 +128,6 @@ export function SuggestionActions({
   );
   const statement =
     suggestion.family === "statement_transaction" ? suggestion.evidence : null;
-  const rowDraft = draft(suggestion.id);
   const wrong = wrongItem(suggestion);
   const never = neverSuggestItem(suggestion);
   const merge = suggestion.review?.merge;
@@ -263,7 +261,8 @@ export function SuggestionActions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-52">
             <DropdownMenuGroup>
-              {statement?.create ? (
+              {statement?.create &&
+              statementChoice(suggestion)?.action === "create" ? (
                 // The kind is a value: its Picker lives in the evidence.
                 <DropdownMenuItem
                   onClick={() => toggleOpen(suggestion.id, true)}
@@ -281,19 +280,13 @@ export function SuggestionActions({
                     {alternatives.map((candidate) => (
                       <DropdownMenuItem
                         key={candidate.transactionId}
-                        onClick={() =>
-                          run(() =>
-                            statementApplyItem(statement, {
-                              action: "attach",
-                              booking: rowDraft.booking,
-                              transactionId: candidate.transactionId,
-                              fields: [
-                                ...(rowDraft.fields[candidate.transactionId] ??
-                                  []),
-                              ],
-                            }),
-                          )
-                        }
+                        onClick={() => {
+                          setDraft(suggestion.id, {
+                            action: "attach",
+                            transactionId: candidate.transactionId,
+                          });
+                          toggleOpen(suggestion.id, true);
+                        }}
                       >
                         Attach to{" "}
                         {candidate.merchant ??
@@ -321,17 +314,15 @@ export function SuggestionActions({
               statement.recommended !== "create" &&
               statement.candidates.length ? (
                 <DropdownMenuItem
-                  onClick={() =>
-                    run(() =>
-                      statementApplyItem(statement, {
-                        action: "create",
-                        booking: rowDraft.booking,
-                        kindOverride: rowDraft.kind,
-                      }),
-                    )
-                  }
+                  onClick={() => {
+                    setDraft(suggestion.id, {
+                      action: "create",
+                      transactionId: undefined,
+                    });
+                    toggleOpen(suggestion.id, true);
+                  }}
                 >
-                  Create anyway
+                  Preview new transaction
                 </DropdownMenuItem>
               ) : null}
             </DropdownMenuGroup>

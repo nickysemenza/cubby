@@ -441,6 +441,7 @@ export async function reviewAssessment(
     input.suppression
   )
     throw new Error("An Automatic rule only accepts an Assessment as is");
+  const assessmentId = input.assessmentId;
   const { assertAutomaticRuleOn } =
     await import("~/server/generic/assessment/repo/automatic-rule-runtime");
   return withSnapshotWriteDatabase(
@@ -453,6 +454,7 @@ export async function reviewAssessment(
         transactionDb,
         automatic.rule.key,
         automatic.rule.stamp,
+        assessmentId,
       );
       return settleReview(
         transactionDb,

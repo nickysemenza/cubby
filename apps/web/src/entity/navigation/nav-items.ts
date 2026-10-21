@@ -151,11 +151,6 @@ export const desktopNav: NavNode[] = [
       { to: "/problems", label: "Problems", icon: WarningIcon },
       { to: "/work-queue", label: "Work queue", icon: ListChecksIcon },
       { to: "/suggestions", label: "Suggestions", icon: LightbulbIcon },
-      {
-        to: "/automatic-decisions",
-        label: "Review automatic decisions",
-        icon: ListChecksIcon,
-      },
       { to: "/activity", label: "Activity", icon: PulseIcon },
       { to: "/collections", label: "Collections", icon: PaletteIcon },
       { to: "/entities", label: "Entity explorer", icon: NetworkIcon },

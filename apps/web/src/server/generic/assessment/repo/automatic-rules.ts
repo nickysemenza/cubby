@@ -120,7 +120,7 @@ export const AUTOMATIC_RULES = {
     family: "statement_transaction",
     execution: "import_clean",
     description:
-      "Book every clean posted spending observation from an import through the shared reviewed booking path.",
+      "Book clean posted spending from imports automatically by default. Pause to leave future clean spending suggestions pending for review.",
     revision: () => STATEMENT_SUGGESTION_REVISION,
     perModel: false,
     match: (judgment) =>

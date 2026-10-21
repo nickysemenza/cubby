@@ -8,12 +8,10 @@ import {
 } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import {
   useCallback,
   useMemo,
@@ -53,6 +51,7 @@ import { Button } from "~/ui/primitives/button";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
+import { AutomaticDecisions } from "./automatic-decisions";
 import { AutomaticRulesSection } from "./automatic-rules";
 import { MobileEvidenceDisclosure } from "./suggestion-actions";
 import { SuggestionEvidence } from "./suggestion-evidence";
@@ -106,9 +105,7 @@ const viewOf = (search: SuggestionsSearch): SuggestionView => familyOf(search);
 const countHint = (count: number | undefined) =>
   count === undefined ? "…" : formatCount(count);
 
-/**
- * Proposal review and rule configuration share scope; audit has its own route.
- */
+/** Pending work, optional audit and automation controls share one workspace. */
 function StatusTabs({
   search,
   onSearch,
@@ -117,34 +114,21 @@ function StatusTabs({
   onSearch: (patch: Partial<SuggestionsSearch>) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <Tabs
-        value={search.status === "rules" ? "rules" : "pending"}
-        onValueChange={(value) =>
-          onSearch({ status: value === "rules" ? "rules" : undefined })
-        }
-      >
-        <TabsList variant="line" aria-label="Suggestion status">
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="rules">Automatic rules</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="basis-full justify-start md:basis-auto"
-        render={
-          <Link
-            to="/automatic-decisions"
-            search={{ record: parseRecordParam(search.record)?.code }}
-          />
-        }
-        nativeButton={false}
-      >
-        Review automatic decisions
-        <CaretRightIcon aria-hidden />
-      </Button>
-    </div>
+    <Tabs
+      value={search.status ?? "pending"}
+      onValueChange={(value) =>
+        onSearch({
+          status:
+            value === "rules" || value === "automatic" ? value : undefined,
+        })
+      }
+    >
+      <TabsList variant="line" aria-label="Suggestion status">
+        <TabsTrigger value="pending">Pending</TabsTrigger>
+        <TabsTrigger value="automatic">Automatic decisions</TabsTrigger>
+        <TabsTrigger value="rules">Automatic rules</TabsTrigger>
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -274,16 +258,31 @@ export function SuggestionsPage({
           />
         ) : null}
         <StatusTabs search={search} onSearch={onSearch} />
-        {search.status === "rules" ? null : (
-          <>
-            <FamilyChips search={search} onSearch={onSearch} />
-            <ScopeChips search={search} onSearch={onSearch} />
-          </>
-        )}
+        {!search.status ? (
+          <FamilyChips search={search} onSearch={onSearch} />
+        ) : null}
+        {search.status !== "rules" ? (
+          <ScopeChips
+            search={
+              search.status === "automatic"
+                ? { ...search, runId: undefined }
+                : search
+            }
+            onSearch={onSearch}
+          />
+        ) : null}
       </div>
       {search.status === "rules" ? (
         <div className="px-2 py-2 md:px-4">
           <AutomaticRulesSection />
+        </div>
+      ) : search.status === "automatic" ? (
+        <div className="px-2 py-2 md:px-4">
+          <AutomaticDecisions
+            key={`${search.record}:${search.auditFamily ?? search.family}`}
+            id={parseRecordParam(search.record)?.code}
+            initialFamily={search.auditFamily ?? search.family}
+          />
         </div>
       ) : (
         <SuggestionsTable
@@ -533,20 +532,7 @@ function SuggestionsTableBody({
   const accept = useAcceptClean((id) => rowsById.get(id));
   const rosters = useDeferredEntityRosters(REFERENCE_ROSTERS);
   const firstPage = list.pages?.[0];
-  const sources = useMemo(
-    () =>
-      new Set(
-        list.data.flatMap((row) =>
-          row.family === "statement_transaction" ? [row.evidence.source] : [],
-        ),
-      ),
-    [list.data],
-  );
-  // Verbatim provider evidence, never "Category": it sets no spending category.
-  const providerCategoryLabel =
-    sources.size === 1
-      ? `${humanize([...sources][0] ?? "")} category`
-      : "Provider category";
+  const providerCategoryLabel = "Provider category";
   const columns = useMemo(
     () => viewColumns(view, rosters, providerCategoryLabel),
     [view, rosters, providerCategoryLabel],

@@ -8,6 +8,7 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "~/server/domains/statement-import/repo/statement-row";
+import { previewStatementSuggestion } from "~/server/domains/statement-import/repo/statement-suggestion-preview";
 import { scheduleStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-generation";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import {
@@ -18,6 +19,8 @@ import {
 export const statementRowHandlers = implementOperationDomain(
   statementRowContract,
   {
+    previewSuggestion: (context, input) =>
+      previewStatementSuggestion(context.db, input),
     previewCsv: (context, input) =>
       previewStatementCsv(context.db, context.actorContext, input),
     commitCsv: (context, input) =>

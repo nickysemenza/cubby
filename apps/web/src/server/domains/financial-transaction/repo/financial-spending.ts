@@ -615,18 +615,31 @@ async function existingSpendingOutcome(
 export async function previewFinancialSpending(
   db: Database,
   raw: z.input<typeof financialSpendingRequest>,
-  attachment?: { settlementRef: SettlementRef },
+  attachment?: {
+    settlementRef: SettlementRef;
+    fields?: Partial<
+      Pick<
+        z.infer<typeof financialSpendingSource>,
+        "amount" | "status" | "postedDate"
+      >
+    >;
+  },
 ): Promise<FinancialSpendingPlan> {
   const request = spendingRequestBoundary.parse(raw);
   const facts = await spendingFacts(db, request);
   // Preview an impending reference attachment without duplicating its charge.
   // Commit still requires that reference to exist in retained evidence.
-  if (attachment && facts.row)
+  if (attachment && facts.row) {
+    facts.source = financialSpendingSource.parse({
+      ...facts.source,
+      ...attachment.fields,
+    });
     facts.source.sourceRefs = await settlementRefsIncluding(
       db,
       facts.row.id,
       attachment.settlementRef,
     );
+  }
   const deferred =
     facts.source.status !== "posted" ||
     facts.row?.ledgerTransferId ||
@@ -815,6 +828,11 @@ async function prepareReadySpending(
               purchaseId: target.shortcode,
               spendingCategoryId: category?.shortcode,
             }),
+            {
+              amount: source.amount,
+              status: source.status,
+              postedDate: source.postedDate,
+            },
           );
           if (checked.action !== effect)
             return review("The selected Purchase's booking capacity changed.");

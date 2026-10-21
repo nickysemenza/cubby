@@ -1,5 +1,7 @@
 import type { AssessmentReviewOut } from "@cubby/schemas/assessment";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
+import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
+import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import type { StatementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
@@ -33,6 +35,8 @@ type ReviewFailure = { row: SuggestionListRow; error: string };
 
 /** A statement row's draft alternatives, shared by its actions menu and its evidence. */
 type StatementDraft = {
+  action?: StatementTransactionAction;
+  transactionId?: FinancialTransactionShortcode;
   kind?: FinancialTransactionKind;
   booking?: StatementTransactionApplication["booking"];
   /** Ticked "apply" fields per candidate transaction. */
@@ -184,8 +188,10 @@ export function SuggestionReviewProvider({
         if (row.family !== "statement_transaction") return undefined;
         const suggestion = row.evidence;
         const current = draft(row.id);
-        const first = suggestion.candidates[0]?.transactionId;
-        return suggestion.recommended === "attach"
+        const first =
+          current.transactionId ?? suggestion.candidates[0]?.transactionId;
+        const action = current.action ?? suggestion.recommended;
+        return action === "attach"
           ? {
               action: "attach",
               transactionId: first,
@@ -193,7 +199,7 @@ export function SuggestionReviewProvider({
               booking: current.booking,
             }
           : {
-              action: suggestion.recommended,
+              action,
               kindOverride: current.kind,
               booking: current.booking,
             };

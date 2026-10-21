@@ -35,7 +35,7 @@ export const automaticDecisionRow = z.object({
   automaticRule: z.string().nullable(),
   verdict: feedbackVerdict.nullable(),
   reviewedAt: z.iso.datetime().nullable(),
-  /** Choice corrections use the existing family's apply handler; null means Feedback and record correction. */
+  /** Retained for explicit assessment-review clients; the web audit records feedback only. */
   correction: z
     .object({
       label: z.string(),

@@ -108,7 +108,7 @@ function buildFilters(search: {
   dateTo?: string;
   q?: string;
 }): StatementRowFilters {
-  const matchState = search.matchState ?? "unmatched";
+  const matchState = search.matchState ?? "all";
   return {
     matchState: matchState === "all" ? undefined : matchState,
     disposition: search.disposition,
@@ -276,7 +276,7 @@ function StatementRowFilterBar({
         mode="choose"
         label="Match state"
         options={MATCH_STATE_FILTER_OPTIONS}
-        value={search.matchState ?? "unmatched"}
+        value={search.matchState ?? "all"}
         onValueChange={(next) =>
           onUpdate({ matchState: matchStateSearchSchema.parse(next) })
         }
@@ -555,6 +555,30 @@ export function StatementRowList() {
             },
           }),
         );
+        add(
+          columnHelper.display({
+            id: "reviewSuggestion",
+            header: "Review",
+            cell: ({ row }) =>
+              row.original.matchState === "unmatched" &&
+              row.original.accountId ? (
+                <Link
+                  to="/suggestions"
+                  search={{
+                    family: "statement_transaction",
+                    record: `financialAccount:${row.original.accountId}`,
+                    date: `${row.original.statementDate}..${row.original.statementDate}`,
+                    amount: `${row.original.amount}..${row.original.amount}`,
+                  }}
+                  className="text-link"
+                >
+                  Review suggestions
+                </Link>
+              ) : (
+                <NoneValue />
+              ),
+          }),
+        );
       }),
     [],
   );
@@ -585,9 +609,14 @@ export function StatementRowList() {
 
   return (
     <Stack gap="md">
+      <p className="text-sm text-muted-foreground">
+        Imported source observations, including multiple rows for the same
+        charge. Resolve charges in Suggestions; matching a row does not by
+        itself add spending.
+      </p>
       <StatementRowSummary
         filters={filters}
-        matchState={search.matchState ?? "unmatched"}
+        matchState={search.matchState ?? "all"}
         onSelectMatchState={(matchState) => updateFilter({ matchState })}
       />
       <StatementRowFilterBar search={search} onUpdate={updateFilter} />

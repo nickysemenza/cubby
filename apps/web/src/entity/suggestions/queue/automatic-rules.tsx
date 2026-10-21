@@ -79,6 +79,11 @@ export function AutomaticRulesSection({
       headingAs="h2"
       caption={rules.data ? `${on} of ${list.length} on` : null}
     >
+      <p className="mb-2 text-sm text-muted-foreground">
+        These switches control statement automation. Eligible empty-field
+        filling follows its fixed policy; saved values and rejections remain
+        protected.
+      </p>
       {rules.error ? (
         <p
           role="alert"
@@ -107,6 +112,7 @@ function RuleRow({
   operations: AutomaticRuleOperations;
 }) {
   const name = RULE_NAME[rule.ruleKey];
+  const importPolicy = rule.ruleKey === "statement_transaction.book_spending";
   const [confirmingOff, setConfirmingOff] = useState(false);
   const set = useMutation(operations.setRule.mutationOptions());
   const change = (enabled: boolean) =>
@@ -148,7 +154,9 @@ function RuleRow({
       <LedgerCell slot="secondary" className="flex flex-col gap-0.5 text-xs">
         <span>{rule.description}</span>
         <span className="text-muted-foreground tabular-nums">
-          {ruleNumbers(rule)}
+          {importPolicy
+            ? "Clean import policy · on by default · no measured threshold"
+            : ruleNumbers(rule)}
           {rule.eligible ? null : ` · eligible at ${BAR}`}
         </span>
         {rule.enabled && rule.enabledAt ? (
@@ -177,8 +185,10 @@ function RuleRow({
           <AlertDialogHeader>
             <AlertDialogTitle>Turn off {name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Its matches wait for review again. Changes it already applied
-              stay. Turning it back on needs it to be eligible ({BAR}).
+              Future matches wait for review. Changes it already applied stay.
+              {importPolicy
+                ? " You can resume this policy at any time; resuming does not immediately apply the backlog."
+                : ` Turning it back on needs it to be eligible (${BAR}).`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

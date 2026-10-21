@@ -889,7 +889,16 @@ function statementColumns(
           ),
         }),
         cell: ({ row }) =>
-          columnText(row.original, "providerCategory") ?? <NoneValue />,
+          row.original.family === "statement_transaction" ? (
+            <StackedValue
+              primary={
+                columnText(row.original, "providerCategory") ?? "Unassigned"
+              }
+              secondary={humanize(row.original.evidence.source)}
+            />
+          ) : (
+            <NoneValue />
+          ),
       }),
     );
     add(

@@ -11,6 +11,7 @@ import type {
   SuggestionActionVerb,
   SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
+import { omitBy } from "es-toolkit";
 import type { z } from "zod";
 
 export type ReviewItem = z.input<typeof assessmentReviewInput>;
@@ -37,7 +38,7 @@ export const offers = (row: SuggestionListRow, verb: SuggestionActionVerb) =>
  * candidate as rejected: the server refuses a create while any possible
  * existing transaction is still live.
  */
-function statementApplication(
+export function statementApplication(
   suggestion: StatementSuggestionOut,
   choice: StatementChoice,
 ): StatementTransactionApplication {
@@ -47,6 +48,14 @@ function statementApplication(
       : undefined;
   const target =
     choice.transactionId ?? suggestion.candidates[0]?.transactionId;
+  // Draft controls clear choices with undefined; Feedback correction values
+  // must contain ordinary JSON while preserving explicit standalone nulls.
+  const booking = choice.booking
+    ? {
+        ...omitBy(choice.booking, (value) => value === undefined),
+        rejectedPurchaseIds: choice.booking.rejectedPurchaseIds ?? [],
+      }
+    : undefined;
   return {
     kind: "statement_transaction",
     action: choice.action,
@@ -60,7 +69,7 @@ function statementApplication(
       choice.action === "create"
         ? suggestion.candidates.map((candidate) => candidate.transactionId)
         : [],
-    ...(choice.booking && { booking: choice.booking }),
+    ...(booking && { booking }),
   };
 }
 

@@ -64,6 +64,10 @@ export function AutomaticDecisions({
   return (
     <section aria-label="Automatic decisions">
       <Stack gap="sm">
+        <p className="text-sm text-muted-foreground">
+          Already decided automatically. Review is optional; reporting a mistake
+          records feedback without changing its records or pausing automation.
+        </p>
         <Row gap="sm" className="flex-wrap">
           <Picker
             mode="choose"
@@ -126,37 +130,12 @@ export function AutomaticDecisions({
 }
 
 function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
-  const [correcting, setCorrecting] = useState(false);
-  const [choice, setChoice] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const review = useMutation(
     assessment.review.mutationOptions({
-      onSuccess: async () => {
-        setCorrecting(false);
-        await invalidateOperationTags(queryClient, ripple.suggestions);
-      },
+      onSuccess: () => invalidateOperationTags(queryClient, ripple.suggestions),
     }),
   );
-  const options =
-    row.correction?.options.map((option, index) => ({
-      label: option.label,
-      value: String(index),
-    })) ?? [];
-  const wrong = (
-    correction?: NonNullable<
-      AutomaticDecisionRow["correction"]
-    >["options"][number],
-  ) =>
-    review.mutate({
-      assessmentId: row.id,
-      operationId: crypto.randomUUID(),
-      verdict: "wrong",
-      intent: correction ? "apply" : "history",
-      expectedFingerprint: row.fingerprint,
-      correction: correction
-        ? { present: true, value: correction.value }
-        : { present: false },
-    });
   return (
     <RecordRow
       primary={
@@ -182,71 +161,58 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
       actions={
         <Row gap="sm" className="items-center">
           <span className="text-xs">
-            {row.verdict ? humanize(row.verdict) : "Unreviewed"}
+            {row.verdict === "wrong"
+              ? "Feedback recorded"
+              : row.verdict
+                ? humanize(row.verdict)
+                : "Not reviewed"}
           </span>
           <Button
             size="sm"
             variant="outline"
             disabled={review.isPending || row.verdict === "wrong"}
-            onClick={() => (row.correction ? setCorrecting(true) : wrong())}
+            onClick={() =>
+              review.mutate({
+                assessmentId: row.id,
+                operationId: crypto.randomUUID(),
+                verdict: "wrong",
+                intent: "history",
+                expectedFingerprint: row.fingerprint,
+                correction: { present: false },
+              })
+            }
           >
-            Wrong
+            Report incorrect
           </Button>
         </Row>
       }
       detail={
         <Stack gap="sm">
-          {row.automaticRule ? (
-            <span className="text-xs text-muted-foreground">
-              Rule {row.automaticRule}
-            </span>
-          ) : null}
-          <Disclosure summary="Technical evidence" className="text-xs">
+          <section aria-label="Applied result">
+            <p className="text-sm font-medium">Applied result</p>
+            <p className="text-xs">{row.summary}</p>
+            {row.automaticRule ? (
+              <p className="text-xs text-muted-foreground">
+                Automatic rule: {row.automaticRule}
+              </p>
+            ) : null}
+          </section>
+          <Disclosure summary="Evidence" className="text-xs">
             <pre className="break-words whitespace-pre-wrap">
               {JSON.stringify(row.decision, null, 2)}
             </pre>
           </Disclosure>
-          {correcting && row.correction ? (
-            <Row gap="sm" className="flex-wrap">
-              <Picker
-                mode="choose"
-                aria-label={row.correction.label}
-                options={options}
-                value={choice}
-                onValueChange={setChoice}
-              />
-              <Button
-                size="sm"
-                disabled={review.isPending || choice === null}
-                onClick={() => {
-                  const correction = row.correction?.options[Number(choice)];
-                  if (correction) wrong(correction);
-                }}
-              >
-                Save correction
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => wrong()}>
-                Record Wrong only
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setCorrecting(false)}
-              >
-                Cancel
-              </Button>
-            </Row>
-          ) : null}
-          {row.verdict === "wrong" && row.correction === null ? (
+          {row.verdict === "wrong" ? (
             <p className="text-xs text-muted-foreground">
-              Feedback recorded. Open an affected record above to correct it
-              through its existing actions.
+              Feedback recorded for reassessment where supported on the next
+              suggestion run. Applied records stay as they are; open an affected
+              record above if it needs editing. Automation remains unchanged.
             </p>
           ) : null}
           {review.error ? (
             <ErrorDisplay
               error={review.error}
-              title="automatic decision review"
+              title="automatic decision feedback"
             />
           ) : null}
         </Stack>

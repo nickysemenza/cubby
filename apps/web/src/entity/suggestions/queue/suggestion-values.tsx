@@ -2,6 +2,7 @@ import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-famil
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import type {
@@ -23,6 +24,17 @@ import { StackedValue } from "~/ui/common/stacked-value";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
+
+/** Older saved projections retain their original provider observation. */
+export const providerCategories = (
+  evidence: Pick<
+    StatementSuggestionOut,
+    "sourceCategories" | "source" | "sourceCategory"
+  >,
+) =>
+  evidence.sourceCategories.length
+    ? evidence.sourceCategories
+    : [{ source: evidence.source, sourceCategory: evidence.sourceCategory }];
 
 export const FAMILY_LABEL = mapRecord(
   suggestionListFamily.options,

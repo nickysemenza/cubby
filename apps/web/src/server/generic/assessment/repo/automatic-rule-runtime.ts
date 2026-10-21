@@ -30,7 +30,7 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
-import { automaticRule } from "~/server/db/schema";
+import { assessment, automaticRule } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
@@ -136,11 +136,14 @@ async function storedRules(db: Database) {
 }
 
 type StoredRule = typeof automaticRule.$inferSelect;
-/** On for the code's current revision; a missing row is off. */
+/** Import booking defaults on; an explicit pause survives policy revisions. */
 const isOn = (key: AutomaticRuleKey, row: StoredRule | undefined) =>
   AUTOMATIC_RULES[key].execution === "field_policy" ||
-  AUTOMATIC_RULES[key].execution === "import_clean" ||
-  Boolean(row?.enabled && row.revision === AUTOMATIC_RULES[key].revision());
+  (AUTOMATIC_RULES[key].execution === "import_clean"
+    ? (row?.enabled ?? true)
+    : Boolean(
+        row?.enabled && row.revision === AUTOMATIC_RULES[key].revision(),
+      ));
 
 /**
  * Inside the application's transaction: the rule is still on for this
@@ -153,11 +156,48 @@ export async function assertAutomaticRuleOn(
   db: Database,
   key: AutomaticRuleKey,
   stamp: string,
+  assessmentId: string,
 ) {
-  if (AUTOMATIC_RULES[key].execution !== "measured") {
+  const rule = AUTOMATIC_RULES[key];
+  if (rule.execution !== "measured") {
     if (stamp !== ruleBase(key))
       throw new Error("Automatic policy changed; refresh the suggestion");
-    return;
+    if (rule.execution === "field_policy") return;
+    // Materialize the default before locking: a concurrent first pause must
+    // serialize with this application even when no switch row existed yet.
+    await getDb(db)
+      .insert(automaticRule)
+      .values({
+        family: rule.family,
+        ruleKey: key,
+        revision: rule.revision(),
+        enabled: true,
+      })
+      .onConflictDoNothing({
+        target: [automaticRule.family, automaticRule.ruleKey],
+      });
+  } else {
+    const [prediction] = await getDb(db)
+      .select({ judgment: assessment.judgment })
+      .from(assessment)
+      .where(eq(assessment.id, assessmentId))
+      .limit(1);
+    const judgment = statementTransactionJudgment.safeParse(
+      prediction?.judgment,
+    );
+    if (judgment.success) {
+      const booking = matchStatementRules(judgment.data).find(
+        (match) => AUTOMATIC_RULES[match.key].execution === "import_clean",
+      );
+      // Attaching a clean spending charge also books it; it shares the pause.
+      if (booking)
+        await assertAutomaticRuleOn(
+          db,
+          booking.key,
+          booking.stamp,
+          assessmentId,
+        );
+    }
   }
   const [row] = await getDb(db)
     .select()
@@ -192,13 +232,15 @@ async function ruleSummary(
     revision: rule.revision(),
     description: rule.description,
     enabled: isOn(key, row),
-    enabledRevision: row?.revision ?? null,
+    enabledRevision: row?.revision ?? rule.revision(),
     enabledAt: row?.enabledAt?.toISOString() ?? null,
     enabledByUserId: row?.enabledByUserId ?? null,
     enabledReason: row?.enabledReason ?? null,
     disabledAt: row?.disabledAt?.toISOString() ?? null,
     disabledReason: row?.disabledReason ?? null,
-    eligible: windows.some((window) => window.eligible),
+    eligible:
+      rule.execution === "import_clean" ||
+      windows.some((window) => window.eligible),
     n,
     hits,
     precision: n ? hits / n : null,
@@ -216,13 +258,13 @@ export async function listAutomaticRules(db: Database) {
   return automaticRulesOut.parse({
     rules: await Promise.all(
       AUTOMATIC_RULE_KEYS.filter(
-        (key) => AUTOMATIC_RULES[key].execution === "measured",
+        (key) => AUTOMATIC_RULES[key].execution !== "field_policy",
       ).map((key) => ruleSummary(db, key, stored.get(key))),
     ),
   });
 }
 
-/** A member's switch. Turning a rule on requires eligibility; off is always allowed. */
+/** Import booking can resume immediately; measured rules require eligible reviews. */
 export async function setAutomaticRule(
   db: Database,
   actor: ActorContext,
@@ -235,7 +277,7 @@ export async function setAutomaticRule(
       "Only a member turns an Automatic rule on or off",
     );
   const rule = AUTOMATIC_RULES[input.ruleKey];
-  if (rule.execution !== "measured")
+  if (rule.execution === "field_policy")
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "This automatic policy is not an optional measured rule.",
@@ -397,7 +439,7 @@ export async function applyAutomaticRules(
     /** Kernel services for field writes; the actor is always the system's. */
     context?: EntityKernelContext;
     onFailure?: (assessmentId: string, message: string) => void;
-    /** An import explicitly authorizes every current clean spending plan. */
+    /** An import authorizes clean spending plans while their rule is enabled. */
     importClean?: boolean;
   } = {},
 ): Promise<AutomaticRuleOutcome> {
@@ -431,7 +473,16 @@ export async function applyAutomaticRules(
     if (!row.active || row.status !== "pending" || !row.served) continue;
     const stamp = ruleStamps.safeParse(row.data).data;
     if (row.family !== "field" && !stamp?.matchedRules.length) continue;
-    const matches = currentMatches(row, stamp?.pinnedModel ?? null)
+    const current = currentMatches(row, stamp?.pinnedModel ?? null);
+    if (
+      current.some(
+        (match) =>
+          AUTOMATIC_RULES[match.key].execution === "import_clean" &&
+          !isOn(match.key, stored.get(match.key)),
+      )
+    )
+      continue;
+    const matches = current
       .filter(
         (match) =>
           (row.family === "field" ||
