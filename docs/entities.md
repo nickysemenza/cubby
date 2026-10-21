@@ -2121,7 +2121,11 @@ are required. Periodic reconciliation pages through authoritative rows and
 removals without trusting hooks or timestamps, and separately repairs missing
 recipe totals, missing configured embeddings and unfinished vector artifacts even when input snapshots are
 unchanged. Healthy-service targets are search catch-up and discovery queue
-eligibility within 60 seconds. Provider completion depends on capacity. Recipe
+eligibility within 60 seconds. Input scanning shares one cursor transaction
+across at most eight adjacent table pages, stopping at the first nonempty
+page. Each populated page still processes at most 100 rows; cursor progress,
+observations and captures commit atomically, and a failed scan rolls them back.
+Provider completion depends on capacity. Recipe
 reads expose pending totals after that Recipe's invalidation page until its
 totals publish. Projection-code changes require the streaming "Repair index"
 maintenance action.
