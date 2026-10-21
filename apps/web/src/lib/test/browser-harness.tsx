@@ -91,43 +91,31 @@ interface BrowserTestHarnessOptions {
 }
 
 function installBrowserLayoutMetrics() {
-  const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "offsetWidth",
-  );
-  const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "offsetHeight",
-  );
-  // jsdom has no layout engine, so a virtualizer sees a zero-height pane and
-  // never mounts its rows. The harness supplies a stable viewport just as a
-  // browser would; individual behavior tests can still own exact measurements.
-  Object.defineProperties(HTMLElement.prototype, {
-    offsetWidth: {
+  // jsdom has no layout engine. Virtualizers read client dimensions while
+  // other controls read offsets; both must describe the same viewport.
+  const metrics = {
+    offsetWidth: BROWSER_TEST_VIEWPORT.width,
+    offsetHeight: BROWSER_TEST_VIEWPORT.height,
+    clientWidth: BROWSER_TEST_VIEWPORT.width,
+    clientHeight: BROWSER_TEST_VIEWPORT.height,
+  };
+  const originals = Object.entries(metrics).map(([name, value]) => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      name,
+    );
+    Object.defineProperty(HTMLElement.prototype, name, {
       configurable: true,
-      get: () => BROWSER_TEST_VIEWPORT.width,
-    },
-    offsetHeight: {
-      configurable: true,
-      get: () => BROWSER_TEST_VIEWPORT.height,
-    },
+      get: () => value,
+    });
+    return { name, descriptor };
   });
-
   return () => {
-    if (originalOffsetWidth)
-      Object.defineProperty(
-        HTMLElement.prototype,
-        "offsetWidth",
-        originalOffsetWidth,
-      );
-    else Reflect.deleteProperty(HTMLElement.prototype, "offsetWidth");
-    if (originalOffsetHeight)
-      Object.defineProperty(
-        HTMLElement.prototype,
-        "offsetHeight",
-        originalOffsetHeight,
-      );
-    else Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
+    for (const { name, descriptor } of originals) {
+      if (descriptor)
+        Object.defineProperty(HTMLElement.prototype, name, descriptor);
+      else Reflect.deleteProperty(HTMLElement.prototype, name);
+    }
   };
 }
 

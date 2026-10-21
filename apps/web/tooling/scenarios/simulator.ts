@@ -11,6 +11,7 @@ import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/ru
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SIM_PRODUCT_NAME } from "./simulator-product-fixture";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
 export async function seedSimulatorPhotoActor(pool: Pool, userId: string) {
   const existing = await pool.query(
@@ -54,6 +55,7 @@ export async function seedSimulatorScenario(
     model: null,
     categoryId: taxonomyShortcode("household"),
   });
+  await drainDerivedRefreshFrontier(db);
   return product.id;
 }
 
