@@ -160,6 +160,7 @@
   // but import hand-written code, so knip must read them. These are the
   // gitignored trees that are not source.
   "ignore": [
+    "artifacts/**",
     "apps/web/src/server/.lint-fixture-*/**",
     ".claude/**",
     "**/dist/**",

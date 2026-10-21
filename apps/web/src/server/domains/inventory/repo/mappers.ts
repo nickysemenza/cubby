@@ -62,7 +62,7 @@ const unresolvedOwnership = (
   steps: [],
 });
 
-export const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
+const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
   entry: InventoryEntryBaseDB,
   valuation: number | null,
   dataQuality: Q,

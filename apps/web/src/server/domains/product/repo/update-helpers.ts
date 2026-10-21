@@ -211,7 +211,7 @@ export async function ensureSlotPrimaries(
  * handles the amazon/asin derived-url special case so the comparison matches
  * what would actually be persisted.
  */
-export function externalIdSlotUnchanged(
+function externalIdSlotUnchanged(
   existing: Pick<
     typeof entityExternalId.$inferSelect,
     "source" | "kind" | "externalId" | "url" | "isPrimary"

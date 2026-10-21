@@ -18,7 +18,7 @@ import type {
 import { z } from "zod";
 
 import { EntityDeclarationError, SPEC_DIRECTORY } from "./source.ts";
-export { EntityDeclarationError, SPEC_DIRECTORY } from "./source.ts";
+export { EntityDeclarationError } from "./source.ts";
 
 export type DeclarationValue =
   | string

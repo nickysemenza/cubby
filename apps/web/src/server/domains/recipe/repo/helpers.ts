@@ -219,9 +219,9 @@ export const recipeTotalsFields = (
   return { totals, ...totalsPreview(totals) };
 };
 
-export const dbRecipeToAPIShallow: (
-  recipeParam: RecipeSelect,
-) => RecipeShallowOut = (recipeData) => ({
+const dbRecipeToAPIShallow: (recipeParam: RecipeSelect) => RecipeShallowOut = (
+  recipeData,
+) => ({
   ...dbRecipeToTopLevel(recipeData),
   ...recipeTotalsFields(recipeData),
 });
