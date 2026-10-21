@@ -2982,12 +2982,27 @@ preserves every identifier and the current primary; an empty slot selects its
 first value. Explicit `isPrimary: true` demotes the previous primary without
 removing it. Make primary replaces the targeted row's primary attribute;
 replacing an identity value uses a targeted remove plus add in one atomic patch,
-with the old identity in the remove key. A full array remains a full replacement.
+with the old identity in the remove key. A full array remains a full replacement
+for explicit API callers. Ordinary web/native update editors submit keyed patches.
+Their single local collection draft keeps an immutable saved baseline and explicit
+Add, Replace, Remove and Make primary intent; normalization removes this local
+wrapper before input validation and submission. Untouched collections are omitted.
+Create materializes the initial full collection. Record collections declare
+`primary: { key: "isPrimary", scope: ["source", "kind"] }` when role controls apply.
+Attribute replacements carry the stored URL and primary role as expectations.
+Baseline identity keys preserve literal nonbarcode bytes exactly; only declared
+barcode kinds use Rust identity normalization, while source follows its slug policy.
+
 Canonical
 GTIN digits do not establish the observed UPC/EAN encoding: barcode displays use
 GTIN and preserve canonical digits unless encoding evidence is available. Validated
 book identities may display ISBN-13. Primary and secondary barcode displays share
-one renderer; provider lookup links belong to the applicable lookup workflow.
+shared kind/source/role metadata across web and native; explicit stored URLs remain
+links. Committed identifier audit effects retain every changed value and primary
+role without truncation. Historical read effects compare URL storage policy
+directly, without input normalization or identity repair. Missing committed sides
+produce diagnostics rather than an invented empty baseline. Provider lookup links
+belong to the applicable lookup workflow.
 Product create/update accepts one write-only `barcode` shortcut for barcode or
 ISBN input; `primaryGtin` remains a derived read of `externalIds`. Omission
 leaves identity alone; null retires only the current primary barcode and the
@@ -3002,7 +3017,9 @@ the writer while retaining the supplied
 barcode width, and translate validated book identity to ISBN-13. The native
 specialized barcode control retains ordinary text entry.
 Books inference comes from validated ISBN identity in the collection, with
-Food evidence taking precedence; the barcode editor is available in every category.
+Food evidence taking precedence. Create exposes the barcode shortcut in every
+category; ordinary update exposes the identifier collection without a second
+barcode draft.
 
 ## Classification field policies
 
