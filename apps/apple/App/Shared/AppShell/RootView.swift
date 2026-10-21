@@ -96,14 +96,15 @@ struct RootView: View {
             #if os(iOS)
                 .task { applyStashedLaunchLinkIfNeeded() }
             #endif
-            // Layer 6: a one-line monospaced strip for the last request `CubbyAuthMiddleware`
-            // observed, only while the toggle is on — an overlay/caption only, never affecting the
-            // rest of the layout (`DESIGN.md` § Developer overlays).
-            .safeAreaInset(edge: .bottom) {
-                if developerOverlays, let last = model.requestTrace.last {
-                    RequestTraceStrip(entry: last)
+            #if DEBUG
+                // The request strip is a developer diagnostic, enabled only by the developer
+                // overlay preference in debug builds.
+                .safeAreaInset(edge: .bottom) {
+                    if developerOverlays, let last = model.requestTrace.last {
+                        RequestTraceStrip(entry: last)
+                    }
                 }
-            }
+            #endif
             // Asked once per install, right after sign-in: until it is answered the participation
             // master switch stays off (`DeviceParticipation`'s default).
             .sheet(isPresented: showsParticipationOnboarding) {
