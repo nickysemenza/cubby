@@ -1,0 +1,63 @@
+apps/web/src/features/calendar/calendar-agenda.tsx
+  s_2034f37bd849a7::t_a4ac3d9502c6a4 6-7,98,102-111,113-141
+apps/web/src/features/expense/expense-aggregate-explorer.tsx
+  s_2034f37bd849a7::t_13c3bfd066c893 37,158,160
+apps/web/src/features/garden/garden-workbench.tsx
+  s_2034f37bd849a7::t_1644b6e3b03fd1 25,27,113-117,169,191,211,220-224,232,235,238,303-307,335,338,343,403-455
+apps/web/src/features/meal/shopping-list-page.tsx
+  s_2034f37bd849a7::t_3336adcc779a2c 15,182,211-213,228,230-235,237-246,294
+apps/web/src/features/meal/suggestions-page.tsx
+  s_2034f37bd849a7::t_c9044cd3533503 7,9,62-64,145-147,188
+apps/web/src/features/problems/components/maintenance-run-card.tsx
+  s_9b829d577c7e4c::t_f79dfce94ac9cd 17,19,178,213,223-225,252,275,277-287,305
+apps/web/src/features/recipe/compare/recipe-compare-grid.tsx
+  s_9b829d577c7e4c::t_a977f44f492053 31,33,271,326,330-332,336,599
+apps/web/src/features/recipe/cookbook-import/index.tsx
+  s_2034f37bd849a7::t_24f83743a59dc3 1274-1278
+apps/web/src/features/recipe/recipe-flow-renderers.tsx
+  s_2034f37bd849a7::t_86e9716a78e6d2 16,270,371
+apps/web/src/features/recipe/recipe-ingredient-matrix-view.tsx
+  s_2034f37bd849a7::t_2cb64cf1513543 3-4,18,34
+apps/web/src/features/recipe/recipe-magazine-view.tsx
+  s_2034f37bd849a7::t_ac114be54eff0f 25-26,96,99-101,103-104,107,168,170-172,174,178,256-258,261,267,273
+apps/web/src/features/recipe/recipe-spec-view.tsx
+  s_2034f37bd849a7::t_3a2d5ab66266e2 10,376,431
+apps/web/src/features/run/photo-group-review.tsx
+  s_2034f37bd849a7::t_0388c8bf302bc1 934-942,946,953-955,966-968,978-980
+apps/web/src/features/shell/authenticated-app-shell.tsx
+  s_2034f37bd849a7::t_13cfe5f4f93bfe 92
+apps/web/src/features/task/board/board-controls.tsx
+  s_2034f37bd849a7::t_26f978205a6178 85,92
+apps/web/src/features/task/board/task-board.tsx
+  s_2034f37bd849a7::t_a0907cb36976c8 31,258-261,263
+apps/web/src/features/task/board/task-card.tsx
+  s_2034f37bd849a7::t_34adcdb39d9bac 21,162,164,166,186,214,312
+apps/web/src/features/recipe/recipe-flow-view.tsx
+  s_2034f37bd849a7::t_8aa50e222aebff 32,62,77,554,575
+apps/web/src/features/recipe/recipe-prep-sheet-view.tsx
+  s_2034f37bd849a7::t_2da30e0669a026 301,350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f1c7556252e44519e47c52101fddf49b692207c1",
+  "prompts": {},
+  "sessions": {
+    "s_2034f37bd849a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b4d-4961-7890-a13d-4387d8ef89d5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
