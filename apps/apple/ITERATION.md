@@ -38,7 +38,8 @@ evidence through the usual QA artifact path. This guard also runs in the full QA
 journey-specific fixtures (`tooling/scenarios/native-qa.ts`), and replays
 every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
 save, approving only the selected ready group of a photo Run, a structured
-unit-mapping edit, external-ID Source/Identifier keyboard entry with saved-value reopen,
+unit-mapping edit, external-ID Source/Identifier keyboard entry and formatted primary
+barcode entry with canonical saved-value reopen,
 recipe scaling in cook mode, and scoped entity picking after a location change
 with selections across two pages. After the replays it reads the database back
 (one unit from the chosen shelf only, both allocations, the one committed
@@ -77,6 +78,9 @@ visible totals rather than an unexposed layout container; the Columns popup
 is observable by its accessibility label.
 After opening a record, assert its detail Edit control. A title-only assertion
 can pass while the list stays visible behind a field explanation.
+Generic editor inputs use `editor.<entity>.<field>` accessibility identifiers.
+Keep that identity on the input itself: text width and keyboard avoidance can
+change its frame during entry, so frame-based identity cannot confirm replacement.
 
 For Mac `TableColumn`, apply `width` before `customizationID`; the latter
 returns opaque `TableColumnContent`, which has no `width` modifier. Validate

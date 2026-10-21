@@ -324,6 +324,7 @@ struct EntityFieldControl: View {
             TextField(label, text: stringBinding, prompt: Text(field.placeholder ?? "None"))
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
+                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
         }
     }
 

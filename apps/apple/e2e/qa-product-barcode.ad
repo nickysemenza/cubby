@@ -1,0 +1,19 @@
+context platform=ios timeout=240000
+
+# The specialized barcode renderer must retain editable native text and persist
+# through the generic writer; the read-back exposes canonical GTIN width.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${PRODUCT_ID}"
+wait "role=Button id=detail.product.edit" 90000
+click "role=Button id=detail.product.edit"
+wait text "Edit Product" 90000
+scroll down 0.4 --until "id=editor.product.barcode"
+fill "id=editor.product.barcode" "0-88888-88888-0"
+click "role=Button label=Done"
+click "role=Button label=Save"
+wait "role=Button id=detail.product.edit" 90000
+click "role=Button id=detail.product.edit"
+wait text "Edit Product" 90000
+scroll down 0.4 --until "role=TextField value=00088888888880"
+wait "role=TextField value=00088888888880" 90000
