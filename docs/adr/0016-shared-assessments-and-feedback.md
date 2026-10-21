@@ -141,6 +141,11 @@ trigger-driven field supersession. Update both generated Postgres triggers and
 kernel invalidation to the new state path, including input dependencies. Schema
 changes include the derived-DDL migration, not only the table migration.
 
+Field producers call `publishFieldAssessment`, which delegates to the shared
+transactional `publishAssessment` writer for immutable evidence and its current
+projection. The producer supplies serving explicitly; paired trials do not gain
+member authority by inheriting a Run's model pin.
+
 A typed family registry owns subject and judgment schemas, fingerprints,
 authority checks, supported review actions and projection invalidation.
 Typed connection recommendations use the existing recommendation family with

@@ -121,6 +121,57 @@ export async function publishAssessment(
   });
 }
 
+/** Field producers publish evidence before its live projection; serving is a producer decision. */
+export function publishFieldAssessment(
+  db: Database,
+  projection: Omit<typeof assessmentState.$inferInsert, "id" | "family"> & {
+    field: string;
+  },
+  served: boolean,
+) {
+  const model = projection.model ?? "unknown";
+  return publishAssessment(
+    db,
+    {
+      publicationKey: `field:${crypto.randomUUID()}`,
+      family: "field",
+      subject: {
+        kind: "field",
+        entity: projection.entity,
+        recordId: projection.recordId,
+        field: projection.field,
+      },
+      judgment: {
+        value: z.json().parse(projection.suggestedValue ?? null),
+        confidence: projection.confidence ?? 0,
+        runnerUpValue: z.json().parse(projection.runnerUpValue ?? null),
+        runnerUpConfidence: projection.runnerUpConfidence ?? null,
+        kind: projection.kind ?? "addition",
+      },
+      fingerprint:
+        projection.provenance?.inputFingerprint ??
+        projection.financeReviewFingerprint ??
+        null,
+      producer:
+        model === "unknown"
+          ? null
+          : {
+              kind: "model",
+              model,
+              revision: null,
+              runId: projection.runId ?? null,
+              evaluationId: projection.evaluationId ?? null,
+            },
+      evidence: {
+        currentValue: z.json().parse(projection.currentValue ?? null),
+        provenance: projection.provenance ?? null,
+      },
+      served,
+    },
+    projection,
+  );
+}
+
 /** Recording a grade is independent of applying a correction or changing authority. */
 export async function recordFeedback(
   db: Database,
