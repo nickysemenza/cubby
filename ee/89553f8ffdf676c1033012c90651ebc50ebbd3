@@ -1,0 +1,19 @@
+apps/apple/App/Tests/Entity/NativeCoverageViewPathTests.swift
+  s_9b829d577c7e4c::t_2922142dee411c 14,21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ee89553f8ffdf676c1033012c90651ebc50ebbd3",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
