@@ -41,9 +41,56 @@ const page: EntityGraphOutput = {
 };
 
 describe("persistent graph map", () => {
-  it("projects the first loaded page of a large branch by default", () => {
-    expect(graphBranchCount(branch, new Map())).toBe(1);
-    expect(projectGraphMap(page, root, new Map()).nodes).toHaveLength(2);
+  it("keeps a high-degree relationship collapsed until requested", () => {
+    expect(projectGraphMap(page, root, new Map()).nodes).toEqual([
+      page.nodes[0],
+    ]);
+  });
+  it("does not open a visible record's sibling branches automatically", () => {
+    const sibling = { entityKind: "expense", entityId: "EXP-2345" } as const;
+    const siblingEdge = {
+      ...edge,
+      id: "other-expense",
+      source: sibling,
+      target: child,
+    };
+    const data = {
+      ...page,
+      nodes: [
+        ...page.nodes,
+        { ...sibling, label: "Another expense", metadata: {} },
+      ],
+      edges: [...page.edges, siblingEdge],
+      branches: [
+        ...page.branches,
+        {
+          ...branch,
+          root: child,
+          target: "expense" as const,
+          relationshipKey: "expenses",
+          totalCount: 1,
+          items: [sibling],
+          edgeIds: [siblingEdge.id],
+          nextOffset: null,
+        },
+      ],
+    };
+    const shown = projectGraphMap(
+      data,
+      root,
+      new Map([[graphBranchKey(root, "purchases"), 1]]),
+    );
+    expect(shown.nodes.map(graphRefKey)).toEqual([
+      graphRefKey(root),
+      graphRefKey(child),
+    ]);
+    expect(
+      projectGraphMap(data, root, new Map(), new Set(), true).nodes,
+    ).toHaveLength(3);
+  });
+  it("reveals the first loaded page only after explicit expansion", () => {
+    expect(graphBranchCount(branch, new Map(), root)).toBe(0);
+    expect(projectGraphMap(page, root, new Map()).nodes).toHaveLength(1);
     const shown = projectGraphMap(
       page,
       root,
@@ -85,8 +132,10 @@ describe("persistent graph map", () => {
       ],
     };
     const key = graphBranchKey(root, "purchases");
-    expect(graphBranchCount(data.branches[0]!, new Map())).toBe(12);
-    expect(projectGraphMap(data, root, new Map()).nodes).toHaveLength(13);
+    expect(graphBranchCount(data.branches[0]!, new Map(), root)).toBe(0);
+    expect(
+      projectGraphMap(data, root, new Map([[key, 12]])).nodes,
+    ).toHaveLength(13);
     expect(graphBranchCount(data.branches[0]!, new Map([[key, 0]]))).toBe(0);
     expect(graphBranchCount(data.branches[0]!, new Map([[key, 13]]))).toBe(13);
   });
@@ -101,7 +150,10 @@ describe("persistent graph map", () => {
     const result = projectGraphMap(
       data,
       root,
-      new Map([[graphBranchKey(root, "purchases"), 0]]),
+      new Map([
+        [graphBranchKey(root, "purchases"), 0],
+        [graphBranchKey(root, "other"), 1],
+      ]),
     );
     expect(result.nodes).toHaveLength(2);
     expect(result.edges).toHaveLength(1);
@@ -166,6 +218,11 @@ describe("persistent graph map", () => {
     for (const [key, position] of Object.entries(first.positions))
       expect(full.positions[key]).toEqual(position);
     const frames = Object.values(full.positions);
+    const focus = full.positions[rootID]!;
+    expect(Math.min(...frames.map((frame) => frame.x))).toBeLessThan(focus.x);
+    expect(Math.max(...frames.map((frame) => frame.x))).toBeGreaterThan(
+      focus.x,
+    );
     const overlapping = frames.flatMap((a, i) =>
       frames
         .slice(i + 1)

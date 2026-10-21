@@ -59,6 +59,7 @@ export function useGraphExplorer(
     restored?.counts ?? new Map<string, number>(),
   );
   const [pathEdges, setPathEdges] = useState(new Set<string>());
+  const [showSiblings, setShowSiblings] = useState(false);
   const applyPath = useCallback((page?: EntityGraphOutput) => {
     if (page)
       setCached((old) =>
@@ -105,8 +106,8 @@ export function useGraphExplorer(
     [initial.data, cached],
   );
   const map = useMemo(
-    () => projectGraphMap(data, root, counts, pathEdges),
-    [data, root, counts, pathEdges],
+    () => projectGraphMap(data, root, counts, pathEdges, showSiblings),
+    [data, root, counts, pathEdges, showSiblings],
   );
   const atCapacity =
     data.nodes.length >= GRAPH_NODE_LIMIT ||
@@ -179,13 +180,24 @@ export function useGraphExplorer(
         operations.explore.queryOptions({ root: ref, depth: 1 }),
       ),
     );
-    if (page && version === generation.current)
+    if (page && version === generation.current) {
       setExpanded((old) => new Set(old).add(key));
+      setCounts((old) => {
+        const next = new Map(old);
+        for (const branch of page.branches)
+          if (graphRefKey(branch.root) === key)
+            next.set(
+              graphBranchKey(branch.root, branch.relationshipKey),
+              Math.min(branch.items.length, GRAPH_BRANCH_PAGE_SIZE),
+            );
+        return next;
+      });
+    }
   };
   const more = async (branch: EntityGraphBranch) => {
     const version = generation.current;
     const key = graphBranchKey(branch.root, branch.relationshipKey);
-    const count = graphBranchCount(branch, counts);
+    const count = graphBranchCount(branch, counts, root, showSiblings);
     const desired = Math.min(branch.totalCount, count + GRAPH_BRANCH_PAGE_SIZE);
     if (branch.items.length >= desired || branch.nextOffset === null) {
       setCounts((old) => new Map(old).set(key, desired));
@@ -210,12 +222,19 @@ export function useGraphExplorer(
       graphBranchKey(branch.root, branch.relationshipKey),
       0,
     );
-    const projection = projectGraphMap(data, root, next, pathEdges);
+    const projection = projectGraphMap(
+      data,
+      root,
+      next,
+      pathEdges,
+      showSiblings,
+    );
     if (!projection.nodes.some((node) => graphRefKey(node) === selected))
       setSelected(graphRefKey(branch.root));
     setCounts(next);
   };
   const restart = () => {
+    setShowSiblings(false);
     generation.current++;
     pending.current.clear();
     setCached(undefined);
@@ -227,10 +246,23 @@ export function useGraphExplorer(
     setBusy(new Set());
     setErrors(new Map());
   };
+  const collapseAll = () => {
+    setShowSiblings(false);
+    setCounts(
+      new Map(
+        data.branches.map((branch) => [
+          graphBranchKey(branch.root, branch.relationshipKey),
+          0,
+        ]),
+      ),
+    );
+    setPathEdges(new Set());
+    select(rootKey);
+  };
   const clearPath = () => {
     setPathEdges(new Set());
     if (
-      !projectGraphMap(data, root, counts).nodes.some(
+      !projectGraphMap(data, root, counts, new Set(), showSiblings).nodes.some(
         (node) => graphRefKey(node) === selected,
       )
     )
@@ -256,5 +288,8 @@ export function useGraphExplorer(
     expand,
     more,
     collapse,
+    collapseAll,
+    showSiblings,
+    setShowSiblings,
   };
 }

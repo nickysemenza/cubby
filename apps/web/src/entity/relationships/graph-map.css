@@ -39,6 +39,37 @@
   padding: 10px 0 8px;
   min-height: 76px;
 }
+.graph-record-identity[data-compact="true"] {
+  min-height: 52px;
+  padding: 6px 0;
+}
+.graph-record-identity[data-compact="true"] .text-2xs {
+  display: none;
+}
+.graph-map-branch {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.graph-branch-button {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.graph-branch-button:hover {
+  background: var(--muted);
+}
 .graph-record-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -68,21 +99,15 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.graph-record-links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-  font-size: var(--text-2xs);
+.graph-map-record .graph-record-facts dd {
+  font-size: 14px;
 }
 .graph-map-record[data-selected="true"] {
   border-color: var(--primary);
   outline: 1px solid var(--primary);
 }
-.graph-map-record .react-flow__handle {
+.graph-map-record .react-flow__handle,
+.graph-map-branch .react-flow__handle {
   opacity: 0;
 }
 .graph-map .react-flow__node:focus-visible {

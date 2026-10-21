@@ -2,6 +2,7 @@ import {
   seedInventoryPrerequisites,
   seedTaskPrerequisite,
   seedProjectPrerequisite,
+  seedVendorDisplayPrerequisite,
 } from "./fixtures/catalog";
 import {
   seedImagePrerequisite,
@@ -13,7 +14,7 @@ import {
   waitForAppHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { createEntityFixture } from "./fixtures/core";
+import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
 
 // Regression boundaries: card money must come from the canonical read, curated
 // context must retain its actual purchase/project evidence, and paths stay links.
@@ -78,7 +79,7 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   ).toBeVisible();
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
-  await page.getByRole("button", { name: "Fit map", exact: true }).click();
+  await page.getByRole("button", { name: "Fit focus", exact: true }).click();
   expect(
     await graph.locator(".graph-map-record").evaluateAll((cards) =>
       cards.every((card) => {
@@ -98,9 +99,10 @@ test("connections workspace shares dense facts, linked paths, and native handoff
     await page.screenshot({
       path: testInfo.outputPath("dense-connections-desktop.png"),
     });
-  const neighborLink = card
-    .getByRole("navigation", { name: "Linked records" })
-    .getByRole("link")
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
+  const neighborLink = page
+    .getByLabel("Connection paths")
+    .getByRole("link", { name: "Connection lighting purchase", exact: true })
     .first();
   const neighborHref = await neighborLink.getAttribute("href");
   expect(neighborHref).toBeTruthy();
@@ -110,9 +112,13 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   await expect(page).toHaveURL(neighborURL);
   await page.goBack();
   await expect(card).toBeVisible();
-  await page.getByRole("button", { name: "Fit map", exact: true }).click();
-  const factLink = graph
-    .locator(`.react-flow__node[data-id="expense:${expense.id}"] dl`)
+  await page.getByRole("button", { name: "Fit focus", exact: true }).click();
+  await graph
+    .locator(`.react-flow__node[data-id="expense:${expense.id}"]`)
+    .click();
+  const factLink = page
+    .getByRole("complementary", { name: "Graph inspector" })
+    .locator("dl")
     .getByRole("link")
     .first();
   const factHref = await factLink.getAttribute("href");
@@ -182,6 +188,61 @@ test("connections workspace shares dense facts, linked paths, and native handoff
       replace: false,
     });
   await expect(page).toHaveURL(hostedURL);
+});
+
+test("a high-degree focus stays readable and expands only the requested branch", async ({
+  page,
+}, testInfo) => {
+  const vendor = await seedVendorDisplayPrerequisite(
+    page,
+    "Focused graph vendor",
+  );
+  await createEntityFixtures(
+    page,
+    "purchase",
+    Array.from({ length: 24 }, (_, index) => ({
+      vendorId: vendor.id,
+      orderId: `Focused order ${index}`,
+      date: "2026-09-16",
+    })),
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/connections?source=vendor&id=${vendor.id}&mode=map`,
+  );
+  const graph = page.getByLabel("Relationship graph", { exact: true });
+  await expect(page.getByText(/1 visible ·/)).toBeVisible();
+  await expect(
+    graph.getByRole("button", { name: "Expand Purchases (24)", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "Graph inspector" }),
+  ).toHaveCount(0);
+  await graph
+    .getByRole("button", { name: "Expand Purchases (24)", exact: true })
+    .click();
+  await expect(page.getByText(/13 visible ·/)).toBeVisible();
+  await page.getByRole("button", { name: "Fit focus", exact: true }).click();
+  const scale = await graph
+    .locator(".react-flow__viewport")
+    .evaluate((element) =>
+      Number(element.style.transform.match(/scale\(([^)]+)\)/)?.[1]),
+    );
+  expect(scale).toBeGreaterThanOrEqual(0.85);
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("focused-vendor-expanded.png"),
+    });
+  await graph
+    .getByRole("button", { name: "Load more Purchases", exact: true })
+    .click();
+  await expect(page.getByText(/25 visible ·/)).toBeVisible();
+  await page.getByRole("button", { name: "Collapse all", exact: true }).click();
+  await expect(page.getByText(/1 visible ·/)).toBeVisible();
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("focused-vendor-collapsed.png"),
+    });
 });
 
 test("work graph renders through Viz, restores filters, and opens a graph node", async ({
@@ -296,6 +357,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   const graph = page.getByLabel("Relationship graph", { exact: true });
   const nodes = graph.locator(".react-flow__node");
   await expect(nodes).toHaveCount(2);
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
   const inventoryBranch = page
     .getByRole("heading", { name: "Inventory", exact: true })
     .locator("../..");

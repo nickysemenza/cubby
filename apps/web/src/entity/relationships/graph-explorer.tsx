@@ -85,7 +85,7 @@ export function GraphExplorer({
   onList,
   embedded = false,
   fill = false,
-  initialDepth = embedded ? 2 : 1,
+  initialDepth = 1,
   operations = entityGraph,
 }: {
   root: EntityRef;
@@ -130,7 +130,7 @@ export function GraphExplorer({
     null,
   );
   const [showList, setShowList] = useState(false);
-  const [showInspector, setShowInspector] = useState(true);
+  const [showInspector, setShowInspector] = useState(false);
   const listing = showList || Boolean(query.trim());
   const [reveal, setReveal] = useState(0);
   const [canvasGeneration, setCanvasGeneration] = useState(0);
@@ -173,6 +173,7 @@ export function GraphExplorer({
     model.select(key);
     setSelectedEdge(undefined);
     setInspecting(true);
+    setShowInspector(true);
     if (center) setReveal((old) => old + 1);
   };
   const selectionChange = useRef(onNavigationChange);
@@ -410,6 +411,24 @@ export function GraphExplorer({
               nodes={displayed.nodes}
               edges={displayed.edges}
               anchors={model.map.anchors}
+              branches={model.data.branches}
+              counts={model.counts}
+              showSiblings={model.showSiblings}
+              onToggleSiblings={() => model.setShowSiblings((value) => !value)}
+              onCollapseAll={model.collapseAll}
+              onMoreBranch={(branch) => void model.more(branch)}
+              onToggleBranch={(branch) => {
+                if (
+                  graphBranchCount(
+                    branch,
+                    model.counts,
+                    root,
+                    model.showSiblings,
+                  )
+                )
+                  model.collapse(branch);
+                else void model.more(branch);
+              }}
               selected={model.selected}
               selectedEdge={selectedEdge}
               onSelect={select}
@@ -584,7 +603,12 @@ function GraphRecordInspector({
           <Stack gap="sm" aria-label="Relationship branches">
             {branches.map((branch) => {
               const key = graphBranchKey(branch.root, branch.relationshipKey);
-              const count = graphBranchCount(branch, model.counts);
+              const count = graphBranchCount(
+                branch,
+                model.counts,
+                root,
+                model.showSiblings,
+              );
               return (
                 <Stack
                   key={key}
