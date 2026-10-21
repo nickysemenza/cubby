@@ -25,7 +25,6 @@ import { Picker } from "~/ui/combobox/picker";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { numberCellData, specFromCellData } from "~/ui/data-table/cell-data";
-import { CellBar, CellSparkline } from "~/ui/data-table/cell-visual";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
@@ -35,6 +34,7 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
+import { CellBar, CellSparkline } from "~/ui/data-table/visuals/cell-visual";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

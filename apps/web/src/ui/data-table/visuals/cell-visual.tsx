@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { CellFrame } from "./cell-frame";
+import { CellFrame } from "../cell-frame";
 
 /** Visuals are supplementary: the caller retains editing and clipboard ownership. */
 export function CellBar({

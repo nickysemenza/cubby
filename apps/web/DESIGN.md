@@ -156,7 +156,7 @@ These are Cubby's own components, designed and built here rather than adopted fr
 - **`RTable`** (`entity/table/table.tsx`), reached through `ListWorkbench` (`/design#rtable`).
   Its synthetic showcase compares plain and visual cells alongside editing,
   range copy/paste, and grouping. `CellBar` and `CellSparkline`
-  (`ui/data-table/cell-visual.tsx`) supplement
+  (`ui/data-table/visuals/cell-visual.tsx`) supplement
   readable values with explicit fixed scales; missing samples break the trend.
   Stock targets and price histories are illustrative, page-local evidence.
   These presentations are not yet connected to entity declarations or saved views.
