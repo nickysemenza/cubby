@@ -161,6 +161,10 @@ Narrow pickers and internal target readers use `listScaffold.raw` and keep their
 own output contract. Both methods share authoritative filtering, sorting,
 pagination, exact counts, prepared context and selected-ID order restoration.
 There is no public full-row hydration callback.
+Reference lookup targets come from declared read fields as well as storage
+fields: table-only lineage columns can still expose declared public references.
+Photo receipt recovery captures the requested current revision even when a
+completed Run blocks new approvals; the server validates the existing receipt.
 
 Review outcomes and completion callbacks belong to the submitting view visit.
 Capture its identity before dispatch and compare it on completion; a query key

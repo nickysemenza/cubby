@@ -872,6 +872,59 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
   expect(submittedRevision).toBe(savedRevision);
 });
 
+it("recovers an applied receipt on a completed Run with an unsettled proposal", async () => {
+  const proposal = { ...proposedSweater, blockedReason: "Run is completed" };
+  const snapshot: PhotoRunReview = {
+    ...review,
+    review: { ...review.review, proposals: [proposal] },
+  };
+  harness.queryClient.setQueryData(
+    photoImport.review.queryKey({ runId: RUN_ID }),
+    snapshot,
+  );
+  let recovered = false;
+  let submittedRevisions: unknown;
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    if (operation === "photoImport.candidatesBatch")
+      return { ok: true, data: { groups: [] } };
+    if (operation === "product.manufacturerOptions")
+      return { ok: true, data: [] };
+    if (operation === "photoImport.review")
+      return {
+        ok: true,
+        data: recovered
+          ? {
+              ...snapshot,
+              review: { ...snapshot.review, proposals: [committedSweater] },
+            }
+          : snapshot,
+      };
+    if (operation === "photoImport.approveGroups") {
+      const body = photoImportContract.ops.approveGroups.input.parse(input);
+      submittedRevisions = body.expectedRevisions;
+      recovered = true;
+      return {
+        ok: true,
+        data: reviewPhotoGroupsOutput.parse({
+          ...review.review,
+          proposals: [committedSweater],
+          results: [{ groupKey: proposal.groupKey, outcome: "replayed" }],
+          frozenGroupKeys: [],
+        }),
+      };
+    }
+    throw new Error(`Unexpected operation ${operation}`);
+  });
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Recover applied result" }),
+  );
+  await waitFor(() => expect(recovered).toBe(true));
+  expect(submittedRevisions).toEqual([
+    { groupKey: proposal.groupKey, updatedAt: proposal.updatedAt },
+  ]);
+});
+
 it("retains per-image retry errors and refreshes successful siblings", async () => {
   const failedIds = [
     imageShortcode.parse("IMG-4K7M"),

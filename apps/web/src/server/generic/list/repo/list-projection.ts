@@ -261,9 +261,10 @@ export function listReadPlan<Row>(
   };
   for (const binding of bindings)
     for (const key of Object.keys(binding.schema.shape)) claim(key);
-  const storage =
-    Object.entries(entityFieldModels).find(([key]) => key === entity)?.[1]
-      .storage ?? [];
+  const model = Object.entries(entityFieldModels).find(
+    ([key]) => key === entity,
+  )?.[1];
+  const storage = model?.storage ?? [];
   const privateKeys = new Set<string>(
     storage
       .filter((field) => field.reference !== null)
@@ -277,8 +278,12 @@ export function listReadPlan<Row>(
       const stored = storage.find(
         (field) => field.key === key || field.column === key,
       );
+      const declared = model?.fields.find(
+        (field) => field.key === key || field.readKey === key,
+      );
       const target = shortcodeEntities.find(
-        (candidate) => candidate === stored?.reference,
+        (candidate) =>
+          candidate === (stored?.reference ?? declared?.reference?.entity),
       );
       if (!target)
         throw new Error(

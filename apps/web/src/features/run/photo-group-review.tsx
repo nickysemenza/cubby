@@ -3382,10 +3382,7 @@ export function PhotoGroupReview({
           Awaited<ReturnType<typeof photoImport.review.call>>
         >(photoImport.review.queryKey({ runId }));
         const expectedRevisions = (latest?.review.proposals ?? [])
-          .filter(
-            (proposal) =>
-              groupKeys.includes(proposal.groupKey) && !proposal.blockedReason,
-          )
+          .filter((proposal) => groupKeys.includes(proposal.groupKey))
           .map(({ groupKey, updatedAt }) => ({ groupKey, updatedAt }));
         if (expectedRevisions.length !== groupKeys.length)
           throw new Error(
