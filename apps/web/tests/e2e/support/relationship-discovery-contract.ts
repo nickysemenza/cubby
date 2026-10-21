@@ -43,14 +43,14 @@ export function relationshipDiscoveryContract() {
     );
     await expect(page).toHaveURL((url) => url.pathname === "/graph");
     const showRecords = page.getByRole("button", {
-      name: "Show record list",
+      name: "Paths list",
       exact: true,
     });
     await showRecords.click();
     const records = page.getByLabel("Map records", { exact: true });
     await records
       .getByRole("button", {
-        name: new RegExp(`^${escapeRegExp(name)} switch`),
+        name: new RegExp(`^Inspect ${escapeRegExp(name)} switch`),
       })
       .click();
     await page
@@ -63,8 +63,8 @@ export function relationshipDiscoveryContract() {
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("group", {
-        name: `Inspect ${name} supporting expense`,
+      records.getByRole("button", {
+        name: `Inspect ${name} supporting expense Expense`,
         exact: true,
       }),
     ).toBeVisible();
@@ -72,10 +72,9 @@ export function relationshipDiscoveryContract() {
       page.getByLabel("Relationship graph", { exact: true }),
     ).toBeVisible();
     await expectViewportBounded(page);
-    await showRecords.click();
     await records
       .getByRole("button", {
-        name: new RegExp(`^${escapeRegExp(name)} suggested`),
+        name: new RegExp(`^Inspect ${escapeRegExp(name)} suggested`),
       })
       .click();
     await expect(
