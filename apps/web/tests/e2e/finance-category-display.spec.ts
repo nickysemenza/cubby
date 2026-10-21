@@ -488,20 +488,43 @@ test("expense category pills agree with quality for direct, allocated, and missi
     "expense_spending_category",
   );
   await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(tag)}`);
-  for (const name of [`${tag} principal`, `${tag} shipping`]) {
-    const row = page.getByRole("row").filter({ hasText: name });
-    await expect(
-      row.getByRole("link", { name: categoryName, exact: true }),
-    ).toBeVisible();
-    await expect(
-      row.getByRole("link", { name: categoryName, exact: true }),
-    ).toHaveAttribute("href", `/spending-categories/${categoryId}`);
-    await expect(row.getByText(categoryId, { exact: true })).toHaveCount(0);
-  }
+  const principalRow = page
+    .getByRole("row")
+    .filter({ hasText: `${tag} principal` });
+  const directCategory = principalRow.getByRole("link", {
+    name: categoryName,
+    exact: true,
+  });
+  await expect(directCategory).toBeVisible();
+  await expect(directCategory).toHaveAttribute(
+    "href",
+    `/spending-categories/${categoryId}`,
+  );
+  await expect(principalRow.getByText(categoryId, { exact: true })).toHaveCount(
+    0,
+  );
+
+  // Standard-height pills fit one line. Allocated categories retain the first
+  // link and name the remainder through the shared cluster's overflow tooltip.
   const shipping = page.getByRole("row").filter({ hasText: `${tag} shipping` });
   await expect(
     shipping.getByRole("link", { name: secondCategoryName, exact: true }),
   ).toBeVisible();
+  const overflow = shipping.getByRole("button", {
+    name: `1 more: ${categoryName}`,
+    exact: true,
+  });
+  await overflow.focus();
+  await expect(page.getByRole("tooltip")).toHaveText(categoryName);
   const row = page.getByRole("row").filter({ hasText: `${tag} unclassified` });
   await expect(row).not.toContainText("100/100");
+
+  // The full record keeps both allocated categories navigable.
+  await gotoAuthenticatedPage(page, `/expenses/${adjustment}`);
+  await expect(
+    page.getByRole("link", { name: categoryName, exact: true }).first(),
+  ).toHaveAttribute("href", `/spending-categories/${categoryId}`);
+  await expect(
+    page.getByRole("link", { name: secondCategoryName, exact: true }).first(),
+  ).toHaveAttribute("href", `/spending-categories/${secondCategoryId}`);
 });
