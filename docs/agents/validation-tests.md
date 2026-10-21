@@ -14,6 +14,9 @@ baseline can make an untouched form appear changed. Run the web `typecheck`
 command after the final test fixture or query edit, even when its runtime test
 passes; an earlier check does not cover later test repairs. `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
+Browser grouping journeys use the visible list Group control. Header-menu
+dispatch remains in `table-header-layout.unit.test.tsx`; do not duplicate its
+hover/focus disclosure in a backend-connected grouping journey.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
 For conditional expected output, construct expected data and assert once; keep

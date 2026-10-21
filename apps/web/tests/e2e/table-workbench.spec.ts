@@ -43,7 +43,9 @@ test("Project Tasks group by status, latest due first, without a Project column"
   ).toHaveCount(0);
 });
 
-test("a column header menu groups and ungroups the list", async ({ page }) => {
+test("the list grouping control groups and ungroups real Tasks", async ({
+  page,
+}) => {
   const prefix = `Header menu ${Date.now()}`;
   await createFixture(page, "task", {
     name: `${prefix} open`,
@@ -57,21 +59,21 @@ test("a column header menu groups and ungroups the list", async ({ page }) => {
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
-  const openMenu = async () => {
-    const menu = page.getByRole("button", { name: "Status column menu" });
-    await menu.focus();
-    await menu.press("Enter");
-  };
-
-  await openMenu();
+  // Header-menu dispatch is covered by table-header-layout.unit.test.tsx.
+  // This journey owns grouping real records through the visible list control.
+  await page.getByRole("button", { name: "Group by", exact: true }).click();
   await page.getByRole("menuitem", { name: /^Group by Status/ }).click();
   await expect(page).toHaveURL(/groupBy=status/);
   await expect(
     page.getByRole("heading", { name: "In progress", exact: true }),
   ).toBeVisible();
 
-  await openMenu();
-  await page.getByRole("menuitem", { name: "Ungroup" }).click();
+  await page
+    .getByRole("button", { name: "Grouped by Status", exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Group by None", exact: true })
+    .click();
   await expect(page).not.toHaveURL(/groupBy=/);
 });
 
