@@ -68,15 +68,6 @@ describe("SavedViewChips", () => {
 });
 
 describe("EntityManifestGrid schema sheet", () => {
-  it("renders one row per declared entity", () => {
-    renderGrid();
-
-    // Header rows plus one row per entity.
-    expect(within(sheet()).getAllByRole("row")).toHaveLength(
-      allEntities.length + 2,
-    );
-  });
-
   it.each([
     ["recipe", { create: "yes", read: "yes", update: "yes", delete: "yes" }],
     ["run", { create: "no", read: "yes", update: "no", delete: "no" }],

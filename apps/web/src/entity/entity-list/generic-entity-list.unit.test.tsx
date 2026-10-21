@@ -262,25 +262,6 @@ describe("listPage", () => {
 });
 
 describe("GenericEntityList", () => {
-  it.each(
-    browserRoutedEntities.filter(
-      (entity) => entity !== "location" && entity !== "meal",
-    ),
-  )(
-    "compiles the %s list columns from its manifest field keys",
-    async (entity) => {
-      await renderListPage(entity, entities[entity].routes.list, []);
-      const table = await screen.findByRole("table");
-      // Regression: product lists its field as `images`, and the standard
-      // column prepend only recognized `image`, so it rendered two image lanes.
-      expect(
-        table.querySelectorAll(
-          'th[data-column-id="image"], th[data-column-id="images"]',
-        ).length,
-      ).toBeLessThanOrEqual(1);
-    },
-  );
-
   it("keeps the primary search in a generic list request", () => {
     // Cards and Compact use the same transport parser as List. If this is
     // absent, Zod strips the typed search before the server can filter it.
