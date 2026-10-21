@@ -1,5 +1,11 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
@@ -88,8 +94,16 @@ it.each([1440, 402])(
     );
     state.showProduct();
     fireEvent.click(clear);
+    const surface =
+      width === 1440
+        ? await screen.findByTestId("entity-card-grid")
+        : (await screen.findAllByRole("listitem")).find((item) =>
+            item.textContent?.includes(productName),
+          );
+    if (!surface)
+      throw new Error("Recovered Product has no responsive list surface");
     expect(
-      await screen.findByRole("link", { name: productName }),
+      within(surface).getByRole("link", { name: productName }),
     ).toBeVisible();
     await waitFor(() =>
       expect(state.requests.at(-1)).not.toEqual(
@@ -156,6 +170,14 @@ it("fits populated declared money, count, date and identifier columns", async ()
     expect(width("purchaseDate")).toBeLessThanOrEqual(88);
     expect(width("primaryGtin")).toBeLessThanOrEqual(88);
   });
+  const dateLines = row?.querySelectorAll(
+    '[data-cell-col="purchaseDate"] [data-stacked-line]',
+  );
+  expect(dateLines).toHaveLength(2);
+  expect(dateLines?.[0]).toBeVisible();
+  expect(dateLines?.[0]).toHaveTextContent("Sep 3");
+  expect(dateLines?.[1]).toBeVisible();
+  expect(dateLines?.[1]?.textContent).toMatch(/^’25 · \d+y ago$/);
   expect(row?.querySelector('[data-cell-col="price"]')).toHaveTextContent(
     "$12.00",
   );

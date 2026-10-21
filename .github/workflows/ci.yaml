@@ -239,6 +239,17 @@ jobs:
       - name: ${{ matrix.step || 'Run lane' }}
         if: ${{ !matrix.browser }}
         run: ${{ matrix.run }}
+      - name: Preserve Auxiliary results before Worker tests
+        if: ${{ !cancelled() && matrix.worker }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: component-browser-${{ github.sha }}
+          path: |
+            apps/web/.vitest-results.json
+            apps/web/**/__screenshots__/**
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
       - if: ${{ matrix.browser }}
         uses: ./.github/actions/playwright
         with:

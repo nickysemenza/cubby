@@ -105,6 +105,14 @@ function explicitlySelectsProject(name: string): boolean {
   );
 }
 
+// One required owner per migrated capability; other previews remain opt-in.
+const requiredCapabilityTests = [
+  "src/lib/test/browser-harness.preview.test.tsx",
+  "src/entity/entity-list/list-capabilities.preview.test.tsx",
+  "src/ui/data-table/table-density.preview.test.tsx",
+  "src/ui/data-table/rendered-column-fit.preview.test.tsx",
+];
+
 const mcpContractTests = [
   "src/server/mcp/agent-manifest-tools.unit.test.ts",
   "src/server/mcp/catalog-schema.unit.test.ts",
@@ -361,13 +369,14 @@ export default defineConfig({
                 name,
                 include:
                   name === "capability"
-                    ? [
-                        "src/lib/test/browser-harness.preview.test.tsx",
-                        "src/entity/entity-list/list-capabilities.preview.test.tsx",
-                        "src/ui/data-table/table-density.preview.test.tsx",
-                        "src/ui/data-table/rendered-column-fit.preview.test.tsx",
-                      ]
+                    ? requiredCapabilityTests
                     : ["**/*.preview.test.tsx"],
+                // A direct file argument enables preview implicitly. Required
+                // files already run in capability; explicit preview still runs all.
+                exclude:
+                  name === "preview" && !explicitlySelectsProject("preview")
+                    ? requiredCapabilityTests
+                    : [],
                 setupFiles: ["./tooling/preview-test-setup.ts"],
                 browser: {
                   enabled: true,

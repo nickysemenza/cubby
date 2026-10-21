@@ -341,7 +341,10 @@ with the real Tailwind CSS. It is part of `pnpm test` and the existing Auxiliary
 that runner installs Chromium before running the tests. No additional runner
 is allocated. Other `**/*.preview.test.tsx` files remain opt-in through
 `pnpm --dir apps/web test:preview`; they are not retained merge-gate coverage
-until migrated into the required roster.
+until migrated into the required roster. A direct preview-file run selects
+required files through `capability` once; explicit `--project preview` retains
+the full optional preview command. Auxiliary uploads its JSON report and browser
+failure screenshots before Worker tests can overwrite the shared report.
 
 Shared list, table, card and detail presentation capabilities have one owner
 here: populated/empty/loading states, responsive layout, overflow, focus and
