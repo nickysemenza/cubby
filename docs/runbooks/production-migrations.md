@@ -104,7 +104,9 @@ one baseline bookkeeping row and unchanged application data/schema. No reset or
 manual deletion of production bookkeeping is part of this procedure. If Neon
 is behind, apply its missing original migrations from the preceding revision
 before deploying the consolidation. Retired SQL and its preservation tests
-remain in Git history; new migrations get populated-predecessor coverage.
+remain in Git history: remove tests that locate or replay retired SQL in the
+consolidation PR, while retaining domain write/readback coverage for current
+invariants. New migrations get populated-predecessor coverage.
 
 Only the newest schema snapshot is retained. Drizzle Kit uses it to generate
 the next SQL diff; it does not apply snapshots to the database. After generation,

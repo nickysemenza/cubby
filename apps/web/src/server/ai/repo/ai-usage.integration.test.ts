@@ -1,6 +1,3 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import type { AiModelPricing } from "@cubby/shared/ai/pricing";
@@ -10,7 +7,6 @@ type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { MIGRATIONS_FOLDER } from "tooling/db-migrate";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { z } from "zod";
@@ -678,61 +674,6 @@ describe("AiUsage transport", () => {
     ).rejects.toMatchObject({
       cause: { constraint: "AiUsage_transport_check" },
     });
-  });
-
-  // The migration backfills only positive evidence: a gateway log id proves
-  // the gateway carried the call, and an application-cache hit proves no
-  // model call happened. Everything else — including zero-cost rows, which
-  // might be ChatGPT plan calls or cache replays — stays unknown.
-  it("backfills historical rows from positive evidence only", async () => {
-    const migration = readdirSync(MIGRATIONS_FOLDER)
-      .filter((file) => file.endsWith(".sql"))
-      .map((file) => readFileSync(join(MIGRATIONS_FOLDER, file), "utf8"))
-      .find((body) =>
-        /ALTER TABLE "AiUsage" ADD COLUMN "transport"/.test(body),
-      );
-    expect(migration).toBeDefined();
-    const backfill = (migration ?? "")
-      .split("--> statement-breakpoint")
-      .map((statement) =>
-        statement
-          .split("\n")
-          .filter((line) => !line.startsWith("--"))
-          .join("\n")
-          .trim(),
-      )
-      .filter((statement) => statement.startsWith("UPDATE"));
-    expect(backfill).toHaveLength(2);
-
-    await insertCalls([
-      { minute: 1, transport: "unknown", gatewayLogId: "log-synthetic-1" },
-      { minute: 2, transport: "unknown", gatewayLogId: "" },
-      {
-        minute: 3,
-        transport: "unknown",
-        applicationCacheStatus: "hit",
-        attempt: 0,
-        chargedCost: 0,
-      },
-      { minute: 4, transport: "unknown", chargedCost: 0 },
-      { minute: 5, transport: "unknown", cacheStatus: "hit" },
-      { minute: 6, transport: "unknown", status: "failed" },
-    ]);
-    for (const statement of backfill)
-      await getDb(ctx.db).execute(sql.raw(statement));
-
-    const rows = await getDb(ctx.db)
-      .select({ createdAt: aiUsage.createdAt, transport: aiUsage.transport })
-      .from(aiUsage)
-      .orderBy(aiUsage.createdAt);
-    expect(rows.map((row) => row.transport)).toEqual([
-      "gateway",
-      "unknown",
-      "cache",
-      "unknown",
-      "unknown",
-      "unknown",
-    ]);
   });
 });
 
