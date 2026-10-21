@@ -12,6 +12,7 @@ import type { Pool } from "pg";
 import * as schema from "~/server/db/schema";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { createRecipe } from "~/server/domains/recipe/repo/crud";
 import { saveMealFood } from "~/server/domains/meal/repo/food";
@@ -169,6 +170,7 @@ export async function seedCorpus(
   const origin = new URL(options.storageOrigin);
   if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(origin.hostname))
     throw new Error("Household image storage must use a local test/dev origin");
+  await createSystemUserFixture(buildScenarioDatabase(pool));
   await pool.query(
     "CREATE TABLE IF NOT EXISTS cubby_household_fixture (version integer PRIMARY KEY, state text NOT NULL)",
   );

@@ -5,8 +5,11 @@ import {
 } from "../../src/server/workflows/background-tasks/publish";
 import { getBackgroundQueue } from "../../src/server/cf-env";
 import { createPostgresPool } from "../postgres-pool";
+import { buildScenarioDatabase } from "../scenarios/context";
+import { createSystemUserFixture } from "../../src/server/testing/repo.fixtures";
 import { Buffer } from "node:buffer";
 import { seedUpcLookupFixture } from "./upc-fixture";
+import { assertDevDatabaseUrl } from "./state";
 
 import boots from "../../tests/e2e/fixtures/synthetic-wardrobe-boots.png?inline";
 import label from "../../tests/e2e/fixtures/synthetic-wardrobe-label.png?inline";
@@ -30,10 +33,12 @@ export async function seedCoreFixtures(options: {
   keyPrefix: string;
   post: AuthPost;
 }): Promise<void> {
+  assertDevDatabaseUrl(options.databaseUrl);
   // The pre-Worker template accepts publications into a local outbox. Delete
   // only after queue acceptance; a crash may redeliver, and handlers are idempotent.
   const pool = createPostgresPool({ connectionString: options.databaseUrl });
   try {
+    await createSystemUserFixture(buildScenarioDatabase(pool));
     if (
       (
         await pool.query(
