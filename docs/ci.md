@@ -392,10 +392,11 @@ Generated output is never committed; web and Apple jobs generate it during
 `Validation`'s `generate` gate checks that it generates cleanly and that the
 OpenAPI document lints.
 
-The `lanes` job is one static matrix: four E2E shards, PostgreSQL integration,
-and the auxiliary and Worker tests. Browser shards run alone, so no companion
-check waits behind one. Every failure still fails the job and `CI passed`, and
-each Nx target retains its own cache key.
+The `lanes` job is one static matrix: five mixed browser/PostgreSQL shards
+and one auxiliary/Worker entry. Each mixed entry prepares the immutable Worker
+build, then runs its browser and PostgreSQL targets concurrently through Nx.
+Every failure still fails the job and `CI passed`, and each target retains its
+own cache key and shard input.
 
 Each entry uses one standard runner with PostgreSQL and IntegreSQL service
 containers.
@@ -408,7 +409,7 @@ worker environment together. `Build Workers and runtime tests` runs the
 `integration-workerd` Vitest project against a Worker it builds itself. Both
 share one runner as `Auxiliary, Worker, and runtime tests`, two steps that each
 run despite the other's failure.
-Desktop Chromium runs as four Playwright shards (two workers each) through the
+Desktop Chromium runs as five Playwright shards (two workers each) through the
 `e2e` target, each building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
 Playwright suite; native checks remain separate. There is no coverage mode.
@@ -433,8 +434,11 @@ model and gateway, driven through the browser) through the
 it is outside `CI passed` and `continue-on-error`, so its failure leaves the run
 successful. It uses the same `webGate` key as the
 other web lanes and uploads the same Playwright report.
-The `integration` Vitest project runs once through the `postgres` target
-with four fork workers; local explicit partitions remain supported and separately keyed. The
+The `integration` Vitest project runs as five disjoint file shards through the
+`postgres:mixed` configuration, with one fork per runner alongside two browser
+workers. The default standalone `postgres` target retains Vitest's normal worker
+selection (available CPUs minus one); `VITEST_MAX_WORKERS` controls the fast-tier
+projects, not this PostgreSQL project. Local partitions remain separately keyed. The
 `integration-workerd` project (the files that start the built Worker, listed in
 `workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in `Build
 Workers and runtime tests`. Keep every Worker-consuming integration test in
@@ -541,8 +545,9 @@ and do not require human review.
 Optimize readiness across four concurrent PRs on the existing hosted plan.
 The Linux `lanes` matrix sets no `max-parallel`, so its six entries run
 concurrently; validation and short control jobs are additional demand, and
-native/optional work has repository-level limits. Standalone browser shards pay
-setup four times to shorten the slowest lane; this does not reserve
+native/optional work has repository-level limits. The five mixed shards pay
+setup five times and share each runner's CPU between browser and PostgreSQL work;
+this does not reserve
 account-wide capacity or guarantee fairness against unrelated repositories.
 
 Use the Actions job timeline to distinguish created-to-start waiting, setup,

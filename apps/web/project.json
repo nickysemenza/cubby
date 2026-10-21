@@ -59,7 +59,12 @@
           "target": "generate"
         }
       ],
-      "inputs": ["webGate", { "env": "CUBBY_POSTGRES_SHARD" }]
+      "inputs": ["webGate", { "env": "CUBBY_POSTGRES_SHARD" }],
+      "configurations": {
+        "mixed": {
+          "command": "pnpm exec node tooling/dev-services/test-services.ts -- vitest run --project integration --shard=${CUBBY_POSTGRES_SHARD:-1/1} --maxWorkers=1"
+        }
+      }
     },
     "db-check": {
       "command": "pnpm run db:check",
@@ -161,7 +166,8 @@
         }
       ],
       "inputs": ["webGate", { "env": "CUBBY_E2E_SHARD" }],
-      "outputs": ["{projectRoot}/playwright-report"]
+      "outputs": ["{projectRoot}/playwright-report"],
+      "configurations": { "mixed": {} }
     },
     // Informative only (never a merge gate); keyed like the other web lanes.
     "e2e-purchase-import": {
