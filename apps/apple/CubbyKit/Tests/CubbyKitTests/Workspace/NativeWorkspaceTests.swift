@@ -73,6 +73,31 @@ struct NativeWorkspaceTests {
                 id: "RUN-4K7M"))
     }
 
+    @Test func connectionsWorkspaceRejectsOtherPagesAndDuplicateModes() {
+        let policy = NativeWorkspacePolicy(baseURL: base)
+        let surface = NativeWorkspaceSurface.connections(entity: "product", id: "PRD-4K7M")
+        #expect(policy.isWorkspaceDocument(policy.workspaceURL(surface), surface: surface))
+        #expect(
+            !policy.isWorkspaceDocument(
+                URL(string: "https://example.invalid/settings?nativeWorkspace=connections")!, surface: surface
+            ))
+        #expect(
+            !policy.isWorkspaceDocument(
+                URL(
+                    string:
+                        "https://example.invalid/connections?nativeWorkspace=connections&nativeWorkspace=run-evidence"
+                )!, surface: surface))
+        #expect(
+            !policy.isWorkspaceDocument(
+                URL(string: "https://evil.test/connections?nativeWorkspace=connections")!, surface: surface))
+        #expect(
+            policy.isWorkspaceDocument(
+                URL(
+                    string:
+                        "https://example.invalid/connections?nativeWorkspace=connections&source=task&id=TSK-4K7M"
+                )!, surface: surface))
+    }
+
     @Test func credentialRevisionDetectsLogoutAndSameTokenSignIn() async throws {
         let provider = CredentialProvider(host: "example.invalid", store: InMemorySessionTokenStore())
         try await provider.set(.bearer("synthetic"))

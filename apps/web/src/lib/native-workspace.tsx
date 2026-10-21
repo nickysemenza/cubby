@@ -14,13 +14,20 @@ export const useNativeRunEvidence = () => useContext(NativeRunEvidenceContext);
 
 export function isNativeRunEvidence(
   pathname: string,
-  mode: "run-evidence" | undefined,
+  mode: "run-evidence" | "connections" | undefined,
 ) {
   if (mode !== "run-evidence") return false;
   const parts = pathname.split("/").filter(Boolean);
   if (parts.length !== 1 && !(parts.length === 2 && parts[0] === "runs"))
     return false;
   return parseShortcode(parts.at(-1) ?? "")?.type === "run";
+}
+
+export function isNativeConnections(
+  pathname: string,
+  mode: "run-evidence" | "connections" | undefined,
+) {
+  return mode === "connections" && pathname === "/connections";
 }
 
 function recordDestination(url: URL) {
@@ -64,6 +71,18 @@ export function NativeWorkspaceBridge() {
         return true;
       }
       const current = new URL(window.location.href);
+      if (
+        isNativeConnections(
+          current.pathname,
+          current.searchParams.get("nativeWorkspace") === "connections"
+            ? "connections"
+            : undefined,
+        ) &&
+        next.pathname === current.pathname &&
+        next.searchParams.getAll("nativeWorkspace").length === 1 &&
+        next.searchParams.get("nativeWorkspace") === "connections"
+      )
+        return false;
       const insideEvidence =
         next.pathname === current.pathname &&
         next.search === current.search &&

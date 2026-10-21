@@ -17,9 +17,11 @@ export const graphMapLayoutOutputSchema = z.object({
 export type GraphMapRect = z.infer<typeof graphMapRectSchema>;
 export type GraphMapLayoutInput = z.infer<typeof graphMapLayoutInputSchema>;
 
-const WIDTH = 196;
-const HEIGHT = 104;
-const GAP = 32;
+export const GRAPH_CARD_WIDTH = 280;
+export const GRAPH_CARD_HEIGHT = 360;
+const WIDTH = GRAPH_CARD_WIDTH;
+const HEIGHT = GRAPH_CARD_HEIGHT;
+const GAP = 48;
 
 const overlaps = (a: GraphMapRect, b: GraphMapRect) =>
   a.x < b.x + b.width + GAP &&
@@ -27,7 +29,7 @@ const overlaps = (a: GraphMapRect, b: GraphMapRect) =>
   a.y < b.y + b.height + GAP &&
   a.y + a.height + GAP > b.y;
 
-/** New records occupy the nearest free grid slot. Existing coordinates are immutable. */
+/** New records fan out to the right of their parent. Existing coordinates are immutable. */
 export function placeGraphMap(input: GraphMapLayoutInput) {
   const positions = { ...input.previous };
   const buckets = new Map<string, GraphMapRect[]>();
@@ -64,25 +66,36 @@ export function placeGraphMap(input: GraphMapLayoutInput) {
     };
     let placed = false;
     for (let radius = 0; !placed; radius++) {
-      for (let y = -radius; y <= radius && !placed; y++) {
-        for (let x = -radius; x <= radius && !placed; x++) {
-          if (Math.max(Math.abs(x), Math.abs(y)) !== radius) continue;
-          const rect = {
-            x: origin.x + x * (WIDTH + GAP),
-            y: origin.y + y * (HEIGHT + GAP),
-            width: WIDTH,
-            height: HEIGHT,
-          };
-          if (
-            cells(rect).some((key) =>
-              buckets.get(key)?.some((other) => overlaps(rect, other)),
-            )
+      const slots =
+        radius === 0
+          ? [{ x: 0, y: 0 }]
+          : [
+              ...Array.from({ length: radius }, (_, x) => [
+                { x, y: radius },
+                { x, y: -radius },
+              ]).flat(),
+              ...Array.from({ length: radius * 2 + 1 }, (_, index) => ({
+                x: radius,
+                y: index - radius,
+              })),
+            ];
+      for (const slot of slots) {
+        if (placed) break;
+        const rect = {
+          x: origin.x + slot.x * (WIDTH + GAP),
+          y: origin.y + slot.y * (HEIGHT + GAP),
+          width: WIDTH,
+          height: HEIGHT,
+        };
+        if (
+          cells(rect).some((key) =>
+            buckets.get(key)?.some((other) => overlaps(rect, other)),
           )
-            continue;
-          positions[node.id] = rect;
-          insert(rect);
-          placed = true;
-        }
+        )
+          continue;
+        positions[node.id] = rect;
+        insert(rect);
+        placed = true;
       }
     }
   }

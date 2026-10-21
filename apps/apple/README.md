@@ -31,6 +31,9 @@ Xcode project in dependency order. Outputs are gitignored. The
 Direct `build-rust.sh --targets sim` is useful for a one-slice FFI iteration;
 restore all slices before a Mac/CLI build. The first GUI build asks to trust
 OpenAPIGenerator; command-line builds skip package-plugin validation.
+After adding or removing app/test Swift files, use the full preparation command
+(`apps/apple/scripts/prepare-project.sh`) before a direct Xcode build. Its
+`--sources` mode is for SwiftPM only and leaves Xcode project references unchanged.
 The OpenAPI typed-record keep-list retains schemas decoded from generic kernel
 rows. Its reachability check allows those roots alongside HTTP paths, replacing
 Redocly's path-only unused-component rule.

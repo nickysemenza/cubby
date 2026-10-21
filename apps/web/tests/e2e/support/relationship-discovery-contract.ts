@@ -43,14 +43,14 @@ export function relationshipDiscoveryContract() {
     );
     await expect(page).toHaveURL((url) => url.pathname === "/graph");
     const showRecords = page.getByRole("button", {
-      name: "Show record list",
+      name: "Paths list",
       exact: true,
     });
     await showRecords.click();
     const records = page.getByLabel("Map records", { exact: true });
     await records
       .getByRole("button", {
-        name: new RegExp(`^${escapeRegExp(name)} switch`),
+        name: new RegExp(`^Inspect ${escapeRegExp(name)} switch`),
       })
       .click();
     await page
@@ -75,7 +75,7 @@ export function relationshipDiscoveryContract() {
     await showRecords.click();
     await records
       .getByRole("button", {
-        name: new RegExp(`^${escapeRegExp(name)} suggested`),
+        name: new RegExp(`^Inspect ${escapeRegExp(name)} suggested`),
       })
       .click();
     await expect(

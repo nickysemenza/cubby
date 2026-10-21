@@ -369,7 +369,12 @@ export function ConnectedRecordsSection({
                   label={`${view.totalCount - view.items.length} more`}
                   link={{
                     to: "/connections",
-                    search: { source, id: sourceId, view: view.viewKey },
+                    search: {
+                      source,
+                      id: sourceId,
+                      view: view.viewKey,
+                      mode: "records",
+                    },
                   }}
                 />
               ) : null

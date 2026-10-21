@@ -1,10 +1,50 @@
 import CoreFoundation
 import Foundation
 
+public enum NativeWorkspaceSurface: Sendable {
+    case runEvidence(String)
+    case connections(entity: String?, id: String?)
+}
+
 /// Only the selected server may authenticate or command the native record navigator.
 public struct NativeWorkspacePolicy: Sendable {
     public let baseURL: URL
     public init(baseURL: URL) { self.baseURL = baseURL }
+
+    public func workspaceURL(_ surface: NativeWorkspaceSurface) -> URL {
+        switch surface {
+        case .runEvidence(let id): return evidenceURL(id: id)
+        case .connections(let entity, let id):
+            var parts = URLComponents(
+                url: baseURL.appending(path: "connections"), resolvingAgainstBaseURL: false)!
+            var query = [URLQueryItem(name: "nativeWorkspace", value: "connections")]
+            if let entity, let id {
+                query += [URLQueryItem(name: "source", value: entity), URLQueryItem(name: "id", value: id)]
+            }
+            parts.queryItems = query
+            return parts.url!
+        }
+    }
+
+    public func isWorkspaceDocument(_ url: URL, surface: NativeWorkspaceSurface) -> Bool {
+        switch surface {
+        case .runEvidence(let id): return isEvidenceDocument(url, id: id)
+        case .connections:
+            guard trusts(url), url.path == baseURL.appending(path: "connections").path,
+                let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+            else { return false }
+            return query.filter { $0.name == "nativeWorkspace" } == [
+                URLQueryItem(name: "nativeWorkspace", value: "connections")
+            ]
+        }
+    }
+
+    public func isWorkspaceEntry(_ url: URL, surface: NativeWorkspaceSurface) -> Bool {
+        switch surface {
+        case .runEvidence(let id): return isEvidence(url, id: id)
+        case .connections: return isWorkspaceDocument(url, surface: surface)
+        }
+    }
 
     public func trusts(_ url: URL) -> Bool {
         func port(_ value: URL) -> Int { value.port ?? (value.scheme == "https" ? 443 : 80) }

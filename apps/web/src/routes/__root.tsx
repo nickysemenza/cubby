@@ -28,6 +28,7 @@ import { buildMetadataQueryOptions } from "~/lib/build-metadata";
 import { FLAGS } from "~/lib/flags";
 import {
   isNativeRunEvidence,
+  isNativeConnections,
   NativeRunEvidenceContext,
   NativeWorkspaceBridge,
 } from "~/lib/native-workspace";
@@ -82,7 +83,10 @@ interface MyRouterContext {
 }
 
 const workspaceSearch = z.object({
-  nativeWorkspace: z.literal("run-evidence").optional().catch(undefined),
+  nativeWorkspace: z
+    .enum(["run-evidence", "connections"])
+    .optional()
+    .catch(undefined),
 });
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
@@ -100,6 +104,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     if (
       search.nativeWorkspace &&
       !isNativeRunEvidence(location.pathname, search.nativeWorkspace) &&
+      !isNativeConnections(location.pathname, search.nativeWorkspace) &&
       !location.pathname.startsWith("/auth/")
     ) {
       const params = new URLSearchParams(location.searchStr);
@@ -176,9 +181,11 @@ function RootComponent() {
     select: (state) => state.location.pathname,
   });
   const nativeAuth =
-    search.nativeWorkspace === "run-evidence" && pathname.startsWith("/auth/");
+    Boolean(search.nativeWorkspace) && pathname.startsWith("/auth/");
   const nativeWorkspace =
-    nativeAuth || isNativeRunEvidence(pathname, search.nativeWorkspace);
+    nativeAuth ||
+    isNativeRunEvidence(pathname, search.nativeWorkspace) ||
+    isNativeConnections(pathname, search.nativeWorkspace);
   const buildMetadata = Route.useLoaderData();
   const footer = <AppFooter metadata={buildMetadata} />;
   const { queryClient } = Route.useRouteContext();

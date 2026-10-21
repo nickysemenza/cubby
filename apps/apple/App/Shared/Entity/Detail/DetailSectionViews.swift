@@ -204,13 +204,10 @@ struct EntityHeroView<Actions: View>: View {
 
 /// The `fields` section: one `LabeledContent` per declared key that carries a value. A
 /// `reference` field links to its target (showing the projected name); an `identifier` is mono.
-/// `inlineFieldKey` names the field beneath which the relationship alternatives render.
-struct FieldsSectionView<Inline: View>: View {
+struct FieldsSectionView: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
     let keys: [String]
-    var inlineFieldKey: String? = nil
-    @ViewBuilder let inline: Inline
     @Environment(AppModel.self) private var appModel
     @State private var resolutionReview: ResolutionActionRequest?
 
@@ -312,7 +309,6 @@ struct FieldsSectionView<Inline: View>: View {
                 }
             }
         }
-        if field.key == inlineFieldKey { inline }
     }
 
     private var rows: [FieldDescriptor] {
@@ -1049,9 +1045,7 @@ struct RelationSectionView: View {
         Group {
             Section {
                 if !model.spec.contextFields.isEmpty {
-                    FieldsSectionView(descriptor: model.source, row: row, keys: model.spec.contextFields) {
-                        EmptyView()
-                    }
+                    FieldsSectionView(descriptor: model.source, row: row, keys: model.spec.contextFields)
                 }
                 content
             } header: {
@@ -1309,68 +1303,6 @@ struct EntityJournalEntryRow: View {
             }
         }
         .padding(.vertical, FieldGuideTokens.Space.xs)
-    }
-}
-
-// MARK: - Inline relationship alternatives
-
-struct InlineRelationshipAlternativeView: View {
-    let proposal: ActionableRelationshipRecommendation
-    let hasCurrentTarget: Bool
-    let review: () -> Void
-
-    var body: some View {
-        Button(action: review) {
-            HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(FieldGuideTokens.interaction)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text("\(hasCurrentTarget ? "Alternative" : "Suggested") \(field): \(targetName)")
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(FieldGuideTokens.graphite)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let reason {
-                        Text(reason)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: FieldGuideTokens.Space.sm)
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: FieldGuideTokens.touchTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens supporting evidence and the accept action")
-    }
-
-    private var field: String {
-        switch proposal {
-        case .expenseProject: "project"
-        case .inventoryPlacement: "location"
-        }
-    }
-
-    private var targetName: String {
-        switch proposal {
-        case .expenseProject(let proposal): proposal.target.name
-        case .inventoryPlacement(let proposal): proposal.target.name
-        }
-    }
-
-    private var reason: String? {
-        switch proposal {
-        case .expenseProject(let proposal):
-            proposal.reasons.first
-                ?? "\(proposal.sameTradeCount) same-trade and \(proposal.exactProductCount) exact-product matches"
-        case .inventoryPlacement(let proposal):
-            proposal.reasons.first
-        }
     }
 }
 

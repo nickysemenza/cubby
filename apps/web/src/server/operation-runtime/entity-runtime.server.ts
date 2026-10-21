@@ -32,6 +32,7 @@ import {
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/generic/entity-graph/repo/entity-graph-explore";
 import { getEntityGraphPaths } from "~/server/generic/entity-graph/repo/entity-graph-paths";
+import { withGraphPreviews } from "~/server/generic/entity-graph/service/graph-preview";
 import {
   getConnectedRecords,
   getConnectedRecordsPreview,
@@ -107,9 +108,15 @@ export const entityGraphHandlers = implementOperationDomain(
       getConnectedRecords(context.db, input),
     connectedRecordsPreview: (context, input) =>
       getConnectedRecordsPreview(context.db, input),
-    explore: (context, input) => getEntityGraphExplore(context.db, input),
-    graph: (context, input) => getEntityGraph(context.db, input),
-    graphPaths: (context, input) => getEntityGraphPaths(context.db, input),
+    explore: async (context, input) =>
+      withGraphPreviews(
+        context,
+        await getEntityGraphExplore(context.db, input),
+      ),
+    graph: async (context, input) =>
+      withGraphPreviews(context, await getEntityGraph(context.db, input)),
+    graphPaths: async (context, input) =>
+      withGraphPreviews(context, await getEntityGraphPaths(context.db, input)),
     connections: (context, input) => getEntityConnections(context.db, input),
     relation: async (context, input) => {
       // The parse brands the ids; the input's entity is a union, so the

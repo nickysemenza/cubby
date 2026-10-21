@@ -1,8 +1,12 @@
 import {
   seedInventoryPrerequisites,
   seedTaskPrerequisite,
+  seedProjectPrerequisite,
 } from "./fixtures/catalog";
-import { seedImagePrerequisite } from "./fixtures/photos";
+import {
+  seedImagePrerequisite,
+  attachProductImagePrerequisite,
+} from "./fixtures/photos";
 import {
   chooseOption,
   gotoAuthenticatedPage,
@@ -10,6 +14,175 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { createEntityFixture } from "./fixtures/core";
+
+// Regression boundaries: card money must come from the canonical read, curated
+// context must retain its actual purchase/project evidence, and paths stay links.
+test("connections workspace shares dense facts, linked paths, and native handoff", async ({
+  page,
+  e2eRuntime,
+}, testInfo) => {
+  const name = `Connection light ${Date.now()}`;
+  const { products } = await seedInventoryPrerequisites(page, {
+    locationName: "Connection garden path",
+    products: [{ name, quantity: 6, unit: "each" }],
+  });
+  const product = products[0]!;
+  const image = await seedImagePrerequisite(
+    "Connection light cover",
+    e2eRuntime.objectStorageUrl,
+  );
+  await attachProductImagePrerequisite(page, image.id, product.id, "item");
+  const project = await seedProjectPrerequisite(
+    page,
+    "Connection patio project",
+  );
+  const expense = await createEntityFixture(page, "expense", {
+    name: "Connection lighting purchase",
+    cost: 204,
+    date: "2026-09-09",
+    costType: "materials",
+    trade: "other",
+    productId: product.id,
+    productQuantity: 6,
+    projectId: project.id,
+  });
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  const context = page.getByRole("region", { name: "Connection context" });
+  await expect(
+    context.getByRole("link", { name: "Connection patio project" }),
+  ).toBeVisible();
+  await context
+    .getByText("Show connection paths", { exact: true })
+    .first()
+    .click();
+  await expect(
+    context.getByRole("link", { name: "Connection lighting purchase" }),
+  ).toBeVisible();
+  await context
+    .getByRole("link", { name: "Open connections", exact: true })
+    .click();
+  const graph = page.getByLabel("Relationship graph", { exact: true });
+  const card = graph.locator(
+    `.react-flow__node[data-id="product:${product.id}"]`,
+  );
+  await expect(card.getByText("$204.00", { exact: true })).toBeVisible();
+  await expect(card.locator("dl dt")).not.toHaveCount(0);
+  await expect(card.locator(".graph-record-identity img")).toBeVisible();
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
+  const paths = page.getByLabel("Connection paths", { exact: true });
+  await expect(
+    paths.locator(`a[href="/products/${product.id}"]`).first(),
+  ).toBeVisible();
+  await expect(
+    paths.getByRole("link", { name: "Connection lighting purchase" }).first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await page.getByRole("button", { name: "Fit map", exact: true }).click();
+  expect(
+    await graph.locator(".graph-map-record").evaluateAll((cards) =>
+      cards.every((card) => {
+        const frame = card.getBoundingClientRect();
+        return [...card.querySelectorAll("dl dd")].every((fact) => {
+          const bounds = fact.getBoundingClientRect();
+          return (
+            bounds.left >= frame.left - 1 &&
+            bounds.right <= frame.right + 1 &&
+            bounds.bottom <= frame.bottom + 1
+          );
+        });
+      }),
+    ),
+  ).toBe(true);
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("dense-connections-desktop.png"),
+    });
+  const neighborLink = card
+    .getByRole("navigation", { name: "Linked records" })
+    .getByRole("link")
+    .first();
+  const neighborHref = await neighborLink.getAttribute("href");
+  expect(neighborHref).toBeTruthy();
+  if (!neighborHref) throw new Error("Expected a linked neighbor destination");
+  const neighborURL = new URL(neighborHref, page.url()).href;
+  await neighborLink.click();
+  await expect(page).toHaveURL(neighborURL);
+  await page.goBack();
+  await expect(card).toBeVisible();
+  await page.getByRole("button", { name: "Fit map", exact: true }).click();
+  const factLink = graph
+    .locator(`.react-flow__node[data-id="expense:${expense.id}"] dl`)
+    .getByRole("link")
+    .first();
+  const factHref = await factLink.getAttribute("href");
+  if (!factHref) throw new Error("Expected a reference fact destination");
+  const factURL = new URL(factHref, page.url()).href;
+  await factLink.click();
+  await expect(page).toHaveURL(factURL);
+  await page.goBack();
+  await expect(card).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("dense-connections-phone.png"),
+    });
+  await page.addInitScript(() => {
+    window.workspaceTestMessages = [];
+    window.webkit = {
+      messageHandlers: {
+        cubbyWorkspace: {
+          postMessage: (message) => window.workspaceTestMessages.push(message),
+        },
+      },
+    };
+  });
+  await page.goto(
+    `/connections?source=product&id=${product.id}&nativeWorkspace=connections`,
+  );
+  await expect(page.locator("[data-native-workspace]")).toBeVisible();
+  await expect(page.locator('[data-app-shell="authenticated"]')).toHaveCount(0);
+  const hostedContext = page.getByRole("region", {
+    name: "Connection context",
+  });
+  await hostedContext
+    .getByRole("button", { name: "Show connection paths", exact: true })
+    .last()
+    .click();
+  await hostedContext
+    .getByRole("link", { name: "All purchase projects", exact: true })
+    .click();
+  await expect(page).toHaveURL(/mode=records/);
+  await page.getByRole("button", { name: "Show map", exact: true }).click();
+  await expect(page).toHaveURL(/mode=map/);
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
+  const recordLink = page
+    .getByLabel("Connection paths")
+    .locator(`a[href*="/products/${product.id}"]`)
+    .first();
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("dense-connections-hosted.png"),
+    });
+  const hostedURL = page.url();
+  await recordLink.click();
+  await expect
+    .poll(() => page.evaluate(() => window.workspaceTestMessages))
+    .toContainEqual({
+      version: 1,
+      type: "navigate",
+      entity: "product",
+      id: product.id,
+      replace: false,
+    });
+  await expect(page).toHaveURL(hostedURL);
+});
 
 test("work graph renders through Viz, restores filters, and opens a graph node", async ({
   page,
@@ -140,9 +313,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await connection.press("Escape");
   await expect(page.getByLabel("Connection evidence")).toHaveCount(0);
 
-  await page
-    .getByRole("button", { name: "Show record list", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
   const records = page.getByLabel("Map records", { exact: true });
   await records.getByRole("button", { name: /Inventory Item$/ }).click();
   await expect(nodes).toHaveCount(2);
@@ -174,17 +345,20 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page
     .getByRole("button", { name: "Previous record", exact: true })
     .click();
-  await expect(nodes).toHaveCount(3);
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   await page.getByRole("button", { name: "Next record", exact: true }).click();
-  await expect(nodes).toHaveCount(3);
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   await page.getByLabel("Find explored records").fill(locationName);
   await records
-    .getByRole("button", { name: new RegExp(`^${locationName}`) })
+    .getByRole("button", {
+      name: `Inspect ${locationName} Location`,
+      exact: true,
+    })
     .click();
   await page.getByRole("link", { name: "Open record", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/locations/${location.id}$`));
   await page.goBack();
-  await expect(nodes).toHaveCount(3);
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   await page
     .getByRole("button", { name: "Previous record", exact: true })
     .click();

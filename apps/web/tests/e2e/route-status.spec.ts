@@ -22,8 +22,9 @@ test("incomplete deep links render without a server error", async ({
   const connections = await page.goto("/connections");
   expect(connections?.status()).toBe(200);
   await expect(
-    page.getByRole("heading", { name: "Unknown connection view" }),
+    page.getByRole("heading", { name: "Connections", exact: true }),
   ).toBeVisible();
+  await expect(page.getByPlaceholder("Find a starting record…")).toBeVisible();
 
   const workbench = await page.goto("/recommendations/workbench");
   expect(workbench?.status()).toBe(200);

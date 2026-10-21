@@ -622,7 +622,7 @@ operation does not declare. A server `*Preview` query supplies any
 delete), so web and native show the same verdict. A list/multi-select verb
 (`bulkEdit`) is `ownedElsewhere`, not a plan.
 
-A section or slot can declare `workspace: "overview" | "work" | "evidence"` for browser detail grouping. Relations default to Work, timelines to Evidence, and other sections to Overview. The Relations group holds the generated Connected records section (every entry in `connectedViews`, read through one `entity.connectedRecordsPreview`) ahead of Relationships. Every group and body renders continuously; navigation scrolls to stable sections and preserves mounted drafts. Full detail headings and index entries stay present while loading and after a section becomes empty. The old group fragments remain jump aliases; a real section ID takes precedence if it matches an alias. Explicit jumps add history; scrolling only updates the highlighted entry. Photo comparison grids respond to their own width so the outline cannot squeeze identity evidence into a zero-width column. Apple retains native detail renderers and native Contents navigation. The Run evidence pilot renders only the shared Evidence group in its isolated hosted surface. Durable transcript and structured logs remain available for every Run purpose; purchase-import predicates apply only to workflow reports. Workspace vocabulary is presentation metadata, separate from SQL enums.
+A section or slot can declare `workspace: "overview" | "work" | "evidence"` for browser detail grouping. Relations default to Work, timelines to Evidence, and other sections to Overview. The Relations group holds the generated Connected records section (every entry in `connectedViews`, read through one `entity.connectedRecordsPreview`) ahead of Relationships. Every group and body renders continuously; navigation scrolls to stable sections and preserves mounted drafts. Full detail headings and index entries stay present while loading and after a section becomes empty. The old group fragments remain jump aliases; a real section ID takes precedence if it matches an alias. Explicit jumps add history; scrolling only updates the highlighted entry. Photo comparison grids respond to their own width so the outline cannot squeeze identity evidence into a zero-width column. Apple retains native record fields and native Contents navigation; Connections uses the shared hosted workspace. The Run evidence pilot renders only the shared Evidence group in its isolated hosted surface. Durable transcript and structured logs remain available for every Run purpose; purchase-import predicates apply only to workflow reports. Workspace vocabulary is presentation metadata, separate from SQL enums.
 
 `detail.overviewSections` still emits independent `overview` metadata for web and Swift. On full web detail, sections that set `overview: false` join Evidence unless their declaration explicitly chooses another group. The native Contents outline follows the native record's reading order; all section bodies remain visible.
 
@@ -2653,16 +2653,16 @@ an Image.
 
 ## Relationship discovery and suggestions
 
-Web and the Apple apps share relationships through the ordinary operation
-contracts and `/api/v1`. Swift maps generated OpenAPI payloads into CubbyKit
-relationship models; ranking and eligibility are not reimplemented on device.
-The cross-client wire example
-`packages/schemas/fixtures/relationship-discovery.json` feeds both Zod and Swift
-mapping tests. Web inline previews and the full Relationships section share one
-query result; native graph and list views share selection and loaded data, and
-graph state is local to the active view.
+Web and the Apple apps render the graph, paths, inspector, and connection review
+through one React workspace. Swift owns its authenticated host and native record
+navigation; ranking and eligibility remain server-owned. CubbyKit retains the
+ordinary `/api/v1` mappings for native API consumers. The cross-client wire
+example `packages/schemas/fixtures/relationship-discovery.json` feeds both Zod
+and Swift mapping tests. Inline previews and the full Relationships section
+share one query result; the workspace's graph and list share selection and
+loaded data, and graph state is local to the active workspace.
 
-`entity.explore` takes an entity reference and a depth of one to three and reads
+`entity.explore` takes an entity reference and a depth of one to four and reads
 the manifest-backed graph breadth-first, returning nodes, directed edges,
 branches, explanatory paths, and completion state. A hop is a displayed
 relationship; a derived relationship keeps its declared provenance. Each branch
@@ -2674,6 +2674,17 @@ depth, pagination, and budget limits; returned paths explain the explored
 records and do not claim an unsearched branch has no shorter connection.
 `entity.graphPaths` remains the destination-path search. Cycles are valid, and
 all traversal applies the live-record filters, including on intermediate tables.
+
+The operation handlers hydrate each graph's optional `preview` from the existing
+selected-field list readers, once per entity kind. The shared preview roster
+selects facts and status; those canonical reads own money, quantities and
+progress. Graph rendering never computes a separate unit price or spend total.
+The graph's structural metadata stays available to native clients. Detail-page
+context uses populated curated connected views, rather than arbitrary graph
+reachability. Product purchase-project context follows `expenses → project`,
+so a sibling product on the same order cannot lend this product its project.
+Each surfaced target retains its witnessed, linked path; multiple projects are
+reported together rather than choosing one implied purpose.
 
 `recommendations.forEntity` returns a source reference, a source-context
 `basisKey`, and typed groups; discovery works when recommendations or a

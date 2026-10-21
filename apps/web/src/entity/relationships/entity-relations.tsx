@@ -60,6 +60,7 @@ const DEPTH_OPTIONS: readonly PickerOption[] = [
   { value: "1", label: "1" },
   { value: "2", label: "2" },
   { value: "3", label: "3" },
+  { value: "4", label: "4" },
 ];
 export function supportsEntityGraph(entity: Entity) {
   return (
@@ -86,7 +87,7 @@ export interface EntityRelationsState {
   cursor?: number;
   collapsed?: string[];
   destination?: string;
-  depth?: 1 | 2 | 3;
+  depth?: 1 | 2 | 3 | 4;
 }
 
 const refFromKey = (key?: string): EntityRef | undefined => {
@@ -541,7 +542,7 @@ function EntityRelationsContent(
           options={DEPTH_OPTIONS}
           value={String(current.depth ?? 1)}
           onValueChange={(value) => {
-            const depth = ([1, 2, 3] as const).find(
+            const depth = ([1, 2, 3, 4] as const).find(
               (candidate) => String(candidate) === value,
             );
             if (depth) change({ depth });

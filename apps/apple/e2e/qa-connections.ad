@@ -1,0 +1,23 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby cubby://entity/${PRODUCT_ID}
+wait "role=Button label=Contents" 90000
+click "role=Button label=Contents"
+scroll bottom
+wait "label=Connections" 30000
+click "label=Connections"
+wait "id=relationships.openConnections" 90000
+click "id=relationships.openConnections"
+wait text "Synthetic Flour Bag" 90000
+wait absent "label=\"Loading connections\"" 90000
+wait text "$42.50" 90000
+wait "label=\"Paths list\"" 90000
+is absent "label=\"Declared relationship depth\""
+click "role=Button label=Done"
+wait "id=relationships.openConnections" 90000
+click "id=relationships.openConnections"
+wait absent "label=\"Loading connections\"" 90000
+click "role=Link label=\"Synthetic Pancakes\""
+wait "id=detail.recipe" 90000
+wait text "Synthetic Pancakes" 90000
+is absent "role=Button label=Done"

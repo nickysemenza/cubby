@@ -69,6 +69,7 @@ it("reorganizes retained positions only when clicked and anchors later expansion
     viewport: { x: 32, y: 32, zoom: 1 },
   };
   const props = {
+    root: nodes[0]!,
     nodes,
     edges: [],
     anchors: new Map([[member, root]]),
@@ -87,7 +88,8 @@ it("reorganizes retained positions only when clicked and anchors later expansion
 
   rerender(<GraphMapCanvas {...props} selected={member} />);
   expect(camera.positions).toEqual(initialPositions);
-  fireEvent.click(screen.getByRole("button", { name: "Reorganize" }));
+  fireEvent.click(screen.getByRole("button", { name: "Map options" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Reorganize" }));
   await waitFor(() =>
     expect(camera.positions[root]).toMatchObject({ x: 0, y: 0 }),
   );

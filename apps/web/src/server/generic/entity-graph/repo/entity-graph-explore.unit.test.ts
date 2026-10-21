@@ -84,6 +84,34 @@ const graphReader =
   };
 
 describe("entity graph exploration", () => {
+  it("explains a four-hop record without crossing into the fifth frontier", async () => {
+    const chain = [
+      ref("ROOT"),
+      ref("FIRST"),
+      ref("SECOND"),
+      ref("THIRD"),
+      ref("FOURTH"),
+      ref("FIFTH"),
+    ];
+    const edges = chain.flatMap((source, index) => {
+      const target = chain[index + 1];
+      return target ? [edge(`step-${index}`, source, target)] : [];
+    });
+    const root = chain[0]!;
+    const result = await exploreEntityGraph(root, 4, graphReader(edges));
+    expect(result.paths).toContainEqual({
+      nodeRefs: chain.slice(0, 5),
+      edgeIds: edges.slice(0, 4).map((item) => item.id),
+    });
+    expect(
+      result.nodes.some((item) => item.entityId === chain[5]?.entityId),
+    ).toBe(false);
+    expect(result.completion).toMatchObject({
+      status: "depth-limit",
+      requestedDepth: 4,
+      reachedDepth: 4,
+    });
+  });
   it("preserves cycles and distinct shortest explanatory routes", async () => {
     const root = ref("ROOT");
     const left = ref("LEFT");

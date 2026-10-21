@@ -267,7 +267,11 @@ export default defineEntity({
         },
         kind: "timestamp",
         labelOverride: "Activity",
-        display: { list: true, renderer: { list: "run-activity" } },
+        display: {
+          list: true,
+          labelPath: "activityAt",
+          renderer: { list: "run-activity" },
+        },
         validation: readOnly(z.iso.datetime().nullable().default(null)),
       },
       {

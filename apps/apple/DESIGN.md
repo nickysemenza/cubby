@@ -40,7 +40,21 @@ Photo and label text lead on narrow layouts and sit beside the steps when space 
 
 Identity shows every pending Product edit with its current and proposed values and a Remove control that saves through `saveGroups`. The approval effect sentence also enumerates the edits, including when Identity is collapsed. Rejecting the selected Product switches to a create draft named from the observed label, clears Product edits, and drops any inventory link to the rejected Product. Candidate reads track group keys and proposal revisions; changes during a read coalesce into one replacement refresh, and superseded results are not published.
 
-## Run evidence pilot
+## Hosted workspaces
+
+Connections uses one shared React workspace for the map, four-link exploration,
+path inspector, and suggestion review. The native Graph route renders it directly.
+A record's Connections entry opens it scoped by `source` and `id`: a full-screen
+cover on iPhone/iPad, or a resizable 1400×900 window with a full-screen command on
+Mac. The native graph canvas, depth picker, recommendation sheets, and inline
+relationship alternatives are removed. Native record fields and record navigation
+remain native; the title, Done action, authenticated session, and dismissal are
+owned by Swift. Secondary Mac windows gate hosted content on the signed-in phase.
+Only `/connections` retains this mode; navigation search and record selection
+may change within that document, while record links hand off to native.
+Connections and Run evidence share one host, session bootstrap, lifecycle and
+strict origin/frame checks. A different route or duplicated mode does not gain
+bridge authority.
 
 Every entity retains its native detail renderer. A Run’s native console and detail offer one hosted destination for transcript, logs, and AI usage. Native overview, actions, photo review, editors, routing, and coverage remain in place. The evidence sheet has native Done and hands record links back to the native navigator; it does not own record history.
 
@@ -85,6 +99,6 @@ Review iPhone and Mac, narrow Mac windows, iPad resizing, light/dark, accessibil
 
 Full record routes show every declared section in one continuous native list, including sections formerly selected as another record view. Section bodies remain open; pagination and explicit show-more controls still bound collections. Empty relations and connections keep their secondary title, an explicit Empty cue, and a compact no-items message. Their creation and other actions retain normal control contrast. Raw record details remain visible.
 
-The Contents toolbar control opens grouped headings with indented, expanded subsections. Native declarations do not carry web workspace groups, so generic records keep declared sections under Record in their existing reading order, followed by Relations and Provenance. iPhone presents a native sheet, iPad a native popover, and a Mac detail at least 700 points wide toggles an adjacent outline (smaller windows use a popover). Selecting a subsection closes Contents and scrolls the existing detail; scrolling marks the current subsection. Each target identity, focus binding, and geometry measurement belongs to one subsection header, while the enclosing section resolves body emptiness. Never attach those target modifiers to a multi-row Section. Use standard native controls without entrance animation. Run console and Image detail follow this rule; the isolated hosted Run evidence pilot remains its own route.
+The Contents toolbar control opens grouped headings with indented, expanded subsections. Native declarations do not carry web workspace groups, so generic records keep declared sections under Record in their existing reading order, followed by Relations and Provenance. iPhone presents a native sheet, iPad a native popover, and a Mac detail at least 700 points wide toggles an adjacent outline (smaller windows use a popover). Selecting a subsection closes Contents and scrolls the existing detail; scrolling marks the current subsection. Each target identity, focus binding, and geometry measurement belongs to one subsection header, while the enclosing section resolves body emptiness. Never attach those target modifiers to a multi-row Section. Use standard native controls without entrance animation. Run console and Image detail follow this rule; Run evidence and Connections remain isolated hosted routes.
 
 Image diagnostics remain visible in continuous detail, but Vision comparison and stored-analysis reconciliation begin only from the explicit Run diagnostics action. Leaving or cancelling releases the loading state so the action can be requested again. A Contents jump is consumed after its header receives focus; reconstructing a lazy header never replays a completed jump.

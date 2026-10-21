@@ -14,6 +14,7 @@ import {
   entityManifest,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
+import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
@@ -1046,34 +1047,17 @@ export function entityPreviewFacts<TRecord extends object>(
   entity: Entity,
   record: TRecord,
   limit = 4,
+  options: { singleLine?: boolean } = {},
 ): { label: string; value: ReactNode }[] {
-  const presentation = entitySummary[entity];
-  const { hero, preview } = presentation.detail;
-  const firstSection = presentation.detail.sections.find(
-    (section) => section.kind === "fields",
-  );
-  // A declared `display.preview` roster is the card; otherwise the hero stats
-  // and first fields section stand in, up to `limit` known facts.
-  const keys: readonly string[] =
-    preview.length > 0
-      ? preview
-      : [
-          ...new Set([
-            ...hero.stats,
-            ...(firstSection?.kind === "fields" ? firstSection.fields : []),
-          ]),
-        ].filter(
-          (key) =>
-            key !== presentation.titleField &&
-            key !== hero.chip &&
-            key !== hero.breadcrumb,
-        );
+  const { preview } = entitySummary[entity].detail;
+  const keys = entityPreviewFieldKeys(entity);
   const fields = entityFieldModels[entity].fields;
   const facts: { label: string; value: ReactNode }[] = [];
   for (const key of keys) {
     if (preview.length === 0 && facts.length >= limit) break;
     const field = fields.find((candidate) => candidate.key === key);
-    if (!field || field.kind === "json") continue;
+    if (!field || (field.kind === "json" && field.display.format === null))
+      continue;
     const reference = readDisplayReferenceField(record, field);
     const known = reference
       ? reference.items.length > 0
@@ -1082,7 +1066,7 @@ export function entityPreviewFacts<TRecord extends object>(
     if (!known) continue;
     facts.push({
       label: field.label,
-      value: renderCompactFieldValue(entity, record, field),
+      value: renderCompactFieldValue(entity, record, field, options),
     });
   }
   return facts;
