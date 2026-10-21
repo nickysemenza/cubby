@@ -691,17 +691,29 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "unknown", label: "Unclassified" },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
             {
               value: "purchased",
               label: "Purchased",
-              color: "var(--brand-domain-finance)",
+              color: "domain-finance",
             },
-            { value: "gift", label: "Gift", color: "var(--brand-domain-plan)" },
+            {
+              value: "gift",
+              label: "Gift",
+              color: "domain-plan",
+            },
             {
               value: "previously_owned",
               label: "Previously owned",
-              color: "var(--brand-domain-house)",
+              color: "domain-house",
             },
           ],
         },
@@ -709,6 +721,9 @@ export default defineEntity({
           columnLabel: "Origin",
           list: true,
           detail: true,
+          optionRole: "category",
+          optionColor: "domain-pantry",
+          optionGlyph: { phosphor: "Package", sfSymbol: "shippingbox" },
         },
         validation: {
           read: z
@@ -1518,13 +1533,19 @@ Rules:
           readPath: "modelPresence",
           format: "presence",
           valueOptions: [
-            { value: "yes", label: "Has model", color: "var(--slate)" },
+            {
+              value: "yes",
+              label: "Has model",
+              color: "neutral-status",
+            },
             {
               value: "no",
               label: "No model",
-              color: "var(--muted-foreground)",
+              color: "neutral-status",
             },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
         explanation: {
@@ -1544,9 +1565,19 @@ Rules:
           readPath: "upcPresence",
           format: "presence",
           valueOptions: [
-            { value: "yes", label: "Has UPC", color: "var(--slate)" },
-            { value: "no", label: "No UPC", color: "var(--muted-foreground)" },
+            {
+              value: "yes",
+              label: "Has UPC",
+              color: "neutral-status",
+            },
+            {
+              value: "no",
+              label: "No UPC",
+              color: "neutral-status",
+            },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",
@@ -1571,13 +1602,19 @@ Rules:
           readPath: "notesPresence",
           format: "presence",
           valueOptions: [
-            { value: "yes", label: "Has notes", color: "var(--slate)" },
+            {
+              value: "yes",
+              label: "Has notes",
+              color: "neutral-status",
+            },
             {
               value: "no",
               label: "No notes",
-              color: "var(--muted-foreground)",
+              color: "neutral-status",
             },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
         explanation: {

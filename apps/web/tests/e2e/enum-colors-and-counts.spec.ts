@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 import { createFixture } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
@@ -30,8 +31,7 @@ test("declared expectation colors and spending category navigation counts", asyn
   const record = page
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name, exact: true }) });
-  // Expectation rosters are states: a tone surface, full-strength ink and
-  // the tone's glyph.
+  // Compiled status choices keep readable labels and their explicit glyph tones.
   const unknown = record.locator(
     '[data-cell-col="itemizationExpectation"] [data-enum-role="status"]',
   );
@@ -40,10 +40,8 @@ test("declared expectation colors and spending category navigation counts", asyn
   );
   await expect(unknown).toHaveText("Unclassified");
   await expect(expected).toHaveText("Expected");
-  await expect(unknown).toHaveClass(/bg-muted/);
-  await expect(unknown).toHaveClass(/text-muted-foreground/);
-  await expect(unknown.locator("[data-option-glyph]")).toHaveCount(1);
-  await expect(expected).toHaveClass(/bg-info-surface/);
+  await expectGlyphTone(unknown, "--brand-neutral-status");
+  await expectGlyphTone(expected, "--brand-info");
   const counts = await page.request.get("/api/v1/dashboard/counts");
   expect(counts.ok()).toBe(true);
   const body = dashboardCountsOut.parse(await counts.json());
@@ -66,7 +64,7 @@ test("declared expectation colors and spending category navigation counts", asyn
     page.getByRole("button", { name: /^Checking suggestions/ }),
   ).toHaveCount(0);
   const mobileBadge = page
-    .locator('[data-enum-role="status"].bg-muted', {
+    .locator('[data-enum-role="status"]', {
       hasText: "Unclassified",
     })
     .first();
@@ -75,6 +73,21 @@ test("declared expectation colors and spending category navigation counts", asyn
   await expect(mobileBadge).toBeInViewport();
   await gotoAuthenticatedPage(page, "/");
   await expectActiveHomeIcon("Today");
+
+  async function expectGlyphTone(pill: Locator, token: string) {
+    const color = await page.evaluate((token) => {
+      const probe = document.createElement("span");
+      probe.style.color = `var(${token})`;
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    }, token);
+    await expect(pill.locator("svg[data-option-glyph]")).toHaveCSS(
+      "color",
+      color,
+    );
+  }
 
   async function expectActiveHomeIcon(label: string) {
     const home = page.getByRole("link", { name: label, exact: true }).first();

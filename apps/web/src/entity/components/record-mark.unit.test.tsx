@@ -44,7 +44,7 @@ describe("RecordMark", () => {
     expect(mark).toHaveAttribute("aria-hidden", "true");
     expect(mark).toHaveAttribute("width", "14");
     expect(mark).toHaveAttribute("height", "14");
-    expect(mark).toHaveClass("text-category-7");
+    expect(mark).toHaveClass("text-(--brand-domain-house)");
   });
 
   it("renders project identity inside a chart axis tick", () => {
@@ -86,6 +86,6 @@ describe("RecordMark", () => {
     expect(screen.getByText("🍳")).toBeInTheDocument();
     expect(
       screen.getByText("Garage").parentElement?.querySelector("svg"),
-    ).toHaveClass("text-category-7");
+    ).toHaveClass("text-(--brand-domain-house)");
   });
 });

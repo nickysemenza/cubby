@@ -21,31 +21,24 @@ function pillFor(label: string) {
 }
 
 describe("enum values by role", () => {
-  it("draws a status as its tone's surface and ink with a leading glyph", () => {
+  it("draws supplied presentation without interpreting the stored word", () => {
     render(
-      renderOptionCell("done", [
-        { value: "done", label: "Done", color: "var(--positive)" },
+      renderOptionCell("blocked", [
+        {
+          value: "blocked",
+          label: "Available",
+          role: "category",
+          color: "var(--brand-domain-house)",
+          glyph: { phosphor: "CheckCircle", sfSymbol: "checkmark.circle.fill" },
+        },
       ]),
     );
-    const pill = pillFor("Done");
-    expect(pill).toHaveAttribute("data-enum-role", "status");
-    expect(pill).toHaveClass("bg-positive-surface", "text-positive");
-    // Full-strength ink: no foreground mix, no tinted border.
-    expect(pill.style.color).toBe("");
-    expect(pill).toHaveClass("border-transparent");
+    const pill = pillFor("Available");
+    expect(pill).toHaveAttribute("data-enum-role", "category");
+    expect(pill).toHaveClass("text-foreground", "border-transparent");
+    expect(pill.style.backgroundColor).toContain("var(--brand-domain-house)");
     expect(
       pill.querySelector("[data-option-glyph='CheckCircle']"),
-    ).not.toBeNull();
-  });
-
-  it("keeps a value's own status glyph over its tone's", () => {
-    render(
-      <EnumPill value="blocked" color="var(--destructive)">
-        Blocked
-      </EnumPill>,
-    );
-    expect(
-      pillFor("Blocked").querySelector("[data-option-glyph='Prohibit']"),
     ).not.toBeNull();
   });
 
@@ -58,7 +51,7 @@ describe("enum values by role", () => {
     expect(pill.className).not.toMatch(/positive|warning|destructive/);
   });
 
-  it("lets a declared role win over the color's inference", () => {
+  it("keeps a declared role independent of color", () => {
     render(
       <EnumPill optionRole="category" color="var(--positive)">
         Other
@@ -68,7 +61,7 @@ describe("enum values by role", () => {
   });
 
   it("reads a declared kind roster as categories with their glyphs", async () => {
-    // `planning` alone infers a neutral tone; the roster's role keeps it a kind.
+    // The compiled roster owns the glyph across scalar and cell surfaces.
     const trade = entityFieldModels.task.fields.find(
       (field) => field.key === "trade",
     );
@@ -115,9 +108,9 @@ describe("boolean values", () => {
     const yes = screen.getByText("Yes").parentElement;
     const no = screen.getByText("No").parentElement;
     expect(yes).toHaveClass("text-positive");
-    expect(yes?.querySelector("[data-option-glyph='Check']")).not.toBeNull();
+    expect(yes?.querySelector("svg")).not.toBeNull();
     expect(no).toHaveClass("text-muted-foreground");
-    expect(no?.querySelector("[data-option-glyph='Minus']")).not.toBeNull();
+    expect(no?.querySelector("svg")).not.toBeNull();
     expect(document.querySelector("[data-enum-role]")).toBeNull();
   });
 });

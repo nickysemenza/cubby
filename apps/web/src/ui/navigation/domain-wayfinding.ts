@@ -8,11 +8,11 @@ import {
 
 /** Identity hues never replace status tones or active-route treatment. */
 const DOMAIN_ICON_CLASSES = {
-  cook: "text-category-4",
-  pantry: "text-category-3",
-  plan: "text-category-5",
-  house: "text-category-7",
-  finance: "text-category-1",
+  cook: "text-(--brand-domain-cook)",
+  pantry: "text-(--brand-domain-pantry)",
+  plan: "text-(--brand-domain-plan)",
+  house: "text-(--brand-domain-house)",
+  finance: "text-(--brand-domain-finance)",
 } satisfies Record<WayfindingDomain, string>;
 
 export function domainIconClass(

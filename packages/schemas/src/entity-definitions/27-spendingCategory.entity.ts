@@ -143,18 +143,25 @@ export default defineEntity({
               label: "Unclassified",
               description:
                 "Insufficient or mixed evidence; leave itemization expectation unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
             },
             {
               value: "required",
               label: "Expected",
               description:
                 "Household expects the order's item lines with their Products",
+              color: "info",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
                 "Household does not expect item lines; one amount is enough",
+              color: "neutral-status",
             },
           ],
         },
@@ -162,6 +169,8 @@ export default defineEntity({
           columnLabel: "Evidence",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: expectation,
@@ -186,24 +195,32 @@ export default defineEntity({
               label: "Unclassified",
               description:
                 "Insufficient or mixed evidence; leave Product expectation unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
             },
             {
               value: "required",
               label: "Expected",
               description:
                 "Durable goods such as tools, furniture, clothing, and tracked software need a Product record",
+              color: "info",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
                 "Groceries, services, and friend reimbursements do not need a Product record, but may link one",
+              color: "neutral-status",
             },
             {
               value: "not_allowed",
               label: "Not allowed",
               description:
                 "Restaurant meals, event tickets, rides and donations never link a Product",
+              color: "neutral-status",
             },
           ],
         },
@@ -213,6 +230,7 @@ export default defineEntity({
           detail: true,
           // "Not allowed" is a state too; inferred, it read as a category.
           optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: productExpectation,

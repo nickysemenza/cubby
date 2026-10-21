@@ -1,7 +1,4 @@
-import {
-  locationTypeColors,
-  locationTypeValues,
-} from "@cubby/shared/location-type-theme";
+import { locationTypeValues } from "@cubby/shared/location-type-theme";
 import { COST_TYPE_LABELS, costTypeValues } from "../expense-fields.js";
 import {
   EXPENSE_LINE_BASIS_LABELS,
@@ -115,25 +112,23 @@ const meal_kindDescriptions = {
   takeout: "Ordered for pickup or delivery",
   other: "Doesn't fit a listed kind",
 };
+type Presentation = {
+  role: "status" | "category";
+  color: import("@cubby/shared/enum-palette").ColorToken;
+  glyph?: Glyph;
+};
 const labeled = <Value extends string>(
   values: readonly Value[],
   labels: Record<Value, string>,
-  colors?: Record<Value, string>,
+  presentation: Presentation | Record<Value, Presentation>,
   descriptions?: Record<Value, string>,
 ) =>
-  values.map((value) => {
-    if (colors && descriptions)
-      return {
-        value,
-        label: labels[value],
-        color: colors[value],
-        description: descriptions[value],
-      };
-    if (colors) return { value, label: labels[value], color: colors[value] };
-    if (descriptions)
-      return { value, label: labels[value], description: descriptions[value] };
-    return { value, label: labels[value] };
-  });
+  values.map((value) => ({
+    value,
+    label: labels[value],
+    ...("role" in presentation ? presentation : presentation[value]),
+    ...(descriptions ? { description: descriptions[value] } : {}),
+  }));
 
 type Glyph = Readonly<{ phosphor: string; sfSymbol: string }>;
 
@@ -188,22 +183,6 @@ const locationTypeGlyphs = {
   furniture: g("Package", "shippingbox"),
 } satisfies Record<(typeof locationTypeValues)[number], Glyph>;
 
-/** Product category feature glyphs; the feature declaration carries them. */
-export const productCategoryFeatureGlyphs = {
-  food: g("ForkKnife", "fork.knife"),
-  books: g("BookOpen", "book"),
-  tools: g("Wrench", "wrench.and.screwdriver"),
-  "tool-consumables": g("Disc", "opticaldisc"),
-  "tool-accessories": g("Gear", "gearshape"),
-  storage: g("Archive", "archivebox"),
-  hardware: g("Lightning", "bolt"),
-  electronics: g("Cpu", "cpu"),
-  software: g("Package", "shippingbox"),
-  household: g("Couch", "sofa"),
-  supplies: g("Sparkle", "sparkles"),
-  apparel: g("TShirt", "tshirt"),
-} as const satisfies Record<string, Glyph>;
-
 const expenseLineKindDescriptions = {
   unclassified: "Receipt role is unresolved and needs review",
   principal: "The main item or service purchased",
@@ -215,11 +194,7 @@ const expenseLineKindDescriptions = {
   other_adjustment: "Other receipt adjustments that don't fit above",
 } satisfies Record<(typeof expenseLineKindValues)[number], string>;
 
-/**
- * Labels and optional color overrides shared by web and Apple. The compiler
- * completes uncolored choices through the shared enum palette; browser icons
- * decorate these values without defining another wording or color source.
- */
+/** Contextual rosters own labels, presentation and descriptions for both clients. */
 export const selectControlOptions = {
   locationType: withGlyphs(
     labeled(
@@ -239,7 +214,11 @@ export const selectControlOptions = {
         cabinet: "cabinet",
         furniture: "furniture",
       },
-      locationTypeColors,
+      {
+        role: "category",
+        color: "domain-house",
+        glyph: g("Shapes", "square.on.circle"),
+      },
       location_typeDescriptions,
     ),
     locationTypeGlyphs,
@@ -247,31 +226,33 @@ export const selectControlOptions = {
   mealType: labeled(
     mealTypeValues,
     MEAL_TYPE_LABELS,
-    undefined,
+    {
+      role: "category",
+      color: "domain-cook",
+      glyph: g("ForkKnife", "fork.knife"),
+    },
     meal_typeDescriptions,
   ),
   mealKind: labeled(
     mealKindValues,
     MEAL_KIND_LABELS,
     {
-      cooked: "var(--brand-domain-cook)",
-      leftovers: "var(--brand-domain-pantry)",
-      eating_out: "var(--brand-domain-finance)",
-      takeout: "var(--brand-domain-plan)",
-      other: "var(--slate)",
+      role: "category",
+      color: "domain-cook",
+      glyph: g("ForkKnife", "fork.knife"),
     },
     meal_kindDescriptions,
   ),
   ledgerPartyKind: labeled(ledgerPartyKindValues, LEDGER_PARTY_KIND_LABELS, {
-    member: "var(--brand-domain-house)",
-    guest: "var(--brand-domain-plan)",
-    household: "var(--brand-domain-pantry)",
+    role: "category",
+    color: "domain-finance",
+    glyph: g("Users", "person.2"),
   }),
   projectStatus: labeled(projectStatusValues, PROJECT_STATUS_LABELS, {
-    planning: "var(--chart-5)",
-    not_started: "var(--chart-neutral)",
-    in_progress: "var(--chart-1)",
-    done: "var(--chart-positive)",
+    planning: { role: "status", color: "neutral-status" },
+    not_started: { role: "status", color: "neutral-status" },
+    in_progress: { role: "status", color: "info" },
+    done: { role: "status", color: "positive" },
   }),
   projectKind: labeled(
     projectKindValues,
@@ -283,47 +264,56 @@ export const selectControlOptions = {
       garden: "Garden",
       trip: "Trip",
     },
-    undefined,
+    { role: "category", color: "domain-house", glyph: g("Hammer", "hammer") },
     project_kindDescriptions,
   ),
   taskStatus: labeled(taskStatusValues, TASK_STATUS_LABELS, {
-    not_started: "var(--chart-neutral)",
-    later: "var(--warning)",
-    in_progress: "var(--chart-1)",
-    blocked: "var(--chart-negative)",
-    done: "var(--chart-positive)",
+    not_started: { role: "status", color: "neutral-status" },
+    later: { role: "status", color: "warning" },
+    in_progress: { role: "status", color: "info" },
+    blocked: { role: "status", color: "destructive" },
+    done: { role: "status", color: "positive" },
   }),
   trade: withGlyphs(
-    labeled(tradeValues, TRADE_LABELS, undefined, tradeDescriptions),
+    labeled(
+      tradeValues,
+      TRADE_LABELS,
+      {
+        role: "category",
+        color: "domain-house",
+        glyph: g("Shapes", "square.on.circle"),
+      },
+      tradeDescriptions,
+    ),
     tradeGlyphs,
   ),
-  productKind: labeled(productKindValues, PRODUCT_KIND_LABELS),
+  productKind: labeled(productKindValues, PRODUCT_KIND_LABELS, {
+    role: "category",
+    color: "domain-pantry",
+    glyph: g("Package", "shippingbox"),
+  }),
   expenseLineKind: labeled(
     expenseLineKindValues,
     EXPENSE_LINE_KIND_LABELS,
     {
-      unclassified: "var(--warning)",
-      principal: "var(--slate)",
-      tax: "var(--slate)",
-      shipping: "var(--slate)",
-      discount: "var(--positive)",
-      fee: "var(--warning)",
-      tip: "var(--plum)",
-      other_adjustment: "var(--slate)",
+      role: "category",
+      color: "domain-finance",
+      glyph: g("Receipt", "receipt"),
     },
     expenseLineKindDescriptions,
   ),
   expenseLineBasis: labeled(expenseLineBasisValues, EXPENSE_LINE_BASIS_LABELS, {
-    item_line: "var(--slate)",
-    allocation: "var(--plum)",
+    role: "category",
+    color: "domain-finance",
+    glyph: g("ListBullets", "list.bullet"),
   }),
   costType: labeled(
     costTypeValues,
     COST_TYPE_LABELS,
     {
-      materials: "var(--chart-1)",
-      tools: "var(--chart-5)",
-      services: "var(--chart-2)",
+      role: "category",
+      color: "domain-house",
+      glyph: g("Wrench", "wrench.and.screwdriver"),
     },
     cost_typeDescriptions,
   ),

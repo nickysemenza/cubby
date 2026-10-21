@@ -387,14 +387,23 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "vendor", label: "Vendor charge" },
-            { value: "reimbursement", label: "Reimbursement" },
+            {
+              value: "vendor",
+              label: "Vendor charge",
+            },
+            {
+              value: "reimbursement",
+              label: "Reimbursement",
+            },
           ],
         },
         display: {
           columnLabel: "Role",
           list: true,
           detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Storefront", sfSymbol: "storefront" },
         },
         validation: {
           read: z.enum(["vendor", "reimbursement"]).default("vendor"),

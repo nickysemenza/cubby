@@ -471,7 +471,7 @@ function PickerRowContent<TId extends string>({
           {layout.secondary ? (
             <span className="min-w-0 text-xs text-muted-foreground">
               {presentation?.status ? (
-                <EnumPill color={presentation.status.color}>
+                <EnumPill optionRole="status" color={presentation.status.color}>
                   {presentation.status.text}
                 </EnumPill>
               ) : (

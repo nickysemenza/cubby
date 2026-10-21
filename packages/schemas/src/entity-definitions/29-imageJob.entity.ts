@@ -23,22 +23,43 @@ const kindOptions = imageProcessingJobKind.options.map((value) => ({
   label: ACTIVITY_KIND_LABEL[value],
 }));
 
-const stateOptions: {
-  value: (typeof imageProcessingJobState.options)[number];
-  label: string;
-  color: string;
-}[] = [
-  { value: "pending", label: "Queued", color: "var(--muted-foreground)" },
+const stateOptions = [
+  {
+    value: "pending",
+    label: "Queued",
+    color: "neutral-status",
+  },
   {
     value: "waiting_for_device",
     label: "Waiting for Apple",
-    color: "var(--warning)",
+    color: "warning",
   },
-  { value: "leased", label: "Processing", color: "var(--primary)" },
-  { value: "ready", label: "Completed", color: "var(--positive)" },
-  { value: "skipped", label: "Skipped", color: "var(--muted-foreground)" },
-  { value: "failed", label: "Failed", color: "var(--destructive)" },
-];
+  {
+    value: "leased",
+    label: "Processing",
+    color: "info",
+  },
+  {
+    value: "ready",
+    label: "Completed",
+    color: "positive",
+  },
+  {
+    value: "skipped",
+    label: "Skipped",
+    color: "neutral-status",
+  },
+  {
+    value: "failed",
+    label: "Failed",
+    color: "destructive",
+  },
+] satisfies {
+  value: string;
+  label: string;
+  color?: import("@cubby/shared/enum-palette").ColorToken;
+  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
+}[];
 
 /**
  * One durable unit of image work (subject lift, description, identification)
@@ -114,14 +135,26 @@ export default defineEntity({
         key: "kind",
         kind: "enum",
         control: { kind: "select", options: kindOptions },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "neutral-status",
+          optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
+        },
         validation: readOnly(imageProcessingJobKind),
       },
       {
         key: "state",
         kind: "enum",
         control: { kind: "select", options: stateOptions },
-        display: { list: true, detail: true, width: "sm" },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          optionRole: "status",
+          optionColor: "neutral-status",
+        },
         validation: readOnly(imageProcessingJobState),
       },
       {

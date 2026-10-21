@@ -105,7 +105,16 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: {
+            phosphor: "NotePencil",
+            sfSymbol: "square.and.pencil",
+          },
+        },
         validation: {
           read: gardenEntryKind,
           create: gardenEntryKind.default("note"),

@@ -313,6 +313,18 @@ export default defineEntity({
           create: inheritanceModeSchema.optional(),
           update: inheritanceModeSchema.optional(),
         },
+        display: {
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: {
+            phosphor: "ArrowBendDownRight",
+            sfSymbol: "arrow.turn.down.right",
+          },
+          valueOptions: [
+            { value: "inherit", label: "Inherit" },
+            { value: "explicit", label: "Explicit" },
+          ],
+        },
       },
       {
         key: "assigneeName",
@@ -386,6 +398,18 @@ export default defineEntity({
           create: inheritanceModeSchema.optional(),
           update: inheritanceModeSchema.optional(),
         },
+        display: {
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: {
+            phosphor: "ArrowBendDownRight",
+            sfSymbol: "arrow.turn.down.right",
+          },
+          valueOptions: [
+            { value: "inherit", label: "Inherit" },
+            { value: "explicit", label: "Explicit" },
+          ],
+        },
       },
       {
         key: "subjectProductId",
@@ -454,6 +478,18 @@ export default defineEntity({
           read: null,
           create: inheritanceModeSchema.optional(),
           update: inheritanceModeSchema.optional(),
+        },
+        display: {
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: {
+            phosphor: "ArrowBendDownRight",
+            sfSymbol: "arrow.turn.down.right",
+          },
+          valueOptions: [
+            { value: "inherit", label: "Inherit" },
+            { value: "explicit", label: "Explicit" },
+          ],
         },
       },
       {

@@ -397,7 +397,11 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
           <TimelineLink link={event.link} className="min-w-0 truncate">
             {event.label}
           </TimelineLink>
-          <EnumPill color={kindColor(event.kind)} className="text-xs">
+          <EnumPill
+            icon={<ClockIcon />}
+            color={kindColor(event.kind)}
+            className="text-xs"
+          >
             {kindLabel(event.kind)}
           </EnumPill>
         </>
@@ -606,7 +610,7 @@ function LifecyclesView({
       </Panel>
       <Row wrap gap="md" className="text-xs">
         {kinds.map((kind) => (
-          <EnumPill key={kind} color={kindColor(kind)}>
+          <EnumPill key={kind} icon={<ClockIcon />} color={kindColor(kind)}>
             {kindLabel(kind)}
           </EnumPill>
         ))}

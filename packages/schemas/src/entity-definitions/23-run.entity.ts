@@ -290,17 +290,55 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "running", label: "Running" },
-            { value: "paused", label: "Paused" },
-            { value: "paused_auth", label: "Agent authorization needed" },
-            { value: "paused_offline", label: "Paused offline (historical)" },
-            { value: "needs_review", label: "Needs review" },
-            { value: "completed", label: "Completed" },
-            { value: "failed", label: "Failed" },
-            { value: "dispatch_failed", label: "Dispatch failed" },
+            {
+              value: "running",
+              label: "Running",
+              color: "info",
+            },
+            {
+              value: "paused",
+              label: "Paused",
+              color: "warning",
+            },
+            {
+              value: "paused_auth",
+              label: "Agent authorization needed",
+              color: "warning",
+            },
+            {
+              value: "paused_offline",
+              label: "Paused offline (historical)",
+              color: "warning",
+            },
+            {
+              value: "needs_review",
+              label: "Needs review",
+              color: "warning",
+            },
+            {
+              value: "completed",
+              label: "Completed",
+              color: "positive",
+            },
+            {
+              value: "failed",
+              label: "Failed",
+              color: "destructive",
+            },
+            {
+              value: "dispatch_failed",
+              label: "Dispatch failed",
+              color: "destructive",
+            },
           ],
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          optionRole: "status",
+          optionColor: "neutral-status",
+        },
         validation: readOnly(runStatus),
       },
       {
@@ -313,7 +351,14 @@ export default defineEntity({
             label: RUN_PURPOSE_LABEL[value],
           })),
         },
-        display: { list: true, detail: true, width: "sm" },
+        display: {
+          list: true,
+          detail: true,
+          width: "sm",
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Gear", sfSymbol: "gearshape" },
+        },
         validation: readOnly(runPurpose),
       },
       {
@@ -322,15 +367,39 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "foreground", label: "Foreground" },
-            { value: "discovery", label: "Discovery" },
-            { value: "manual", label: "Manual" },
-            { value: "backfill", label: "Backfill" },
-            { value: "scheduled", label: "Scheduled" },
-            { value: "ephemeral", label: "Ephemeral" },
+            {
+              value: "foreground",
+              label: "Foreground",
+            },
+            {
+              value: "discovery",
+              label: "Discovery",
+            },
+            {
+              value: "manual",
+              label: "Manual",
+            },
+            {
+              value: "backfill",
+              label: "Backfill",
+            },
+            {
+              value: "scheduled",
+              label: "Scheduled",
+            },
+            {
+              value: "ephemeral",
+              label: "Ephemeral",
+            },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Lightning", sfSymbol: "bolt" },
+        },
         validation: readOnly(runTrigger),
       },
       {
@@ -410,11 +479,22 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "unrelated_source", label: "Unrelated source removed" },
-            { value: "settled", label: "Settled; transcript destroyed" },
+            {
+              value: "unrelated_source",
+              label: "Unrelated source removed",
+            },
+            {
+              value: "settled",
+              label: "Settled; transcript destroyed",
+            },
           ],
         },
-        display: { detail: true },
+        display: {
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Archive", sfSymbol: "archivebox" },
+        },
         validation: readOnly(runRetirementReason.nullable()),
       },
       {
@@ -547,7 +627,12 @@ export default defineEntity({
         key: "cause",
         kind: "enum",
         nullable: true,
-        display: { detail: true },
+        display: {
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Lightning", sfSymbol: "bolt" },
+        },
         control: {
           kind: "select",
           options: runCause.options.map((value) => ({

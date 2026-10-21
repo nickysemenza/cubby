@@ -145,11 +145,24 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "succeeded", label: "Succeeded" },
-            { value: "failed", label: "Failed" },
+            {
+              value: "succeeded",
+              label: "Succeeded",
+              color: "positive",
+            },
+            {
+              value: "failed",
+              label: "Failed",
+              color: "destructive",
+            },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
+        },
         validation: {
           read: plantingOutcome.nullable(),
           create: plantingOutcome.nullable().default(null),
@@ -216,16 +229,19 @@ export default defineEntity({
               label: "Planned",
               description:
                 "Planned for a future or not-yet-established planting",
+              color: "neutral-status",
             },
             {
               value: "growing",
               label: "Growing",
               description: "Currently transplanted or actively growing",
+              color: "positive",
             },
             {
               value: "finished",
               label: "Finished",
               description: "No longer growing or completed",
+              color: "neutral-status",
             },
           ],
         },
@@ -233,6 +249,8 @@ export default defineEntity({
           list: true,
           detail: true,
           mobile: { slot: "trailing", priority: 10 },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: plantingStatus,

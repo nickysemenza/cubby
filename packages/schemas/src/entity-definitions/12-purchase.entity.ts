@@ -278,15 +278,29 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "partial", label: "Partial" },
-            { value: "recorded", label: "Recorded" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "partial",
+              label: "Partial",
+              color: "warning",
+            },
+            {
+              value: "recorded",
+              label: "Recorded",
+              color: "positive",
+            },
           ],
         },
         display: {
           columnLabel: "Booked",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: purchaseEvidenceCoverage.shape.booking,
@@ -304,16 +318,38 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "present", label: "Present" },
-            { value: "not_expected", label: "Not expected" },
-            { value: "unknown", label: "Unclassified" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "present",
+              label: "Present",
+              color: "positive",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              color: "neutral-status",
+            },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
           ],
         },
         display: {
           columnLabel: "Documented",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: purchaseEvidenceCoverage.shape.document,
@@ -331,16 +367,38 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "present", label: "Present" },
-            { value: "not_expected", label: "Not expected" },
-            { value: "unknown", label: "Unclassified" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "present",
+              label: "Present",
+              color: "positive",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              color: "neutral-status",
+            },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
           ],
         },
         display: {
           columnLabel: "Itemized",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: purchaseEvidenceCoverage.shape.itemization,
@@ -358,17 +416,43 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "partial", label: "Partial" },
-            { value: "present", label: "Present" },
-            { value: "not_expected", label: "Not expected" },
-            { value: "unknown", label: "Unclassified" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "partial",
+              label: "Partial",
+              color: "warning",
+            },
+            {
+              value: "present",
+              label: "Present",
+              color: "positive",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              color: "neutral-status",
+            },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
           ],
         },
         display: {
           columnLabel: "Products",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: purchaseEvidenceCoverage.shape.products,
@@ -426,7 +510,17 @@ export default defineEntity({
         key: "spendingCategoryOrigin",
         kind: "enum",
         labelOverride: "Fallback provenance",
-        display: { detail: true },
+        display: {
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Clock", sfSymbol: "clock" },
+          valueOptions: [
+            { value: "legacy", label: "Legacy" },
+            { value: "manual", label: "Manual" },
+            { value: "source", label: "Source" },
+          ],
+        },
         validation: {
           read: z.enum(["legacy", "manual", "source"]).default("legacy"),
           create: null,
@@ -490,18 +584,25 @@ export default defineEntity({
               label: "Unclassified",
               description:
                 "Insufficient or mixed evidence; leave itemization expectation unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
             },
             {
               value: "required",
               label: "Expected",
               description:
                 "Household expects the order's item lines with their Products",
+              color: "info",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
                 "Household does not expect item lines; one amount is enough",
+              color: "neutral-status",
             },
           ],
         },
@@ -509,6 +610,8 @@ export default defineEntity({
           columnLabel: "Evidence",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         resolution: {
           reset: { itemizationExpectation: null },
@@ -895,23 +998,33 @@ export default defineEntity({
           labelPath: "reconciliationLabel",
           renderer: { list: "reconciliation-status" },
           valueOptions: [
-            { value: "match", label: "Reconciles", color: "var(--positive)" },
+            {
+              value: "match",
+              label: "Reconciles",
+              color: "positive",
+            },
             {
               value: "refund_adjusted",
               label: "Refund-adjusted",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
             {
               value: "mismatch",
               label: "Needs review",
-              color: "var(--warning)",
+              color: "warning",
             },
             {
               value: "unknown",
               label: "No stated total",
-              color: "var(--slate)",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
             },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",
@@ -948,15 +1061,33 @@ export default defineEntity({
           renderer: { list: "financial-settlement" },
           // Roster for `financialReconciliation.status`.
           valueOptions: [
-            { value: "unknown", label: "No evidence", color: "var(--slate)" },
-            { value: "pending", label: "Pending", color: "var(--warning)" },
-            { value: "match", label: "Settled", color: "var(--positive)" },
+            {
+              value: "unknown",
+              label: "No evidence",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
+            {
+              value: "pending",
+              label: "Pending",
+              color: "warning",
+            },
+            {
+              value: "match",
+              label: "Settled",
+              color: "positive",
+            },
             {
               value: "mismatch",
               label: "Mismatch",
-              color: "var(--destructive)",
+              color: "destructive",
             },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",

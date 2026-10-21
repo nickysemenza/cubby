@@ -109,21 +109,32 @@ export default defineEntity({
             {
               value: "credit_card",
               label: "Credit card",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
             {
               value: "bank_account",
               label: "Bank account",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
             {
               value: "stored_value",
               label: "Gift card or store credit",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
-            { value: "cash", label: "Cash", color: "var(--slate)" },
-            { value: "other", label: "Other", color: "var(--slate)" },
+            {
+              value: "cash",
+              label: "Cash",
+              color: "neutral-status",
+            },
+            {
+              value: "other",
+              label: "Other",
+              color: "neutral-status",
+            },
           ],
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "CreditCard", sfSymbol: "creditcard" },
         },
         validation: {
           read: financialAccountIdentity,
@@ -216,6 +227,9 @@ export default defineEntity({
           list: true,
           detail: true,
           mobile: { slot: "trailing", priority: 10 },
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "CreditCard", sfSymbol: "creditcard" },
         },
         validation: {
           read: financialAccountNetwork.nullable(),

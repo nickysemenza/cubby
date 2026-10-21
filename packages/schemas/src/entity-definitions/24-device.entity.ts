@@ -73,11 +73,23 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "ios", label: "iOS" },
-            { value: "macos", label: "macOS" },
+            {
+              value: "ios",
+              label: "iOS",
+            },
+            {
+              value: "macos",
+              label: "macOS",
+            },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "neutral-status",
+          optionGlyph: { phosphor: "DeviceMobile", sfSymbol: "iphone" },
+        },
         validation: {
           read: devicePlatform,
           create: devicePlatform,

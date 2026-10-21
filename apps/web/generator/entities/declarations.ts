@@ -82,6 +82,8 @@ export type FilterDescriptor = Readonly<{
         label: string;
         meta?: boolean;
         color?: string;
+        role?: "status" | "category";
+        glyph?: Readonly<{ phosphor: string; sfSymbol: string }>;
         expand?: Readonly<Record<string, string | number | boolean>>;
       }>[]
     | null;
@@ -193,7 +195,16 @@ type OperationOwner = "kernel" | "workflow" | null;
 type EntityFieldControl = Readonly<{
   kind: EntityFieldControlKind;
   renderer: string | null;
-  options: readonly Readonly<{ value: string; label: string }>[] | null;
+  options:
+    | readonly Readonly<{
+        value: string;
+        label: string;
+        color: string;
+        role: "status" | "category";
+        glyph: Readonly<{ phosphor: string; sfSymbol: string }>;
+        description?: string;
+      }>[]
+    | null;
   /** Pairs with the next consecutive `"half"` field on one row. */
   width: "half" | null;
   placeholder: string | null;

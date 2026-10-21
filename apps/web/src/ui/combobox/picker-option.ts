@@ -18,9 +18,10 @@ export interface PickerOption {
   /** Leading glyph — a trade icon, a category mark, a vendor's brand logo. */
   icon?: React.ReactNode;
   color?: string;
+  role?: string;
   /**
    * The option's semantic glyph (Phosphor name for web, SF Symbol for Apple).
-   * Shared completion supplies status and category glyphs; a declaration may override them.
+   * The compiler supplies declared presentation; UI-only choices declare their own.
    */
   glyph?: { phosphor: string; sfSymbol: string };
   /**

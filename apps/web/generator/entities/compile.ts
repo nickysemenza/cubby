@@ -4,7 +4,7 @@ import type { ChildTableDeclaration } from "../../../../packages/schemas/src/ent
 import { servesKernelGet } from "./list-capabilities.ts";
 import { humanize } from "../../../../packages/shared/src/text-case.ts";
 import { parseRangeBounds } from "../../../../packages/shared/src/filter.ts";
-import { colorizeEnumOptions } from "../../../../packages/shared/src/enum-palette.ts";
+import { compileEnumOptions } from "../../../../packages/shared/src/enum-palette.ts";
 import {
   FILTER_KINDS,
   parseEntityDeclarationMetadata,
@@ -452,29 +452,6 @@ const compileSort = (
   };
 };
 
-/** Read-only enums still need the same labeled palette as editable enum controls. */
-const inferredEnumOptions = (
-  field: EntityFieldModelMetadata["fields"][number],
-) => {
-  let schema: unknown =
-    field.validation.read ?? field.validation.create ?? field.validation.update;
-  while (
-    schema instanceof z.ZodOptional ||
-    schema instanceof z.ZodNullable ||
-    schema instanceof z.ZodDefault
-  )
-    schema = schema.unwrap();
-  return schema instanceof z.ZodEnum
-    ? colorizeEnumOptions(
-        schema.options.map((value) => {
-          const raw = z.string().parse(value);
-          return { value: raw, label: humanize(raw) };
-        }),
-        field.display.optionRole,
-      )
-    : null;
-};
-
 const storedFieldExplanation = (
   field: EntityFieldModelMetadata["fields"][number],
   storage: EntityFieldModelMetadata["storage"],
@@ -527,10 +504,16 @@ const compileFieldModel = (
   }
   const model = value;
   const fields = model.fields.map((field, index): EntityField => {
-    const fieldContext = `${context}.fields[${index}]`;
+    const fieldContext = `${entityKey}.${field.key}`;
     const key = field.key;
-    if (field.kind === "enum" && field.control?.kind === "select") {
-      const options = field.control.options ?? [];
+    if (
+      field.kind === "enum" &&
+      (field.validation.read !== null ||
+        field.control?.options ||
+        field.display.valueOptions)
+    ) {
+      const options =
+        field.control?.options ?? field.display.valueOptions ?? [];
       let read: unknown = field.validation.read;
       while (
         read instanceof z.ZodOptional ||
@@ -538,19 +521,21 @@ const compileFieldModel = (
         read instanceof z.ZodDefault
       )
         read = read.unwrap();
-      if (!(read instanceof z.ZodEnum))
+      if (options.length === 0)
         throw new EntityDeclarationError(
-          `${fieldContext}.validation.read must be an enum for a select control.`,
+          `${fieldContext}: declare enum options and presentation.`,
         );
-      const expected = [...read.options].sort();
-      const actual = options.map((option) => option.value).sort();
-      if (
-        expected.length !== actual.length ||
-        expected.some((value, position) => value !== actual[position])
-      )
-        throw new EntityDeclarationError(
-          `${fieldContext}.control.options must label exactly ${expected.join(", ")}.`,
-        );
+      if (read instanceof z.ZodEnum) {
+        const expected = [...read.options].sort();
+        const actual = options.map((option) => option.value).sort();
+        if (
+          expected.length !== actual.length ||
+          expected.some((value, position) => value !== actual[position])
+        )
+          throw new EntityDeclarationError(
+            `${fieldContext}.options must label exactly ${expected.join(", ")}.`,
+          );
+      }
     }
     if (field.display.columnId !== null && !field.display.columnId.trim())
       throw new EntityDeclarationError(
@@ -603,9 +588,14 @@ const compileFieldModel = (
           : {
               ...field.control,
               options: field.control.options
-                ? colorizeEnumOptions(
+                ? compileEnumOptions(
                     field.control.options,
-                    field.display.optionRole,
+                    {
+                      role: field.display.optionRole,
+                      color: field.display.optionColor,
+                      glyph: field.display.optionGlyph,
+                    },
+                    `${entityKey}.${key}`,
                   )
                 : field.control.options,
             },
@@ -631,13 +621,16 @@ const compileFieldModel = (
         referencePreviewLimit: field.display.referencePreviewLimit ?? null,
         columnLabel: field.display.columnLabel ?? null,
         valueOptions: field.display.valueOptions
-          ? colorizeEnumOptions(
+          ? compileEnumOptions(
               field.display.valueOptions,
-              field.display.optionRole,
+              {
+                role: field.display.optionRole,
+                color: field.display.optionColor,
+                glyph: field.display.optionGlyph,
+              },
+              `${entityKey}.${key}`,
             )
-          : field.kind === "enum" && field.control?.options == null
-            ? inferredEnumOptions(field)
-            : null,
+          : null,
         preview: field.display.preview ?? false,
       },
       validation: field.validation,
@@ -1237,10 +1230,7 @@ const enumFilterOptions = (
       value.optionsKey != null ||
       value.schemaRef != null
       ? null
-      : fieldOptions.map(({ value: option, label }) => ({
-          value: option,
-          label,
-        }));
+      : fieldOptions.map((option) => ({ ...option }));
   const declaredValues = declared
     .filter((option) => option.meta !== true)
     .map((option) => option.value)
@@ -1250,7 +1240,19 @@ const enumFilterOptions = (
     throw new EntityDeclarationError(
       `${context} options must match ${value.columnId}'s control options (${fieldValues.join(", ")}); omit them to derive from the field.`,
     );
-  return declared;
+  return declared.map((option) => {
+    const resolved = fieldOptions.find(
+      (candidate) => candidate.value === option.value,
+    );
+    return resolved
+      ? {
+          ...option,
+          color: resolved.color,
+          role: resolved.role,
+          glyph: resolved.glyph,
+        }
+      : option;
+  });
 };
 
 /**

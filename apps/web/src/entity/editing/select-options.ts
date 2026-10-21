@@ -1,7 +1,7 @@
 import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
 import { createElement, type ReactNode } from "react";
 
-import { colorizeSelectOptions } from "~/lib/select-options";
+import { expenseLineAutoOption } from "~/lib/select-options";
 import { OptionGlyph } from "~/ui/common/option-glyph";
 
 /** One picker option: a value/label pair plus an optional leading icon or swatch color. */
@@ -12,15 +12,14 @@ export type EntitySelectOption = Readonly<{
   description?: string;
   icon?: ReactNode;
   color?: string;
-  /** Compiler-filled roster role: states tint, kinds stay neutral. */
+  /** Compiler-filled roster role. */
   role?: EnumRole;
-  /** Declared or shared semantic glyph; becomes `icon` for pickers. */
+  /** Compiled contextual glyph; becomes `icon` for pickers. */
   glyph?: EnumIcon;
 }>;
 
 /**
- * Completes a declared enum roster with web-only sentinels and deterministic
- * presentation. Declared values stay first; sentinel-only values follow in
+ * Merges compiled choices with explicitly presented web-only sentinels. Declared values stay first; sentinel-only values follow in
  * their source order. A declared `glyph` becomes the picker's leading icon,
  * tinted with the option's color; a caller's explicit icon wins.
  */
@@ -45,7 +44,7 @@ export function presentEntitySelectOptions(
       const richOption = richByValue.get(declaredOption.value);
       return { ...richOption, ...declaredOption };
     });
-  return colorizeSelectOptions(merged).map((option) =>
+  return merged.map((option) =>
     option.glyph && option.icon === undefined
       ? {
           ...option,
@@ -67,13 +66,7 @@ export function presentEntitySelectOptions(
 const ENTITY_SELECT_OPTIONS = {
   // The capture form's `"auto"` sentinel asks the server's role Decision
   // before create; `buildData` strips it before validation.
-  "expense.lineKind": [
-    {
-      value: "auto",
-      label: "Decide from receipt evidence",
-      glyph: { phosphor: "Sparkle", sfSymbol: "sparkles" },
-    },
-  ],
+  "expense.lineKind": [expenseLineAutoOption],
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;
 
 /**

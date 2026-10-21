@@ -173,8 +173,9 @@ test("saved suggestion previews stay visible while current evidence is checked",
   page,
 }, testInfo) => {
   const name = uniqueName(testInfo, "Cached suggestion tool");
+  const categoryName = uniqueName(testInfo, "Cached category");
   const category = await createEntityFixture(page, "productCategory", {
-    name: uniqueName(testInfo, "Cached category"),
+    name: categoryName,
   });
   await createEntityFixture(page, "product", { name, categoryId: null });
   const live = Promise.withResolvers<void>();
@@ -263,8 +264,10 @@ test("saved suggestion previews stay visible while current evidence is checked",
       .getByRole("row")
       .filter({ has: page.getByRole("link", { name, exact: true }) });
     const cell = row.locator('[data-cell-col="categoryId"]');
+    // Reference previews resolve the stored category name, which can replace
+    // the model's cached label before this assertion runs.
     const saved = cell.getByRole("button", {
-      name: /Accept.*Synthetic saved category/i,
+      name: `Accept suggested value: ${categoryName}`,
     });
     await expect(saved).toBeVisible();
     await expect(saved).toBeDisabled();

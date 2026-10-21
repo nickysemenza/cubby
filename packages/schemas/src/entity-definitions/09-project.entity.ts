@@ -353,6 +353,18 @@ Rules:
           create: inheritanceModeSchema.optional(),
           update: inheritanceModeSchema.optional(),
         },
+        display: {
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: {
+            phosphor: "ArrowBendDownRight",
+            sfSymbol: "arrow.turn.down.right",
+          },
+          valueOptions: [
+            { value: "inherit", label: "Inherit" },
+            { value: "explicit", label: "Explicit" },
+          ],
+        },
       },
       {
         key: "assigneeId",
@@ -417,6 +429,18 @@ Rules:
           read: null,
           create: inheritanceModeSchema.optional(),
           update: inheritanceModeSchema.optional(),
+        },
+        display: {
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: {
+            phosphor: "ArrowBendDownRight",
+            sfSymbol: "arrow.turn.down.right",
+          },
+          valueOptions: [
+            { value: "inherit", label: "Inherit" },
+            { value: "explicit", label: "Explicit" },
+          ],
         },
       },
       {

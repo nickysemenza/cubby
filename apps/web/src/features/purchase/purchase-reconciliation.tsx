@@ -75,7 +75,11 @@ export const ReconciliationStatus: FC<{
     (candidate) => candidate.value === status,
   );
   return (
-    <EnumPill color={option?.color ?? "var(--slate)"}>
+    <EnumPill
+      optionRole={option?.role}
+      glyph={option?.glyph}
+      color={option?.color ?? "var(--slate)"}
+    >
       {(status === "mismatch" || status === "refund_adjusted") && delta !== null
         ? `${presentation.label} ${formatCurrency(delta)}`
         : presentation.label}

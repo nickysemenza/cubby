@@ -116,6 +116,9 @@ export default defineEntity({
           columnLabel: "Guide",
           list: true,
           detail: true,
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: { phosphor: "Plant", sfSymbol: "leaf" },
         },
         validation: {
           read: gardenCropKey.nullable(),
@@ -130,15 +133,29 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "yes", label: "Yes" },
-            { value: "maybe", label: "Maybe" },
-            { value: "no", label: "No" },
+            {
+              value: "yes",
+              label: "Yes",
+              color: "positive",
+            },
+            {
+              value: "maybe",
+              label: "Maybe",
+              color: "warning",
+            },
+            {
+              value: "no",
+              label: "No",
+              color: "destructive",
+            },
           ],
         },
         display: {
           list: true,
           detail: true,
           mobile: { slot: "trailing", priority: 10 },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: plantVerdict.nullable(),
@@ -178,11 +195,22 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "open-pollinated", label: "Open-pollinated" },
-            { value: "hybrid", label: "Hybrid" },
+            {
+              value: "open-pollinated",
+              label: "Open-pollinated",
+            },
+            {
+              value: "hybrid",
+              label: "Hybrid",
+            },
           ],
         },
-        display: { detail: true },
+        display: {
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: { phosphor: "Flower", sfSymbol: "camera.macro" },
+        },
         validation: {
           read: plantBreeding.nullable(),
           create: plantBreeding.nullable().default(null),

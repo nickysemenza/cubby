@@ -3250,24 +3250,24 @@ weakening domain invariants.
 
 ### Cross-platform option colors and roster counts
 
-The shared `colorizeEnumOptions` policy completes every roster once during
-manifest compilation: semantic statuses use condition colors and ordinary
-categories cycle through teal, violet, ochre, rose, and green in declaration
-order. Explicit overrides win; legacy web chart/action tokens normalize to
-shared adaptive roles. Clients filter only after assignment so colors stay
-stable across surfaces.
+Enum presentation is authored in the owning roster. Field display metadata
+`optionRole`, `optionColor`, and `optionGlyph` supplies explicit defaults for
+`control.options` or `display.valueOptions`; each option may override its color
+or glyph. Colors are keys from `packages/design-tokens/tokens.json`, such as
+`domain-house`, `positive`, or `neutral-status`. Status rosters use condition
+tones, whose standard glyph is an explicit shared default. Category rosters
+choose contextual glyphs and stable colors; several values may share a mark.
+Unknown choices explicitly declare neutral presentation.
 
-A read-only enum without an explicit roster derives its labels and colors from
-its existing Zod enum schema.
-
-Enum presentation color overrides live in the field's `control.options` or
-`display.valueOptions`, alongside labels. Web's generic `EnumPill` and Apple's
-generic list, detail, and hero chips consume those declarations. Use shared
-semantic tokens (`var(--warning)`, `var(--slate)`) or brand domain tokens
-(`var(--brand-domain-house)`); the design-token generator derives Apple's
-adaptive asset lookup. Unknown expectation and acquisition values infer neutral
-gray; expected evidence uses the info tone, and explicitly not-expected evidence
-remains neutral.
+`compileEnumOptions` completes and validates presentation once, with errors
+naming the entity, field, and option. Read-only enums declare `valueOptions`
+instead of deriving presentation from Zod values. Zod enum coverage is checked
+against the roster. No value spelling, array order, or color infers semantics.
+The compiler projects token keys into the existing cross-client CSS-token wire
+form and generates static browser icon imports from the used glyphs. UI-only
+sentinels live with their web option declarations. Renderers draw resolved
+presentation without rerunning completion. The design-token generator supplies
+both CSS and Apple's adaptive color assets, including named domain hues.
 Color supplements the visible label.
 
 Specialized surfaces, including task-board trade badges and native journal

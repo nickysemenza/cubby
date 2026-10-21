@@ -1,13 +1,4 @@
-import { colorizeEnumOptions } from "@cubby/shared/enum-palette";
-
 import type { PickerOption } from "~/ui/combobox/picker-option";
-
-/** Shared defaults also cover web-only editor sentinels. */
-export function colorizeSelectOptions<T extends PickerOption>(
-  options: readonly T[],
-) {
-  return colorizeEnumOptions(options);
-}
 
 /** Default dot inks for a boolean whose `true` really is the good outcome. */
 const DEFAULT_BOOLEAN_COLORS = {
@@ -32,7 +23,28 @@ export function booleanCellOptions(
   colors: { true: string; false: string } = DEFAULT_BOOLEAN_COLORS,
 ): PickerOption[] {
   return [
-    { value: "true", label: labels.true, color: colors.true },
-    { value: "false", label: labels.false, color: colors.false },
+    {
+      value: "true",
+      label: labels.true,
+      color: colors.true,
+      role: "status",
+      glyph: { phosphor: "CheckCircle", sfSymbol: "checkmark.circle.fill" },
+    },
+    {
+      value: "false",
+      label: labels.false,
+      color: colors.false,
+      role: "status",
+      glyph: { phosphor: "MinusCircle", sfSymbol: "minus.circle" },
+    },
   ];
 }
+
+/** Capture-only sentinel, stripped before validating a stored Expense. */
+export const expenseLineAutoOption = {
+  value: "auto",
+  label: "Decide from receipt evidence",
+  role: "category",
+  color: "var(--brand-domain-finance)",
+  glyph: { phosphor: "Sparkle", sfSymbol: "sparkles" },
+} as const;
