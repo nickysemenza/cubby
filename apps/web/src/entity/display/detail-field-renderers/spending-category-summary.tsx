@@ -3,7 +3,7 @@ import {
   type SpendingCategorySummary,
 } from "@cubby/schemas/spending-classification";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { formatCurrency } from "~/lib/number-format";
 import { ChipCluster } from "~/ui/common/chip-cluster";
 import { Row, Stack } from "~/ui/layout";
@@ -36,16 +36,7 @@ export function SpendingCategorySummaryValue({
         items={summary.categories.map((category) => ({
           key: category.id,
           label: category.name,
-          node: (
-            <EntityRefLink
-              variant="chip"
-              compact
-              entity="spendingCategory"
-              id={category.id}
-              name={category.name}
-              displayImage={null}
-            />
-          ),
+          node: <SpendingCategoryLabel id={category.id} name={category.name} />,
         }))}
       />
     );
@@ -63,13 +54,7 @@ export function SpendingCategorySummaryValue({
       )}
       {summary.categories.map((category) => (
         <Row key={category.id} justify="between" gap="sm">
-          <EntityRefLink
-            variant="chip"
-            entity="spendingCategory"
-            id={category.id}
-            name={category.name}
-            displayImage={null}
-          />
+          <SpendingCategoryLabel id={category.id} name={category.name} />
           {!contextOnly && category.amount !== null && (
             <span className="shrink-0 tabular-nums">
               {formatCurrency(category.amount)}

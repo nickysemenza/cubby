@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { CategoryLabelById } from "~/entity/presentation/category-label";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Description } from "~/ui/primitives/description";
 
@@ -168,13 +169,17 @@ function FinanceEvidence({ suggestion }: { suggestion: FieldSuggestion }) {
         {evidence.distinctPurchaseCount} purchases;{" "}
         {evidence.unknownCategoryLineCount} lines without a product category.
       </p>
-      {evidence.categories.map((category) => (
-        <p key={category.id}>
-          <a className="underline" href={`/product-categories/${category.id}`}>
-            {category.emoji} {category.name}
-          </a>
-        </p>
-      ))}
+      {evidence.categories.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {evidence.categories.map((category) => (
+            <CategoryLabelById
+              key={category.id}
+              id={category.id}
+              name={category.name}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

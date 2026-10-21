@@ -188,7 +188,9 @@ export const financialBookingCorrectionPreview =
     snapshot: z.string(),
     amount: wholeCentAmount,
     targetName: z.string(),
+    categoryId: spendingCategoryShortcode.nullable().default(null),
     categoryName: z.string().nullable().default(null),
+    categoryEmoji: z.string().nullable().default(null),
     projectName: z.string().nullable().default(null),
     trade: tradeSchema.nullable().default(null),
     lines: z.array(

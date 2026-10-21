@@ -8,6 +8,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatSmallCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
+import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -89,79 +90,71 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
                 {result.model ?? result.stage}
               </p>
               <Disclosure summary="Technical details" className="text-xs">
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 pb-2 text-muted-foreground">
-                  <dt>Classification reason</dt>
-                  <dd className="min-w-0 break-words">{result.reason}</dd>
-                  <dt>Decision model</dt>
-                  <dd>
-                    {result.triage.model ?? "No model call"}:{" "}
-                    {result.triage.classification}
-                  </dd>
-                  <dt>Decision view</dt>
-                  <dd>
-                    {result.view
-                      ? `${result.view.bytes} bytes; ${result.view.incompleteReasons.join(", ") || "complete"}`
-                      : "Unavailable"}
-                  </dd>
-                  <dt>Luna fallback</dt>
-                  <dd>
-                    {result.relevance
-                      ? `${result.imageEvidence?.rawClassification ?? "No model call"} → ${result.relevance.classification}`
-                      : "Not needed"}
-                  </dd>
-                  {result.imageEvidence && (
-                    <>
-                      <dt>Image evidence</dt>
-                      <dd>
-                        {result.imageEvidence.supplied}/
-                        {result.imageEvidence.candidates} images supplied;{" "}
-                        {result.imageEvidence.sourceBytes} source bytes;{" "}
-                        {result.imageEvidence.requestBytes} request bytes
-                      </dd>
-                      <dt>Readability</dt>
-                      <dd>
-                        {result.imageEvidence.imageReadability ??
-                          "Not reported"}
-                        ;{" "}
-                        {result.imageEvidence.complete
-                          ? "complete evidence"
-                          : "omitted evidence"}
-                        ; detail retry{" "}
-                        {result.imageEvidence.detailRetried
-                          ? "used"
-                          : "not used"}
-                      </dd>
-                      <dt>Image diagnostics</dt>
-                      <dd>
-                        {result.imageEvidence.failures.join("; ") || "None"}
-                      </dd>
-                    </>
-                  )}
-                  <dt>Model calls / elapsed</dt>
-                  <dd>
-                    {result.usage.calls} / {result.usage.elapsedMs} ms
-                  </dd>
-                  <dt>Catalog / charged cost</dt>
-                  <dd>
-                    {result.usage.standardCost === null
-                      ? "Unknown"
-                      : formatSmallCurrency(result.usage.standardCost)}{" "}
-                    /{" "}
-                    {result.usage.chargedCost === null
-                      ? "Unknown"
-                      : formatSmallCurrency(result.usage.chargedCost)}
-                    {result.usage.accountingPending && " (accounting pending)"}
-                  </dd>
-                  <dt>Diagnostic Run</dt>
-                  <dd>
-                    <EntityRefLink
-                      variant="chip"
-                      entity="run"
-                      id={result.runId}
-                      name={result.runId}
-                    />
-                  </dd>
-                </dl>
+                <FactsDensityProvider density="compact">
+                  <Facts
+                    layout="list"
+                    className="pb-2"
+                    facts={[
+                      {
+                        label: "Classification reason",
+                        value: result.reason,
+                      },
+                      {
+                        label: "Decision model",
+                        value: `${result.triage.model ?? "No model call"}: ${result.triage.classification}`,
+                      },
+                      {
+                        label: "Decision view",
+                        value: result.view
+                          ? `${result.view.bytes} bytes; ${result.view.incompleteReasons.join(", ") || "complete"}`
+                          : "Unavailable",
+                      },
+                      {
+                        label: "Luna fallback",
+                        value: result.relevance
+                          ? `${result.imageEvidence?.rawClassification ?? "No model call"} → ${result.relevance.classification}`
+                          : "Not needed",
+                      },
+                      ...(result.imageEvidence
+                        ? [
+                            {
+                              label: "Image evidence",
+                              value: `${result.imageEvidence.supplied}/${result.imageEvidence.candidates} images supplied; ${result.imageEvidence.sourceBytes} source bytes; ${result.imageEvidence.requestBytes} request bytes`,
+                            },
+                            {
+                              label: "Readability",
+                              value: `${result.imageEvidence.imageReadability ?? "Not reported"}; ${result.imageEvidence.complete ? "complete evidence" : "omitted evidence"}; detail retry ${result.imageEvidence.detailRetried ? "used" : "not used"}`,
+                            },
+                            {
+                              label: "Image diagnostics",
+                              value:
+                                result.imageEvidence.failures.join("; ") ||
+                                "None",
+                            },
+                          ]
+                        : []),
+                      {
+                        label: "Model calls / elapsed",
+                        value: `${result.usage.calls} / ${result.usage.elapsedMs} ms`,
+                      },
+                      {
+                        label: "Catalog / charged cost",
+                        value: `${result.usage.standardCost === null ? "Unknown" : formatSmallCurrency(result.usage.standardCost)} / ${result.usage.chargedCost === null ? "Unknown" : formatSmallCurrency(result.usage.chargedCost)}${result.usage.accountingPending ? " (accounting pending)" : ""}`,
+                      },
+                      {
+                        label: "Diagnostic Run",
+                        value: (
+                          <EntityRefLink
+                            variant="chip"
+                            entity="run"
+                            id={result.runId}
+                            name={result.runId}
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                </FactsDensityProvider>
               </Disclosure>
             </div>
           )}

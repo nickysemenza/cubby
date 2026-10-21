@@ -5,6 +5,7 @@ import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { categoryReference } from "~/entity/presentation/category-reference";
 import { formatCount } from "~/lib/number-format";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
@@ -193,6 +194,12 @@ function LedgerValueText({
   const parsed = value.mono ? parseShortcode(value.text) : null;
   const reference = parsed ? references[parsed.shortcode] : undefined;
   if (parsed && reference) {
+    const category = categoryReference(
+      parsed.type,
+      parsed.shortcode,
+      reference.name,
+    );
+    if (category) return category;
     return (
       <EntityRefLink
         variant="audit"

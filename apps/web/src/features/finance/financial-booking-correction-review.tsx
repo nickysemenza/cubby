@@ -8,6 +8,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
@@ -120,10 +121,17 @@ export function FinancialBookingCorrectionReview({
           </p>
           {review.action.kind === "attach_reimbursement" ? (
             <p className="text-xs text-muted-foreground">
-              Inherit category: {review.categoryName} · Purchase project
-              default: {review.projectName ?? "None"} · Purchase trade default:{" "}
-              {review.trade ?? "None"}. Existing Expense project and trade
-              overrides stay recorded.
+              <span className="inline-flex flex-wrap items-center gap-1 align-middle">
+                Inherit category:{" "}
+                <SpendingCategoryLabel
+                  id={review.categoryId}
+                  name={review.categoryName}
+                  emoji={review.categoryEmoji}
+                />
+              </span>{" "}
+              · Purchase project default: {review.projectName ?? "None"} ·
+              Purchase trade default: {review.trade ?? "None"}. Existing Expense
+              project and trade overrides stay recorded.
             </p>
           ) : null}
           {review.lines.map((line) => (

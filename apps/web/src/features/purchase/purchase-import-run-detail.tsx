@@ -14,7 +14,6 @@ import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Fragment,
   type ReactNode,
   useEffect,
   useState,
@@ -45,6 +44,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { AiCost } from "~/ui/common/ai-cost";
+import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import {
   RecordDetail,
   RecordDot,
@@ -536,19 +536,17 @@ function StepTiming({
   rows: readonly (readonly [string, string, string?])[];
 }) {
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 tabular-nums">
-      {rows.map(([label, value, note]) => (
-        <Fragment key={label}>
-          <dt className="text-muted-foreground">{label}</dt>
-          <dd>
-            {value}
-            {note ? (
-              <span className="text-muted-foreground"> · {note}</span>
-            ) : null}
-          </dd>
-        </Fragment>
-      ))}
-    </dl>
+    <FactsDensityProvider density="compact">
+      <Facts
+        layout="list"
+        facts={rows.map(([label, value, note]) => ({
+          label,
+          value,
+          caption: note,
+          className: "tabular-nums",
+        }))}
+      />
+    </FactsDensityProvider>
   );
 }
 

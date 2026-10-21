@@ -59,14 +59,18 @@ async function reimbursementDestination(
     where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
   });
   if (!target) return fail("The original Purchase is no longer live.");
-  const categoryId = target.spendingCategoryId;
-  const category = categoryId
+  const spendingCategoryId = target.spendingCategoryId;
+  const category = spendingCategoryId
     ? await getDb(db).query.spendingCategory.findFirst({
         where: (category, { eq }) =>
-          and(eq(category.id, categoryId), notDeleted(category)),
+          and(eq(category.id, spendingCategoryId), notDeleted(category)),
       })
     : null;
   const categoryName = category?.name ?? null;
+  const categoryId = category
+    ? parseShortcodeFor("spendingCategory", category.shortcode)
+    : null;
+  const categoryEmoji = category?.emoji ?? null;
   let trade = target.defaultTrade;
   if (target.defaultProjectId) {
     const project = await getDb(db).query.project.findFirst({
@@ -77,7 +81,15 @@ async function reimbursementDestination(
     trade ??= project?.defaultTrade ?? null;
   }
   const targetName = target.displayLabel ?? target.orderId ?? target.shortcode;
-  return { target, targetName, categoryName, projectName, trade };
+  return {
+    target,
+    targetName,
+    categoryId,
+    categoryName,
+    categoryEmoji,
+    projectName,
+    trade,
+  };
 }
 export async function previewFinancialBookingCorrection(
   db: Database,
@@ -140,7 +152,9 @@ export async function previewFinancialBookingCorrection(
   )
     return fail("The original booking allocation changed.");
   let targetName: string;
+  let categoryId: FinancialBookingCorrectionPreview["categoryId"] = null;
   let categoryName: string | null = null;
+  let categoryEmoji: string | null = null;
   let projectName: string | null = null;
   let trade: FinancialBookingCorrectionPreview["trade"] = null;
   let target;
@@ -151,7 +165,15 @@ export async function previewFinancialBookingCorrection(
       row.amount,
       lineage,
     );
-    ({ target, targetName, categoryName, projectName, trade } = destination);
+    ({
+      target,
+      targetName,
+      categoryId,
+      categoryName,
+      categoryEmoji,
+      projectName,
+      trade,
+    } = destination);
   } else {
     target = await getLedgerTransferByShortcode(db, input.action.transferId);
     if (!target) return fail("The selected transfer is no longer live.");
@@ -170,7 +192,9 @@ export async function previewFinancialBookingCorrection(
     ...input,
     snapshot,
     targetName,
+    categoryId,
     categoryName,
+    categoryEmoji,
     projectName,
     trade,
     amount: row.amount,

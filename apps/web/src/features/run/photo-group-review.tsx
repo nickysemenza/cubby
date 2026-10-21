@@ -43,6 +43,7 @@ import { PhotoGrid } from "~/entity/entity-media/photo-grid";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { CategoryLabel } from "~/entity/presentation/category-label";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { useOptimisticDisplayValue } from "~/entity/table/editable-cell";
 import { ProductVariantEvidence } from "~/features/product/product-variant-evidence";
@@ -1366,7 +1367,10 @@ function ExistingProductChanges({
           ) : null}
           {Object.hasOwn(changes, "categoryId") ? (
             <>
-              <p>Before: {current.data.category?.name ?? "None"}</p>
+              <p className="flex flex-wrap items-center gap-1">
+                Before:{" "}
+                <CategoryLabel category={current.data.category ?? null} />
+              </p>
               <WithProductCategorySearch>
                 {({ items, ...search }) => (
                   <Picker

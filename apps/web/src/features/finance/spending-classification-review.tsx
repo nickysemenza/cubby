@@ -14,6 +14,7 @@ import { useId, useState } from "react";
 
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { spendingClassification } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
@@ -178,7 +179,15 @@ function ClassificationReview({
               {
                 id: "category",
                 header: "Category",
-                cell: (row) => row.spendingCategoryName ?? "Unclassified",
+                cell: (row) =>
+                  row.spendingCategoryId ? (
+                    <SpendingCategoryLabel
+                      id={row.spendingCategoryId}
+                      name={row.spendingCategoryName}
+                    />
+                  ) : (
+                    <span className="text-muted-foreground">Unclassified</span>
+                  ),
               },
               {
                 id: "before",

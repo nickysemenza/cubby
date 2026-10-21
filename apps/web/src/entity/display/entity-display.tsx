@@ -96,6 +96,7 @@ import {
   resolutionPolicyFor,
 } from "../fields/field-resolution";
 import { CategoryLabelById } from "../presentation/category-label";
+import { SpendingCategoryLabel } from "../presentation/spending-category-label";
 import { readPathValue } from "../read-path";
 import { compactFieldRendererFor } from "./compact-field-renderers";
 import {
@@ -591,6 +592,10 @@ function referenceLink(
   // category's own list cell (`compactFieldRendererFor`).
   if (compact && routed === "productCategory")
     return <CategoryLabelById id={item.id} />;
+  if (routed === "spendingCategory")
+    return (
+      <SpendingCategoryLabel id={item.id} name={item.name} emoji={item.emoji} />
+    );
   return (
     <EntityRefLink
       variant="chip"

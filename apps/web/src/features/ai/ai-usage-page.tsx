@@ -12,6 +12,7 @@ import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { categoryReference } from "~/entity/presentation/category-reference";
 import RTable from "~/entity/table/table";
 import {
   AiUsageChart,
@@ -222,12 +223,14 @@ export function UsageEntityLink({
   }
 
   return (
-    <EntityRefLink
-      variant="byId"
-      entityKind={row.entityKind}
-      entityId={row.entityId}
-      compact
-    />
+    categoryReference(row.entityKind, row.entityId) ?? (
+      <EntityRefLink
+        variant="byId"
+        entityKind={row.entityKind}
+        entityId={row.entityId}
+        compact
+      />
+    )
   );
 }
 
