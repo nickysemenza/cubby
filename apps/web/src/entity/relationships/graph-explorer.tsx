@@ -418,8 +418,11 @@ export function GraphExplorer({
               counts={model.counts}
               busy={model.busy}
               showSiblings={model.showSiblings}
-              onToggleSiblings={() => model.setShowSiblings((value) => !value)}
-              onCollapseAll={model.collapseAll}
+              onToggleSiblings={model.toggleSiblings}
+              onCollapseAll={() => {
+                clearPath();
+                model.collapseAll();
+              }}
               onMoreBranch={(branch) => void model.more(branch)}
               onToggleBranch={(branch) => {
                 if (
@@ -439,6 +442,7 @@ export function GraphExplorer({
               onSelectEdge={(key) => {
                 setSelectedEdge(key);
                 setInspecting(true);
+                setShowInspector(true);
               }}
               reveal={reveal}
               highlightedEdges={highlightedEdges}

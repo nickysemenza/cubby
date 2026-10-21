@@ -15,6 +15,7 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 
 // Regression boundaries: card money must come from the canonical read, curated
 // context must retain its actual purchase/project evidence, and paths stay links.
@@ -234,6 +235,50 @@ test("a high-degree focus stays readable and expands only the requested branch",
       path: testInfo.outputPath("focused-vendor-expanded.png"),
     });
   await graph
+    .locator('.react-flow__edge:not([data-id^="stem:"])')
+    .first()
+    .press("Enter");
+  await expect(page.getByLabel("Connection evidence")).toBeVisible();
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  let release = () => {};
+  let blocked = false;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/browser/dispatch", async (route) => {
+    if (await unbatchFor(route, ["entity.graph"])) return;
+    if (dispatchesOperation(route.request(), "entity.graph")) {
+      blocked = true;
+      await held;
+    }
+    await route.continue();
+  });
+  try {
+    await graph
+      .getByRole("button", { name: "Load more Purchases", exact: true })
+      .click();
+    await expect.poll(() => blocked).toBe(true);
+    await page
+      .getByRole("button", { name: "Collapse all", exact: true })
+      .click();
+    await expect(page.getByText(/1 visible ·/)).toBeVisible();
+    const response = page.waitForResponse(
+      (value) =>
+        value.status() === 200 &&
+        dispatchesOperation(value.request(), "entity.graph"),
+    );
+    release();
+    await (await response).finished();
+  } finally {
+    release();
+    await page.unroute("**/api/browser/dispatch");
+  }
+  await page.getByRole("button", { name: "Map options", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "Show siblings", exact: true })
+    .click();
+  await expect(page.getByText(/13 visible ·/)).toBeVisible();
+  await graph
     .getByRole("button", { name: "Load more Purchases", exact: true })
     .click();
   await expect(page.getByText(/25 visible ·/)).toBeVisible();
@@ -443,7 +488,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await expect(page).toHaveURL(
     (url) => url.searchParams.get("destination") === `location:${location.id}`,
   );
-  await page.getByRole("button", { name: "Clear path", exact: true }).click();
+  await page.getByRole("button", { name: "Collapse all", exact: true }).click();
   await expect(page).toHaveURL((url) => !url.searchParams.has("destination"));
 
   await gotoAuthenticatedPage(page, `/products/${product.id}`);

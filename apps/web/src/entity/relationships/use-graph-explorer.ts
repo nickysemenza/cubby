@@ -37,6 +37,7 @@ interface ExplorerSession {
   expanded: Set<string>;
   history: { trail: string[]; cursor: number };
   selected: string;
+  showSiblings?: boolean;
 }
 
 export function useGraphExplorer(
@@ -59,7 +60,9 @@ export function useGraphExplorer(
     restored?.counts ?? new Map<string, number>(),
   );
   const [pathEdges, setPathEdges] = useState(new Set<string>());
-  const [showSiblings, setShowSiblings] = useState(false);
+  const [showSiblings, setShowSiblings] = useState(
+    restored?.showSiblings ?? false,
+  );
   const applyPath = useCallback((page?: EntityGraphOutput) => {
     if (page)
       setCached((old) =>
@@ -91,12 +94,22 @@ export function useGraphExplorer(
       expanded,
       history,
       selected,
+      showSiblings,
     };
     queryClient.setQueryData(["graph-workspace", rootKey], snapshot);
     return () => {
       queryClient.setQueryData(["graph-workspace", rootKey], snapshot);
     };
-  }, [queryClient, rootKey, cached, counts, expanded, history, selected]);
+  }, [
+    queryClient,
+    rootKey,
+    cached,
+    counts,
+    expanded,
+    history,
+    selected,
+    showSiblings,
+  ]);
   const data = useMemo(
     () =>
       mergeGraphPages([
@@ -247,6 +260,10 @@ export function useGraphExplorer(
     setErrors(new Map());
   };
   const collapseAll = () => {
+    generation.current++;
+    pending.current.clear();
+    setBusy(new Set());
+    setErrors(new Map());
     setShowSiblings(false);
     setCounts(
       new Map(
@@ -258,6 +275,20 @@ export function useGraphExplorer(
     );
     setPathEdges(new Set());
     select(rootKey);
+  };
+  const toggleSiblings = () => {
+    const next = !showSiblings;
+    const nextCounts = next
+      ? new Map([...counts].filter(([, count]) => count > 0))
+      : counts;
+    setCounts(nextCounts);
+    setShowSiblings(next);
+    if (
+      !projectGraphMap(data, root, nextCounts, pathEdges, next).nodes.some(
+        (node) => graphRefKey(node) === selected,
+      )
+    )
+      select(rootKey);
   };
   const clearPath = () => {
     setPathEdges(new Set());
@@ -290,6 +321,6 @@ export function useGraphExplorer(
     collapse,
     collapseAll,
     showSiblings,
-    setShowSiblings,
+    toggleSiblings,
   };
 }
