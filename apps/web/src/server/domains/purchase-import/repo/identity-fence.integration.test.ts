@@ -21,6 +21,7 @@ import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -486,7 +487,7 @@ describe("member prepare and commit identity fences", () => {
     manufacturer: string;
     aliases?: string[];
   }) {
-    const created = await createProductFixture(
+    const created = await createProductIdentityFixture(
       ctx.db,
       makeProductInput(input),
       ctx.actor,
@@ -807,7 +808,7 @@ describe("purchase import learned product identifiers", () => {
   const ctx = withTestDb();
 
   it("keeps one primary and learns later retailer identifiers as secondaries", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Example imported product" }),
       ctx.actor,
@@ -851,12 +852,12 @@ describe("purchase import learned product identifiers", () => {
   });
 
   it("replays an exact identifier and refuses a different product owner", async () => {
-    const first = await createProductFixture(
+    const first = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "First product" }),
       ctx.actor,
     );
-    const second = await createProductFixture(
+    const second = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Second product" }),
       ctx.actor,

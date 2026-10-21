@@ -43,6 +43,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -148,7 +149,7 @@ describe("reviewed accepted source Product association", () => {
           },
         ],
       });
-      const photographed = await createProductFixture(
+      const photographed = await createProductIdentityFixture(
         db,
         makeProductInput({ name: "Synthetic photographed household item" }),
         actor,
@@ -1581,7 +1582,7 @@ describe("reviewed accepted source Product association", () => {
           })
         : null;
       if (!created) throw new Error("Synthetic bound Product missing");
-      const keep = await createProductFixture(
+      const keep = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Synthetic surviving catalog item" }),
         ctx.actor,
@@ -2230,7 +2231,7 @@ describe("reviewed accepted source Product association", () => {
       if (change === "unknown preparation")
         await w.db.delete(importPreparedLine);
       if (change === "exact Product appears")
-        await createProductFixture(
+        await createProductIdentityFixture(
           ctx.db,
           makeProductInput({ name: "Synthetic household item" }),
           ctx.actor,
@@ -2403,7 +2404,7 @@ describe("reviewed accepted source Product association", () => {
       .update(importSourceOrder)
       .set({ acceptedObservationId: null, originalOrder: null })
       .where(eq(importSourceOrder.id, unknown.id));
-    const sku = await createProductFixture(
+    const sku = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic retained stock" }),
       ctx.actor,

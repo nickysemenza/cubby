@@ -15,7 +15,7 @@ import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { setMemberLoginParty } from "~/server/http/member-login";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -131,12 +131,12 @@ describe("device", () => {
   });
 
   it("clears its hardware when the Product is deleted, and follows a merged product", async () => {
-    const kept = await createProductFixture(
+    const kept = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Kept Phone" }),
       ctx.actor,
     );
-    const merged = await createProductFixture(
+    const merged = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Merged-away Phone" }),
       ctx.actor,

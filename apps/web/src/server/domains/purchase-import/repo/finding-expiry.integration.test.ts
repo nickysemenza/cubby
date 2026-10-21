@@ -12,7 +12,7 @@ import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-im
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -63,7 +63,7 @@ describe("finding expiry", () => {
 
   it("reads exact active findings in a read-only transaction without changing history", async () => {
     const party = await owner();
-    const target = await createProductFixture(
+    const target = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic expiry target" }),
       ctx.actor,
@@ -125,7 +125,7 @@ describe("finding expiry", () => {
 
   it("refuses an expired apply without changing the target or audit, and permits dismiss", async () => {
     const party = await owner();
-    const target = await createProductFixture(
+    const target = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic proposed Product" }),
       ctx.actor,

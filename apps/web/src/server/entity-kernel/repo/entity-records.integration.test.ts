@@ -15,7 +15,7 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -28,7 +28,7 @@ describe("combined entity records", () => {
   const ctx = withTestDb();
   it("evaluates default-list quality and image subplans only for the requested page", async () => {
     for (let i = 0; i < 30; i++) {
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: `Page cost product ${i}` }),
         ctx.actor,
@@ -61,7 +61,7 @@ describe("combined entity records", () => {
       makeLocationInput({ name: "Records roster Alpha" }),
       ctx.actor,
     );
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Records roster Zulu" }),
       ctx.actor,
@@ -139,7 +139,7 @@ describe("combined entity records", () => {
   });
 
   it("filters payload timestamps and removes deleted records from rows and counts", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Records timestamps" }),
       ctx.actor,

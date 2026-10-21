@@ -25,6 +25,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeCookbookExtraction,
   makeExpenseInput,
   makeLocationInput,
@@ -72,7 +73,7 @@ describe("compiled list fields", () => {
       ctx.actor,
     );
     const stock = async (name: string, categoryId: typeof child.output.id) => {
-      const item = await createProductFixture(
+      const item = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name, categoryId }),
         ctx.actor,
@@ -180,7 +181,7 @@ describe("compiled list fields", () => {
       name: string,
       categoryId?: typeof category.output.id,
     ) => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput(categoryId ? { name, categoryId } : { name }),
         ctx.actor,
@@ -293,7 +294,7 @@ describe("compiled list fields", () => {
       name: string,
       categoryId?: typeof clothing.output.id,
     ) => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput(categoryId ? { name, categoryId } : { name }),
         ctx.actor,
@@ -538,7 +539,7 @@ describe("compiled list fields", () => {
     );
     // Bought `bought` units, counted `counted` on the shelf.
     const stocked = async (name: string, bought: number, counted: number) => {
-      const created = await createProductFixture(
+      const created = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name }),
         ctx.actor,
@@ -681,7 +682,7 @@ describe("compiled list fields", () => {
     const basil = await insertWithShortcode(ctx.db, "plant", {
       name: "Compiler basil",
     });
-    const seeds = await createProductFixture(
+    const seeds = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Compiler basil seeds",

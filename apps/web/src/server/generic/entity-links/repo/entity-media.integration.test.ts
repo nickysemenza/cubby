@@ -9,7 +9,7 @@ import { product } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
   insertEntityAttachments,
@@ -34,17 +34,17 @@ describe("entity media public display images", () => {
   };
 
   it("deduplicates public refs and returns explicit nulls for absent or external records", async () => {
-    const pictured = await createProductFixture(
+    const pictured = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Pictured public ref" }),
       ctx.actor,
     );
-    const unpictured = await createProductFixture(
+    const unpictured = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Unpictured public ref" }),
       ctx.actor,
     );
-    const deleted = await createProductFixture(
+    const deleted = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Deleted public ref" }),
       ctx.actor,

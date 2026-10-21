@@ -6,43 +6,37 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-test("tool Flow keeps group order across pagination, jumps to unloaded groups, and reflows around inspection", async ({
+test("tool Flow searches, groups, and opens a real record in inspection", async ({
   page,
 }) => {
   page.setDefaultTimeout(15_000);
-  // Keep the first page below the 500px prefetch margin until a section jump.
-  await page.setViewportSize({ width: 1600, height: 500 });
+  // Page splitting and unloaded-group jumps belong to tool-gallery-page tests;
+  // this journey owns real records, keyboard inspection, search and grouping.
+  await page.setViewportSize({ width: 1600, height: 1000 });
   const prefix = `Tool flow ${Date.now()}`;
   const seededGroups = await seedToolFlowPrerequisite(page, [
     {
       locationName: `${prefix} A workshop`,
       productNames: Array.from(
-        { length: 56 },
+        { length: 2 },
         (_, index) => `${prefix} alpha ${String(index).padStart(2, "0")}`,
       ),
     },
     {
       locationName: `${prefix} B unusually long precision-tool storage heading that must wrap cleanly`,
       productNames: Array.from(
-        { length: 6 },
+        { length: 2 },
         (_, index) => `${prefix} beta ${String(index).padStart(2, "0")}`,
       ),
     },
     {
       locationName: `${prefix} C late shed`,
       productNames: Array.from(
-        { length: 3 },
+        { length: 1 },
         (_, index) => `${prefix} gamma ${String(index).padStart(2, "0")}`,
       ),
     },
   ]);
-  const firstGroup = seededGroups[0];
-  const splitGroup = seededGroups[1];
-  const lateGroup = seededGroups[2];
-  if (!firstGroup || !splitGroup || !lateGroup) {
-    throw new Error("Tool Flow fixture did not create its three groups");
-  }
-
   await gotoAuthenticatedPage(page, `/tools?q=${encodeURIComponent(prefix)}`);
   await page
     .getByRole("group", { name: "Tools view" })
@@ -50,78 +44,12 @@ test("tool Flow keeps group order across pagination, jumps to unloaded groups, a
     .click();
 
   const flow = page.getByTestId("grouped-flow");
-  const firstMarker = flow.locator(
-    `[data-grouped-flow-group="${firstGroup.location.id}"]`,
-  );
-  const splitMarker = flow.locator(
-    `[data-grouped-flow-group="${splitGroup.location.id}"]`,
-  );
-  await expect(firstMarker).toContainText(firstGroup.locationName);
-  await expect(firstMarker).toContainText("56");
-  await expect(splitMarker).toContainText("6");
-  await expect(
-    flow.locator(
-      `[aria-describedby="grouped-flow-group-${splitGroup.location.id}-heading"]`,
-    ),
-  ).toHaveCount(4);
-
-  const packing = await flow.evaluate(
-    (node, ids) => {
-      const marker = node.querySelector<HTMLElement>(
-        `[data-grouped-flow-group="${ids.split}"]`,
-      );
-      const firstItem = node.querySelector<HTMLElement>(
-        `[aria-describedby="grouped-flow-group-${ids.split}-heading"]`,
-      );
-      const firstGroupLastItem = Array.from(
-        node.querySelectorAll<HTMLElement>(
-          `[aria-describedby="grouped-flow-group-${ids.first}-heading"]`,
-        ),
-      ).find((button) => button.textContent?.includes(ids.lastName));
-      if (!marker || !firstItem || !firstGroupLastItem) return null;
-      const markerRect = marker.getBoundingClientRect();
-      const itemRect = firstItem.getBoundingClientRect();
-      const previousRect = firstGroupLastItem.getBoundingClientRect();
-      return {
-        dividerSpansTwoCards: markerRect.width > itemRect.width * 1.8,
-        nextGroupStartsAfterItsDivider: itemRect.top >= markerRect.top,
-        dividerSharesThePreviousPackedRow:
-          Math.abs(markerRect.top - previousRect.top) < 2,
-      };
-    },
-    {
-      first: firstGroup.location.id,
-      split: splitGroup.location.id,
-      lastName: `${prefix} alpha 55`,
-    },
-  );
-  expect(packing).toEqual({
-    dividerSpansTwoCards: true,
-    nextGroupStartsAfterItsDivider: true,
-    dividerSharesThePreviousPackedRow: true,
-  });
+  for (const group of seededGroups) {
+    await expect(
+      flow.getByRole("heading", { name: group.locationName, exact: true }),
+    ).toBeVisible();
+  }
   await expectViewportBounded(page);
-  const lateMarker = flow.locator(
-    `[data-grouped-flow-group="${lateGroup.location.id}"]`,
-  );
-  // Jump before scrolling near the sentinel: otherwise automatic pagination
-  // would load this group and hide a regression in the jump's page fetching.
-  await expect(lateMarker).toHaveCount(0);
-  await page
-    .getByRole("button")
-    .filter({ hasText: lateGroup.locationName })
-    .click();
-  await expect(lateMarker).toBeInViewport();
-  await expect(
-    flow.locator(`[data-grouped-flow-group="${splitGroup.location.id}"]`),
-  ).toHaveCount(1);
-  await expect(
-    flow.locator(
-      `[aria-describedby="grouped-flow-group-${splitGroup.location.id}-heading"]`,
-    ),
-  ).toHaveCount(6);
-  await page.setViewportSize({ width: 1600, height: 1000 });
-  await splitMarker.scrollIntoViewIfNeeded();
 
   const flowBeforeInspection = await flow.boundingBox();
   if (!flowBeforeInspection)

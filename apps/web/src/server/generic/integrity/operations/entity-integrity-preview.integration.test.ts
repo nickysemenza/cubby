@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { listProductComponents } from "~/server/domains/product/repo/product-components";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -14,12 +14,12 @@ describe("entityIntegrity.previewOperation", () => {
   const ctx = withTestDb();
 
   it("returns public attach impacts without writing component links", async () => {
-    const parent = await createProductFixture(
+    const parent = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Preview tool kit" }),
       ctx.actor,
     );
-    const child = await createProductFixture(
+    const child = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Preview battery" }),
       ctx.actor,

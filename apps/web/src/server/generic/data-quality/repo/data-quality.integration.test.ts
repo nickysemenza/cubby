@@ -32,6 +32,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -118,12 +119,12 @@ describe("data quality: list filters, sort and hydration agree", () => {
         (row) => row.key,
       );
     for (let index = 0; index < 64; index++)
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: `Synthetic price catalog ${index}` }),
         TEST_ACTOR,
       );
-    const kit = await createProductFixture(
+    const kit = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic priced kit" }),
       TEST_ACTOR,
@@ -719,7 +720,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
 
   // Retired checks can remain stored until the post-deploy contract migration.
   it("product: ignores retired exceptions during reads and supported exception writes", async () => {
-    const row = await createProductFixture(
+    const row = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic retired-check product",
@@ -758,7 +759,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
   // Failure mode: broadening the presence predicate invalidates accepted
   // external-ID exceptions even though the record still has no identifier.
   it("product: identifier exceptions survive unrelated edits and reopen on evidence", async () => {
-    const row = await createProductFixture(
+    const row = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "DQ identifier exception",

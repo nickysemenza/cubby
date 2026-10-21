@@ -24,6 +24,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -60,7 +61,7 @@ describe("smart Collection live relationships", () => {
       makeLocationInput({ name: "Other shelf" }),
       ctx.actor,
     );
-    const brush = await createProductFixture(
+    const brush = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic brush", tags: ["fits-example"] }),
       ctx.actor,
@@ -114,7 +115,7 @@ describe("smart Collection live relationships", () => {
   });
 
   it("excludes self-placement and deleted rows while deduplicating overlapping roots before pagination", async () => {
-    const vessel = await createProductFixture(
+    const vessel = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic vessel" }),
       ctx.actor,
@@ -193,12 +194,12 @@ describe("smart Collection live relationships", () => {
   });
 
   it("uses each Product's own actual Expense trade, never other purchase lines, and deduplicates purchase context", async () => {
-    const first = await createProductFixture(
+    const first = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Trade brush", tags: ["collection:painting"] }),
       ctx.actor,
     );
-    const second = await createProductFixture(
+    const second = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Electrical accessory" }),
       ctx.actor,
@@ -296,7 +297,7 @@ describe("smart Collection live relationships", () => {
       makeLocationInput({ name: "Paint crate" }),
       ctx.actor,
     );
-    const roller = await createProductFixture(
+    const roller = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic roller" }),
       ctx.actor,
@@ -323,7 +324,7 @@ describe("collection workflow persistence", () => {
   const ctx = withTestDb();
 
   it("creates, reads, unassigns, and reassigns a product collection", async () => {
-    const fixture = await createProductFixture(
+    const fixture = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ tags: ["example-tag"] }),
       ctx.actor,

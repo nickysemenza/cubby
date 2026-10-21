@@ -24,7 +24,7 @@ import {
 } from "~/server/testing/mcp-test-utils";
 import {
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
   makeRecipeInput,
@@ -204,7 +204,7 @@ describe("summary mutation output demand", () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic amount product" }),
       ctx.actor,
@@ -407,7 +407,7 @@ describe("summary mutation output demand", () => {
       { name: "Synthetic summary owner", kind: "member", notes: null },
       ctx.actor,
     );
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic summary ownership product" }),
       ctx.actor,

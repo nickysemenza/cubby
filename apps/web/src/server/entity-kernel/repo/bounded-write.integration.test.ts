@@ -33,6 +33,7 @@ import {
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -236,7 +237,7 @@ describe("bounded entity writes", () => {
   }, 30_000);
 
   it("defers kit conversion invalidation when one component price changes", async () => {
-    const component = await createProductFixture(
+    const component = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic kit component", price: 4 }),
       ctx.actor,
@@ -296,7 +297,7 @@ describe("bounded entity writes", () => {
   });
 
   it("commits a Product rename without rewriting dependent projections", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic canvas cover" }),
       ctx.actor,
@@ -425,7 +426,7 @@ describe("bounded entity writes", () => {
   });
 
   it("coalesces repeated edits into one root wave", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic coalesced product" }),
       ctx.actor,
@@ -452,7 +453,7 @@ describe("bounded entity writes", () => {
   });
 
   it("patches a stored collection without hydrating dependent detail", async () => {
-    const subject = await createProductFixture(
+    const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic collection budget",

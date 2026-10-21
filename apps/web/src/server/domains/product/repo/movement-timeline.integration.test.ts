@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -21,7 +21,7 @@ describe("product movement timeline paging", () => {
 
   const seed = async () => {
     const make = async (name: string, dates: readonly string[]) => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: `Paged timeline ${name}` }),
         ctx.actor,

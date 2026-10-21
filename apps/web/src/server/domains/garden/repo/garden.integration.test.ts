@@ -36,7 +36,7 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import {
   createPlantFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -648,7 +648,7 @@ describe("garden workflows", () => {
       { name: "Source product filter crop" },
       TEST_ACTOR,
     );
-    const seedPacket = await createProductFixture(
+    const seedPacket = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Source product filter seed packet" }),
       TEST_ACTOR,
@@ -685,7 +685,7 @@ describe("garden workflows", () => {
       { name: "Source policy crop" },
       TEST_ACTOR,
     );
-    const foodProduct = await createProductFixture(
+    const foodProduct = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Source policy food",

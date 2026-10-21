@@ -15,7 +15,7 @@ import { createExpense } from "~/server/domains/expense/repo/crud";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -60,17 +60,17 @@ describe("product category hierarchy", () => {
       },
       ctx.actor,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Group product", categoryId: group.output.id }),
       ctx.actor,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Type product", categoryId: type.output.id }),
       ctx.actor,
     );
-    const removed = await createProductFixture(
+    const removed = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Removed product", categoryId: type.output.id }),
       ctx.actor,
@@ -614,7 +614,7 @@ describe("product category hierarchy", () => {
       },
       ctx.actor,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Food evidence category product",
@@ -623,7 +623,7 @@ describe("product category hierarchy", () => {
       }),
       ctx.actor,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "ISBN evidence category product",
@@ -687,7 +687,7 @@ describe("product category hierarchy", () => {
         name: "Household project",
         defaultTrade: "building",
       });
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Food product with inherited trade",

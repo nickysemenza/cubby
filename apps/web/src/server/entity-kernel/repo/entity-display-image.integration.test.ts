@@ -41,7 +41,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createPlantFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeCookbookExtraction,
   makeExpenseInput,
   makeLocationInput,
@@ -67,7 +67,7 @@ describe("entity display image resolver", () => {
   const ctx = withTestDb();
 
   it("keeps images already resolved by a repository list", async () => {
-    const record = await createProductFixture(
+    const record = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic list item" }),
       ctx.actor,
@@ -128,7 +128,7 @@ describe("entity display image resolver", () => {
     });
 
   it("does not reload resolved display representations for duplicate nested references", async () => {
-    const owner = await createProductFixture(
+    const owner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic representation reuse" }),
       ctx.actor,
@@ -228,7 +228,7 @@ describe("entity display image resolver", () => {
   });
 
   it("uses a linked product image for a device without image storage", async () => {
-    const hardware = await createProductFixture(
+    const hardware = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic tablet" }),
       ctx.actor,
@@ -265,7 +265,7 @@ describe("entity display image resolver", () => {
 
   describe("product", () => {
     it("orders displayImages by sortOrder and excludes PDF, missing, and soft-deleted links", async () => {
-      const p = await createProductFixture(
+      const p = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Ordered Product" }),
         ctx.actor,
@@ -310,7 +310,7 @@ describe("entity display image resolver", () => {
     });
 
     it("returns an empty list for a product with no images", async () => {
-      const p = await createProductFixture(
+      const p = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Bare Product" }),
         ctx.actor,
@@ -327,7 +327,7 @@ describe("entity display image resolver", () => {
     });
 
     it("hides label attachments from direct and borrowed covers while keeping items", async () => {
-      const labelledProduct = await createProductFixture(
+      const labelledProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Labelled product" }),
         ctx.actor,
@@ -397,7 +397,7 @@ describe("entity display image resolver", () => {
 
   describe("location", () => {
     it("prefers its own gallery, falling back to the identity product's images", async () => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Shelf SKU" }),
         ctx.actor,
@@ -514,7 +514,7 @@ describe("entity display image resolver", () => {
     });
 
     it("falls back to the linked product's photo when it has no cover", async () => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Shelf Copy" }),
         ctx.actor,
@@ -563,7 +563,7 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
 
-      const older = await createProductFixture(
+      const older = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: "Older Product",
@@ -578,7 +578,7 @@ describe("entity display image resolver", () => {
         sortOrder: 0,
       });
 
-      const newer = await createProductFixture(
+      const newer = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: "Newer Product",
@@ -616,7 +616,7 @@ describe("entity display image resolver", () => {
 
   describe("direct attachments", () => {
     it("preserves file/status metadata and deterministic order while excluding tombstones", async () => {
-      const owner = await createProductFixture(
+      const owner = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Attachment policy product" }),
         ctx.actor,
@@ -787,7 +787,7 @@ describe("entity display image resolver", () => {
 
   describe("wish (borrowed)", () => {
     it("orders candidates' product images in candidate link order", async () => {
-      const pA = await createProductFixture(
+      const pA = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: "Candidate A",
@@ -802,7 +802,7 @@ describe("entity display image resolver", () => {
         sortOrder: 0,
       });
 
-      const pB = await createProductFixture(
+      const pB = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: "Candidate B",
@@ -856,7 +856,7 @@ describe("entity display image resolver", () => {
 
   describe("inventory and expense (borrowed)", () => {
     it("an inventory entry shows its product's images", async () => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Inventoried Product" }),
         ctx.actor,
@@ -893,7 +893,7 @@ describe("entity display image resolver", () => {
     });
 
     it("an expense shows its product's images", async () => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Expensed Product" }),
         ctx.actor,
@@ -930,7 +930,7 @@ describe("entity display image resolver", () => {
       const unrelated = await insertWithShortcode(ctx.db, "project", {
         name: `Unrelated project ${crypto.randomUUID()}`,
       });
-      const purchasedProduct = await createProductFixture(
+      const purchasedProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Synthetic purchased product" }),
         ctx.actor,
@@ -965,7 +965,7 @@ describe("entity display image resolver", () => {
         }),
         ctx.actor,
       );
-      const overriddenProduct = await createProductFixture(
+      const overriddenProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Synthetic override product" }),
         ctx.actor,
@@ -1092,7 +1092,7 @@ describe("entity display image resolver", () => {
     // the only photo surface) — its cover borrows the latest journal entry's
     // first photo, falling back to the seed/source product's.
     it("prefers the newest journal entry's first photo over an older entry's and over the seed product", async () => {
-      const seedPacket = await createProductFixture(
+      const seedPacket = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Planting fallback seed packet" }),
         ctx.actor,
@@ -1165,7 +1165,7 @@ describe("entity display image resolver", () => {
     });
 
     it("falls back to the seed product's photo when there are no journal entries", async () => {
-      const seedPacket = await createProductFixture(
+      const seedPacket = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "No-entry seed packet" }),
         ctx.actor,
@@ -1229,7 +1229,7 @@ describe("entity display image resolver", () => {
 
   describe("resolveEntityDisplayImages", () => {
     it("selects the current ready derivative and honors the original override", async () => {
-      const owner = await createProductFixture(
+      const owner = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Image representation fixture" }),
         ctx.actor,
@@ -1301,7 +1301,7 @@ describe("entity display image resolver", () => {
     });
 
     it("returns only the cover and omits refs with no image", async () => {
-      const withImage = await createProductFixture(
+      const withImage = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Covered" }),
         ctx.actor,
@@ -1320,7 +1320,7 @@ describe("entity display image resolver", () => {
           sortOrder: 1,
         },
       ]);
-      const withoutImage = await createProductFixture(
+      const withoutImage = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Coverless" }),
         ctx.actor,
@@ -1340,7 +1340,7 @@ describe("entity display image resolver", () => {
     });
 
     it("silently omits an unsupported entity type", async () => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Real Entity" }),
         ctx.actor,
@@ -1367,7 +1367,7 @@ describe("entity display image resolver", () => {
     });
 
     it("resolves a mixed batch of several entity types independently", async () => {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Mixed Product" }),
         ctx.actor,
@@ -1408,7 +1408,7 @@ describe("entity display image resolver", () => {
         { name: "Mixed Ingredient" },
         ctx.actor,
       );
-      const ingredientProduct = await createProductFixture(
+      const ingredientProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: "Mixed Ingredient Product",
@@ -1423,7 +1423,7 @@ describe("entity display image resolver", () => {
         sortOrder: 0,
       });
 
-      const wishProduct = await createProductFixture(
+      const wishProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: "Mixed Wish Product",
@@ -1447,7 +1447,7 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
 
-      const invProduct = await createProductFixture(
+      const invProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Mixed Inventory Product" }),
         ctx.actor,
@@ -1473,7 +1473,7 @@ describe("entity display image resolver", () => {
         ctx.actor,
       );
 
-      const expProduct = await createProductFixture(
+      const expProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Mixed Expense Product" }),
         ctx.actor,

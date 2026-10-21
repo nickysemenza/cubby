@@ -9,7 +9,7 @@ import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
 import {
   createInventoryFixture,
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -41,7 +41,7 @@ describe("inventory list location filters", () => {
     return { id: loc.id, entityId: loc.entityId };
   };
   const stockAt = async (name: string, where: { id: string }) => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name }),
       ctx.actor,

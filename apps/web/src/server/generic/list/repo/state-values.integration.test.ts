@@ -52,6 +52,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -82,7 +83,7 @@ describe("state predicates re-declared as values", () => {
       price: number | undefined,
       amount: { value: number; unit: "each" | "g" },
     ) => {
-      const sku = await createProductFixture(
+      const sku = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name, price }),
         ctx.actor,

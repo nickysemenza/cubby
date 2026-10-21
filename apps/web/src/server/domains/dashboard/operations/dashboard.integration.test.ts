@@ -12,7 +12,7 @@ import {
 import { listSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -23,7 +23,7 @@ describe("dashboard count workflow", () => {
   afterEach(() => setCfEnv(undefined));
 
   it("preserves local counts while the USDA release is unavailable", async () => {
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Dashboard test product" }),
       ctx.actor,

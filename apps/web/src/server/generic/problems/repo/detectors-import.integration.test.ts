@@ -9,7 +9,7 @@ import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnos
 import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -42,7 +42,7 @@ describe("SQL-backed finding diagnostic intent", () => {
       userId: ctx.actor.userId,
       name: "Synthetic diagnostic owner",
     });
-    const target = await createProductFixture(
+    const target = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic diagnostic target",

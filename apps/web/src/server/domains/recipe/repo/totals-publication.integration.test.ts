@@ -22,7 +22,7 @@ import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createRecipeFixture,
   makeRecipeInput,
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
   ingredientRef,
 } from "~/server/testing/repo.fixtures";
@@ -57,7 +57,7 @@ describe("recipe totals publication ordering", () => {
       makeRecipeInput({ name: "Synthetic healthy totals" }),
       ctx.actor,
     );
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unrelated embedding failure" }),
       ctx.actor,
@@ -101,7 +101,7 @@ describe("recipe totals publication ordering", () => {
         ctx.db,
         "Synthetic repair ingredient",
       );
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: "Synthetic expense-priced product",
@@ -110,7 +110,7 @@ describe("recipe totals publication ordering", () => {
         }),
         ctx.actor,
       );
-      const other = await createProductFixture(
+      const other = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Synthetic reassigned product", price: null }),
         ctx.actor,

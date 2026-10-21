@@ -58,7 +58,7 @@ import { reconcileDerivedRefreshPage } from "~/server/generic/derived-refresh/re
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { settleDerivedRefreshForDiscovery } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
   createSystemUserFixture,
 } from "~/server/testing/repo.fixtures";
@@ -1219,13 +1219,13 @@ describe("targeted prompt refresh", () => {
   });
 
   it("publishes catalog pairs in bounded transactions with snapshot preparation outside them", async () => {
-    const source = await createProductFixture(
+    const source = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic catalog source" }),
       ctx.actor,
     );
     for (let index = 0; index < 4; index++)
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: `Synthetic catalog candidate ${index}`,
@@ -1286,13 +1286,13 @@ describe("targeted prompt refresh", () => {
   });
 
   it("bounds Product connection publication transactions independently of identity pairs", async () => {
-    const source = await createProductFixture(
+    const source = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic connection source" }),
       ctx.actor,
     );
     for (let index = 0; index < 4; index++)
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: `Synthetic connection candidate ${index}`,

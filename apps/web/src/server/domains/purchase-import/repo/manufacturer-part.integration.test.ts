@@ -15,6 +15,7 @@ import { refreshSearchDocuments } from "~/server/generic/search/repo/search-docu
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -37,7 +38,7 @@ describe("manufacturer_part identity", () => {
   const ctx = withTestDb();
 
   const makeProduct = async (name: string) => {
-    const created = await createProductFixture(
+    const created = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name, manufacturer: MAKER, model: "TEE-100" }),
       ctx.actor,

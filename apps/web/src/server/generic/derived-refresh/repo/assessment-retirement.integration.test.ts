@@ -11,7 +11,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -32,7 +32,7 @@ describe("assessment invalidation boundaries", () => {
   afterEach(() => queue.restore());
 
   it("commits an ordinary edit before retiring its derived assessments", async () => {
-    const subject = await createProductFixture(
+    const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic deferred assessment" }),
       ctx.actor,
@@ -88,7 +88,7 @@ describe("assessment invalidation boundaries", () => {
   });
 
   it("preserves current-basis judgments and rechecks review status on publication", async () => {
-    const subject = await createProductFixture(
+    const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic current assessment" }),
       ctx.actor,
@@ -138,7 +138,7 @@ describe("assessment invalidation boundaries", () => {
   });
 
   it("refuses publication invalidated later inside the same outer transaction", async () => {
-    const subject = await createProductFixture(
+    const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic final-state fence" }),
       ctx.actor,

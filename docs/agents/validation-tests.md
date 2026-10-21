@@ -35,6 +35,13 @@ from repeatedly processing partially created fixture cohorts.
 For a mixed-entity prerequisite graph, use `createFixtureGraph` with its supplied
 kernel writer. It commits the graph and settles projections once; keep fixtures
 with intermediate browser reads outside that transaction.
+Setup that consumes only identities uses `createRepoIdentity` or
+`createProductIdentityFixture`; retain the full-response fixture when its
+returned fields are under test. Validation, audit, financial allocations and
+publication still execute; unused presentation hydration does not.
+Reconcile derived inputs once after a mutation boundary before reading several
+fingerprints of that same state, rather than repeating a full reconciliation
+for each read.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.

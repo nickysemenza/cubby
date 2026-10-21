@@ -18,7 +18,7 @@ import {
 } from "@cubby/shared/ai/models";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -154,7 +154,7 @@ const record = (
   );
 
 const card = async (ctx: Ctx) => {
-  const owner = await createRepoEntity(ctx, "ledgerParty", {
+  const owner = await createRepoIdentity(ctx, "ledgerParty", {
     name: "Synthetic statement owner",
     kind: "member",
   });
@@ -165,7 +165,7 @@ const card = async (ctx: Ctx) => {
       name: "Synthetic statement spending",
     },
   );
-  return createRepoEntity(ctx, "financialAccount", {
+  return createRepoIdentity(ctx, "financialAccount", {
     name: "Synthetic Card",
     ledgerPartyId: owner.output.id,
     provisional: false,
@@ -387,7 +387,7 @@ describe("statement Transaction suggestions", () => {
   // makes every bulk-built suggestion fail as stale.
   it("builds a page of charges exactly as it builds each one alone", async () => {
     const account = (await card(ctx)).output;
-    await createRepoEntity(ctx, "financialAccount", {
+    await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic Debit",
       identity: {
         kind: "bank_account",
@@ -402,7 +402,7 @@ describe("statement Transaction suggestions", () => {
         },
       ],
     });
-    await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -413,7 +413,7 @@ describe("statement Transaction suggestions", () => {
       sourceRefs: [],
     });
     for (const day of ["2026-04-28", "2026-04-29", "2026-04-30"])
-      await createRepoEntity(ctx, "financialTransaction", {
+      await createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.id,
         kind: "purchase",
         status: "pending",
@@ -588,7 +588,7 @@ describe("statement Transaction suggestions", () => {
   it("offers an attach across descriptors and only creates after the candidate is rejected", async () => {
     const account = (await card(ctx)).output;
     const existing = (
-      await createRepoEntity(ctx, "financialTransaction", {
+      await createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.id,
         kind: "purchase",
         status: "posted",
@@ -628,7 +628,7 @@ describe("statement Transaction suggestions", () => {
     await generate(ctx);
     const [suggestion] = await suggestions(ctx);
     // A new transaction appears nearby without the ref: the proposal is stale.
-    await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -1025,7 +1025,7 @@ describe("statement Transaction suggestions", () => {
   // Matching statement labels must not replace the attach target's actual kind.
   it("keeps an attach to a non-spending transaction out of clean booking despite matching statement labels", async () => {
     const account = (await card(ctx)).output;
-    await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "account_transfer",
       status: "posted",
@@ -1056,7 +1056,7 @@ describe("statement Transaction suggestions", () => {
   // the apply step checks.
   it("labels attach candidates and lets a confident same-charge attach go in bulk", async () => {
     const account = (await card(ctx)).output;
-    await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -1216,7 +1216,7 @@ describe("statement Transaction suggestions", () => {
       try {
         const account = (await card(ctx)).output;
         for (let index = 0; index < 5; index++)
-          await createRepoEntity(ctx, "financialTransaction", {
+          await createRepoIdentity(ctx, "financialTransaction", {
             accountId: account.id,
             kind: "purchase",
             status: "posted",
@@ -1251,7 +1251,7 @@ describe("statement Transaction suggestions", () => {
         expect(outcome.next).not.toBeNull();
         expect(outcome.labelled).toBe(0);
         if (addCandidate)
-          await createRepoEntity(ctx, "financialTransaction", {
+          await createRepoIdentity(ctx, "financialTransaction", {
             accountId: account.id,
             kind: "purchase",
             status: "posted",
@@ -1401,7 +1401,7 @@ describe("statement Transaction suggestions", () => {
     "retires labels when %s model inputs change",
     async (changed) => {
       const account = (await card(ctx)).output;
-      await createRepoEntity(ctx, "financialTransaction", {
+      await createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.id,
         kind: "purchase",
         status: "posted",
@@ -1430,7 +1430,7 @@ describe("statement Transaction suggestions", () => {
           { fingerprint: "synthetic-changed-subject" },
         );
       } else {
-        await createRepoEntity(ctx, "financialTransaction", {
+        await createRepoIdentity(ctx, "financialTransaction", {
           accountId: account.id,
           kind: "purchase",
           status: "posted",
@@ -1542,7 +1542,7 @@ describe("statement Transaction suggestions", () => {
   it("fans out every candidate identity decision in one charge", async () => {
     const account = (await card(ctx)).output;
     for (let index = 0; index < 8; index++)
-      await createRepoEntity(ctx, "financialTransaction", {
+      await createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.id,
         kind: "purchase",
         status: "posted",
@@ -1936,7 +1936,7 @@ describe("statement Transaction suggestions", () => {
     async ({ failure, resolution }) => {
       await enableStatementAttach(ctx);
       const account = (await card(ctx)).output;
-      await createRepoEntity(ctx, "financialTransaction", {
+      await createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.id,
         kind: "purchase",
         status: "posted",
@@ -2275,7 +2275,7 @@ describe("statement Transaction suggestions", () => {
     await generate(ctx);
     const [suggestion] = await suggestions(ctx);
     const [row] = (await listStatementRows(ctx.db, {})).data;
-    await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -2551,7 +2551,7 @@ describe("statement Transaction suggestions", () => {
   it("leaves a money move labelled clean by an earlier rule out of Accept clean", async () => {
     const account = (await card(ctx)).output;
     // A clean attach beside it: its create alternative never decides it.
-    await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -2616,15 +2616,15 @@ describe("statement Transaction suggestions", () => {
   // accepted without its LedgerTransfer; a named own account makes a move
   // clean before its opposite leg is seen.
   it("reads a cash-out naming an own balance account as a transfer", async () => {
-    const member = await createRepoEntity(ctx, "ledgerParty", {
+    const member = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Avery Example",
       kind: "member",
     });
-    const partner = await createRepoEntity(ctx, "ledgerParty", {
+    const partner = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Blake Example",
       kind: "member",
     });
-    await createRepoEntity(ctx, "financialAccount", {
+    await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic Checking",
       identity: {
         kind: "bank_account",
@@ -2640,12 +2640,12 @@ describe("statement Transaction suggestions", () => {
         },
       ],
     });
-    const wallet = await createRepoEntity(ctx, "financialAccount", {
+    const wallet = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic PayFriend",
       identity: { kind: "stored_value", provider: "PayFriend" },
       ledgerPartyId: member.output.id,
     });
-    const partnerWallet = await createRepoEntity(ctx, "financialAccount", {
+    const partnerWallet = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic SplitPay",
       identity: { kind: "stored_value", provider: "SplitPay" },
       ledgerPartyId: partner.output.id,
@@ -2690,7 +2690,7 @@ describe("statement Transaction suggestions", () => {
   // Failure mode: a payment-app payee whose note reads like a merchant is
   // labelled a business and bulk-accepted.
   it("holds a payment-app payment back on the label alone", async () => {
-    await createRepoEntity(ctx, "financialAccount", {
+    await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic PayFriend",
       identity: { kind: "stored_value", provider: "PayFriend" },
       sourceAliases: [
@@ -2729,7 +2729,7 @@ describe("statement Transaction suggestions", () => {
   it("keys merchant history on direction for a benefit credit", async () => {
     const account = (await card(ctx)).output;
     const prior = (amount: number, postedDate: string) =>
-      createRepoEntity(ctx, "financialTransaction", {
+      createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.id,
         kind: amount > 0 ? "purchase" : "adjustment",
         status: "posted",
@@ -2790,7 +2790,7 @@ describe("statement Transaction suggestions", () => {
       kind: FinancialTransactionKind,
       postedDate: string,
     ) =>
-      createRepoEntity(ctx, "financialTransaction", {
+      createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.id,
         kind,
         status: "posted",

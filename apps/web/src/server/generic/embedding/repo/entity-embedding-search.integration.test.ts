@@ -20,6 +20,7 @@ import {
 import { findRelatedSearchCandidates } from "~/server/generic/search/service/search.service";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -141,7 +142,7 @@ describe("validated semantic candidates", () => {
     const config = getSemanticEmbeddingConfig();
     const seeded = [];
     for (let position = 0; position < 4; position++) {
-      const entity = await createProductFixture(
+      const entity = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: `Synthetic ranked candidate ${position}` }),
         ctx.actor,
@@ -190,7 +191,7 @@ describe("validated semantic candidates", () => {
       }),
     );
     const config = getSemanticEmbeddingConfig();
-    const entity = await createProductFixture(
+    const entity = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic live semantic hit" }),
       ctx.actor,
@@ -235,7 +236,7 @@ describe("validated semantic candidates", () => {
   });
 
   it("reports incomplete when the seed has never been embedded", async () => {
-    const entity = await createProductFixture(
+    const entity = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic missing seed" }),
       ctx.actor,

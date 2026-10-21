@@ -9,7 +9,7 @@ import {
   getVendorByID,
 } from "~/server/domains/vendor/repo/vendor";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -42,7 +42,7 @@ describe("financial transaction itemization verdict", () => {
       ctx.db,
       await findOrCreateVendor(ctx.db, "Itemization Vendor"),
     );
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Itemization test good" }),
       ctx.actor,

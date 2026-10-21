@@ -14,6 +14,7 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import {
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -111,7 +112,7 @@ describe("receiving context", () => {
   });
 
   it("serves the receiving defaults from the Product's own expectedQuantity and live stock", async () => {
-    const unique = await createProductFixture(
+    const unique = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic heirloom clock",

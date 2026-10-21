@@ -17,7 +17,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 const ctx = withTestDb();
@@ -31,7 +31,7 @@ it("keeps purchase evidence bounded against a large unrelated mailbox", async ()
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic supplier",
   });
-  const item = await createProductFixture(
+  const item = await createProductIdentityFixture(
     ctx.db,
     makeProductInput({ name: "Synthetic tool" }),
     ctx.actor,

@@ -50,7 +50,10 @@ import {
 } from "../domains/ingredient/repo/crud";
 import { createInventoryEntry } from "../domains/inventory/repo/crud";
 import { createLocation } from "../domains/location/repo/crud";
-import { createProduct } from "../domains/product/repo/crud";
+import {
+  createProduct,
+  createProductRecord,
+} from "../domains/product/repo/crud";
 import { createRecipe } from "../domains/recipe/repo/crud";
 import type { CookbookImportContext } from "../domains/recipe/repo/import-recipe-convert";
 import { resolveLiveShortcode } from "../generic/shortcode/repo/shortcode-resolver";
@@ -145,13 +148,12 @@ const retainEntityId =
     return { ...output, entityId: parseEntityId(entity, resolvedId) };
   };
 
-/** Resolves a public ingredient id before handing off to `createProduct`. */
-const createProductWithResolvedIngredient = async (
+/** Public fixture references enter the UUID-only repository boundary here. */
+const resolveProductFixtureInput = async (
   db: Database,
   data: Omit<ProductCreateInput, "ingredientId"> & {
     ingredientId?: string | null;
   },
-  actor: ActorContext,
 ) => {
   const rawIngredientId = data.ingredientId ?? null;
   const resolvedIngredientId = rawIngredientId?.startsWith("ING-")
@@ -166,21 +168,39 @@ const createProductWithResolvedIngredient = async (
   if (data.growsPlantId && !growsPlantId) {
     throw new Error(`fixture: growing plant ${data.growsPlantId} not found`);
   }
-  return createProduct(
-    db,
-    {
-      ...data,
-      categoryId: data.categoryId
-        ? await resolveLiveShortcode(db, data.categoryId, "productCategory")
-        : null,
-      growsPlantId: growsPlantId ? parseEntityId("plant", growsPlantId) : null,
-      ingredientId: resolvedIngredientId
-        ? parseEntityId("ingredient", resolvedIngredientId)
-        : null,
-    },
-    actor,
-  );
+  return {
+    ...data,
+    categoryId: data.categoryId
+      ? await resolveLiveShortcode(db, data.categoryId, "productCategory")
+      : null,
+    growsPlantId: growsPlantId ? parseEntityId("plant", growsPlantId) : null,
+    ingredientId: resolvedIngredientId
+      ? parseEntityId("ingredient", resolvedIngredientId)
+      : null,
+  };
 };
+
+const createProductWithResolvedIngredient = async (
+  db: Database,
+  data: Parameters<typeof resolveProductFixtureInput>[1],
+  actor: ActorContext,
+) => createProduct(db, await resolveProductFixtureInput(db, data), actor);
+
+/** Setup-only Product writes keep every domain effect without loading a detail response. */
+export async function createProductIdentityFixture(
+  db: Database,
+  data: Parameters<typeof resolveProductFixtureInput>[1],
+  actor: ActorContext,
+) {
+  const created = await createProductRecord(
+    db,
+    await resolveProductFixtureInput(db, data),
+    actor,
+    undefined,
+    async (_tx, row) => ({ id: parseShortcodeFor("product", row.shortcode) }),
+  );
+  return { ...created.output, entityId: created.entityId };
+}
 
 /**
  * Create a product for a repo integration test while retaining both sides of

@@ -26,7 +26,7 @@ import {
 import { findReferentialLivenessViolations } from "~/server/generic/problems/repo/detectors-integrity";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -466,7 +466,7 @@ describe("spending category stock tracking", () => {
       vendorId: shop.id,
       date: "2026-09-03",
     });
-    const apples = await createProductFixture(
+    const apples = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic apples", stockTracked: null }),
       TEST_ACTOR,

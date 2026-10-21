@@ -63,6 +63,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -915,7 +916,7 @@ describe("inventory ownership mutations", () => {
       createSubject("Filter inherited"),
       createSubject("Filter unassigned"),
     ]);
-    const unstocked = await createProductFixture(
+    const unstocked = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Filter unstocked product" }),
       TEST_ACTOR,

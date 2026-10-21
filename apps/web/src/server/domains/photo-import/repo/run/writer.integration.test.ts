@@ -26,7 +26,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   createImageFixture,
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -232,7 +232,7 @@ describe("commitPhotoGroup", () => {
     const run = await seedRun(party);
     const images = await seedImages(1);
     await seedTargets(run.id, images);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic Trail Shirt — Blue, Medium",
@@ -284,7 +284,7 @@ describe("commitPhotoGroup", () => {
     const run = await seedRun(party);
     const images = await seedImages(1);
     await seedTargets(run.id, images);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic Identity Shirt — Green, Large",
@@ -364,7 +364,7 @@ describe("commitPhotoGroup", () => {
     const run = await seedRun(party);
     const images = await seedImages(1);
     await seedTargets(run.id, images);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Existing Hiking Boots" }),
       ctx.actor,
@@ -517,7 +517,7 @@ describe("commitPhotoGroup", () => {
     const run = await seedRun(party);
     const images = await seedImages(1);
     await seedTargets(run.id, images);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Green Rain Boots" }),
       ctx.actor,
@@ -557,7 +557,7 @@ describe("commitPhotoGroup", () => {
     const run = await seedRun(party);
     const images = await seedImages(1);
     await seedTargets(run.id, images);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Unidentifiable Item" }),
       ctx.actor,
@@ -601,7 +601,7 @@ describe("commitPhotoGroup", () => {
     const run = await seedRun(party);
     const images = await seedImages(2);
     await seedTargets(run.id, images);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Two-Group Sneakers" }),
       ctx.actor,
@@ -687,7 +687,7 @@ describe("commitPhotoGroup", () => {
     const run = await seedRun(party);
     const images = await seedImages(1);
     await seedTargets(run.id, images);
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Canvas work boot" }),
       ctx.actor,

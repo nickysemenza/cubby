@@ -24,6 +24,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -207,7 +208,7 @@ describe("explicit purchase acquisition", () => {
 
   it("retains confirmation when duplicate purchase links collide in a product merge", async () => {
     const { order, item } = await seed();
-    const keeper = await createProductFixture(
+    const keeper = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Acquisition survivor" }),
       ctx.actor,
@@ -281,7 +282,7 @@ describe("explicit purchase acquisition", () => {
       { kind: "acquired", cost: 12, quantity: 1, provenanceOnly: false },
     ]);
     expect(result.summary.spent).toBe(12);
-    const component = await createProductFixture(
+    const component = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Acquisition component" }),
       ctx.actor,

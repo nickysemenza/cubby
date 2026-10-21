@@ -10,7 +10,7 @@ import { product } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { requireActor } from "~/server/http/request-context";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -22,7 +22,7 @@ import { createMcpServer } from "./server";
 describe("availability explanations through MCP", () => {
   const ctx = withTestDb("mcp");
   it("accepts, clears, and invalidates the evidence-bound finding", async () => {
-    const saved = await createProductFixture(
+    const saved = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic unbranded container",

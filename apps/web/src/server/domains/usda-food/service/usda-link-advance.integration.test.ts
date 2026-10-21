@@ -10,7 +10,7 @@ import {
 } from "~/server/domains/product/repo/crud";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   createSystemUserFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -48,17 +48,17 @@ describe("advanceProductUsdaLinks", () => {
 
   it("moves superseded links to the current revision and leaves the rest", async () => {
     await createSystemUserFixture(ctx.db);
-    const superseded = await createProductFixture(
+    const superseded = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Sample granola", fdc_id: 9900101 }),
       ctx.actor,
     );
-    const current = await createProductFixture(
+    const current = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Sample oats", fdc_id: 9900200 }),
       ctx.actor,
     );
-    const vanished = await createProductFixture(
+    const vanished = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Sample yogurt", fdc_id: 9900300 }),
       ctx.actor,
@@ -88,7 +88,7 @@ describe("advanceProductUsdaLinks", () => {
 
   it("leaves a link the household changed while the run was looking it up", async () => {
     await createSystemUserFixture(ctx.db);
-    const edited = await createProductFixture(
+    const edited = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Sample granola", fdc_id: 9900101 }),
       ctx.actor,

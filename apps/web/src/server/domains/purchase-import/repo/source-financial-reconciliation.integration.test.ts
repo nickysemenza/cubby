@@ -24,7 +24,7 @@ import {
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -1214,7 +1214,7 @@ describe("accepted source financial reconciliation", () => {
 
   it("reuses an unlinked item Expense after explicit review without adding spending", async () => {
     const { database } = await world();
-    const good = await createProductFixture(
+    const good = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic admission pass" }),
       ctx.actor,

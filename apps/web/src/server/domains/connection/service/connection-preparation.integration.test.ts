@@ -39,6 +39,7 @@ import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   createIngredientFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -142,7 +143,7 @@ describe("connection preparation and publication authority", () => {
         },
       }),
     );
-    const target = await createProductFixture(
+    const target = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic Acme Driver", manufacturer: "Acme" }),
       ctx.actor,
@@ -340,7 +341,7 @@ describe("connection preparation and publication authority", () => {
   });
 
   it("refuses an acquisition candidate assigned to another Product while subsequent inference is pending", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic basil powder",
@@ -348,7 +349,7 @@ describe("connection preparation and publication authority", () => {
       }),
       ctx.actor,
     );
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic unrelated socket",

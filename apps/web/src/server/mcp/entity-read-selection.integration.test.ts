@@ -19,7 +19,7 @@ import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -292,7 +292,7 @@ describe("entity_read field selection", () => {
   // Selection must narrow the published MCP projection, never the raw kernel
   // row: product externalIds child rows carry storage uuids the projection drops.
   it("selects from the published projection, not the raw kernel row", async () => {
-    const created = await createProductFixture(
+    const created = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic selection product" }),
       TEST_ACTOR,
@@ -346,7 +346,7 @@ describe("entity_read field selection", () => {
       fieldResolutions: { stockTracked: { value: false } },
     });
 
-    const created = await createProductFixture(
+    const created = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic array selection product" }),
       TEST_ACTOR,
