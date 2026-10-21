@@ -121,6 +121,19 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   );
   await expect(page.locator("[data-native-workspace]")).toBeVisible();
   await expect(page.locator('[data-app-shell="authenticated"]')).toHaveCount(0);
+  const hostedContext = page.getByRole("region", {
+    name: "Connection context",
+  });
+  await hostedContext
+    .getByRole("button", { name: "Show connection paths", exact: true })
+    .last()
+    .click();
+  await hostedContext
+    .getByRole("link", { name: "All purchase projects", exact: true })
+    .click();
+  await expect(page).toHaveURL(/mode=records/);
+  await page.getByRole("button", { name: "Show map", exact: true }).click();
+  await expect(page).toHaveURL(/mode=map/);
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   const recordLink = page
     .getByLabel("Connection paths")
