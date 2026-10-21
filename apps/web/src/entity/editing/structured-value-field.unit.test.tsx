@@ -112,7 +112,7 @@ describe("StructuredValueField", () => {
       screen.getByRole("button", { name: "Refresh saved snapshot" }),
     );
     expect(screen.getByText(/Removal will be applied on Save/u)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Save$/u }));
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({
