@@ -186,11 +186,7 @@ function ActionsMenu<TData extends RowData>({
  * "Order". Writes the same `sorting` state the column headers do; a cleared
  * sort falls back to the entity's declared default order.
  */
-export function SortMenu<TData extends RowData>({
-  table,
-}: {
-  table: Table<TData>;
-}) {
+function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
   const columns = sortableColumns(table);
   if (columns.length === 0) return null;
   const [active] = table.state.sorting;

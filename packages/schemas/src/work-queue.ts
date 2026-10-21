@@ -241,7 +241,7 @@ export const workQueuePageInput = z.object({
 
 /** Projected values the household queue can section by, ahead of its sort. */
 export const workQueueGroupSchema = z.enum([
-  "entity",
+  "recordType",
   "waitingFor",
   "nextAction",
 ]);

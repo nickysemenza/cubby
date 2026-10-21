@@ -275,7 +275,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     // of the summary and its counts cover the whole filtered set.
     const grouped = await read({
       query: prefix,
-      group: "entity",
+      group: "recordType",
       sort: [{ orderBy: "amount", direction: "desc" }],
     });
     const sections = grouped.meta.groups ?? [];

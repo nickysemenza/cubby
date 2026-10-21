@@ -39,10 +39,12 @@ import {
   workQueueHouseholdInput,
   workQueueKindSchema,
   workQueueSourceSchema,
+  workQueueSortableFields,
   workQueueSortSchema,
   workWaitingForSchema,
   workQueueOutSchema,
   type WorkQueueGap,
+  type WorkQueueGroup,
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER, parseShortcode } from "@cubby/shared";
@@ -129,6 +131,15 @@ const unresolved = workWaitingForSchema.options[2].shape.kind.value;
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
 /** A grouped read's section for rows without a value (no next action). */
 const WORK_QUEUE_NO_GROUP_LABEL = "None";
+/** Each Group by sections on the same value its column sorts by. */
+const GROUP_SORTS = {
+  recordType: "entity",
+  waitingFor: "waitingFor",
+  nextAction: "nextAction",
+} as const satisfies Record<
+  WorkQueueGroup,
+  (typeof workQueueSortableFields)[number]
+>;
 type Candidate = Pick<WorkQueueRow, "source" | "kind" | "nextAction"> & {
   reason: string | SQL;
 };
@@ -904,7 +915,7 @@ async function queryWorkQueue(
   // A grouped read orders by its section first, so loaded rows are a prefix
   // of the summary's sections; an empty value is the trailing no-value section.
   const groupExpression = input.group
-    ? sql`nullif(${sortExpressions[input.group]}, '')`
+    ? sql`nullif(${sortExpressions[GROUP_SORTS[input.group]]}, '')`
     : undefined;
   // Every sort places nulls last in both directions; name and key break ties.
   const orderBy = sql.join(

@@ -287,7 +287,7 @@ const FILTER_FIELDS: readonly FilterBarField[] = [
 
 /** Projected values the server sections by, ahead of the sort. */
 const GROUPS = [
-  { key: "entity", columnId: "entity", label: "Type" },
+  { key: "recordType", columnId: "entity", label: "Type" },
   { key: "waitingFor", columnId: "waitingFor", label: "Waiting for" },
   { key: "nextAction", columnId: "nextAction", label: "Next action" },
 ] as const satisfies readonly {
