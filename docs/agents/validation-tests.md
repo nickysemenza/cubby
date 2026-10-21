@@ -335,7 +335,7 @@ changes the affected layout.
 
 ## Required component-browser tests
 
-The `capability` Vitest project runs the explicitly selected shared list/table
+The `capability` Vitest project runs the explicitly selected shared list/table/explanation
 coverage in `vitest.config.ts`. Production renderers run in headless Chromium
 with the real Tailwind CSS. It is part of `pnpm test` and the existing Auxiliary lane;
 that runner installs Chromium before running the tests. No additional runner

@@ -188,3 +188,26 @@ it("fits populated declared money, count, date and identifier columns", async ()
     "8905",
   );
 });
+
+// SQL quality ordering has its real PostgreSQL owner; the shared control must
+// still emit the declared sort instead of sorting only the current page.
+it("keeps quality beside identity and emits its server sort", async () => {
+  await page.viewport(1440, 900);
+  const state = await mount("/products?view=table");
+  await screen.findByRole("link", { name: productName });
+  const ids = Array.from(
+    document.querySelectorAll("thead th[data-column-id]"),
+    (header) => header.getAttribute("data-column-id"),
+  );
+  expect(ids.indexOf("dataQuality")).toBe(ids.indexOf("name") + 1);
+  fireEvent.click(screen.getByRole("button", { name: "Sort by Quality" }));
+  await waitFor(() =>
+    expect(state.requests.at(-1)).toEqual(
+      expect.objectContaining({
+        sort: expect.arrayContaining([
+          expect.objectContaining({ orderBy: "dataQuality" }),
+        ]),
+      }),
+    ),
+  );
+});

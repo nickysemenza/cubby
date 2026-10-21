@@ -109,6 +109,7 @@ function explicitlySelectsProject(name: string): boolean {
 const requiredCapabilityTests = [
   "src/lib/test/browser-harness.preview.test.tsx",
   "src/entity/entity-list/list-capabilities.preview.test.tsx",
+  "src/entity/fields/field-explanation.preview.test.tsx",
   "src/ui/data-table/table-density.preview.test.tsx",
   "src/ui/data-table/rendered-column-fit.preview.test.tsx",
 ];
