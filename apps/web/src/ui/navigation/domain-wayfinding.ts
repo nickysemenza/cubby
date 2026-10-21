@@ -6,6 +6,21 @@ import {
   WAYFINDING_DOMAIN_PRESENTATION,
 } from "@cubby/schemas/entity-summary";
 
+/** Identity hues never replace status tones or active-route treatment. */
+const DOMAIN_ICON_CLASSES = {
+  cook: "text-category-4",
+  pantry: "text-category-3",
+  plan: "text-category-5",
+  house: "text-category-7",
+  finance: "text-category-1",
+} satisfies Record<WayfindingDomain, string>;
+
+export function domainIconClass(
+  domain: WayfindingDomain | null | undefined,
+): string {
+  return domain ? DOMAIN_ICON_CLASSES[domain] : "text-muted-foreground";
+}
+
 /** The stable wayfinding families used by the Field Guide shell. */
 export type { WayfindingDomain };
 

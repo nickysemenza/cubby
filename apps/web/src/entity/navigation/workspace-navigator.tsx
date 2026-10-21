@@ -23,6 +23,7 @@ import {
   mobileHouseholdItems,
   type NavGroup,
   type NavItem,
+  navIconClass,
   primaryNavGroups,
   settingsNavItem,
   workspaceUtilitySections,
@@ -88,7 +89,10 @@ function NavigatorLink({
       )}
       aria-current={active ? "page" : undefined}
     >
-      <Icon className="size-3.5 shrink-0" aria-hidden />
+      <Icon
+        className={cn("size-3.5 shrink-0", navIconClass(item))}
+        aria-hidden
+      />
       <span className="min-w-0 flex-1 break-words">{item.label}</span>
       {item.entity && <NavigationCountBadge entity={item.entity} />}
       {section && (
@@ -114,7 +118,10 @@ function GroupDisclosure({
     <Disclosure
       summary={
         <span className="inline-flex items-center gap-2">
-          <Icon className="size-3.5 text-foreground" aria-hidden="true" />
+          <Icon
+            className={cn("size-3.5", navIconClass(group))}
+            aria-hidden="true"
+          />
           {group.label}
         </span>
       }

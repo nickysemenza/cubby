@@ -22,7 +22,12 @@ import { useMemo } from "react";
 
 import { entities } from "~/entity/entities";
 
-import type { WayfindingDomain } from "../../ui/navigation/domain-wayfinding";
+import {
+  domainForEntity,
+  domainForRoute,
+  domainIconClass,
+  type WayfindingDomain,
+} from "../../ui/navigation/domain-wayfinding";
 import { activityViews, recordViews } from "./application-views";
 
 /** A navigable destination. `to` is typed against the generated route tree. */
@@ -53,6 +58,14 @@ export type NavGroup = {
 };
 
 type NavNode = NavItem | NavGroup;
+
+/** Route and entity destinations share the same identity hues on every shell. */
+export function navIconClass(node: NavItem | NavGroup): string {
+  if ("children" in node) return domainIconClass(node.domain);
+  return node.entity
+    ? domainIconClass(domainForEntity(node.entity))
+    : domainIconClass(domainForRoute(node.to ?? "/"));
+}
 
 export const isNavGroup = (node: NavNode): node is NavGroup =>
   "children" in node;

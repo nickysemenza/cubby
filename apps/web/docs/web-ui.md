@@ -36,7 +36,7 @@ both `:root` and `@theme inline` mirrors. Use `size-N` icon sizing (inline/nav
 `size-3.5`, card/tile `size-5`) and the `Badge` primitive for categorical chips.
 A declared enum field renders as an `EnumPill` through one roster: the
 option's compiled `role` picks `StatusValue` (glyph, tone surface, full ink)
-or `CategoryValue` (neutral chip, glyph tinted with the option color), and
+or `CategoryValue` (quiet option-tinted surface, foreground label, colored glyph), and
 booleans render as `BooleanValue` (check / muted dash). The roster is
 `enumFieldOptions`/`enumFieldLabel` (`apps/web/src/entity/display/enum-field-display.tsx`), on
 every surface — generic list cell, embedded relation table, detail value, hero

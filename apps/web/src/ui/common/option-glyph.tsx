@@ -41,6 +41,166 @@ const EAGER = new Map<string, Icon>(
  */
 const LAZY = new Map<string, () => Promise<Icon>>(
   Object.entries({
+    ArrowBendDownRight: () =>
+      import("@phosphor-icons/react/dist/csr/ArrowBendDownRight").then(
+        (m) => m.ArrowBendDownRightIcon,
+      ),
+    ArrowClockwise: () =>
+      import("@phosphor-icons/react/dist/csr/ArrowClockwise").then(
+        (m) => m.ArrowClockwiseIcon,
+      ),
+    ArrowCounterClockwise: () =>
+      import("@phosphor-icons/react/dist/csr/ArrowCounterClockwise").then(
+        (m) => m.ArrowCounterClockwiseIcon,
+      ),
+    ArrowsLeftRight: () =>
+      import("@phosphor-icons/react/dist/csr/ArrowsLeftRight").then(
+        (m) => m.ArrowsLeftRightIcon,
+      ),
+    Bag: () =>
+      import("@phosphor-icons/react/dist/csr/Bag").then((m) => m.BagIcon),
+    Bank: () =>
+      import("@phosphor-icons/react/dist/csr/Bank").then((m) => m.BankIcon),
+    Basket: () =>
+      import("@phosphor-icons/react/dist/csr/Basket").then((m) => m.BasketIcon),
+    Bed: () =>
+      import("@phosphor-icons/react/dist/csr/Bed").then((m) => m.BedIcon),
+    Carrot: () =>
+      import("@phosphor-icons/react/dist/csr/Carrot").then((m) => m.CarrotIcon),
+    Code: () =>
+      import("@phosphor-icons/react/dist/csr/Code").then((m) => m.CodeIcon),
+    Coffee: () =>
+      import("@phosphor-icons/react/dist/csr/Coffee").then((m) => m.CoffeeIcon),
+    Cookie: () =>
+      import("@phosphor-icons/react/dist/csr/Cookie").then((m) => m.CookieIcon),
+    CreditCard: () =>
+      import("@phosphor-icons/react/dist/csr/CreditCard").then(
+        (m) => m.CreditCardIcon,
+      ),
+    CurrencyDollar: () =>
+      import("@phosphor-icons/react/dist/csr/CurrencyDollar").then(
+        (m) => m.CurrencyDollarIcon,
+      ),
+    Desktop: () =>
+      import("@phosphor-icons/react/dist/csr/Desktop").then(
+        (m) => m.DesktopIcon,
+      ),
+    DeviceMobile: () =>
+      import("@phosphor-icons/react/dist/csr/DeviceMobile").then(
+        (m) => m.DeviceMobileIcon,
+      ),
+    Envelope: () =>
+      import("@phosphor-icons/react/dist/csr/Envelope").then(
+        (m) => m.EnvelopeIcon,
+      ),
+    Eye: () =>
+      import("@phosphor-icons/react/dist/csr/Eye").then((m) => m.EyeIcon),
+    EyeSlash: () =>
+      import("@phosphor-icons/react/dist/csr/EyeSlash").then(
+        (m) => m.EyeSlashIcon,
+      ),
+    FileArrowDown: () =>
+      import("@phosphor-icons/react/dist/csr/FileArrowDown").then(
+        (m) => m.FileArrowDownIcon,
+      ),
+    Gift: () =>
+      import("@phosphor-icons/react/dist/csr/Gift").then((m) => m.GiftIcon),
+    Globe: () =>
+      import("@phosphor-icons/react/dist/csr/Globe").then((m) => m.GlobeIcon),
+    Hand: () =>
+      import("@phosphor-icons/react/dist/csr/Hand").then((m) => m.HandIcon),
+    Handshake: () =>
+      import("@phosphor-icons/react/dist/csr/Handshake").then(
+        (m) => m.HandshakeIcon,
+      ),
+    Image: () =>
+      import("@phosphor-icons/react/dist/csr/Image").then((m) => m.ImageIcon),
+    Key: () =>
+      import("@phosphor-icons/react/dist/csr/Key").then((m) => m.KeyIcon),
+    Leaf: () =>
+      import("@phosphor-icons/react/dist/csr/Leaf").then((m) => m.LeafIcon),
+    Link: () =>
+      import("@phosphor-icons/react/dist/csr/Link").then((m) => m.LinkIcon),
+    LinkBreak: () =>
+      import("@phosphor-icons/react/dist/csr/LinkBreak").then(
+        (m) => m.LinkBreakIcon,
+      ),
+    ListBullets: () =>
+      import("@phosphor-icons/react/dist/csr/ListBullets").then(
+        (m) => m.ListBulletsIcon,
+      ),
+    Lock: () =>
+      import("@phosphor-icons/react/dist/csr/Lock").then((m) => m.LockIcon),
+    MagnifyingGlass: () =>
+      import("@phosphor-icons/react/dist/csr/MagnifyingGlass").then(
+        (m) => m.MagnifyingGlassIcon,
+      ),
+    MapPin: () =>
+      import("@phosphor-icons/react/dist/csr/MapPin").then((m) => m.MapPinIcon),
+    Money: () =>
+      import("@phosphor-icons/react/dist/csr/Money").then((m) => m.MoneyIcon),
+    NotePencil: () =>
+      import("@phosphor-icons/react/dist/csr/NotePencil").then(
+        (m) => m.NotePencilIcon,
+      ),
+    Percent: () =>
+      import("@phosphor-icons/react/dist/csr/Percent").then(
+        (m) => m.PercentIcon,
+      ),
+    Question: () =>
+      import("@phosphor-icons/react/dist/csr/Question").then(
+        (m) => m.QuestionIcon,
+      ),
+    Receipt: () =>
+      import("@phosphor-icons/react/dist/csr/Receipt").then(
+        (m) => m.ReceiptIcon,
+      ),
+    SkipForward: () =>
+      import("@phosphor-icons/react/dist/csr/SkipForward").then(
+        (m) => m.SkipForwardIcon,
+      ),
+    Storefront: () =>
+      import("@phosphor-icons/react/dist/csr/Storefront").then(
+        (m) => m.StorefrontIcon,
+      ),
+    SunHorizon: () =>
+      import("@phosphor-icons/react/dist/csr/SunHorizon").then(
+        (m) => m.SunHorizonIcon,
+      ),
+    UploadSimple: () =>
+      import("@phosphor-icons/react/dist/csr/UploadSimple").then(
+        (m) => m.UploadSimpleIcon,
+      ),
+    Users: () =>
+      import("@phosphor-icons/react/dist/csr/Users").then((m) => m.UsersIcon),
+    WifiSlash: () =>
+      import("@phosphor-icons/react/dist/csr/WifiSlash").then(
+        (m) => m.WifiSlashIcon,
+      ),
+    FileText: () =>
+      import("@phosphor-icons/react/dist/csr/FileText").then(
+        (m) => m.FileTextIcon,
+      ),
+    Grains: () =>
+      import("@phosphor-icons/react/dist/csr/Grains").then((m) => m.GrainsIcon),
+    OrangeSlice: () =>
+      import("@phosphor-icons/react/dist/csr/OrangeSlice").then(
+        (m) => m.OrangeSliceIcon,
+      ),
+    PencilSimple: () =>
+      import("@phosphor-icons/react/dist/csr/PencilSimple").then(
+        (m) => m.PencilSimpleIcon,
+      ),
+    Pepper: () =>
+      import("@phosphor-icons/react/dist/csr/Pepper").then((m) => m.PepperIcon),
+    SealCheck: () =>
+      import("@phosphor-icons/react/dist/csr/SealCheck").then(
+        (m) => m.SealCheckIcon,
+      ),
+    Warning: () =>
+      import("@phosphor-icons/react/dist/csr/Warning").then(
+        (m) => m.WarningIcon,
+      ),
     AirplaneTilt: () =>
       import("@phosphor-icons/react/dist/csr/AirplaneTilt").then(
         (m) => m.AirplaneTiltIcon,

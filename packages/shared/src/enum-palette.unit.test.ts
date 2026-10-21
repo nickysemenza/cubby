@@ -3,7 +3,8 @@ import { colorizeEnumOptions } from "./enum-palette";
 
 // Failure modes: categories borrowing domain or condition hues, a status roster
 // read as categories (no glyphs), the blanket legacy slate graying out kinds,
-// lost overrides, and changed colors or roles after filtering.
+// missing category glyphs, unknown values looking urgent, lost overrides, and
+// changed colors or roles after filtering.
 describe("shared enum palette", () => {
   it("cycles the category palette for kinds and keeps explicit overrides", () => {
     const options = colorizeEnumOptions([
@@ -21,10 +22,10 @@ describe("shared enum palette", () => {
     expect(options.map((option) => option.color)).toEqual([
       "var(--category-1)",
       "var(--category-2)",
-      "var(--warning)",
+      "var(--neutral-status)",
       "var(--brand-domain-finance)",
     ]);
-    expect(options.every((option) => option.glyph === undefined)).toBe(true);
+    expect(options.every((option) => option.glyph !== undefined)).toBe(true);
     expect(colorizeEnumOptions(options.slice(1))).toEqual(options.slice(1));
   });
 

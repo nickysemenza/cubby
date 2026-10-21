@@ -42,7 +42,10 @@ import { entityListFor } from "~/entity/entity-list";
 import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn } from "~/lib/utils";
-import { domainForEntity } from "~/ui/navigation/domain-wayfinding";
+import {
+  domainForEntity,
+  domainIconClass,
+} from "~/ui/navigation/domain-wayfinding";
 
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import { generatedSortRoster } from "./sortable-fields";
@@ -656,12 +659,12 @@ export type EntityDetailParams = ReturnType<typeof entityDetailParams>;
  * Render an entity's Phosphor icon. Useful for entities where you need
  * dynamic icon selection based on entity type.
  *
- * `colored` asks for an identity mark: domain entities use neutral foreground,
+ * Identity marks use color by default: domain entities use their shared hue,
  * while unclassified entities keep their declared entity tone.
  */
 export const EntityIcon = ({
   entity,
-  colored,
+  colored = true,
   className,
   ...props
 }: { entity: Entity; colored?: boolean } & IconProps) => {
@@ -672,7 +675,7 @@ export const EntityIcon = ({
     <def.phosphorIcon
       {...props}
       className={cn(
-        colored && (domain ? "text-foreground" : def.color.text),
+        colored && (domain ? domainIconClass(domain) : def.color.text),
         className,
       )}
     />
