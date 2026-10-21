@@ -1,4 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { createExpense } from "~/server/domains/expense/repo/crud";
@@ -8,7 +10,7 @@ import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-par
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { createProject } from "~/server/domains/project/repo/crud";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
-import { createTask } from "~/server/domains/task/repo/crud";
+import { createTask, createTaskRead } from "~/server/domains/task/repo/crud";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
 import { createVendorAccount } from "~/server/domains/vendor-account/repo/vendor-account";
 
@@ -57,10 +59,80 @@ type RepoWriters = {
 };
 const writers: RepoWriters = REPO_WRITERS;
 
+const mutationIdentity = z.object({ id: z.string().min(1) });
+
+/** Preserve the writer's validation, audit and publication; omit unused response hydration. */
+function identityWriter<
+  E extends RepoWriterEntity,
+  Args extends unknown[],
+  Result extends { output: unknown },
+>(
+  entity: E,
+  read: (fields: readonly string[], ...args: Args) => Promise<Result>,
+) {
+  return async (...args: Args) => {
+    const result = await read(["id"], ...args);
+    return {
+      ...result,
+      output: {
+        id: parseShortcodeFor(entity, mutationIdentity.parse(result.output).id),
+      },
+    };
+  };
+}
+
+const IDENTITY_WRITERS = {
+  expense: identityWriter("expense", createExpense.read),
+  financialAccount: identityWriter(
+    "financialAccount",
+    createFinancialAccount.read,
+  ),
+  financialTransaction: identityWriter(
+    "financialTransaction",
+    createFinancialTransaction.read,
+  ),
+  ledgerParty: identityWriter("ledgerParty", createLedgerParty.read),
+  productCategory: identityWriter(
+    "productCategory",
+    createProductCategory.read,
+  ),
+  project: identityWriter("project", createProject.read),
+  purchase: identityWriter("purchase", createPurchase.read),
+  task: identityWriter(
+    "task",
+    (fields, db: Database, input: EntityInput<"task">, actor: ActorContext) =>
+      createTaskRead(db, input, actor, fields),
+  ),
+  vendor: identityWriter("vendor", createVendor.read),
+  vendorAccount: identityWriter("vendorAccount", createVendorAccount.read),
+};
+type IdentityWriters = {
+  [K in RepoWriterEntity]: (
+    db: Database,
+    input: EntityInput<K>,
+    actor: ActorContext,
+  ) => ReturnType<(typeof IDENTITY_WRITERS)[K]>;
+};
+const identityWriters: IdentityWriters = IDENTITY_WRITERS;
+
 /** The `{ db, actor }` pair `withTestDb()` hands every integration test. */
 export interface RepoContext {
   db: Database;
   actor: ActorContext;
+}
+
+/** Setup that only consumes a shortcode/UUID does not need a detail response. */
+export function createRepoIdentity<E extends RepoWriterEntity>(
+  context: RepoContext,
+  entity: E,
+  overrides: EntityOverrides<E> = {},
+  opts: BuildOptions = {},
+): ReturnType<(typeof IDENTITY_WRITERS)[E]> {
+  return identityWriters[entity](
+    context.db,
+    buildEntity(entity, overrides, opts),
+    context.actor,
+  );
 }
 
 export function createRepoEntity<E extends RepoWriterEntity>(

@@ -1,6 +1,6 @@
 import { testUserId } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { TEST_USER_ID } from "tooling/test-setup";
@@ -25,7 +25,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   createSystemUserFixture,
   makeCookbookExtraction,
   makeProductInput,
@@ -53,7 +53,7 @@ describe("discovery epoch recovery", () => {
     await activateAiRefresh(ctx.db, "synthetic-positive-discovery", {
       enabled: true,
     });
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic exhausted target" }),
       ctx.actor,
@@ -104,24 +104,24 @@ describe("discovery epoch recovery", () => {
   it.each(["reassign", "sql-reassign", "hard-remove"] as const)(
     "repairs old Purchase adjustment text after principal %s",
     async (operation) => {
-      const project = await createRepoEntity(ctx, "project", {
+      const project = await createRepoIdentity(ctx, "project", {
         name: "Synthetic departed principal project",
         defaultTrade: "other",
       });
-      const vendor = await createRepoEntity(ctx, "vendor", {
+      const vendor = await createRepoIdentity(ctx, "vendor", {
         name: "Synthetic endpoint vendor",
       });
-      const first = await createRepoEntity(ctx, "purchase", {
+      const first = await createRepoIdentity(ctx, "purchase", {
         vendorId: vendor.output.id,
         orderId: "SYNTHETIC-OLD-ENDPOINT",
         defaultProjectId: null,
       });
-      const second = await createRepoEntity(ctx, "purchase", {
+      const second = await createRepoIdentity(ctx, "purchase", {
         vendorId: vendor.output.id,
         orderId: "SYNTHETIC-NEW-ENDPOINT",
         defaultProjectId: null,
       });
-      const principal = await createRepoEntity(ctx, "expense", {
+      const principal = await createRepoIdentity(ctx, "expense", {
         name: "Synthetic departing principal",
         lineKind: "principal",
         trade: "other",
@@ -129,7 +129,7 @@ describe("discovery epoch recovery", () => {
         purchaseId: first.output.id,
         projectId: project.output.id,
       });
-      const tax = await createRepoEntity(ctx, "expense", {
+      const tax = await createRepoIdentity(ctx, "expense", {
         name: "Synthetic retained adjustment",
         lineKind: "tax",
         trade: "other",
@@ -193,22 +193,22 @@ describe("discovery epoch recovery", () => {
   );
 
   it("repairs SQL endpoint changes without traversing unrelated Project members", async () => {
-    const previous = await createRepoEntity(ctx, "project", {
+    const previous = await createRepoIdentity(ctx, "project", {
       name: "Synthetic previous SQL project",
       defaultTrade: "other",
     });
-    const next = await createRepoEntity(ctx, "project", {
+    const next = await createRepoIdentity(ctx, "project", {
       name: "Synthetic next SQL project",
       defaultTrade: "other",
     });
-    const untouched = await createRepoEntity(ctx, "expense", {
+    const untouched = await createRepoIdentity(ctx, "expense", {
       name: "Synthetic independent SQL line",
       lineKind: "principal",
       trade: "other",
       cost: 10,
       projectId: next.output.id,
     });
-    const moved = await createRepoEntity(ctx, "expense", {
+    const moved = await createRepoIdentity(ctx, "expense", {
       name: "Synthetic moved SQL line",
       lineKind: "principal",
       trade: "other",
@@ -244,12 +244,12 @@ describe("discovery epoch recovery", () => {
   }, 30_000);
 
   it("does not recapture unrelated records after an ordinary edit", async () => {
-    const edited = await createProductFixture(
+    const edited = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic changed root" }),
       ctx.actor,
     );
-    const unrelated = await createProductFixture(
+    const unrelated = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic independent root" }),
       ctx.actor,
@@ -323,7 +323,7 @@ describe("discovery epoch recovery", () => {
       .from(derivedDiscoveryPass)
       .where(eq(derivedDiscoveryPass.family, "product"));
     expect(unchanged?.runId).toBe(first.runId);
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic new discovery input" }),
       ctx.actor,

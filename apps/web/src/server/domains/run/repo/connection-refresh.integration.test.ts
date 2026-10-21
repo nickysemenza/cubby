@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -31,7 +31,7 @@ import {
   createInventoryFixture,
   createIngredientFixture,
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -68,7 +68,7 @@ describe("connection discovery roster freshness", () => {
   it.each(["failed", "dispatch_failed", "cancelled"] as const)(
     "returns the %s owner when explicit rediscovery finds its retained work",
     async (outcome) => {
-      const source = await createRepoEntity(ctx, "task", {
+      const source = await createRepoIdentity(ctx, "task", {
         name: "Synthetic recoverable discovery",
         trade: "other",
       });
@@ -124,15 +124,15 @@ describe("connection discovery roster freshness", () => {
   );
   // A page must not scan the same broad target corpus for every source.
   it("shares broad rosters within a batch and refreshes them on the next call", async () => {
-    const first = await createRepoEntity(ctx, "task", {
+    const first = await createRepoIdentity(ctx, "task", {
       name: "Synthetic first batch source",
       trade: "other",
     });
-    const second = await createRepoEntity(ctx, "task", {
+    const second = await createRepoIdentity(ctx, "task", {
       name: "Synthetic second batch source",
       trade: "other",
     });
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic batch target" }),
       ctx.actor,
@@ -143,9 +143,10 @@ describe("connection discovery roster freshness", () => {
       { entityKind: "task", entityId: first.output.id },
       { entityKind: "task", entityId: second.output.id },
     ] as const;
+    await reconcileDerivedRefreshInputs(ctx.db);
     const singles = [];
     for (const source of sources)
-      singles.push(await reconciledSourceFingerprint(ctx.db, source));
+      singles.push(await connectionSourceFingerprint(ctx.db, source));
     const batch = await countTestDbQueries(() =>
       connectionSourceFingerprints(ctx.db, sources),
     );
@@ -168,7 +169,7 @@ describe("connection discovery roster freshness", () => {
     expect(after).not.toEqual(batch.result);
     const current = [];
     for (const source of sources)
-      current.push(await reconciledSourceFingerprint(ctx.db, source));
+      current.push(await connectionSourceFingerprint(ctx.db, source));
     expect(after).toEqual(current);
     await refreshSearchDocument(ctx.db, "product", item.entityId);
     const rebuilt = await connectionSourceFingerprints(ctx.db, sources);
@@ -203,7 +204,7 @@ describe("connection discovery roster freshness", () => {
     expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
   });
   it("revisits Product field inference after an Ingredient alias changes indexed retrieval", async () => {
-    const source = await createProductFixture(
+    const source = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic alias source" }),
       ctx.actor,
@@ -227,11 +228,11 @@ describe("connection discovery roster freshness", () => {
     expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(changed);
   });
   it("includes indexed Product retrieval content for Task field inference", async () => {
-    const source = await createRepoEntity(ctx, "task", {
+    const source = await createRepoIdentity(ctx, "task", {
       name: "Synthetic field retrieval source",
       trade: "other",
     });
-    const target = await createProductFixture(
+    const target = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic indexed target" }),
       ctx.actor,
@@ -249,14 +250,14 @@ describe("connection discovery roster freshness", () => {
   it.each(["expense", "confirmation"] as const)(
     "revisits both acquisition endpoints after their %s acquisition blocker is removed",
     async (blocker) => {
-      const vendor = await createRepoEntity(ctx, "vendor", {
+      const vendor = await createRepoIdentity(ctx, "vendor", {
         name: "Synthetic acquisition supplier",
       });
-      const order = await createRepoEntity(ctx, "purchase", {
+      const order = await createRepoIdentity(ctx, "purchase", {
         vendorId: vendor.output.id,
         notes: "Synthetic acquired tool",
       });
-      const item = await createProductFixture(
+      const item = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Synthetic acquired tool" }),
         ctx.actor,
@@ -267,7 +268,7 @@ describe("connection discovery roster freshness", () => {
       };
       const productRef = { entityKind: "product" as const, entityId: item.id };
       if (blocker === "expense")
-        await createRepoEntity(ctx, "expense", {
+        await createRepoIdentity(ctx, "expense", {
           name: "Synthetic acquired tool",
           cost: 20,
           trade: "electrical",
@@ -283,8 +284,9 @@ describe("connection discovery roster freshness", () => {
       expect(
         await acquisitionPairEligible(ctx.db, item.id, order.output.id),
       ).toBe(false);
-      const before = await reconciledSourceFingerprint(ctx.db, ref);
-      const beforeProduct = await reconciledSourceFingerprint(
+      await reconcileDerivedRefreshInputs(ctx.db);
+      const before = await connectionSourceFingerprint(ctx.db, ref);
+      const beforeProduct = await connectionSourceFingerprint(
         ctx.db,
         productRef,
       );
@@ -301,19 +303,20 @@ describe("connection discovery roster freshness", () => {
       expect(
         await acquisitionPairEligible(ctx.db, item.id, order.output.id),
       ).toBe(true);
-      expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(before);
-      expect(await reconciledSourceFingerprint(ctx.db, productRef)).not.toBe(
+      await reconcileDerivedRefreshInputs(ctx.db);
+      expect(await connectionSourceFingerprint(ctx.db, ref)).not.toBe(before);
+      expect(await connectionSourceFingerprint(ctx.db, productRef)).not.toBe(
         beforeProduct,
       );
     },
   );
   it("advances conservative inventory epochs while ignoring verification-only changes", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic stock subject" }),
       ctx.actor,
     );
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic other stock" }),
       ctx.actor,
@@ -364,7 +367,7 @@ describe("connection discovery roster freshness", () => {
     );
   });
   it("reschedules a completed negative scan for new, changed and retired endpoints", async () => {
-    const source = await createRepoEntity(ctx, "task", {
+    const source = await createRepoIdentity(ctx, "task", {
       name: "Synthetic discovery source",
       trade: "other",
     });
@@ -399,7 +402,7 @@ describe("connection discovery roster freshness", () => {
     });
     expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
 
-    const endpoint = await createProductFixture(
+    const endpoint = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic new endpoint" }),
       ctx.actor,

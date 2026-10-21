@@ -480,7 +480,11 @@ const readTaskMutationOutput = async (
   row: TaskStoredRow,
   fields: readonly string[],
 ): Promise<ListReadRow> => {
-  if (fields.some((field) => field !== "name" && field !== "dataQuality"))
+  if (
+    fields.some(
+      (field) => field !== "id" && field !== "name" && field !== "dataQuality",
+    )
+  )
     return selectListReadFields(await getTaskByID(db, row.id), fields);
   const dataQuality = fields.includes("dataQuality")
     ? (await loadDataQualities(db, "task", [row.id])).get(row.id)

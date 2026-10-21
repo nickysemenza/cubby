@@ -22,7 +22,7 @@ import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createRecipeFixture,
   makeRecipeInput,
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
   ingredientRef,
 } from "~/server/testing/repo.fixtures";
@@ -57,7 +57,7 @@ describe("recipe totals publication ordering", () => {
       makeRecipeInput({ name: "Synthetic healthy totals" }),
       ctx.actor,
     );
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unrelated embedding failure" }),
       ctx.actor,
@@ -94,25 +94,28 @@ describe("recipe totals publication ordering", () => {
     ).rejects.toBeInstanceOf(DerivedInputsChanged);
   });
 
-  it.each(["price edit", "removal", "endpoint reassignment"])(
-    "repairs populated recipe totals after a SQL-only Expense %s",
-    async (change) => {
+  it("repairs independent recipe totals after SQL-only price edits, removals and endpoint reassignment", async () => {
+    const scenarios = [];
+    for (const change of ["price edit", "removal", "endpoint reassignment"]) {
       const ingredient = await findOrCreateIngredient(
         ctx.db,
-        "Synthetic repair ingredient",
+        `Synthetic repair ingredient ${change}`,
       );
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
-          name: "Synthetic expense-priced product",
+          name: `Synthetic expense-priced product ${change}`,
           ingredientId: ingredient.id,
           price: null,
         }),
         ctx.actor,
       );
-      const other = await createProductFixture(
+      const other = await createProductIdentityFixture(
         ctx.db,
-        makeProductInput({ name: "Synthetic reassigned product", price: null }),
+        makeProductInput({
+          name: `Synthetic reassigned product ${change}`,
+          price: null,
+        }),
         ctx.actor,
       );
       const charge = await createRepoEntity(ctx, "expense", {
@@ -127,7 +130,7 @@ describe("recipe totals publication ordering", () => {
       const subject = await createRecipeFixture(
         ctx.db,
         makeRecipeInput({
-          name: "Synthetic expense-priced recipe",
+          name: `Synthetic expense-priced recipe ${change}`,
           sections: [
             {
               ingredients: [
@@ -146,25 +149,32 @@ describe("recipe totals publication ordering", () => {
             where: eq(recipe.id, subject.entityId),
           })
         )?.totals;
-      const repair = async () => {
-        for (let cycle = 0; cycle < 2; cycle++) {
-          await getDb(ctx.db)
-            .update(derivedRefreshCursor)
-            .set({ availableAt: new Date(0) });
-          let done = false;
-          for (let page = 0; page < 1000; page++)
-            if ((await reconcileDerivedRefreshPage(ctx.db)).done) {
-              done = true;
-              break;
-            }
-          expect(done).toBe(true);
-          await drain();
-        }
-      };
-      await drain();
-      await repair();
+      scenarios.push({ change, charge, other, stored });
+    }
+    const repair = async () => {
+      for (let cycle = 0; cycle < 2; cycle++) {
+        await getDb(ctx.db)
+          .update(derivedRefreshCursor)
+          .set({ availableAt: new Date(0) });
+        let done = false;
+        for (let page = 0; page < 1000; page++)
+          if ((await reconcileDerivedRefreshPage(ctx.db)).done) {
+            done = true;
+            break;
+          }
+        expect(done).toBe(true);
+        await drain();
+      }
+    };
+    await drain();
+    await repair();
+    const baselines = [];
+    for (const { stored } of scenarios) {
       const before = await stored();
       expect(before).toMatchObject({ cost: { lower: 10 } });
+      baselines.push(before);
+    }
+    for (const { change, charge, other } of scenarios) {
       const fields =
         change === "price edit"
           ? { cost: 20 }
@@ -175,11 +185,12 @@ describe("recipe totals publication ordering", () => {
         .update(expense)
         .set(fields)
         .where(eq(expense.id, charge.entityId));
-      await repair();
-      expect(await stored()).not.toEqual(before);
-    },
-    30_000,
-  );
+    }
+    await repair();
+    for (const [index, { stored }] of scenarios.entries()) {
+      expect(await stored()).not.toEqual(baselines[index]);
+    }
+  }, 30_000);
 
   it("keeps a newer cache stamp when an older refresh frontier arrives", async () => {
     const subject = await createRecipeFixture(
