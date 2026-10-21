@@ -492,6 +492,8 @@ export function GraphMapCanvas({
           anchors.get(node.id) === graphRefKey(root),
       ),
     });
+  const centerRef = useRef(center);
+  centerRef.current = center;
   const fitFocusRef = useRef(fitFocus);
   fitFocusRef.current = fitFocus;
   useEffect(() => {
