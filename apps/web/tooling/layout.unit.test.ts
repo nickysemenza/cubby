@@ -60,7 +60,7 @@ const MAX_DIRECT_SOURCE_FILES = 40;
 const CROWDED_FOLDERS = {
   "apps/web/src/contracts": 60,
   "apps/web/src/features/recipe": 51,
-  "apps/web/src/lib": 89,
+  "apps/web/src/lib": 88,
   "apps/web/src/server/domains/product/repo": 43,
   "apps/web/src/ui/data-table": 51,
   "apps/web/src/ui/primitives": 45,
