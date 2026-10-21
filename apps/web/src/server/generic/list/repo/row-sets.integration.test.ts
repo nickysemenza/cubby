@@ -7,6 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import { wasm } from "~/lib/wasm";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb } from "~/server/db/helpers";
@@ -36,7 +37,7 @@ import {
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
-import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
+import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -67,23 +68,16 @@ describe("row-set filters", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-  const listed = async (
-    entity: EntityKernelEntity,
-    filters: ListFilterValues,
-  ) =>
-    sorted(
-      z
-        .object({ items: z.array(z.object({ id: z.string() })) })
-        .parse(
-          await executeEntity(context(), {
-            action: "list",
-            entity,
-            filters,
-            pagination: page,
-          }),
-        )
-        .items.map((row) => row.id),
+  const listed = async (entity: ListEntity, filters: ListFilterValues) => {
+    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].base(
+      context(),
+      {
+        filters,
+        pagination: page,
+      },
     );
+    return sorted(pageResult.data.map((row) => row.id));
+  };
   /** The live rows of `table` the retired predicate's SQL selects. */
   const oracle = async (table: string, condition: SQL) =>
     sorted(

@@ -9,7 +9,6 @@ import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, uuidArrayParam } from "~/server/db/helpers";
@@ -31,10 +30,8 @@ import {
   projectCompletionYear,
 } from "~/server/domains/project/repo/subtree";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
-import {
-  entityKernelContextSchema,
-  executeEntity,
-} from "~/server/entity-kernel";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -67,20 +64,16 @@ describe("declared list scopes", () => {
   const listed = async (
     entity: "ingredient" | "task" | "expense",
     filters: ListFilterValues,
-  ) =>
-    sorted(
-      z
-        .object({ items: z.array(z.object({ id: z.string() })) })
-        .parse(
-          await executeEntity(context(), {
-            action: "list",
-            entity,
-            filters,
-            pagination: page,
-          }),
-        )
-        .items.map((row) => row.id),
+  ) => {
+    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].base(
+      context(),
+      {
+        filters,
+        pagination: page,
+      },
     );
+    return sorted(pageResult.data.map((row) => row.id));
+  };
   /** Codes of `rows` matching `where`, sorted. */
   const matching = async (
     table: PgTable & { id: AnyPgColumn; shortcode: AnyPgColumn },
