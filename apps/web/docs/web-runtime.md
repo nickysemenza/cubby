@@ -86,6 +86,11 @@ The generated route component imports only its own override and passes it to
 Shared cells live with their generic feature (for example, the unit-mappings
 column lives in `features/units`), so generic hooks do not import a specialist
 list module merely to reuse one renderer.
+Scalar columns share `createEditableAccessorColumn`. One row-parametrized
+clipboard descriptor supplies both range operations and the rendered editor;
+declared-control bindings preserve its value type. Generated cells reread the
+row, while ordinary factories request the cached accessor value lazily. Keep
+inheritance intent and domain formatting in their existing adapters.
 Full record timelines join the continuous detail page. Timeline renderers remain lazy imports; section navigation never unmounts an editor or timeline.
 Ordinary browser surfaces never import `entityInspectorMetadata`: it carries the
 compiler's filter descriptors, port refs, and a duplicate of the summary, and
