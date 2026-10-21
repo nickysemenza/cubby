@@ -13,6 +13,7 @@ import {
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -30,7 +31,7 @@ afterEach(() => queue.restore());
 // The second connection replaces the tuple on every attempt; no quiet period or
 // retry can make this interleaving safe when capture shares worker-owned rows.
 it("commits a snapshot write while the affected root's background progress advances", async () => {
-  const subject = await createProductFixture(
+  const subject = await createProductIdentityFixture(
     ctx.db,
     makeProductInput({ name: "Synthetic isolated capture" }),
     ctx.actor,
@@ -128,7 +129,7 @@ it("replays rolled-back folding with old/new endpoints and no extra input revisi
 });
 
 it("keeps a captured input stale before the background fold and rolls capture back with a failed save", async () => {
-  const subject = await createProductFixture(
+  const subject = await createProductIdentityFixture(
     ctx.db,
     makeProductInput({
       name: "Synthetic pending freshness",

@@ -25,7 +25,7 @@ import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnos
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -413,7 +413,7 @@ describe("applyUpcDataWithSideEffects", () => {
 
   it("uses the UPC price only when the Product has no purchase history", async () => {
     const upc = "076666666669";
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Unpriced widget", upc }),
       ctx.actor,
@@ -440,7 +440,7 @@ describe("applyUpcDataWithSideEffects", () => {
 
   it("keeps an Expense-derived price and omits the corresponding UPC proposal", async () => {
     const upc = "077777777770";
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Ledger-priced widget", upc }),
       ctx.actor,
@@ -526,7 +526,7 @@ describe("projected Product mutation reads", () => {
     );
     if (!ingredient) throw new Error("Missing synthetic ingredient");
     const ingredientId = ingredientShortcode.parse(ingredient.shortcode);
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic snapshot product",

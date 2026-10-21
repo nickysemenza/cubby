@@ -25,6 +25,7 @@ import { refreshSearchDocument } from "~/server/generic/search/repo/search-docum
 import { canonicalJson } from "~/server/lib/canonical-json";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -68,7 +69,7 @@ describe("stored connection evidence", () => {
 
   it("refuses direct publication for an Expense already assigned to another Product", async () => {
     const { candidate, charge } = await fixture();
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic prior owner" }),
       ctx.actor,
@@ -92,7 +93,7 @@ describe("stored connection evidence", () => {
 
   it("does not let a fresh forged basis authorize replacing an assignment or reconfirming an acquired pair", async () => {
     const { candidate, charge, item, proposal } = await fixture();
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic protected owner" }),
       ctx.actor,
@@ -342,7 +343,7 @@ describe("stored connection evidence", () => {
   });
 
   it("retrieves an unlinked unitemized Purchase from notes without needing inventory", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic cobalt drill" }),
       ctx.actor,

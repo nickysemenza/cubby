@@ -16,6 +16,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -520,7 +521,7 @@ describe("inherited values", () => {
       ctx.actor,
     );
     const product = async (name: string, from?: { shortcode: string }) => {
-      const created = await createProductFixture(
+      const created = await createProductIdentityFixture(
         db(),
         makeProductInput(
           from === undefined

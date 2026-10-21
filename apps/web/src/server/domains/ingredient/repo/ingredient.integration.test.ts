@@ -29,7 +29,7 @@ import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import {
   createRecipeFixture as createRecipe,
   createPlantFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   ingredientRef,
   makeRecipeInput,
   makeProductInput,
@@ -75,12 +75,12 @@ describe("ingredient", () => {
       }),
       ctx.actor,
     );
-    const live = await createProductFixture(
+    const live = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Live fixture", ingredientId: item.id }),
       ctx.actor,
     );
-    const removed = await createProductFixture(
+    const removed = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Removed fixture", ingredientId: item.id }),
       ctx.actor,
@@ -128,12 +128,12 @@ describe("ingredient", () => {
       "ingredient",
       (await resolveLiveShortcode(ctx.db, keeper.id, "ingredient"))!,
     );
-    const live = await createProductFixture(
+    const live = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Live linked", ingredientId: keeper.id }),
       ctx.actor,
     );
-    const dead = await createProductFixture(
+    const dead = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Dead linked", ingredientId: keeper.id }),
       ctx.actor,
@@ -165,7 +165,7 @@ describe("ingredient", () => {
       { name: "Absorbed with dead product" },
       ctx.actor,
     );
-    const absorbedDead = await createProductFixture(
+    const absorbedDead = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Dead linked on absorbed",

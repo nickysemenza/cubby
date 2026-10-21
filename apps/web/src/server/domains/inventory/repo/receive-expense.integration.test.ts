@@ -11,6 +11,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -93,7 +94,7 @@ describe("atomic reviewed Expense receiving", () => {
 
   it("refuses a Product relink after review without stocking or resolving arrival", async () => {
     const f = await fixture();
-    const replacement = await createProductFixture(
+    const replacement = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Receiving fixture replacement" }),
       ctx.actor,
@@ -124,7 +125,7 @@ describe("atomic reviewed Expense receiving", () => {
 
   it("creates stock only on explicit receive and resolves arrived only when all live product lines are stocked", async () => {
     const f = await fixture();
-    const second = await createProductFixture(
+    const second = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Receiving fixture second item" }),
       ctx.actor,
@@ -313,7 +314,7 @@ describe("atomic reviewed Expense receiving", () => {
 
   it("rejects another product's entry and a deleted Expense without touching inventory or the finding", async () => {
     const f = await fixture();
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Receiving fixture unrelated item" }),
       ctx.actor,

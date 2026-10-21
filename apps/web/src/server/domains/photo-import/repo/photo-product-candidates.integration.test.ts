@@ -24,6 +24,7 @@ import {
   createLocationFixture,
   makeLocationInput,
   createProductFixture,
+  createProductIdentityFixture,
   insertEntityAttachments,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -71,7 +72,7 @@ describe("photo product candidates", () => {
   // A model budget cap or OCR-derived title silently leaves otherwise eligible candidates unchecked.
   it("checks every retrieved candidate concurrently using stable name and identifier inputs", async () => {
     for (let index = 0; index < 21; index++)
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: `Synthetic Forge canvas boot blue ${index}`,
@@ -117,7 +118,7 @@ describe("photo product candidates", () => {
 
   // Selected evidence cannot depend on lexical retrieval or a successful inference.
   it("reads selected Product dates, vendor and capture time independently of ranking", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic selected object" }),
       ctx.actor,
@@ -430,7 +431,7 @@ describe("photo product candidates", () => {
       }),
       ctx.actor,
     );
-    const photographed = await createProductFixture(
+    const photographed = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "ForgeWear pocket tee black small duplicate",
@@ -486,7 +487,7 @@ describe("photo product candidates", () => {
   });
 
   it("finds an alias and an exact identifier observed on a label", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "ForgeWear Q7",
@@ -532,7 +533,7 @@ describe("photo product candidates", () => {
   });
 
   it("shows returned, concession, and unknown-quantity lines without claiming the photo is absent", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "ForgeWear tan work boots",

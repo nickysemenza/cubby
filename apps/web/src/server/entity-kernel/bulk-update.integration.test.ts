@@ -31,6 +31,7 @@ import {
 } from "~/server/testing/background-queue";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   createRecipeFixture,
   ingredientRef,
   makeProductInput,
@@ -115,7 +116,7 @@ describe("generic bulk updates", () => {
   });
 
   it("supersedes pending targets and basis suggestions on an explicit unchanged scalar write", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic suggestion target",
@@ -287,7 +288,7 @@ describe("generic bulk updates", () => {
   });
 
   it("returns summary writes without hydrating unrequested food", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic cited product", fdc_id: 123456 }),
       ctx.actor,
@@ -440,7 +441,7 @@ describe("generic bulk updates", () => {
   });
 
   it("rolls back a manufacturer collision and reports the conflicting selection", async () => {
-    const first = await createProductFixture(
+    const first = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic collision",
@@ -448,7 +449,7 @@ describe("generic bulk updates", () => {
       }),
       ctx.actor,
     );
-    const second = await createProductFixture(
+    const second = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic collision",
@@ -456,7 +457,7 @@ describe("generic bulk updates", () => {
       }),
       ctx.actor,
     );
-    const bystander = await createProductFixture(
+    const bystander = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic collision bystander",
@@ -483,7 +484,7 @@ describe("generic bulk updates", () => {
   });
 
   it("adds and removes bulk list values without replacing row-specific values", async () => {
-    const first = await createProductFixture(
+    const first = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic list first",
@@ -491,7 +492,7 @@ describe("generic bulk updates", () => {
       }),
       ctx.actor,
     );
-    const second = await createProductFixture(
+    const second = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic list second", tags: ["mount-b"] }),
       ctx.actor,

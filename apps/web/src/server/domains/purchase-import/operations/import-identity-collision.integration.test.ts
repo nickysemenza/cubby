@@ -23,6 +23,7 @@ import { syncProductExternalIds } from "~/server/domains/product/repo/update-hel
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -62,12 +63,12 @@ describe("purchase import identifier collisions", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const owner = await createProductFixture(
+    const owner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "ForgeWear trail shirt, blue, medium" }),
       ctx.actor,
     );
-    const reviewed = await createProductFixture(
+    const reviewed = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "ForgeWear trail shirt, blue, large" }),
       ctx.actor,

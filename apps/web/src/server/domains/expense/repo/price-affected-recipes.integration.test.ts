@@ -8,7 +8,7 @@ import {
 } from "~/server/testing/background-queue";
 import {
   createIngredientFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   createRecipeFixture,
   ingredientRef,
   makeProductInput,
@@ -32,12 +32,12 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       { name: "Costed ingredient", aliases: [] },
       ctx.actor,
     );
-    const linked = await createProductFixture(
+    const linked = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ ingredientId: ingredient.id }),
       ctx.actor,
     );
-    const unlinked = await createProductFixture(
+    const unlinked = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Non-food product" }),
       ctx.actor,

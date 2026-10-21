@@ -37,7 +37,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
@@ -330,7 +330,7 @@ describe("durable image representations", () => {
 
   it("attempts subject lift for label-only and shared item images", async () => {
     const labelOnly = await source();
-    const labelOwner = await createProductFixture(
+    const labelOwner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Label-only image owner" }),
       ctx.actor,
@@ -358,7 +358,7 @@ describe("durable image representations", () => {
       }),
     ).toMatchObject({ id: labelOnly.jobId, kind: "subject_lift" });
     const shared = await source();
-    const itemOwner = await createProductFixture(
+    const itemOwner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Item image owner" }),
       ctx.actor,
@@ -567,7 +567,7 @@ describe("durable image representations", () => {
   it("retires image search and removes its description from an attached owner on delete", async () => {
     const row = await source();
     const imageId = parseEntityId("image", row.id);
-    const owner = await createProductFixture(
+    const owner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Search owner" }),
       ctx.actor,

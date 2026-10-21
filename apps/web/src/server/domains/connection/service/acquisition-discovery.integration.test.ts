@@ -22,7 +22,7 @@ import {
   hasUnembeddedSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   createSystemUserFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -103,13 +103,13 @@ describe("acquisition Expense discovery gating", () => {
   it("keeps valid acquisition candidates when other corpus documents have no vector", async () => {
     await createSystemUserFixture(ctx.db);
     const index = semanticIndex();
-    const runner = await createProductFixture(
+    const runner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic Acme Runner", manufacturer: "Acme" }),
       ctx.actor,
     );
     const lexical = await charge(index, "Synthetic Acme Runner purchase", 0.95);
-    const missing = await createProductFixture(
+    const missing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unrelated unembedded document" }),
       ctx.actor,
@@ -151,13 +151,13 @@ describe("acquisition Expense discovery gating", () => {
     // Query embeddings book their AI call under a system background Run.
     await createSystemUserFixture(ctx.db);
     const index = semanticIndex();
-    const runner = await createProductFixture(
+    const runner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Acme Trail Runner", manufacturer: "Acme" }),
       ctx.actor,
     );
     // Makes "Zenith" a known brand.
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Zenith Court Classic",
@@ -187,7 +187,7 @@ describe("acquisition Expense discovery gating", () => {
     expect(targets).not.toContain(weak);
 
     // An unbranded Product has no brand to contradict a branded line.
-    const unbranded = await createProductFixture(
+    const unbranded = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Trail Runner",

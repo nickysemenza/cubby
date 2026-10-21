@@ -42,6 +42,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -145,7 +146,7 @@ describe("photo group proposals", () => {
   // Rejections belong to the photographed item, including after group keys change.
   it("suppresses wrong candidate Feedback through combine and split and isolates inference failure", async () => {
     const { run, codes } = await seedRun(3);
-    const rejected = await createProductFixture(
+    const rejected = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic canvas boot" }),
       ctx.actor,
@@ -454,7 +455,7 @@ describe("photo group proposals", () => {
   // or attach evidence to a guessed variant. Retrying a reviewed edit is once-only.
   it("requires explicit identity resolution and atomically applies selected Product changes", async () => {
     const { run, codes } = await seedRun(1);
-    const original = await createProductFixture(
+    const original = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic blue shirt" }),
       ctx.actor,
@@ -526,7 +527,7 @@ describe("photo group proposals", () => {
       }),
       ctx.actor,
     );
-    const original = await createProductFixture(
+    const original = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic rollback shirt",
@@ -746,7 +747,7 @@ describe("photo group proposals", () => {
   // before publication so clearing the last checkbox re-enables all clients.
   it("omits empty Product changes after the last selected edit is cleared", async () => {
     const { run, codes } = await seedRun(1);
-    const original = await createProductFixture(
+    const original = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unchanged shirt" }),
       ctx.actor,
@@ -1027,7 +1028,7 @@ describe("photo group proposals", () => {
 
   it("keeps photo roles and evidence when a reviewer selects an existing product", async () => {
     const { run, codes } = await seedRun(2);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic Canvas Shirt" }),
       ctx.actor,
@@ -1510,7 +1511,7 @@ describe("photo group proposals", () => {
 
   it("keeps a name-collision conflict proposed, then commits once the reviewer picks the existing Product", async () => {
     const { run, codes } = await seedRun(1);
-    const existing = await createProductFixture(
+    const existing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic Linen Shirt" }),
       ctx.actor,
@@ -1651,12 +1652,12 @@ describe("photo group proposals", () => {
 
   it("follows a Product merge: the proposal's product FK repoints onto the survivor", async () => {
     const { run, codes } = await seedRun(1);
-    const loser = await createProductFixture(
+    const loser = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic Tote Duplicate" }),
       ctx.actor,
     );
-    const keeper = await createProductFixture(
+    const keeper = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic Tote" }),
       ctx.actor,

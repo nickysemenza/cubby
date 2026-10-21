@@ -18,6 +18,7 @@ import {
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
@@ -55,7 +56,7 @@ describe("immutable embedding artifacts", () => {
         },
       }),
     );
-    const subject = await createProductFixture(
+    const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic vector Alpha" }),
       ctx.actor,
@@ -214,7 +215,7 @@ describe("immutable embedding artifacts", () => {
         BACKGROUND_QUEUE: { sendBatch: async () => {} },
       }),
     );
-    const subject = await createProductFixture(
+    const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic failed embedding" }),
       ctx.actor,
@@ -234,7 +235,7 @@ describe("immutable embedding artifacts", () => {
     await refreshEntityEmbeddings(ctx.db, [ref], port);
     await refreshEntityEmbeddings(ctx.db, [ref], port);
     expect(calls).toBe(3);
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unrelated embedding input" }),
       ctx.actor,

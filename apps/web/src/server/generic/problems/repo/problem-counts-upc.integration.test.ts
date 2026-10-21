@@ -6,7 +6,7 @@ import {
   findUpcProblems,
 } from "~/server/generic/problems/service/problems.service";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -17,7 +17,7 @@ describe("problem counts and the UPC lane", () => {
   const ctx = withTestDb();
 
   it("never calls the UPC provider for the count snapshot", async () => {
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "UPC count test good", upc: "036000291452" }),
       ctx.actor,

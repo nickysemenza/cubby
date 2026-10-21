@@ -11,6 +11,7 @@ import {
   createLocationFixture,
   makeLocationInput,
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -75,7 +76,7 @@ describe("kernel list restricted to ids", () => {
         ),
       ),
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Unselected item", price: 999 }),
       ctx.actor,
@@ -95,7 +96,7 @@ describe("kernel list restricted to ids", () => {
     }
   });
   it("intersects hand-built inventory predicates before pagination and valuation totals", async () => {
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Ids stock", price: 10 }),
       ctx.actor,

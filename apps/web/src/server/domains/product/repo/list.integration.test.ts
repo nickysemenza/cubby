@@ -19,6 +19,7 @@ import {
   createLocationFixture,
   createPlantFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeExpenseInput,
   makeProductInput,
@@ -49,12 +50,12 @@ describe("productList id filters", () => {
       { name: "Filter tomato crop" },
       TEST_ACTOR,
     );
-    const flourBag = await createProductFixture(
+    const flourBag = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Flour bag", ingredientId: flour.id }),
       TEST_ACTOR,
     );
-    const tomatoSeeds = await createProductFixture(
+    const tomatoSeeds = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Tomato seed packet",
@@ -85,12 +86,12 @@ describe("productList id filters", () => {
       { name: "Filter tomato crop 2" },
       TEST_ACTOR,
     );
-    const flourBag = await createProductFixture(
+    const flourBag = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Flour bag 2", ingredientId: flour.id }),
       TEST_ACTOR,
     );
-    const tomatoSeeds = await createProductFixture(
+    const tomatoSeeds = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Tomato seed packet 2",
@@ -115,7 +116,7 @@ describe("product list price footer", () => {
   const ctx = withTestDb();
 
   it("sums the full filtered set with explicit prices and projected kit prices", async () => {
-    const kit = await createProductFixture(
+    const kit = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Example kit" }),
       ctx.actor,
@@ -369,12 +370,12 @@ describe("product list staged projections", () => {
   });
 
   it("restricts derived patches through existing filters and preserves full price and ledger arithmetic", async () => {
-    const included = await createProductFixture(
+    const included = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Staged derived", price: 17 }),
       ctx.actor,
     );
-    const excluded = await createProductFixture(
+    const excluded = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Other derived", price: 31 }),
       ctx.actor,
@@ -605,7 +606,7 @@ describe("product list display labels", () => {
   const ctx = withTestDb();
 
   it("discloses unquantified ledger lines in the Expected label", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Label ledger bolt" }),
       ctx.actor,

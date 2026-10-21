@@ -19,6 +19,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -312,7 +313,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
           }),
       ),
     );
-    const snack = await createProductFixture(
+    const snack = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Arrived later untracked snack" }),
       ctx.actor,

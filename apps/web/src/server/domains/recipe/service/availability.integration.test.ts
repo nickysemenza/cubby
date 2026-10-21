@@ -22,7 +22,7 @@ import { requireActor } from "~/server/http/request-context";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   seedIngredientWithStock,
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -259,7 +259,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         { usuallyOnHand: true },
         TEST_ACTOR,
       );
-      await createProductFixture(
+      await createProductIdentityFixture(
         tdb.db,
         makeProductInput({
           name: "Priced flour",

@@ -51,6 +51,7 @@ import { refreshSearchDocuments } from "~/server/generic/search/repo/search-docu
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -1609,7 +1610,7 @@ describe("shared purchase-import prepare and commit", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const existingProduct = await createProductFixture(
+    const existingProduct = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Reusable exact-ASIN product" }),
       ctx.actor,
@@ -1805,7 +1806,7 @@ describe("shared purchase-import prepare and commit", () => {
     });
     // A photo-first Product whose only identifier is the barcode read off its
     // tag, stored under the vendor-neutral GTIN source.
-    const photoProduct = await createProductFixture(
+    const photoProduct = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Gray crew t-shirt — M" }),
       ctx.actor,
@@ -1973,7 +1974,7 @@ describe("shared purchase-import prepare and commit", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const existingProduct = await createProductFixture(
+    const existingProduct = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Adjustment lines widget" }),
       ctx.actor,
@@ -2762,7 +2763,7 @@ describe("shared purchase-import prepare and commit", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const existingProduct = await createProductFixture(
+    const existingProduct = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Already-identified manual product" }),
       ctx.actor,

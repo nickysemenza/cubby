@@ -25,6 +25,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   createRecipeFixture,
   ingredientRef,
   makeCookbookExtraction,
@@ -256,7 +257,7 @@ describe("data quality: pantry and garden entities", () => {
       makeLocationInput({ name: "DQ inventory shelf complete" }),
       TEST_ACTOR,
     );
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "DQ inventory product" }),
       TEST_ACTOR,

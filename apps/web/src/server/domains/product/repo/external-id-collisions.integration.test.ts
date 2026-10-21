@@ -9,6 +9,7 @@ import { findProductExternalIdCollisions } from "~/server/domains/product/repo/e
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -21,7 +22,7 @@ describe("product external-id ownership", () => {
       makeProductInput({ name: "ForgeWear trail shirt, blue, medium" }),
       ctx.actor,
     );
-    const other = await createProductFixture(
+    const other = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "ForgeWear trail shirt, blue, large" }),
       ctx.actor,

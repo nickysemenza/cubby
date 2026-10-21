@@ -25,7 +25,7 @@ import { explainField } from "~/server/generic/field-explanation/operations/fiel
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -64,7 +64,7 @@ describe("derived field explanations against canonical records", () => {
       label: "Synthetic unowned source",
       vendorId: null,
     });
-    const item = await createProductFixture(
+    const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         externalIds: externalIdInputs.parse([
@@ -531,7 +531,7 @@ describe("derived field explanations against canonical records", () => {
   });
 
   it("explains manual price precedence and links the records behind an expense count", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Explanation product", price: 20 }),
       ctx.actor,
@@ -600,7 +600,7 @@ describe("derived field explanations against canonical records", () => {
   });
 
   it("uses the same explicit owner and evidence fingerprint as inventory detail", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput(),
       ctx.actor,
@@ -658,7 +658,7 @@ describe("derived field explanations against canonical records", () => {
   });
 
   it("keeps aggregate values complete while bounding their record evidence", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput(),
       ctx.actor,

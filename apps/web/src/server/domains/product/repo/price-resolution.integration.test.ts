@@ -9,7 +9,7 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -37,7 +37,7 @@ describe("Product valuation price resolution on canonical reads", () => {
   // quantity but no price: it must never become a price sample or dilute the
   // unit price of the priced lines beside it.
   it("never derives a price from an unknown-cost undated acquisition", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic historical acquisition" }),
       ctx.actor,
@@ -84,7 +84,7 @@ describe("Product valuation price resolution on canonical reads", () => {
   // A by-weight line (0.41 lb) is a legitimate fractional acquisition; its
   // unit count must survive detail and list reads without rounding.
   it("reads a fractional acquisition quantity without rounding", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic by-weight cheese" }),
       ctx.actor,
@@ -114,7 +114,7 @@ describe("Product valuation price resolution on canonical reads", () => {
   });
 
   it("preserves stored overrides, expense-derived fallback and explicit reset without changing ledger cost", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic resolution clamp",
@@ -203,7 +203,7 @@ describe("Product valuation price resolution on canonical reads", () => {
       matchesFallback: false,
       canReset: false,
     });
-    const missing = await createProductFixture(
+    const missing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unpriced clamp", price: null }),
       ctx.actor,

@@ -55,6 +55,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   createRecipeFixture,
   ingredientRef,
   makeExpenseInput,
@@ -237,7 +238,7 @@ describe("Problems card read projections", () => {
       })
       .where(eq(recipe.id, incomplete.entityId));
     for (let index = 0; index < 14; index++) {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: `Projection product ${index}`, price: 10 }),
         ctx.actor,
@@ -382,7 +383,7 @@ describe("problems — view-backed uniform rows", () => {
       makeLocationInput({ name: "Test shelf", type: "shelf" }),
       ctx.actor,
     );
-    const thing = await createProductFixture(
+    const thing = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Unpriced test good" }),
       ctx.actor,
@@ -402,7 +403,7 @@ describe("problems — view-backed uniform rows", () => {
       ctx.actor,
     );
 
-    const bucket = await createProductFixture(
+    const bucket = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "misc: Synthetic spare parts" }),
       ctx.actor,
@@ -1380,7 +1381,7 @@ describe("problems — weight-sold products", () => {
   });
 
   it("stops reporting a product once it has a weight-to-money mapping", async () => {
-    const mapped = await createProductFixture(
+    const mapped = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Mapped test produce",
@@ -1443,7 +1444,7 @@ describe("title-size suggestions — food eligibility", () => {
         ...data,
       });
     }
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Example mapped oats 500 g",

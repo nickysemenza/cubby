@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -54,7 +54,7 @@ describe("usda_food.suggest_for_product", () => {
   const ctx = withTestDb();
 
   it("returns the barcode match first, then name+manufacturer matches without repeating it", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Example Oat Flakes",
@@ -88,7 +88,7 @@ describe("usda_food.suggest_for_product", () => {
   });
 
   it("falls through to the name search when the barcode has no USDA record", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Example Lentil Pasta",
@@ -115,7 +115,7 @@ describe("usda_food.suggest_for_product", () => {
   });
 
   it("retries on the bare name when the manufacturer-qualified search is empty", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Example Chickpea Flour",

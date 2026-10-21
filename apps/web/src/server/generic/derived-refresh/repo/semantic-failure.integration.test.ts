@@ -11,7 +11,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import * as search from "~/server/generic/search/repo/search-document";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -30,7 +30,7 @@ describe("semantic phase failure budget", () => {
   });
 
   it("keeps unchanged input failures stopped across unrelated same-kind writes", async () => {
-    const subject = await createProductFixture(
+    const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic failed projection" }),
       ctx.actor,
@@ -47,7 +47,7 @@ describe("semantic phase failure budget", () => {
       expect((await processDerivedRefreshPage(ctx.db)).errors).toHaveLength(1);
     }
     expect(publication).toHaveBeenCalledTimes(3);
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unrelated product" }),
       ctx.actor,

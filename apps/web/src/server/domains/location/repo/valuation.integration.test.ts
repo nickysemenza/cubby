@@ -27,6 +27,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -45,7 +46,7 @@ describe("location valuation — computed on read", () => {
   const ctx = withTestDb();
 
   it("computeLocationValuations matches the pure rollup, and getLocationById threads the same map", async () => {
-    const crateSku = await createProductFixture(
+    const crateSku = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Wooden Crate" }),
       ctx.actor,

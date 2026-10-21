@@ -14,7 +14,7 @@ import { loadProductOwnershipTimelines } from "~/server/domains/product/repo/own
 import { loadProductQuantityLedgers } from "~/server/domains/product/repo/quantity-ledger";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -126,7 +126,7 @@ describe("unknown expense dates", () => {
   });
 
   it("keeps undated free acquisitions and discards in history without inventing ownership dates", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Undated workshop tool" }),
       ctx.actor,

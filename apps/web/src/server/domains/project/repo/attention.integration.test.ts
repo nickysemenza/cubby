@@ -9,7 +9,7 @@ import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -28,7 +28,7 @@ describe("project attention activity", () => {
       startDate: "2024-01-01",
       endDate: "2024-01-02",
     });
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic later tool" }),
       ctx.actor,

@@ -26,7 +26,7 @@ import {
   readWorkQueue,
 } from "~/server/generic/work-queue/service/work-queue-read";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -287,7 +287,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
   it("filters by check before counting and paging, and carries check ids", async () => {
     const prefix = "Synthetic check filter";
     await merchandiseOrder(prefix);
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: `${prefix} widget`, categoryId: null }),
       ctx.actor,
@@ -545,7 +545,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     }
     expect(strip.items.map((row) => row.id)).not.toContain(line.shortcode);
 
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: `${prefix} widget`, categoryId: null }),
       ctx.actor,

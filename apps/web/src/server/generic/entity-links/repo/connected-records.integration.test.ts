@@ -14,7 +14,7 @@ import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createPlantFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -112,12 +112,12 @@ describe("complete connected record tables", () => {
       { name: "Example crop" },
       ctx.actor,
     );
-    const seed = await createProductFixture(
+    const seed = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Example seeds", growsPlantId: plant.id }),
       ctx.actor,
     );
-    const starter = await createProductFixture(
+    const starter = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Example starter", growsPlantId: plant.id }),
       ctx.actor,

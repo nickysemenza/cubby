@@ -12,6 +12,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -103,7 +104,7 @@ describe("entity edge source", () => {
 
   it("reads a merged-away code as its survivor", async () => {
     const { item } = await seedStockedProduct("Edge keeper");
-    const loser = await createProductFixture(
+    const loser = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Edge loser" }),
       TEST_ACTOR,

@@ -6,7 +6,7 @@ import {
   createIngredientFixture,
   createInventoryFixture,
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   createRecipeFixture,
   ingredientRef,
   makeLocationInput,
@@ -36,12 +36,12 @@ describe("coverage totals", () => {
     );
     // A stocked product is in scope for the image meter; an unstocked one is
     // not (`product_image` expects inventory).
-    const stocked = await createProductFixture(
+    const stocked = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Coverage stocked" }),
       TEST_ACTOR,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Coverage unstocked" }),
       TEST_ACTOR,

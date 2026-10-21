@@ -13,7 +13,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   createInventoryFixture,
   createLocationFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -361,7 +361,7 @@ describe("entity report", () => {
   });
 
   it("shares identity across distinct product report slots", async () => {
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Shared context product" }),
       ctx.actor,
@@ -569,7 +569,7 @@ describe("entity report", () => {
       makeLocationInput({ name: "Valuation bin", type: "shelf" }),
       ctx.actor,
     );
-    const widget = await createProductFixture(
+    const widget = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Valuation widget",
@@ -616,7 +616,7 @@ describe("entity report", () => {
       quantity: number,
       where = bin,
     ) => {
-      const sku = await createProductFixture(
+      const sku = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name, price, manufacturer }),
         ctx.actor,

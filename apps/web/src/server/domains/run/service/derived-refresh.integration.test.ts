@@ -10,7 +10,7 @@ import type { StepContext } from "~/server/domains/run/service/step-run";
 import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/repo/refresh-ports.boundary";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
   createRecipeFixture,
   makeRecipeInput,
@@ -73,7 +73,7 @@ describe("derived refresh driver fairness", () => {
   it("advances periodic repair while other refresh work is in backoff", async () => {
     const queue = captureBackgroundQueue();
     try {
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Synthetic deferred refresh" }),
         ctx.actor,

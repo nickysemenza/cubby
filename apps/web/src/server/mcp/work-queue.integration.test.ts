@@ -46,6 +46,7 @@ import {
   createLocationFixture,
   insertEntityAttachments,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -469,7 +470,7 @@ describe("member actionable Work queue", () => {
           }),
         ),
       );
-    const product = await createProductFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic public identity match" }),
       ctx.actor,
@@ -958,7 +959,7 @@ describe("member actionable Work queue", () => {
       kind: "member",
       userId: otherUserId,
     });
-    const shared = await createProductFixture(
+    const shared = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic shared research item",
@@ -1363,7 +1364,7 @@ describe("member actionable Work queue", () => {
   // its product's cover, or a member read exposes imagery borrowed through a
   // linked record the member's routing never established.
   it("carries each source record's resolved display images", async () => {
-    const pictured = await createProductFixture(
+    const pictured = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic pictured queue item",
@@ -1431,7 +1432,7 @@ describe("member actionable Work queue", () => {
   it("keeps multi-field sorting stable across page boundaries", async () => {
     const query = "Synthetic sorted queue";
     for (const suffix of ["Alpha", "Bravo"]) {
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: `${query} ${suffix}`, categoryId: null }),
         ctx.actor,

@@ -16,7 +16,7 @@ import { createWish } from "~/server/domains/wish/repo";
 import { executeEntity } from "~/server/entity-kernel";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import {
@@ -36,7 +36,7 @@ describe("ordinary scalar write fanout", () => {
       ctx.db,
       "Synthetic conversion input",
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic linked ingredient product",
@@ -78,7 +78,7 @@ describe("ordinary scalar write fanout", () => {
     ).toEqual([]);
   });
   it("does not hydrate untouched candidates for a Wish rename", async () => {
-    const candidate = await createProductFixture(
+    const candidate = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic candidate" }),
       ctx.actor,

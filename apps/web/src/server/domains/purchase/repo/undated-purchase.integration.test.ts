@@ -17,7 +17,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { getCollectionDetail } from "~/server/generic/collection/repo/collection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -31,7 +31,7 @@ describe("undated Purchase readers", () => {
   const ctx = withTestDb();
 
   it("retains undated Product and kit history without inventing chronology or calendar positions", async () => {
-    const kit = await createProductFixture(
+    const kit = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic undated kit",
@@ -39,7 +39,7 @@ describe("undated Purchase readers", () => {
       }),
       ctx.actor,
     );
-    const component = await createProductFixture(
+    const component = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic kit component" }),
       ctx.actor,

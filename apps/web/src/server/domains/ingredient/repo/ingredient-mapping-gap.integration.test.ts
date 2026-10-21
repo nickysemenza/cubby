@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { writeProductConversionCoverageProjection } from "~/server/domains/product/repo/conversion-coverage";
 import {
-  createProductFixture,
+  createProductIdentityFixture,
   createRecipeFixture,
   ingredientRef,
   makeProductInput,
@@ -24,7 +24,7 @@ describe("ingredient mappingGap filter", () => {
   ) => {
     const ingredient = await findOrCreateIngredient(ctx.db, name);
     for (const [index, tier] of products.entries()) {
-      const product = await createProductFixture(
+      const product = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: `${name} product ${index}`,

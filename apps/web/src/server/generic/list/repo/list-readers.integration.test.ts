@@ -23,6 +23,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -61,7 +62,7 @@ describe("custom list readers", () => {
       [gamma!, 1],
     ] as const)
       for (let index = 0; index < count; index++)
-        await createProductFixture(
+        await createProductIdentityFixture(
           ctx.db,
           makeProductInput({
             name: `${ingredient.name} product ${index}`,
@@ -106,7 +107,7 @@ describe("custom list readers", () => {
         ),
       ),
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Tiecase lead product",
@@ -216,22 +217,22 @@ describe("custom list readers", () => {
   });
 
   it("pages the Product picker and matches names through aliases", async () => {
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Picker alpha" }),
       ctx.actor,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Zeta widget", aliases: ["picker gamma"] }),
       ctx.actor,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Picker beta" }),
       ctx.actor,
     );
-    await createProductFixture(
+    await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Unrelated item" }),
       ctx.actor,
@@ -255,7 +256,7 @@ describe("custom list readers", () => {
 
     // Five rows tie on manufacturer and model, so the name decides.
     for (const suffix of ["e", "c", "a", "d", "b"])
-      await createProductFixture(
+      await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: `Tiepick ${suffix}` }),
         ctx.actor,

@@ -13,6 +13,7 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -102,7 +103,7 @@ describe("location shape", () => {
   });
 
   it("stores furniture for a Product-linked location and refuses it without a Product", async () => {
-    const crate = await createProductFixture(
+    const crate = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Shape Crate" }),
       ctx.actor,

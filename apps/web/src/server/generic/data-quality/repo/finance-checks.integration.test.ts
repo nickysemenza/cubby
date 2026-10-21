@@ -26,7 +26,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   createImageFixture,
   createPlantFixture,
-  createProductFixture,
+  createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
   insertEntityAttachments,
@@ -413,7 +413,7 @@ describe("data quality: finance and project entities", () => {
   });
 
   it("wish: candidate (only while not yet acquired)", async () => {
-    const tool = await createProductFixture(
+    const tool = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "DQ wish tool",
