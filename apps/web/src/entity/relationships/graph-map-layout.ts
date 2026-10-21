@@ -29,7 +29,7 @@ const overlaps = (a: GraphMapRect, b: GraphMapRect) =>
   a.y < b.y + b.height + GAP &&
   a.y + a.height + GAP > b.y;
 
-/** New records occupy a free column slot to the right of their parent. Existing coordinates are immutable. */
+/** New records fan out to the right of their parent. Existing coordinates are immutable. */
 export function placeGraphMap(input: GraphMapLayoutInput) {
   const positions = { ...input.previous };
   const buckets = new Map<string, GraphMapRect[]>();
@@ -66,25 +66,36 @@ export function placeGraphMap(input: GraphMapLayoutInput) {
     };
     let placed = false;
     for (let radius = 0; !placed; radius++) {
-      for (const y of radius === 0 ? [0] : [radius, -radius]) {
+      const slots =
+        radius === 0
+          ? [{ x: 0, y: 0 }]
+          : [
+              ...Array.from({ length: radius }, (_, x) => [
+                { x, y: radius },
+                { x, y: -radius },
+              ]).flat(),
+              ...Array.from({ length: radius * 2 + 1 }, (_, index) => ({
+                x: radius,
+                y: index - radius,
+              })),
+            ];
+      for (const slot of slots) {
         if (placed) break;
-        {
-          const rect = {
-            x: origin.x,
-            y: origin.y + y * (HEIGHT + GAP),
-            width: WIDTH,
-            height: HEIGHT,
-          };
-          if (
-            cells(rect).some((key) =>
-              buckets.get(key)?.some((other) => overlaps(rect, other)),
-            )
+        const rect = {
+          x: origin.x + slot.x * (WIDTH + GAP),
+          y: origin.y + slot.y * (HEIGHT + GAP),
+          width: WIDTH,
+          height: HEIGHT,
+        };
+        if (
+          cells(rect).some((key) =>
+            buckets.get(key)?.some((other) => overlaps(rect, other)),
           )
-            continue;
-          positions[node.id] = rect;
-          insert(rect);
-          placed = true;
-        }
+        )
+          continue;
+        positions[node.id] = rect;
+        insert(rect);
+        placed = true;
       }
     }
   }
