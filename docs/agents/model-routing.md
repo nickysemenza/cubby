@@ -18,7 +18,7 @@ read-heavy work; write lanes own disjoint worktrees or stay in the main thread.
 Run at most two implementation lanes at once on one machine: each builds,
 typechecks and starts test services, and more lanes contend for CPU and the
 test harness instead of finishing sooner. Queue further units behind them.
-The per-PR review below is the one routine spawn.
+Independent review is selected by risk below; it is not a routine spawn for every PR.
 
 ## Lanes
 
@@ -31,13 +31,21 @@ may do any lane. Keep to three lanes to limit repeated setup and coordination.
 | --------------------------------------------------------------------- | --------------------------------- | -------------------- |
 | Default: implementation, diagnosis, identity and money judgment, docs | opus (Opus 5.5) / medium          | `gpt-6.1-sol` / low  |
 | Search and extraction whose raw output would flood the main context   | haiku (Haiku 5.5) / low           | `gpt-6-luna` / low   |
-| Independent review, one per PR                                        | fable (`claude-fable-5-1`) / high | `gpt-6.1-sol` / high |
+| Independent review, when selected                                     | fable (`claude-fable-5-1`) / high | `gpt-6.1-sol` / high |
 
 Raise effort before changing model: the default lane runs at high (opus) or
 medium-to-high (Sol) for production financial writes, identity merges,
 migrations, and write-path enforcement, and drops back afterwards.
 
-The reviewer is a different model from the implementer; prefer the other
+Use independent review when the user requests it or the change carries material
+correctness risk: production financial writes, identity merges, migrations,
+security boundaries, concurrency enforcement, or major infrastructure. Routine
+UI, icon, token, and behavior-preserving cleanup can finish with main-agent
+self-review and focused validation. Do not automatically send every change to
+Astra or Fable, or add review rounds because a provider is unavailable. An
+explicit user instruction can waive a review; preserve it across the task.
+
+When independent review is selected, the reviewer is a different model from the implementer; prefer the other
 provider when both are available (an Opus implementation gets a Sol review, a
 Sol implementation gets a Fable review). From T3 use `delegate_task` with the
 reviewer's provider and model, role `review`; from plain Claude Code reach Sol
