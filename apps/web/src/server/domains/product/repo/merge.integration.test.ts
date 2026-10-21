@@ -626,7 +626,7 @@ describe("mergeProducts", () => {
     );
 
     expect(summary.externalIdsMoved).toBe(1);
-    expect(planned.get("repoint-or-discard-conflicting-slot")).toBe(
+    expect(planned.get("repoint-product-identifiers")).toBe(
       summary.externalIdsMoved,
     );
     expect(planned.get("demote-conflicting-external-id")).toBe(

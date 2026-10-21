@@ -39,15 +39,16 @@ the whole file.
   Conversely `m.media-amazon.com`, `ikea.com`,
   `mobileimages.lowes.com`, `images.thdstatic.com`, Zoro's `og:image` and Shopify
   CDNs all fetch server-side fine.
-- **`entity.merge product` carries fields.** The survivor's empty `upc`,
+- **`entity.merge product` carries fields.** The survivor's empty
   `price` and `expectedQuantity` are filled from the loser, and the loser's
   image can take cover — so folding a scan-created duplicate onto a clean
   record installs the catalog price as an override that beats the
   Expense-derived value. Check `pricing.source` and the cover after every merge.
   Merge dedupes images by id, not content hash, so byte-identical files both
-  survive; check the product's gallery, not `Image.targetId`. A colliding
-  `(source, kind)` external id on the loser is discarded — note it in the
-  survivor if worth keeping.
+  survive; check the product's gallery, not `Image.targetId`. Identifier rows
+  move to the survivor; a conflicting source/kind primary is retained as a
+  secondary and named in the response and audit trail. Check every intended
+  identifier after merging.
 - **Scan-created Products copy the UPC provider's name, manufacturer and price
   verbatim**, and that price is often the multipack/case listing (5.7× on a foam
   brush, 2.6× on a spray can); it is not uniformly high, so verify per item

@@ -2970,6 +2970,8 @@ table each (ADR 0007):
   remain live relationships in Connected records, including purchase documents
   and accepted/reviewed Emails; they never certify a researched field.
 
+### Collection changes
+
 A field declared with `collection: { key }` accepts patch items on
 `entity.update` as well as a full replacement: `{op: "add" | "replace" |
 "remove", key, value?, expect?}`. All preconditions are checked before any
