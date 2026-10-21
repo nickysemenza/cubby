@@ -163,6 +163,12 @@ export interface RTableProps<TItem extends RowData> {
   actionDialogs?: ReactNode;
   /** Canonical mobile destination for rows whose entity type varies by row. */
   getMobileDetailsHref?: (item: TItem) => string | undefined;
+  /**
+   * Why these rows show no image column. Only rows that are not records take
+   * one (usage tallies, aggregates, nutrients); a table of records adds
+   * `createImageColumn`, with `imageRef` when its rows are about a record.
+   */
+  withoutImages?: string;
   /** Suppress implicit entity links when cards use a specialist row interaction. */
   disableMobileDetailsHref?: boolean;
   /** Full-width content below a mobile card's compact identity line. */
@@ -752,6 +758,16 @@ export default function RTable<TItem extends RowData>(
   props: RTableProps<TItem>,
 ) {
   const { entity, subjectEntity, rowActions, actionDialogs } = props;
+  if (
+    import.meta.env.DEV &&
+    props.withoutImages === undefined &&
+    !props.table
+      .getAllLeafColumns()
+      .some((column) => column.columnDef.meta?.entityColumnRole === "image")
+  )
+    throw new Error(
+      `${props.ariaLabel ?? entity ?? "This table"} has no image column: add createImageColumn, or pass withoutImages with why its rows are not records.`,
+    );
   let content = (
     <>
       <RTableInner {...props} />

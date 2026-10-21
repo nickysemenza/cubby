@@ -149,6 +149,7 @@ function BriefingProjectLine({
     return (
       <EntityRefLink
         variant="table"
+        tone="muted"
         to={entities.project.routes.detail}
         params={entityDetailParams(line.ref.id)}
         title={line.text}

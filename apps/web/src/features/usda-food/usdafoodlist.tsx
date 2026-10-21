@@ -154,6 +154,7 @@ export function USDAFoodList({
             cell: (info) => (
               <EntityRefLink
                 variant="table"
+                tone="mono"
                 to="/usda/$id"
                 params={{ id: String(info.getValue()) }}
               >

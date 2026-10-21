@@ -9,7 +9,6 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { VendorCell } from "~/entity/components/vendor-cell";
-import { entities, entityDetailParams } from "~/entity/entities";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entity/filters";
 import {
@@ -116,13 +115,11 @@ export function expenseVendorColumn(
                 });
                 return (
                   <EntityRefLink
-                    variant="table"
-                    to={entities.purchase.routes.detail}
-                    params={entityDetailParams(expense.purchaseId)}
-                    className="block truncate"
-                  >
-                    <span title={label}>{label}</span>
-                  </EntityRefLink>
+                    variant="chip"
+                    entity="purchase"
+                    id={expense.purchaseId}
+                    name={label}
+                  />
                 );
               }
               return v ? (

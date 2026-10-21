@@ -16,7 +16,10 @@ import type { ReactNode } from "react";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { EntityIcon } from "~/entity/entities";
 import type { FilterSpecCore } from "~/entity/filters";
-import { renderOptionCell } from "~/entity/table/column-helpers";
+import {
+  createImageColumn,
+  renderOptionCell,
+} from "~/entity/table/column-helpers";
 import type { TableStateReturn } from "~/entity/table/use-table-state";
 import { formatCurrency } from "~/lib/number-format";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -244,7 +247,8 @@ const textFilter = (placeholder: string): FilterConfig => ({
   filterType: "text",
 });
 
-/** Columns shared by every view: selection, the evidence toggle, record. */
+/** Columns shared by every view: selection, the evidence toggle, and the
+ * suggested record's image. */
 function leadingColumns(
   add: Parameters<Parameters<typeof createCubbyColumnCollection<Row>>[0]>[0],
 ) {
@@ -259,6 +263,14 @@ function leadingColumns(
       enableResizing: false,
       meta: attachCubbyColumnMeta<Row>({ entityColumnRole: "selection" }),
       cell: ExpandCell,
+    }),
+  );
+  add(
+    createImageColumn(helper, {
+      imageRef: (row) => ({
+        entityKind: row.record.entity,
+        entityId: row.record.id,
+      }),
     }),
   );
 }

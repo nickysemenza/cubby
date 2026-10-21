@@ -1,6 +1,10 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
-import type { Entity, EntityRef } from "@cubby/schemas/entity";
+import {
+  type Entity,
+  type EntityRef,
+  entityRefKey,
+} from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
@@ -487,6 +491,10 @@ interface CreateImageColumnOptions<T> {
    *  project tools) — name `rowImages` at the call site for those, or a
    *  cascade resolver when the row borrows a linked entity's cover. */
   getImages?: (row: T) => Array<{ id: string; url: string; filename?: string }>;
+  /** The record a row is about, when the row carries no images of its own (a
+   *  Suggestion, a recipe line): its cover comes from the table's batched
+   *  display-image provider, and a ref-less row shows its entity's icon. */
+  imageRef?: (row: T) => EntityRef | null;
   /** Custom className for the column (default: "px-0 py-0 h-px") */
   className?: string;
   /** Mobile projection metadata override */
@@ -540,6 +548,12 @@ export function createImageColumn<T extends object>(
 ): ImageColumnDef<T>;
 export function createImageColumn<T extends object>(
   columnHelper: ColumnHelper<T>,
+  options: CreateImageColumnOptions<T> & {
+    imageRef: (row: T) => EntityRef | null;
+  },
+): ImageColumnDef<T>;
+export function createImageColumn<T extends object>(
+  columnHelper: ColumnHelper<T>,
   options: CreateImageColumnOptions<T>,
 ) {
   const { entity } = options;
@@ -563,15 +577,21 @@ export function createImageColumn<T extends object>(
     // h-px trick: setting height:1px on td makes h-full work on children
     // overflow-hidden prevents image from expanding the row. The cover fills
     // the 32px row; layout normalization adds any explanation rail beside it.
-    meta: {
+    meta: attachCubbyColumnMeta<T>({
       provenance: options.provenance,
       explanation: entity
         ? declaredColumnExplanation(entity, options.id ?? "image")
         : undefined,
       entityColumnRole: "image",
+      entityRefs: options.imageRef
+        ? (row: T) => {
+            const ref = options.imageRef?.(row);
+            return ref ? [ref] : [];
+          }
+        : undefined,
       className: cn("h-px w-8 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
-    },
+    }),
     // Reads `row.original` rather than `info.getValue()` — deliberately, and it
     // is load-bearing whenever `getImages` closes over separately-fetched data
     // (projects hydrate theirs from the project-image Start projection, not from the
@@ -582,15 +602,41 @@ export function createImageColumn<T extends object>(
     // thumbnail at the empty placeholder: the accessor returned the right image
     // when called directly, while `getValue()` kept handing back the `[]` from
     // before the images query resolved.
-    cell: (info) => (
-      <ImageThumbnail
-        images={getImages(info.row.original)}
-        alt="Image"
-        lazyPreview={true}
-        entity={rowEntity(info.row.original)}
-      />
-    ),
+    cell: (info) => {
+      const ref = options.imageRef?.(info.row.original);
+      return ref ? (
+        <RefImageThumbnail imageRef={ref} />
+      ) : (
+        <ImageThumbnail
+          images={getImages(info.row.original)}
+          alt="Image"
+          lazyPreview={true}
+          entity={rowEntity(info.row.original)}
+        />
+      );
+    },
   });
+}
+
+function RefImageThumbnail({ imageRef }: { imageRef: EntityRef }) {
+  const image = useEntityDisplayImage(imageRef);
+  return (
+    <ImageThumbnail
+      images={
+        image
+          ? [
+              {
+                id: entityRefKey(imageRef.entityKind, imageRef.entityId),
+                url: image.url,
+              },
+            ]
+          : []
+      }
+      alt="Image"
+      lazyPreview={true}
+      entity={imageRef.entityKind}
+    />
+  );
 }
 
 // A single relation summary is the source shape for both a lone inline link
@@ -1694,7 +1740,6 @@ export function createExternalLinkColumn<
   linkTo: "/usda/$id",
   options?: {
     header?: string;
-    variant?: "mono" | "default";
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
@@ -1709,7 +1754,6 @@ export function createExternalLinkColumn<
     };
   },
 ) {
-  const variant = options?.variant ?? "mono";
   const display = options?.display ?? ((value: string) => value);
   const editable = options?.editable;
 
@@ -1730,7 +1774,7 @@ export function createExternalLinkColumn<
         variant="table"
         to={linkTo}
         params={{ id: shown }}
-        tone={variant}
+        tone="mono"
       >
         {shown}
       </EntityRefLink>
@@ -1741,8 +1785,8 @@ export function createExternalLinkColumn<
     header: options?.header,
     meta: {
       className: options?.className,
-      mono: variant === "mono",
-      code: variant === "mono",
+      mono: true,
+      code: true,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
     },

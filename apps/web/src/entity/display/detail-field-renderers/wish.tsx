@@ -1,7 +1,6 @@
 import type { WishCandidateOut } from "@cubby/schemas/wish";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { entities, entityDetailParams } from "~/entity/entities";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -34,13 +33,11 @@ function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
           </span>
           <span className="min-w-0">
             <EntityRefLink
-              variant="table"
-              to={entities.product.routes.detail}
-              params={entityDetailParams(candidate.id)}
-              className="block truncate"
-            >
-              {candidate.name}
-            </EntityRefLink>
+              variant="chip"
+              entity="product"
+              id={candidate.id}
+              name={candidate.name}
+            />
             <span className="block truncate text-muted-foreground">
               {candidate.manufacturer}
               {candidate.model ? ` · ${candidate.model}` : ""}

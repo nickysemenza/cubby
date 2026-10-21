@@ -617,7 +617,11 @@ export function StatementRowList() {
         onSelectMatchState={(matchState) => updateFilter({ matchState })}
       />
       <StatementRowFilterBar search={search} onUpdate={updateFilter} />
-      <ListWorkbench model={workbench.model} ariaLabel="Statement Rows Table" />
+      <ListWorkbench
+        model={workbench.model}
+        ariaLabel="Statement Rows Table"
+        withoutImages="Rows are imported statement lines awaiting a match."
+      />
     </Stack>
   );
 }

@@ -4,7 +4,6 @@ import {
   shortcodeEntities,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
@@ -213,9 +212,8 @@ function useListColumns(
     const composed = compose
       ? assertSpecialistColumnProvenance(entity, declared, compose(declared))
       : declared;
-    const policy = entityManifest[entity].images;
-    if (policy.storage === false && policy.displaySources.length === 0)
-      return composed;
+    // Every list leads with the image column; an entity with no image source
+    // shows its icon there, so rows of every kind share one shape.
     const imageId = entityFieldModels[entity].fields.some(
       (field) => field.key === "images" && field.display.list,
     )

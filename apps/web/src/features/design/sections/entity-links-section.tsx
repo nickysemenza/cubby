@@ -39,11 +39,12 @@ export function EntityLinksSection() {
         </Stack>
       </Demo>
       <Demo
-        name={'<EntityRefLink variant="table" />'}
-        note="A plain record destination for table cells. All examples link to synthetic records."
+        name={'<EntityRefLink variant="table" tone="identity" />'}
+        note="The row's own name beside its image column, or a code (mono). A reference to another record uses chip. All examples link to synthetic records."
       >
         <EntityRefLink
           variant="table"
+          tone="identity"
           to="/products/$shortcode"
           params={{ shortcode: PRODUCT.id }}
         >

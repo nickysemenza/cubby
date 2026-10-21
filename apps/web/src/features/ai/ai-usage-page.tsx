@@ -449,6 +449,7 @@ function SummaryTable({
     <RTable
       table={table}
       ariaLabel="Usage by feature, model, and day"
+      withoutImages="Rows are usage tallies."
       embedded
       showColumnMenu
       isLoading={isLoading}
@@ -601,6 +602,7 @@ function RecentTable({
     <RTable
       table={table}
       ariaLabel="Recent AI calls"
+      withoutImages="Rows are model calls."
       embedded
       showColumnMenu
       additionalToolbarContent={toolbar}

@@ -3,7 +3,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link, type LinkProps } from "@tanstack/react-router";
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva } from "class-variance-authority";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
@@ -207,18 +207,30 @@ type EntityRoute = {
   params: EntityDetailParams | { id: string };
 };
 
-export type TableRefLinkProps = {
-  variant: "table";
-  /** Graphite `identity` for names, `mono` for codes, `muted` for context. */
-  tone?: VariantProps<typeof tableLinkVariants>["tone"];
+/**
+ * What a plain text link names, declared at every call site: `identity` is a
+ * row's own name (beside its image column in a table), `mono` a code, and
+ * `muted` a related record's name beside its own mark or emoji. A reference to
+ * another record with no mark is none of these; it uses `chip`, which carries
+ * one.
+ */
+type TableLinkRole = "identity" | "mono" | "muted";
+
+type TableLinkBase = {
   children: ReactNode;
   className?: string;
   title?: string;
 } & (USDALookupRoute | EntityRoute);
 
+export type TableRefLinkProps = {
+  variant: "table";
+  tone: TableLinkRole;
+} & TableLinkBase;
+
 /**
  * A plain styled link for a table cell. It stops the click so a clickable row
- * never also navigates to its own destination.
+ * never also navigates to its own destination. The chip and avatar variants
+ * reuse it untoned around their own mark.
  */
 export function TableRefLink({
   to,
@@ -227,7 +239,7 @@ export function TableRefLink({
   className = "",
   title,
   tone,
-}: Leaf<TableRefLinkProps>) {
+}: Leaf<{ variant: "table"; tone?: TableLinkRole } & TableLinkBase>) {
   return (
     <Link
       className={tableLinkVariants({ tone, className })}

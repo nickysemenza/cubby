@@ -24,7 +24,10 @@ import {
 } from "~/entity/hooks/use-entity-preview";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { confidenceColor } from "~/entity/suggestions/ai-proposal-card";
-import { createNameColumn } from "~/entity/table/column-helpers";
+import {
+  createImageColumn,
+  createNameColumn,
+} from "~/entity/table/column-helpers";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { CoverageChips } from "~/features/problems/components/unit-coverage-fix";
 import {
@@ -572,6 +575,11 @@ export function EnrichmentWorkbench({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<EnrichmentTableRow>((add) => {
+        add(
+          createImageColumn(columnHelper, {
+            imageRef: (row) => ({ entityKind: "ingredient", entityId: row.id }),
+          }),
+        );
         add(
           columnHelper.accessor("focusRank", {
             header: "Focus",

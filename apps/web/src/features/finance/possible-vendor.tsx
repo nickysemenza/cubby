@@ -1,7 +1,6 @@
 import type { MerchantVendorInference } from "@cubby/schemas/financial-transaction";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { entities, entityDetailParams } from "~/entity/entities";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 
@@ -29,13 +28,11 @@ export function PossibleVendor({
       return (
         <Row gap="sm" className="min-w-0">
           <EntityRefLink
-            variant="table"
-            to={entities.vendor.routes.detail}
-            params={entityDetailParams(candidate.vendorId)}
-            className="min-w-0 truncate"
-          >
-            {candidate.vendorName}
-          </EntityRefLink>
+            variant="chip"
+            entity="vendor"
+            id={candidate.vendorId}
+            name={candidate.vendorName}
+          />
           <span
             className="shrink-0 text-2xs text-muted-foreground"
             title={supportCopy(candidate.supportingTransactionCount)}
@@ -60,13 +57,11 @@ export function PossibleVendor({
     return (
       <Stack gap="tight" className="min-w-0">
         <EntityRefLink
-          variant="table"
-          to={entities.vendor.routes.detail}
-          params={entityDetailParams(candidate.vendorId)}
-          className="block truncate"
-        >
-          {candidate.vendorName}
-        </EntityRefLink>
+          variant="chip"
+          entity="vendor"
+          id={candidate.vendorId}
+          name={candidate.vendorName}
+        />
         <span className="text-2xs text-muted-foreground">
           Based on {supportCopy(candidate.supportingTransactionCount)}.
         </span>
@@ -84,13 +79,11 @@ export function PossibleVendor({
         {inference.candidates.map((candidate) => (
           <Row as="li" key={candidate.vendorId} justify="between" gap="sm">
             <EntityRefLink
-              variant="table"
-              to={entities.vendor.routes.detail}
-              params={entityDetailParams(candidate.vendorId)}
-              className="min-w-0 truncate"
-            >
-              {candidate.vendorName}
-            </EntityRefLink>
+              variant="chip"
+              entity="vendor"
+              id={candidate.vendorId}
+              name={candidate.vendorName}
+            />
             <span className="shrink-0 text-2xs text-muted-foreground">
               {supportCopy(candidate.supportingTransactionCount)}
             </span>
