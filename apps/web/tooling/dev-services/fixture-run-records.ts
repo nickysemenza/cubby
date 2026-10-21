@@ -6,13 +6,13 @@ import { join } from "node:path";
 function serviceDirectory(url: string): string {
   return join(
     tmpdir(),
-    "cubby-template-initializers",
+    "cubby-fixture-runs",
     createHash("sha1").update(url).digest("hex"),
   );
 }
 
 /** Clients must share both this host directory and the service incarnation. */
-export function templateMarkerDirectory(
+export function fixtureRunRecordDirectory(
   url: string,
   incarnation?: string,
 ): string {
@@ -27,14 +27,17 @@ export function templateMarkerDirectory(
 }
 
 /** The service owner can prove only named prior incarnations are gone. */
-export function retireTemplateMarkers(url: string, incarnation?: string): void {
+export function retireFixtureRunRecords(
+  url: string,
+  incarnation?: string,
+): void {
   const directory = serviceDirectory(url);
   if (!existsSync(directory)) return;
   const keep = incarnation
     ? createHash("sha1").update(incarnation).digest("hex")
     : undefined;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    // Legacy files and unverified scopes may still belong to live older clients.
+    // An unverified namespace cannot establish that its service has stopped.
     if (
       entry.isDirectory() &&
       /^[0-9a-f]{40}$/u.test(entry.name) &&

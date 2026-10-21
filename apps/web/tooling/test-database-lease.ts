@@ -4,7 +4,6 @@ import { IntegreSQLClient } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
 import { migrateDatabase } from "./db-migrate";
-import { initializeRecoverableTemplate } from "./template-recovery";
 import { cloneSchemaTemplate } from "./schema-template";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {
@@ -72,18 +71,16 @@ function connectionUrl(config: {
 
 const preparedHashes = new Map<TemplateNamespace, string>();
 
-/** IntegreSQL coordinates preparation; dead initializers recover without locks. */
+/** IntegreSQL owns template election, preparation and readiness. */
 export async function prepareTemplate(
   namespace: TemplateNamespace,
 ): Promise<void> {
-  const hash = await initializeRecoverableTemplate(
-    templateHash(namespace),
-    async (config) => {
-      console.log(`[test database] Preparing the ${namespace} template`);
-      if (namespace !== "migration") await cloneSchemaTemplate(config.database);
-      console.log(`[test database] Prepared the ${namespace} template`);
-    },
-  );
+  const hash = templateHash(namespace);
+  await integreSQL().initializeTemplate(hash, async (config) => {
+    console.log(`[test database] Preparing the ${namespace} template`);
+    if (namespace !== "migration") await cloneSchemaTemplate(config.database);
+    console.log(`[test database] Prepared the ${namespace} template`);
+  });
   preparedHashes.set(namespace, hash);
 }
 

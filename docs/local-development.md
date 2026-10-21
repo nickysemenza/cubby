@@ -44,17 +44,16 @@ runtime identity, while `/__dev/ready` checks database connectivity, committed
 migrations, the completed core fixture marker, and that the synthetic USDA
 release has loaded (`usdaReady`).
 
-Dev sessions and template recovery share one process-liveness contract: `alive`
-means equal verified birth identities; `dead` means an absent PID or a verified
-different birth in the same identity format; everything unreadable or in another
-format is `unknown`. Unknown ownership never authorizes termination, replacement,
-reset, or template discard. Unprefixed legacy identities are unknown because their
-original timezone/locale was not recorded. For local birth uncertainty, the
-diagnostic names the PID: stop that local process with `kill <pid>`, then run
-`pnpm dev down` before retrying. Foreign-host or missing-service-incarnation
-uncertainty requires shared-service recovery instead; see
-[template recovery](development.md#worktrees-and-test-services). Session and
-persistent data stay intact until ownership is resolved.
+Dev sessions and seeded fixture cleanup share one process-liveness contract:
+`alive` means equal verified birth identities; `dead` means an absent PID or a
+verified different birth in the same identity format; everything unreadable or
+in another format is `unknown`. Unknown ownership never authorizes termination,
+replacement, reset, or fixture cleanup. Unprefixed legacy identities are unknown
+because their original timezone/locale was not recorded. For local birth
+uncertainty, stop the reported local process before running `pnpm dev down`.
+Session and persistent data stay intact until ownership is resolved.
+IntegreSQL owns template initialization; interrupted initialization requires
+coordinated [test-service restart](development.md#worktrees-and-test-services).
 `/__dev/login` signs in the synthetic local
 account through real Better Auth on loopback.
 Debug Swift apps launched with `--cubby-dev-server <origin>` use

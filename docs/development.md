@@ -272,38 +272,18 @@ native PostgreSQL installation remain owned by their existing runners.
   that require populated Recipe totals compute them after their input writes
   settle. The corpus settles
   its initial SQL projections before becoming a cloneable template.
-  All template layers use IntegreSQL's initializer election without a template
-  lock. Recovery supports one Mac or one CI runner: all clients must share the
-  same host temporary marker directory and service incarnation. Separate machines,
-  containers with separate temp directories, and unmarked pending owners fail closed;
-  there is no cross-host recovery. Pending records under `cubby-template-initializers`
-  are keyed by service URL, incarnation and hash and record host, PID and a
-  versioned process birth identity read with `TZ=UTC LC_ALL=C`. A live or
-  unverifiable owner is never discarded. Recovery uses the shared
-  [tri-state process-liveness contract](local-development.md#checkout-runtime);
-  local birth uncertainty reports the local PID to stop before retrying, while
-  live owners wait at most two minutes. Foreign-host markers and missing service
-  IDs reject before PID inspection: never kill a local PID based on a foreign
-  marker. Stop all shared-service clients, run `pnpm test:services:down`, then
-  restart via the managed runner. External service owners must recycle the
-  service and supply a fresh `CUBBY_TEMPLATE_SERVICE_ID` shared by all clients.
-  If legacy/unverified markers still block recovery, the service owner must
-  remove only that retired service's marker scope after confirming all its
-  initializers have stopped; managed cleanup deliberately preserves those scopes.
-  A proven-dead owner redirects to a deterministic successor hash. Only newly
-  created redirects consume the eight-interruption budget; established redirects
-  may be traversed across any number of past interruptions within the deadline.
-  Concurrent recoverers discard only the abandoned hash through IntegreSQL's API.
-  A kill before the owner record exists times out rather than guessing ownership.
-  Successful finalization removes its pending record. Managed startup derives
-  `CUBBY_TEMPLATE_SERVICE_ID` from both containers' start identities and retires
-  named directories from previous incarnations; recycling and teardown remove
-  named incarnation directories. Legacy-layout marker files and unverified scopes
-  remain untouched because they cannot prove a gone service incarnation and an
-  older live initializer still needs its pending file for finalization. External
-  services must provide a shared, fresh ID whenever either
-  service restarts (CI uses its fresh job's identity). Without it, initialization
-  and finalized-template reuse work, but pending-owner recovery fails closed.
+  Template election, setup failure cleanup, finalization and readiness belong
+  to the existing IntegreSQL client. There is no Cubby initializer recovery,
+  PID marker or successor-hash protocol. A killed initializer can leave its
+  template pending: stop every client of that shared test service, then run
+  `pnpm test:services:down` and restart through the managed runner. External
+  service owners restart their own service. Do not discard a pending template
+  while another client may still initialize it.
+  Seeded fixture run records remain scoped by service URL and incarnation so
+  cleanup cannot target another service's templates. Managed startup derives
+  `CUBBY_TEMPLATE_SERVICE_ID` from both container start identities; external
+  services supply a fresh shared ID after either service restarts. Process-birth
+  checks protect live fixture runs; an unverifiable run is not cleanup authority.
   Local development clones that corpus to its stable `cubby_dev_*` name
   ([database lifetime](local-development.md#checkout-runtime)). One capped server (1.5 GB, 4 CPUs, durability off) replaces a
   second VM: Virtualization.framework guests never return freed memory to

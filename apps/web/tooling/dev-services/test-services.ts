@@ -1,4 +1,4 @@
-import { retireTemplateMarkers } from "./template-markers.ts";
+import { retireFixtureRunRecords } from "./fixture-run-records.ts";
 import type { ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -254,7 +254,7 @@ async function integresqlDatabases(): Promise<string[]> {
 async function createIntegresql(postgresHost: string): Promise<void> {
   const previousUrl = await integresqlAddress().catch(() => undefined);
   await stopAndRemove(INTEGRESQL);
-  if (previousUrl) retireTemplateMarkers(previousUrl);
+  if (previousUrl) retireFixtureRunRecords(previousUrl);
   const stale = await integresqlDatabases();
   if (stale.length > 0) {
     await psql(
@@ -309,7 +309,7 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
     )) {
       if (name.endsWith("-integresql")) {
         const url = await integresqlAddress(name).catch(() => undefined);
-        if (url) retireTemplateMarkers(url);
+        if (url) retireFixtureRunRecords(url);
       }
       await stopAndRemove(name);
       console.log(`[test-services] Removed idle ${name}`);
@@ -360,7 +360,7 @@ async function joinSharedServices(env: NodeJS.ProcessEnv) {
     const incarnation = createHash("sha256")
       .update(JSON.stringify(births))
       .digest("hex");
-    retireTemplateMarkers(integresqlUrl, incarnation);
+    retireFixtureRunRecords(integresqlUrl, incarnation);
     const overlay: NodeJS.ProcessEnv = {
       CUBBY_TEMPLATE_SERVICE_ID: incarnation,
       CUBBY_TEST_SERVICES: "external",
@@ -399,7 +399,7 @@ async function stopIdleServices(): Promise<void> {
     )) {
       if (name.endsWith("-integresql")) {
         const url = await integresqlAddress(name).catch(() => undefined);
-        if (url) retireTemplateMarkers(url);
+        if (url) retireFixtureRunRecords(url);
       }
       await stopAndRemove(name);
       console.log(`[test-services] Removed ${name}`);
