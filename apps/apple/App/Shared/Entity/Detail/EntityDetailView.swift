@@ -149,6 +149,8 @@ struct EntityDetailView: View {
                         Label("Copy shortcode", systemImage: "number")
                     }
                     recordMenuButtons(row: row)
+                    relationCreationMenuItems
+                    ConnectionsWorkspaceLink(entity: key.rawValue, recordID: row.id)
                     heroActionButtons
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
@@ -184,6 +186,33 @@ struct EntityDetailView: View {
         }
     }
 
+    @ViewBuilder private var relationCreationMenuItems: some View {
+        let declared = relationSections.filter { section in
+            descriptor.presentation.detailSections.contains(where: { $0.id == section.id })
+                && section.target.key.nativeActions.contains(.create)
+        }
+        if !declared.isEmpty {
+            Section("Create") {
+                ForEach(declared) { section in
+                    Button(
+                        section.id == journalRelationID ? "Log entry" : "New \(section.target.singular)",
+                        systemImage: "plus"
+                    ) {
+                        creatingRelation = section
+                    }
+                }
+            }
+        }
+    }
+
+    private var journalRelationID: String? {
+        guard descriptor.presentation.detailVariant == .journal else { return nil }
+        return descriptor.presentation.detailSections.first {
+            if case .relation = $0.kind { return true }
+            return false
+        }?.id
+    }
+
     @ViewBuilder
     private var content: some View {
         if let model, let row = model.row {
@@ -197,8 +226,6 @@ struct EntityDetailView: View {
                     descriptor: descriptor, row: row,
                     relationSections: relationSections,
                     connectedRecords: connectedRecords,
-                    fetchedAt: model.fetchedAt,
-                    onCreateRelation: { creatingRelation = $0 },
                     onChanged: { Task { await refresh() } }
                 )
             }
@@ -258,6 +285,7 @@ struct EntityDetailView: View {
             connectedRecords = ConnectedRecordsPreviewModel(
                 source: EntityRef(entity: key, id: survivorID), client: appModel.client)
         }
+        await connectedRecords?.loadInitial()
     }
 
     private func refresh() async {
@@ -362,16 +390,21 @@ struct EntityDetailContent: View {
     let row: EntityRow
     var relationSections: [RelationSectionModel] = []
     var connectedRecords: ConnectedRecordsPreviewModel? = nil
-    /// Developer overlays layer 4: when this row was fetched. `nil` in previews/fixtures that
-    /// never went through `GenericEntityDetailModel`.
-    var fetchedAt: Date? = nil
-    var onCreateRelation: (RelationSectionModel) -> Void = { _ in }
     var onChanged: () -> Void = {}
 
     @Environment(AppModel.self) private var appModel
-    @Environment(\.developerOverlays) private var developerOverlays
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
+    @State private var spendPoints: MonthlyExpenseSpendOutput?
+    @State private var spendError: String?
+    @State private var activityEvents: [DetailActivityEvent] = []
+    @State private var activityCursor: String?
+    @State private var activityError: String?
+    @State private var activityLoaded = false
+    @State private var loadingOlderActivity = false
+    @State private var connectedExpanded = false
+    @State private var rawExpanded = false
+    @State private var collapsedMacSections: Set<String> = []
     @State private var reportBatches = ReportBatchStore()
 
     private var presentation: EntityPresentation { descriptor.presentation }
@@ -401,6 +434,197 @@ struct EntityDetailContent: View {
     }
 
     var body: some View {
+        #if os(macOS)
+            macBody
+        #else
+            phoneBody
+        #endif
+    }
+
+    #if os(macOS)
+        private var macBody: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                    if let redirectedFrom = row.redirectedFrom {
+                        Label(
+                            "\(redirectedFrom) was merged into \(row.id)",
+                            systemImage: "arrow.triangle.branch"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    EntityHeroView(descriptor: descriptor, row: row) {
+                        if let supplement = DetailSlotRegistry.supplement(
+                            for: descriptor.key, row: row, onChanged: onChanged)
+                        {
+                            supplement
+                        }
+                    }
+                    if presentation.heroChart != nil {
+                        if let spendError {
+                            InlineLoadFailure(message: spendError) { await loadSpend() }
+                        } else if let spendPoints {
+                            MonthlyExpenseSpendChart(points: spendPoints)
+                        } else {
+                            LoadingIndicator(label: "Loading monthly spend")
+                        }
+                    }
+                    HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                            if descriptor.key == .location {
+                                macDisclosure("Fieldwork", id: "fieldwork") {
+                                    NavigationLink(
+                                        value: Route.locationPhotoPass(scope: LocationCode(row.id))
+                                    ) {
+                                        Label(
+                                            "Photo pass from this location",
+                                            systemImage: "camera.on.rectangle")
+                                    }
+                                }
+                            }
+                            if let journal = journalSection,
+                                !(journal.list.phase == .loaded && journal.list.rows.isEmpty)
+                            {
+                                DisclosureGroup(isExpanded: macSectionBinding(journal.id)) {
+                                    EntityJournalSectionView(model: journal, macLayout: true)
+                                } label: {
+                                    Text(journal.section.title ?? "Journal").font(.headline)
+                                }
+                            }
+                            ForEach(presentation.detailSections) { section in
+                                if section.id != journalSection?.id { macDeclared(section) }
+                            }
+                            if hasUnsupportedPresentation {
+                                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                                    Text("More details").font(.headline)
+                                    Text("Additional details are available on web.").foregroundStyle(
+                                        .secondary)
+                                    Link(
+                                        "Open on web",
+                                        destination: appModel.webURL(for: descriptor.key, id: row.id))
+                                }
+                            }
+                            if let connectedRecords, connectedHasRows || connectedRecords.error != nil {
+                                DisclosureGroup(isExpanded: $connectedExpanded) {
+                                    ConnectedRecordsSection(model: connectedRecords)
+                                } label: {
+                                    Text("Connected records").font(.headline)
+                                }
+                            }
+                            DisclosureGroup(isExpanded: $rawExpanded) {
+                                RawRecordDisclosure(raw: row.raw)
+                            } label: {
+                                Text("Raw record").font(.headline)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if !presentation.activityRelations.isEmpty {
+                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                                if let activityError {
+                                    InlineLoadFailure(message: activityError) { await loadActivity() }
+                                } else if activityLoaded {
+                                    DetailActivitySection(
+                                        events: activityEvents, isLoadingMore: loadingOlderActivity,
+                                        hasMore: activityCursor != nil,
+                                        onLoadMore: { Task { await loadOlderActivity() } })
+                                } else {
+                                    Text("Activity").font(.headline)
+                                    LoadingIndicator(label: "Loading activity")
+                                }
+                            }
+                            .frame(width: 320, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(maxWidth: 1_160, alignment: .topLeading)
+                .padding(FieldGuideTokens.Space.lg)
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
+            .task(id: row.id) {
+                await loadTimelineIfDeclared()
+                await loadChartAndActivity()
+            }
+            .modifier(DetailContentsNavigation(entries: contentsEntries))
+            .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
+            .environment(\.reportBatchStore, reportBatches)
+            .task { reportBatches.onRecordStale = onChanged }
+        }
+
+        @ViewBuilder
+        private func macDeclared(_ section: DetailSection) -> some View {
+            switch section.kind {
+            case .fields(let keys):
+                let fields = FieldsSectionView(descriptor: descriptor, row: row, keys: keys, macGrid: true)
+                if fields.hasVisibleRows {
+                    DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
+                        fields
+                    } label: {
+                        Text(section.title ?? "Details").font(.headline)
+                    }
+                }
+            case .relation:
+                if let model = relationSections.first(where: { $0.id == section.id }),
+                    !(model.list.phase == .loaded && model.list.rows.isEmpty)
+                {
+                    DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
+                        RelationSectionView(model: model, row: row, macLayout: true)
+                    } label: {
+                        Text(section.title ?? model.target.plural).font(.headline)
+                    }
+                }
+            case .timeline:
+                if !timelineIsEmpty {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                        Text(section.title ?? "Timeline").font(.headline)
+                        if let timelineError {
+                            InlineLoadFailure(message: timelineError) { await loadTimelineIfDeclared() }
+                        } else if let timeline {
+                            EntityTimelineView(timeline: timeline)
+                        } else {
+                            LoadingIndicator(label: "Loading timeline")
+                        }
+                    }
+                }
+            case .slot:
+                if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
+                    DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
+                        view
+                    } label: {
+                        if let key = section.explanationField, let field = descriptor.field(key) {
+                            FieldExplanationLabel(
+                                field: field, subject: EntityRef(entity: descriptor.key, id: row.id),
+                                labelOverride: section.title
+                            )
+                            .font(.headline)
+                        } else {
+                            Text(section.title ?? section.id).font(.headline)
+                        }
+                    }
+                }
+            }
+        }
+
+        private func macDisclosure<Content: View>(
+            _ title: String, id: String, @ViewBuilder content: @escaping () -> Content
+        ) -> some View {
+            DisclosureGroup(isExpanded: macSectionBinding(id)) {
+                content()
+            } label: {
+                Text(title).font(.headline)
+            }
+        }
+
+        private func macSectionBinding(_ id: String) -> Binding<Bool> {
+            Binding(
+                get: { !collapsedMacSections.contains(id) },
+                set: { expanded in
+                    if expanded { collapsedMacSections.remove(id) } else { collapsedMacSections.insert(id) }
+                })
+        }
+    #endif
+
+    private var phoneBody: some View {
         List {
             if let redirectedFrom = row.redirectedFrom {
                 Section {
@@ -418,12 +642,6 @@ struct EntityDetailContent: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-                // Layer 4: shortcode + fetched-at/age. The generic entity API never exposes the
-                // underlying uuid (only shortcodes cross the wire — see apps/apple/AGENTS.md), so
-                // there is nothing to show beyond the shortcode already in `row.id`.
-                if developerOverlays {
-                    DevOverlayText(EntityDetailDiagnostics(shortcode: row.id, fetchedAt: fetchedAt).caption)
-                }
                 if !row.previousShortcodes.isEmpty {
                     LabeledContent(
                         "Previous shortcodes", value: row.previousShortcodes.joined(separator: ", "))
@@ -436,13 +654,40 @@ struct EntityDetailContent: View {
                     }
                 }
             }
+            if presentation.heroChart != nil {
+                Section {
+                    if let spendError {
+                        InlineLoadFailure(message: spendError) { await loadSpend() }
+                    } else if let spendPoints {
+                        MonthlyExpenseSpendChart(points: spendPoints)
+                    } else {
+                        LoadingIndicator(label: "Loading monthly spend")
+                    }
+                }
+            }
             if let journal = journalSection {
-                EntityJournalSectionView(model: journal) { onCreateRelation(journal) }
-                    .detailContentsAnchor(journal.id)
+                if !(journal.list.phase == .loaded && journal.list.rows.isEmpty) {
+                    EntityJournalSectionView(model: journal)
+                        .detailContentsAnchor(journal.id)
+                }
             }
             ForEach(presentation.detailSections) { section in
                 if section.id != journalSection?.id {
                     declared(section).detailContentsAnchor(section.id)
+                }
+            }
+            if !presentation.activityRelations.isEmpty {
+                Section {
+                    if let activityError {
+                        InlineLoadFailure(message: activityError) { await loadActivity() }
+                    } else if !activityLoaded {
+                        LoadingIndicator(label: "Loading activity")
+                    } else {
+                        DetailActivitySection(
+                            events: activityEvents, isLoadingMore: loadingOlderActivity,
+                            hasMore: activityCursor != nil,
+                            onLoadMore: { Task { await loadOlderActivity() } })
+                    }
                 }
             }
             if hasUnsupportedPresentation {
@@ -453,21 +698,32 @@ struct EntityDetailContent: View {
                 }
             }
             if let connectedRecords {
-                ConnectedRecordsSection(model: connectedRecords).detailContentsAnchor("connected-records")
+                if connectedHasRows || connectedRecords.error != nil {
+                    DisclosureGroup("Connected records", isExpanded: $connectedExpanded) {
+                        ConnectedRecordsSection(model: connectedRecords)
+                    }
+                    .detailContentsAnchor("connected-records")
+                }
             }
-            ContinuousDetailSection(title: "Connections") {
-                EntityRelationshipsSection(source: EntityRef(entity: descriptor.key, id: row.id))
-            }.detailContentsAnchor("relationships")
-            ContinuousDetailSection(title: "Raw record") { RawRecordDisclosure(raw: row.raw) }
-                .detailContentsAnchor("raw-record")
+            DisclosureGroup("Raw record", isExpanded: $rawExpanded) {
+                RawRecordDisclosure(raw: row.raw)
+            }
+            .detailContentsAnchor("raw-record")
         }
-        .listStyle(.plain)
+        #if os(iOS)
+            .listStyle(.insetGrouped)
+        #else
+            .listStyle(.plain)
+        #endif
         .listRowBackground(Color.clear)
         .fieldGuideDetailDensity()
         .frame(maxWidth: 900)
         .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
-        .task(id: row.id) { await loadTimelineIfDeclared() }
+        .task(id: row.id) {
+            await loadTimelineIfDeclared()
+            await loadChartAndActivity()
+        }
         .modifier(DetailContentsNavigation(entries: contentsEntries))
         .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
         .environment(\.reportBatchStore, reportBatches)
@@ -478,28 +734,26 @@ struct EntityDetailContent: View {
     private func declared(_ section: DetailSection) -> some View {
         switch section.kind {
         case .fields(let keys):
-            ContinuousDetailSection(title: section.title ?? "") {
-                FieldsSectionView(descriptor: descriptor, row: row, keys: keys)
+            let fields = FieldsSectionView(descriptor: descriptor, row: row, keys: keys)
+            if fields.hasVisibleRows {
+                ContinuousDetailSection(title: section.title ?? "") { fields }
             }
         case .relation:
             if let model = relationSections.first(where: { $0.id == section.id }) {
-                RelationSectionView(model: model, row: row) { onCreateRelation(model) }
-            }
-        case .timeline:
-            ContinuousDetailSection(title: section.title ?? "Timeline") {
-                if let timelineError {
-                    InlineLoadFailure(message: timelineError) { await loadTimelineIfDeclared() }
-                } else if let timeline {
-                    if timeline.groups.isEmpty && (timeline.rows ?? []).isEmpty {
-                        Text("No events").foregroundStyle(.secondary)
-                            .preference(key: DetailSectionEmpty.self, value: true)
-                    }
-                } else {
-                    LoadingIndicator(label: "Loading timeline")
+                if !(model.list.phase == .loaded && model.list.rows.isEmpty) {
+                    RelationSectionView(model: model, row: row)
                 }
             }
-            if let timeline, !(timeline.groups.isEmpty && (timeline.rows ?? []).isEmpty) {
-                EntityTimelineView(timeline: timeline)
+        case .timeline:
+            if !timelineIsEmpty {
+                ContinuousDetailSection(title: section.title ?? "Timeline") {
+                    if let timelineError {
+                        InlineLoadFailure(message: timelineError) { await loadTimelineIfDeclared() }
+                    } else if timeline == nil {
+                        LoadingIndicator(label: "Loading timeline")
+                    }
+                }
+                if let timeline { EntityTimelineView(timeline: timeline) }
             }
         case .slot:
             if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
@@ -518,34 +772,42 @@ struct EntityDetailContent: View {
                 } else {
                     ContinuousDetailSection(title: section.title ?? "") { view }
                 }
-            } else {
-                ContinuousDetailSection(title: section.title ?? section.id) {
-                    Text("This section is available on web.").foregroundStyle(.secondary)
-                    Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
-                }
             }
         }
     }
 
+    private var timelineIsEmpty: Bool {
+        guard let timeline else { return false }
+        return timeline.groups.isEmpty && (timeline.rows ?? []).isEmpty && timelineError == nil
+    }
+
     // Native declarations have no workspace grouping; preserve the detail's reading order.
     private var contentsEntries: [DetailContentsEntry] {
-        let ordered =
-            presentation.detailSections.filter { $0.id == journalSection?.id }
-            + presentation.detailSections.filter { $0.id != journalSection?.id }
-        return ordered.map {
-            DetailContentsEntry(
-                id: $0.id, title: $0.title ?? $0.id, group: "Record")
+        let sections = presentation.detailSections.compactMap { section -> DetailContentsEntry? in
+            switch section.kind {
+            case .fields(let keys):
+                guard FieldsSectionView(descriptor: descriptor, row: row, keys: keys).hasVisibleRows else {
+                    return nil
+                }
+            case .relation:
+                guard let relation = relationSections.first(where: { $0.id == section.id }),
+                    !(relation.list.phase == .loaded && relation.list.rows.isEmpty)
+                else { return nil }
+            case .timeline:
+                guard !timelineIsEmpty else { return nil }
+            case .slot:
+                guard DetailSlotRegistry.view(slot: section.id, row: row) != nil else { return nil }
+            }
+            return DetailContentsEntry(id: section.id, title: section.title ?? section.id, group: "Record")
         }
-            + (connectedRecords == nil
-                ? []
-                : [
+        return sections
+            + (connectedHasRows
+                ? [
                     DetailContentsEntry(
                         id: "connected-records", title: "Connected records", group: "Relations")
-                ])
-            + [DetailContentsEntry(id: "relationships", title: "Connections", group: "Relations")]
-            + [
-                DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")
-            ]
+                ]
+                : [])
+            + [DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")]
     }
 
     private func loadTimelineIfDeclared() async {
@@ -561,6 +823,58 @@ struct EntityDetailContent: View {
         } catch {
             timelineError = error.userMessage
             Diagnostics.report(error, context: "detail.timeline")
+        }
+    }
+
+    private var connectedHasRows: Bool {
+        connectedRecords?.preview?.views.contains(where: { $0.totalCount > 0 }) ?? false
+    }
+
+    private func loadChartAndActivity() async {
+        if presentation.heroChart != nil { await loadSpend() }
+        if !presentation.activityRelations.isEmpty { await loadActivity() }
+    }
+
+    private func loadSpend() async {
+        guard presentation.heroChart != nil else { return }
+        spendError = nil
+        do {
+            spendPoints = try await appModel.client.monthlyExpenseSpend(
+                .init(source: EntityGraphRootInput(entityKind: descriptor.key, entityId: row.id)))
+        } catch {
+            spendError = error.userMessage
+        }
+    }
+
+    private func loadActivity() async {
+        guard !presentation.activityRelations.isEmpty else { return }
+        activityError = nil
+        activityLoaded = false
+        do {
+            let output = try await appModel.client.detailActivity(
+                .init(
+                    source: EntityGraphRootInput(entityKind: descriptor.key, entityId: row.id), limit: 30))
+            activityEvents = output.items
+            activityCursor = output.nextCursor
+            activityLoaded = true
+        } catch {
+            activityError = error.userMessage
+        }
+    }
+
+    private func loadOlderActivity() async {
+        guard let cursor = activityCursor, !loadingOlderActivity else { return }
+        loadingOlderActivity = true
+        defer { loadingOlderActivity = false }
+        do {
+            let output = try await appModel.client.detailActivity(
+                .init(
+                    source: EntityGraphRootInput(entityKind: descriptor.key, entityId: row.id),
+                    limit: 30, cursor: cursor))
+            activityEvents.append(contentsOf: output.items)
+            activityCursor = output.nextCursor
+        } catch {
+            activityError = error.userMessage
         }
     }
 
@@ -658,8 +972,7 @@ private struct HeroEditorRequest: Identifiable {
 #Preview {
     NavigationStack {
         EntityDetailContent(
-            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow,
-            fetchedAt: Date()
+            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow
         )
         .navigationTitle("Cast Iron Skillet")
     }
@@ -669,8 +982,7 @@ private struct HeroEditorRequest: Identifiable {
 #Preview("Developer overlays on") {
     NavigationStack {
         EntityDetailContent(
-            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow,
-            fetchedAt: Date()
+            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow
         )
         .navigationTitle("Cast Iron Skillet")
     }

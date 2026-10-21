@@ -5,12 +5,12 @@ extension View {
     func fieldGuideDetailDensity() -> some View {
         self
             #if os(iOS)
-                .environment(\.defaultMinListRowHeight, FieldGuideTokens.touchTarget)
+                .environment(\.defaultMinListRowHeight, 30)
             #endif
             .listRowInsets(
                 EdgeInsets(
-                    top: FieldGuideTokens.Space.xs, leading: FieldGuideTokens.Space.md,
-                    bottom: FieldGuideTokens.Space.xs, trailing: FieldGuideTokens.Space.md)
+                    top: 2, leading: FieldGuideTokens.Space.md,
+                    bottom: 2, trailing: FieldGuideTokens.Space.md)
             )
             .contentMargins(.horizontal, FieldGuideTokens.Space.md, for: .scrollContent)
             #if os(iOS)
