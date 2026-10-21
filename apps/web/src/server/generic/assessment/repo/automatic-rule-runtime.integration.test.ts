@@ -27,6 +27,8 @@ import { getDb } from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
+  automaticRule,
+  expense,
   feedback,
   spendingCategory,
 } from "~/server/db/schema";
@@ -92,6 +94,7 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
 };
 
 const ATTACH: AutomaticRuleKey = "statement_transaction.attach";
+const BOOK_SPENDING: AutomaticRuleKey = "statement_transaction.book_spending";
 const ASSIGNMENT: AutomaticRuleKey = "field.addition";
 
 type Verdict = "correct" | "wrong" | "dismissed";
@@ -411,6 +414,167 @@ const eligibleFor = (ctx: Ctx, models: readonly string[]) =>
       }),
     ),
   );
+
+// Failure modes: clean booking is invisible or cannot be paused; a measured
+// attach bypasses its pause; stale automatic commands ignore the persisted
+// switch; feedback retries reapply rejected or already-booked evidence.
+describe("clean import booking controls", () => {
+  const ctx = withTestDb();
+
+  it("defaults on and lets a member pause and resume without measured eligibility", async () => {
+    expect(await ruleOf(ctx, BOOK_SPENDING)).toMatchObject({
+      enabled: true,
+      eligible: true,
+      n: 0,
+      precision: null,
+    });
+    expect(
+      await setAutomaticRule(ctx.db, ctx.actor, {
+        ruleKey: BOOK_SPENDING,
+        enabled: false,
+      }),
+    ).toMatchObject({ enabled: false, eligible: true });
+    // A new code revision must not silently discard a member's pause.
+    await getDb(ctx.db)
+      .update(automaticRule)
+      .set({ revision: "synthetic-previous-revision" })
+      .where(eq(automaticRule.ruleKey, BOOK_SPENDING));
+    expect((await ruleOf(ctx, BOOK_SPENDING)).enabled).toBe(false);
+    expect(
+      await setAutomaticRule(ctx.db, ctx.actor, {
+        ruleKey: BOOK_SPENDING,
+        enabled: true,
+      }),
+    ).toMatchObject({ enabled: true, eligible: true, n: 0 });
+    await expect(
+      setAutomaticRule(ctx.db, systemActor(), {
+        ruleKey: BOOK_SPENDING,
+        enabled: false,
+      }),
+    ).rejects.toThrow(/Only a member/);
+  });
+
+  it("holds clean spending while paused even when measured attach is on, then resumes once", async () => {
+    await createSystemUserFixture(ctx.db);
+    const { existing } = await soleCandidateCharge(ctx);
+    await eligibleFor(ctx, supportedDecisionModelSchema.options);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: BOOK_SPENDING,
+      enabled: false,
+    });
+    await label(ctx);
+    const suggestion = await chargeSuggestion(ctx);
+    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await applyAutomaticRules(ctx.db, [suggestion.id], { importClean: true }),
+    ).toEqual({
+      applied: [],
+      audited: [],
+      refused: [],
+    });
+    const attachStamp = (
+      await stateOf(ctx, suggestion.id)
+    ).data.matchedRules!.find((stamp) =>
+      stamp.startsWith(`${ruleBase(ATTACH)}@`),
+    )!;
+    await expect(
+      reviewAssessment(
+        ctx.db,
+        kernelCtx(ctx),
+        {
+          assessmentId: suggestion.id,
+          operationId: "automatic:synthetic-paused-attach",
+          verdict: "correct",
+          intent: "apply",
+          expectedFingerprint: suggestion.fingerprint,
+          application: {
+            kind: "statement_transaction",
+            action: "attach",
+            transactionId: existing.id,
+            fields: [],
+            rejectedCandidateIds: [],
+          },
+        },
+        {
+          authority: "automatic",
+          rule: {
+            key: ATTACH,
+            revision: ruleBase(ATTACH).slice(ATTACH.length + 1),
+            stamp: attachStamp,
+          },
+        },
+      ),
+    ).rejects.toThrow(/is off; review the suggestion/);
+    expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: BOOK_SPENDING,
+      enabled: true,
+    });
+    expect(
+      (
+        await applyAutomaticRules(ctx.db, [suggestion.id], {
+          importClean: true,
+        })
+      ).applied,
+    ).toEqual([suggestion.id]);
+    const booked = await getDb(ctx.db).select().from(expense);
+    expect(booked).toHaveLength(1);
+    const history = await feedbackFor(ctx, suggestion.id);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: suggestion.id,
+      operationId: "synthetic-booked-wrong",
+      verdict: "wrong",
+      intent: "history",
+    });
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    expect(
+      (
+        await applyAutomaticRules(ctx.db, [suggestion.id], {
+          importClean: true,
+        })
+      ).applied,
+    ).toEqual([]);
+    expect((await stateOf(ctx, suggestion.id)).status).toBe("applied");
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(booked);
+    expect(await feedbackFor(ctx, suggestion.id)).toEqual([
+      ...history,
+      expect.objectContaining({
+        authority: "member",
+        verdict: "wrong",
+      }),
+    ]);
+  });
+
+  it("does not automatically reapply an unchanged pending suggestion marked Wrong", async () => {
+    await soleCandidateCharge(ctx);
+    await label(ctx);
+    const suggestion = await chargeSuggestion(ctx);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: suggestion.id,
+      operationId: "synthetic-pending-wrong",
+      verdict: "wrong",
+      intent: "history",
+    });
+    const history = await feedbackFor(ctx, suggestion.id);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await label(ctx);
+    expect(
+      (
+        await applyAutomaticRules(ctx.db, [suggestion.id], {
+          importClean: true,
+        })
+      ).applied,
+    ).toEqual([]);
+    expect((await stateOf(ctx, suggestion.id)).status).toBe("rejected");
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(await feedbackFor(ctx, suggestion.id)).toEqual(history);
+  });
+});
 
 describe("Automatic rules", () => {
   const ctx = withTestDb();

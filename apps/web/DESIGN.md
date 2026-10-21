@@ -243,10 +243,20 @@ fields sort before paging. Run titles link to the passive Problems overview
 until Run detail reads stop recovering execution. Problems and Research saved
 views link into this projection without creating assignments.
 
-The Suggestions page has Pending and Automatic rules line tabs, with a separate
-Review automatic decisions link beneath them on phones. The family choice stays
-in a bounded horizontal scroll strip, and scope chips sit beneath it. Impact chips
-lead with one caution-first label and count the remaining labels as "+N".
+The Suggestions workspace has Pending, Automatic decisions and Automatic rules
+line tabs. Pending counts only actionable proposals; automatic history is an
+optional audit with feedback, separate from pausing future automation. Statement
+review expansions use Source, Proposed result (Applied result in history), and
+Evidence as flat, ruled sections. The result includes transaction and spending
+relationships, existing/new vendor and alias, purchaser basis, explicit vendor
+account state and recorded-spend effect. Draft changes replan on the server;
+loading and raw errors never present the previous draft as the current result.
+Provider category keeps one label with each named provider's observed value;
+conflicting observations remain separate. Statement Rows browses all imported
+observations by default and links into scoped Suggestions for reconciliation.
+The family choice stays in a bounded horizontal scroll strip, and scope chips
+sit beneath it. Impact chips lead with one caution-first label and count the
+remaining labels as "+N".
 
 The Problems overview is one `IndexedSections` page grouped Needs you,
 Fixes automatically, Coverage & cues and Upkeep. Its headline reads inline

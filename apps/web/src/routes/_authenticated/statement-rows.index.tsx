@@ -12,10 +12,7 @@ import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { Button } from "~/ui/primitives/button";
 
-// `"all"` is a client-only sentinel (never reaches the server filter — see
-// buildFilters in statement-row-list.tsx): the worklist default is
-// `matchState: "unmatched"`, so there must be a distinct URL value meaning
-// "no matchState filter" rather than "absent, therefore unmatched".
+// Source browsing starts with every observation; reconciliation lives in Suggestions.
 const matchStateSearchValue = z.union([
   statementRowMatchState,
   z.literal("all"),
@@ -29,11 +26,8 @@ const searchSchema = z.object({
   q: urlStringParam,
 });
 
-// Stripped back out of the URL when it equals the app's default worklist
-// view, so a fresh `/statement-rows` link and an explicit `?matchState=` one
-// both round-trip to the same clean URL.
 const searchDefaults = {
-  matchState: "unmatched",
+  matchState: "all",
   disposition: undefined,
   source: undefined,
   dateFrom: undefined,
@@ -60,7 +54,7 @@ const StatementRowsPage = listChromePage({
         }
         nativeButton={false}
       >
-        Suggestions
+        Review suggestions
       </Button>
       <Button
         render={<Link to="/statement-rows/import" />}

@@ -359,8 +359,8 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     amount: 61.07,
     merchant: `${alias} Hardware`,
     kind: "purchase",
-    status: "posted",
-    postedDate: "2026-05-11",
+    status: "pending",
+    transactionDate: "2026-05-11",
   });
   const hardware = `${alias} HARDWARE 0441`;
   const hold = `${alias} HOLD`;
@@ -397,7 +397,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     table.getByRole("row").filter({ hasText: text });
   // The provider's category is named as its source's evidence, never "Category".
   await expect(
-    table.getByRole("columnheader", { name: "Monarch category" }),
+    table.getByRole("columnheader", { name: "Provider category" }),
   ).toBeVisible();
   // Without decision labels no create's kind is agreed, so nothing is clean.
   await expect(
@@ -411,9 +411,39 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await expect(
     page.getByRole("list", { name: "Candidate transactions" }),
   ).toContainText("61.07");
+  // A deferred pending candidate becomes bookable after applying status. Its
+  // controls must retain focus across the next authoritative draft replan.
+  await page
+    .getByRole("checkbox", { name: "Apply status", exact: true })
+    .check();
+  // Preview the graph, including auto-created identity and no vendor account.
+  const result = page.getByRole("region", {
+    name: "Proposed result",
+    exact: true,
+  });
+  await expect(result).toContainText("One Purchase and one lump Expense");
+  await expect(result).toContainText("Create vendor");
+  await expect(result).toContainText("Unassigned");
+  await expect(result).toContainText("Recorded spending");
+  await result
+    .getByRole("button", { name: "Correct booking", exact: true })
+    .click();
+  const reviewedVendor = `${alias} Reviewed Hardware`;
+  await result
+    .getByRole("textbox", { name: "Reviewed new Vendor business name" })
+    .fill(reviewedVendor);
+  await expect(result).toContainText(`Create vendor “${reviewedVendor}”`);
   await expect(
-    page.getByText("One Purchase and one lump Expense", { exact: true }),
-  ).toBeVisible();
+    result.getByRole("textbox", { name: "Reviewed new Vendor business name" }),
+  ).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(result).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   const attach = page.waitForRequest((request) =>
     dispatchesOperation(
@@ -536,30 +566,46 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   ).toBeVisible();
 });
 
-// Field fill is a fixed policy; measured statement matching retains its switch
-// and cannot be enabled before its reviewed precision window is eligible.
-test("Automatic rules lists measured rules with their state and switch", async ({
+// Failure modes: clean booking is hidden or cannot resume, and audit history
+// becomes a second disconnected workspace. Field fill remains a fixed policy.
+test("Suggestions contains automatic history and pausable statement spending", async ({
   page,
 }) => {
   await gotoAuthenticatedPage(page, "/suggestions");
-  await page.getByRole("tab", { name: /^Automatic rules/ }).click();
+  await page.getByRole("tab", { name: "Automatic rules", exact: true }).click();
   await expect(page).toHaveURL(/status=rules/);
   const rules = page.getByRole("list", { name: "Automatic rules" });
-  const field = rules.getByRole("listitem", { name: "Field assignment" });
-  await expect(field).toHaveCount(0);
+  await expect(
+    rules.getByRole("listitem", { name: "Field assignment" }),
+  ).toHaveCount(0);
   const attach = rules.getByRole("listitem", { name: "Statement attach" });
-  await expect(attach.getByText("Off", { exact: true })).toBeVisible();
-  await expect(attach.getByText("Not yet eligible")).toBeVisible();
   await expect(
     attach.getByRole("switch", { name: "Statement attach automatic rule" }),
   ).toHaveAttribute("aria-disabled", "true");
+  const spending = rules.getByRole("listitem", { name: "Statement spending" });
+  const toggle = spending.getByRole("switch", {
+    name: "Statement spending automatic rule",
+  });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await toggle.click();
   await page
-    .getByRole("button", { name: "Review automatic decisions" })
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Turn off", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/automatic-decisions/);
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await page
+    .getByRole("tab", { name: "Automatic decisions", exact: true })
+    .click();
+  await expect(page).toHaveURL(/status=automatic/);
   await expect(
     page.getByRole("region", { name: "Automatic decisions", exact: true }),
   ).toBeVisible();
+  await page.getByRole("tab", { name: "Pending", exact: true }).click();
+  await expect(suggestionsTable(page)).toBeVisible();
+  await gotoAuthenticatedPage(page, "/automatic-decisions");
+  await expect(page).toHaveURL(/suggestions\?status=automatic/);
 });
 
 // Acceptance must acknowledge the chosen value before the response arrives,

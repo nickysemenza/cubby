@@ -1,3 +1,4 @@
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
@@ -19,12 +20,13 @@ export function parseRecordParam(value: string | undefined) {
 /** The route's search params; table filters ride beside them as their column ids. */
 export const suggestionsSearchSchema = z.object({
   family: suggestionListFamily.optional().catch(undefined),
+  auditFamily: assessmentFamily.optional().catch(undefined),
   /**
-   * The page tab: absent lists pending Suggestions; `rules` configures rules.
-   * Legacy `applied_automatically` URLs redirect to the automatic-decision audit.
+   * The page tab: absent lists pending work; history and rules share its scope.
+   * Legacy `applied_automatically` URLs redirect to the automatic tab.
    */
   status: z
-    .enum(["applied_automatically", "rules"])
+    .enum(["applied_automatically", "automatic", "rules"])
     .optional()
     .catch(undefined),
   /** `<entityKind>:<SHORTCODE>`; a connection matches either endpoint. */

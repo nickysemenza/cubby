@@ -18,6 +18,9 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import {
   pendingSuggestion,
   suggestionField,
+  chargeKeyOf,
+  chargeStateOf,
+  LIVE_REFS,
 } from "~/server/domains/statement-import/repo/statement-charge";
 import {
   automaticApplicationRule,
@@ -165,6 +168,43 @@ export async function readStatementSuggestions(
   const judgments = page.rows.map((row) =>
     statementTransactionJudgment.parse(row.judgment),
   );
+  const { rows: categoryEvidence } = await unwrapDb(db).execute<{
+    id: string;
+    source: string;
+    sourceCategory: string | null;
+  }>(sql`
+    WITH roots AS (
+      SELECT s.id, s.data->>${"source"} AS source, s.data->>'chargeKey' AS "chargeKey"
+      FROM "AssessmentState" s WHERE s.id = ANY(${uuidArrayParam(page.rows.map((row) => row.id))})
+    ), matched AS (
+      SELECT roots.id, cs.shortcode FROM roots
+      JOIN ${chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM roots)`)} cs
+        ON cs.source = roots.source AND cs."chargeKey" = roots."chargeKey"
+      WHERE cs.shortcode IS NOT NULL
+    ), members AS (
+      SELECT id, source, "chargeKey" FROM roots
+      UNION
+      SELECT matched.id, observed.source, ${chargeKeyOf("observed")} AS "chargeKey"
+      FROM matched JOIN ${LIVE_REFS} refs ON refs.shortcode = matched.shortcode
+      JOIN "StatementRow" observed ON observed.source = refs.source
+        AND (observed."externalId" = refs."externalId" OR ${chargeKeyOf("observed")} = refs."externalId")
+        AND observed."deletedAt" IS NULL
+    )
+    SELECT DISTINCT members.id, r.source, r."sourceCategory"
+    FROM members JOIN "StatementRow" r
+      ON r.source = members.source AND ${chargeKeyOf("r")} = members."chargeKey"
+    WHERE r."deletedAt" IS NULL
+    ORDER BY members.id, r.source, r."sourceCategory" NULLS FIRST
+  `);
+  const categories = new Map<
+    string,
+    StatementSuggestionOut["sourceCategories"]
+  >();
+  for (const { id, source, sourceCategory } of categoryEvidence) {
+    const entries = categories.get(id) ?? [];
+    entries.push({ source, sourceCategory });
+    categories.set(id, entries);
+  }
   const transactionIds = [
     ...new Set(
       judgments.flatMap((judgment) => [
@@ -238,6 +278,7 @@ export async function readStatementSuggestions(
       merchant: row.merchant,
       rawDescription: row.rawDescription,
       sourceCategory: row.sourceCategory,
+      sourceCategories: categories.get(row.id) ?? [],
       providerStatus: judgment.providerStatus,
       recommended: judgment.recommended,
       clean: isClean(judgment, judgment.create?.amount ?? 0),

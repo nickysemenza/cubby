@@ -1,4 +1,5 @@
 import { formatConfidence } from "@cubby/schemas/ai";
+import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type {
   SpendingCategoryShortcode,
@@ -6,11 +7,16 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
+  StatementSuggestionPreviewOut,
+  StatementSuggestionOut,
+} from "@cubby/schemas/statement-suggestion";
+import type {
   SuggestionListRow,
   DeclaredSuggestionEvidence,
 } from "@cubby/schemas/suggestion-list";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
+import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { match } from "ts-pattern";
 
@@ -23,13 +29,14 @@ import {
   suggestionBasisLabels,
 } from "~/entity/suggestions/suggestion-body";
 import { renderOptionCell } from "~/entity/table/column-helpers";
+import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
-import { Panel } from "~/ui/layout/panel";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -42,19 +49,127 @@ import {
 } from "./statement-kind-votes";
 import {
   acceptItem,
-  statementApplyItem,
+  statementApplication,
   wrongItem,
   type StatementTransactionField,
 } from "./suggestion-review";
 import { useSuggestionReview } from "./suggestion-review-context";
-import { FieldValue, RecordLink } from "./suggestion-values";
+import {
+  FieldValue,
+  RecordLink,
+  providerCategories,
+} from "./suggestion-values";
 
 const KIND_OPTIONS = fieldEnumOptions("financialTransaction", "kind");
 
-function SpendingEvidence({ row }: { row: StatementRow }) {
+function SpendingResultFacts({
+  row,
+  plan,
+  amount,
+  merchant,
+}: {
+  row: StatementRow;
+  plan: Extract<FinancialSpendingPlan, { status: "ready" }>;
+  amount: number;
+  merchant: string | null;
+}) {
+  return (
+    <EvidenceFacts
+      rows={[
+        [
+          "Effect",
+          plan.effect === "create_aggregate"
+            ? plan.purchaseId
+              ? "One lump Expense on the existing Purchase"
+              : "One Purchase and one lump Expense"
+            : "Settle existing spending",
+        ],
+        [
+          "Vendor",
+          plan.vendorId ? (
+            <RecordLink
+              key="vendor"
+              record={{ entity: "vendor", id: plan.vendorId }}
+            />
+          ) : (
+            `Create vendor “${plan.vendorName}”`
+          ),
+        ],
+        [
+          "Merchant alias",
+          plan.vendorId
+            ? "No new alias"
+            : merchant && merchant !== plan.vendorName
+              ? merchant
+              : "None",
+        ],
+        [
+          "Vendor account",
+          plan.purchaseId ? "Keep existing Purchase account" : "Unassigned",
+        ],
+        [
+          "Purchase",
+          plan.purchaseId ? (
+            <RecordLink
+              key="purchase"
+              record={{ entity: "purchase", id: plan.purchaseId }}
+            />
+          ) : (
+            "Create Purchase"
+          ),
+        ],
+        ["Settlement", "Link the transaction to this Purchase"],
+        [
+          "Recorded spending",
+          plan.effect === "create_aggregate"
+            ? `Add ${formatCurrency(amount)} as one Expense`
+            : "No additional Expense",
+        ],
+        [
+          "Spending category",
+          <FieldValue
+            key="category"
+            entity="expense"
+            field="spendingCategoryId"
+            value={plan.spendingCategoryId}
+          />,
+        ],
+        [
+          "Purchaser",
+          <RecordLink
+            key="purchaser"
+            record={{ entity: "ledgerParty", id: plan.purchaserId }}
+          />,
+        ],
+        ["Purchaser basis", "Payment-account owner"],
+        [
+          "Payment account",
+          <RecordLink
+            key="payment-account"
+            record={{
+              entity: "financialAccount",
+              id: row.evidence.accountId,
+            }}
+          />,
+        ],
+      ]}
+    />
+  );
+}
+
+function SpendingEvidence({
+  row,
+  plan,
+  amount,
+  merchant,
+}: {
+  row: StatementRow;
+  plan: FinancialSpendingPlan | null;
+  amount: number;
+  merchant: string | null;
+}) {
   const { draft, setDraft, outcome } = useSuggestionReview();
   const current = draft(row.id);
-  const plan = row.evidence.spending;
   const [category, setCategory] =
     useState<ComboboxItem<SpendingCategoryShortcode> | null>(null);
   const [purchase, setPurchase] =
@@ -62,10 +177,10 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
   const [vendor, setVendor] = useState<ComboboxItem<VendorShortcode> | null>(
     null,
   );
-  if (!plan) return null;
+  const controls = plan ?? row.evidence.spending;
   const busy = outcome(row.id)?.state === "pending";
   const booking = {
-    rejectedPurchaseIds: plan.request.rejectedPurchaseIds,
+    rejectedPurchaseIds: controls?.request.rejectedPurchaseIds ?? [],
     ...current.booking,
   };
   return (
@@ -74,67 +189,37 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
       className="flex flex-col gap-2 border-t pt-2 text-xs"
     >
       <p className="font-medium">
-        {plan.status === "already_booked"
-          ? "Spending already booked"
-          : plan.status === "deferred"
-            ? "Settlement only"
-            : "Book spending"}
+        {!plan
+          ? "Updating spending preview…"
+          : plan.status === "already_booked"
+            ? "Spending already booked"
+            : plan.status === "deferred"
+              ? "Settlement only"
+              : "Book spending"}
       </p>
-      {plan.status === "deferred" || plan.status === "review_required" ? (
+      {plan &&
+      (plan.status === "deferred" || plan.status === "review_required") ? (
         <p>{plan.reason}</p>
       ) : null}
-      {plan.status === "already_booked"
+      {plan?.status === "already_booked"
         ? plan.purchaseIds.map((id) => (
             <RecordLink key={id} record={{ entity: "purchase", id }} />
           ))
         : null}
-      {plan.status === "ready" ? (
-        <EvidenceFacts
-          rows={[
-            [
-              "Effect",
-              plan.effect === "create_aggregate"
-                ? plan.purchaseId
-                  ? "One lump Expense on the existing Purchase"
-                  : "One Purchase and one lump Expense"
-                : "Settle existing spending",
-            ],
-            [
-              "Vendor",
-              plan.vendorId ? (
-                <RecordLink
-                  key="vendor"
-                  record={{ entity: "vendor", id: plan.vendorId }}
-                />
-              ) : (
-                plan.vendorName
-              ),
-            ],
-            [
-              "Spending category",
-              <FieldValue
-                key="category"
-                entity="expense"
-                field="spendingCategoryId"
-                value={plan.spendingCategoryId}
-              />,
-            ],
-            [
-              "Purchaser",
-              <RecordLink
-                key="purchaser"
-                record={{ entity: "ledgerParty", id: plan.purchaserId }}
-              />,
-            ],
-          ]}
+      {plan?.status === "ready" ? (
+        <SpendingResultFacts
+          row={row}
+          plan={plan}
+          amount={amount}
+          merchant={merchant}
         />
       ) : null}
-      {plan.candidates.length ? (
+      {(controls?.candidates ?? []).length ? (
         <ul
           aria-label="Possible existing Purchases"
           className="flex flex-col gap-1"
         >
-          {plan.candidates.map((candidate) => (
+          {(controls?.candidates ?? []).map((candidate) => (
             <li
               key={candidate.purchaseId}
               className="flex flex-wrap items-center gap-2"
@@ -147,9 +232,7 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
                   ? "Retained payment evidence"
                   : "Needs matching review"}
               </span>
-              {!row.automaticRule &&
-              plan.status !== "already_booked" &&
-              plan.status !== "deferred" ? (
+              {!row.automaticRule ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -171,14 +254,12 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
           ))}
         </ul>
       ) : null}
-      {!row.automaticRule &&
-      plan.status !== "already_booked" &&
-      plan.status !== "deferred" ? (
+      {!row.automaticRule && row.evidence.recommended !== "void" ? (
         <Section
           title="Correct booking"
           headingAs="h4"
           disclosure={{
-            defaultOpen: plan.status === "review_required",
+            defaultOpen: controls?.status === "review_required",
             keepMounted: true,
           }}
         >
@@ -318,7 +399,7 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
                 Book this reviewed refund as a standalone Purchase
               </label>
             ) : null}
-            {plan.candidates.length ? (
+            {(controls?.candidates ?? []).length ? (
               <label
                 htmlFor={`spending-distinct-${row.id}`}
                 className="inline-flex items-center gap-2"
@@ -334,7 +415,7 @@ function SpendingEvidence({ row }: { row: StatementRow }) {
                       booking: {
                         ...booking,
                         rejectedPurchaseIds: checked
-                          ? plan.candidates.map(
+                          ? (controls?.candidates ?? []).map(
                               (candidate) => candidate.purchaseId,
                             )
                           : [],
@@ -362,18 +443,17 @@ function EvidenceBox({
   title,
   children,
 }: {
-  title: ReactNode;
+  title: string;
   children: ReactNode;
 }) {
   return (
-    <Panel tone="default" render={<section />} headingAs="h4" title={title}>
+    <section aria-label={title} className="min-w-0 border-t pt-2">
+      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
       {children}
-    </Panel>
+    </section>
   );
 }
 
-/** Label/value facts; a null value leaves its row out. */
-/** Evidence as a compact property list; absent values drop out. */
 function EvidenceFacts({ rows }: { rows: [string, ReactNode][] }) {
   return (
     <FactsDensityProvider density="compact">
@@ -381,7 +461,7 @@ function EvidenceFacts({ rows }: { rows: [string, ReactNode][] }) {
         layout="list"
         facts={rows.map(([label, value]) => ({
           label,
-          value: value ?? undefined,
+          value: value ?? "None",
         }))}
       />
     </FactsDensityProvider>
@@ -414,12 +494,48 @@ function KindPicker({ row }: { row: StatementRow }) {
   );
 }
 
+function TransactionPreviewFacts({
+  preview,
+  fallback,
+}: {
+  preview: StatementSuggestionPreviewOut | undefined;
+  fallback?: StatementSuggestionOut;
+}) {
+  if (!preview && !fallback?.create) return null;
+  return (
+    <EvidenceFacts
+      rows={[
+        [
+          "Transaction kind",
+          renderOptionCell(
+            preview?.kind ?? fallback?.create?.kind,
+            KIND_OPTIONS,
+          ),
+        ],
+        ["Amount", formatCurrency(preview?.amount ?? fallback?.amount ?? 0)],
+        ["Status", humanize(preview?.status ?? fallback?.create?.status ?? "")],
+        [
+          "Date",
+          <DateDisplay
+            key="projected-date"
+            start={
+              preview
+                ? (preview.postedDate ?? preview.transactionDate)
+                : (fallback?.statementDate ?? null)
+            }
+          />,
+        ],
+      ]}
+    />
+  );
+}
+
 /** The charge beside each candidate it could be, with what attaching would copy. */
 function StatementEvidence({ row }: { row: StatementRow }) {
   const charge = row.evidence;
   // An Automatic rule already applied it: evidence only, nothing to choose.
   const settled = row.automaticRule !== null;
-  const { draft, setDraft, review, outcome } = useSuggestionReview();
+  const { draft, setDraft, outcome, statementChoice } = useSuggestionReview();
   const rowDraft = draft(row.id);
   const busy = outcome(row.id)?.state === "pending";
   const toggle = (
@@ -437,10 +553,21 @@ function StatementEvidence({ row }: { row: StatementRow }) {
       },
     });
   };
-  const kind = rowDraft.kind ?? charge.create?.kind;
+  const choice = statementChoice(row);
+  const preview = useQuery({
+    ...statementRow.previewSuggestion.queryOptions({
+      assessmentId: row.assessmentId,
+      expectedFingerprint: row.fingerprint ?? "",
+      application: statementApplication(
+        charge,
+        choice ?? { action: charge.recommended },
+      ),
+    }),
+    enabled: !settled,
+  });
   return (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
-      <EvidenceBox title="Statement charge">
+      <EvidenceBox title="Source">
         <EvidenceFacts
           rows={[
             ["Descriptor", charge.rawDescription],
@@ -463,29 +590,67 @@ function StatementEvidence({ row }: { row: StatementRow }) {
                 />
               ) : null,
             ],
-            // Verbatim provider evidence; it sets no spending category.
-            [`${humanize(charge.source)} category`, charge.sourceCategory],
+            [
+              "Provider category",
+              <div key="provider-categories" className="flex flex-col gap-1">
+                {providerCategories(charge).map((item) => (
+                  <span key={`${item.source}:${item.sourceCategory}`}>
+                    {item.sourceCategory ?? "Unassigned"}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {humanize(item.source)}
+                    </span>
+                  </span>
+                ))}
+              </div>,
+            ],
           ]}
         />
       </EvidenceBox>
-      <EvidenceBox
-        title={
-          charge.candidates.length
-            ? countLabel(charge.candidates.length, "candidate")
-            : charge.recommended === "void"
-              ? "Hold"
-              : "New transaction"
-        }
-      >
+      <EvidenceBox title={settled ? "Applied result" : "Proposed result"}>
+        <p className="mb-2 text-sm font-medium">
+          {humanize(choice?.action ?? charge.recommended)} transaction
+          {choice?.action === "attach"
+            ? " · preserve existing spending unless shown below"
+            : ""}
+        </p>
+        {charge.create && !settled && choice?.action === "create" ? (
+          <div className="mb-2">
+            <KindPicker row={row} />
+          </div>
+        ) : null}
+        {rowDraft.action ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              setDraft(row.id, {
+                action: undefined,
+                transactionId: undefined,
+                kind: undefined,
+                booking: undefined,
+                fields: {},
+              })
+            }
+          >
+            Use recommendation
+          </Button>
+        ) : null}
+        <TransactionPreviewFacts
+          preview={preview.data}
+          fallback={settled ? charge : undefined}
+        />
         {charge.candidates.length ? (
           <ul
             className="flex flex-col gap-2"
             aria-label="Candidate transactions"
           >
-            {charge.candidates.map((candidate, index) => {
+            {charge.candidates.map((candidate) => {
               const ticked = rowDraft.fields[candidate.transactionId] ?? [];
               const recommended =
-                charge.recommended === "attach" && index === 0;
+                choice?.action === "attach" &&
+                candidate.transactionId ===
+                  (choice.transactionId ?? charge.candidates[0]?.transactionId);
               return (
                 <li
                   key={candidate.transactionId}
@@ -550,17 +715,13 @@ function StatementEvidence({ row }: { row: StatementRow }) {
                         variant="outline"
                         disabled={busy}
                         onClick={() =>
-                          void review([row], () =>
-                            statementApplyItem(charge, {
-                              action: "attach",
-                              booking: rowDraft.booking,
-                              transactionId: candidate.transactionId,
-                              fields: [...ticked],
-                            }),
-                          )
+                          setDraft(row.id, {
+                            action: "attach",
+                            transactionId: candidate.transactionId,
+                          })
                         }
                       >
-                        Attach to this candidate
+                        Use this transaction
                       </Button>
                     </div>
                   ) : null}
@@ -568,29 +729,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
               );
             })}
           </ul>
-        ) : charge.create ? (
-          <EvidenceFacts
-            rows={[
-              [
-                "Kind",
-                settled ? (
-                  renderOptionCell(kind, KIND_OPTIONS)
-                ) : (
-                  <KindPicker key="kind" row={row} />
-                ),
-              ],
-              [
-                "Amount",
-                <span key="amount" className="tabular-nums">
-                  {formatCurrency(charge.create.amount)}
-                </span>,
-              ],
-              ["Status", humanize(charge.create.status)],
-            ]}
-          />
-        ) : (
-          <p className="text-xs text-muted-foreground">No transaction.</p>
-        )}
+        ) : null}
         {charge.supersedeTransactionId ? (
           <p className="mt-1 text-xs">
             Settles hold{" "}
@@ -614,8 +753,34 @@ function StatementEvidence({ row }: { row: StatementRow }) {
             , which no later statement shows.
           </p>
         ) : null}
+        {preview.error ? (
+          <ErrorDisplay
+            error={preview.error}
+            title="proposed result"
+            onRetry={() => void preview.refetch()}
+          />
+        ) : null}
+        {!settled && preview.isFetching ? (
+          <output className="text-xs text-muted-foreground">
+            Updating proposed result…
+          </output>
+        ) : null}
+        <SpendingEvidence
+          row={row}
+          plan={
+            settled
+              ? (charge.spending ?? null)
+              : (preview.data?.spending ?? null)
+          }
+          amount={preview.data?.amount ?? charge.amount}
+          merchant={
+            preview.data?.merchant?.trim() ||
+            preview.data?.rawDescription?.trim() ||
+            null
+          }
+        />
       </EvidenceBox>
-      <EvidenceBox title="Why">
+      <EvidenceBox title="Evidence">
         <div className="flex flex-col gap-1 text-xs">
           <p>
             {settled
@@ -627,10 +792,6 @@ function StatementEvidence({ row }: { row: StatementRow }) {
           {charge.create ? (
             <>
               <KindVotes create={charge.create} />
-              {/* With candidates the kind only matters to Create anyway. */}
-              {charge.candidates.length && !settled ? (
-                <KindPicker row={row} />
-              ) : null}
               {rowDraft.kind && rowDraft.kind !== charge.create.kind ? (
                 <p className="text-muted-foreground">
                   You changed the kind to {humanize(rowDraft.kind)}.
@@ -649,7 +810,6 @@ function StatementEvidence({ row }: { row: StatementRow }) {
             <p className="text-muted-foreground">Labelled by {charge.model}</p>
           ) : null}
         </div>
-        <SpendingEvidence row={row} />
       </EvidenceBox>
     </div>
   );

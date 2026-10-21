@@ -3007,15 +3007,16 @@ Project, placement and tag proposals appear after a Sweep publishes them; passiv
 record reads never discover or publish new advice.
 Similar-Product browsing stays informational; photo-import choices stay in their Run.
 
-`/automatic-decisions` is the separate generic **Review automatic decisions** view,
-newest first, with family and review-status filters. It also appears on each affected
+Suggestions' **Automatic decisions** tab is the optional generic audit, newest
+first, with family and review-status filters. `/automatic-decisions` redirects
+there, preserving record and audit-family scope. It also appears on each affected
 record's detail page. Email relevance, automatic Email links, mail-import outcomes
 and automatic-rule application receipts enter through declarations; member-made
-Email link decisions remain ordinary history. Wrong records Feedback through the
-existing family path: relevance and link decisions offer their correction choices;
-mail-import outcomes and rule applications keep their applied effects and link to
-affected records for domain correction. Wrong and corrected decisions remain in the
-audit. Legacy Email predictions without application receipts are included with
+Email link decisions remain ordinary history. Report incorrect records Wrong
+Feedback through the existing family path, without applying a correction or
+pausing automation. Applied effects remain; affected records link to their domain
+actions. Feedback participates in supported later reassessment without promising
+historical record repair. Wrong and corrected decisions remain in the audit. Legacy Email predictions without application receipts are included with
 **Unverified application**, even if they disagree with the Email's current relevance.
 New ingestion records observation and application receipts atomically with routing;
 known unapplied predictions stay ordinary history. Observation receipts coexist

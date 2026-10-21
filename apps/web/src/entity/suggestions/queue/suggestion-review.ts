@@ -37,7 +37,7 @@ export const offers = (row: SuggestionListRow, verb: SuggestionActionVerb) =>
  * candidate as rejected: the server refuses a create while any possible
  * existing transaction is still live.
  */
-function statementApplication(
+export function statementApplication(
   suggestion: StatementSuggestionOut,
   choice: StatementChoice,
 ): StatementTransactionApplication {

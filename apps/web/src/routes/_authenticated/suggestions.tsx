@@ -2,10 +2,7 @@ import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 
 import { RoutePending } from "~/entity/navigation/route-pending";
 import { SuggestionsPage } from "~/entity/suggestions/queue/suggestions-page";
-import {
-  suggestionsSearchSchema,
-  parseRecordParam,
-} from "~/entity/suggestions/queue/suggestions-search";
+import { suggestionsSearchSchema } from "~/entity/suggestions/queue/suggestions-search";
 import { pageTitle } from "~/lib/page-title";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
 
@@ -16,11 +13,8 @@ export const Route = createFileRoute("/_authenticated/suggestions")({
   beforeLoad: ({ search }) => {
     if (search.status === "applied_automatically")
       throw redirect({
-        to: "/automatic-decisions",
-        search: {
-          family: search.family,
-          record: parseRecordParam(search.record)?.code,
-        },
+        to: "/suggestions",
+        search: { ...search, status: "automatic" },
       });
   },
   component: SuggestionsRoute,
@@ -48,6 +42,7 @@ function SuggestionsRoute() {
                   runId: previous.runId,
                   sweep: previous.sweep,
                   family: previous.family,
+                  auditFamily: previous.auditFamily,
                   status: previous.status,
                   ...patch,
                 }

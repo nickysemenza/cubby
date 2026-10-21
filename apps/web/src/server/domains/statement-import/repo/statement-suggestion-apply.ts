@@ -1,4 +1,3 @@
-import { assessmentSubjects } from "@cubby/schemas/assessment";
 import {
   financialTransactionCreateInput,
   type FinancialTransactionUpdateData,
@@ -8,23 +7,16 @@ import {
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import {
-  statementTransactionJudgment,
   type StatementTransactionApplication,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 import { createLogger } from "@cubby/worker-tracing";
 import { eq, sql } from "drizzle-orm";
-import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  runAfterCommit,
-  unwrapDb,
-  withTransaction,
-} from "~/server/db/helpers";
-import { assessment, assessmentState } from "~/server/db/schema";
+import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { assessmentState } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   previewFinancialSpending,
@@ -36,8 +28,6 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { updateStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import {
-  buildChargeProposals,
-  buildHoldVoidProposals,
   type ChargeProposal,
   regenerateCharges,
 } from "~/server/domains/statement-import/repo/statement-suggestions";
@@ -46,34 +36,17 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { settlementRefsIncluding } from "~/server/generic/entity-links/repo/entity-external-ids";
 
+import {
+  currentStatementApplication,
+  loadStatementApplication,
+  statementApplicationSelection,
+  statementTransactionPatch,
+} from "./statement-suggestion-application";
+
 const log = createLogger("statement-suggestions");
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
-
-const projection = z.object({
-  evidenceFingerprint: z.string(),
-  refs: z.array(z.string()),
-});
-
-async function shortcodes(
-  db: Database,
-  table: "FinancialTransaction" | "FinancialAccount",
-  ids: readonly string[],
-) {
-  if (!ids.length) return new Map<string, string>();
-  const { rows } = await unwrapDb(db).execute<{
-    id: string;
-    shortcode: string;
-  }>(sql`
-    SELECT id, shortcode FROM ${sql.identifier(table)}
-    WHERE id IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
-  `);
-  return new Map(rows.map((row) => [String(row.id), row.shortcode]));
-}
 
 /** Apply revalidates authoritative evidence under its keys, independently of background retirement. */
 export async function applyStatementTransactionSuggestion(
@@ -85,19 +58,9 @@ export async function applyStatementTransactionSuggestion(
     corrected: boolean;
   },
 ) {
-  const [prediction] = await getDb(db)
-    .select()
-    .from(assessment)
-    .where(eq(assessment.id, state.id))
-    .limit(1);
-  const subject = assessmentSubjects.statement_transaction.parse(
-    prediction?.subject,
-  );
-  const published = statementTransactionJudgment.parse(prediction?.judgment);
-  const stored = projection.parse(state.data);
+  const loaded = await loadStatementApplication(db, state);
+  const { subject, published, stored } = loaded;
   const { application } = input;
-  if (state.status !== "pending")
-    throw refused("This Transaction suggestion is no longer pending.");
   if (!input.corrected && application.action !== published.recommended)
     throw refused(
       "Accepting a suggestion as is applies its recommended action; review a different choice as a correction.",
@@ -135,19 +98,13 @@ export async function applyStatementTransactionSuggestion(
   });
 
   const charge = { source: subject.source, chargeKey: subject.chargeKey };
-  const current: ChargeProposal | undefined =
-    published.recommended === "void"
-      ? (await buildHoldVoidProposals(db, [published.accountId])).find(
-          (proposal) =>
-            proposal.judgment.void?.transactionId ===
-            published.void?.transactionId,
-        )
-      : (await buildChargeProposals(db, [charge]))[0];
-  if (!current || current.evidenceFingerprint !== stored.evidenceFingerprint)
-    throw refused(
-      "The statement or transaction evidence changed since this suggestion was made. Refresh suggestions and review again.",
-    );
+  const current = await currentStatementApplication(db, loaded);
   const judgment = current.judgment;
+  const { accountCode, codeOf, targetId } = await statementApplicationSelection(
+    db,
+    judgment,
+    application,
+  );
   if (
     application.action === "create" &&
     published.transferPair?.clean &&
@@ -165,20 +122,6 @@ export async function applyStatementTransactionSuggestion(
     return;
   }
   const actor = context.actorContext;
-  const accounts = await shortcodes(db, "FinancialAccount", [
-    judgment.accountId,
-  ]);
-  const accountCode = accounts.get(judgment.accountId);
-  if (!accountCode) throw refused("The suggestion's account no longer exists.");
-  const transactionCodes = await shortcodes(db, "FinancialTransaction", [
-    ...judgment.candidates.map((candidate) => candidate.transactionId),
-    ...(judgment.supersede ? [judgment.supersede.pendingTransactionId] : []),
-    ...(judgment.void ? [judgment.void.transactionId] : []),
-    ...(judgment.matchedTransactionId ? [judgment.matchedTransactionId] : []),
-  ]);
-  const codeOf = (id: string) =>
-    parseShortcodeFor("financialTransaction", transactionCodes.get(id)!);
-
   const claimRows = async () => {
     await updateStatementRows(
       db,
@@ -200,7 +143,6 @@ export async function applyStatementTransactionSuggestion(
         db,
         judgment,
         application,
-        codeOf,
         accountCode,
         {
           claimRows,
@@ -214,6 +156,7 @@ export async function applyStatementTransactionSuggestion(
         judgment,
         application,
         codeOf,
+        targetId!,
         {
           claimRows,
           actor,
@@ -227,14 +170,15 @@ export async function applyStatementTransactionSuggestion(
       });
       break;
     case "book":
-      if (!judgment.matchedTransactionId)
-        throw refused(
-          "The matched transaction is no longer available for booking.",
-        );
-      appliedTransactionId = codeOf(judgment.matchedTransactionId);
+      appliedTransactionId = codeOf(targetId!);
       break;
     case "void":
-      await applyVoid(db, judgment, application, codeOf, actor);
+      await updateFinancialTransaction(
+        db,
+        codeOf(targetId!),
+        { status: "void" },
+        actor,
+      );
       break;
   }
   if (appliedTransactionId) {
@@ -286,22 +230,10 @@ async function applyCreate(
   db: Database,
   judgment: StatementTransactionJudgment,
   application: StatementTransactionApplication,
-  codeOf: (id: string) => FinancialTransactionShortcode,
   accountCode: string,
   effects: Effects,
 ) {
-  const create = judgment.create;
-  if (!create) throw refused("This charge has no transaction to create.");
-  const rejected = new Set(application.rejectedCandidateIds);
-  const live = judgment.candidates.filter(
-    (candidate) => !rejected.has(codeOf(candidate.transactionId)),
-  );
-  // A transaction that may already record this money blocks a create until
-  // the member has said it is a different charge.
-  if (live.length)
-    throw refused(
-      `Possible existing transactions must be rejected before creating: ${live.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,
-    );
+  const create = judgment.create!;
   await effects.claimRows();
   const created = await createFinancialTransaction(
     db,
@@ -329,53 +261,17 @@ async function applyAttach(
   judgment: StatementTransactionJudgment,
   application: StatementTransactionApplication,
   codeOf: (id: string) => FinancialTransactionShortcode,
+  targetId: string,
   effects: Effects,
 ) {
-  // With several candidates the target must be named: a default would put the
-  // charge's ref on whichever transaction happened to sort first.
-  if (!application.transactionId && judgment.candidates.length > 1)
-    throw refused(
-      `Name the transaction to attach to: ${judgment.candidates.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,
-    );
-  const target = application.transactionId
-    ? judgment.candidates.find(
-        (candidate) =>
-          codeOf(candidate.transactionId) === application.transactionId,
-      )
-    : judgment.candidates[0];
-  if (!target || !judgment.create)
-    throw refused(
-      "The chosen transaction is no longer a candidate for this charge. Review again.",
-    );
-  const fields = new Set(application.fields);
-  for (const field of fields)
-    if (!target.diff.includes(field))
-      throw refused(
-        `The transaction's ${field} already matches the statement.`,
-      );
+  const create = judgment.create!;
   const data: FinancialTransactionUpdateData = {
-    sourceRefs: await settlementRefsIncluding(
-      db,
-      target.transactionId,
-      judgment.create.sourceRef,
-    ),
+    sourceRefs: await settlementRefsIncluding(db, targetId, create.sourceRef),
+    ...statementTransactionPatch(judgment, application),
   };
-  if (fields.has("amount")) data.amount = judgment.create.amount;
-  if (fields.has("status")) data.status = judgment.providerStatus;
-  // A posted transaction needs its posted date, so posting brings the date.
-  if (
-    fields.has("postedDate") ||
-    (fields.has("status") && judgment.providerStatus === "posted")
-  )
-    data.postedDate = judgment.statementDate;
   await effects.claimRows();
-  await updateFinancialTransaction(
-    db,
-    codeOf(target.transactionId),
-    data,
-    effects.actor,
-  );
-  return codeOf(target.transactionId);
+  await updateFinancialTransaction(db, codeOf(targetId), data, effects.actor);
+  return codeOf(targetId);
 }
 
 async function applySupersede(
@@ -385,15 +281,15 @@ async function applySupersede(
   effects: Effects,
 ) {
   const { judgment } = proposal;
-  if (!judgment.supersede || !judgment.create)
-    throw refused("This charge no longer settles a recorded hold.");
+  const supersede = judgment.supersede!;
+  const create = judgment.create!;
   const { rows: pendingRows } = await unwrapDb(db).execute<{
     source: string;
     externalId: string;
   }>(sql`
     SELECT source, "externalId" FROM "StatementRow"
     WHERE id IN (${sql.join(
-      judgment.supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
+      supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
     )}) AND "deletedAt" IS NULL
   `);
@@ -412,7 +308,7 @@ async function applySupersede(
       },
       effects.actor,
     );
-  const transactionId = judgment.supersede.pendingTransactionId;
+  const transactionId = supersede.pendingTransactionId;
   await updateFinancialTransaction(
     db,
     codeOf(transactionId),
@@ -420,28 +316,14 @@ async function applySupersede(
       sourceRefs: await settlementRefsIncluding(
         db,
         transactionId,
-        judgment.create.sourceRef,
+        create.sourceRef,
       ),
-      status: "posted",
-      postedDate: judgment.statementDate,
-      amount: judgment.create.amount,
+      ...statementTransactionPatch(judgment, {
+        action: "supersede",
+        fields: [],
+      }),
     },
     effects.actor,
   );
   return codeOf(transactionId);
-}
-
-async function applyVoid(
-  db: Database,
-  judgment: StatementTransactionJudgment,
-  application: StatementTransactionApplication,
-  codeOf: (id: string) => FinancialTransactionShortcode,
-  actor: EntityKernelContext["actorContext"],
-) {
-  if (!judgment.void)
-    throw refused("This hold no longer qualifies as vanished.");
-  const code = codeOf(judgment.void.transactionId);
-  if (application.transactionId && application.transactionId !== code)
-    throw refused("A void applies only to the vanished hold it names.");
-  await updateFinancialTransaction(db, code, { status: "void" }, actor);
 }

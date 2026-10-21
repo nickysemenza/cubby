@@ -194,6 +194,28 @@ export type StatementTransactionApplication = z.infer<
   typeof statementTransactionApplication
 >;
 
+export const statementSuggestionPreviewInput = z.strictObject({
+  assessmentId: z.uuid(),
+  expectedFingerprint: z.string().min(1),
+  application: statementTransactionApplication,
+});
+export const statementSuggestionPreviewOut = z.object({
+  assessmentId: z.uuid(),
+  fingerprint: z.string(),
+  action: statementTransactionAction,
+  kind: kind.nullable(),
+  amount: z.number(),
+  status,
+  transactionDate: plainDate.nullable(),
+  postedDate: plainDate.nullable(),
+  merchant: z.string().nullable(),
+  rawDescription: z.string().nullable(),
+  spending: financialSpendingPlan.nullable(),
+});
+export type StatementSuggestionPreviewOut = z.infer<
+  typeof statementSuggestionPreviewOut
+>;
+
 export const statementSuggestionFilters = z.object({
   accountId: financialAccountShortcode.optional(),
   month: z
@@ -224,6 +246,15 @@ export const statementSuggestionOut = z.object({
   merchant: z.string().nullable(),
   rawDescription: z.string(),
   sourceCategory: z.string().nullable(),
+  /** Distinct provider/category observations from the charge's retained evidence. */
+  sourceCategories: z
+    .array(
+      z.object({
+        source: z.string(),
+        sourceCategory: z.string().nullable(),
+      }),
+    )
+    .default([]),
   providerStatus: financialTransactionProviderStatus,
   recommended: statementTransactionAction,
   clean: z.boolean(),

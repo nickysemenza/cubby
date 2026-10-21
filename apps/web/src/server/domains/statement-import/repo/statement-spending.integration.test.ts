@@ -22,6 +22,8 @@ import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { answering } from "./statement-decision-port.fixtures";
 import { recordStatementRows, listStatementRows } from "./statement-row";
+import { previewStatementSuggestion } from "./statement-suggestion-preview";
+import { readStatementSuggestions } from "./statement-suggestion-read";
 import { generateStatementSuggestionPage } from "./statement-suggestions";
 
 // Failure modes: a clean accept writes only settlement evidence; a matched
@@ -113,6 +115,299 @@ describe("statement spending review and re-import", () => {
     });
     expect(result.failed).toEqual([]);
   };
+  const pendingPreview = async () => {
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const states = await getDb(ctx.db).query.assessmentState.findMany();
+    const [suggestion] = await readStatementSuggestions(
+      ctx.db,
+      states.map((state) => state.id),
+    );
+    return suggestion!;
+  };
+  // Preview must fence missing/stale assessments and invalid drafts before
+  // planning, replan the selected draft, and never publish or mutate evidence.
+  it("fences missing fingerprints, replaced assessments, and changed statement evidence in preview", async () => {
+    await fixture();
+    const suggestion = await pendingPreview();
+    const input = {
+      assessmentId: suggestion.assessmentId,
+      expectedFingerprint: suggestion.fingerprint,
+      application: { kind: "statement_transaction", action: "create" },
+    };
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        ...input,
+        expectedFingerprint: undefined,
+      }),
+    ).rejects.toThrow(/expectedFingerprint/i);
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        ...input,
+        assessmentId: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow(/no longer available/i);
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        ...input,
+        expectedFingerprint: "synthetic-stale",
+      }),
+    ).rejects.toThrow(/fingerprint changed/i);
+    await getDb(ctx.db).execute(
+      sql`UPDATE "StatementRow" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
+    );
+    await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
+      /evidence changed/i,
+    );
+  });
+  it("replans draft kind and booking without writing transactions, vendors, aliases, or assessment state", async () => {
+    const { advice } = await fixture();
+    const suggestion = await pendingPreview();
+    const snapshot = async () =>
+      (
+        await getDb(ctx.db).execute<{ state: unknown }>(sql`
+      SELECT jsonb_build_object(
+        'vendors', (SELECT jsonb_agg(to_jsonb(v)) FROM "Vendor" v),
+        'accounts', (SELECT jsonb_agg(to_jsonb(v)) FROM "VendorAccount" v),
+        'transactions', (SELECT jsonb_agg(to_jsonb(v)) FROM "FinancialTransaction" v),
+        'purchases', (SELECT jsonb_agg(to_jsonb(v)) FROM "Purchase" v),
+        'expenses', (SELECT jsonb_agg(to_jsonb(v)) FROM "Expense" v),
+        'refs', (SELECT jsonb_agg(to_jsonb(v)) FROM "EntityExternalId" v),
+        'rows', (SELECT jsonb_agg(to_jsonb(v)) FROM "StatementRow" v),
+        'assessments', (SELECT jsonb_agg(to_jsonb(v)) FROM "AssessmentState" v)
+      ) AS state
+    `)
+      ).rows[0]!.state;
+    const before = await snapshot();
+    const input = {
+      assessmentId: suggestion.assessmentId,
+      expectedFingerprint: suggestion.fingerprint,
+      application: {
+        kind: "statement_transaction",
+        action: "create",
+        booking: {
+          spendingCategoryId: advice.spendingCategoryId,
+          reviewedVendorName: "Synthetic Orchard",
+        },
+      },
+    };
+    const result = await previewStatementSuggestion(ctx.db, input);
+    expect(result).toMatchObject({
+      action: "create",
+      kind: "purchase",
+      spending: { status: "ready", effect: "create_aggregate" },
+    });
+    const transfer = await previewStatementSuggestion(ctx.db, {
+      ...input,
+      application: { ...input.application, kindOverride: "account_transfer" },
+    });
+    expect(transfer).toMatchObject({
+      kind: "account_transfer",
+      spending: { status: "deferred" },
+    });
+    expect(await snapshot()).toEqual(before);
+  });
+  it("refuses ambiguous attach drafts and preserves selected identity, allocations and projected fields", async () => {
+    const { account, advice } = await fixture();
+    const makeTransaction = () =>
+      createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 42.5,
+        transactionDate: "2026-05-04",
+        merchant: "Synthetic Orchard",
+        sourceRefs: [],
+      });
+    const first = await makeTransaction();
+    const second = await makeTransaction();
+    const vendor = await getDb(ctx.db).query.vendor.findFirst();
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor!.shortcode,
+      date: "2026-05-04",
+      statedTotal: 42.5,
+    });
+    const suggestion = await pendingPreview();
+    const input = {
+      assessmentId: suggestion.assessmentId,
+      expectedFingerprint: suggestion.fingerprint,
+      application: { kind: "statement_transaction", action: "attach" },
+    };
+    await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
+      /Name the transaction/i,
+    );
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        ...input,
+        application: { ...input.application, transactionId: "FT4K7M" },
+      }),
+    ).rejects.toThrow(/Invalid|Expected|shortcode/i);
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        ...input,
+        application: {
+          ...input.application,
+          transactionId: first.output.id,
+          fields: ["amount"],
+        },
+      }),
+    ).rejects.toThrow(/already matches/i);
+    const application = {
+      ...input.application,
+      transactionId: second.output.id,
+      fields: ["status"],
+      booking: {
+        purchaseId: purchase.output.id,
+        spendingCategoryId: advice.spendingCategoryId,
+        reviewedVendorName: "Synthetic Orchard",
+      },
+    };
+    const result = await previewStatementSuggestion(ctx.db, {
+      ...input,
+      application,
+    });
+    expect(result.spending).toMatchObject({
+      status: "ready",
+      request: { transactionId: second.output.id },
+    });
+    expect(
+      (await getDb(ctx.db).query.financialTransaction.findMany()).every(
+        (row) => row.status === "pending",
+      ),
+    ).toBe(true);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: suggestion.assessmentId,
+      operationId: "synthetic-preview-attach",
+      verdict: "wrong",
+      correction: {
+        present: true,
+        value: statementTransactionApplication.parse(application),
+      },
+      expectedFingerprint: suggestion.fingerprint,
+      intent: "apply",
+      application: statementTransactionApplication.parse(application),
+    });
+    expect(await total()).toBe(42.5);
+  });
+  it("retains existing allocations when previewing attachment to an already booked transaction", async () => {
+    const { account, advice } = await fixture();
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-04",
+      merchant: "Synthetic Orchard",
+      sourceRefs: [
+        { source: "synthetic-bank", externalId: "synthetic-already-booked" },
+      ],
+    });
+    const vendor = await getDb(ctx.db).query.vendor.findFirst();
+    await bookFinancialTransaction(
+      ctx.db,
+      financialBookingInput.parse({
+        transactionId: transaction.output.id,
+        vendorId: vendor!.shortcode,
+        spendingCategoryId: advice.spendingCategoryId,
+      }),
+      ctx.actor,
+    );
+    const suggestion = await pendingPreview();
+    const result = await previewStatementSuggestion(ctx.db, {
+      assessmentId: suggestion.assessmentId,
+      expectedFingerprint: suggestion.fingerprint,
+      application: {
+        kind: "statement_transaction",
+        action: "attach",
+        transactionId: transaction.output.id,
+      },
+    });
+    expect(result.spending).toMatchObject({
+      status: "already_booked",
+      request: { transactionId: transaction.output.id },
+    });
+    expect(await total()).toBe(42.5);
+  });
+  // Categories are provider observations, never a fuzzy same-merchant join.
+  it("retains conflicting category observations and scopes source evidence to charge membership", async () => {
+    const { input, account } = await fixture();
+    await recordStatementRows(
+      ctx.db,
+      recordStatementRowsInput.parse({
+        ...input,
+        import: { ...input.import, fingerprint: "synthetic-category-reexport" },
+        rows: [{ ...input.rows[0], sourceCategory: "Food and drink" }],
+      }),
+      ctx.actor,
+    );
+    await recordStatementRows(
+      ctx.db,
+      recordStatementRowsInput.parse({
+        ...input,
+        import: { ...input.import, fingerprint: "synthetic-other-charge" },
+        rows: [
+          {
+            ...input.rows[0],
+            statementDate: "2026-05-05",
+            sourceCategory: "Unrelated category",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const states = await getDb(ctx.db).query.assessmentState.findMany();
+    const suggestions = await readStatementSuggestions(
+      ctx.db,
+      states.map((state) => state.id),
+    );
+    const suggestion = suggestions.find(
+      (item) => item.statementDate === "2026-05-04",
+    )!;
+    expect(suggestion.sourceCategories).toEqual([
+      { source: "monarch", sourceCategory: "Food and drink" },
+      { source: "monarch", sourceCategory: "Groceries" },
+    ]);
+    await recordStatementRows(
+      ctx.db,
+      recordStatementRowsInput.parse({
+        ...input,
+        import: {
+          ...input.import,
+          source: "copilot",
+          fingerprint: "synthetic-second-provider",
+        },
+        rows: [{ ...input.rows[0], sourceCategory: "Dining" }],
+      }),
+      ctx.actor,
+    );
+    const observations = (await listStatementRows(ctx.db, {})).data;
+    const primary = observations.find(
+      (row) => row.source === "monarch" && row.statementDate === "2026-05-04",
+    )!;
+    const secondProvider = observations.find(
+      (row) => row.source === "copilot",
+    )!;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-04",
+      merchant: "Synthetic Orchard",
+      sourceRefs: [primary, secondProvider].map((row) => ({
+        source: row.source,
+        externalId: row.externalId,
+      })),
+    });
+    expect(
+      (await readStatementSuggestions(ctx.db, [suggestion.assessmentId]))[0]!
+        .sourceCategories,
+    ).toEqual([
+      { source: "copilot", sourceCategory: "Dining" },
+      { source: "monarch", sourceCategory: "Food and drink" },
+      { source: "monarch", sourceCategory: "Groceries" },
+    ]);
+  });
   it("accepts a clean spending suggestion as a Purchase and categorized Expense", async () => {
     const { advice } = await fixture();
     await label(advice);

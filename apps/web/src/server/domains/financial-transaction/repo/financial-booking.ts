@@ -44,22 +44,30 @@ export const digestValue = <T extends object>(value: T) =>
 const fail = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
 };
+type BookingProjection = Partial<
+  Pick<
+    typeof financialTransaction.$inferSelect,
+    "amount" | "status" | "postedDate"
+  >
+>;
 async function transactionForBooking(
   db: Database,
   input: FinancialBookingInput,
+  projection?: BookingProjection,
 ) {
   const id = await resolveOrThrow(
     db,
     "financialTransaction",
     input.transactionId,
   );
-  const row = await getDb(db).query.financialTransaction.findFirst({
+  const stored = await getDb(db).query.financialTransaction.findFirst({
     where: and(
       eq(financialTransaction.id, id),
       notDeleted(financialTransaction),
     ),
   });
-  if (!row) return fail("The financial transaction is no longer live.");
+  if (!stored) return fail("The financial transaction is no longer live.");
+  const row = { ...stored, ...projection };
   if (
     row.status !== "posted" ||
     row.ledgerTransferId ||
@@ -191,9 +199,10 @@ async function bookingAction(
 export async function previewFinancialBooking(
   db: Database,
   raw: FinancialBookingInput,
+  projection?: BookingProjection,
 ) {
   const input = financialBookingInput.parse(raw);
-  const row = await transactionForBooking(db, input);
+  const row = await transactionForBooking(db, input, projection);
   if (!input.purchaseId && !input.vendorId)
     return fail("Choose the vendor or an existing Purchase before booking.");
   const purchaseId = input.purchaseId

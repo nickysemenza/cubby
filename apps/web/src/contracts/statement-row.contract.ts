@@ -17,10 +17,24 @@ import {
   statementCsvFileInput,
   statementCsvPreviewOut,
 } from "@cubby/schemas/statement-row";
+import {
+  statementSuggestionPreviewInput,
+  statementSuggestionPreviewOut,
+} from "@cubby/schemas/statement-suggestion";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const statementRowContract = defineContract("statementRow", {
+  previewSuggestion: query({
+    mcp: {
+      omit: "client_view",
+      note: "Read-only preview of a Suggestions review draft",
+    },
+    readPolicy: "strong",
+    transport: "post",
+    input: statementSuggestionPreviewInput,
+    output: statementSuggestionPreviewOut,
+  }),
   previewCsv: query({
     mcp: {
       omit: "deferred_capability",

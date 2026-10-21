@@ -55,12 +55,26 @@ and reimbursement lines, supplies the refund category unless
 a member explicitly chooses another. An unmatched
 refund needs explicit review before a standalone refund Purchase is booked.
 
-The import-clean execution policy applies every current clean spending plan;
-optional measured-rule switches and withheld audit samples do not gate that
-policy. Each application still uses `entity.review_assessment(s)` and records
-automatic authority and its policy revision in Review automatic decisions.
+The clean import booking rule is enabled by default and appears in Automatic
+rules. A member can pause it or resume it without a measured-precision threshold.
+Pausing leaves future clean spending suggestions Pending, including clean
+attachments that would book spending through the measured attach rule. The pause
+survives policy revisions and is rechecked inside the application transaction.
+Resuming permits future import processing to book current clean plans; it does
+not immediately apply every existing Pending suggestion. Optional measured-rule
+switches and withheld audit samples do not gate enabled import-clean booking.
+Each application still uses `entity.review_assessment(s)` and records automatic
+authority and its policy revision in Automatic history.
 Changing a booking policy never turns an old transaction-only receipt into
 proof of spending; regenerate and revalidate the unbooked work.
+
+Wrong feedback preserves the original Assessment, automatic application receipt
+and booked records. It records a review, not an undo or a repair request for
+already-booked Purchases, Expenses or allocations. The next suggestion run uses
+the existing current-evidence rules: eligible field questions can be reassessed,
+while an unchanged rejected answer is withheld from automatic application.
+An unchanged rejected statement suggestion remains rejected. Changed evidence
+may produce a new suggestion; there is no historical correction pass.
 
 Mail preparation validates source kind, owned original identity and exact
 checksums before any paid attribution or relationship judgment. Admission
@@ -181,7 +195,8 @@ propose, one per unmatched charge, creating a transaction, attaching to an
 existing one (same account, same cents, within three days, whatever the
 descriptor), superseding a recorded hold with its posted row (posted at or up
 to the larger of 25% or $20 above the hold, within seven days), or voiding a
-vanished hold. Nothing applies until reviewed, except through the
+vanished hold. Enabled clean import booking applies current clean spending
+plans as described above. Other work waits for review except through the
 `statement_transaction.attach` Automatic rule ([ADR 0016
 amendment](adr/0016-shared-assessments-and-feedback.md#amendment-sweeps-the-suggestions-page-and-automatic-rules-2026-10)):
 once a member turns it on, an attach to the sole candidate, with no possible
@@ -310,3 +325,21 @@ Follow [production change rules](agents/domain-rules.md#production-changes).
 Historical backfills must preserve unknown acquisition origin and evidence;
 existing bank transactions and Expenses are not automatically reclassified or
 booked. Deployment never applies migrations.
+
+## Reviewing statement outcomes
+
+Suggestions is the reconciliation workspace: Pending proposals, optional Automatic
+decisions audit, and Automatic rules. Statement Rows is the imported-evidence
+browser and defaults to all observations; its scoped review links preserve the
+account, amount and date. Several rows can describe the same charge.
+
+Statement review shows Source, Proposed result and Evidence. The read-only
+`statementRow.previewSuggestion` revalidates the Assessment fingerprint and live
+charge before projecting a draft through the same action gates and spending
+planner as acceptance. It writes no aliases or records. The preview identifies
+transaction changes, vendor reuse/creation and alias effects, Purchase/Expense
+and settlement effects, purchaser basis and the explicit vendor-account state.
+Changing a draft refreshes the result; acceptance still replans inside its write
+boundary. Provider category is evidence, not a Cubby spending-category assignment:
+retain each provider/category observation, joining other provider charges only
+through authoritative settlement references to the same transaction.

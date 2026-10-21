@@ -274,9 +274,11 @@ test("one queue separates proposals from automatic history and reviews either en
   await page.setViewportSize({ width: 390, height: 844 });
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await audit.getByRole("button", { name: "Wrong", exact: true }).click();
+  await audit
+    .getByRole("button", { name: "Report incorrect", exact: true })
+    .click();
   await expect(
-    audit.getByRole("button", { name: "Wrong", exact: true }),
+    audit.getByRole("button", { name: "Report incorrect", exact: true }),
   ).toBeDisabled();
   await expect
     .poll(async () =>
