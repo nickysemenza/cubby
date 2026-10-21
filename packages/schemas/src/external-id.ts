@@ -100,7 +100,7 @@ export function groupIdentifiers<T extends PresentedIdentifier>(
     groups.set(key, group);
   }
   return [...groups.values()].map((group) =>
-    group.toSorted(
+    group.sort(
       (a, b) => Number(b.isPrimary === true) - Number(a.isPrimary === true),
     ),
   );
