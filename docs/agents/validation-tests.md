@@ -41,9 +41,7 @@ returned fields are under test. Validation, audit, financial allocations and
 publication still execute; unused presentation hydration does not.
 Reconcile derived inputs once after a mutation boundary before reading several
 fingerprints of that same state, rather than repeating a full reconciliation
-for each read. Independent recovery cases can share reconciliation passes over
-disjoint fixture graphs; retain each mutation and outcome assertion, with
-distinct lookup inputs so the graphs cannot supply evidence for one another.
+for each read.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.
