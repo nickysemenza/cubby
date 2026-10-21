@@ -22,8 +22,9 @@ import {
 } from "~/features/schedule/schedule-grid";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Stack } from "~/ui/layout";
+import { Section, Stack, Toolbar } from "~/ui/layout";
 import {
   Table,
   TableBody,
@@ -109,14 +110,11 @@ function PracticeView({ crop }: { crop?: GardenCropKey }) {
     return { key, practice };
   });
   return (
-    <Stack gap="md">
-      <div>
-        <h2 className="text-base font-semibold">Household practice</h2>
-        <p className="max-w-[75ch] text-sm text-muted-foreground">
-          Start methods and succession intervals are household choices. Maturity
-          ranges cite their own source or say when they are estimates.
-        </p>
-      </div>
+    <Section
+      headingAs="h2"
+      title="Household practice"
+      caption="Start methods and succession intervals are household choices. Maturity ranges cite their own source or say when they are estimates."
+    >
       <div className="divide-y divide-border border-y border-border md:hidden">
         {rows.map(({ key, practice }) => (
           <div key={key} className="space-y-1 py-3 text-sm">
@@ -168,7 +166,7 @@ function PracticeView({ crop }: { crop?: GardenCropKey }) {
           ))}
         </TableBody>
       </Table>
-    </Stack>
+    </Section>
   );
 }
 
@@ -190,8 +188,7 @@ function SourceNotes({ rows }: { rows: readonly ScheduleRow[] }) {
   );
   if (sources.length === 0) return null;
   return (
-    <section className="space-y-2 border-t border-border pt-4">
-      <h3 className="text-sm font-semibold">Guide sources</h3>
+    <Section headingAs="h3" title="Guide sources">
       <ul className="space-y-2 text-xs text-muted-foreground">
         {sources.map((source) => (
           <li key={source.id}>
@@ -211,7 +208,7 @@ function SourceNotes({ rows }: { rows: readonly ScheduleRow[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }
 
@@ -220,15 +217,11 @@ function TimingView({ year, crop }: { year: number; crop?: GardenCropKey }) {
   const window = useMemo(() => yearWindow(year), [year]);
   const scheduleLabel = usePlantingScheduleLabel(rows, EMPTY_PLANTINGS);
   return (
-    <Stack gap="md">
-      <div>
-        <h2 className="text-base font-semibold">Cited planting windows</h2>
-        <p className="max-w-[75ch] text-sm text-muted-foreground">
-          Each row preserves one source’s method, microclimate, and month or
-          half-month precision. The year places recurring windows on an axis; it
-          does not turn them into dated household plans.
-        </p>
-      </div>
+    <Section
+      headingAs="h2"
+      title="Cited planting windows"
+      caption="Each row preserves one source’s method, microclimate, and month or half-month precision. The year places recurring windows on an axis; it does not turn them into dated household plans."
+    >
       <ScheduleGrid
         rows={rows}
         window={window}
@@ -236,13 +229,13 @@ function TimingView({ year, crop }: { year: number; crop?: GardenCropKey }) {
         renderLabel={scheduleLabel}
       />
       {rows.length === 0 && (
-        <p className="text-sm text-muted-foreground">
+        <EmptyState size="inline">
           This crop has no cited window for the sunny or Bay Area calendar. Its
           household practice is still available in Practice.
-        </p>
+        </EmptyState>
       )}
       <SourceNotes rows={rows} />
-    </Stack>
+    </Section>
   );
 }
 
@@ -307,15 +300,11 @@ function PlanView({
   const scheduleLabel = usePlantingScheduleLabel(rows, plantings.records);
   const error = plantings.error ?? plants.error;
   return (
-    <Stack gap="md">
-      <div>
-        <h2 className="text-base font-semibold">Plan comparison</h2>
-        <p className="max-w-[75ch] text-sm text-muted-foreground">
-          Guide windows are cited reference ranges. Sown, transplanted, and
-          finished marks are recorded dates; harvest ranges are derived
-          expectations. Free-text planned windows remain in the undated lane.
-        </p>
-      </div>
+    <Section
+      headingAs="h2"
+      title="Plan comparison"
+      caption="Guide windows are cited reference ranges. Sown, transplanted, and finished marks are recorded dates; harvest ranges are derived expectations. Free-text planned windows remain in the undated lane."
+    >
       {error ? (
         <ErrorDisplay
           error={error}
@@ -343,15 +332,15 @@ function PlanView({
             renderLabel={scheduleLabel}
           />
           {!rows.some((row) => row.id.startsWith("planting:")) && (
-            <p className="text-sm text-muted-foreground">
+            <EmptyState size="inline">
               No plantings with dates in {year} or undated plans match these
               filters.
-            </p>
+            </EmptyState>
           )}
           <SourceNotes rows={rows} />
         </>
       )}
-    </Stack>
+    </Section>
   );
 }
 
@@ -411,53 +400,59 @@ export function GardenWorkbench({
 
   return (
     <Stack gap="lg">
-      <div className="flex flex-wrap items-end gap-3 border-b border-border pb-3">
-        <Picker
-          mode="segmented"
-          label="Switch view"
-          options={modes}
-          value={mode}
-          onValueChange={(next) => {
-            const choice = modes.find((option) => option.value === next);
-            if (choice) onModeChange(choice.value);
-          }}
-          iconOnlyOnPhone
-        />
-        <div className="grid min-w-24 gap-1 text-xs text-muted-foreground">
-          <span>Year</span>
-          <Picker
-            mode="choose"
-            label="Year"
-            options={yearOptions}
-            value={String(year)}
-            onValueChange={(next) => {
-              if (next) onYearChange(Number(next));
-            }}
-          />
-        </div>
-        <div className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
-          <span>Crop</span>
-          <Picker
-            label="Crop"
-            options={CROP_OPTIONS}
-            value={crop ?? ""}
-            onValueChange={(next) => {
-              const parsed = gardenCropKey.safeParse(next);
-              onCropChange(parsed.success ? parsed.data : undefined);
-            }}
-          />
-        </div>
-        <div className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
-          <span>Current location</span>
-          <Picker
-            label="Current location"
-            options={locationOptions}
-            value={location ?? ""}
-            disabled={!planActive}
-            onValueChange={(next) => onLocationChange(next || undefined)}
-          />
-        </div>
-      </div>
+      <Toolbar
+        label="Garden workbench"
+        className="border-b border-border pb-3"
+        start={
+          <div className="flex min-w-0 flex-wrap items-end gap-3">
+            <Picker
+              mode="segmented"
+              label="Switch view"
+              options={modes}
+              value={mode}
+              onValueChange={(next) => {
+                const choice = modes.find((option) => option.value === next);
+                if (choice) onModeChange(choice.value);
+              }}
+              iconOnlyOnPhone
+            />
+            <div className="grid min-w-24 gap-1 text-xs text-muted-foreground">
+              <span>Year</span>
+              <Picker
+                mode="choose"
+                label="Year"
+                options={yearOptions}
+                value={String(year)}
+                onValueChange={(next) => {
+                  if (next) onYearChange(Number(next));
+                }}
+              />
+            </div>
+            <div className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
+              <span>Crop</span>
+              <Picker
+                label="Crop"
+                options={CROP_OPTIONS}
+                value={crop ?? ""}
+                onValueChange={(next) => {
+                  const parsed = gardenCropKey.safeParse(next);
+                  onCropChange(parsed.success ? parsed.data : undefined);
+                }}
+              />
+            </div>
+            <div className="grid min-w-44 flex-1 gap-1 text-xs text-muted-foreground md:max-w-60">
+              <span>Current location</span>
+              <Picker
+                label="Current location"
+                options={locationOptions}
+                value={location ?? ""}
+                disabled={!planActive}
+                onValueChange={(next) => onLocationChange(next || undefined)}
+              />
+            </div>
+          </div>
+        }
+      />
       {mode === "timing" ? (
         <TimingView year={year} crop={crop} />
       ) : mode === "practice" ? (

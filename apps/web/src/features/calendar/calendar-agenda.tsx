@@ -3,6 +3,8 @@ import { addDays, format, parseISO } from "date-fns";
 import { Fragment } from "react";
 
 import { formatCalendarDay } from "~/lib/date-format";
+import { EmptyState } from "~/ui/feedback/empty-state";
+import { Panel } from "~/ui/layout";
 
 /**
  * The phone form of the planning calendar.
@@ -93,49 +95,49 @@ export function CalendarAgenda({
   const groups = groupItemsByDay(items, includesDay, range, showAllDays);
 
   if (groups.length === 0) {
-    return <div className="border p-4">{emptyMessage}</div>;
+    return <EmptyState size="inline">{emptyMessage}</EmptyState>;
   }
 
   return (
-    // A plain bordered container: the sections are ruled and adjacent, so
-    // there is no gap for a layout primitive to own.
-    <div data-slot="calendar-agenda" className="border">
-      {groups.map((group) => (
-        <section key={group.day} data-day={group.day}>
-          {/* Keep the day named while scrolling through its events. */}
-          <h3 className="sticky top-0 z-10 border-b bg-muted text-xs font-medium">
-            <button
-              type="button"
-              className="flex min-h-11 w-full items-center gap-2 px-2 py-1 text-left outline-none hover:bg-muted-foreground/5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-              onClick={() => onDayClick?.(group.day)}
-            >
-              <span
-                className={group.day === today ? "text-primary" : undefined}
+    <Panel tone="default" flush>
+      <div data-slot="calendar-agenda">
+        {groups.map((group) => (
+          <section key={group.day} data-day={group.day}>
+            {/* Keep the day named while scrolling through its events. */}
+            <h3 className="sticky top-0 z-10 border-b bg-muted text-xs font-medium">
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center gap-2 px-2 py-1 text-left outline-none hover:bg-muted-foreground/5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                onClick={() => onDayClick?.(group.day)}
               >
-                {group.day === today
-                  ? "Today"
-                  : formatCalendarDay(group.day, "weekdayMonthDay")}
-              </span>
-              <span className="ml-auto text-slate tabular-nums">
-                {group.items.length}
-              </span>
-            </button>
-          </h3>
-          <div className="px-2">
-            {group.items.length === 0 ? (
-              <div className="py-4 text-xs text-muted-foreground">
-                Nothing planned.
-              </div>
-            ) : (
-              group.items.map((item) => (
-                <Fragment key={`${item.kind}:${item.id}`}>
-                  {renderItem(item)}
-                </Fragment>
-              ))
-            )}
-          </div>
-        </section>
-      ))}
-    </div>
+                <span
+                  className={group.day === today ? "text-primary" : undefined}
+                >
+                  {group.day === today
+                    ? "Today"
+                    : formatCalendarDay(group.day, "weekdayMonthDay")}
+                </span>
+                <span className="ml-auto text-slate tabular-nums">
+                  {group.items.length}
+                </span>
+              </button>
+            </h3>
+            <div className="px-2">
+              {group.items.length === 0 ? (
+                <div className="py-4 text-xs text-muted-foreground">
+                  Nothing planned.
+                </div>
+              ) : (
+                group.items.map((item) => (
+                  <Fragment key={`${item.kind}:${item.id}`}>
+                    {renderItem(item)}
+                  </Fragment>
+                ))
+              )}
+            </div>
+          </section>
+        ))}
+      </div>
+    </Panel>
   );
 }

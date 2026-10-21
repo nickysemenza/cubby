@@ -13,6 +13,7 @@ import { useId, useMemo } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { cn } from "~/lib/utils";
+import { Panel } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
 
@@ -266,7 +267,7 @@ export function RecipeFlowMap({
   );
 
   return (
-    <div className="overflow-x-auto border border-[var(--border)] bg-card">
+    <Panel tone="default" flush className="overflow-x-auto overflow-y-hidden">
       <div className="relative" style={{ width: Math.max(width, 720), height }}>
         <svg
           aria-hidden="true"
@@ -367,7 +368,7 @@ export function RecipeFlowMap({
           );
         })}
       </div>
-    </div>
+    </Panel>
   );
 }
 

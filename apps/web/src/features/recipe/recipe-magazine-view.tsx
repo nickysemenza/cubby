@@ -22,7 +22,8 @@ import type {
   RecipeCosting,
 } from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
-import { Row, Section, Stack } from "~/ui/layout";
+import { Panel, Row, Section, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 
 import {
@@ -92,17 +93,18 @@ function VitalsPanel({
   return (
     <aside className="w-full lg:w-[230px] lg:self-start lg:justify-self-end">
       {show ? (
-        <div className="border border-[var(--border)] bg-card p-4">
+        <Panel tone="default" className="p-3">
           <Row align="center" justify="between" className="mb-2">
             <span className="eyebrow">{stats.basisLabel}</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={onToggle}
-              title="Hide nutrition & cost"
-              className="text-muted-foreground hover:text-foreground"
+              aria-label="Hide nutrition and cost"
+              className="size-11 shrink-0 text-muted-foreground hover:text-foreground"
             >
               <EyeSlashIcon className="size-3.5" />
-            </button>
+            </Button>
           </Row>
 
           <div className="mb-3 space-y-1">
@@ -163,16 +165,17 @@ function VitalsPanel({
               )}
             </Row>
           )}
-        </div>
+        </Panel>
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onToggle}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="min-h-11 text-muted-foreground hover:text-foreground"
         >
           <EyeIcon className="size-3.5" />
           Show nutrition &amp; cost
-        </button>
+        </Button>
       )}
     </aside>
   );
@@ -250,22 +253,24 @@ function IngredientLedger({
                     : null;
               return (
                 <li key={ing.id} className={cn(ingredientRowGrid, "py-2")}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     aria-pressed={isStruck}
                     onClick={() => toggle(ing.id)}
+                    aria-label={`${isStruck ? "Restore" : "Cross off"} ${name}`}
                     title={
                       ing.rawLine && ing.rawLine !== name
                         ? ing.rawLine
                         : "Cross off"
                     }
-                    className="cursor-pointer text-left"
+                    className="min-h-11 min-w-11 cursor-pointer px-1 text-left md:min-h-0 md:min-w-0"
                   >
                     <IngredientQuantities
                       quantities={quantities}
                       className={cn("text-xs", isStruck && "opacity-40")}
                     />
-                  </button>
+                  </Button>
                   <span
                     className={cn(
                       "text-sm leading-snug",
