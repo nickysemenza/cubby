@@ -32,6 +32,10 @@ test("Product identifier edits preserve additions and apply explicit identity ac
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
   const edit = page.getByRole("button", { name: "Edit Product", exact: true });
   const dialog = page.getByRole("dialog", { name: "Edit Product" });
+  const identifiers = dialog.getByRole("group", {
+    name: "External IDs",
+    exact: true,
+  });
   const save = async () => {
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).toBeHidden();
@@ -44,9 +48,8 @@ test("Product identifier edits preserve additions and apply explicit identity ac
   await dialog
     .getByRole("textbox", { name: "Source", exact: true })
     .fill(source);
-  await dialog
+  await identifiers
     .getByRole("combobox", { name: "Kind", exact: true })
-    .last()
     .click();
   await page
     .getByRole("option", { name: "Catalog number", exact: true })

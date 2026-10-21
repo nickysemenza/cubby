@@ -166,8 +166,8 @@ function CollectionEditor({
     rowSummary?.(row) ??
     collection.key.map((key) => String(row[key] ?? "")).join(" · ");
   return (
-    <div className="space-y-3">
-      <p className="text-xs font-medium">{props.label}</p>
+    <fieldset className="min-w-0 space-y-3">
+      <legend className="text-xs font-medium">{props.label}</legend>
       {error && (
         <p role="alert" className="text-xs text-destructive">
           {error}
@@ -304,7 +304,7 @@ function CollectionEditor({
       >
         Add identifier
       </Button>
-    </div>
+    </fieldset>
   );
 }
 
