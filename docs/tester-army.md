@@ -101,8 +101,9 @@ limitations in these paths are test outcomes, not locally patched behavior.
 A full-panel empty SwiftUI Toolbar can block visible fields in upstream occlusion
 checks, and keyboard-driven form scrolling can retarget an index-bound input.
 The rename, external-ID, and recipe-line journeys exercise these risks.
-A scroll-until match can still sit beneath the native tab bar. Bring the row
-clear before tapping; keep the stock driver's occlusion check enabled.
+A scroll-until match can still sit beneath the native tab bar. Use paced,
+settled gestures to bring the row clear without momentum carrying it offscreen;
+keep the stock driver's occlusion check enabled.
 
 ## Configuration and commands
 
