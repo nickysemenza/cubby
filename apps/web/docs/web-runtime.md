@@ -165,6 +165,8 @@ Reference lookup targets come from declared read fields as well as storage
 fields: table-only lineage columns can still expose declared public references.
 Photo receipt recovery captures the requested current revision even when a
 completed Run blocks new approvals; the server validates the existing receipt.
+An unsaved-field refusal restores focus after approval's pending state clears,
+so the field is enabled when focus lands.
 
 Review outcomes and completion callbacks belong to the submitting view visit.
 Capture its identity before dispatch and compare it on completion; a query key

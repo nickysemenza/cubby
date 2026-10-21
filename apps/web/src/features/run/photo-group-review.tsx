@@ -3373,7 +3373,10 @@ export function PhotoGroupReview({
           groupKeys.includes(field.groupKey),
         );
         if (unsaved) {
-          document.getElementById(unsaved[0])?.focus();
+          // Approval's finally re-enables the field before focus can land.
+          requestAnimationFrame(() =>
+            document.getElementById(unsaved[0])?.focus(),
+          );
           throw new Error(
             "Save or correct the edited field before applying this group",
           );
