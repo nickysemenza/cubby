@@ -64,10 +64,12 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   );
   const table = page.getByRole("table").first();
   const headers = table.getByRole("columnheader");
-  const labels = await headers.allTextContents();
-  expect(labels.findIndex((text) => text.includes("Quality"))).toBe(
-    labels.findIndex((text) => text.includes("Product")) + 1,
-  );
+  const columnOrder = () =>
+    headers.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("data-column-id")),
+    );
+  const labels = await columnOrder();
+  expect(labels.indexOf("dataQuality")).toBe(labels.indexOf("name") + 1);
   const row = table.getByRole("row").filter({ hasText: name }).first();
   // A table cell drops the "/100" its header already implies; the status
   // stays spoken.
@@ -131,10 +133,10 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     .getByRole("button", { name: "Move Quality later", exact: true })
     .click();
   await page.keyboard.press("Escape");
-  const changed = await headers.allTextContents();
+  const changed = await columnOrder();
   expect(changed).not.toEqual(labels);
   await reloadAuthenticatedPage(page, table);
-  await expect.poll(() => headers.allTextContents()).toEqual(labels);
+  await expect.poll(columnOrder).toEqual(labels);
   await table
     .getByRole("button", { name: "Sort by Quality", exact: true })
     .click();

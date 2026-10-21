@@ -51,9 +51,16 @@ test("activity uses calendar days and spend readouts remain accessible at both e
   await expect(bars.nth(1)).toBeFocused();
   await page.keyboard.press("Home");
   await expect(bars.first()).toBeFocused();
-  const tooltip = page.getByRole("tooltip").and(page.locator("[data-open]"));
-  await expect(tooltip).toBeVisible();
-  const checkReadout = async () => {
+  const checkReadout = async (bar: ReturnType<typeof bars.first>) => {
+    const label = await bar.getAttribute("aria-label");
+    if (!label) throw new Error("Spend bar is missing its accessible value");
+    const tooltip = page
+      .getByRole("tooltip", {
+        name: label.replace(" spend:", " ·"),
+        exact: true,
+      })
+      .and(page.locator("[data-open]"));
+    await expect(tooltip).toBeVisible();
     const bounds = await tooltip.boundingBox();
     expect(bounds).not.toBeNull();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -67,13 +74,10 @@ test("activity uses calendar days and spend readouts remain accessible at both e
       ),
     ).toBe(true);
   };
-  await checkReadout();
+  await checkReadout(bars.first());
   await page.keyboard.press("End");
   await expect(bars.last()).toBeFocused();
-  await expect(tooltip).toHaveText(
-    (await bars.last().getAttribute("aria-label"))!.replace(" spend:", " ·"),
-  );
-  await checkReadout();
+  await checkReadout(bars.last());
   await expect(chart.locator('[tabindex="0"]')).toHaveCount(1);
 });
 

@@ -547,7 +547,9 @@ describe("statement Sweep throughput", () => {
       expect(peakPublications).toBeLessThanOrEqual(4);
       expect(peakModels).toBeGreaterThanOrEqual(30);
       expect(startsPerMinute).toBe(180);
-      expect(waits).toBeGreaterThan(0);
+      // Other work can advance virtual time past admission deadlines before
+      // the runner reaches its sleep. The runner wait regression owns sleep
+      // execution; this sweep owns completion without in-page polling.
       expect(refusals).toBeGreaterThan(0);
       // Parallel chunks may each defer once; no chunk may poll again inside
       // the same page instead of returning to the durable Workflow sleep.
