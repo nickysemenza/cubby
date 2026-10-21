@@ -912,10 +912,10 @@ it("retains per-image retry errors and refreshes successful siblings", async () 
           ...failedReview,
           lifecycle: {
             ...failedReview.lifecycle,
-            failedImageIds: [failedIds[1]],
+            failedImageIds: retried.length ? [failedIds[1]] : failedIds,
           },
           images: failedReview.images.map((image) =>
-            image.id === failedIds[0]
+            retried.length && image.id === failedIds[0]
               ? { ...image, describe: "leased" }
               : image,
           ),

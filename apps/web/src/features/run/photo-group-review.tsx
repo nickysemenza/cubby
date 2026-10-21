@@ -152,7 +152,8 @@ function usePhotoRunCandidates(
 ) {
   const options = photoImport.candidatesBatch.queryOptions({ runId });
   return useQuery({
-    ...options,
+    meta: options.meta,
+    ...photoImport.candidatesBatch.policy({ runId }).freshness,
     queryKey: [
       ...options.queryKey,
       proposals.map(({ groupKey, updatedAt }) => ({ groupKey, updatedAt })),
@@ -1168,17 +1169,25 @@ function useSelectedPhotoProduct(
   runId: string,
   product: PhotoGroupProposal["product"],
 ) {
-  return useQuery<PhotoProductEvidence>(
+  const input =
     product.kind === "existing" && product.existing
-      ? photoImport.productEvidence.queryOptions({
-          runId,
-          productId: product.existing.id,
-        })
-      : {
-          queryKey: ["photo-product-evidence", runId, "unselected"],
-          queryFn: skipToken,
-        },
-  );
+      ? { runId, productId: product.existing.id }
+      : null;
+  const options = input
+    ? photoImport.productEvidence.queryOptions(input)
+    : null;
+  return useQuery({
+    queryKey: options?.queryKey ?? [
+      "photo-product-evidence",
+      runId,
+      "unselected",
+    ],
+    meta: options?.meta,
+    ...(input ? photoImport.productEvidence.policy(input).freshness : {}),
+    queryFn: input
+      ? ({ signal }) => photoImport.productEvidence.call(input, { signal })
+      : skipToken,
+  });
 }
 
 function SelectedProductEvidence({
@@ -1691,7 +1700,6 @@ function ProductPanel({
                     "New product",
                 },
               });
-            setShowCandidates(kind === "existing");
           }}
         />
         <EntityReferencePicker
