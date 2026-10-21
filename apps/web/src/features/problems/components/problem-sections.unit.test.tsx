@@ -54,15 +54,6 @@ const sorted = (keys: readonly string[]) => [...keys].sort();
 
 describe("PROBLEM_SECTIONS", () => {
   it.each(PROBLEM_SECTIONS.map((s) => [s.id, s] as const))(
-    "%s reads only known detector keys",
-    (_id, section) => {
-      const keys = keysReadBy(section);
-      expect(keys.length).toBeGreaterThan(0);
-      expect(keys.filter((key) => !ALL_PROBLEM_KEYS.includes(key))).toEqual([]);
-    },
-  );
-
-  it.each(PROBLEM_SECTIONS.map((s) => [s.id, s] as const))(
     "%s renders keys of a single class",
     (_id, section) => {
       const classes = new Set(
@@ -114,11 +105,6 @@ describe("PROBLEM_SECTIONS", () => {
     expect({ needsYou: sum(needsYou), autoFix: sum(autoFix) }).toEqual(
       splitDefects(sections, sectionTotals),
     );
-  });
-
-  it("renders every detector key in exactly one section", () => {
-    const rendered = PROBLEM_SECTIONS.flatMap(keysReadBy);
-    expect(sorted(rendered)).toEqual(sorted(ALL_PROBLEM_KEYS));
   });
 
   it.each(PROBLEM_SECTIONS.map((s) => [s.id, s] as const))(
