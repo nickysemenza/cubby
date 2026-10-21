@@ -17,6 +17,11 @@ deduplication are dependency maintenance, not validation gates.
 - Agents' PiHarness patch invalidates failed pi-durable sessions at its cache
   boundary, with ownership checks so an old session cannot discard a replacement
   during startup. Remove it when upstream provides equivalent recovery.
+- TanStack Start's import-protection patch drops cached parser trees after
+  collecting import names and reparses only when a violation needs a source
+  position. Both cached AST references must be released; import protection
+  remains enabled. Remove the backport when upgrading to a release containing
+  [the upstream fix](https://github.com/TanStack/router/pull/8682).
 - Build-only `@esbuild-kit/*`, OpenTelemetry's `glob`, and transitive `uuid`
   dependencies remain upstream maintenance concerns. A blanket override can
   replace an API with an incompatible major inside another package.

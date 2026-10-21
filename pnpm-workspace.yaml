@@ -155,6 +155,7 @@ optimisticRepeatInstall: false
 addMissingPeerTypes: true
 # Observation events preserve pg-cloudflare startup ordering; port when upgrading.
 patchedDependencies:
+  "@tanstack/start-plugin-core@1.171.53": patches/@tanstack__start-plugin-core@1.171.53.patch
   agent-device@0.21.27: patches/agent-device@0.21.27.patch
   agents@0.28.1: patches/agents@0.28.1.patch
   pg-cloudflare@1.4.1: patches/pg-cloudflare@1.4.1.patch

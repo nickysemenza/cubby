@@ -1,0 +1,92 @@
+diff --git a/dist/esm/import-protection/analysis.d.ts b/dist/esm/import-protection/analysis.d.ts
+index 40b1d34eeabce773a6a4edbd3f8aa9405a45f804..d5b6fdc7c2615acbfa2eefeaf4d3d0e75ca4b5f5 100644
+--- a/dist/esm/import-protection/analysis.d.ts
++++ b/dist/esm/import-protection/analysis.d.ts
+@@ -10,7 +10,7 @@ type ImportBindingInfo = {
+ };
+ type UsageCacheKey = `${BoundaryEnv | 'post'}::${string}`;
+ export type ImportAnalysis = {
+-    ast: ParseAstResult;
++    ast?: ParseAstResult;
+     lineIndex: LineIndex;
+     importSourcesInOrder: Array<string>;
+     importSpecifierLocationIndex: Map<string, number>;
+diff --git a/dist/esm/import-protection/analysis.js b/dist/esm/import-protection/analysis.js
+index 89726f6d0f52f9241db810a18922ac2d8f8ea4b5..24a973ddf2edcf33c2df1d9fe9dda0c0183c0436 100644
+--- a/dist/esm/import-protection/analysis.js
++++ b/dist/esm/import-protection/analysis.js
+@@ -179,8 +179,8 @@ function buildImportAnalysis(result) {
+ 	for (const [source, names] of mockNamesBySource) mockExportNamesBySource.set(source, Array.from(names).sort());
+ 	const lineIndex = result.lineIndex ?? buildLineIndex(result.code);
+ 	result.lineIndex = lineIndex;
++	delete result.parsedAst;
+ 	return {
+-		ast,
+ 		lineIndex,
+ 		importSourcesInOrder,
+ 		importSpecifierLocationIndex,
+@@ -424,10 +424,15 @@ function findUsagePosInAnalysis(result, source, envType) {
+ 			});
+ 		}
+ 	};
+-	visit(analysis.ast.program, {
+-		parents: [],
+-		scopeStack: []
+-	});
++	const ast = getOrParseAst(result);
++	try {
++		visit(ast.program, {
++			parents: [],
++			scopeStack: []
++		});
++	} finally {
++		delete result.parsedAst;
++	}
+ 	const pos = preferred ?? anyUsage ?? null;
+ 	analysis.usageByKey.set(cacheKey, pos);
+ 	return pos ?? void 0;
+diff --git a/src/import-protection/analysis.ts b/src/import-protection/analysis.ts
+index 85f90b0a87e6cfea89e3b3ba76d13f1268b95251..83ad4da5c5cc45579c77d72badb82009772b44b3 100644
+--- a/src/import-protection/analysis.ts
++++ b/src/import-protection/analysis.ts
+@@ -21,7 +21,7 @@ function mayContainImportOrExport(code: string): boolean {
+ }
+ 
+ export type ImportAnalysis = {
+-  ast: ParseAstResult
++  ast?: ParseAstResult
+   lineIndex: LineIndex
+   importSourcesInOrder: Array<string>
+   importSpecifierLocationIndex: Map<string, number>
+@@ -333,8 +333,9 @@ function buildImportAnalysis(result: TransformResult): ImportAnalysis {
+   const lineIndex = result.lineIndex ?? buildLineIndex(result.code)
+   result.lineIndex = lineIndex
+ 
+-  const analysis = {
+-    ast,
++  delete result.parsedAst
++
++  const analysis: ImportAnalysis = {
+     lineIndex,
+     importSourcesInOrder,
+     importSpecifierLocationIndex,
+@@ -890,10 +891,15 @@ function findUsagePosInAnalysis(
+     }
+   }
+ 
+-  visit(analysis.ast.program, {
+-    parents: [],
+-    scopeStack: [],
+-  })
++  const ast = getOrParseAst(result)
++  try {
++    visit(ast.program, {
++      parents: [],
++      scopeStack: [],
++    })
++  } finally {
++    delete result.parsedAst
++  }
+ 
+   const pos = preferred ?? anyUsage ?? null
+   analysis.usageByKey.set(cacheKey, pos)
