@@ -27,8 +27,8 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import {
   assertWorkflowEffect,
@@ -64,10 +64,18 @@ export async function ensureRunSteps(
 }
 
 export async function listRunSteps(db: Database, runId: RunId) {
-  return getDb(db)
+  return listRunStepsForRuns(db, [runId]);
+}
+
+export async function listRunStepsForRuns(
+  db: Database | DrizzleTransaction,
+  runIds: RunId[],
+) {
+  if (!runIds.length) return [];
+  return unwrapDb(db)
     .select()
     .from(runStep)
-    .where(eq(runStep.runId, runId))
+    .where(inArray(runStep.runId, runIds))
     .orderBy(asc(runStep.position));
 }
 

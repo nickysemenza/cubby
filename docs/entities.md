@@ -473,6 +473,13 @@ metadata, preserving completed phases across pages and Workflow attempts.
 The shared report labels the current-phase ETA explicitly. Capacity and retry
 waits identify their activity and mark a reused rate as stale; later phases do
 not acquire an overall ETA from the current phase's throughput.
+The Run list exposes `workProgress` and `activityAt` as read-only derived
+fields. Its hydration batches step receipts across the page and reuses the
+detail calculation; other purposes use their persisted samples, so row counters
+can lag the detail's live counters. The list never
+requests a work snapshot per row or infers throughput from timeline frequency.
+Activity is the latest recorded progress, step update, or heartbeat. A missing
+sample remains unavailable, and stale/paused samples do not read as live rates.
 Other Run checkpoints and progress events retain samples in live-progress
 metadata; samples use the checkpoint write time, while heartbeat-only events
 do not refresh a work sample. Timeline history

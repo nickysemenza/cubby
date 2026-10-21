@@ -15,6 +15,7 @@ import {
   runStatus,
   runTrigger,
 } from "../run-fields.js";
+import { runWorkProgress } from "../run-work-progress.js";
 import { defineEntity } from "./definition.js";
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
@@ -175,7 +176,11 @@ export default defineEntity({
     },
     list: {
       // Display images borrow from the vendor; they load as list media.
-      read: { media: ["displayImages"], quality: ["dataQuality"] },
+      read: {
+        derived: ["workProgress", "activityAt"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
       tree: { toggle: true, defaultNested: false },
       savedViews: [
         {
@@ -239,6 +244,32 @@ export default defineEntity({
   model: {
     hierarchy: { parentField: "parentRunId", maxDepth: 100 },
     fields: [
+      {
+        key: "workProgress",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Recorded work samples and step counters" }],
+        },
+        kind: "json",
+        labelOverride: "Work",
+        display: {
+          list: true,
+          labelPath: "workProgress.current.label",
+          renderer: { list: "run-throughput" },
+        },
+        validation: readOnly(runWorkProgress.nullable().default(null)),
+      },
+      {
+        key: "activityAt",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Latest progress, step update, or heartbeat" }],
+        },
+        kind: "timestamp",
+        labelOverride: "Activity",
+        display: { list: true, renderer: { list: "run-activity" } },
+        validation: readOnly(z.iso.datetime().nullable().default(null)),
+      },
       {
         key: "iconEntity",
         kind: "text",
@@ -634,6 +665,8 @@ export default defineEntity({
     create: [],
     update: [],
     output: [
+      "workProgress",
+      "activityAt",
       "id",
       "iconEntity",
       "displayName",

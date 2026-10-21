@@ -19,6 +19,12 @@ Full labels wrap rather than clip on narrow screens. Date columns start at
 96px and declared spans at 320px; shared rendered-content fitting preserves
 readable labels.
 
+Desktop table cells containing `DateDisplay`'s open-overdue marker use the
+destructive surface tint across the cell. Keep the overdue text as a second
+signal, and let the shared date/status logic clear both when work is settled.
+The deadline tint stays visible through row hover and selection; selected cells
+retain a ring outline so selection does not depend on the background.
+
 Mounted record labels share `useDisplayNow`, refreshing once per minute and on
 focus/visibility changes, including household midnight and sleep/wake; they do
 not depend on a query refetch. `formatTimestamp` and `formatDateSpan` supply the

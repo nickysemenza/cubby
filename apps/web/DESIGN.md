@@ -159,7 +159,14 @@ These are Cubby's own components, designed and built here rather than adopted fr
   (`ui/data-table/visuals/cell-visual.tsx`) supplement
   readable values with explicit fixed scales; missing samples break the trend.
   Stock targets and price histories are illustrative, page-local evidence.
-  These presentations are not yet connected to entity declarations or saved views.
+  The showcase's presentation toggle stays page-local; saved-view presentation
+  preferences are not connected.
+  Production Project lists declare an own-task completion bar, with "No tasks"
+  for an empty denominator. Deadline cell treatment follows
+  [the shared date rules](docs/web-ui.md).
+  Run lists show recorded current-phase work, purpose-specific items per minute
+  when supported, and the latest progress/heartbeat time. Unknown totals omit
+  the bar; paused and stale samples do not advertise a live rate.
 - **`IndexedSections`** (`ui/data-table/indexed-sections.tsx`) — the continuous grouped page with its sticky contents index and Jump to menu; record details and `/design` both render through it (`/design#indexed-sections`).
 - **`LocationTree`**, `DateDisplay`, `EnumPill`, `GapChipCluster` and `FilterBar` (`/design#location-tree`, `/design#values`).
 

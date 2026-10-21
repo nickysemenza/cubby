@@ -4,6 +4,10 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RunFilters, RunOut } from "@cubby/schemas/run";
 import { runOut } from "@cubby/schemas/run";
 import { runPurpose, runWorkLabel } from "@cubby/schemas/run-fields";
+import {
+  runWorkSamples,
+  readRunWorkPhase,
+} from "@cubby/schemas/run-work-progress";
 import { and, eq } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
@@ -29,6 +33,9 @@ import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { listRunStepsForRuns } from "./run-step";
+import { readRunStepWorkProgress, usesStepWorkProgress } from "./work-progress";
+
 /**
  * The manifest read side of an import run. Writes stay in
  * `purchase-import/run-service.ts`; this file only projects the row.
@@ -46,7 +53,7 @@ const hydrateProjection = async (
     entity: E,
     ids: (string | null)[],
   ) => lookupEntityReferences(db, entity, ids, { includeDeleted: true });
-  const [accounts, vendors, parties, predecessors] = await Promise.all([
+  const [accounts, vendors, parties, predecessors, steps] = await Promise.all([
     refs(
       "vendorAccount",
       rows.map((row) => row.vendorAccountId),
@@ -63,7 +70,20 @@ const hydrateProjection = async (
       "run",
       rows.flatMap((row) => [row.predecessorRunId, row.parentRunId]),
     ),
+    listRunStepsForRuns(
+      db,
+      rows
+        .filter((row) => usesStepWorkProgress(runPurpose.parse(row.purpose)))
+        .map((row) => row.id),
+    ),
   ]);
+  const stepsByRun = new Map<string, typeof steps>();
+  for (const step of steps) {
+    const group = stepsByRun.get(step.runId) ?? [];
+    group.push(step);
+    stepsByRun.set(step.runId, group);
+  }
+  const now = new Date();
   const at = <V>(map: Map<string, V>, id: string | null) =>
     id === null ? undefined : map.get(id);
   const runLinks = (row: RunRow) => ({
@@ -74,8 +94,31 @@ const hydrateProjection = async (
     const account = at(accounts, row.vendorAccountId);
     const vendor = at(vendors, row.vendorId);
     const party = at(parties, row.ledgerPartyId);
+    const runSteps = stepsByRun.get(row.id) ?? [];
+    const samples = runWorkSamples.safeParse(row.liveProgress?.work).data;
+    const workProgress =
+      readRunStepWorkProgress(runSteps, row.status, row.startedAt, now) ??
+      (samples
+        ? {
+            current: readRunWorkPhase(samples.current, row.status, now),
+            completed: samples.completed.map((sample) =>
+              readRunWorkPhase(sample, "completed", now),
+            ),
+          }
+        : null);
+    const activity =
+      [
+        row.heartbeatAt?.toISOString(),
+        row.liveProgress?.createdAt,
+        ...runSteps.map((step) => step.updatedAt.toISOString()),
+      ]
+        .filter((value) => value !== undefined)
+        .sort((a, b) => Date.parse(a) - Date.parse(b))
+        .at(-1) ?? null;
     const projected = {
       ...row,
+      workProgress,
+      activityAt: activity,
       purpose: runPurpose.parse(row.purpose),
       id: parseShortcodeFor("run", row.shortcode),
       displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,

@@ -32,7 +32,9 @@ import type { ListRenderer, ListRowOf } from "./list-renderer-types";
 import { emailListRenderers } from "./list-renderers/email";
 import { mealListRenderers } from "./list-renderers/meal";
 import { productListRenderers } from "./list-renderers/product";
+import { projectListRenderers } from "./list-renderers/project";
 import { recipeListRenderers } from "./list-renderers/recipe";
+import { runListRenderers } from "./list-renderers/run";
 
 /**
  * Entities outside the kernel list roster whose renderers still meet a row
@@ -250,7 +252,10 @@ const buildListRendererCoverage = () => {
     },
     productCategory: scoredCoverage<"productCategory">(),
     // finance and project entities
-    project: scoredCoverage<"project">(),
+    project: {
+      ...scoredCoverage<"project">(),
+      "task-progress": implemented(projectListRenderers["task-progress"]),
+    },
     task: scoredCoverage<"task">(),
     vendor: scoredCoverage<"vendor">(),
     financialAccount: scoredCoverage<"financialAccount">(),
@@ -277,7 +282,11 @@ const buildListRendererCoverage = () => {
       ...scoredCoverage<"email">(),
       "purchase-links": implemented(emailListRenderers["purchase-links"]),
     },
-    run: scoredCoverage<"run">(),
+    run: {
+      ...scoredCoverage<"run">(),
+      "run-throughput": implemented(runListRenderers["run-throughput"]),
+      "run-activity": implemented(runListRenderers["run-activity"]),
+    },
     imageJob: scoredCoverage<"imageJob">(),
     "usda-food": {
       "data-quality": implemented<

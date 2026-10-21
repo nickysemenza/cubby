@@ -23,11 +23,11 @@ import {
 } from "@cubby/schemas/run-fields";
 import {
   runWorkSamples,
+  readRunWorkPhase,
   type RunWorkItems,
   type RunWorkSample,
   type RunWorkSamples,
   type RunWorkProgress,
-  type RunWorkPhase,
 } from "@cubby/schemas/run-work-progress";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -125,53 +125,6 @@ export function sampleRunWork(
             { ...previous.current, finished: true },
           ]
       : [],
-  };
-}
-
-function phaseRead(
-  sample: RunWorkSample,
-  status: string,
-  now: Date,
-  waiting = false,
-): RunWorkPhase {
-  const paused = status.startsWith("paused") || status === "needs_review";
-  const stale = now.getTime() - Date.parse(sample.sampledAt) > 120_000;
-  const state =
-    status === "failed" || status === "dispatch_failed"
-      ? "failed"
-      : sample.finished || status === "completed"
-        ? sample.failures
-          ? "failed"
-          : "completed"
-        : paused
-          ? "paused"
-          : waiting ||
-              sample.activity === "capacity" ||
-              sample.activity === "retry"
-            ? "waiting"
-            : "running";
-  const etaSeconds =
-    sample.total !== null && sample.ratePerSecond !== null
-      ? Math.max(
-          0,
-          Math.ceil((sample.total - sample.processed) / sample.ratePerSecond),
-        )
-      : null;
-  return {
-    ...sample,
-    state,
-    etaSeconds,
-    estimateState:
-      sample.ratePerSecond === null
-        ? null
-        : paused
-          ? "paused"
-          : stale ||
-              waiting ||
-              sample.activity === "capacity" ||
-              sample.activity === "retry"
-            ? "stale"
-            : "current",
   };
 }
 
@@ -348,6 +301,67 @@ function checkpointWorkItems(
   return items;
 }
 
+/** Step receipts use one calculation in detail snapshots and batched list reads. */
+export function readRunStepWorkProgress(
+  steps: RunStepRow[],
+  status: string,
+  startedAt: Date,
+  now = new Date(),
+): RunWorkProgress | null {
+  const currentStep =
+    steps.find((step) => !isTerminalStep(step.state)) ?? steps.at(-1);
+  if (currentStep) {
+    const samples =
+      stepWorkSamples(currentStep) ??
+      sampleRunWork(
+        undefined,
+        {
+          phase: currentStep.key,
+          label: currentStep.label,
+          unit: "items",
+          processed:
+            currentStep.done + currentStep.skipped + currentStep.failed,
+          total:
+            currentStep.found > 0 || isTerminalStep(currentStep.state)
+              ? currentStep.found
+              : null,
+          failures: currentStep.failed,
+        },
+        {
+          startedAt: currentStep.startedAt ?? startedAt,
+          sampledAt: currentStep.updatedAt,
+          finished: isTerminalStep(currentStep.state),
+        },
+      );
+    const completed = steps
+      .filter((step) => step.position < currentStep.position)
+      .flatMap((step) =>
+        step.meta?.work
+          ? [...step.meta.work.completed, step.meta.work.current]
+          : [],
+      );
+    return {
+      current: readRunWorkPhase(
+        {
+          ...samples.current,
+          finished:
+            samples.current.finished || isTerminalStep(currentStep.state),
+        },
+        currentStep.state === "failed" ? "failed" : status,
+        now,
+        currentStep.state === "waiting",
+      ),
+      completed: [...completed, ...samples.completed].map((sample) =>
+        readRunWorkPhase({ ...sample, finished: true }, "completed", now),
+      ),
+    };
+  }
+  return null;
+}
+
+export const usesStepWorkProgress = (purpose: RunPurpose) =>
+  countSources[purpose] === "steps";
+
 /** The same storage-only projection feeds reports and MCP work snapshots. */
 export async function getRunWorkProgress(
   db: Database,
@@ -392,54 +406,13 @@ export async function getRunWorkProgress(
   const previous = runWorkSamples.safeParse(owner.work).data;
   const steps =
     countSources[purpose] === "steps" ? await listRunSteps(db, owner.id) : [];
-  const currentStep =
-    steps.find((step) => !isTerminalStep(step.state)) ?? steps.at(-1);
-  if (currentStep) {
-    const samples =
-      stepWorkSamples(currentStep) ??
-      sampleRunWork(
-        undefined,
-        {
-          phase: currentStep.key,
-          label: currentStep.label,
-          unit: "items",
-          processed:
-            currentStep.done + currentStep.skipped + currentStep.failed,
-          total:
-            currentStep.found > 0 || isTerminalStep(currentStep.state)
-              ? currentStep.found
-              : null,
-          failures: currentStep.failed,
-        },
-        {
-          startedAt: currentStep.startedAt ?? owner.startedAt,
-          sampledAt: currentStep.updatedAt,
-          finished: isTerminalStep(currentStep.state),
-        },
-      );
-    const completed = steps
-      .filter((step) => step.position < currentStep.position)
-      .flatMap((step) =>
-        step.meta?.work
-          ? [...step.meta.work.completed, step.meta.work.current]
-          : [],
-      );
-    return {
-      current: phaseRead(
-        {
-          ...samples.current,
-          finished:
-            samples.current.finished || isTerminalStep(currentStep.state),
-        },
-        currentStep.state === "failed" ? "failed" : status,
-        now,
-        currentStep.state === "waiting",
-      ),
-      completed: [...completed, ...samples.completed].map((sample) =>
-        phaseRead({ ...sample, finished: true }, "completed", now),
-      ),
-    };
-  }
+  const stepProgress = readRunStepWorkProgress(
+    steps,
+    status,
+    owner.startedAt,
+    now,
+  );
+  if (stepProgress) return stepProgress;
   const photos = photoCounts.parse(owner.photos);
   const source = countSources[purpose];
   const missingMailRoster = purpose === "mail_import" && owner.input === null;
@@ -515,9 +488,9 @@ export async function getRunWorkProgress(
     finished: status === "completed",
   });
   return {
-    current: phaseRead(samples.current, status, now),
+    current: readRunWorkPhase(samples.current, status, now),
     completed: samples.completed.map((sample) =>
-      phaseRead(sample, "completed", now),
+      readRunWorkPhase(sample, "completed", now),
     ),
   };
 }
