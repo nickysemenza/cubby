@@ -38,8 +38,9 @@ evidence through the usual QA artifact path. This guard also runs in the full QA
 journey-specific fixtures (`tooling/scenarios/native-qa.ts`), and replays
 every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
 save, approving only the selected ready group of a photo Run, a structured
-unit-mapping edit, external-ID Source/Identifier keyboard entry and formatted primary
-barcode entry with canonical saved-value reopen,
+unit-mapping edit, external-ID Source/Identifier keyboard entry on an independent
+Product, and formatted barcode Add, additive preservation, explicit primary
+promotion and secondary-barcode sweep confirmation,
 recipe scaling in cook mode, and scoped entity picking after a location change
 with selections across two pages. After the replays it reads the database back
 (one unit from the chosen shelf only, both allocations, the one committed

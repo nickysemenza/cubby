@@ -1132,6 +1132,23 @@ async function assertQaOutcomes(): Promise<void> {
   const rows = async <T extends object>(text: string, values: unknown[] = []) =>
     (await checkPool.query<T>(text, values)).rows;
   try {
+    const identifiers = await rows<{ externalId: string; isPrimary: boolean }>(
+      `SELECT e."externalId", e."isPrimary" FROM "EntityExternalId" e
+       JOIN "Product" p ON p.id = e."entityId"
+       WHERE p.shortcode = $1 AND e.source = 'gtin' AND e.kind = 'gtin_14'
+       ORDER BY e."externalId"`,
+      [qaIds.PRODUCT_ID],
+    );
+    if (
+      JSON.stringify(identifiers) !==
+      JSON.stringify([
+        { externalId: "00012345678905", isPrimary: true },
+        { externalId: "00088888888880", isPrimary: false },
+      ])
+    )
+      throw new Error(
+        `Native identifier promotion must preserve both barcodes: ${JSON.stringify(identifiers)}`,
+      );
     const stock = await rows<{ code: string; amount: number }>(
       `SELECT e.shortcode AS code, e."amountValue" AS amount
        FROM "InventoryEntry" e WHERE e.shortcode = ANY($1)`,
