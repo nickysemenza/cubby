@@ -638,7 +638,9 @@ struct EntityListView: View {
                 VStack {
                     if hasBanner(model) { banner(model) }
                     #if !os(macOS)
-                        if let meta = model.summaryMeta { listSummary(meta: meta, shown: 0) }
+                        if let meta = model.summaryMeta {
+                            listSummary(meta: meta, filtered: !model.filters.isEmpty)
+                        }
                     #endif
                     ContentUnavailableView {
                         Label(
@@ -678,7 +680,9 @@ struct EntityListView: View {
                     VStack {
                         if hasBanner(model) { banner(model) }
                         #if !os(macOS)
-                            if let meta = search.summaryMeta { listSummary(meta: meta, shown: 0) }
+                            if let meta = search.summaryMeta {
+                                listSummary(meta: meta, filtered: !model.filters.isEmpty)
+                            }
                         #endif
                         ContentUnavailableView(
                             "No matching \(descriptor.plural)", systemImage: "magnifyingglass")
@@ -704,7 +708,7 @@ struct EntityListView: View {
                 if hasBanner(model) { banner(model).padding(.horizontal) }
                 #if !os(macOS)
                     if let meta {
-                        listSummary(meta: meta, shown: rows.count)
+                        listSummary(meta: meta, filtered: !model.filters.isEmpty)
                             .padding(.horizontal, FieldGuideTokens.Space.md)
                             .padding(.top, FieldGuideTokens.Space.sm)
                     }
@@ -890,19 +894,20 @@ struct EntityListView: View {
     }
 
     private func tableTitle(_ row: EntityRow) -> some View {
-        HStack(spacing: FieldGuideTokens.Space.xs) {
+        let titleParts = EntityRowPresentation.titleParts(descriptor: descriptor, row: row)
+        let subtitle = [
+            EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)?.value,
+            row.subtitle, titleParts.subtitle,
+        ].compactMap { $0 }.first(where: EntityRowPresentation.isVisibleListFactValue)
+        return HStack(spacing: FieldGuideTokens.Space.xs) {
             Thumb(
                 url: row.imageURL, size: 18, symbol: descriptor.recordSymbol(in: row),
                 emoji: descriptor.recordEmoji(in: row))
             HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
-                Text(row.title)
+                Text(titleParts.title)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                if descriptor.presentation.titleSubtitle,
-                    let subtitle = EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)?
-                        .value
-                        ?? row.subtitle
-                {
+                if descriptor.presentation.titleSubtitle, let subtitle {
                     Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -930,6 +935,15 @@ struct EntityListView: View {
         #endif
         VStack(spacing: 0) {
             tableControls(model)
+            #if !os(macOS)
+                if let visibleMeta {
+                    listSummary(meta: visibleMeta, filtered: !model.filters.isEmpty)
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
+                        .padding(.vertical, FieldGuideTokens.Space.xs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("browse.\(key.rawValue).table.summary")
+                }
+            #endif
             #if os(macOS)
                 Table(of: EntityRow.self, selection: tableSelection, sortOrder: tableSortOrder(model)) {
                     if descriptor.sortFields.contains(descriptor.titleField) {
@@ -1031,15 +1045,6 @@ struct EntityListView: View {
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
             #endif
-            if let visibleMeta {
-                #if !os(macOS)
-                    listSummary(meta: visibleMeta, shown: visibleRows.count)
-                        .padding(.horizontal, FieldGuideTokens.Space.md)
-                        .padding(.vertical, FieldGuideTokens.Space.xs)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("browse.\(key.rawValue).table.summary")
-                #endif
-            }
             if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
                 loadMore(model)
                     .frame(maxWidth: .infinity)
@@ -1054,17 +1059,34 @@ struct EntityListView: View {
             let facts = EntityRowPresentation.resolve(
                 descriptor: descriptor, row: row, columns: fields.map(\.key)
             ).facts
+            let declaredTitleSubtitle =
+                EntityRowPresentation.titleSubtitle(
+                    descriptor: descriptor, row: row)?.value ?? row.subtitle
+            let titleParts = EntityRowPresentation.titleParts(
+                descriptor: descriptor, row: row, subtitle: declaredTitleSubtitle)
+            let titleSubtitle = [declaredTitleSubtitle, titleParts.subtitle].compactMap { $0 }
+                .first(where: EntityRowPresentation.isVisibleListFactValue)
             return VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                        Text(row.title)
-                            .font(.body.weight(.medium))
-                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                            .frame(width: titleColumnWidth, alignment: .leading)
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                            .contentShape(Rectangle())
-                            .accessibilityIdentifier(
-                                "browse.\(key.rawValue).table.row.\(row.id)")
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(titleParts.title)
+                                .font(.body.weight(.medium))
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                                .truncationMode(.tail)
+                            if let subtitle = titleSubtitle {
+                                Text(subtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                        .frame(width: titleColumnWidth, alignment: .leading)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier(
+                            "browse.\(key.rawValue).table.row.\(row.id)")
                     }
                     .buttonStyle(.plain)
                     ForEach(fields, id: \.key) { field in
@@ -1188,7 +1210,7 @@ struct EntityListView: View {
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         if let meta = visibleMeta {
             #if !os(macOS)
-                listSummary(meta: meta, shown: visibleRows.count)
+                listSummary(meta: meta, filtered: !model.filters.isEmpty)
             #endif
         }
         if let sections = model.sections {
@@ -1222,20 +1244,19 @@ struct EntityListView: View {
         }
     }
 
-    private func listSummary(meta: ListPageMeta, shown: Int) -> some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Text("\(meta.totalCount.formatted()) total · \(shown.formatted()) shown")
-            if let totals = ListTotalsSummary.line(
-                totals: descriptor.presentation.listTotals,
-                labels: meta.totalLabels?.additionalProperties)
-            {
-                Text(totals)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .accessibilityElement(children: .combine)
+    private func listSummary(meta: ListPageMeta, filtered: Bool) -> some View {
+        let totals = descriptor.presentation.listTotals.compactMap {
+            meta.totalLabels?.additionalProperties[$0.id]
+        }.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let summary = ([meta.totalCount.formatted()] + totals + (filtered ? ["filtered"] : []))
+            .joined(separator: " · ")
+        return Text(summary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(summary)
     }
 
     @ViewBuilder
@@ -1341,6 +1362,7 @@ struct EntityRowView: View {
     /// One manifest projection feeds both visible lines and the complete spoken row label.
     private struct Layout {
         let presentation: EntityRowPresentation
+        let title: String
         let trailingValue: EntityRowPresentation.Fact?
         let date: EntityRowPresentation.Fact?
         let subtitle: EntityRowPresentation.Fact?
@@ -1371,14 +1393,28 @@ struct EntityRowView: View {
             let field = descriptor.field(fact.id)
             return field?.key == descriptor.presentation.heroChip || field?.mobileSlot == "trailing"
         }
-        let subtitle = titleSubtitle ?? mobileSubtitle
-        let subtitleText = titleSubtitle?.value ?? row.subtitle ?? mobileSubtitle?.value
+        let subtitle = [titleSubtitle, mobileSubtitle].compactMap { $0 }.first {
+            EntityRowPresentation.isVisibleListFactValue($0.value)
+        }
+        let declaredSubtitle = titleSubtitle?.value ?? row.subtitle ?? mobileSubtitle?.value
+        let titleParts = EntityRowPresentation.titleParts(
+            descriptor: descriptor, row: row, subtitle: declaredSubtitle)
+        let subtitleText =
+            [titleSubtitle?.value, row.subtitle, mobileSubtitle?.value]
+            .compactMap { $0 }
+            .first(where: EntityRowPresentation.isVisibleListFactValue) ?? titleParts.subtitle
         let omitted = Set(
             ["dataQuality", leading?.id, dated?.id, subtitle?.id].compactMap { $0 })
-        let contextFacts = presentation.facts.filter { !omitted.contains($0.id) }
+        let contextFacts = presentation.facts.filter {
+            !omitted.contains($0.id) && EntityRowPresentation.isVisibleListFactValue($0.value)
+        }
         return Layout(
-            presentation: presentation, trailingValue: leading, date: dated,
-            subtitle: subtitle, subtitleText: subtitleText,
+            presentation: presentation, title: titleParts.title,
+            trailingValue: leading, date: dated,
+            subtitle: subtitle,
+            subtitleText: subtitleText.flatMap {
+                EntityRowPresentation.isVisibleListFactValue($0) ? $0 : nil
+            },
             contextFacts: Array(contextFacts.prefix(3)), needsData: EntityRowPresentation.needsData(in: row))
     }
 
@@ -1386,19 +1422,20 @@ struct EntityRowView: View {
         let layout = layout
         let presentation = layout.presentation
         RecordListRow(
-            title: presentation.title, imageURL: presentation.imageURL,
+            title: layout.title, imageURL: presentation.imageURL,
             symbol: EntityCatalog[key].recordSymbol(in: row), emoji: EntityCatalog[key].recordEmoji(in: row),
             previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
         ) {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 if layout.needsData {
                     Circle().fill(.orange).frame(width: 6, height: 6)
-                    Text("Needs data")
                 }
-                let facts = ([layout.subtitleText].compactMap { $0 } + layout.contextFacts.map(\.value))
+                let facts =
+                    ([layout.needsData ? "Needs data" : nil, layout.subtitleText]
+                        .compactMap { $0 } + layout.contextFacts.map(\.value))
                 if !facts.isEmpty {
-                    Text(facts.prefix(layout.needsData ? 2 : 3).joined(separator: " · "))
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    Text(facts.prefix(3).joined(separator: " · "))
+                        .lineLimit(1)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -1420,7 +1457,7 @@ struct EntityRowView: View {
 
     private func accessibilityText(for layout: Layout) -> String {
         let descriptor = EntityCatalog[key]
-        var facts = [layout.presentation.title]
+        var facts = [layout.title]
         if let value = layout.trailingValue {
             facts.append("\(descriptor.field(value.id)?.label ?? value.id): \(value.spokenValue)")
         }

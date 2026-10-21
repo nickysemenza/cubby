@@ -49,9 +49,13 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                             }
                         }
                         .font(.subheadline.weight(.medium))
+                        .lineLimit(textSize.isAccessibilitySize ? nil : 1)
+                        .truncationMode(.tail)
                         .accessibilityIdentifier(titleIdentifier)
                         .fixedSize(horizontal: false, vertical: true)
                         context().font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

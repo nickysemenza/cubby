@@ -39,6 +39,11 @@ enum RecipeSourcePresentation: Sendable, Hashable {
 /// reads the rich list projection and catalog declarations, so relation sections and main lists
 /// cannot drift into per-row fetches or hand-maintained entity switch statements.
 struct EntityRowPresentation: Sendable, Hashable {
+    struct TitleParts: Sendable, Hashable {
+        let title: String
+        let subtitle: String?
+    }
+
     struct Fact: Sendable, Hashable, Identifiable {
         /// One run of a fact's text; an inherited run carries the shared marker after it.
         struct Segment: Sendable, Hashable {
@@ -148,6 +153,41 @@ struct EntityRowPresentation: Sendable, Hashable {
             return caption
         }
         return nil
+    }
+
+    /// A composed title may include a declared reference name after the canonical ` · `
+    /// separator. When the manifest asks for a title subtitle and supplies no separate caption,
+    /// put that reference suffix on the row's second line instead of wrapping the title.
+    static func titleParts(
+        descriptor: EntityDescriptor, row: EntityRow, subtitle: String? = nil
+    ) -> TitleParts {
+        let existingSubtitle =
+            subtitle ?? titleSubtitle(descriptor: descriptor, row: row)?.value
+            ?? row.subtitle
+        guard descriptor.presentation.titleSubtitle,
+            !isVisibleListFactValue(existingSubtitle ?? "")
+        else {
+            return TitleParts(title: row.title, subtitle: nil)
+        }
+
+        for field in descriptor.fields where field.reference != nil {
+            guard let referenceName = fact(field.key, descriptor: descriptor, row: row)?.value,
+                isVisibleListFactValue(referenceName)
+            else { continue }
+            let suffix = " · \(referenceName)"
+            guard row.title.hasSuffix(suffix) else { continue }
+            let title = String(row.title.dropLast(suffix.count))
+            guard !title.isEmpty else { continue }
+            return TitleParts(title: title, subtitle: referenceName)
+        }
+        return TitleParts(title: row.title, subtitle: nil)
+    }
+
+    /// Empty and placeholder values add no information to the compact context line.
+    static func isVisibleListFactValue(_ value: String) -> Bool {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return !["", "unknown", "not recorded", "unavailable", "not assessed", "—", "-"]
+            .contains(normalized)
     }
 
     static func needsData(in row: EntityRow) -> Bool {

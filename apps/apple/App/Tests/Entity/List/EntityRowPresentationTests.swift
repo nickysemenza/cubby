@@ -72,6 +72,29 @@ struct EntityRowPresentationTests {
             })
     }
 
+    @Test func composedTitleMovesADeclaredReferenceSuffixToTheSubtitle() {
+        let descriptor = EntityCatalog[.inventory]
+        let title = "Synthetic flour bag · Synthetic pantry shelf"
+        let row = EntityRow(
+            id: "INV-1001", title: title, subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "INV-1001", "displayName": .string(title),
+                "productId": "PRD-1001", "locationId": "LOC-1001",
+                "product": ["id": "PRD-1001", "name": "Synthetic flour bag"],
+                "location": ["id": "LOC-1001", "name": "Synthetic pantry shelf"],
+            ])
+
+        let parts = EntityRowPresentation.titleParts(
+            descriptor: descriptor, row: row, subtitle: "Not recorded")
+
+        #expect(parts.title == "Synthetic flour bag")
+        #expect(parts.subtitle == "Synthetic pantry shelf")
+        #expect(!EntityRowPresentation.isVisibleListFactValue(" Unknown "))
+        #expect(!EntityRowPresentation.isVisibleListFactValue("Not recorded"))
+        #expect(!EntityRowPresentation.isVisibleListFactValue("  "))
+        #expect(EntityRowPresentation.isVisibleListFactValue("Stock"))
+    }
+
     @Test func qualityLeadsSupportingFactsAndDistinguishesUnassessed() {
         let row = EntityRow(
             id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
