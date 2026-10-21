@@ -48,7 +48,9 @@ import {
 } from "./connection-candidates";
 import {
   captureConnectionBasis,
-  prepareConnectionBases,
+  connectionReadEvidence,
+  connectionReadEvidenceSql,
+  forEachConnectionBasis,
 } from "./connection-evidence";
 import { applyEmailConnection } from "./email-connections";
 import { readExistingConnectionAssessments } from "./existing-assessments";
@@ -167,6 +169,15 @@ async function publishPreparedEntityConnection(
   });
 }
 
+const connectionReadSelection = {
+  id: assessment.id,
+  family: assessment.family,
+  subject: assessment.subject,
+  fingerprint: assessment.fingerprint,
+  // Freshness hashes the current basis, so the retained snapshot stays in SQL.
+  evidence: connectionReadEvidenceSql(sql`${assessment.evidence}`),
+};
+
 /** Batched Assessment selection; freshness also rereads family-owned evidence. */
 export async function readEntityConnectionsBatch(
   db: Database,
@@ -176,7 +187,9 @@ export async function readEntityConnectionsBatch(
   if (!sources.length) return [];
   const keys = sources.map(sourceKey);
   const rows = await getDb(db)
-    .select({ prediction: assessment })
+    .select({
+      prediction: connectionReadSelection,
+    })
     .from(assessment)
     .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
     .where(
@@ -204,9 +217,7 @@ export async function readEntityConnectionsBatch(
     )
     .orderBy(assessment.createdAt, assessment.id);
   const parsed = rows.flatMap(({ prediction }) => {
-    const evidence = connectionAssessmentEvidence.safeParse(
-      prediction.evidence,
-    );
+    const evidence = connectionReadEvidence.safeParse(prediction.evidence);
     const subject = assessmentSubjects.recommendation.safeParse(
       prediction.subject,
     );
@@ -250,20 +261,22 @@ export async function readEntityConnectionsBatch(
       liveKeys.has(sourceKey(proposal.source)) &&
       liveKeys.has(sourceKey(proposal.target)),
   );
-  const prepared = await prepareConnectionBases(db, liveProposals);
-  for (const proposal of liveProposals) {
-    const basis = await captureConnectionBasis(db, proposal, false, prepared);
-    if (
-      (await sha256Hex(
-        canonicalJson({
-          version: 1,
-          candidate: connectionCandidate.parse(proposal),
-          basis,
-        }),
-      )) === proposal.fingerprint
-    )
-      fresh.push(proposal);
-  }
+  await forEachConnectionBasis(
+    db,
+    liveProposals.map((candidate) => ({ candidate })),
+    async ({ candidate: proposal }, basis) => {
+      if (
+        (await sha256Hex(
+          canonicalJson({
+            version: 1,
+            candidate: connectionCandidate.parse(proposal),
+            basis,
+          }),
+        )) === proposal.fingerprint
+      )
+        fresh.push(proposal);
+    },
+  );
   const existing = await readExistingConnectionAssessments(db, sources);
   const grouped = sources.map((source, index) => [
     ...fresh.filter(
@@ -331,14 +344,14 @@ export async function applyEntityConnection(
     );
   return withTransactionDatabase(db, async (db) => {
     const [prediction] = await getDb(db)
-      .select()
+      .select(connectionReadSelection)
       .from(assessment)
       .where(eq(assessment.id, state.id))
       .limit(1);
     if (!prediction || prediction.family !== "recommendation")
       throw new Error("Connection Assessment not found");
     const subject = assessmentSubjects.recommendation.parse(prediction.subject);
-    const evidence = connectionAssessmentEvidence.parse(prediction.evidence);
+    const evidence = connectionReadEvidence.parse(prediction.evidence);
     const { candidate } = evidence;
     if (
       subject.scope !== scopeFor(candidate) ||

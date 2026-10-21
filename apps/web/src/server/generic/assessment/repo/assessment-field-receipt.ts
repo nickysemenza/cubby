@@ -26,7 +26,10 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 export async function acknowledgeSavedField(
   db: Database,
   context: EntityKernelContext,
-  prediction: typeof assessment.$inferSelect,
+  prediction: Pick<
+    typeof assessment.$inferSelect,
+    "id" | "subject" | "judgment" | "producer"
+  >,
   input: {
     recordId: string;
     operationId: string;

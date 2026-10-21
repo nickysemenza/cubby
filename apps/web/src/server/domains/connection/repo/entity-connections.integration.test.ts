@@ -23,6 +23,7 @@ import {
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { canonicalJson } from "~/server/lib/canonical-json";
+import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
 import {
   createProductFixture,
   createProductIdentityFixture,
@@ -35,6 +36,7 @@ import {
   readEntityConnections,
   applyEntityConnection,
 } from "./entity-connections";
+import { assertConnectionFieldFresh } from "./field-connections";
 
 // Failure modes: reverse reads miss a candidate; bare Wrong suppresses future
 // evidence; stale/deleted endpoints apply; mutation escapes the caller rollback.
@@ -66,6 +68,122 @@ describe("stored connection evidence", () => {
     const proposal = await publishEntityConnection(ctx.db, candidate);
     return { item, charge, candidate, proposal };
   }
+
+  // Stored basis snapshots can dwarf the candidate. Transferring them before
+  // queue pagination exhausts Worker memory; freshness must still reread facts.
+  it("reads fresh connection candidates without transferring stored basis snapshots", async () => {
+    const { candidate, proposal, item } = await fixture();
+    const [original] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    if (!original) throw new Error("Synthetic Assessment is missing");
+    const oversized = await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: "synthetic-oversized-connection-basis",
+        family: "recommendation",
+        subject: original.subject,
+        judgment: assessmentJudgments.recommendation.parse(original.judgment),
+        producer: null,
+        fingerprint: proposal.fingerprint,
+        evidence: {
+          version: 1,
+          candidate,
+          basis: { syntheticBallast: "x".repeat(128 * 1024) },
+        },
+      },
+      { data: { connection: true } },
+    );
+    const measured = await measureDatabaseTransfer(
+      ctx.databaseUrl,
+      async (db) => {
+        const fresh = await readEntityConnections(db, candidate.source);
+        expect(fresh.map((entry) => entry.review.assessmentId)).toContain(
+          oversized.id,
+        );
+        await getDb(ctx.db)
+          .update(product)
+          .set({ name: "Synthetic changed connection evidence" })
+          .where(eq(product.id, item.entityId));
+        expect(await readEntityConnections(db, candidate.source)).toEqual([]);
+        await reviewAssessment(db, kernelCtx({ ...ctx, db }), {
+          assessmentId: oversized.id,
+          operationId: "synthetic-oversized-history-review",
+          verdict: "dismissed",
+          intent: "history",
+        });
+      },
+    );
+    expect(measured.largestValueBytes).toBeLessThan(64 * 1024);
+  });
+
+  // Existing field suggestions share the connection list. Their currentness
+  // guard must compare stored JSON in PostgreSQL, not download its full basis.
+  it("filters existing field connections without downloading their stored snapshots", async () => {
+    const { candidate, charge, item } = await fixture();
+    const basis = await captureConnectionBasis(ctx.db, candidate);
+    const stored = await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: "synthetic-field-connection-transfer",
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: "expense",
+          recordId: charge.entityId,
+          field: "productId",
+        },
+        judgment: { value: item.id },
+        fingerprint: "synthetic-field-connection-fingerprint",
+        producer: null,
+        evidence: { syntheticBallast: "x".repeat(128 * 1024) },
+      },
+      {
+        suggestedValue: item.id,
+        data: {
+          connectionEvidence: { version: 1, candidate, basis },
+          syntheticBallast: "x".repeat(128 * 1024),
+        },
+      },
+    );
+    const measured = await measureDatabaseTransfer(
+      ctx.databaseUrl,
+      async (db) => {
+        expect(
+          (await readEntityConnections(db, candidate.source)).map(
+            (row) => row.review.assessmentId,
+          ),
+        ).toContain(stored.id);
+        await withTransactionDatabase(db, (transactionDb) =>
+          assertConnectionFieldFresh(transactionDb, stored.id),
+        );
+        await getDb(ctx.db)
+          .update(assessmentState)
+          .set({
+            data: {
+              connectionEvidence: {
+                version: 1,
+                candidate,
+                basis: { syntheticBallast: "x".repeat(128 * 1024) },
+              },
+            },
+          })
+          .where(eq(assessmentState.id, stored.id));
+        expect(
+          (await readEntityConnections(db, candidate.source)).map(
+            (row) => row.review.assessmentId,
+          ),
+        ).not.toContain(stored.id);
+        await expect(
+          withTransactionDatabase(db, (transactionDb) =>
+            assertConnectionFieldFresh(transactionDb, stored.id),
+          ),
+        ).rejects.toThrow("Connection field evidence changed");
+      },
+    );
+    expect(measured.largestValueBytes).toBeLessThan(64 * 1024);
+  });
 
   it("refuses direct publication for an Expense already assigned to another Product", async () => {
     const { candidate, charge } = await fixture();

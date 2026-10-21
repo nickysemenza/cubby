@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { ProjectOptionsOut } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/project";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
@@ -33,10 +33,18 @@ export async function expenseProjectRecommendationContext(
 
 /**
  * `expenseProjectRecommendationContext` for several Expenses. The project
- * roster and its ledger allocation are read once for the set; each source
- * keeps its own record, history and current-project reads.
+ * roster, ledger allocation and current targets are read once for the set;
+ * every source keeps its own history and derived-window exclusion.
  */
 export async function expenseProjectRecommendationContexts(
+  db: Database,
+  ids: readonly ExpenseShortcode[],
+) {
+  return (await prepareExpenseProjectRecommendationContexts(db, ids))(ids);
+}
+
+/** Share input rows across bounded consumers without retaining every expanded context. */
+export async function prepareExpenseProjectRecommendationContexts(
   db: Database,
   ids: readonly ExpenseShortcode[],
 ) {
@@ -53,26 +61,49 @@ export async function expenseProjectRecommendationContexts(
     db,
     sources.map(({ source }) => source),
   );
-  const contexts = new Map<ExpenseShortcode, RecommendationContext | null>(
-    ids.map((id) => [id, null]),
+  const projectIds = uniq(
+    sources.flatMap(({ source }) =>
+      source.effectiveProjectId ? [source.effectiveProjectId] : [],
+    ),
   );
-  for (const { id, source } of sources)
-    contexts.set(
-      id,
-      await sourceContext(
-        db,
-        source,
-        rosters.get(source.id) ?? [],
-        history.filter(
-          (row) =>
-            row.expenseId !== source.id &&
-            (row.trade === source.effectiveTrade ||
-              (source.productId !== null &&
-                row.productId === source.productId)),
-        ),
-      ),
+  const currentProjects = projectIds.length
+    ? await getDb(db)
+        .select({
+          id: project.id,
+          shortcode: project.shortcode,
+          name: project.name,
+        })
+        .from(project)
+        .where(and(inArray(project.id, projectIds), notDeleted(project)))
+    : [];
+  const byProject = new Map(currentProjects.map((row) => [row.id, row]));
+  return (requestedIds: readonly ExpenseShortcode[]) => {
+    const requested = new Set(requestedIds);
+    const contexts = new Map<ExpenseShortcode, RecommendationContext | null>(
+      requestedIds.map((id) => [id, null]),
     );
-  return contexts;
+    for (const { id, source } of sources) {
+      if (!requested.has(id)) continue;
+      contexts.set(
+        id,
+        sourceContext(
+          source,
+          rosters.get(source.id) ?? [],
+          history.filter(
+            (row) =>
+              row.expenseId !== source.id &&
+              (row.trade === source.effectiveTrade ||
+                (source.productId !== null &&
+                  row.productId === source.productId)),
+          ),
+          source.effectiveProjectId
+            ? byProject.get(source.effectiveProjectId)
+            : undefined,
+        ),
+      );
+    }
+    return contexts;
+  };
 }
 
 /**
@@ -140,21 +171,12 @@ const readSources = async (db: Database, ids: readonly ExpenseShortcode[]) =>
         with: { product: { columns: { kind: true } } },
       });
 
-async function sourceContext(
-  db: Database,
+function sourceContext(
   source: EligibleSource,
   projects: ProjectOptionsOut[],
   history: Awaited<ReturnType<typeof readHistory>>,
+  currentProject: { shortcode: string; name: string } | undefined,
 ) {
-  const currentProject = source.effectiveProjectId
-    ? await getDb(db).query.project.findFirst({
-        where: and(
-          eq(project.id, source.effectiveProjectId),
-          notDeleted(project),
-        ),
-        columns: { shortcode: true, name: true },
-      })
-    : undefined;
   return {
     source: {
       ...source,

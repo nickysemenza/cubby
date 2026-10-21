@@ -39,7 +39,7 @@ export async function ensureEmailAssessment(
   predictionId: string,
 ) {
   const [existing] = await getDb(db)
-    .select()
+    .select({ id: assessment.id, judgment: assessment.judgment })
     .from(assessment)
     .where(eq(assessment.publicationKey, `email-observation:${predictionId}`))
     .limit(1);

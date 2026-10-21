@@ -1,12 +1,13 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionCandidate,
+  connectionAssessmentEvidence,
   type ConnectionCandidate,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -17,10 +18,12 @@ import {
   expense,
   financialTransactionAllocation,
   inventoryEntry,
+  assessmentState,
 } from "~/server/db/schema";
 import {
   expenseProjectRecommendationContext,
   expenseProjectRecommendationContexts,
+  prepareExpenseProjectRecommendationContexts,
 } from "~/server/domains/expense/repo/project-recommendations";
 import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
@@ -138,6 +141,17 @@ export function connectionRelevantRow(kind: string, value: unknown) {
   );
 }
 
+/** Project the same fingerprint fields before transfer, including only keys the table owns. */
+export function connectionRelevantRowSql(kind: string, table: ShortcodeTable) {
+  const fields = connectionRelevantFields(kind);
+  const pairs = Object.entries(getTableColumns(table))
+    .filter(([name]) => fields.includes(name))
+    .flatMap(([name, column]) => [sql`${name}::text`, sql`${column}`]);
+  return pairs.length
+    ? sql<unknown>`jsonb_build_object(${sql.join(pairs, sql`, `)})`
+    : sql<unknown>`'{}'::jsonb`;
+}
+
 const jsonEvidence = z.json();
 type ConnectionJson = z.infer<typeof jsonEvidence>;
 const snapshotSchema = z
@@ -145,6 +159,71 @@ const snapshotSchema = z
   .transform((value) => JSON.parse(JSON.stringify(value)))
   .pipe(jsonEvidence);
 export const snapshotJson = (value: unknown) => snapshotSchema.parse(value);
+
+export const connectionReadEvidence = connectionAssessmentEvidence.omit({
+  basis: true,
+});
+
+/** Lists validate the candidate; stored snapshots stay in PostgreSQL. */
+export const connectionReadEvidenceSql = (evidence: SQL) => sql<unknown>`CASE
+  WHEN ${evidence} ? 'basis' THEN jsonb_build_object(
+    'version', ${evidence}->'version', 'candidate', ${evidence}->'candidate'
+  ) ELSE NULL END`;
+
+/** JSONB equality preserves canonical object/array semantics without downloading the snapshot. */
+export async function connectionBasisIsCurrent(
+  db: Database,
+  assessmentId: string,
+  basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
+) {
+  const [match] = await getDb(db)
+    .select({ id: assessmentState.id })
+    .from(assessmentState)
+    .where(
+      and(
+        eq(assessmentState.id, assessmentId),
+        sql`${assessmentState.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
+      ),
+    )
+    .limit(1);
+  return Boolean(match);
+}
+
+/** A source roster can fan out to many proposals; bound the prepared bases themselves. */
+export async function forEachConnectionBasis<
+  T extends { candidate: ConnectionCandidate },
+>(
+  db: Database,
+  entries: readonly T[],
+  visit: (
+    entry: T,
+    basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
+  ) => Promise<void>,
+) {
+  const expenseIds = entries.flatMap(({ candidate }) =>
+    candidate.relation === "expense-project"
+      ? [parseShortcodeFor("expense", candidate.source.entityId)]
+      : [],
+  );
+  const expenseProjects = expenseIds.length
+    ? await prepareExpenseProjectRecommendationContexts(db, expenseIds)
+    : undefined;
+  // Each basis may contain a full recommendation context; do not retain 250 of them.
+  const batchSize = 16;
+  for (let offset = 0; offset < entries.length; offset += batchSize) {
+    const batch = entries.slice(offset, offset + batchSize);
+    const prepared = await prepareConnectionBases(
+      db,
+      batch.map((entry) => entry.candidate),
+      expenseProjects,
+    );
+    for (const entry of batch)
+      await visit(
+        entry,
+        await captureConnectionBasis(db, entry.candidate, false, prepared),
+      );
+  }
+}
 
 /** The actual payload row is locked, rather than its independent identity tombstone. */
 export async function connectionRecord(
@@ -156,7 +235,7 @@ export async function connectionRecord(
   const id = await resolveOrThrow(db, kind, ref.entityId);
   const table: ShortcodeTable = SHORTCODE_TABLE[kind];
   const query = getDb(db)
-    .select({ row: sql<unknown>`to_jsonb(${table})` })
+    .select({ row: connectionRelevantRowSql(kind, table) })
     .from(table)
     .where(and(eq(table.id, id), notDeleted(table)))
     .limit(1);
@@ -203,7 +282,7 @@ async function connectionRecords(db: Database, refs: readonly EntityRef[]) {
       .select({
         id: table.id,
         shortcode: table.shortcode,
-        row: sql<unknown>`to_jsonb(${table})`,
+        row: connectionRelevantRowSql(kind, table),
       })
       .from(table)
       .where(
@@ -233,6 +312,9 @@ async function connectionRecords(db: Database, refs: readonly EntityRef[]) {
 export async function prepareConnectionBases(
   db: Database,
   raws: readonly ConnectionCandidate[],
+  expenseProjects?: Awaited<
+    ReturnType<typeof prepareExpenseProjectRecommendationContexts>
+  >,
 ): Promise<PreparedConnectionBases> {
   const candidates = raws.map((raw) => connectionCandidate.parse(raw));
   const records = await connectionRecords(
@@ -343,7 +425,9 @@ export async function prepareConnectionBases(
     records,
     allocations,
     purchaseProducts,
-    expenseProject: await expenseProjectRecommendationContexts(db, expenses),
+    expenseProject: expenseProjects
+      ? expenseProjects(expenses)
+      : await expenseProjectRecommendationContexts(db, expenses),
     settlementCandidates: await listPurchasesSettlementCandidates(
       db,
       purchases,

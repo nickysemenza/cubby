@@ -6,7 +6,6 @@ import {
 } from "@cubby/schemas/assessment";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
-  connectionAssessmentEvidence,
   connectionProposal,
   type ConnectionProposal,
   type ConnectionRelation,
@@ -26,11 +25,12 @@ import {
 } from "~/server/db/schema";
 import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
 import { readStoredProductPair } from "~/server/domains/product/repo/match/product-pair-signals";
-import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
-  captureConnectionBasis,
-  prepareConnectionBases,
+  connectionReadEvidence,
+  connectionReadEvidenceSql,
+  connectionBasisIsCurrent,
+  forEachConnectionBasis,
 } from "./connection-evidence";
 
 const fieldRelations = new Map<string, ConnectionRelation>(
@@ -104,8 +104,19 @@ export async function readExistingConnectionAssessments(
       AND ${inArray(sql`source_entity."kind" || ':' || source_entity."shortcode"`, keys)}`;
   const rows = await getDb(db)
     .select({
-      prediction: assessment,
-      state: assessmentState,
+      prediction: {
+        id: assessment.id,
+        family: assessment.family,
+        subject: assessment.subject,
+        judgment: assessment.judgment,
+        producer: assessment.producer,
+        fingerprint: assessment.fingerprint,
+        evidence: sql<unknown>`CASE WHEN ${assessment.family} = ${"product_pair"} THEN ${assessment.evidence} ELSE NULL END`,
+      },
+      state: { entity: assessmentState.entity, field: assessmentState.field },
+      connectionEvidence: connectionReadEvidenceSql(
+        sql`${assessmentState.data}->'connectionEvidence'`,
+      ),
       sourceKind: from.kind,
       sourceCode: from.shortcode,
       targetKind: to.kind,
@@ -232,41 +243,28 @@ export async function readExistingConnectionAssessments(
   const guards = new Map(
     proposals.map((proposal) => [
       proposal,
-      z
-        .object({ connectionEvidence: connectionAssessmentEvidence })
-        .safeParse(
-          rows.find((row) => row.prediction.id === proposal.review.assessmentId)
-            ?.state.data,
-        ),
+      connectionReadEvidence.safeParse(
+        rows.find((row) => row.prediction.id === proposal.review.assessmentId)
+          ?.connectionEvidence,
+      ),
     ]),
   );
-  const prepared = await prepareConnectionBases(
-    db,
-    [...guards.values()].flatMap((guard) =>
-      guard.success ? [guard.data.connectionEvidence.candidate] : [],
-    ),
-  );
-  const fresh: ConnectionProposal[] = [];
-  for (const proposal of proposals) {
+  const fresh = new Set<ConnectionProposal>();
+  const guarded = proposals.flatMap((proposal) => {
     const guard = guards.get(proposal)!;
-    if (guard.success) {
-      const basis = await captureConnectionBasis(
-        db,
-        guard.data.connectionEvidence.candidate,
-        false,
-        prepared,
-      );
-      if (
-        canonicalJson(basis) !==
-        canonicalJson(guard.data.connectionEvidence.basis)
-      )
-        continue;
-    }
-    fresh.push(proposal);
-  }
+    if (guard.success) return [{ proposal, candidate: guard.data.candidate }];
+    fresh.add(proposal);
+    return [];
+  });
+  await forEachConnectionBasis(db, guarded, async ({ proposal }, basis) => {
+    if (await connectionBasisIsCurrent(db, proposal.review.assessmentId, basis))
+      fresh.add(proposal);
+  });
   return sources.map((source) =>
-    fresh.filter(
-      (p) => key(p.source) === key(source) || key(p.target) === key(source),
-    ),
+    proposals
+      .filter(
+        (p) => key(p.source) === key(source) || key(p.target) === key(source),
+      )
+      .filter((proposal) => fresh.has(proposal)),
   );
 }

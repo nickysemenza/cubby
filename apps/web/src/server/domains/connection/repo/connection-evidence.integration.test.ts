@@ -2,15 +2,21 @@ import {
   type ConnectionCandidate,
   connectionCandidate,
 } from "@cubby/schemas/entity-connections";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { entityLink, financialTransactionAllocation } from "~/server/db/schema";
+import {
+  entityLink,
+  financialTransactionAllocation,
+  product as productTable,
+} from "~/server/db/schema";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson } from "~/server/lib/canonical-json";
+import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
 
 import {
   captureConnectionBasis,
@@ -163,5 +169,24 @@ describe("prepared connection bases", () => {
       expect(
         canonicalJson(await captureConnectionBasis(ctx.db, raw, false, ready)),
       ).toBe(canonicalJson(await captureConnectionBasis(ctx.db, raw)));
+    // Tags are not connection evidence; a large unrelated value must never
+    // cross the wire in either the single-record or prepared-batch path.
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ tags: ["x".repeat(128 * 1024)] })
+      .where(eq(productTable.id, product.id));
+    const measured = await measureDatabaseTransfer(
+      ctx.databaseUrl,
+      async (db) => {
+        const prepared = await prepareConnectionBases(db, candidates);
+        for (const raw of candidates)
+          expect(
+            canonicalJson(
+              await captureConnectionBasis(db, raw, false, prepared),
+            ),
+          ).toBe(canonicalJson(await captureConnectionBasis(db, raw)));
+      },
+    );
+    expect(measured.largestValueBytes).toBeLessThan(64 * 1024);
   });
 });

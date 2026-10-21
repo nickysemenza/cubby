@@ -198,7 +198,7 @@ async function publishProductPairWithGuard(
     );
     const publicationKey = `product-pair:${digest}`;
     const [published] = await client
-      .select()
+      .select({ evidence: assessment.evidence, producer: assessment.producer })
       .from(assessment)
       .where(eq(assessment.publicationKey, publicationKey))
       .limit(1);

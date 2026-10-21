@@ -83,7 +83,7 @@ export async function publishMailImportOutcome(
   // A recovered tool can run after another model turn; its original producer
   // belongs to its first committed outcome, never the latest usage on retry.
   const [existing] = await getDb(db)
-    .select()
+    .select({ id: assessment.id })
     .from(assessment)
     .where(eq(assessment.publicationKey, publicationKey))
     .limit(1);

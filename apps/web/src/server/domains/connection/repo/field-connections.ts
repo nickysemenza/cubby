@@ -27,7 +27,11 @@ import {
   captureConnectionBasis,
   connectionRecord,
   connectionRelevantRow,
+  connectionRelevantRowSql,
   snapshotJson,
+  connectionReadEvidence,
+  connectionReadEvidenceSql,
+  connectionBasisIsCurrent,
 } from "./connection-evidence";
 
 const targets = new Map<
@@ -68,7 +72,10 @@ export async function prepareConnectionFieldGuard(
   const table =
     SHORTCODE_TABLE[z.enum(shortcodeEntities).parse(target.entityKind)];
   const rows = await getDb(db)
-    .select({ code: table.shortcode, row: sql<unknown>`to_jsonb(${table})` })
+    .select({
+      code: table.shortcode,
+      row: connectionRelevantRowSql(target.entityKind, table),
+    })
     .from(table)
     .where(notDeleted(table));
   const targetBasis = new Map<string, ReturnType<typeof snapshotJson>>();
@@ -178,26 +185,22 @@ export async function assertConnectionFieldFresh(
   assessmentId: string,
 ) {
   const [state] = await getDb(db)
-    .select()
+    .select({
+      connectionEvidence: connectionReadEvidenceSql(
+        sql`${assessmentState.data}->'connectionEvidence'`,
+      ),
+    })
     .from(assessmentState)
     .where(eq(assessmentState.id, assessmentId))
     .limit(1);
   if (!state) throw new Error("Field Assessment not found");
-  const data = z
-    .object({ connectionEvidence: connectionAssessmentEvidence })
-    .safeParse(state.data);
+  const data = connectionReadEvidence.safeParse(state.connectionEvidence);
   if (!data.success) return;
-  const current = await captureConnectionBasis(
-    db,
-    data.data.connectionEvidence.candidate,
-    true,
-  );
-  if (
-    canonicalJson(current) !== canonicalJson(data.data.connectionEvidence.basis)
-  )
+  const current = await captureConnectionBasis(db, data.data.candidate, true);
+  if (!(await connectionBasisIsCurrent(db, assessmentId, current)))
     throw new Error("Connection field evidence changed before acceptance");
   const [fresh] = await getDb(db)
-    .select()
+    .select({ active: assessmentState.active, status: assessmentState.status })
     .from(assessmentState)
     .where(eq(assessmentState.id, assessmentId))
     .limit(1)
