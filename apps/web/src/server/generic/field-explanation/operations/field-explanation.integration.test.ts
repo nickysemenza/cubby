@@ -114,6 +114,7 @@ describe("derived field explanations against canonical records", () => {
     };
     const lineRecord = await createRepoEntity(ctx, "expense", {
       name: "Synthetic category context line",
+      trade: "other",
       lineKind: "principal",
       date: "2026-09-01",
       cost: 8,

@@ -81,8 +81,12 @@ that main has since changed, so they are not evidence for the merge.
 
 Construct synthetic domain fixtures through the supported `createRepoEntity`
 writer roster. For other entities, use the owning `create…Fixture` and
-`make…Input` helpers so required defaults survive. Create Runs with `ensureRun`
-and an actor. For member-scoped import purposes, create a member LedgerParty
+`make…Input` helpers so required defaults survive.
+Do not substitute `insertWithShortcode` for those fixture writers: it omits
+required schema/writer defaults such as Product manufacturer and Purchase vendor.
+Create a valid record first, then update storage only when the tested historical
+or invalid state cannot be expressed through its supported writer.
+Create Runs with `ensureRun` and an actor. For member-scoped import purposes, create a member LedgerParty
 and link its storage-only `userId` first; `ensureRun` derives scope and actor
 metadata from that link. `ensureRun` creates running/completed Runs, so seed paused or
 failed fixture states by updating the created row. Build fixture progress with
