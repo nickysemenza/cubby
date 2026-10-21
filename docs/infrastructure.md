@@ -91,11 +91,7 @@ those executable bounds; continuation retains the RunStep cursors and the
 attempt/cancellation fences instead of starting generation over.
 `packages/shared/src/workflow-platform-limits.json` owns the platform allowance.
 Deployment config reads its bytes; the runtime `WORKFLOW_EXECUTION_LIMITS`
-policy imports it to size application paths. Keep runtime modules out of the
-deployment config import graph: the Cloudflare Vite plugin denies config
-dependencies to the runtime loader. Use relative URL file reads for shared data;
-the config loader also tracks `import.meta.resolve()` targets as dependencies.
-The policy configures a four-million
+policy imports it to size application paths. The policy configures a four-million
 subrequest allowance, 512 suggestions / 1,024 new questions per model page,
 three batch attempts and a 500-page hard ceiling. Model pages spend 1/65 and
 database-only pages 1/400 of one shared allowance across all phases. Generation

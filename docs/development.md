@@ -387,6 +387,12 @@ the Worker bundle and copied static assets. Deployment reuses this output with
 `cf deploy --prebuilt --mode production`. The plugin writes directly into this
 output tree; there is no separate `dist` bundle.
 
+Keep runtime modules out of the deployment config import graph: the Cloudflare
+Vite plugin denies config dependencies to the runtime loader. Read shared data
+through relative URL file reads (as for Workflow declarations and platform
+limits); the config loader also tracks `import.meta.resolve()` targets as
+dependencies. Validate shared config data at the read boundary.
+
 `Env` is inferred directly from the production configuration in
 `worker-environment.d.ts`; local text values stay strings, and
 `worker-bindings.ts` supplies isolated RPC contracts checked against live exports.

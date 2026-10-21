@@ -8,6 +8,8 @@ import { isFileLoadingAllowed, resolveConfig } from "vite";
 // load the shared Workflow policy without exposing deployment configuration.
 test("Cloudflare config keeps the runtime Workflow policy loadable", async () => {
   const root = path.resolve(import.meta.dirname, "../..");
+  // Deny derivation is independent of the app's environment/persistence options.
+  // Keep this real plugin boundary cheap instead of preparing a dev database.
   const config = await resolveConfig(
     {
       root,
@@ -16,6 +18,18 @@ test("Cloudflare config keeps the runtime Workflow policy loadable", async () =>
     },
     "serve",
   );
+  for (const denied of config.server.fs.deny) {
+    for (const runtimeRoot of [
+      path.join(root, "src"),
+      path.resolve(root, "../../packages"),
+    ]) {
+      assert.equal(
+        denied.startsWith(`${runtimeRoot}/`),
+        false,
+        `config must not deny runtime source: ${denied}`,
+      );
+    }
+  }
   for (const file of ["workflow-limits.ts", "workflow-platform-limits.json"]) {
     assert.equal(
       isFileLoadingAllowed(
