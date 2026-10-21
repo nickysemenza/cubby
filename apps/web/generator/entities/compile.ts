@@ -56,6 +56,8 @@ import {
   validateRelationSections,
 } from "./presentation.ts";
 
+import { browserRoutes } from "./render/routes.ts";
+
 const SENTINELS = new Set([FILTER_ANY, FILTER_NONE]);
 
 /** Dotted keys, each with optional `[n]` index / `[]` projection segments. */
@@ -2764,10 +2766,13 @@ const validateImageChoiceConsistency = (
   ingress: readonly ImageIngressRoute[],
   context: string,
 ): void => {
-  const unconditionalPrimaryRoutes = ingress.filter(
+  const enabled = ingress.filter(
+    (route) => route.kind !== "createSelf" || route.enabled,
+  );
+  const unconditionalPrimaryRoutes = enabled.filter(
     (route) => route.choice === "primary",
   );
-  const conditionalPrimaryRoutes = ingress.filter((route) =>
+  const conditionalPrimaryRoutes = enabled.filter((route) =>
     isConditionalChoice(route.choice),
   );
   if (unconditionalPrimaryRoutes.length > 1)
@@ -2779,7 +2784,7 @@ const validateImageChoiceConsistency = (
       `${context}.ingress may declare at most one conditional-primary route.`,
     );
   if (
-    ingress.some((route) => resolvedRouteChoice(route) === "alternate") &&
+    enabled.some((route) => resolvedRouteChoice(route) === "alternate") &&
     unconditionalPrimaryRoutes.length === 0
   )
     throw new EntityDeclarationError(
@@ -3006,19 +3011,34 @@ export const compileEntityDeclarations = (
 ): CompiledEntity[] => {
   if (declarations.length === 0)
     throw new EntityDeclarationError("Entity declarations must not be empty.");
-  const entities = compileListFields(
-    deriveRelationSections(
-      validateDataQualityDeclarations(
-        deriveInverseRelations(
-          deriveImageDisplaySources(
-            declarations.map((value, index) =>
-              objectValue(value, `ENTITY_DECLARATIONS[${index}]`),
-            ),
-          ),
-        ).map(compileEntity),
-      ),
-    ),
+  const raw = declarations.map((value, index) =>
+    objectValue(value, `ENTITY_DECLARATIONS[${index}]`),
   );
+  const declaredOverrides = new Map(
+    raw.map((declaration) => [
+      String(declaration.key),
+      collectEntityOverrides(declaration),
+    ]),
+  );
+  const compiled = deriveInverseRelations(deriveImageDisplaySources(raw)).map(
+    (declaration, index) => ({
+      ...compileEntity(declaration, index),
+      overrides: declaredOverrides.get(String(declaration.key)) ?? [],
+    }),
+  );
+  const entities = compileListFields(
+    validateDataQualityDeclarations(deriveRelationSections(compiled)),
+  );
+  const routes = new Set<string>();
+  for (const entity of entities) {
+    if (entity.descriptor.browserRoutes === false) continue;
+    for (const [name, route] of Object.entries(browserRoutes(entity).routes)) {
+      if (name === "create") continue;
+      if (routes.has(route))
+        throw new EntityDeclarationError(`Duplicate browser route ${route}.`);
+      routes.add(route);
+    }
+  }
   for (const entity of entities) {
     for (const view of entity.inspector.list.views) {
       if (typeof view !== "object" || view.kind !== "board") continue;

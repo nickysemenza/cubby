@@ -73,9 +73,10 @@ domains between `src/app/` and `src/features/` under different names.
   files and all folders are kebab-case,
   except TanStack route files (their `$param` names are URL contract). No new
   `index.ts` re-export barrels in `domains/`, `generic/`, or `features/`
-  (`cubby/no-domain-barrel`). `apps/web/tooling/layout.unit.test.ts` enforces
-  kebab-case, the server top-level allowlist, entity role entries, and at most
-  40 direct source files per folder (existing offenders baselined).
+  (`cubby/no-domain-barrel`). Naming and responsibility placement remain review
+  concerns. The cross-repository simplification retires source-layout tests and
+  file-count ceilings: coherent ownership and deleted duplication matter more
+  than mechanically splitting files or folders to meet a number.
 - `~/` stays the only import alias.
 
 ## Consequences

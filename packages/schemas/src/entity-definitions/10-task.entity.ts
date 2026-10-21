@@ -1293,8 +1293,8 @@ export default defineEntity({
       ],
       routing: {
         category: "home",
-        candidateFields: ["name", "description", "notes"],
-        temporalFields: ["dueDate", "completedAt"],
+        candidateFields: ["name"],
+        temporalFields: ["dueDate"],
         lifecycleFilters: [
           {
             field: "status",
@@ -1302,7 +1302,7 @@ export default defineEntity({
           },
         ],
         signals: {
-          ocrFields: ["name", "description", "notes"],
+          ocrFields: ["name"],
           classifierLabels: ["sticky_note"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },

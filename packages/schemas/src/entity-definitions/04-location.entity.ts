@@ -1083,11 +1083,11 @@ Rules:
       ],
       routing: {
         category: "home",
-        candidateFields: ["name", "description"],
+        candidateFields: ["name", "notes", "aiDescription"],
         temporalFields: [],
         lifecycleFilters: [],
         signals: {
-          ocrFields: ["name", "description"],
+          ocrFields: ["name", "notes", "aiDescription"],
           classifierLabels: ["closet", "shed"],
         },
         abstention: { minimumScore: 0.7, minimumMargin: 0.12 },

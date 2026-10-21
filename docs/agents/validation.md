@@ -79,7 +79,7 @@ option for one spec. `workerdProfile` owns intentional peer/queue differences.
 
 Rebase onto freshly fetched `origin/main` before running any typecheck,
 generator, or test, and again before pushing: results from a stale base miss
-migrations, generated artifacts, and ratchets (layout counts, schema budgets)
+migrations, generated artifacts, and ratchets (schema budgets)
 that main has since changed, so they are not evidence for the merge.
 
 Construct synthetic domain fixtures through the supported `createRepoEntity`
@@ -109,11 +109,11 @@ local native `sim-e2e` artifacts; no custom bundle is required for every E2E
 journey or runtime acquisition.
 
 Run one affected E2E scenario when it exposes the behavior. While iterating on
-web code, run `pnpm test:changed` for the fast-tier tests affected by changes
-since `origin/main`; `pnpm test:file src/...` runs named test files. Do not use
-Vitest's own `related` or `run --changed`: selecting and running in one
-process fails `ui` tests falsely. Run them from
-the repository root; paths are relative to `apps/web`. For PostgreSQL
+web code, choose the named affected files with `pnpm test:file src/...`.
+Automatic changed-test selection is retired. Do not use Vitest's own `related`
+or `run --changed`: selecting and running in one process has caused false
+`ui` failures. Run named-file commands from the repository root; paths are
+relative to `apps/web`. For PostgreSQL
 contracts use `pnpm test:postgres src/...`. Read failed tests from
 `apps/web/.vitest-results.json` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
@@ -235,8 +235,8 @@ hook. Fix formatting through a normal commit so that hook owns the edits.
 The merge gate below applies to every included PR. Merge the ready group with
 `gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic stack
 merge instead of issuing individual-PR merge requests. Stack registration does
-not replace final-head CI or independent review. Run `pnpm check:stack <stack-number>` for read-only native membership,
-ancestry, current-head normal PR CI and mergeability diagnostics. Before reporting a stack ready,
+not replace final-head CI or independent review. Read membership and final-head checks
+from GitHub directly. Before reporting a stack ready,
 fetch the trunk and verify it is an ancestor of the bottom branch, then verify
 each lower head is an ancestor of the layer above it. Rebase the full stack when
 the trunk has advanced and push bottom to top. Register layers before their

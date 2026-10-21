@@ -1,25 +1,11 @@
-import {
-  type CompiledEntityListFields,
-  compileListFields,
-} from "./list-fields.ts";
+import type { CompiledEntityListFields } from "./list-fields.ts";
 import type { ChildTableMetadata } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import {
-  collectEntityOverrides,
-  compileEntity,
-  validateEntityIdentities,
-} from "./compile.ts";
-import { validateDataQualityDeclarations } from "./data-quality.ts";
-import {
-  deriveImageDisplaySources,
-  deriveInverseRelations,
-  deriveRelationSections,
-} from "./derive.ts";
+import { compileEntityDeclarations } from "./compile.ts";
+import { modulesChildren } from "../../../../packages/schemas/src/child-tables/modules.ts";
 import { validatePredicateBaseline } from "./predicate-baseline.ts";
-import { validateRelationSections } from "./presentation.ts";
-import { browserRoutes } from "./render/routes.ts";
 import type {
   CompiledEntityPresentation,
   DisplayFormat,
@@ -595,33 +581,7 @@ export const declarationModules = new Map<
 export const compileLoadedEntityDeclarations = (
   loaded: readonly DeclarationObject[],
 ): CompiledEntity[] => {
-  const declaredOverrides = new Map(
-    loaded.map((raw) => [String(raw.key), collectEntityOverrides(raw)]),
-  );
-  const compiled = deriveInverseRelations(
-    deriveImageDisplaySources(loaded),
-  ).map((raw) => ({
-    ...compileEntity(raw, 0),
-    overrides: declaredOverrides.get(String(raw.key)) ?? [],
-  }));
-  const entities = compileListFields(
-    validateDataQualityDeclarations(deriveRelationSections(compiled)),
-  );
-  const routes = new Set<string>();
-  validateEntityIdentities(entities);
-  validateRelationSections(entities);
-  for (const entity of entities) {
-    if (entity.descriptor.browserRoutes === false) continue;
-    for (const [routeName, route] of Object.entries(
-      browserRoutes(entity).routes,
-    )) {
-      if (routeName === "create") continue;
-      if (routes.has(route))
-        throw new EntityDeclarationError(`Duplicate browser route ${route}.`);
-      routes.add(route);
-    }
-  }
-  return entities;
+  return compileEntityDeclarations(loaded, modulesChildren);
 };
 
 export const loadEntityDeclarationBundle = async (): Promise<{

@@ -16,6 +16,13 @@ metadata and applies defaults before typed compilation. Cross-entity
 references, capability compatibility, field rosters, and physical storage remain
 semantic compiler checks. Field-validation Zod instances pass through unchanged.
 
+Declaration loading and artifact generation use the same effective compilation
+pass. It captures explicit overrides before deriving image sources and inverse
+relations, derives detail sections before validating data-quality placements,
+then validates the complete graph against entity and module child storage.
+Image routing names actual model fields; disabled create routes do not count as
+active alternatives. Counterfactual override comparisons use this same pass.
+
 ## Declared board lists
 
 A `kind: "board"` list view configures grouping choices, card fields, intrinsic filters,

@@ -1573,7 +1573,7 @@ Rules:
       ],
       routing: {
         category: "home",
-        candidateFields: ["name", "description", "notes"],
+        candidateFields: ["name", "notes"],
         temporalFields: ["startDate", "endDate"],
         lifecycleFilters: [
           {
@@ -1582,7 +1582,7 @@ Rules:
           },
         ],
         signals: {
-          ocrFields: ["name", "description", "notes"],
+          ocrFields: ["name", "notes"],
           classifierLabels: ["toolbox"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },

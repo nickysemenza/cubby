@@ -15,8 +15,7 @@
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
-        "scripts/check-outward-text.ts!",
-        "scripts/stack-preflight.ts!"
+        "scripts/check-outward-text.ts!"
       ],
       "project": [
         "neon.ts!",

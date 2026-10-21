@@ -963,10 +963,10 @@ export default defineEntity({
       ],
       routing: {
         category: "home",
-        candidateFields: ["notes"],
+        candidateFields: [],
         temporalFields: ["verifiedAt"],
         lifecycleFilters: [],
-        signals: { ocrFields: ["notes"], classifierLabels: ["crate"] },
+        signals: { ocrFields: [], classifierLabels: ["crate"] },
         abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
       },
     },
