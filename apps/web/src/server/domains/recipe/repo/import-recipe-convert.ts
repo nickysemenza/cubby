@@ -9,13 +9,11 @@ import {
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { IngredientShortcode, RecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import {
-  composeNotesMarkdown,
-  type ImportRecipe,
-} from "@cubby/schemas/import-recipe";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 
 import {
+  cookbookRecipeNotes,
   normalizeImportRecipe,
   normalizeImportTimes,
   normalizeImportYield,
@@ -162,32 +160,6 @@ const importRecipeToRecipeInput = async (
   return withTransaction(db, build);
 };
 
-/** The tree's `RecipeTimes` (snake_case, nullable) as the normalizer reads them. */
-const cookbookTimes = (
-  times: CookbookRecipe["meta"]["times"],
-): ImportRecipe["meta"]["times"] =>
-  times
-    ? {
-        active: times.active ?? undefined,
-        total: times.total ?? undefined,
-        prep: times.prep ?? undefined,
-        cook: times.cook ?? undefined,
-        active_minutes: times.active_minutes ?? undefined,
-        total_minutes: times.total_minutes ?? undefined,
-        prep_minutes: times.prep_minutes ?? undefined,
-        cook_minutes: times.cook_minutes ?? undefined,
-      }
-    : undefined;
-
-/** The notes markdown for a cookbook recipe: headnote, then labelled notes. */
-const cookbookRecipeNotes = (item: CookbookRecipe): string | null =>
-  composeNotesMarkdown(
-    item.meta.description.join("\n\n"),
-    item.notes.map((note) =>
-      note.label ? `**${note.label}** ${note.text}` : note.text,
-    ),
-  );
-
 /**
  * A recipe item from the extracted book tree → `RecipeCreateInput`. The
  * crate already parsed every ingredient line (`line.parsed`, the same
@@ -222,7 +194,7 @@ const cookbookRecipeToRecipeInput = async (
     name: item.name,
     meta: {
       url: null,
-      times: normalizeImportTimes(cookbookTimes(item.meta.times)),
+      times: normalizeImportTimes(item.meta.times),
       equipment: equipment.length > 0 ? equipment : null,
       page: item.meta.page ?? null,
     },

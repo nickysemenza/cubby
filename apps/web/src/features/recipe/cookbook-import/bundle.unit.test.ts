@@ -5,7 +5,7 @@ import {
   syntheticCookbookArchive,
   syntheticZip,
 } from "../../../../tooling/cookbook-bundle-fixture";
-import { openCookbookBundle, runTwoAtATime } from "./bundle";
+import { openCookbookBundle } from "./bundle";
 
 // Archive failures: whole-file reads, unselected payload reads, corrupt/oversized
 // entries, contradictory identities/aliases, duplicate/traversal paths, aborted
@@ -181,20 +181,5 @@ describe("incremental cookbook bundle", () => {
         abort.signal,
       ),
     ).rejects.toThrow(/abort/i);
-  });
-
-  it("bounds complete asset jobs to two and continues independently after handled failure", async () => {
-    let active = 0;
-    let peak = 0;
-    const completed: number[] = [];
-    await runTwoAtATime([0, 1, 2, 3, 4], async (id) => {
-      active++;
-      peak = Math.max(peak, active);
-      await new Promise<void>((resolve) => setTimeout(resolve, 5));
-      completed.push(id);
-      active--;
-    });
-    expect(peak).toBe(2);
-    expect(completed.sort()).toEqual([0, 1, 2, 3, 4]);
   });
 });

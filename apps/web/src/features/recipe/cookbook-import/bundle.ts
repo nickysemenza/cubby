@@ -243,20 +243,3 @@ export async function openCookbookBundle(file: Blob, signal?: AbortSignal) {
     },
   };
 }
-
-/** Backpressure covers read/decompress/PUT/attach together, not just HTTP calls. */
-export async function runTwoAtATime<T>(
-  items: readonly T[],
-  job: (item: T) => Promise<void>,
-) {
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(2, items.length) }, async () => {
-      while (next < items.length) {
-        const index = next++;
-        const item = items[index];
-        if (item !== undefined) await job(item);
-      }
-    }),
-  );
-}

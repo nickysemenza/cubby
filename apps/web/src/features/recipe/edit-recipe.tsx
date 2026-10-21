@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 import { useEntityDetailController } from "~/entity/editing/use-entity-detail-controller";
 
-import { RecipeForm } from "./recipe-form";
+import { RecipeForm } from "./recipe-form/index";
 
 interface EditRecipeFormProps {
   recipe: RecipeOut;
