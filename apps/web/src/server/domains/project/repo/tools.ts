@@ -376,37 +376,6 @@ async function loadProjectPurchaseCosts(
   return byProject.get(projectId) ?? new Map();
 }
 
-async function loadProductPurchaseCostsByProject(
-  dbc: DrizzleClient,
-  productId: ProductId,
-  projectIds: ProjectId[],
-): Promise<Map<ProjectId, number>> {
-  const result = new Map<ProjectId, number>();
-  if (projectIds.length === 0) return result;
-  const rows = await dbc
-    .select({
-      projectId: effectiveExpenseProject,
-      cost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
-    })
-    .from(expense)
-    .where(
-      and(
-        eq(expense.productId, productId),
-        inArray(effectiveExpenseProject, projectIds),
-        actualExpense(),
-        eq(expense.lineKind, "principal"),
-        eq(expense.costType, "tools"),
-        gt(expense.cost, 0),
-        notDeleted(expense),
-      ),
-    )
-    .groupBy(effectiveExpenseProject);
-  for (const row of rows) {
-    if (row.projectId) result.set(row.projectId, row.cost);
-  }
-  return result;
-}
-
 async function listProjectResources(
   db: Database,
   projectId: ProjectId,
@@ -1753,8 +1722,8 @@ export async function listProductProjectUses(
     await Promise.all([
       loadResourceMetrics(dbc, [productId]),
       reusableCategory === "tools"
-        ? loadProductPurchaseCostsByProject(dbc, productId, projectIds)
-        : new Map<ProjectId, number>(),
+        ? loadProjectToolPurchaseCosts(dbc, projectIds, [productId])
+        : new Map<ProjectId, Map<ProductId, number>>(),
       reusableCategory === "software" ? loadProjectDateWindows(db) : null,
     ]);
   const metrics = metricsByProduct.get(productId) ?? EMPTY_METRICS;
@@ -1784,7 +1753,7 @@ export async function listProductProjectUses(
       kind: row.kind,
       projectPurchaseCost:
         reusableCategory === "tools"
-          ? (purchaseCostByProject.get(row.projectId) ?? 0)
+          ? (purchaseCostByProject.get(row.projectId)?.get(productId) ?? 0)
           : null,
       sharedWindow:
         reusableCategory === "software"
