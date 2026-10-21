@@ -2097,6 +2097,10 @@ fails after an empty prefix, that prefix checkpoints first; the failed route
 retries alone with the normal failure budget. A short final route completes the
 scope immediately. Assessment advances directly to dependencies (or completion
 when no traversal is needed); stored legacy `recipe` cursors still resume.
+Projection also skips a separate assessment step when a bounded candidate
+query proves none exist. Any candidate retains normal retirement paging and
+fingerprint checks; failure of the optional absence query leaves assessment
+scheduled, where preparation failures keep their own phase attribution.
 Recipe computation and embedding publication remain separate from frontier
 packets.
 

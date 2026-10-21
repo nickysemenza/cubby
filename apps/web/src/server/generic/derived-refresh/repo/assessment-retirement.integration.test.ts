@@ -2,10 +2,14 @@ import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb, TEST_USER_ID } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
+import {
+  assessmentState,
+  derivedRefreshFailure,
+  searchDocument,
+} from "~/server/db/schema";
 import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
 import { executeEntity } from "~/server/entity-kernel";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -19,7 +23,8 @@ import {
   prepareAssessmentRetirement,
   publishAssessmentRetirement,
 } from "./assessment-retirement";
-import { captureDerivedRefresh } from "./capture";
+import * as retirement from "./assessment-retirement";
+import { captureDerivedRefresh, foldDerivedRefreshCaptures } from "./capture";
 import { currentInputRevision, fenceDerivedInputsAtCommit } from "./freshness";
 
 // An old wave cannot retire a current judgment or overwrite a subsequent review.
@@ -29,7 +34,10 @@ describe("assessment invalidation boundaries", () => {
   beforeEach(() => {
     queue = captureBackgroundQueue();
   });
-  afterEach(() => queue.restore());
+  afterEach(() => {
+    queue.restore();
+    vi.restoreAllMocks();
+  });
 
   it("commits an ordinary edit before retiring its derived assessments", async () => {
     const subject = await createProductIdentityFixture(
@@ -85,6 +93,86 @@ describe("assessment invalidation boundaries", () => {
       .from(assessmentState)
       .where(eq(assessmentState.id, advice.id));
     expect(refreshed?.status).toBe("superseded");
+  });
+
+  // An optional absence proof must never turn a retirement read failure into
+  // a projection failure, and a full current page cannot hide a stale tail.
+  it("publishes projection when the optional retirement proof fails and retains phase failure attribution", async () => {
+    const subject = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic proof failure" }),
+      ctx.actor,
+    );
+    await foldDerivedRefreshCaptures(ctx.db);
+    vi.spyOn(retirement, "hasAssessmentRetirementCandidates").mockRejectedValue(
+      new Error("Synthetic absence proof unavailable"),
+    );
+    vi.spyOn(retirement, "prepareAssessmentRetirement").mockRejectedValue(
+      new Error("Synthetic retirement preparation unavailable"),
+    );
+    expect((await processDerivedRefreshPage(ctx.db)).errors).toEqual([]);
+    const documents = await getDb(ctx.db)
+      .select()
+      .from(searchDocument)
+      .where(eq(searchDocument.entityId, subject.entityId));
+    expect(documents.map((row) => row.title)).toEqual([
+      "Synthetic proof failure",
+    ]);
+    expect(await getDb(ctx.db).select().from(derivedRefreshFailure)).toEqual(
+      [],
+    );
+    expect((await processDerivedRefreshPage(ctx.db)).errors).toEqual([
+      expect.stringContaining("Synthetic retirement preparation unavailable"),
+    ]);
+    const failures = await getDb(ctx.db).select().from(derivedRefreshFailure);
+    expect(failures).toMatchObject([{ phase: "assessment", attempts: 1 }]);
+  });
+
+  it("reaches a stale retirement candidate beyond a full page of current judgments", async () => {
+    const subject = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic retirement page boundary" }),
+      ctx.actor,
+    );
+    const fingerprint = await fieldInputFingerprint(
+      ctx.db,
+      "product",
+      subject.entityId,
+      "tags",
+    );
+    const rows = await getDb(ctx.db)
+      .insert(assessmentState)
+      .values(
+        Array.from({ length: 101 }, () => ({
+          entity: "product",
+          recordId: subject.entityId,
+          field: "tags",
+          currentValue: [],
+          suggestedValue: [],
+          confidence: 0.5,
+          model: "synthetic-model",
+          kind: "correction",
+          status: "pending",
+          data: { liveInputFingerprint: fingerprint },
+        })),
+      )
+      .returning({ id: assessmentState.id });
+    const stale = [...rows].sort((a, b) => a.id.localeCompare(b.id)).at(-1);
+    if (!stale) throw new Error("Synthetic tail judgment missing");
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ data: { liveInputFingerprint: "synthetic-old-basis" } })
+      .where(eq(assessmentState.id, stale.id));
+    for (let page = 0; page < 25; page++) {
+      const result = await processDerivedRefreshPage(ctx.db);
+      expect(result.errors).toEqual([]);
+      if (result.done) break;
+    }
+    const after = await getDb(ctx.db).select().from(assessmentState);
+    expect(after.find((row) => row.id === stale.id)?.status).toBe("superseded");
+    expect(
+      after.filter((row) => row.id !== stale.id).map((row) => row.status),
+    ).toEqual(Array.from({ length: 100 }, () => "pending"));
   });
 
   it("preserves current-basis judgments and rechecks review status on publication", async () => {
