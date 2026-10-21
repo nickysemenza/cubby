@@ -9,7 +9,11 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  *
  * This file drives EVERY declared filter (one at a time) and EVERY declared
  * sort field, for EVERY kernel entity with a list operation, through the real
- * kernel against real Postgres. Postgres raises an alias mismatch at PLAN
+ * production list readers against real Postgres. Plan probes use progressive
+ * core reads, avoiding unrelated media/quality hydration. Full kernel reads
+ * still establish each entity's baseline and unmatched-ID behavior; complete
+ * output/enrichment compatibility belongs to list-read.integration.test.ts.
+ * Postgres raises an alias mismatch at PLAN
  * time, so even a query matching zero rows exercises the SQL — the one
  * exception is a filter that must RESOLVE a shortcode to a real row (e.g.
  * `gardenEntry.plantingId`): an unresolvable id short-circuits to
@@ -42,11 +46,15 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { mock } from "~/lib/test/mock-schema";
 import { ingredientList } from "~/server/domains/ingredient/repo/search";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
-import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
+import type {
+  EntityKernelEntity,
+  EntityQueryCommand,
+} from "~/server/entity-kernel/contracts";
 import {
   buildKernelContext,
   collectShortcodePaths,
@@ -59,6 +67,7 @@ import {
   SKIPPED_ENTITIES,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 
 /* oxlint-disable anti-slop/no-unknown-returns -- the mock() walker trade-off in reference-universe.fixtures.ts */
 /**
@@ -202,6 +211,24 @@ describe("entity list smoke — shared selection/count FROM context", () => {
     const seededCodes = new Set(universe.shortcodeByPrefix.values());
     for (const entity of ENTITY_KERNEL_ENTITIES) {
       const binding = ENTITY_KERNEL_BINDINGS[entity];
+      const progressive = z.enum(listEntities).safeParse(entity);
+      // Plan probes need selected rows/counts, not media/quality hydration.
+      // Full reads and every enrichment group retain their composition owner.
+      const readPlan = async (
+        input: Omit<
+          Extract<EntityQueryCommand, { action: "list" }>,
+          "action" | "entity"
+        >,
+      ) => {
+        if (progressive.success) {
+          const page = await ENTITY_LIST_READ_OPERATIONS[progressive.data].base(
+            kernelCtx,
+            input,
+          );
+          return { items: page.data, meta: page.meta };
+        }
+        return executeEntity(kernelCtx, { action: "list", entity, ...input });
+      };
       const filterFields = filterFieldsOf(entity);
       const unfiltered = await executeEntity(kernelCtx, {
         action: "list",
@@ -246,9 +273,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         }
         listCases.push(() =>
           runListCase(`${entity} filter ${key}`, () =>
-            executeEntity(kernelCtx, {
-              action: "list",
-              entity,
+            readPlan({
               filters: { [key]: sample.value },
               pagination: { pageIndex: 0, pageSize: 20 },
             }),
@@ -294,9 +319,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
       for (const orderBy of binding.sort.fields) {
         listCases.push(() =>
           runListCase(`${entity} sort ${orderBy} asc`, () =>
-            executeEntity(kernelCtx, {
-              action: "list",
-              entity,
+            readPlan({
               filters: {},
               sort: [{ orderBy, direction: "asc" }],
               pagination: { pageIndex: 0, pageSize: 20 },
