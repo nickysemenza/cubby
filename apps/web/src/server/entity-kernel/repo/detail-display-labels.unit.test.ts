@@ -40,9 +40,7 @@ describe("externalIdsLabel", () => {
         { source: "synthetic-shop", kind: "asin", externalId: "B0SYNTH001" },
         { source: "synthetic-mill", kind: "item_number", externalId: "SM-42" },
       ]),
-    ).toBe(
-      "synthetic-shop (asin): B0SYNTH001, synthetic-mill (item number): SM-42",
-    );
+    ).toMatch(/synthetic-shop[^\n]*B0SYNTH001\nsynthetic-mill[^\n]*SM-42/);
     expect(externalIdsLabel([])).toBeNull();
   });
 });

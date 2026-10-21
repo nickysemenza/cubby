@@ -5,7 +5,8 @@ observe. Use an isolated test for a specific plausible failure that E2E cannot
 reasonably catch, such as a database constraint, native wire contract, or
 concurrency boundary. Use real implementations; mocks are for external seams
 that cannot run locally. Write failure modes and any isolated test before the
-implementation it guards.
+implementation it guards. Negative fixtures must satisfy earlier admission
+contracts so the observed failure reaches the intended guard.
 
 ## Signal and speed
 
