@@ -1,0 +1,27 @@
+apps/web/DESIGN.md
+  s_ccb4b815169f0b::t_09f95a2219100a 229-232
+apps/web/src/entity/display/list-field-renderers.tsx
+  s_ccb4b815169f0b::t_30de33f4d11d7d 105-109,153,159,240,297
+apps/web/src/entity/work-queue/record-work-queue.tsx
+  s_ccb4b815169f0b::t_6a07dd1d95b6dd 79,113
+apps/web/src/entity/work-queue/work-queue-display.tsx
+  s_ccb4b815169f0b::t_72d30aa8111a40 119,134,160-166
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_ccb4b815169f0b::t_ba982b03a5bf0b 38-39,54,347-351,394-398,403-406,422-425,453,455
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "96abbfaf90a3a6ff8408d79f81bc59984adaba74",
+  "prompts": {},
+  "sessions": {
+    "s_ccb4b815169f0b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dbcd31ce-11f3-4079-ac11-3706d17309fc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
