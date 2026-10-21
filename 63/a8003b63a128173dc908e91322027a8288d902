@@ -1,0 +1,19 @@
+apps/web/src/features/developer/ai-smoke-test.tsx
+  s_9b829d577c7e4c::t_36257986c15427 165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "63a8003b63a128173dc908e91322027a8288d902",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
