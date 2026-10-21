@@ -34,8 +34,16 @@ export const Route = createFileRoute("/_authenticated/connections")({
 });
 
 function ConnectionsPage() {
-  const { source, id, view, mode, selected, destination, start } =
-    Route.useSearch();
+  const {
+    source,
+    id,
+    view,
+    mode,
+    selected,
+    destination,
+    start,
+    nativeWorkspace,
+  } = Route.useSearch();
   const navigate = Route.useNavigate();
   const root = useMemo(
     () =>
@@ -64,7 +72,15 @@ function ConnectionsPage() {
     <Page variant="bare" layout="viewport">
       <Stack gap="md" className="h-full min-h-0 p-3 md:p-4">
         <Row gap="md" wrap>
-          <h1 className="text-xl font-semibold">Connections</h1>
+          <h1
+            className={
+              nativeWorkspace === "connections"
+                ? "sr-only"
+                : "text-xl font-semibold"
+            }
+          >
+            Connections
+          </h1>
           <div className="min-w-0 flex-1">
             <EntityGraphPicker
               placeholder="Find a starting record…"
@@ -95,6 +111,7 @@ function ConnectionsPage() {
         {root ? (
           <>
             <EntityConnectionContext
+              showOpenLink={false}
               entity={root.entityKind}
               id={root.entityId}
             />

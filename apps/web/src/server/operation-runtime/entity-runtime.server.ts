@@ -29,10 +29,10 @@ import {
   getDetailActivity,
   getMonthlyExpenseSpend,
 } from "~/server/generic/entity-detail/repo/detail-data";
-import { withGraphPreviews } from "~/server/generic/entity-graph/graph-preview";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/generic/entity-graph/repo/entity-graph-explore";
 import { getEntityGraphPaths } from "~/server/generic/entity-graph/repo/entity-graph-paths";
+import { withGraphPreviews } from "~/server/generic/entity-graph/service/graph-preview";
 import {
   getConnectedRecords,
   getConnectedRecordsPreview,

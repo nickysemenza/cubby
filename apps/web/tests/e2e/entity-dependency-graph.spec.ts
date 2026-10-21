@@ -79,10 +79,22 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   await page.getByRole("button", { name: "Fit map", exact: true }).click();
-  await testInfo.attach("Dense connections desktop", {
-    body: await page.screenshot(),
-    contentType: "image/png",
-  });
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("dense-connections-desktop.png"),
+    });
+  const neighborLink = card
+    .getByRole("navigation", { name: "Linked records" })
+    .getByRole("link")
+    .first();
+  const neighborHref = await neighborLink.getAttribute("href");
+  expect(neighborHref).toBeTruthy();
+  if (!neighborHref) throw new Error("Expected a linked neighbor destination");
+  const neighborURL = new URL(neighborHref, page.url()).href;
+  await neighborLink.click();
+  await expect(page).toHaveURL(neighborURL);
+  await page.goBack();
+  await expect(card).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   expect(
@@ -90,10 +102,10 @@ test("connections workspace shares dense facts, linked paths, and native handoff
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await testInfo.attach("Dense connection paths phone", {
-    body: await page.screenshot(),
-    contentType: "image/png",
-  });
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("dense-connections-phone.png"),
+    });
   await page.addInitScript(() => {
     window.workspaceTestMessages = [];
     window.webkit = {
@@ -104,8 +116,7 @@ test("connections workspace shares dense facts, linked paths, and native handoff
       },
     };
   });
-  await gotoAuthenticatedPage(
-    page,
+  await page.goto(
     `/connections?source=product&id=${product.id}&nativeWorkspace=connections`,
   );
   await expect(page.locator("[data-native-workspace]")).toBeVisible();
@@ -115,6 +126,10 @@ test("connections workspace shares dense facts, linked paths, and native handoff
     .getByLabel("Connection paths")
     .locator(`a[href*="/products/${product.id}"]`)
     .first();
+  if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
+    await page.screenshot({
+      path: testInfo.outputPath("dense-connections-hosted.png"),
+    });
   const hostedURL = page.url();
   await recordLink.click();
   await expect
@@ -262,7 +277,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
     .getByRole("button", { name: "Show record list", exact: true })
     .click();
   const records = page.getByLabel("Map records", { exact: true });
-  await records.getByRole("button", { name: /^Inspect .*Inventory/ }).click();
+  await records.getByRole("button", { name: /Inventory Item$/ }).click();
   await expect(nodes).toHaveCount(2);
   const before = await nodes.evaluateAll((items) =>
     Object.fromEntries(
@@ -297,7 +312,10 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await expect(nodes).toHaveCount(3);
   await page.getByLabel("Find explored records").fill(locationName);
   await records
-    .getByRole("button", { name: `Inspect ${locationName}`, exact: true })
+    .getByRole("button", {
+      name: `Inspect ${locationName} Location`,
+      exact: true,
+    })
     .click();
   await page.getByRole("link", { name: "Open record", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/locations/${location.id}$`));

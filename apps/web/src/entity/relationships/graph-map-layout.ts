@@ -18,7 +18,7 @@ export type GraphMapRect = z.infer<typeof graphMapRectSchema>;
 export type GraphMapLayoutInput = z.infer<typeof graphMapLayoutInputSchema>;
 
 export const GRAPH_CARD_WIDTH = 280;
-export const GRAPH_CARD_HEIGHT = 272;
+export const GRAPH_CARD_HEIGHT = 360;
 const WIDTH = GRAPH_CARD_WIDTH;
 const HEIGHT = GRAPH_CARD_HEIGHT;
 const GAP = 48;
@@ -29,7 +29,7 @@ const overlaps = (a: GraphMapRect, b: GraphMapRect) =>
   a.y < b.y + b.height + GAP &&
   a.y + a.height + GAP > b.y;
 
-/** New records occupy the nearest free grid slot. Existing coordinates are immutable. */
+/** New records occupy a free column slot to the right of their parent. Existing coordinates are immutable. */
 export function placeGraphMap(input: GraphMapLayoutInput) {
   const positions = { ...input.previous };
   const buckets = new Map<string, GraphMapRect[]>();
@@ -68,9 +68,9 @@ export function placeGraphMap(input: GraphMapLayoutInput) {
     for (let radius = 0; !placed; radius++) {
       for (const y of radius === 0 ? [0] : [radius, -radius]) {
         if (placed) break;
-        for (const x of [0]) {
+        {
           const rect = {
-            x: origin.x + x * (WIDTH + GAP),
+            x: origin.x,
             y: origin.y + y * (HEIGHT + GAP),
             width: WIDTH,
             height: HEIGHT,

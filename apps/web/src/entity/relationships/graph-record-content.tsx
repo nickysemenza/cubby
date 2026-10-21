@@ -7,14 +7,21 @@ import {
   entityPreviewFacts,
   renderCompactFieldValue,
 } from "~/entity/display/entity-display";
-import { entityLabel, isBrowserRoutedEntity } from "~/entity/entities";
+import { isBrowserRoutedEntity } from "~/entity/entities";
 import { Image } from "~/ui/primitives/image";
 
 /** All graph links use already hydrated identity and cover; hover resolves detail on demand. */
-export function GraphRecordLink({ node }: { node: EntityGraphNode }) {
+export function GraphRecordLink({
+  node,
+  compact = false,
+}: {
+  node: EntityGraphNode;
+  compact?: boolean;
+}) {
   return isBrowserRoutedEntity(node.entityKind) ? (
     <EntityRefLink
       variant="chip"
+      compact={compact}
       entity={node.entityKind}
       id={node.entityId}
       name={node.label}
@@ -66,7 +73,7 @@ export function GraphRecordContent({ node }: { node: EntityGraphNode }) {
           <div className="mt-1 text-2xs text-muted-foreground">
             {chip && node.preview
               ? renderCompactFieldValue(node.entityKind, node.preview, chip)
-              : entityLabel(node.entityKind)}
+              : node.entityId}
           </div>
         </div>
       </div>

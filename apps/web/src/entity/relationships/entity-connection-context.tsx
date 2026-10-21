@@ -8,20 +8,33 @@ import { isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Section, Disclosure } from "~/ui/layout";
 
 /** Only declared useful paths become headline context; generic graph reachability does not. */
 export function EntityConnectionContext({
   entity,
   id,
+  showOpenLink = true,
 }: {
   entity: Entity;
   id: string;
+  showOpenLink?: boolean;
 }) {
   if (!connectedViews[entity].length) return null;
-  return <ResolvedContext entity={entity} id={id} />;
+  return (
+    <ResolvedContext entity={entity} id={id} showOpenLink={showOpenLink} />
+  );
 }
 
-function ResolvedContext({ entity, id }: { entity: Entity; id: string }) {
+function ResolvedContext({
+  entity,
+  id,
+  showOpenLink,
+}: {
+  entity: Entity;
+  id: string;
+  showOpenLink: boolean;
+}) {
   const query = useQuery(
     entityGraph.connectedRecordsPreview.queryOptions({
       source: { entityKind: entity, entityId: id },
@@ -63,20 +76,23 @@ function ResolvedContext({ entity, id }: { entity: Entity; id: string }) {
     );
   return (
     <EntityDisplayImagesProvider refs={refs}>
-      <section
+      <Section
+        title="Connected context"
+        headingAs="h2"
+        compact
         aria-label="Connection context"
-        className="border-y border-border py-3"
+        actions={
+          showOpenLink ? (
+            <Link
+              to="/connections"
+              search={{ source: entity, id }}
+              className="text-xs text-link hover:underline"
+            >
+              Open connections
+            </Link>
+          ) : null
+        }
       >
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Connected context</h2>
-          <Link
-            to="/connections"
-            search={{ source: entity, id }}
-            className="text-xs text-link hover:underline"
-          >
-            Open connections
-          </Link>
-        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {views.map((view) => (
             <div key={view.viewKey} className="min-w-0 text-xs">
@@ -90,10 +106,7 @@ function ResolvedContext({ entity, id }: { entity: Entity; id: string }) {
                   </span>
                 ))}
               </div>
-              <details className="mt-2">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                  Show connection paths
-                </summary>
+              <Disclosure className="mt-2" summary="Show connection paths">
                 <ol className="mt-2 space-y-2">
                   {view.items.map((item) => (
                     <li key={item.target.entityId}>
@@ -139,11 +152,11 @@ function ResolvedContext({ entity, id }: { entity: Entity; id: string }) {
                 >
                   All {view.title.toLowerCase()}
                 </Link>
-              </details>
+              </Disclosure>
             </div>
           ))}
         </div>
-      </section>
+      </Section>
     </EntityDisplayImagesProvider>
   );
 }

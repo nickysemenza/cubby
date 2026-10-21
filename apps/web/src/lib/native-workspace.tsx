@@ -71,6 +71,18 @@ export function NativeWorkspaceBridge() {
         return true;
       }
       const current = new URL(window.location.href);
+      if (
+        isNativeConnections(
+          current.pathname,
+          current.searchParams.get("nativeWorkspace") === "connections"
+            ? "connections"
+            : undefined,
+        ) &&
+        next.pathname === current.pathname &&
+        next.searchParams.getAll("nativeWorkspace").length === 1 &&
+        next.searchParams.get("nativeWorkspace") === "connections"
+      )
+        return false;
       const insideEvidence =
         next.pathname === current.pathname &&
         next.search === current.search &&

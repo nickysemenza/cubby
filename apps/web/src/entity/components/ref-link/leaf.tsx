@@ -127,6 +127,8 @@ export function PreviewRefLink({
               to="/usda/$id"
               params={{ id }}
               className={linkClass}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
               {...newTab}
             />
           ) : (
@@ -134,6 +136,8 @@ export function PreviewRefLink({
               to={entities[entity].routes.detail}
               params={entityDetailParams(id)}
               className={linkClass}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
               {...newTab}
             />
           )
