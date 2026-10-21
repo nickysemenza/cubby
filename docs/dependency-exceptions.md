@@ -20,8 +20,9 @@ deduplication are dependency maintenance, not validation gates.
 - TanStack Start's import-protection patch drops cached parser trees after
   collecting import names and reparses only when a violation needs a source
   position. Both cached AST references must be released; import protection
-  remains enabled. Remove the backport when upgrading to a release containing
-  [the upstream fix](https://github.com/TanStack/router/pull/8682).
+  remains enabled. The backport follows [the upstream proposal](https://github.com/TanStack/router/pull/8682).
+  When upgrading, retain the import-protection cache regression and remove the
+  patch only when the replacement passes it without the backport.
 - Build-only `@esbuild-kit/*`, OpenTelemetry's `glob`, and transitive `uuid`
   dependencies remain upstream maintenance concerns. A blanket override can
   replace an API with an incompatible major inside another package.
