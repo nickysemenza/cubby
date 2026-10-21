@@ -128,6 +128,9 @@ Column factories reuse module-level render components for selection controls:
 metadata must not remount a focused row or header checkbox.
 Standard editable cell renderers also retain their identity when filter rosters
 or related-column metadata refresh; open drafts and focus survive those reads.
+Presentation preferences that change independently of row data reach cell
+renderers through React context. Recreating column closures alone does not
+update memoized desktop rows; do not remount the table to refresh its visuals.
 
 Component traps that typecheck cannot catch: `DropdownMenuLabel` crashes at
 runtime unless wrapped in `DropdownMenuGroup` (Base UI, not Radix). A column
