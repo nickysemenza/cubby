@@ -132,10 +132,18 @@ beside it in `luna-tooling-inventory.*`.
    Preserve scalar versus selected-ID relation reads, authoritative page/count/
    order and explicit field readiness. Migrate all 28 scaffold instances;
    narrow injected domain computations remain where genuinely needed.
-4. Opt-in child UUID identity/navigation and named workflow commands cover
-   AssessmentState, RunFinding, RunApproval, PhotoGroupProposal, PhotoRunImage
-   and StatementRow. Reuse current Suggestions/Run/statement surfaces and
-   family handlers; no universal lifecycle enum or automatic child CRUD.
+4. Opt-in child reads deepen ListWorkbench and the existing workflow-command
+   executor at their consumers. Reuse current Suggestions/Run/statement
+   surfaces and family handlers; no child-entity registry, universal lifecycle
+   enum or automatic CRUD. Suggestions retains immutable Assessment handles;
+   StatementRow gains an opaque read UUID without UUID mutation selectors or
+   routes. RunFinding, PhotoGroupProposal and PhotoRunImage retain their
+   distinct parent-scoped commands. RunApproval has no active producer, reader
+   or answer handler in current source: retain its historical storage and Run
+   invalidation, rather than invent an approval UI. Physical child metadata
+   stays storage-only. This replaces the earlier proposed declaration/compiler
+   expansion: the existing workbench and command catalog already own the
+   required behavior and let callers delete their bespoke wiring.
 5. Root settles explicit identifier collection intent, then all producer/client
    adoption follows the same contract. Photo review becomes a thin consumer of
    server review state and shared read/identifier/field controls, preserving
