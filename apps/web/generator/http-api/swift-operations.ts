@@ -154,6 +154,8 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "entity.listBase": { method: "entityListBase", doc: null },
   "entity.listEnrichment": { method: "entityListEnrichment", doc: null },
   "entity.listSummary": { method: "entityListSummary", doc: null },
+  "entity.detailActivity": { method: "detailActivity", doc: null },
+  "entity.monthlyExpenseSpend": { method: "monthlyExpenseSpend", doc: null },
   "dashboard.counts": { method: "dashboardCounts", doc: null },
   "inventory.confirmOwnership": {
     method: "confirmInventoryOwnership",

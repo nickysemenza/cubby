@@ -6,36 +6,25 @@ struct EntityFieldResolutionLabel: View {
     let resolved: FieldResolutionPresentation
     let field: FieldDescriptor
 
-    /// Where the value comes from; an explicit value reads in the state's words (Set here,
-    /// Redundant, None), so an intentional pin is never called redundant.
-    private var caption: String {
-        switch resolved.resolution.mode {
-        case .inherit, .allocated: resolved.sourceText
-        case .explicit, .none: resolved.state(field: field).label
-        }
-    }
-
     var body: some View {
-        if let source = resolved.sourceEntity,
-            let entity = EntityKey(rawValue: source.entityKind.rawValue)
-        {
-            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                Text(caption).font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: FieldGuideTokens.Space.sm)
-                NavigationLink(value: Route.entityDetail(entity, id: source.entityId)) {
-                    Label(source.name ?? source.entityId, systemImage: "chevron.right")
+        if resolved.isInherited {
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("Inherited from").font(.caption).foregroundStyle(.secondary)
+                if let source = resolved.sourceEntity,
+                    let entity = EntityKey(rawValue: source.entityKind.rawValue)
+                {
+                    NavigationLink(value: Route.entityDetail(entity, id: source.entityId)) {
+                        Text(source.name ?? source.entityId)
+                            .font(.caption)
+                            .foregroundStyle(.tint)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(resolved.resolution.source)
                         .font(.caption)
-                        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .trailing)
-                        .contentShape(Rectangle())
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity)
-            .navigationLinkIndicatorVisibility(.hidden)
-        } else {
-            Text(caption).font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
