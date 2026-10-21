@@ -492,6 +492,7 @@ describe("shared entity Relations", () => {
       />,
       { wrapper: harness.wrapper },
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Inspector" }));
     expect(
       await screen.findByRole("button", { name: "Path 1 · 1 connections" }),
     ).toBeVisible();
@@ -537,6 +538,7 @@ describe("shared entity Relations", () => {
       );
     }
     render(<CancelHarness />, { wrapper: harness.wrapper });
+    fireEvent.click(await screen.findByRole("button", { name: "Inspector" }));
     expect(await screen.findByText("Searching for paths…")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Clear path" }));
     await act(async () =>
@@ -650,6 +652,7 @@ describe("shared entity Relations", () => {
       />,
       { wrapper: harness.wrapper },
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Inspector" }));
     expect(
       await screen.findByRole("heading", { name: "Physical connections" }),
     ).toBeVisible();

@@ -21,13 +21,21 @@ export const parseGraphRecord = (key?: string) => {
 export function graphBranchCount(
   branch: EntityGraphOutput["branches"][number],
   counts: ReadonlyMap<string, number>,
+  root?: EntityRef,
+  showSiblings = false,
 ) {
   return Math.min(
     branch.items.length,
     counts.get(graphBranchKey(branch.root, branch.relationshipKey)) ??
-      // The first fetched page is useful even when the branch has another
-      // page. Expansion remains explicit through the stored visible count.
-      Math.min(branch.items.length, GRAPH_BRANCH_PAGE_SIZE),
+      // Only a singleton directly attached to the focus opens automatically.
+      // Loaded descendants and shared-parent siblings are not visible intent.
+      (showSiblings
+        ? Math.min(branch.items.length, GRAPH_BRANCH_PAGE_SIZE)
+        : root &&
+            graphRefKey(root) === graphRefKey(branch.root) &&
+            branch.totalCount === 1
+          ? 1
+          : 0),
   );
 }
 
@@ -37,16 +45,17 @@ export function projectGraphMap(
   root: EntityRef,
   counts: ReadonlyMap<string, number>,
   pathEdges: ReadonlySet<string> = new Set(),
+  showSiblings = false,
 ) {
   const allowed = new Set(pathEdges);
   const anchors = new Map<string, string>();
   const edgesByID = new Map(data.edges.map((edge) => [edge.id, edge]));
   for (const branch of data.branches) {
     const members = new Set(
-      branch.items.slice(0, graphBranchCount(branch, counts)).map(graphRefKey),
+      branch.items
+        .slice(0, graphBranchCount(branch, counts, root, showSiblings))
+        .map(graphRefKey),
     );
-    for (const key of members)
-      if (!anchors.has(key)) anchors.set(key, graphRefKey(branch.root));
     for (const id of branch.edgeIds) {
       const edge = edgesByID.get(id);
       if (
@@ -71,6 +80,7 @@ export function projectGraphMap(
     for (const next of adjacency.get(key) ?? []) {
       if (!visible.has(next)) {
         visible.add(next);
+        anchors.set(next, key);
         queue.push(next);
       }
     }

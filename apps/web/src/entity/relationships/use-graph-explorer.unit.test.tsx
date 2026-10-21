@@ -117,8 +117,10 @@ describe("graph exploration session", () => {
       wrapper: harness.wrapper,
     });
     await waitFor(() => expect(result.current.data.nodes).toHaveLength(13));
-    expect(result.current.map.nodes).toHaveLength(13);
     const branch = () => result.current.data.branches[0]!;
+    expect(result.current.map.nodes).toHaveLength(1);
+    await act(() => result.current.more(branch()));
+    expect(result.current.map.nodes).toHaveLength(13);
     await act(() => result.current.more(branch()));
     expect(result.current.map.nodes).toHaveLength(13);
     expect(offsets).toEqual([12]);

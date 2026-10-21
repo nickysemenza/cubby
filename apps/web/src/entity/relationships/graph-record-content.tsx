@@ -33,14 +33,20 @@ export function GraphRecordLink({
   );
 }
 
-export function GraphRecordFacts({ node }: { node: EntityGraphNode }) {
+export function GraphRecordFacts({
+  node,
+  limit = 8,
+}: {
+  node: EntityGraphNode;
+  limit?: number;
+}) {
   const record = node.preview ?? {};
-  const facts = entityPreviewFacts(node.entityKind, record, 8, {
+  const facts = entityPreviewFacts(node.entityKind, record, limit, {
     singleLine: true,
   });
   return facts.length ? (
     <dl className="graph-record-facts nodrag nopan">
-      {facts.slice(0, 8).map((fact) => (
+      {facts.slice(0, limit).map((fact) => (
         <div key={fact.label}>
           <dt>{fact.label}</dt>
           <dd>{fact.value}</dd>
@@ -50,19 +56,29 @@ export function GraphRecordFacts({ node }: { node: EntityGraphNode }) {
   ) : null;
 }
 
-export function GraphRecordContent({ node }: { node: EntityGraphNode }) {
+export function GraphRecordContent({
+  node,
+  compact = false,
+}: {
+  node: EntityGraphNode;
+  compact?: boolean;
+}) {
   const chip = entityFieldModels[node.entityKind].fields.find(
     (field) => field.key === entitySummary[node.entityKind].detail.hero.chip,
   );
   return (
     <>
-      <div className="graph-record-identity">
+      <div className="graph-record-identity" data-compact={compact}>
         {node.image ? (
           <Image
             src={node.image.url}
             alt=""
-            displayWidth={56}
-            className="size-14 shrink-0 rounded object-contain"
+            displayWidth={compact ? 40 : 56}
+            className={
+              compact
+                ? "size-10 shrink-0 rounded object-contain"
+                : "size-14 shrink-0 rounded object-contain"
+            }
           />
         ) : null}
         <div className="min-w-0">
@@ -79,7 +95,7 @@ export function GraphRecordContent({ node }: { node: EntityGraphNode }) {
           </div>
         </div>
       </div>
-      <GraphRecordFacts node={node} />
+      <GraphRecordFacts node={node} limit={compact ? 2 : 8} />
     </>
   );
 }

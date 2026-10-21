@@ -10,8 +10,9 @@ accessible without a view switch. Select a section hash to verify scrolling,
 focus and history; empty sections retain headings, index entries and actions.
 When adding editable fields, complete editor-test record baselines, including
 nullable output projections, and run the untouched-submit regression: an absent
-baseline can make an untouched form appear changed. After changing
-any test fixture or query, use the web `typecheck` command: `typecheck:app`
+baseline can make an untouched form appear changed. Run the web `typecheck`
+command after the final test fixture or query edit, even when its runtime test
+passes; an earlier check does not cover later test repairs. `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
@@ -70,7 +71,9 @@ for real virtualizers; a zero client viewport renders no rows even with cached d
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.
-Scope ingredient-link assertions to the recipe's ingredient list items. Entity
+Locate recipe ingredients through the named Ingredients region, not an `aside`
+tag that couples the journey to its layout. Scope ingredient-link assertions to
+the recipe's ingredient list items. Entity
 previews can repeat the same ingredient name elsewhere in a sidebar; a broad
 text assertion can become ambiguous when the preview opens.
 Relation-table assertions target the visible record link by its href within

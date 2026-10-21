@@ -70,7 +70,7 @@ test("placement acceptance follows the surviving stock row after merging", async
   ).toBeVisible();
 });
 
-test("a large planting branch shows its first page without an expansion click", async ({
+test("a large planting branch stays collapsed until requested", async ({
   page,
 }) => {
   const suffix = Date.now();
@@ -91,7 +91,12 @@ test("a large planting branch shows its first page without an expansion click", 
 
   await gotoAuthenticatedPage(page, `/tasks/${task.id}#relationships`);
 
-  await expect(page.getByText("12 of 13", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Expand Plantings (13)", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Collapse Plantings (13)", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   await expect(
     page.getByLabel("Map records").getByRole("button", {

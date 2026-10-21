@@ -129,7 +129,7 @@ function ConnectionsPage() {
             ) : (
               <GraphExplorer
                 fill
-                initialDepth={2}
+                initialDepth={1}
                 key={`${root.entityKind}:${root.entityId}`}
                 root={root}
                 initialSelected={selected}

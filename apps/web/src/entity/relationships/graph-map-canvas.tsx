@@ -1,6 +1,7 @@
 import type {
   EntityGraphEdge,
   EntityGraphNode,
+  EntityGraphBranch,
 } from "@cubby/schemas/entity-graph";
 import {
   Background,
@@ -29,14 +30,15 @@ import {
   DropdownMenuItem,
 } from "~/ui/primitives/dropdown-menu";
 
-import { graphRefKey } from "./entity-graph-state";
+import { graphRefKey, graphBranchKey } from "./entity-graph-state";
 import {
   GRAPH_CARD_WIDTH,
   GRAPH_CARD_HEIGHT,
   graphMapLayoutOutputSchema,
   type GraphMapRect,
 } from "./graph-map-layout";
-import { GraphRecordContent, GraphRecordLink } from "./graph-record-content";
+import { graphBranchCount } from "./graph-map-state";
+import { GraphRecordContent } from "./graph-record-content";
 
 import "@xyflow/react/dist/style.css";
 import "./graph-map.css";
@@ -45,13 +47,21 @@ type RecordNode = Node<{
   record: EntityGraphNode;
   related: EntityGraphNode[];
   depth: number;
+  branch?: EntityGraphBranch;
+  count?: number;
+  toggle?: () => void;
+  more?: () => void;
+  busy?: boolean;
 }>;
 const GraphRecord = memo(function GraphRecord({
   data,
   selected,
 }: NodeProps<RecordNode>) {
   return (
-    <div className="graph-map-record" data-selected={selected}>
+    <div
+      className={data.branch ? "graph-map-branch" : "graph-map-record"}
+      data-selected={selected}
+    >
       {Object.values(Position).map((position) => (
         <Handle
           key={`target-${position}`}
@@ -61,29 +71,58 @@ const GraphRecord = memo(function GraphRecord({
           isConnectable={false}
         />
       ))}
-      <Row gap="sm" align="center" className="text-xs text-muted-foreground">
-        <EntityIcon entity={data.record.entityKind} className="size-3.5" />
-        <span>{entityLabel(data.record.entityKind)}</span>
-      </Row>
-      <span className="graph-record-depth">
-        {data.depth === 0
-          ? "Focus"
-          : `${data.depth} ${data.depth === 1 ? "link" : "links"}`}
-      </span>
-      <GraphRecordContent node={data.record} />
-      <nav
-        className="graph-record-links nodrag nopan"
-        aria-label="Linked records"
-      >
-        {data.related.slice(0, 2).map((node) => (
-          <GraphRecordLink key={graphRefKey(node)} node={node} />
-        ))}
-        {data.related.length > 2 ? (
-          <span className="text-2xs text-muted-foreground">
-            +{data.related.length - 2} linked records
+      {data.branch ? (
+        <>
+          <button
+            className="nodrag nopan graph-branch-button"
+            disabled={data.busy}
+            aria-busy={data.busy}
+            aria-label={`${data.count ? "Collapse" : "Expand"} ${data.branch.label} (${data.branch.totalCount})`}
+            aria-expanded={Boolean(data.count)}
+            onClick={(event) => {
+              event.stopPropagation();
+              data.toggle?.();
+            }}
+          >
+            <span>{data.branch.label}</span>
+            <span className="text-xs text-muted-foreground">
+              {data.count
+                ? `${data.count} of ${data.branch.totalCount} · Collapse`
+                : `${data.branch.totalCount} · Expand`}
+            </span>
+          </button>
+          {Boolean(data.count) && (data.count ?? 0) < data.branch.totalCount ? (
+            <button
+              className="nodrag nopan px-3 text-xs"
+              aria-label={`Load more ${data.branch.label}`}
+              disabled={data.busy}
+              onClick={(event) => {
+                event.stopPropagation();
+                data.more?.();
+              }}
+            >
+              More
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Row
+            gap="sm"
+            align="center"
+            className="text-xs text-muted-foreground"
+          >
+            <EntityIcon entity={data.record.entityKind} className="size-3.5" />
+            <span>{entityLabel(data.record.entityKind)}</span>
+          </Row>
+          <span className="graph-record-depth">
+            {data.depth === 0
+              ? "Focus"
+              : `${data.depth} ${data.depth === 1 ? "link" : "links"}`}
           </span>
-        ) : null}
-      </nav>
+          <GraphRecordContent node={data.record} compact />
+        </>
+      )}
       {Object.values(Position).map((position) => (
         <Handle
           key={`source-${position}`}
@@ -97,8 +136,33 @@ const GraphRecord = memo(function GraphRecord({
   );
 });
 const NODE_TYPES = { record: GraphRecord };
+const MIN_READABLE_ZOOM = 0.85;
+function edgeHandles(a?: GraphMapRect, b?: GraphMapRect) {
+  const dx = (b ? b.x + b.width / 2 : 0) - (a ? a.x + a.width / 2 : 0);
+  const dy = (b ? b.y + b.height / 2 : 0) - (a ? a.y + a.height / 2 : 0);
+  const horizontal =
+    Math.abs(dx) / GRAPH_CARD_WIDTH > Math.abs(dy) / GRAPH_CARD_HEIGHT;
+  const source = horizontal
+    ? dx >= 0
+      ? Position.Right
+      : Position.Left
+    : dy >= 0
+      ? Position.Bottom
+      : Position.Top;
+  const target = horizontal
+    ? dx >= 0
+      ? Position.Left
+      : Position.Right
+    : dy >= 0
+      ? Position.Top
+      : Position.Bottom;
+  return { sourceHandle: `source-${source}`, targetHandle: `target-${target}` };
+}
 const DEFAULT_VIEWPORT = { x: 32, y: 32, zoom: 1 };
 const EMPTY_POSITIONS: Record<string, GraphMapRect> = {};
+const EMPTY_BRANCHES: EntityGraphBranch[] = [];
+const EMPTY_COUNTS: ReadonlyMap<string, number> = new Map();
+const EMPTY_BUSY: ReadonlySet<string> = new Set();
 export interface GraphMapCamera {
   positions: Record<string, GraphMapRect>;
   viewport: Viewport;
@@ -117,6 +181,14 @@ export function GraphMapCanvas({
   highlightedEdges,
   camera,
   toolbarTarget,
+  branches = EMPTY_BRANCHES,
+  counts = EMPTY_COUNTS,
+  busy = EMPTY_BUSY,
+  onToggleBranch,
+  showSiblings = false,
+  onToggleSiblings,
+  onMoreBranch,
+  onCollapseAll,
 }: {
   root: { entityKind: EntityGraphNode["entityKind"]; entityId: string };
   nodes: EntityGraphNode[];
@@ -130,6 +202,14 @@ export function GraphMapCanvas({
   highlightedEdges: ReadonlySet<string>;
   camera: GraphMapCamera;
   toolbarTarget?: HTMLElement | null;
+  branches?: EntityGraphBranch[];
+  counts?: ReadonlyMap<string, number>;
+  busy?: ReadonlySet<string>;
+  onToggleBranch?: (branch: EntityGraphBranch) => void;
+  showSiblings?: boolean;
+  onToggleSiblings?: () => void;
+  onMoreBranch?: (branch: EntityGraphBranch) => void;
+  onCollapseAll?: () => void;
 }) {
   const [positions, setPositions] = useState(
     camera.positions ?? EMPTY_POSITIONS,
@@ -145,12 +225,55 @@ export function GraphMapCanvas({
   const requestID = useRef(0);
   const flow = useRef<ReactFlowInstance<RecordNode>>(null);
   const needsInitialCenter = useRef(Object.keys(camera.positions).length === 0);
-  const topology = JSON.stringify(
-    nodes.map((node) => ({
-      id: graphRefKey(node),
-      anchor: anchors.get(graphRefKey(node)),
+  const [showOverview, setShowOverview] = useState(false);
+  const groups = useMemo(() => {
+    const visible = new Map(nodes.map((node) => [graphRefKey(node), node]));
+    return branches.flatMap((branch) => {
+      const owner = graphRefKey(branch.root);
+      const record = visible.get(owner);
+      if (
+        !record ||
+        (owner !== graphRefKey(root) && owner !== selected) ||
+        !branch.totalCount
+      )
+        return [];
+      const count = graphBranchCount(branch, counts, root, showSiblings);
+      if (
+        branch.totalCount === 1 &&
+        branch.items.every((item) => visible.has(graphRefKey(item)))
+      )
+        return [];
+      return [
+        {
+          id: `branch:${graphBranchKey(branch.root, branch.relationshipKey)}`,
+          owner,
+          record,
+          branch,
+          count,
+        },
+      ];
+    });
+  }, [nodes, branches, counts, root, selected, showSiblings]);
+  const topology = JSON.stringify([
+    { id: graphRefKey(root) },
+    ...groups.map((group) => ({
+      id: group.id,
+      anchor: group.owner,
+      height: 64,
     })),
-  );
+    ...nodes
+      .filter((node) => graphRefKey(node) !== graphRefKey(root))
+      .map((node) => {
+        const id = graphRefKey(node);
+        const parent = anchors.get(id);
+        const group = groups.find(
+          (item) =>
+            item.owner === parent &&
+            item.branch.items.some((ref) => graphRefKey(ref) === id),
+        );
+        return { id, anchor: group?.id ?? parent ?? graphRefKey(root) };
+      }),
+  ]);
   useEffect(() => {
     let layoutWorker: Worker;
     try {
@@ -258,35 +381,62 @@ export function GraphMapCanvas({
     [nodes, positions, relatedRecords, depths],
   );
   const recordNodes = useMemo(
-    () =>
-      baseNodes.map((node) => ({ ...node, selected: node.id === selected })),
-    [baseNodes, selected],
+    () => [
+      ...baseNodes.map((node) => ({ ...node, selected: node.id === selected })),
+      ...groups.flatMap((group): RecordNode[] => {
+        const position = positions[group.id];
+        return position
+          ? [
+              {
+                id: group.id,
+                type: "record",
+                position,
+                width: position.width,
+                height: position.height,
+                draggable: false,
+                selectable: false,
+                focusable: false,
+                data: {
+                  record: group.record,
+                  related: [],
+                  depth: 0,
+                  branch: group.branch,
+                  busy: busy.has(
+                    graphBranchKey(
+                      group.branch.root,
+                      group.branch.relationshipKey,
+                    ),
+                  ),
+                  count: group.count,
+                  toggle: () => onToggleBranch?.(group.branch),
+                  more: () => onMoreBranch?.(group.branch),
+                },
+              },
+            ]
+          : [];
+      }),
+    ],
+    [
+      baseNodes,
+      selected,
+      groups,
+      positions,
+      onToggleBranch,
+      onMoreBranch,
+      busy,
+    ],
   );
   const flowEdges = useMemo(
-    () =>
-      edges.map((edge) => {
-        const source = graphRefKey(edge.source);
-        const target = graphRefKey(edge.target);
-        const a = positions[source];
-        const b = positions[target];
-        const dx = (b?.x ?? 0) - (a?.x ?? 0);
-        const dy = (b?.y ?? 0) - (a?.y ?? 0);
-        const horizontal =
-          Math.abs(dx) / GRAPH_CARD_WIDTH > Math.abs(dy) / GRAPH_CARD_HEIGHT;
-        const sourceSide = horizontal
-          ? dx >= 0
-            ? Position.Right
-            : Position.Left
-          : dy >= 0
-            ? Position.Bottom
-            : Position.Top;
-        const targetSide = horizontal
-          ? dx >= 0
-            ? Position.Left
-            : Position.Right
-          : dy >= 0
-            ? Position.Top
-            : Position.Bottom;
+    () => [
+      ...edges.map((edge) => {
+        const group = groups.find((item) =>
+          item.branch.edgeIds.includes(edge.id),
+        );
+        const from = graphRefKey(edge.source);
+        const to = graphRefKey(edge.target);
+        const source = group?.owner === from ? group.id : from;
+        const target = group?.owner === to ? group.id : to;
+        const handles = edgeHandles(positions[source], positions[target]);
         const active = highlightedEdges.size
           ? highlightedEdges.has(edge.id)
           : edge.id === selectedEdge ||
@@ -296,9 +446,8 @@ export function GraphMapCanvas({
           id: edge.id,
           source,
           target,
-          type: "smoothstep",
-          sourceHandle: `source-${sourceSide}`,
-          targetHandle: `target-${targetSide}`,
+          type: "default",
+          ...handles,
           selected: edge.id === selectedEdge,
           label: edge.id === selectedEdge ? edge.label : undefined,
           className: active ? "graph-map-edge-active" : "graph-map-edge",
@@ -306,7 +455,18 @@ export function GraphMapCanvas({
           markerEnd: { type: MarkerType.ArrowClosed },
         };
       }),
-    [edges, positions, selected, selectedEdge, highlightedEdges],
+      ...groups.map((group) => ({
+        id: `stem:${group.id}`,
+        source: group.owner,
+        target: group.id,
+        ...edgeHandles(positions[group.owner], positions[group.id]),
+        type: "default",
+        selectable: false,
+        focusable: false,
+        style: { stroke: "var(--border)" },
+      })),
+    ],
+    [edges, positions, selected, selectedEdge, highlightedEdges, groups],
   );
   const center = () => {
     const rect = positionsRef.current[selected];
@@ -314,37 +474,64 @@ export function GraphMapCanvas({
       void flow.current?.setCenter(
         rect.x + rect.width / 2,
         rect.y + rect.height / 2,
-        { zoom: Math.max(0.7, flow.current.getZoom()) },
+        { zoom: Math.max(MIN_READABLE_ZOOM, flow.current.getZoom()) },
       );
   };
+  const fitFocus = () =>
+    void flow.current?.fitView({
+      padding: 0.08,
+      minZoom: MIN_READABLE_ZOOM,
+      maxZoom: 1,
+      nodes: recordNodes.filter(
+        (node) =>
+          node.id === graphRefKey(root) ||
+          groups.some(
+            (group) =>
+              group.id === node.id && group.owner === graphRefKey(root),
+          ) ||
+          anchors.get(node.id) === graphRefKey(root),
+      ),
+    });
   const centerRef = useRef(center);
   centerRef.current = center;
+  const fitFocusRef = useRef(fitFocus);
+  fitFocusRef.current = fitFocus;
   useEffect(() => {
     if (reveal) centerRef.current();
   }, [reveal]);
   useEffect(() => {
     if (needsInitialCenter.current && positions[selected] && flow.current) {
-      centerRef.current();
-      needsInitialCenter.current = false;
+      const frame = requestAnimationFrame(() => {
+        fitFocusRef.current();
+        needsInitialCenter.current = false;
+      });
+      return () => cancelAnimationFrame(frame);
     }
   }, [positions, selected]);
   const toolbar = (
     <Row gap="sm">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() =>
-          void flow.current?.fitView({ padding: 0.15, maxZoom: 1 })
-        }
-      >
-        Fit map
+      <Button variant="outline" size="sm" onClick={fitFocus}>
+        Fit focus
       </Button>
+      {onCollapseAll ? (
+        <Button variant="outline" size="sm" onClick={onCollapseAll}>
+          Collapse all
+        </Button>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
           Map options
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={center}>Center selection</DropdownMenuItem>
+          {onToggleSiblings ? (
+            <DropdownMenuItem onClick={onToggleSiblings}>
+              {showSiblings ? "Focus view" : "Show wider network"}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem onClick={() => setShowOverview((value) => !value)}>
+            {showOverview ? "Hide overview" : "Show overview"}
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
               positionsRef.current = {};
@@ -374,7 +561,9 @@ export function GraphMapCanvas({
           onInit={(instance) => {
             flow.current = instance;
           }}
-          onNodeClick={(_, node) => onSelect(node.id)}
+          onNodeClick={(_, node) => {
+            if (!node.data.branch) onSelect(node.id);
+          }}
           onNodesChange={(changes) => {
             const selection = changes.find(
               (change) => change.type === "select" && change.selected,
@@ -382,7 +571,9 @@ export function GraphMapCanvas({
             if (selection?.type === "select" && selection.id !== selected)
               onSelect(selection.id);
           }}
-          onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
+          onEdgeClick={(_, edge) => {
+            if (!edge.id.startsWith("stem:")) onSelectEdge(edge.id);
+          }}
           onEdgesChange={(changes) => {
             const selection = changes.find(
               (change) => change.type === "select" && change.selected,
@@ -397,7 +588,7 @@ export function GraphMapCanvas({
           edgesReconnectable={false}
           deleteKeyCode={null}
           onlyRenderVisibleElements
-          minZoom={0.05}
+          minZoom={MIN_READABLE_ZOOM}
           maxZoom={2.5}
           defaultViewport={camera.viewport ?? DEFAULT_VIEWPORT}
           onMoveEnd={(_, viewport) => {
@@ -409,8 +600,8 @@ export function GraphMapCanvas({
           fitView={false}
         >
           <Background gap={16} size={1} />
-          <Controls showInteractive={false} />
-          {nodes.length > 8 ? (
+          <Controls showInteractive={false} showFitView={false} />
+          {showOverview ? (
             <MiniMap
               pannable
               zoomable

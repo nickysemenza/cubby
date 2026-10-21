@@ -63,16 +63,15 @@ export function relationshipDiscoveryContract() {
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("group", {
-        name: `Inspect ${name} supporting expense`,
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(
       page.getByLabel("Relationship graph", { exact: true }),
     ).toBeVisible();
     await expectViewportBounded(page);
     await showRecords.click();
+    await expect(
+      records.getByRole("button", {
+        name: new RegExp(`^Inspect ${escapeRegExp(name)} supporting expense`),
+      }),
+    ).toBeVisible();
     await records
       .getByRole("button", {
         name: new RegExp(`^Inspect ${escapeRegExp(name)} suggested`),

@@ -7,7 +7,13 @@ const graphMapRectSchema = pointSchema.extend({
 });
 export const graphMapLayoutInputSchema = z.object({
   revision: z.number(),
-  nodes: z.array(z.object({ id: z.string(), anchor: z.string().optional() })),
+  nodes: z.array(
+    z.object({
+      id: z.string(),
+      anchor: z.string().optional(),
+      height: z.number().positive().optional(),
+    }),
+  ),
   previous: z.record(z.string(), graphMapRectSchema),
 });
 export const graphMapLayoutOutputSchema = z.object({
@@ -17,8 +23,8 @@ export const graphMapLayoutOutputSchema = z.object({
 export type GraphMapRect = z.infer<typeof graphMapRectSchema>;
 export type GraphMapLayoutInput = z.infer<typeof graphMapLayoutInputSchema>;
 
-export const GRAPH_CARD_WIDTH = 280;
-export const GRAPH_CARD_HEIGHT = 360;
+export const GRAPH_CARD_WIDTH = 224;
+export const GRAPH_CARD_HEIGHT = 140;
 const WIDTH = GRAPH_CARD_WIDTH;
 const HEIGHT = GRAPH_CARD_HEIGHT;
 const GAP = 48;
@@ -29,74 +35,53 @@ const overlaps = (a: GraphMapRect, b: GraphMapRect) =>
   a.y < b.y + b.height + GAP &&
   a.y + a.height + GAP > b.y;
 
-/** New records fan out to the right of their parent. Existing coordinates are immutable. */
+/** Stable radial branches: the focus stays centered and each descendant fans outward from its parent. */
 export function placeGraphMap(input: GraphMapLayoutInput) {
   const positions = { ...input.previous };
-  const buckets = new Map<string, GraphMapRect[]>();
-  const cells = (rect: GraphMapRect) => {
-    const keys: string[] = [];
-    for (
-      let y = Math.floor(rect.y / (HEIGHT + GAP));
-      y < Math.ceil((rect.y + rect.height + GAP) / (HEIGHT + GAP));
-      y++
-    ) {
-      for (
-        let x = Math.floor(rect.x / (WIDTH + GAP));
-        x < Math.ceil((rect.x + rect.width + GAP) / (WIDTH + GAP));
-        x++
-      )
-        keys.push(`${x}:${y}`);
-    }
-    return keys;
-  };
-  const insert = (rect: GraphMapRect) => {
-    for (const key of cells(rect)) {
-      const bucket = buckets.get(key);
-      if (bucket) bucket.push(rect);
-      else buckets.set(key, [rect]);
-    }
-  };
-  for (const rect of Object.values(positions)) insert(rect);
-  for (const node of input.nodes) {
+  const slots = new Map<string, number>();
+  const pending = [...input.nodes];
+  while (pending.length) {
+    const ready = pending.findIndex(
+      (node) => !node.anchor || positions[node.anchor],
+    );
+    const node = pending.splice(Math.max(0, ready), 1)[0]!;
+    const anchor = node.anchor ?? "";
+    const index = slots.get(anchor) ?? 0;
+    slots.set(anchor, index + 1);
     if (positions[node.id]) continue;
-    const parent = node.anchor ? positions[node.anchor] : undefined;
-    const origin = {
-      x: parent ? parent.x + WIDTH + GAP : 0,
-      y: parent?.y ?? 0,
-    };
-    let placed = false;
-    for (let radius = 0; !placed; radius++) {
-      const slots =
-        radius === 0
-          ? [{ x: 0, y: 0 }]
-          : [
-              ...Array.from({ length: radius }, (_, x) => [
-                { x, y: radius },
-                { x, y: -radius },
-              ]).flat(),
-              ...Array.from({ length: radius * 2 + 1 }, (_, index) => ({
-                x: radius,
-                y: index - radius,
-              })),
-            ];
-      for (const slot of slots) {
-        if (placed) break;
-        const rect = {
-          x: origin.x + slot.x * (WIDTH + GAP),
-          y: origin.y + slot.y * (HEIGHT + GAP),
-          width: WIDTH,
-          height: HEIGHT,
-        };
-        if (
-          cells(rect).some((key) =>
-            buckets.get(key)?.some((other) => overlaps(rect, other)),
-          )
-        )
-          continue;
-        positions[node.id] = rect;
-        insert(rect);
-        placed = true;
-      }
+    const parent = node.anchor
+      ? positions[node.anchor]
+      : node.id !== input.nodes[0]?.id
+        ? positions[input.nodes[0]?.id ?? ""]
+        : undefined;
+    const height = node.height ?? HEIGHT;
+    if (!parent) {
+      positions[node.id] = {
+        x: -WIDTH / 2,
+        y: -height / 2,
+        width: WIDTH,
+        height,
+      };
+      continue;
+    }
+    const px = parent.x + parent.width / 2;
+    const py = parent.y + parent.height / 2;
+    const outward = Math.atan2(py, px);
+    const angle =
+      Math.hypot(px, py) < 1
+        ? -Math.PI / 2 + index * Math.PI * (3 - Math.sqrt(5))
+        : outward + (((index % 5) - 2) * Math.PI) / 8;
+    for (let radius = 1; ; radius += GAP / WIDTH) {
+      const rect = {
+        x: px + Math.cos(angle) * radius * (WIDTH + GAP) - WIDTH / 2,
+        y: py + Math.sin(angle) * radius * (HEIGHT + GAP) - height / 2,
+        width: WIDTH,
+        height,
+      };
+      if (Object.values(positions).some((other) => overlaps(rect, other)))
+        continue;
+      positions[node.id] = rect;
+      break;
     }
   }
   return { revision: input.revision, positions };
