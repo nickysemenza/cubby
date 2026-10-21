@@ -105,12 +105,7 @@ struct EntityListView: View {
     private var presentationChoices: [PresentationChoice] {
         let shared = renderableViews.filter { $0 == .shelf }
         let specialist = renderableViews.filter { $0 != .table && $0 != .shelf }
-        #if os(macOS)
-            let browsePresentations: [BrowsePresentation] = [.list, .table]
-        #else
-            let browsePresentations: [BrowsePresentation] = [.list]
-        #endif
-        let browse = browsePresentations.map { presentation in
+        let browse = [BrowsePresentation.list, .table].map { presentation in
             PresentationChoice(
                 id: presentation.rawValue,
                 label: presentation == .list ? "List" : "Table",
@@ -255,6 +250,11 @@ struct EntityListView: View {
                 }
             }
         #else
+            if let model, presentationChoices.count > 1 {
+                ToolbarItem(placement: .primaryAction) {
+                    presentationPicker(model)
+                }
+            }
             if let model {
                 ToolbarItem(placement: .primaryAction) {
                     macViewMenu(model)
@@ -319,22 +319,6 @@ struct EntityListView: View {
     #if os(macOS)
         private func macViewMenu(_ model: GenericEntityListModel) -> some View {
             Menu("View", systemImage: "slider.horizontal.3") {
-                if presentationChoices.count > 1 {
-                    Section("Presentation") {
-                        ForEach(presentationChoices) { choice in
-                            Button {
-                                selectPresentation(choice.id, model: model)
-                            } label: {
-                                if currentPresentationID(model) == choice.id {
-                                    Label(choice.label, systemImage: "checkmark")
-                                } else {
-                                    Text(choice.label)
-                                }
-                            }
-                            .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
-                        }
-                    }
-                }
                 if !descriptor.sortFields.isEmpty {
                     sortMenu(model)
                 }
@@ -357,14 +341,6 @@ struct EntityListView: View {
                 }
             }
             .accessibilityIdentifier("browse.\(key.rawValue).view-menu")
-        }
-
-        private func currentPresentationID(_ model: GenericEntityListModel) -> String {
-            switch model.view {
-            case .table: browsePresentation.rawValue
-            case .shelf: cardDensity.rawValue
-            case .timeline, .board, .slot: model.view.id
-            }
         }
 
         private func sortMenu(_ model: GenericEntityListModel) -> some View {
