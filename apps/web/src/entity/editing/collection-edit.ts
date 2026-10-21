@@ -51,7 +51,10 @@ export function collectionDraft(
 
 const pick = (row: CollectionRow, keys: readonly string[]): CollectionRow =>
   Object.fromEntries(
-    keys.flatMap((key) => (key in row ? [[key, row[key]]] : [])),
+    keys.flatMap((key) => {
+      const value = row[key];
+      return value === undefined ? [] : [[key, value]];
+    }),
   );
 
 /** Converts intent before the ordinary input validator; never sends editor metadata to the wire. */

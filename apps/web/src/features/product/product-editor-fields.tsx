@@ -191,7 +191,7 @@ export function ProductExternalIdsField({
     name: ["name", "manufacturer"],
   });
   const schema = structuredSchemaFor(entity, field.key);
-  const collection = field.collection;
+  const collection = "collection" in field ? field.collection : undefined;
   if (!schema || !collection?.primary || collection.key === "value")
     throw new Error("Identifier controls need declared collection metadata.");
   const labeled =
@@ -287,7 +287,7 @@ export function ProductBarcodeField({
     .catch(null)
     .parse(useWatch({ control: form.control, name: field.key }));
   const collection = useWatch({ control: form.control, name: "externalIds" });
-  if (mode === "update" && collectionEditSchema.safeParse(collection).success)
+  if (mode === "edit" && collectionEditSchema.safeParse(collection).success)
     return null;
 
   const handleLookup = async () => {

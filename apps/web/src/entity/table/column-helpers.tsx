@@ -823,8 +823,9 @@ export function createEditableAccessorColumn<
     CubbyColumnDef<T, TValue>,
     "id" | "header" | "enableSorting" | "footer"
   > & {
+    id: string;
     meta?: Omit<NonNullable<CubbyColumnDef<T, TValue>["meta"]>, "cellData">;
-    cellData: ColumnCellData<T, TSaved>;
+    cellData: ColumnCellData<T, TSaved> | undefined;
     renderValue: (row: T, value: () => TValue) => ReactNode;
     renderEditable?: (
       row: T,
@@ -845,7 +846,7 @@ export function createEditableAccessorColumn<
     cell: (info: CellContext<T, TValue>) => {
       const row = info.row.original;
       const value = () => info.getValue();
-      return options.renderEditable
+      return options.renderEditable && options.cellData
         ? options.renderEditable(
             row,
             value,

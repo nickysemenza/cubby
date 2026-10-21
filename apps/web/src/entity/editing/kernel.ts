@@ -81,7 +81,10 @@ export function resolveEntityEdit<E extends EditableEntity>(
     (key) =>
       definition.fields.some((field) => field.id === key) &&
       entityFieldModels[request.entity]?.fields.some(
-        (field) => field.key === key && field.collection?.primary,
+        (field) =>
+          field.key === key &&
+          "collection" in field &&
+          field.collection?.primary,
       ),
   );
   const requestedFields =
@@ -206,9 +209,11 @@ export function buildEntityEdit<E extends EditableEntity>(
     }
     try {
       let value = parsedValues[field.id];
-      const collection = entityFieldModels[request.entity]?.fields.find(
+      const model = entityFieldModels[request.entity]?.fields.find(
         (model) => model.key === field.id,
-      )?.collection;
+      );
+      const collection =
+        model && "collection" in model ? model.collection : undefined;
       if (collection?.primary) {
         const local = collectionEditSchema.safeParse(value);
         if (
