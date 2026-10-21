@@ -20,21 +20,15 @@ const pairFence = z.object({
   source: z.string().optional(),
 });
 
-/** Prepare against current inputs; a delayed wave preserves current judgments. */
-export async function prepareAssessmentRetirement(
-  db: Database,
-  subject: { entityKind: Entity; entityId: string; after: string | null },
+function retirementCandidatesWhere(
+  subject: Parameters<typeof prepareAssessmentRetirement>[1],
 ) {
   const fields = entityFieldModels[subject.entityKind].fields.map(
     (field) => field.key,
   );
-  const candidates = await getDb(db)
-    .select()
-    .from(assessmentState)
-    .where(
-      and(
-        eq(assessmentState.active, true),
-        sql`((${assessmentState.family}=${assessmentFamily.enum.field} AND ${assessmentState.status}=${suggestionStatus.enum.pending}
+  return and(
+    eq(assessmentState.active, true),
+    sql`((${assessmentState.family}=${assessmentFamily.enum.field} AND ${assessmentState.status}=${suggestionStatus.enum.pending}
       AND ${assessmentState.entity}=${subject.entityKind} AND ${assessmentState.recordId}=${subject.entityId}::uuid
       AND ${assessmentState.field}=ANY(ARRAY[${sql.join(
         fields.map((field) => sql`${field}`),
@@ -42,9 +36,35 @@ export async function prepareAssessmentRetirement(
       )}]::text[]))
       OR (${subject.entityKind === "product"} AND ${assessmentState.family}=${assessmentFamily.enum.product_pair}
         AND (${assessmentState.recordId}=${subject.entityId}::uuid OR ${assessmentState.data}->>'otherId'=${subject.entityId})))`,
-        subject.after ? gt(assessmentState.id, subject.after) : undefined,
-      ),
-    )
+    subject.after ? gt(assessmentState.id, subject.after) : undefined,
+  );
+}
+
+/** An absence proof may share the projection fence; existing candidates may not. */
+export async function hasAssessmentRetirementCandidates(
+  db: Database,
+  subject: Pick<
+    Parameters<typeof prepareAssessmentRetirement>[1],
+    "entityKind" | "entityId"
+  >,
+) {
+  const [candidate] = await getDb(db)
+    .select({ id: assessmentState.id })
+    .from(assessmentState)
+    .where(retirementCandidatesWhere({ ...subject, after: null }))
+    .limit(1);
+  return candidate !== undefined;
+}
+
+/** Prepare against current inputs; a delayed wave preserves current judgments. */
+export async function prepareAssessmentRetirement(
+  db: Database,
+  subject: { entityKind: Entity; entityId: string; after: string | null },
+) {
+  const candidates = await getDb(db)
+    .select()
+    .from(assessmentState)
+    .where(retirementCandidatesWhere(subject))
     .orderBy(asc(assessmentState.id))
     .limit(DERIVED_REFRESH_PAGE);
   const [live] = await getDb(db)

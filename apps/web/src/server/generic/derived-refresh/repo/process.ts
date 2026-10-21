@@ -36,6 +36,7 @@ import {
 } from "~/server/generic/search/repo/search-document";
 
 import {
+  hasAssessmentRetirementCandidates,
   prepareAssessmentRetirement,
   publishAssessmentRetirement,
 } from "./assessment-retirement";
@@ -133,6 +134,19 @@ function projectedEmbeddingRefs(
   });
 }
 
+function phaseAfterAssessment(
+  scope: typeof derivedRefreshScope.$inferSelect,
+  rootKind: Entity,
+) {
+  return scope.traverse &&
+    (
+      refreshEndpointDependencyRoutes(rootKind, scope.entityKind) ??
+      refreshDependencyRoutes(scope.entityKind)
+    ).length
+    ? "dependencies"
+    : "completed";
+}
+
 /** Frontier preparation has no provider ports and does not retain row locks. */
 async function prepareFrontierPage(
   db: Database,
@@ -150,6 +164,15 @@ async function prepareFrontierPage(
           { entityKind: searchable.data, entityId: scope.entityId },
         ])
       : null;
+  let assessmentEmpty = false;
+  if (scope && (scope.version !== version || scope.phase === "projection")) {
+    try {
+      assessmentEmpty = !(await hasAssessmentRetirementCandidates(db, scope));
+    } catch {
+      // SILENT: The mandatory assessment step retries through normal
+      // preparation and attributes any remaining failure to its own phase.
+    }
+  }
   const retirement =
     scope?.phase === "assessment" && scope.version === version
       ? await prepareAssessmentRetirement(db, scope)
@@ -166,7 +189,7 @@ async function prepareFrontierPage(
           scope,
         )
       : null;
-  return { prepared, retirement, dependencyPacket };
+  return { prepared, retirement, dependencyPacket, assessmentEmpty };
 }
 
 /** One bounded frontier/retirement/publication page, shared by queue and Run. */
@@ -309,7 +332,7 @@ export async function processDerivedRefreshPage(
           ]),
         ),
       };
-    const { prepared, retirement, dependencyPacket } =
+    const { prepared, retirement, dependencyPacket, assessmentEmpty } =
       await prepareFrontierPage(db, scope, work.version, work.entityKind);
     if (!work.publishing)
       failureInput = {
@@ -472,7 +495,15 @@ export async function processDerivedRefreshPage(
             ]);
           if (prepared)
             await publishPreparedSearchDocuments(tx, prepared, inputRevision);
-          updateScope({ projected: true, phase: "assessment", after: null });
+          const nextPhase = assessmentEmpty
+            ? phaseAfterAssessment(scope, work.entityKind)
+            : "assessment";
+          updateScope({
+            projected: true,
+            phase: nextPhase,
+            after: null,
+            ...(nextPhase === "completed" ? { done: true } : {}),
+          });
           return;
         }
         if (phase === "assessment") {
@@ -480,17 +511,7 @@ export async function processDerivedRefreshPage(
             throw new Error("Missing prepared assessment retirement");
           await publishAssessmentRetirement(tx, retirement);
           if (retirement.done)
-            await advance(
-              scope.traverse &&
-                (
-                  refreshEndpointDependencyRoutes(
-                    work.entityKind,
-                    scope.entityKind,
-                  ) ?? refreshDependencyRoutes(scope.entityKind)
-                ).length
-                ? "dependencies"
-                : "completed",
-            );
+            await advance(phaseAfterAssessment(scope, work.entityKind));
           else updateScope({ after: retirement.after });
           return;
         }
