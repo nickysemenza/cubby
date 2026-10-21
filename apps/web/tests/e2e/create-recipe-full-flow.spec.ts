@@ -54,11 +54,11 @@ test.describe("Create Recipe - Full Flow", () => {
       page.getByRole("heading", { name: recipeName, level: 1 }),
     ).toBeVisible({ timeout: 10000 });
 
-    const ingredientsSidebar = page.locator("aside").filter({
-      has: page.getByRole("heading", { name: "Ingredients", exact: true }),
+    const ingredientsSection = page.getByRole("region", {
+      name: "Ingredients",
+      exact: true,
     });
-    await expect(ingredientsSidebar).toHaveCount(1);
-    const ingredientRow = ingredientsSidebar.getByRole("listitem").filter({
+    const ingredientRow = ingredientsSection.getByRole("listitem").filter({
       has: page.getByRole("link", { name: ingredientName, exact: true }),
     });
     await expect(ingredientRow).toBeVisible();

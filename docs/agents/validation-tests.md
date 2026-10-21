@@ -71,7 +71,9 @@ for real virtualizers; a zero client viewport renders no rows even with cached d
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.
-Scope ingredient-link assertions to the recipe's ingredient list items. Entity
+Locate recipe ingredients through the named Ingredients region, not an `aside`
+tag that couples the journey to its layout. Scope ingredient-link assertions to
+the recipe's ingredient list items. Entity
 previews can repeat the same ingredient name elsewhere in a sidebar; a broad
 text assertion can become ambiguous when the preview opens.
 Relation-table assertions target the visible record link by its href within
