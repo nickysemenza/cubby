@@ -8,7 +8,6 @@
       "entry": [
         "neon.ts!",
         "apps/apple/tooling/apple.ts!",
-        "apps/apple/tooling/apple-inputs.ts!",
         "apps/apple/tooling/apple-release.ts!",
         "scripts/ensure.ts!",
         "scripts/design-tokens.ts!"

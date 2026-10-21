@@ -7,8 +7,6 @@
 #   app   generic-simulator build of Cubby-iOS
 #   lint  native formatting and state-initialization rules
 #
-# A passing result satisfies the merge gate for its input hash whether CI or a
-# developer's Mac produced it, but only for the same execution environment.
 set -euo pipefail
 
 mode="${1:-}"
@@ -19,13 +17,6 @@ case "$mode" in
     exit 2
     ;;
 esac
-
-# CI first runs the target with this set to ask only for a cached result
-# (docs/ci.md). Reaching the script means a miss; Nx never caches a failure.
-if [ "${CUBBY_NX_CACHE_PROBE:-}" = 1 ]; then
-  echo "apple $mode: no cached result for this input hash" >&2
-  exit 1
-fi
 
 # Needs only a Swift toolchain, so CI runs it on Linux.
 if [ "$mode" = lint ]; then

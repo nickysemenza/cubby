@@ -177,10 +177,9 @@ launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop
 
 ## Verification
 
-- `pnpm apple check` runs native formatting, probes cached CubbyKit host tests
-  and iOS simulator compilation, then prepares FFI and runs only misses.
-  Use `pnpm apple check host`, `app`, or `lint` for one scope. A pass is cached
-  for its input hash, and CI replays it on a PR with the same declared input hash.
+- `pnpm apple check` runs native formatting, prepares FFI, then runs CubbyKit
+  host tests and iOS simulator compilation sequentially. Use `host`, `app`, or
+  `lint` for one scope. [CI](../../docs/ci.md) owns cache behavior.
 - `pnpm apple test` runs package tests only. It does **not** run the hosted app tests.
 - Hosted CI runs formatting separately as `Apple lint` without FFI setup,
   and native compilation as parallel macOS jobs: `Apple host tests`

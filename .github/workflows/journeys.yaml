@@ -202,7 +202,6 @@ jobs:
           ffi-targets: sim
           wasm: restore
           build-cache: "true"
-          probe: apple:simulator-build
       - name: Restore verified action recordings
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -226,7 +225,6 @@ jobs:
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
       - name: Save DerivedData cache
-        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.apple.outputs.cache-paths }}
@@ -292,7 +290,6 @@ jobs:
           ffi-targets: sim
           wasm: restore
           build-cache: "true"
-          probe: apple:simulator-build
       - uses: ./.github/actions/setup-apple-test-runner-cache
         id: test-runner
         with:
@@ -317,7 +314,6 @@ jobs:
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
       - name: Save DerivedData cache
-        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.apple.outputs.cache-paths }}
