@@ -6,11 +6,15 @@ import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  seedLocationPrerequisite,
   seedProductPrerequisite,
   seedVendorDisplayPrerequisite,
 } from "./catalog";
-import { getFixtureDb, createEntityFixture, ensureMemberParty } from "./core";
+import {
+  getFixtureDb,
+  createEntityFixture,
+  createFixtureGraph,
+  ensureMemberParty,
+} from "./core";
 
 /** Two Purchases sharing one unallocated synthetic statement charge. */
 export async function seedSplitSettlementPrerequisite(
@@ -53,39 +57,54 @@ export async function seedRecordListDisplayPrerequisite(
   page: Page,
   name: string,
 ) {
-  const vendor = await seedVendorDisplayPrerequisite(page, `${name} vendor`);
-  const product = await seedProductPrerequisite(page, {
-    name: `${name} product`,
+  return createFixtureGraph(page, async (create) => {
+    const vendor = await create("vendor", {
+      name: `${name} vendor`,
+      website: "https://example.com",
+      orderUrlTemplate: "https://example.com/orders/{orderId}",
+      notes: `${name} vendor notes`,
+    });
+    const product = await create("product", {
+      manufacturer: "E2E fixture",
+      tags: [],
+      name: `${name} product`,
+    });
+    const location = await create("location", {
+      name: `${name} room`,
+      type: "room",
+      parentId: null,
+    });
+    const child = await create("location", {
+      name: `${name} shelf`,
+      type: "room",
+      parentId: location.id,
+    });
+    await create("inventory", {
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 2, unit: "each" },
+    });
+    const orderId = `${name} order`;
+    const purchase = await create("purchase", {
+      vendorId: vendor.id,
+      orderId,
+      date: "2026-09-09",
+      statedTotal: 12.34,
+      notes: `${name} purchase notes`,
+    });
+    const expense = await create("expense", {
+      name: `${name} expense`,
+      cost: 12.34,
+      date: "2026-09-09",
+      costType: "materials",
+      trade: "other",
+      productId: product.id,
+      productQuantity: 2,
+      purchaseId: purchase.id,
+      notes: `${name} expense notes`,
+    });
+    return { vendor, product, location, child, purchase, expense, orderId };
   });
-  const location = await seedLocationPrerequisite(page, `${name} room`);
-  const child = await seedLocationPrerequisite(page, `${name} shelf`, {
-    parentId: location.id,
-  });
-  await createEntityFixture(page, "inventory", {
-    productId: product.id,
-    locationId: location.id,
-    amount: { value: 2, unit: "each" },
-  });
-  const orderId = `${name} order`;
-  const purchase = await createEntityFixture(page, "purchase", {
-    vendorId: vendor.id,
-    orderId,
-    date: "2026-09-09",
-    statedTotal: 12.34,
-    notes: `${name} purchase notes`,
-  });
-  const expense = await createEntityFixture(page, "expense", {
-    name: `${name} expense`,
-    cost: 12.34,
-    date: "2026-09-09",
-    costType: "materials",
-    trade: "other",
-    productId: product.id,
-    productQuantity: 2,
-    purchaseId: purchase.id,
-    notes: `${name} expense notes`,
-  });
-  return { vendor, product, location, child, purchase, expense, orderId };
 }
 
 export async function seedRelationshipReviewPrerequisite(
@@ -144,33 +163,40 @@ export async function seedRelationshipReviewPrerequisite(
 }
 
 export async function seedInheritancePrerequisite(page: Page, name: string) {
-  const project = await createEntityFixture(page, "project", {
-    name: `${name} project`,
-    defaultTrade: "building",
+  return createFixtureGraph(page, async (create) => {
+    const project = await create("project", {
+      name: `${name} project`,
+      defaultTrade: "building",
+    });
+    const vendor = await create("vendor", {
+      name: `${name} vendor`,
+      website: "https://example.com",
+      orderUrlTemplate: "https://example.com/orders/{orderId}",
+      notes: `${name} vendor notes`,
+    });
+    const purchase = await create("purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-20",
+      defaultProjectId: project.id,
+    });
+    const expense = await create("expense", {
+      name: `${name} item`,
+      date: "2026-09-20",
+      purchaseId: purchase.id,
+      projectId: project.id,
+      cost: 10,
+      costType: "materials",
+    });
+    const charge = await create("expense", {
+      name: `${name} tax`,
+      date: "2026-09-20",
+      purchaseId: purchase.id,
+      cost: 1,
+      costType: "services",
+      lineKind: "tax",
+    });
+    return { project, purchase, expense, charge };
   });
-  const vendor = await seedVendorDisplayPrerequisite(page, `${name} vendor`);
-  const purchase = await createEntityFixture(page, "purchase", {
-    vendorId: vendor.id,
-    date: "2026-09-20",
-    defaultProjectId: project.id,
-  });
-  const expense = await createEntityFixture(page, "expense", {
-    name: `${name} item`,
-    date: "2026-09-20",
-    purchaseId: purchase.id,
-    projectId: project.id,
-    cost: 10,
-    costType: "materials",
-  });
-  const charge = await createEntityFixture(page, "expense", {
-    name: `${name} tax`,
-    date: "2026-09-20",
-    purchaseId: purchase.id,
-    cost: 1,
-    costType: "services",
-    lineKind: "tax",
-  });
-  return { project, purchase, expense, charge };
 }
 
 export async function seedPurchaseHeicAttachment(page: Page, name: string) {

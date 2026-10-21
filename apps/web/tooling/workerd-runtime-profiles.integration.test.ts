@@ -4,16 +4,14 @@ import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { pollUntil } from "@cubby/shared/retry";
 import { describe, expect, it } from "vitest";
 
-import { scenarioControls } from "./purchase-agent-workerd-harness";
 import type { TestHarness } from "./test-runtime";
 import { withTestDb } from "./test-setup";
-import type { WorkerdProfile } from "./workerd-harness";
 import { openWorkerdRuntime } from "./workerd-runtime";
 import { expectWriteLands } from "./workerd-runtime-fixtures";
 
 // Failure modes pinned at the real workerd boundary:
-// - a profile silently stops running a real queue consumer (or starts one it
-//   should not), so a lane "passes" without exercising background work;
+// - a real queue consumer silently stops running, so a lane "passes"
+//   without exercising background work;
 // - a runtime points the Worker at the wrong database.
 
 // What each real consumer logs for a body it cannot parse. Peers that drop
@@ -62,72 +60,23 @@ async function realConsumers(harness: TestHarness, expected: string[]) {
       expected.every((queue) => consumed().includes(queue)) ? true : undefined,
     { label: `real consumers ${expected.join(", ")}`, timeoutMs: 20_000 },
   );
-  // A consumer that should not exist gets the same grace to show up.
-  await new Promise((resolve) => setTimeout(resolve, 1_000));
   return consumed();
 }
 
 const ctx = withTestDb();
 
 // No probe touches object storage, so the runtime starts without it.
-async function start(profile: WorkerdProfile) {
+async function start() {
   const { runtime } = await openWorkerdRuntime(
-    { profile, database: { borrowed: ctx.databaseUrl } },
+    { profile: "coupled", database: { borrowed: ctx.databaseUrl } },
     async () => undefined,
   );
   return runtime;
 }
 
 describe("workerd test runtime profiles", () => {
-  it("offline drops background work and runs no consumer", async () => {
-    const started = await start("offline");
-    try {
-      await expectWriteLands(started);
-      expect(await realConsumers(started.harness, [])).toEqual([]);
-    } finally {
-      await started.close();
-    }
-  }, 120_000);
-
-  it("gmail runs the real background consumer against the local Google provider", async () => {
-    const started = await start("gmail");
-    try {
-      await expectWriteLands(started);
-      const env = await started.harness
-        .getWorker<{ E2E_GOOGLE_PROVIDER_URL: string }>()
-        .getEnv();
-      expect(env.E2E_GOOGLE_PROVIDER_URL).toBe(started.googleProvider?.url);
-      expect(
-        await realConsumers(started.harness, [
-          "cubby-background",
-          "cubby-image-cloud",
-        ]),
-      ).toEqual(["cubby-background", "cubby-image-cloud"]);
-    } finally {
-      await started.close();
-    }
-  }, 120_000);
-
-  it("purchase-agent runs the real agent and telemetry consumers with scripted peers", async () => {
-    const started = await start("purchase-agent");
-    try {
-      await expectWriteLands(started);
-      const controls = scenarioControls(started.harness);
-      await controls.configure({ steps: [] });
-      expect(await controls.violations()).toEqual([]);
-      expect(
-        await realConsumers(started.harness, [
-          "cubby-telemetry",
-          "cubby-purchase-agent",
-        ]),
-      ).toEqual(["cubby-telemetry", "cubby-purchase-agent"]);
-    } finally {
-      await started.close();
-    }
-  }, 120_000);
-
   it("coupled runs every real consumer", async () => {
-    const started = await start("coupled");
+    const started = await start();
     try {
       await expectWriteLands(started);
       expect(

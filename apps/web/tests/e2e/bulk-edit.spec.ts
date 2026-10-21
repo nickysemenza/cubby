@@ -35,8 +35,6 @@ test("task board multi-select bulk-edits status without touching other fields", 
 
   // Cold form initialization must not recurse through the combobox store
   // while slower rendering leaves ordinary form updates in flight.
-  const session = await page.context().newCDPSession(page);
-  await session.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   await gotoAuthenticatedPage(page, "/tasks");
 
   for (const name of [taskOneName, taskTwoName]) {
@@ -44,16 +42,20 @@ test("task board multi-select bulk-edits status without touching other fields", 
     await row.getByRole("checkbox", { name: "Select row" }).click();
   }
 
-  await page
-    .locator("[data-bulk-action-bar]")
-    .getByRole("button", { name: "Bulk edit...", exact: true })
-    .click();
-
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Bulk edit 2 Tasks?")).toBeVisible();
-
-  await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
-  await page.getByRole("option", { name: "Done", exact: true }).click();
+  try {
+    await page
+      .locator("[data-bulk-action-bar]")
+      .getByRole("button", { name: "Bulk edit...", exact: true })
+      .click();
+    await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
+    await page.getByRole("option", { name: "Done", exact: true }).click();
+  } finally {
+    await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    await session.detach();
+  }
 
   await dialog.getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog).not.toBeVisible();

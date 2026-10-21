@@ -7,7 +7,7 @@ import type { Page } from "@playwright/test";
 import { and, eq, isNull } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
-import { getFixtureDb, seedConcurrently, createEntityFixture } from "./core";
+import { getFixtureDb, createFixtureGraph, createEntityFixture } from "./core";
 
 /** Seed a synthetic taxonomy node when a browser flow needs a stable route. */
 export const seedProductCategoryPrerequisite = (
@@ -141,21 +141,28 @@ export const seedInventoryPrerequisites = (
     products: Array<{ name: string; quantity: number; unit: string }>;
   },
 ) =>
-  (async () => {
-    const location = await seedLocationPrerequisite(page, opts.locationName);
-    const products = await seedConcurrently(opts.products, async (product) => {
-      const created = await seedProductPrerequisite(page, {
+  createFixtureGraph(page, async (create) => {
+    const location = await create("location", {
+      name: opts.locationName,
+      type: "room",
+      parentId: null,
+    });
+    const products = [];
+    for (const product of opts.products) {
+      const created = await create("product", {
         name: product.name,
+        manufacturer: "E2E fixture",
+        tags: [],
       });
-      await createEntityFixture(page, "inventory", {
+      await create("inventory", {
         productId: created.id,
         locationId: location.id,
         amount: { value: product.quantity, unit: product.unit },
       });
-      return created;
-    });
+      products.push(created);
+    }
     return { products, location };
-  })();
+  });
 
 export async function seedToolFlowPrerequisite(
   page: Page,
@@ -164,30 +171,32 @@ export async function seedToolFlowPrerequisite(
     productNames: readonly string[];
   }>,
 ) {
-  const located = await seedConcurrently(groups, async (group) => ({
-    ...group,
-    location: await seedLocationPrerequisite(page, group.locationName),
-  }));
-  const placements = located.flatMap((group) =>
-    group.productNames.map((name) => ({ name, group })),
-  );
-  const products = await seedConcurrently(placements, async (placement) => {
-    const product = await createEntityFixture(page, "product", {
-      name: placement.name,
-      manufacturer: "Flow fixture maker",
-      categoryId: taxonomyShortcode("tools"),
-    });
-    await createEntityFixture(page, "inventory", {
-      productId: product.id,
-      locationId: placement.group.location.id,
-      amount: { value: 1, unit: "each" },
-    });
-    return product;
+  return createFixtureGraph(page, async (create) => {
+    const located = [];
+    for (const group of groups) {
+      const location = await create("location", {
+        name: group.locationName,
+        type: "room",
+        parentId: null,
+      });
+      const products = [];
+      for (const name of group.productNames) {
+        const product = await create("product", {
+          name,
+          manufacturer: "Flow fixture maker",
+          categoryId: taxonomyShortcode("tools"),
+        });
+        await create("inventory", {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        });
+        products.push(product);
+      }
+      located.push({ ...group, location, products });
+    }
+    return located;
   });
-  return located.map((group) => ({
-    ...group,
-    products: products.filter((_, index) => placements[index]?.group === group),
-  }));
 }
 
 export const seedIngredientPrerequisite = (page: Page, name: string) =>
