@@ -135,7 +135,7 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
         ? breadcrumb.items.map((item) => ({
             to: entities[target].routes.detail,
             params: entityDetailParams(item.id),
-            icon: <EntityIcon entity={target} size={12} colored />,
+            icon: <EntityIcon entity={target} size={12} />,
             label: item.name ?? item.id,
           }))
         : undefined,
@@ -166,7 +166,7 @@ export function toUsdaCard(
         style={{ color: dataTypeColor(dataType) }}
       />
     ) : (
-      <EntityIcon entity="usda-food" size={14} colored />
+      <EntityIcon entity="usda-food" size={14} />
     ),
     name: data.foodInfo.description || "Unnamed Food",
     tag: "usda",
@@ -182,7 +182,7 @@ export function toUsdaCard(
           {
             to: "/products/$shortcode",
             params: { shortcode: linkedProduct.id },
-            icon: <EntityIcon entity="product" size={12} colored />,
+            icon: <EntityIcon entity="product" size={12} />,
             label: linkedProduct.name ?? "Product",
           },
         ]

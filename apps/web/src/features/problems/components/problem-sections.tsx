@@ -589,7 +589,7 @@ function referentialTargetBadge(v: ReferentialLivenessViolation): ReactNode {
       // mono-uppercase stamp (matches the location/vendor badge idiom).
       className="flex items-center gap-1 font-sans tracking-normal normal-case"
     >
-      <EntityIcon entity={v.targetEntity} colored className="size-3" />
+      <EntityIcon entity={v.targetEntity} className="size-3" />
       {entityLabel(v.targetEntity)} {v.targetId.slice(0, 8)}
     </Badge>
   );

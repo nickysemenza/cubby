@@ -35,9 +35,9 @@ const EAGER = new Map<string, Icon>(
 );
 
 /**
- * Declared category glyphs load on first use, one small chunk each. Static
- * `import()` paths keep the bundler from pulling the whole Phosphor set; a
- * declaration naming a glyph missing here is caught by the manifest test.
+ * Declared and shared semantic glyphs load on first use, one small chunk each. Static
+ * `import()` paths keep the bundler from pulling the whole Phosphor set; the
+ * manifest test checks both declared and inferred glyph names against this map.
  */
 const LAZY = new Map<string, () => Promise<Icon>>(
   Object.entries({

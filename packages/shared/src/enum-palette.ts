@@ -67,6 +67,17 @@ const STATUS_ICONS = new Map<string, EnumIcon>([
   ],
 ]);
 
+/** Shared option meanings; a declaration overrides these when a field needs a more specific mark. */
+function glyphs(
+  phosphor: string,
+  sfSymbol: string,
+  values: string,
+): Array<[string, EnumIcon]> {
+  return values
+    .split(" ")
+    .map((value) => [valueKey(value), { phosphor, sfSymbol }]);
+}
+
 const VALUE_ICONS = new Map<string, EnumIcon>([
   ...glyphs(
     "Question",
@@ -79,17 +90,6 @@ const VALUE_ICONS = new Map<string, EnumIcon>([
   ["planning", { phosphor: "CalendarDots", sfSymbol: "calendar" }],
   ["waiting", { phosphor: "Hourglass", sfSymbol: "hourglass" }],
 ]);
-
-/** Shared option meanings; a declaration overrides these when a field needs a more specific mark. */
-function glyphs(
-  phosphor: string,
-  sfSymbol: string,
-  values: string,
-): Array<[string, EnumIcon]> {
-  return values
-    .split(" ")
-    .map((value) => [valueKey(value), { phosphor, sfSymbol }]);
-}
 
 const CATEGORY_ICONS = new Map<string, EnumIcon>([
   ...glyphs("SealCheck", "checkmark.seal", "complete complete_with_exceptions"),
@@ -258,7 +258,7 @@ const CATEGORY_ICONS = new Map<string, EnumIcon>([
   ...glyphs("Hand", "hand.raised", "manual"),
   ...glyphs("Users", "person.2", "member guest member_request"),
   ...glyphs("Link", "link", "linked related"),
-  ...glyphs("LinkBreak", "link.badge.minus", "unrelated unrelated_source"),
+  ...glyphs("LinkBreak", "minus.circle", "unrelated unrelated_source"),
   ...glyphs("NotePencil", "square.and.pencil", "note"),
   ...glyphs("ClipboardText", "list.clipboard", "rule decision resolution"),
   ...glyphs("ArrowBendDownRight", "arrow.turn.down.right", "inherit"),

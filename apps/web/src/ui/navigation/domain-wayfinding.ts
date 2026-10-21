@@ -18,7 +18,7 @@ const DOMAIN_ICON_CLASSES = {
 export function domainIconClass(
   domain: WayfindingDomain | null | undefined,
 ): string {
-  return domain ? DOMAIN_ICON_CLASSES[domain] : "text-muted-foreground";
+  return domain ? DOMAIN_ICON_CLASSES[domain] : "";
 }
 
 /** The stable wayfinding families used by the Field Guide shell. */

@@ -8,6 +8,10 @@ test("declared expectation colors and spending category navigation counts", asyn
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 900 });
+  // Utility icons must inherit active link ink on desktop and phone; unknown
+  // classifications stay neutral rather than reading as an urgent condition.
+  await gotoAuthenticatedPage(page, "/");
+  await expectActiveHomeIcon("Home");
   const name = `Synthetic color category ${Date.now()}`;
   const category = await createFixture(page, "spendingCategory", {
     name,
@@ -36,8 +40,8 @@ test("declared expectation colors and spending category navigation counts", asyn
   );
   await expect(unknown).toHaveText("Unclassified");
   await expect(expected).toHaveText("Expected");
-  await expect(unknown).toHaveClass(/bg-warning-surface/);
-  await expect(unknown).toHaveClass(/text-warning-ink/);
+  await expect(unknown).toHaveClass(/bg-muted/);
+  await expect(unknown).toHaveClass(/text-muted-foreground/);
   await expect(unknown.locator("[data-option-glyph]")).toHaveCount(1);
   await expect(expected).toHaveClass(/bg-info-surface/);
   const counts = await page.request.get("/api/v1/dashboard/counts");
@@ -62,11 +66,22 @@ test("declared expectation colors and spending category navigation counts", asyn
     page.getByRole("button", { name: /^Checking suggestions/ }),
   ).toHaveCount(0);
   const mobileBadge = page
-    .locator('[data-enum-role="status"].bg-warning-surface', {
+    .locator('[data-enum-role="status"].bg-muted', {
       hasText: "Unclassified",
     })
     .first();
   await expect(mobileBadge).toBeVisible();
   await mobileBadge.scrollIntoViewIfNeeded();
   await expect(mobileBadge).toBeInViewport();
+  await gotoAuthenticatedPage(page, "/");
+  await expectActiveHomeIcon("Today");
+
+  async function expectActiveHomeIcon(label: string) {
+    const home = page.getByRole("link", { name: label, exact: true }).first();
+    await expect(home).toHaveAttribute("aria-current", "page");
+    const ink = await home.evaluate(
+      (element) => getComputedStyle(element).color,
+    );
+    await expect(home.locator("svg").first()).toHaveCSS("color", ink);
+  }
 });

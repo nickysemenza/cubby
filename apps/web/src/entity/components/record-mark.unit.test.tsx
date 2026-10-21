@@ -12,7 +12,7 @@ import { EntityIcon } from "~/entity/entities";
 describe("RecordMark", () => {
   it("uses a run's projected subject icon and safely falls back for an unknown entity", () => {
     const expected = render(
-      <EntityIcon entity="product" size={14} colored aria-hidden="true" />,
+      <EntityIcon entity="product" size={14} aria-hidden="true" />,
     );
     const productGlyph = expected.container.innerHTML;
     expected.unmount();
@@ -44,7 +44,7 @@ describe("RecordMark", () => {
     expect(mark).toHaveAttribute("aria-hidden", "true");
     expect(mark).toHaveAttribute("width", "14");
     expect(mark).toHaveAttribute("height", "14");
-    expect(mark).toHaveClass("text-foreground");
+    expect(mark).toHaveClass("text-category-7");
   });
 
   it("renders project identity inside a chart axis tick", () => {
@@ -86,6 +86,6 @@ describe("RecordMark", () => {
     expect(screen.getByText("🍳")).toBeInTheDocument();
     expect(
       screen.getByText("Garage").parentElement?.querySelector("svg"),
-    ).toHaveClass("text-foreground");
+    ).toHaveClass("text-category-7");
   });
 });

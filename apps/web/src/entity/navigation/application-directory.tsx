@@ -196,7 +196,7 @@ function DirectoryLink({
       >
         <destination.icon
           className={cn(
-            "mt-0.5 size-4 shrink-0",
+            "mt-0.5 size-4 shrink-0 text-muted-foreground",
             domainIconClass(
               destination.entity
                 ? domainForEntity(destination.entity)

@@ -2,8 +2,8 @@ import CubbyKit
 import SwiftUI
 
 /// A compact condition, always spelled out in words as well as color: a 1px semantic border over a
-/// quiet tint, led by the state's glyph when the option declares one. A `category` option (a kind,
-/// not a state) paints as a neutral chip with a color dot instead. Domain identity is a separate mark.
+/// quiet tint, led by its semantic glyph. Category options keep foreground label ink and a
+/// matching tinted surface and glyph. Domain identity is a separate mark.
 struct StatusChip: View {
     enum Tone {
         case neutral
@@ -34,9 +34,7 @@ struct StatusChip: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            if category {
-                Circle().fill(ink).frame(width: 6, height: 6).accessibilityHidden(true)
-            } else if let symbol {
+            if let symbol = symbol ?? (category ? "square.on.circle" : nil) {
                 Image(systemName: symbol)
                     .imageScale(.small)
                     .foregroundStyle(ink)
@@ -54,7 +52,7 @@ struct StatusChip: View {
         .padding(.vertical, 2)
         .background(
             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
-                .fill(ink.opacity(isNeutral ? 0.06 : 0.08))
+                .fill(ink.opacity(category ? 0.12 : (isNeutral ? 0.06 : 0.08)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
@@ -86,7 +84,9 @@ extension StatusChip {
         StatusChip(text: "Best match")
         StatusChip(
             text: "In progress", color: FieldGuideTokens.info, symbol: "circle.lefthalf.filled")
-        StatusChip(text: "Durable", color: FieldGuideTokens.categoryRamp[1], category: true)
+        StatusChip(
+            text: "Durable", color: FieldGuideTokens.categoryRamp[1],
+            symbol: "shippingbox", category: true)
     }
     .padding(FieldGuideTokens.Space.lg)
     .background(FieldGuideTokens.canvas)

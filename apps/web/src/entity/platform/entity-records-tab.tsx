@@ -111,7 +111,7 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
         ),
       }),
       cell: (info) => (
-        <EnumPill icon={<EntityIcon entity={info.getValue()} colored />}>
+        <EnumPill icon={<EntityIcon entity={info.getValue()} />}>
           {entityLabel(info.getValue())}
         </EnumPill>
       ),
