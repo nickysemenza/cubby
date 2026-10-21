@@ -80,29 +80,48 @@ describe("derived field explanations against canonical records", () => {
       spendingCategoryMode: "mapped",
       spendingCategoryId: mapped.id,
     });
-    const product = await insertWithShortcode(ctx.db, "product", {
-      name: "Synthetic food item",
-      categoryId: category.id,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+    const productRecord = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic food item",
+        categoryId: parseShortcodeFor("productCategory", category.shortcode),
+      }),
+      ctx.actor,
+    );
+    const product = { id: productRecord.entityId, shortcode: productRecord.id };
+    const vendorRecord = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic category context vendor",
       spendingProfile: profile,
-      defaultSpendingCategoryId: contextual.id,
+      defaultSpendingCategoryId: parseShortcodeFor(
+        "spendingCategory",
+        contextual.shortcode,
+      ),
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      spendingCategoryId: deliberate.id,
-      spendingCategoryOrigin: "manual",
+    const vendor = {
+      id: vendorRecord.entityId,
+      shortcode: vendorRecord.output.id,
+    };
+    const purchaseRecord = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendorRecord.output.id,
+      spendingCategoryId: parseShortcodeFor(
+        "spendingCategory",
+        deliberate.shortcode,
+      ),
     });
-    const line = await insertWithShortcode(ctx.db, "expense", {
+    const purchase = {
+      id: purchaseRecord.entityId,
+      shortcode: purchaseRecord.output.id,
+    };
+    const lineRecord = await createRepoEntity(ctx, "expense", {
       name: "Synthetic category context line",
       lineKind: "principal",
       date: "2026-09-01",
       cost: 8,
       costType: "materials",
-      productId: product.id,
-      purchaseId: purchase.id,
+      productId: productRecord.id,
+      purchaseId: purchaseRecord.output.id,
     });
+    const line = { id: lineRecord.entityId, shortcode: lineRecord.output.id };
     return {
       mapped,
       contextual,
@@ -1026,10 +1045,18 @@ describe("derived field explanations against canonical records", () => {
         (row) => row.title === "Linked Purchase policies",
       ),
     ).toMatchObject({ id: null, state: { kind: "skipped", label: "Not set" } });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const supplier = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic linked policy vendor",
+    });
+    const purchaseRecord = await createRepoEntity(ctx, "purchase", {
+      vendorId: supplier.output.id,
       orderId: "SYNTHETIC-LINKED-REQUIRED",
       itemizationExpectation: "required",
     });
+    const purchase = {
+      id: purchaseRecord.entityId,
+      shortcode: purchaseRecord.output.id,
+    };
     await getDb(ctx.db).insert(financialTransactionAllocation).values({
       transactionId: transaction.id,
       purchaseId: purchase.id,
@@ -1049,10 +1076,15 @@ describe("derived field explanations against canonical records", () => {
       trailing: "Expected",
       state: { kind: "done" },
     });
-    const second = await insertWithShortcode(ctx.db, "purchase", {
+    const secondRecord = await createRepoEntity(ctx, "purchase", {
+      vendorId: supplier.output.id,
       orderId: "SYNTHETIC-LINKED-UNKNOWN",
       itemizationExpectation: "unknown",
     });
+    const second = {
+      id: secondRecord.entityId,
+      shortcode: secondRecord.output.id,
+    };
     await getDb(ctx.db).insert(financialTransactionAllocation).values({
       transactionId: transaction.id,
       purchaseId: second.id,
