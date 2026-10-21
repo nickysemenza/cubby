@@ -143,6 +143,14 @@ credential through `localSecret` (`apps/web/tooling/local-secret.ts`): shell,
 then this checkout's `apps/web/.env`, then the primary checkout's. Use it
 instead of grepping another checkout's `.env`.
 
+The only local credential needed for Tester Army and live AI evals is
+`AI_GATEWAY_API_KEY`. Copy `apps/web/.env.example` to the gitignored
+`apps/web/.env` and replace its synthetic value when using those tools.
+Normal development and deterministic E2E tests need no env file; their
+database, auth, storage, and test credentials are supplied by the harnesses.
+Do not maintain a root `.env.local` or a separate test env file. Deployed
+bindings and secrets are documented in [infrastructure](infrastructure.md#secrets-and-plaintext-variables).
+
 Ctrl-C stops the owned runtime and keeps the checkout's database. `pnpm dev down` stops
 that checkout's supervisor. `pnpm dev reset` stops it, re-clones its database from the current corpus template,
 and removes its Worker state. Add `--reseed` to build a fresh corpus generation
