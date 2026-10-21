@@ -8,3 +8,8 @@ struct EntityRelationshipsSection: View {
             .accessibilityIdentifier("relationships.openConnections")
     }
 }
+
+#Preview {
+    EntityRelationshipsSection(source: .init(entity: .product, id: "PRD-4K7M"))
+        .environment(PreviewFixtures.signedInModel())
+}

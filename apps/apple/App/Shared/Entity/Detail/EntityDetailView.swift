@@ -50,8 +50,6 @@ struct EntityDetailView: View {
             .task(id: appModel.entityMutationRevision) {
                 guard appModel.entityMutationRevision > 0,
                     appModel.entityMutationKeys.contains(key),
-                    appModel.relationshipMutationReplacement?.subject
-                        != EntityRef(entity: key, id: model?.row?.id ?? id),
                     model?.phase == .loaded
                 else { return }
                 await refresh()

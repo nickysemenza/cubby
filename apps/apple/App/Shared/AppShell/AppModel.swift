@@ -191,7 +191,6 @@ final class AppModel {
     /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
     private(set) var entityMutationRevision = 0
     private(set) var entityMutationKeys: Set<EntityKey> = []
-    private(set) var relationshipMutationReplacement: RelationshipAcceptance?
 
     /// The app's model, for App Intents (which run in-process). Set once in `CubbyApp.init`.
     static weak var active: AppModel?
@@ -506,23 +505,8 @@ final class AppModel {
     /// the write could have changed (a placement touches inventory, location, and product).
     func recordEntityMutation(keys: Set<EntityKey>) {
         entityMutationKeys = keys
-        relationshipMutationReplacement = nil
         entityMutationRevision += 1
         Task { await browseCounts.load(client: client, host: host, force: true) }
-    }
-
-    /// An accepted recommendation is an entity mutation on the kinds it links, plus a jump to the
-    /// surviving row when accepting merged the subject away.
-    func recordRelationshipMutation(_ acceptance: RelationshipAcceptance) {
-        recordEntityMutation(keys: acceptance.affectedEntities)
-        relationshipMutationReplacement = acceptance.replacedSubject ? acceptance : nil
-        if acceptance.replacedSubject {
-            navigator.replaceCurrentRecord(
-                with: RecordSelection(
-                    key: acceptance.destination.entity,
-                    id: acceptance.destination.id
-                ))
-        }
     }
 
     /// The master switch: persists, answers the first-sign-in question if it hasn't been answered

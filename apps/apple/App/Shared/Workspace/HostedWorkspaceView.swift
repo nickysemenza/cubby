@@ -404,3 +404,8 @@ final class HostedWorkspaceHost: NSObject, WKNavigationDelegate, WKScriptMessage
     NavigationStack { RunEvidenceView(runID: "RUN-4K7M") }
 }
 #Preview("Run evidence link") { RunEvidenceLink(runID: "RUN-4K7M") }
+
+#Preview("Hosted workspace") {
+    NavigationStack { HostedWorkspaceView(surface: .connections(entity: nil, id: nil), title: "Connections") }
+        .environment(PreviewFixtures.signedInModel())
+}

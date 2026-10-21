@@ -262,6 +262,35 @@ struct NavigationTests {
         }
     #endif
 
+    @Test func workspaceReplacementRemovesTheAbsorbedRecordFromBackHistory() throws {
+        let message = try NativeWorkspaceMessage.decode([
+            "version": 1, "type": "navigate", "entity": "inventory", "id": "INV-4K7M", "replace": true,
+        ])
+        let destination = try #require(message.record)
+        #expect(message.replace)
+        let navigator = Navigator()
+        navigator.section = .browse
+        navigator.paths[.browse] = [.entityList(.inventory), .entityDetail(.inventory, id: "INV-7M4K")]
+
+        navigator.replaceCurrentRecord(with: record(destination.entity, destination.id))
+
+        #expect(
+            navigator.paths[.browse] == [.entityList(.inventory), .entityDetail(.inventory, id: "INV-4K7M")])
+    }
+
+    #if os(macOS)
+        @Test func workspaceReplacementUpdatesTheSelectedRecordWithoutAddingHistory() {
+            let navigator = Navigator()
+            navigator.section = .browse
+            navigator.selectedRecords[.browse] = record(.inventory, "INV-7M4K")
+
+            navigator.replaceCurrentRecord(with: record(.inventory, "INV-4K7M"))
+
+            #expect(navigator.selectedRecords[.browse] == record(.inventory, "INV-4K7M"))
+            #expect(navigator.paths[.browse]?.isEmpty != false)
+        }
+    #endif
+
     private func record(_ key: EntityKey, _ id: String) -> RecordSelection {
         RecordSelection(key: key, id: id)
     }

@@ -79,3 +79,5 @@ struct ConnectionsWorkspaceLink: View {
         }
     }
 #endif
+
+#Preview("Connections entry") { ConnectionsWorkspaceLink().environment(PreviewFixtures.signedInModel()) }

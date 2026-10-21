@@ -19,3 +19,5 @@ struct GraphWorkspaceView: View {
         #endif
     }
 }
+
+#Preview { NavigationStack { GraphWorkspaceView() }.environment(PreviewFixtures.signedInModel()) }
