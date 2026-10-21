@@ -8,7 +8,18 @@ import { runHref } from "~/entity/routing/purchase-import-links";
 import { workflowCommandOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 /** One catalog-backed executor; mutation scope serializes actual operation effects. */
-export function useWorkflowCommand(scope?: { id: string }) {
+export function useWorkflowCommand({
+  scope,
+  onResult,
+  invalidationCompletion,
+}: {
+  scope?: { id: string };
+  onResult?: (value: {
+    request: WorkflowCommandRequest;
+    result: unknown;
+  }) => void | Promise<void>;
+  invalidationCompletion?: { removeInactive?: boolean };
+} = {}) {
   const queryClient = useQueryClient();
   return useActionMutation({
     mutationFn: () => ({
@@ -16,9 +27,13 @@ export function useWorkflowCommand(scope?: { id: string }) {
         const declared = workflowCommandOptions(request.operation);
         const { command } = declared;
         const options = {
-          mutationFn: declared.mutationFn,
+          mutationFn: async (body: WorkflowCommandRequest["body"]) => {
+            const result = await declared.mutationFn(body);
+            await onResult?.({ request, result });
+            return result;
+          },
           mutationKey: declared.mutationKey,
-          meta: declared.meta,
+          meta: { ...declared.meta, invalidationCompletion },
           scope,
           onError: () => undefined,
         };

@@ -167,6 +167,10 @@ Capture its identity before dispatch and compare it on completion; a query key
 alone cannot distinguish leaving a view and returning to it. Cache invalidation
 still completes for authorized writes. Ordinary workflow commands execute through
 the generated operation catalog with its mutation metadata and optional scope.
+When a command patches a saved snapshot, its awaited `onResult` runs before
+catalog invalidation. Opt into `invalidationCompletion` when the caller's
+serialized mutation must include active refresh and inactive-cache removal;
+keep the serialization scope on that outer mutation only.
 
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;
