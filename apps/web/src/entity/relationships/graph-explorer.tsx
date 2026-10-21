@@ -653,6 +653,7 @@ function GraphRecordInspector({
                       <Button
                         variant="ghost"
                         size="sm"
+                        disabled={model.busy.has(key)}
                         onClick={() => model.collapse(branch)}
                       >
                         Collapse

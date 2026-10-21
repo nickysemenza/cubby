@@ -275,7 +275,7 @@ test("a high-degree focus stays readable and expands only the requested branch",
   }
   await page.getByRole("button", { name: "Map options", exact: true }).click();
   await page
-    .getByRole("menuitem", { name: "Show siblings", exact: true })
+    .getByRole("menuitem", { name: "Show wider network", exact: true })
     .click();
   await expect(page.getByText(/13 visible ·/)).toBeVisible();
   await graph

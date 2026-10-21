@@ -526,7 +526,7 @@ export function GraphMapCanvas({
           <DropdownMenuItem onClick={center}>Center selection</DropdownMenuItem>
           {onToggleSiblings ? (
             <DropdownMenuItem onClick={onToggleSiblings}>
-              {showSiblings ? "Hide siblings" : "Show siblings"}
+              {showSiblings ? "Focus view" : "Show wider network"}
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem onClick={() => setShowOverview((value) => !value)}>
