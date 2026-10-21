@@ -226,8 +226,10 @@ with each view's server total in mono; a tab presets the View filter, beside
 the Type, Waiting for, Kind, Source, Check and Vendor any-of filters. Filters,
 sort and Group by (Type, Waiting for or Next action, sectioned by the server
 ahead of the sort) are URL state, and the shared infinite pager loads more
-work on scroll. Columns are Type, Record (the record's link), Vendor,
-sign-toned Amount, Reason, the Waiting for pill, and the rule's details with
+work on scroll. Columns are the record's image, Type, Record (the record's
+link), the shared Quality meter (unsortable: it is stated after the page is
+read), the Vendor chip, sign-toned Amount, Reason, Waiting for (member
+avatar chips or the Either and Unresolved pills), and the rule's details with
 one Review or Open; Next action, Kind, Date and Source are Columns-menu
 toggles, because a rule's next action repeats down thousands of rows and
 belongs to Details and the inspector. A gap row's reason is its gap messages

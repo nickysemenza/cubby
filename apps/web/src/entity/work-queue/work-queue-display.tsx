@@ -10,8 +10,6 @@ import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { renderOptionCell } from "~/entity/table/column-helpers";
-import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ChipCluster } from "~/ui/common/chip-cluster";
 import { Button } from "~/ui/primitives/button";
 import { EnumPill } from "~/ui/primitives/enum-pill";
@@ -118,7 +116,7 @@ export function WorkActionDetails({
   );
 }
 
-/** One roster, so a member keeps the same color on every queue surface. */
+/** The Waiting for filter's member roster. */
 export const memberOptionsOf = (members: readonly WorkQueueMember[]) =>
   members.map((member) => ({ value: member.id, label: member.name }));
 
@@ -133,13 +131,7 @@ export function waitingForLabel(waitingFor: WorkWaitingFor) {
   }
 }
 
-export function WaitingForPill({
-  waitingFor,
-  memberOptions,
-}: {
-  waitingFor: WorkWaitingFor;
-  memberOptions: PickerOption[];
-}) {
+export function WaitingForPill({ waitingFor }: { waitingFor: WorkWaitingFor }) {
   switch (waitingFor.kind) {
     case "either":
       return (
@@ -165,9 +157,13 @@ export function WaitingForPill({
       return (
         <span className="flex min-w-0 gap-1">
           {waitingFor.members.map((member) => (
-            <span key={member.id} className="min-w-0">
-              {renderOptionCell(member.id, memberOptions)}
-            </span>
+            <EntityRefLink
+              key={member.id}
+              variant="chip"
+              entity="ledgerParty"
+              id={member.id}
+              name={member.name}
+            />
           ))}
         </span>
       );

@@ -17,7 +17,6 @@ import {
 } from "./transfer-pair-accept";
 import {
   GapChip,
-  memberOptionsOf,
   WaitingForPill,
   WorkActionDetails,
 } from "./work-queue-display";
@@ -56,7 +55,6 @@ export function RecordWorkQueue({
     return <div data-needs-row aria-busy="true" className="min-h-10" />;
   const rows = result.data?.items ?? EMPTY_ROWS;
   if (rows.length === 0) return null;
-  const memberOptions = memberOptionsOf(result.data?.members ?? []);
   if (variant === "rows")
     return (
       <section
@@ -78,10 +76,7 @@ export function RecordWorkQueue({
               {row.nextAction}
               <WorkActionDetails explanations={row.explanations} />
             </div>
-            <WaitingForPill
-              waitingFor={row.waitingFor}
-              memberOptions={memberOptions}
-            />
+            <WaitingForPill waitingFor={row.waitingFor} />
           </div>
         ))}
         {rows.some(isTransferEvidenceRow) ? (
@@ -115,10 +110,7 @@ export function RecordWorkQueue({
               <WorkActionDetails explanations={row.explanations} />
             </LedgerCell>
             <LedgerCell as="div" slot="trailing">
-              <WaitingForPill
-                waitingFor={row.waitingFor}
-                memberOptions={memberOptions}
-              />
+              <WaitingForPill waitingFor={row.waitingFor} />
             </LedgerCell>
           </LedgerRow>
         ))}
