@@ -16,10 +16,13 @@ import {
   feedback,
   run as runTable,
   vendor as vendorTable,
+  product as productTable,
+  assessment,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
+import { declaredFilterPredicates } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
@@ -62,6 +65,52 @@ const savedRun = async (
 // and field.
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
+
+  // Without an automatic Run model pin, inferring served status from the Run
+  // hides the primary paired answer and publishes both histories as unserved.
+  it("keeps the primary paired answer visible without a Run model pin", async () => {
+    const item = await productFixture(ctx, "Synthetic input-routed item");
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      {
+        context: kernelCtx(ctx),
+        ...categoryPorts(0.7),
+        decisionModel: undefined,
+        samplePair: () => true,
+      },
+    );
+    const rows = await runSuggestions(ctx.db, started.id);
+    expect(rows).toHaveLength(2);
+    const histories = await getDb(ctx.db)
+      .select({ served: assessment.served })
+      .from(assessment)
+      .where(
+        sql`${assessment.id} IN (${sql.join(
+          rows.map((row) => sql`${row.id}::uuid`),
+          sql`, `,
+        )})`,
+      );
+    expect(histories.map((row) => row.served).sort()).toEqual([false, true]);
+    const visible = await getDb(ctx.db)
+      .select({ id: productTable.id })
+      .from(productTable)
+      .where(
+        and(
+          eq(productTable.id, await recordId(ctx.db, item.id, "product")),
+          ...declaredFilterPredicates("product", productTable, {
+            suggestionKind: "addition",
+          }),
+        ),
+      );
+    expect(visible).toHaveLength(1);
+    const run = await savedRun(ctx.db, started.id);
+    expect(run.input).not.toHaveProperty("decisionModel");
+  });
 
   it("atomically identifies automatic acceptance and its generating Run in the actual field audit", async () => {
     const item = await productFixture(ctx, "Synthetic audited addition");
@@ -221,7 +270,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(processed).toHaveLength(2);
   });
 
-  it("pins the model, applies high-confidence Additions and resumes a paused filtered sweep with total equal to done", async () => {
+  it("retains an explicit model override, applies Additions and resumes a paused filtered sweep", async () => {
     const context = kernelCtx(ctx);
     const products = await Promise.all(
       ["Alpha", "Beta", "Gamma"].map((name) =>
@@ -246,7 +295,7 @@ describe("persisted Suggestion sweeps", () => {
       entity: "product",
       fields: ["categoryId"],
       filters: { categoryIdPresenceFilter: "none" },
-      decisionModel: PRIMARY_MODEL,
+      decisionModelOverride: PRIMARY_MODEL,
     });
     expect(paused.progress).toMatchObject({ done: 2, applied: 2 });
 

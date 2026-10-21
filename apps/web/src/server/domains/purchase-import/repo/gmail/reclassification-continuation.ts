@@ -65,7 +65,12 @@ export async function continueChangedReclassification(
         results: [],
       },
     });
-    await prepareReclassification(db, id, [current], snapshot.decisionModel);
+    await prepareReclassification(
+      db,
+      id,
+      [current],
+      snapshot.decisionModelOverride,
+    );
     const targets = await getDb(db)
       .select({ id: aiEvaluation.id })
       .from(aiEvaluationRequest)
@@ -98,7 +103,7 @@ export async function continueChangedReclassification(
       db,
       owner.id,
       [current],
-      snapshot.decisionModel,
+      snapshot.decisionModelOverride,
     );
     const [next] = await getDb(db)
       .select({ id: aiEvaluation.id })

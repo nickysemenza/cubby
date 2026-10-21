@@ -2,7 +2,6 @@ import { aiProvenance, type AiProvenance } from "@cubby/schemas/ai-evaluation";
 import { productId, runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
-import { selectDecisionModel } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -210,7 +209,7 @@ async function enqueuePreparedProductIdentityPair(
   const frozen = aiProvenance.parse({
     ...provenance,
     inputFingerprint: pair.fingerprint,
-    model: provenance.model ?? selectDecisionModel(),
+    model: provenance.model,
   });
   return enqueueAiEvaluation(db, {
     runId: runEntityId.parse(runId),

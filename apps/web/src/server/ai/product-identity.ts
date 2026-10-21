@@ -5,12 +5,13 @@ import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { getErrorMessage } from "@cubby/shared";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
-import { selectDecisionModel } from "@cubby/shared/ai/models";
 import { and, eq, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  decisionModelFor,
   runDecisionChoice,
+  settleDecisionWorkItems,
   type DecisionPort,
 } from "~/server/ai/decision-model";
 import {
@@ -192,23 +193,28 @@ export async function evaluatePreparedProductIdentityPair(
     model?: string | null;
     evaluationId?: string;
     provenance?: AiProvenance;
+    usage?: Parameters<typeof runDecisionChoice>[0]["usage"];
   } = {},
 ) {
   const pair = preparedProductIdentityPair.parse(raw);
-  const model = supportedDecisionModelSchema.parse(
-    options.model ?? selectDecisionModel(),
-  );
+  const question = {
+    ...productIdentityPrompt(JSON.stringify([pair.first, pair.second])),
+    feature: PRODUCT_IDENTITY_FEATURE,
+    decisionModel:
+      options.model == null
+        ? undefined
+        : supportedDecisionModelSchema.parse(options.model),
+    port: options.decisionPort,
+    usage: options.usage ?? { db, runId, operation: "product-identity" },
+  };
+  const model = decisionModelFor(question);
   const current = await prepareProductIdentityPair(db, pair.productIds);
   if (!current || current.fingerprint !== pair.fingerprint)
     throw new Error("Product identity evidence changed during evaluation");
   const decision = pair.exact
     ? null
     : await runDecisionChoice({
-        ...productIdentityPrompt(JSON.stringify([pair.first, pair.second])),
-        feature: PRODUCT_IDENTITY_FEATURE,
-        decisionModel: model,
-        port: options.decisionPort,
-        usage: { db, runId, operation: "product-identity" },
+        ...question,
       });
   return {
     productIds: pair.productIds,
@@ -267,14 +273,13 @@ export async function evaluateProductIdentity(
   const prepared = await prepareProductIdentityCatalog(db, id);
   const pairs = [];
   let failure: string | null = null;
-  for (const pair of prepared.pairs) {
-    try {
-      pairs.push(
-        await evaluatePreparedProductIdentityPair(db, pair, runId, ports),
-      );
-    } catch (error) {
-      failure = getErrorMessage(error);
-    }
+  const usage = ports.usage ?? { db, runId, operation: "product-identity" };
+  const settled = await settleDecisionWorkItems(prepared.pairs, (pair) =>
+    evaluatePreparedProductIdentityPair(db, pair, runId, { ...ports, usage }),
+  );
+  for (const result of settled) {
+    if (result.status === "fulfilled") pairs.push(result.value);
+    else failure = getErrorMessage(result.reason);
   }
   return { eligible: prepared.eligible, pairs, failure };
 }

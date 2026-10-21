@@ -19,6 +19,7 @@ import type {
   UPCLookupResponse,
 } from "~/contracts/upc.contract";
 import { env } from "~/env";
+import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import {
   getCachedUpcRows,
@@ -79,6 +80,7 @@ const toResponse = (
 export class UpcLookupService {
   private actorContext: ActorContext = systemActor();
   private runId: Promise<RunId> | null = null;
+  private decisionUsage: AiRunContext | null = null;
 
   constructor(
     private readonly db: Database,
@@ -91,6 +93,7 @@ export class UpcLookupService {
   bindActorContext(actor: ActorContext): this {
     this.actorContext = actor;
     this.runId = actor.runId ? Promise.resolve(actor.runId) : null;
+    this.decisionUsage = null;
     return this;
   }
 
@@ -104,17 +107,18 @@ export class UpcLookupService {
       aiCallRunInput(this.actorContext),
     );
     const runId = await this.runId;
+    this.decisionUsage ??= {
+      db: this.db,
+      runId,
+      operation: "upc.lookup.offer-comparability",
+    };
     // Every browser request constructs this service; load AI only for an
     // uncached offer comparison, outside the browser dispatch closure.
     const { decideUpcOfferComparability } =
       await import("~/server/ai/semantic-decisions");
     return decideUpcOfferComparability({
       ...input,
-      usage: {
-        db: this.db,
-        runId,
-        operation: "upc.lookup.offer-comparability",
-      },
+      usage: this.decisionUsage,
     });
   }
 
@@ -127,9 +131,7 @@ export class UpcLookupService {
         Date.now() - row.fetchedAt.getTime() < MISS_TTL_MS;
       if (freshMiss || !this.upstream) return null;
 
-      const result = await this.upstream(upc, (input) =>
-        this.decideOffer(input),
-      );
+      const result = await this.lookupUpstream(upc, this.upstream);
       if (result.status === "error") throw result.error;
       const checkedAt = new Date();
       if (result.status === "not_found") {
@@ -140,6 +142,19 @@ export class UpcLookupService {
       await recordUpcLookups(this.db, [upc], new Map([[upc, hit]]), checkedAt);
       return hit;
     });
+  }
+
+  private async lookupUpstream(upc: string, upstream: UpcUpstream) {
+    // One UPC owns independent offer judgments; the outer UPC loop keeps
+    // its upstream quota and stop-on-rate-limit boundary.
+    const { settleDecisionWorkItems } =
+      await import("~/server/ai/decision-model");
+    const [settled] = await settleDecisionWorkItems([upc], (code) =>
+      upstream(code, (input) => this.decideOffer(input)),
+    );
+    if (!settled) throw new Error("UPC lookup omitted its result");
+    if (settled.status === "rejected") throw settled.reason;
+    return settled.value;
   }
 
   /**
@@ -172,7 +187,7 @@ export class UpcLookupService {
 
       const attempted = pending.slice(0, BATCH_UPSTREAM_LIMIT);
       for (const [index, upc] of attempted.entries()) {
-        const outcome = await upstream(upc, (input) => this.decideOffer(input));
+        const outcome = await this.lookupUpstream(upc, upstream);
         if (outcome.status === "found") {
           result.set(upc, toResponse(upc, outcome));
         } else if (outcome.status === "error") {

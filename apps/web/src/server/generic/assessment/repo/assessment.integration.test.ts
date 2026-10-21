@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { feedbackVerdict } from "@cubby/schemas/assessment";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
@@ -10,7 +12,9 @@ import {
   assessmentState,
   feedback,
   auditLog,
+  run as runTable,
 } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   kernelCtx,
   productFixture,
@@ -32,6 +36,65 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 // history; evaluation feedback acquires operational authority.
 describe("shared Assessment history", () => {
   const ctx = withTestDb();
+  // The trigger migration must retain populated legacy history and honor the
+  // explicit comparison flag even when its model equals a legacy Run pin.
+  it("preserves legacy history while migrating explicit served decisions", async () => {
+    const item = await productFixture(ctx, "Synthetic legacy serving");
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({
+        input: sql`jsonb_build_object('decisionModel','typesafe/jev')`,
+      })
+      .where(eq(runTable.id, runId));
+    const values = {
+      entity: "product",
+      recordId: await recordId(ctx.db, item.id, "product"),
+      field: "notes",
+      currentValue: null,
+      suggestedValue: "Synthetic proposal",
+      confidence: 0.7,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+      runId,
+      pairKey: crypto.randomUUID(),
+    } as const;
+    const [legacy] = await getDb(ctx.db)
+      .insert(assessmentState)
+      .values(values)
+      .returning();
+    if (!legacy) throw new Error("Synthetic legacy assessment missing");
+    const [history] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, legacy.id));
+    expect(history?.served).toBe(true);
+    const migration = readFileSync(
+      new URL(
+        "../../../../../drizzle/0001_explicit_served_decisions.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    await getDb(ctx.db).execute(sql.raw(migration));
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(eq(assessment.id, legacy.id)),
+    ).toEqual([history]);
+    const [comparison] = await getDb(ctx.db)
+      .insert(assessmentState)
+      .values({ ...values, field: "manufacturer", data: { served: false } })
+      .returning();
+    if (!comparison) throw new Error("Synthetic comparison assessment missing");
+    const [unserved] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, comparison.id));
+    expect(unserved?.served).toBe(false);
+  });
   const publication = () => ({
     publicationKey: "synthetic:assessment:retry",
     family: "recommendation" as const,

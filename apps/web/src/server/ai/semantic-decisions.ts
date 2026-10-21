@@ -1,13 +1,11 @@
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
-import {
-  selectDecisionModel,
-  type SupportedDecisionModel,
-} from "@cubby/shared/ai/models";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import {
   type DecisionChoiceResult,
   type DecisionPort,
   decisionChoiceFitsContext,
+  decisionModelFor,
   runDecisionChoice,
   runDecisionChoices,
 } from "~/server/ai/decision-model";
@@ -60,7 +58,7 @@ const choice = async <Value extends string>(args: {
     ...args.prompt,
     usage: args.usage,
     allowNone: false,
-    decisionModel: args.decisionModel ?? selectDecisionModel(),
+    decisionModel: args.decisionModel,
     port: args.port,
   });
   const selected =
@@ -109,30 +107,35 @@ export async function decideImageProvenanceWithEvidence(args: {
   usage: AiRunContext;
   port?: DecisionPort;
 }) {
+  const question = {
+    feature: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
+    ...imageProvenancePrompt(args.input),
+    allowNone: false,
+    port: args.port,
+  };
+  const model = decisionModelFor(question);
   if (!imageProvenanceInputIsComplete(args.input)) {
     return {
       value: "unknown" as const,
       confidence: "low" as const,
       probability: 0,
-      model: selectDecisionModel(),
+      model,
       feature: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.feature,
       promptVersion: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.promptVersion,
     };
   }
-  const decisionModel = selectDecisionModel();
   const result = await choice({
     feature: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
     prompt: imageProvenancePrompt(args.input),
     values: IMAGE_PROVENANCE_CHOICES,
     usage: args.usage,
     port: args.port,
-    decisionModel,
   });
   return {
     value: result.value ?? "unknown",
     confidence: result.result.confidence,
     probability: result.result.probability,
-    model: decisionModel,
+    model,
     feature: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.feature,
     promptVersion: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.promptVersion,
   } as const;
@@ -224,7 +227,6 @@ export async function decideProductVariantComparisons(args: {
       allowNone: false,
       usage: args.usage,
       port: args.port,
-      decisionModel: selectDecisionModel(),
     })),
   );
   const byIndex = new Map(

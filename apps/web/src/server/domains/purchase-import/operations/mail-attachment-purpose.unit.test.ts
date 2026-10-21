@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 
-import { shouldPromoteMailAttachment } from "./mail-attachment-purpose";
+import {
+  shouldPromoteMailAttachment,
+  shouldPromoteMailAttachments,
+} from "./mail-attachment-purpose";
 
 const mail = {
   sender: "orders@shop.example",
@@ -28,6 +31,45 @@ const usage = {
 };
 
 describe("mail attachment purpose", () => {
+  // A batch must preserve each attachment's evidence and positional decision,
+  // including rejected oversized inputs, without changing singleton prompts.
+  it("keeps batch and singleton attachment evidence identical", async () => {
+    const inputs: unknown[] = [];
+    const port = vi.fn<DecisionPort>(async (input) => {
+      inputs.push(input);
+      return {
+        answers: {
+          selection: {
+            type: "choice",
+            choice: "c0",
+            confidence: 0.98,
+            probabilities: { c0: 0.98, c1: 0.01, c2: 0.01 },
+          },
+        },
+      };
+    });
+    const attachments = [
+      attachment,
+      { ...attachment, filename: "invoice.pdf" },
+    ];
+    expect(
+      await shouldPromoteMailAttachments(mail, attachments, usage, port),
+    ).toEqual([true, true]);
+    const batchedInputs = [...inputs];
+    inputs.length = 0;
+    for (const file of attachments)
+      await shouldPromoteMailAttachment(mail, file, usage, port);
+    expect(inputs).toEqual(batchedInputs);
+    expect(
+      await shouldPromoteMailAttachments(
+        { ...mail, content: { ...mail.content, bodyText: "x".repeat(40_000) } },
+        attachments,
+        usage,
+        port,
+      ),
+    ).toEqual([false, false]);
+    expect(port).toHaveBeenCalledTimes(4);
+  });
   it.each([
     { choice: "c0", probability: 0.98, promote: true },
     { choice: "c0", probability: 0.6, promote: false },

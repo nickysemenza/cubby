@@ -96,7 +96,7 @@ export async function executeReclassificationTarget(
         db,
         owner.id,
         undefined,
-        snapshot.decisionModel,
+        snapshot.decisionModelOverride,
       );
     await ingestGmailMessages(db, provider, {
       ...ports,

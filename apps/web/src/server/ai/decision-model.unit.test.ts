@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DECISION_MAX_CANDIDATES,
+  decisionModelFor,
   type DecisionChoiceResponse,
   type DecisionPort,
   runDecisionChoice,
@@ -57,6 +58,45 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.resetModules();
+});
+
+describe("decisionModelFor", () => {
+  // Provenance callers must name the same model as singleton/batch execution,
+  // and the trial key must include every rendered question input.
+  it("routes the full question and preserves explicit overrides and injected ports", async () => {
+    const models = await import("@cubby/shared/ai/models");
+    const { buildChoiceInput } = await import("./policy/decision-choice");
+    const select = vi.spyOn(models, "selectDecisionModel");
+    const question = {
+      ...base,
+      decisionModel: undefined,
+      choices: ["red", "blue"],
+    };
+    decisionModelFor(question);
+    expect(select).toHaveBeenLastCalledWith({
+      key: JSON.stringify([
+        question.feature.feature,
+        question.feature.promptVersion,
+        buildChoiceInput(question),
+      ]),
+    });
+    expect(
+      decisionModelFor({ ...question, decisionModel: "@cf/cloudflare/clef" }),
+    ).toBe("@cf/cloudflare/clef");
+    expect(
+      decisionModelFor({
+        ...question,
+        port: decisionPortFor("c0", { c0: 0.9, none: 0.1 }),
+      }),
+    ).toBe(question.feature.model);
+    expect(
+      decisionModelFor({
+        ...question,
+        decisionModel: "typesafe/jev",
+        images: ["data:image/png;base64,AAAA"],
+      }),
+    ).toBe("@cf/cloudflare/clef");
+  });
 });
 
 describe("runDecisionChoice", () => {

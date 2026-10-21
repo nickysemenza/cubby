@@ -14,6 +14,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
@@ -112,25 +113,22 @@ export async function suggestIngredientMergeBatch(
 ): Promise<IngredientMergeBatchSuggestion[]> {
   const capped = sources.slice(0, 20);
   const out: IngredientMergeBatchSuggestion[] = [];
-  for (let i = 0; i < capped.length; i += 5) {
-    const batch = capped.slice(i, i + 5);
-    const results = await Promise.allSettled(
-      batch.map((s) => suggestIngredientMerge(db, s, runId)),
-    );
-    results.forEach((result, j) => {
-      const source = batch[j]!;
-      if (result.status === "fulfilled") {
-        out.push({ source, ...result.value });
-      } else {
-        log.error(`${source.name} failed`, { error: result.reason });
-        out.push({
-          source,
-          target: null,
-          confidence: "low",
-          reasoning: "Lookup failed.",
-        });
-      }
-    });
-  }
+  const results = await settleDecisionWorkItems(capped, (s) =>
+    suggestIngredientMerge(db, s, runId),
+  );
+  results.forEach((result, j) => {
+    const source = capped[j]!;
+    if (result.status === "fulfilled") {
+      out.push({ source, ...result.value });
+    } else {
+      log.error(`${source.name} failed`, { error: result.reason });
+      out.push({
+        source,
+        target: null,
+        confidence: "low",
+        reasoning: "Lookup failed.",
+      });
+    }
+  });
   return out;
 }

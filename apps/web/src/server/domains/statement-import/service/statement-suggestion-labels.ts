@@ -9,10 +9,6 @@ import {
   type StatementLabelCheckpoint,
   STATEMENT_LABEL_REVISION,
 } from "@cubby/schemas/statement-suggestion";
-import {
-  selectDecisionModel,
-  type SupportedDecisionModel,
-} from "@cubby/shared/ai/models";
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
@@ -24,11 +20,13 @@ import {
 } from "~/server/ai/cooperative-work";
 import {
   decisionChoiceFitsContext,
+  decisionModelFor,
   type DecisionPort,
   settleDecisionChoices,
   type DecisionChoiceResult,
   type DecisionChoiceArgs,
 } from "~/server/ai/decision-model";
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
   STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
@@ -141,8 +139,6 @@ function prepareLabelledJudgment(
       canonicalJson(statementLabelSubject(current.judgment))
       ? input.checkpoint
       : null;
-  const model =
-    previous?.model ?? selectDecisionModel({ key: current.charge.chargeKey });
   const judgment: StatementTransactionJudgment = structuredClone(
     current.judgment,
   );
@@ -174,11 +170,17 @@ function prepareLabelledJudgment(
   }
   const checkpoint: StatementLabelCheckpoint = {
     revision: STATEMENT_LABEL_REVISION,
-    model,
+    model: previous?.model ?? null,
+    models: previous?.models ?? (previous?.model ? [previous.model] : []),
     judgment,
     kind: previous?.kind ?? false,
     counterparty: previous?.counterparty ?? false,
     spending: previous?.spending ?? false,
+  };
+  const recordModel = (model: string) => {
+    checkpoint.models = [...new Set([...(checkpoint.models ?? []), model])];
+    checkpoint.model =
+      checkpoint.models.length === 1 ? checkpoint.models[0]! : null;
   };
   const countLabels = () =>
     judgment.candidates.filter((entry) => entry.label !== null).length +
@@ -217,15 +219,17 @@ function prepareLabelledJudgment(
       };
       continue;
     }
+    const args: DecisionChoiceArgs = {
+      ...prompt,
+      feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
+      port: input.port,
+      usage: input.usage,
+    };
+    const model = decisionModelFor(args);
     decisions.push({
-      args: {
-        ...prompt,
-        feature: STATEMENT_CHARGE_IDENTITY_FEATURE,
-        decisionModel: model,
-        port: input.port,
-        usage: input.usage,
-      },
+      args,
       apply(result) {
+        recordModel(model);
         const choice =
           STATEMENT_CHARGE_IDENTITY_FEATURE.choices[result.selectedIndex ?? -1];
         candidate.label = {
@@ -262,15 +266,16 @@ function prepareLabelledJudgment(
       apply(null);
       continue;
     }
+    const args: DecisionChoiceArgs = {
+      ...prompt,
+      feature,
+      port: input.port,
+      usage: input.usage,
+    };
     decisions.push({
-      args: {
-        ...prompt,
-        feature,
-        decisionModel: model,
-        port: input.port,
-        usage: input.usage,
-      },
+      args,
       apply(result) {
+        recordModel(decisionModelFor(args));
         const choice = feature.choices[result.selectedIndex ?? -1];
         apply(choice && result.confidence === "high" ? choice : null);
       },
@@ -315,13 +320,16 @@ function prepareLabelledJudgment(
         (spendingReserved ? reserved() : input.reserve([], 1)())
       ) {
         try {
-          const advice = await adviseSpending(db, {
-            judgment,
-            runId: input.usage!.runId,
-            model,
-            port: input.port,
-            spendingAdvice: input.spendingAdvice,
-          });
+          const spending = await withAiInputs(false, () =>
+            adviseSpending(db, {
+              judgment,
+              runId: input.usage!.runId,
+              port: input.port,
+              spendingAdvice: input.spendingAdvice,
+            }),
+          );
+          for (const call of spending.inputs) recordModel(call.model);
+          const advice = spending.result;
           judgment.spending = await prepareStatementSpending(
             db,
             judgment,
@@ -337,7 +345,7 @@ function prepareLabelledJudgment(
       return {
         checkpoint,
         labels: { reused, generated: Math.max(0, countLabels() - reused) },
-        model,
+        model: checkpoint.model,
         errors,
         waitingUntil,
         complete:
@@ -508,7 +516,7 @@ async function runStatementLabelBatch(
     input.runId ??
     (await ensureRun(db, systemActor(), { purpose: "background" }));
   const usage = { db, runId, operation: "statement-suggestion-label" };
-  const producer = (model: SupportedDecisionModel) => ({
+  const producer = (model: string | null) => ({
     kind: "model" as const,
     model,
     revision: STATEMENT_CHARGE_IDENTITY_FEATURE.promptVersion,

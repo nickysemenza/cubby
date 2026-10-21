@@ -961,6 +961,7 @@ describe("targeted prompt refresh", () => {
     await startSuggestionSweep(ctx.db, input, {
       context: kernelCtx(ctx),
       ...categoryPorts(0.6),
+      decisionModel: () => "@cf/cloudflare/clef",
     });
     const [pending] = await getDb(ctx.db)
       .select()
@@ -983,7 +984,11 @@ describe("targeted prompt refresh", () => {
     const ports = {
       context: kernelCtx(ctx),
       auditSample: () => false,
-      suggestPorts: { ...ordinary, decisionModel: PRIMARY_MODEL, decisionPort },
+      suggestPorts: {
+        ...ordinary,
+        decisionModel: "@cf/cloudflare/clef" as const,
+        decisionPort,
+      },
     };
     await discoverFieldRefresh(ports);
     const [evaluation] = await getDb(ctx.db)
@@ -991,7 +996,11 @@ describe("targeted prompt refresh", () => {
       .from(aiEvaluation)
       .where(fieldRefreshTarget);
     expect(evaluation).toBeDefined();
-    await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+    // A durable worker receives ports without the member's persisted override.
+    await executeAiRefreshTarget(ctx.db, evaluation!.id, {
+      ...ports,
+      suggestPorts: { ...ports.suggestPorts, decisionModel: undefined },
+    });
     expect(decisionPort).toHaveBeenCalledTimes(1);
     expect(
       (

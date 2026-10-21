@@ -307,7 +307,9 @@ export const suggestionSweepRunInput = z.object({
   entity: z.string().min(1),
   fields: z.array(z.string().min(1)).min(1),
   filters: z.record(z.string(), z.json()),
-  decisionModel: supportedDecisionModelSchema,
+  /** Legacy automatic Run pin; accepted for stored snapshots, never routed. */
+  decisionModel: supportedDecisionModelSchema.optional(),
+  decisionModelOverride: supportedDecisionModelSchema.optional(),
   taxonomyRevision: z.string().optional(),
   /** Retained legacy snapshots; current pause state belongs to Run.status. */
   paused: z.boolean().optional(),

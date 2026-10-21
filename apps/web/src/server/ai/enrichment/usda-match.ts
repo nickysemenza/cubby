@@ -8,6 +8,7 @@
 import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/policy/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
@@ -118,32 +119,26 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = ingredients.slice(0, 20);
   const out: UsdaFoodBatchSuggestion[] = [];
-  for (let i = 0; i < capped.length; i += 5) {
-    const batch = capped.slice(i, i + 5);
-    const results = await Promise.allSettled(
-      batch.map((item) =>
-        ports.suggest(usdaService, db, item.name, {
-          runId,
-          ingredientId: item.id,
-        }),
-      ),
-    );
-    for (const [j, result] of results.entries()) {
-      const item = batch[j]!;
-      if (result.status === "fulfilled") {
-        out.push({ name: item.name, ...result.value });
-      } else {
-        log.error(`${item.name} failed`, { error: result.reason });
-        out.push({
-          name: item.name,
-          food: null,
-          confidence: "low",
-          reasoning: "Lookup failed.",
-        });
-      }
+  const results = await settleDecisionWorkItems(capped, (item) =>
+    ports.suggest(usdaService, db, item.name, {
+      runId,
+      ingredientId: item.id,
+    }),
+  );
+  for (const [j, result] of results.entries()) {
+    const item = capped[j]!;
+    if (result.status === "fulfilled") {
+      out.push({ name: item.name, ...result.value });
+    } else {
+      log.error(`${item.name} failed`, { error: result.reason });
+      out.push({
+        name: item.name,
+        food: null,
+        confidence: "low",
+        reasoning: "Lookup failed.",
+      });
     }
   }
-
   return out;
 }
 

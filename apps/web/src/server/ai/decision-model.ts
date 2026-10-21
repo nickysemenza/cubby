@@ -434,9 +434,32 @@ export type DecisionChoiceArgs = {
     inputTokens: number | null;
     outputTokens: number | null;
   }) => void;
-  /** A long-lived Run may pin the sampled decision tier for reproducibility. */
+  /** Explicit grading/replay override; production routing uses the full question. */
   decisionModel?: SupportedDecisionModel;
 };
+
+/** The runner and provenance callers share exactly one pre-cache routing rule. */
+export function decisionModelFor(
+  args: Pick<DecisionChoiceArgs, "feature" | "decisionModel" | "port"> &
+    DecisionChoicePrompt,
+  input = buildChoiceInput(args),
+): SupportedDecisionModel {
+  // Media requires vision even with a text override. An injected port keeps
+  // the declared feature model unless its caller explicitly overrides it.
+  if (input.images?.length) return selectDecisionModel({ vision: true });
+  return (
+    args.decisionModel ??
+    (args.port
+      ? args.feature.model
+      : selectDecisionModel({
+          key: JSON.stringify([
+            args.feature.feature,
+            args.feature.promptVersion,
+            input,
+          ]),
+        }))
+  );
+}
 
 async function runDecisionChoiceInternal(
   args: DecisionChoiceArgs,
@@ -485,24 +508,7 @@ async function runDecisionChoiceInternal(
     }
     return result;
   };
-  // Images require vision even when a text-only model was pinned. Text calls
-  // retain their pinned model or take the input-keyed split before cache/retry.
-  const feature = input.images?.length
-    ? { ...args.feature, model: selectDecisionModel({ vision: true }) }
-    : args.decisionModel
-      ? { ...args.feature, model: args.decisionModel }
-      : args.port
-        ? args.feature
-        : {
-            ...args.feature,
-            model: selectDecisionModel({
-              key: JSON.stringify([
-                args.feature.feature,
-                args.feature.promptVersion,
-                input,
-              ]),
-            }),
-          };
+  const feature = { ...args.feature, model: decisionModelFor(args, input) };
   await captureAiInput(feature, args.usage.operation, input);
   if (preparingAiInputs())
     return {

@@ -16,10 +16,7 @@ import {
   userId,
 } from "@cubby/schemas/identifiers";
 import { EMAIL_RECLASSIFY_LIMIT } from "@cubby/schemas/mailbox-research";
-import {
-  selectDecisionModel,
-  supportedDecisionModelSchema,
-} from "@cubby/shared/ai/models";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
@@ -133,7 +130,9 @@ const fieldSnapshot = z.object({
   field: z.string(),
   currentValue: z.json(),
   fieldDecisionId: z.uuid().nullable().default(null),
-  decisionModel: supportedDecisionModelSchema.default("typesafe/jev"),
+  /** Legacy automatic snapshot pin, retained only for reading old work. */
+  decisionModel: supportedDecisionModelSchema.optional(),
+  decisionModelOverride: supportedDecisionModelSchema.optional(),
   basis: z.record(z.string(), z.string().nullable()),
 });
 const fieldResult = z.object({
@@ -208,7 +207,7 @@ async function prepareField(
     field: target.field,
     basis,
     fieldDecisionId: lastWrite?.id ?? null,
-    decisionModel: ports.suggestPorts?.decisionModel ?? selectDecisionModel(),
+    decisionModelOverride: ports.suggestPorts?.decisionModel,
     currentValue: record[target.field] ?? null,
   });
   const activation = await readAiRefreshActivation(db);
@@ -227,7 +226,7 @@ async function prepareField(
       },
       {
         ...ports.suggestPorts,
-        decisionModel: snapshot.decisionModel,
+        decisionModel: snapshot.decisionModelOverride,
         recordUsage: false,
       },
     ),
@@ -839,7 +838,6 @@ export async function executeAiRefreshTarget(
         claimed.runId,
         {
           ...ports.productIdentityPorts,
-          model: claimed.provenance.model,
           evaluationId: id,
           provenance: claimed.provenance,
         },
@@ -873,7 +871,6 @@ export async function executeAiRefreshTarget(
             pair.fingerprint,
             await evaluatePreparedProductIdentityPair(db, pair, claimed.runId, {
               ...ports.productIdentityPorts,
-              model: claimed.provenance.model,
               evaluationId: id,
               provenance: claimed.provenance,
             }),
@@ -934,14 +931,21 @@ export async function executeAiRefreshTarget(
       });
       return true;
     }
-    const prepared = await prepareField(db, target, ports);
+    const snapshot = fieldSnapshot.parse(claimed.snapshot);
+    const fieldPorts = {
+      ...ports,
+      suggestPorts: {
+        ...ports.suggestPorts,
+        decisionModel: snapshot.decisionModelOverride,
+      },
+    };
+    const prepared = await prepareField(db, target, fieldPorts);
     if (
       !prepared ||
       prepared.provenance.inputFingerprint !==
         claimed.provenance.inputFingerprint
     )
       throw new Error("AI evaluation target changed during inference");
-    const snapshot = fieldSnapshot.parse(claimed.snapshot);
     const previous = await assessmentStatesById(db, target.assessmentIds);
     if (
       previous.length !== target.assessmentIds.length ||
@@ -965,12 +969,21 @@ export async function executeAiRefreshTarget(
             basisMode: "provided",
             basis: snapshot.basis,
           },
-          { ...ports.suggestPorts, decisionModel: snapshot.decisionModel },
+          fieldPorts.suggestPorts,
         ),
       );
       const provenance = {
         ...prepared.provenance,
-        model: evaluated.inputs[0]?.model ?? snapshot.decisionModel,
+        model:
+          [...evaluated.inputs]
+            .reverse()
+            .find(
+              (call) =>
+                call.operation ===
+                `suggestFields.${snapshot.entity}.${snapshot.field}`,
+            )?.model ??
+          snapshot.decisionModelOverride ??
+          null,
       };
       const reviewKey = await fieldReviewIdentity({
         entity: snapshot.entity,
@@ -999,14 +1012,15 @@ export async function executeAiRefreshTarget(
     }
     const saved = result.data;
     await publishAiEvaluation(db, id, token, async (tx) => {
-      const now = await prepareField(tx, target, ports);
+      const now = await prepareField(tx, target, fieldPorts);
       if (
         !now ||
         now.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
       )
         throw new Error("AI evaluation target changed during inference");
       const decision = saved.output.suggestions[snapshot.field];
-      const model = snapshot.decisionModel;
+      const model =
+        saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
       const entry = decision
         ? makeSweepSuggestion({
             currentValue: snapshot.currentValue,

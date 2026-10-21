@@ -4,7 +4,6 @@ import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
-import { selectDecisionModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
@@ -184,7 +183,6 @@ async function prepareFieldConnections(
   const runId = await ensureRun(db, context.actorContext, {
     purpose: "ai_suggest",
   });
-  const model = ports.suggestPorts?.decisionModel ?? selectDecisionModel();
   for (const field of fields) {
     const declaration = entityFieldModels[entity].fields.find(
       (item) => item.key === field,
@@ -217,11 +215,18 @@ async function prepareFieldConnections(
           basisMode: "provided",
           basis,
         },
-        { ...ports.suggestPorts, decisionModel: model },
+        ports.suggestPorts,
       ),
     );
     const decision = captured.result.suggestions[field];
     if (!decision || decision.value === null) continue;
+    const model =
+      [...captured.inputs]
+        .reverse()
+        .find((call) => call.operation === `suggestFields.${entity}.${field}`)
+        ?.model ??
+      ports.suggestPorts?.decisionModel ??
+      "unknown";
     const entry = makeSweepSuggestion({
       currentValue,
       decision: {

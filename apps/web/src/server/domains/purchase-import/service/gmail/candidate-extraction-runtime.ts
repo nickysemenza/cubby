@@ -1,8 +1,9 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { selectDecisionModel } from "@cubby/shared/ai/models";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import {
   decisionChoiceFitsContext,
+  decisionModelFor,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
 import {
@@ -30,7 +31,7 @@ export async function productionCandidateChoice(
   const email = await readCandidateOwnerEmail(db, input);
   if (!email) throw new Error("Email candidate owner is unavailable");
   await gmailExecutionPolicy(db, runId, email);
-  const model = selectDecisionModel();
+  let model: SupportedDecisionModel | null = null;
   let requested = false;
   const choose: EmailCandidateChoice = async (prompt) => {
     if (!decisionChoiceFitsContext(prompt))
@@ -41,21 +42,24 @@ export async function productionCandidateChoice(
         ranked: [],
       };
     requested = true;
-    return runDecisionChoice({
+    const question = {
       ...prompt,
       feature: MAILBOX_ORDER_CANDIDATE_FEATURE,
-      decisionModel: model,
       usage: {
         db,
         runId: runEntityId.parse(runId),
         operation: "mailbox-order-candidate",
         beforePaidRequest: paidRunPreflight(db, runEntityId.parse(runId)),
       },
-    });
+    };
+    model = decisionModelFor(question);
+    return runDecisionChoice(question);
   };
   return {
     choose,
-    model,
+    get model() {
+      return model;
+    },
     promptVersion: MAILBOX_ORDER_CANDIDATE_FEATURE.promptVersion,
     didRequest: () => requested,
   };
