@@ -31,6 +31,26 @@ struct AuditEntryFoldingTests {
         #expect(IdentifierPresentation.effects(before: nil, after: after).isEmpty)
     }
 
+    @Test func legacyBarcodeURLChangesRemainReadableWithoutInputRepair() {
+        let before: JSONValue = [
+            [
+                "source": "gtin", "kind": "gtin_14", "externalId": "09780306406158",
+                "url": "https://example.com/old", "isPrimary": true,
+            ]
+        ]
+        let after: JSONValue = [
+            [
+                "source": "gtin", "kind": "gtin_14", "externalId": "09780306406158",
+                "url": "https://example.com/new", "isPrimary": true,
+            ]
+        ]
+        let effects = IdentifierPresentation.effects(before: before, after: after)
+        #expect(effects.count == 1)
+        #expect(effects.first?.contains("Changed URL:") == true)
+        #expect(effects.first?.contains("https://example.com/old → https://example.com/new") == true)
+        #expect(effects.first?.contains("GTIN: 09780306406158") == true)
+    }
+
     private func audit(
         _ key: String, minute: Int, action: String = "update", id: String = "PRD-4K7M",
         user: String = "user-a", channel: String = "web", field: String = "name"

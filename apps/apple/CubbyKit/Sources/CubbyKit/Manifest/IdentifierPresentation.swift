@@ -82,15 +82,21 @@ public struct IdentifierPresentation: Sendable {
                     "\(row["isPrimary"]?.boolValue == true ? "Made primary" : "Made secondary"): \(describe(row))"
                 )
             }
-            let oldURL = try? storedRow(old.objectValue ?? [:])["url"]
-            let newURL = try? storedRow(row.objectValue ?? [:])["url"]
+            let oldURL = storedURL(old)
+            let newURL = storedURL(row)
             if oldURL != newURL {
                 result.append(
-                    "Changed URL: \(describe(row)) · \(oldURL?.stringValue ?? "(empty)") → \(newURL?.stringValue ?? "(empty)")"
+                    "Changed URL: \(describe(row)) · \(oldURL ?? "(empty)") → \(newURL ?? "(empty)")"
                 )
             }
         }
         return result
+    }
+
+    /// Read-side URL policy must not validate or repair a historical identity.
+    private static func storedURL(_ row: JSONValue) -> String? {
+        if row["source"]?.stringValue == "amazon", row["kind"]?.stringValue == "asin" { return nil }
+        return row["url"]?.stringValue
     }
 
     public enum InputError: LocalizedError {
