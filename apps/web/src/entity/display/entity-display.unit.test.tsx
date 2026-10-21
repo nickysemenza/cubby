@@ -1049,10 +1049,21 @@ it("opens an inherited scalar from stored intent and clears its explicit overrid
     },
   };
   const save = vi.fn(async () => {});
-  const cellFor = (row: typeof record) =>
+  const explicit = {
+    ...record,
+    fieldResolutions: {
+      trade: {
+        ...record.fieldResolutions.trade,
+        mode: "explicit",
+        storedValue: "plumbing",
+        canReset: true,
+      },
+    },
+  };
+  const cellFor = (row: typeof record | typeof explicit) =>
     createEntityDisplayColumns(
       "task",
-      createCubbyColumnHelper<typeof record>(),
+      createCubbyColumnHelper<typeof record | typeof explicit>(),
       undefined,
       {
         only: ["trade"],
@@ -1066,17 +1077,6 @@ it("opens an inherited scalar from stored intent and clears its explicit overrid
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith(record, "trade", "plumbing"),
   );
-  const explicit = {
-    ...record,
-    fieldResolutions: {
-      trade: {
-        ...record.fieldResolutions.trade,
-        mode: "explicit",
-        storedValue: "plumbing",
-        canReset: true,
-      },
-    },
-  };
   view.rerender(<>{cellFor(explicit)}</>);
   fireEvent.click(screen.getByRole("button"));
   fireEvent.click(
