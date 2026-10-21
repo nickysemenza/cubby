@@ -344,7 +344,8 @@ is allocated. Other `**/*.preview.test.tsx` files remain opt-in through
 until migrated into the required roster. A direct preview-file run selects
 required files through `capability` once; explicit `--project preview` retains
 the full optional preview command. Auxiliary uploads its JSON report and browser
-failure screenshots before Worker tests can overwrite the shared report.
+failure attachments (`.vitest/attachments/`) before Worker tests can overwrite
+the shared report.
 
 Shared list, table, card and detail presentation capabilities have one owner
 here: populated/empty/loading states, responsive layout, overflow, focus and

@@ -246,6 +246,7 @@ jobs:
           name: component-browser-${{ github.sha }}
           path: |
             apps/web/.vitest-results.json
+            apps/web/.vitest/attachments/**
             apps/web/**/__screenshots__/**
           include-hidden-files: true
           if-no-files-found: warn
