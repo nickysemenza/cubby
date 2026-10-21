@@ -36,7 +36,7 @@ export async function loadStatementApplication(
       "This Transaction suggestion is no longer pending.",
     );
   const [prediction] = await getDb(db)
-    .select()
+    .select({ subject: assessment.subject, judgment: assessment.judgment })
     .from(assessment)
     .where(eq(assessment.id, state.id))
     .limit(1);

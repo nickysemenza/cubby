@@ -65,7 +65,7 @@ export async function publishEmailLinkDecision(
     const current = await client
       .select({
         state: assessmentState,
-        prediction: assessment,
+        prediction: { id: assessment.id, subject: assessment.subject },
         authority: feedback.authority,
         purchaseId: sql<string>`${assessmentState.data}->>'purchaseId'`,
       })

@@ -1886,7 +1886,7 @@ export async function applyTransferPairSuggestion(
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
     const [prediction] = await getDb(tx)
-      .select()
+      .select({ subject: assessment.subject, judgment: assessment.judgment })
       .from(assessment)
       .where(eq(assessment.id, state.id))
       .limit(1);

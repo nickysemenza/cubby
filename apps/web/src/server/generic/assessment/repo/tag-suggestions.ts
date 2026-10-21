@@ -246,7 +246,7 @@ export async function applyTagSuggestion(
   state: typeof assessmentState.$inferSelect,
 ) {
   const [prediction] = await getDb(db)
-    .select()
+    .select({ evidence: assessment.evidence })
     .from(assessment)
     .where(eq(assessment.id, state.id))
     .limit(1);

@@ -39,7 +39,11 @@ export async function mergeReviewedProductPair(
 ) {
   const operationId = `merge:${input.keepId}:${input.mergeId}:${input.expectedFingerprint}`;
   const [prediction] = await getDb(context.db)
-    .select()
+    .select({
+      id: assessment.id,
+      family: assessment.family,
+      producer: assessment.producer,
+    })
     .from(assessment)
     .where(eq(assessment.id, input.assessmentId))
     .limit(1);

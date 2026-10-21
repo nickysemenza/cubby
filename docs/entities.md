@@ -938,6 +938,15 @@ each carry exactly one entry per key.
 
 Assessments store immutable typed subjects, judgments, evidence and nullable original producer metadata. Assessment and Feedback child handles accept the full PostgreSQL GUID shape, including retained hash-derived identifiers with arbitrary UUID version/variant bits; readers, review commands and receipts preserve them exactly. Entity, Run and observation identifiers keep their own stricter contracts. Successful applications commit an immutable command-bound Feedback receipt with the domain write. Explicit single and batch finance Apply acknowledge each Assessment only after the finance writer saves; recording the saved default preserves any newer draft. An identical command replays its receipt before current projection checks; conflicting operation reuse is rejected and another command cannot inherit a resolved application. Public operation IDs reserve internal receipt namespaces; replay validates the immutable receipt kind, exact command Feedback binding and recorded outcome. Feedback records correct, wrong, uncertain and presentation-only dismissal separately, with an explicit correction-presence discriminator so corrected JSON null survives. AssessmentState holds rebuildable current targets, field supersession, confirmed values and exactly scoped suppression. Merges and deletes change these projections, never historical subjects. Live field inference shares one immutable publication per subject, full evidence, exact proposal and served model/prompt policy, preserving the first actual producer and proposal across requesting Runs. Live and stored inference also share an internal review identity over the actual captured feature, prompt, model, policy dependencies, field subject, exact proposed value and operation kind. An exact wrong review remains resolved across either entry point until evidence, policy or candidate changes; unknown legacy evidence receives no invented identity. It retains history with an inactive projection; only stored sweep advice enters the queue. A wrong review resolves that exact evidence and served policy without declaring universal value suppression; revised evidence or policy can be assessed again. Runs are nullable provenance references rather than history owners. The family registry validates current projection targets. Email link authority can target the real retained `orderMailEvent` internally when its Email is absent; that target is never a public entity, shortcode, search, or HTTP resource. Email removal repoints link authority to the event and retires relevance projections. Event deletion or supersession retires current link authority while immutable history survives.
 
+Assessment review identity and Feedback admission reads select only their
+required identity or served-status fields; immutable evidence is loaded only
+by the family action that consumes it. Large retained snapshots must not be
+transferred by generic history or review plumbing.
+Canonical fingerprint serialization traverses validated JSON directly, sorting
+object keys while preserving array order and JSON scalar encoding; it must not
+revalidate or clone each nested subtree. Normalize dates and optional values at
+the input boundary before serialization.
+
 All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `entity.review_assessment` and `entity.review_assessments`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
 
 A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
@@ -2736,6 +2745,16 @@ inventory move operation after explicit acceptance, rechecks the stored basis,
 keeps failures reviewable and refreshes affected views on success. When a move
 coalesces stock into an existing row, both clients follow the surviving row and
 replace the deleted source in navigation.
+
+Connection freshness reads project only the declared fingerprint fields of
+each entity and the stored candidate/version, never full entity rows or stored
+basis snapshots. Recommendation reads compare the recomputed fingerprint;
+field connections compare the current basis with retained JSONB inside
+PostgreSQL. Preparation is bounded by candidate batches, independently of source
+roster size or queue pagination. Shared Project recommendation inputs are read
+once for the invocation's roster; only the current batch's expanded contexts
+are retained. These read projections preserve immutable
+evidence and the family's transaction-time acceptance checks.
 
 ### Product relationship route
 

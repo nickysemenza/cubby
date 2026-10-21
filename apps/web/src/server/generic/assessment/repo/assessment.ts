@@ -130,7 +130,7 @@ export async function recordFeedback(
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
     const [prediction] = await client
-      .select()
+      .select({ served: assessment.served })
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
       .limit(1);

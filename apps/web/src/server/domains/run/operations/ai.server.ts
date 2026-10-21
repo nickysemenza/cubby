@@ -327,10 +327,17 @@ export const inferFieldAssessments = async (
       }),
     );
     const publicationKey = `field-inference:${input.entity}:${recordId}:${field}:${fingerprint}`;
+    const publishedFields = {
+      id: assessment.id,
+      evidence: sql<unknown>`CASE WHEN ${assessment.evidence} ? 'proposal'
+        THEN jsonb_build_object('proposal', ${assessment.evidence}->'proposal')
+        ELSE '{}'::jsonb END`,
+      judgment: sql<unknown>`jsonb_build_object('outcome', ${assessment.judgment}->'outcome')`,
+    };
     // A repeated question reuses its published assessment without opening the
     // locking transaction; the transaction below still rechecks under its lock.
     const [published] = await getDb(context.db)
-      .select()
+      .select(publishedFields)
       .from(assessment)
       .where(eq(assessment.publicationKey, publicationKey))
       .limit(1);
@@ -341,7 +348,7 @@ export const inferFieldAssessments = async (
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${publicationKey},0))`,
         );
         const [existing] = await getDb(transactionDb)
-          .select()
+          .select(publishedFields)
           .from(assessment)
           .where(eq(assessment.publicationKey, publicationKey))
           .limit(1);

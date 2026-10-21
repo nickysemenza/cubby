@@ -86,7 +86,7 @@ type Handler = {
   /** Domain parent locks must precede the suggestion's projection row lock. */
   lockForApply?: (
     db: Database,
-    prediction: typeof assessment.$inferSelect,
+    prediction: Pick<typeof assessment.$inferSelect, "subject" | "judgment">,
   ) => Promise<void>;
   /** The fingerprint a review must match; defaults to the stored one. */
   currentFingerprint?: (
@@ -137,7 +137,7 @@ const assessmentFamilies = {
     actions: ["correct", "wrong", "uncertain"],
     apply: async (db, context, state, input) => {
       const [prediction] = await getDb(db)
-        .select()
+        .select({ subject: assessment.subject })
         .from(assessment)
         .where(eq(assessment.id, state.id))
         .limit(1);
@@ -517,10 +517,21 @@ async function settleReview(
   automatic: AutomaticReview | null,
 ) {
   const authority = automatic ? "automatic" : "member";
-  let prediction: typeof assessment.$inferSelect | undefined;
+  let prediction:
+    | Pick<
+        typeof assessment.$inferSelect,
+        "id" | "family" | "subject" | "judgment" | "producer"
+      >
+    | undefined;
   if (input.assessmentId)
     [prediction] = await getDb(db)
-      .select()
+      .select({
+        id: assessment.id,
+        family: assessment.family,
+        subject: assessment.subject,
+        judgment: assessment.judgment,
+        producer: assessment.producer,
+      })
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
       .limit(1);
