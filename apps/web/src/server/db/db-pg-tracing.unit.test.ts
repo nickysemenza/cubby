@@ -151,6 +151,18 @@ describe("node-postgres tracing adapters", () => {
     expect(statements).toEqual(["select 1"]);
   });
 
+  it("observes complete statement templates without reading bind values", async () => {
+    const statement = `select '${"synthetic".repeat(150)}' from "GardenEntry" where id = $1`;
+    const statements: string[] = [];
+    const rawQuery: PgQueryImplementation = () =>
+      Promise.resolve(queryResult());
+    const query = createObservedQuery(rawQuery, (text) =>
+      statements.push(text),
+    );
+    await query({ text: statement, values: ["synthetic-bind-value"] });
+    expect(statements).toEqual([statement]);
+  });
+
   it("distinguishes a pool-owned checkout from an explicit client checkout", () => {
     const ownership = createPoolQueryOwnershipBoundary();
 
