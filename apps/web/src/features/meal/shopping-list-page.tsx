@@ -12,7 +12,7 @@ import { DatePickerInput } from "~/ui/date-picker-input";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import { Row, Stack } from "~/ui/layout";
+import { Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -179,7 +179,7 @@ export function ShoppingListPage({
                   variant={isOut ? "outline" : "secondary"}
                   className={cn(
                     // Free-form meal names — opt out of the mono-uppercase stamp.
-                    "h-auto cursor-pointer px-2 py-1 font-sans text-xs tracking-normal normal-case",
+                    "h-auto min-h-11 cursor-pointer px-2 py-1 font-sans text-xs tracking-normal normal-case sm:min-h-0",
                     isOut && "border-dashed text-muted-foreground line-through",
                   )}
                   render={
@@ -208,7 +208,9 @@ export function ShoppingListPage({
           />
 
           {buyRows.length === 0 && (
-            <Description>Nothing to buy for the selected meals.</Description>
+            <EmptyState size="inline">
+              Nothing to buy for the selected meals.
+            </EmptyState>
           )}
           {(
             [
@@ -223,26 +225,25 @@ export function ShoppingListPage({
             if (sectionRows.length === 0 && membership !== "usuallyOnHand")
               return null;
             return (
-              <Stack
+              <Section
                 key={membership}
-                gap="sm"
-                as="section"
-                aria-label={heading}
-              >
-                <Row align="baseline" gap="sm" wrap>
-                  <h2 className="text-sm font-semibold">{heading}</h2>
-                  {membership === "buy" && (
-                    <Description as="div" size="xs">
+                title={heading}
+                headingAs="h2"
+                count={sectionRows.length}
+                caption={
+                  membership === "buy" ? (
+                    <>
                       {remaining} of {buyRows.length} left
-                    </Description>
-                  )}
-                  {membership === "buy" && data.pricedItems > 0 && (
-                    <Description as="div" size="xs" className="tabular-nums">
-                      ~{formatCurrency(data.estimatedTotal)} for{" "}
-                      {data.pricedItems} of {buyRows.length} priced
-                    </Description>
-                  )}
-                </Row>
+                      {data.pricedItems > 0 && (
+                        <>
+                          {" · "}~{formatCurrency(data.estimatedTotal)} for{" "}
+                          {data.pricedItems} of {buyRows.length} priced
+                        </>
+                      )}
+                    </>
+                  ) : undefined
+                }
+              >
                 {membership === "usuallyOnHand" && (
                   <Description>
                     Assumed available. Required quantities are shown for review;
@@ -290,7 +291,7 @@ export function ShoppingListPage({
                       .exhaustive()}
                   </>
                 )}
-              </Stack>
+              </Section>
             );
           })}
         </>

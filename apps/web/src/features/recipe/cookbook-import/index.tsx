@@ -1271,14 +1271,11 @@ export function CookbookImport({
 
   return (
     <Stack>
-      <div>
-        <h1 className="text-xl font-semibold">Import cookbook</h1>
-        <Description>
-          Drag <code className="rounded bg-muted px-1 py-1 text-xs">.epub</code>{" "}
-          cookbooks here to extract, or choose a .cookbook bundle that is
-          already extracted. Review the recipes, then import.
-        </Description>
-      </div>
+      <Description className="max-w-prose">
+        Drag <code className="rounded bg-muted px-1 py-1 text-xs">.epub</code>{" "}
+        cookbooks here to extract, or choose a .cookbook bundle that is already
+        extracted. Review the recipes, then import.
+      </Description>
 
       {source?.isError && (
         <Row

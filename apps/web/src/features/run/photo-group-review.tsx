@@ -931,22 +931,29 @@ function FieldCrossChecks({
   };
   return (
     <div className="space-y-1 text-xs" aria-label="Field cross-checks">
-      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,1fr)_1rem] gap-x-3 gap-y-1">
-        <span />
-        <span className="text-muted-foreground">Photo label</span>
-        <span className="text-muted-foreground">Current product</span>
-        <span />
+      <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,1fr)_1rem]">
+        <span className="hidden sm:block" />
+        <span className="hidden text-muted-foreground sm:block">
+          Photo label
+        </span>
+        <span className="hidden text-muted-foreground sm:block">
+          Current product
+        </span>
+        <span className="hidden sm:block" />
         {evidenced.map((check) => (
           <div
             key={check.field}
-            className="contents"
+            className="grid grid-cols-1 gap-y-1 sm:contents"
             data-cross-check={check.field}
           >
             <span className="text-muted-foreground">
               {fieldLabel(check.field)}
             </span>
             <span className="break-words">
-              {check.labelValue ?? "Not shown on label"}
+              <span className="mb-0.5 block text-2xs text-muted-foreground sm:hidden">
+                Photo label
+              </span>
+              <span>{check.labelValue ?? "Not shown on label"}</span>
               {check.field === "identifiers" &&
               check.labelValue &&
               check.mark !== "agree" ? (
@@ -956,16 +963,23 @@ function FieldCrossChecks({
               ) : null}
             </span>
             <span className="break-words">
-              {stored(check) || (
-                <span className="text-muted-foreground">Not recorded</span>
-              )}
+              <span className="mb-0.5 block text-2xs text-muted-foreground sm:hidden">
+                Current product
+              </span>
+              <span>
+                {stored(check) || (
+                  <span className="text-muted-foreground">Not recorded</span>
+                )}
+              </span>
               {check.field === "size" || check.field === "color" ? (
                 <span className="block text-muted-foreground">
                   From product name
                 </span>
               ) : null}
             </span>
-            <FieldMark check={check} />
+            <div className="flex justify-end sm:justify-start">
+              <FieldMark check={check} />
+            </div>
           </div>
         ))}
       </div>

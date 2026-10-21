@@ -298,7 +298,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   // (matrix walk + table) until the cook first opens it, then keep it mounted.
 
   return (
-    <Stack gap="lg" className="border border-[var(--border)] bg-card px-6 py-6">
+    <Panel tone="default" className="space-y-6 p-4 sm:p-6">
       <header className="border-b-2 border-primary pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h2 className="my-0 font-heading text-2xl font-semibold tracking-tight">
@@ -347,6 +347,6 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           />
         ))}
       </Stack>
-    </Stack>
+    </Panel>
   );
 });

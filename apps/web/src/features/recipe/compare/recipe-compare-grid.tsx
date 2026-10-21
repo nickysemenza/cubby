@@ -28,7 +28,9 @@ import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { Panel } from "~/ui/layout";
 import { stickyRowHeaderCard } from "~/ui/matrix/matrix-chrome";
+import { Button } from "~/ui/primitives/button";
 import { Image } from "~/ui/primitives/image";
 
 import { compactRound } from "../recipe-scaling-pct";
@@ -266,7 +268,7 @@ export const RecipeCompareGrid: React.FC<{
   );
 
   return (
-    <div className="overflow-x-auto border border-[var(--border)] bg-card">
+    <Panel tone="default" flush className="overflow-x-auto overflow-y-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-2 py-2">
         <Picker
           mode="segmented"
@@ -321,15 +323,17 @@ export const RecipeCompareGrid: React.FC<{
                         <ChefHatIcon className="size-4" />
                       </div>
                     )}
-                    <button
+                    <Button
                       type="button"
                       onClick={() => onRemove(c.recipe.id)}
                       aria-label={`Remove ${c.recipe.name} from comparison`}
-                      className="absolute top-1 right-1 flex size-11 items-center justify-center rounded-full bg-background/70 text-muted-foreground hover:text-destructive sm:size-5"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-1 right-1 size-11 bg-background/70 text-muted-foreground hover:text-destructive sm:size-8"
                       title="Remove from comparison"
                     >
                       <XIcon className="size-3.5" />
-                    </button>
+                    </Button>
                   </div>
                   <Link
                     to="/recipes/$shortcode"
@@ -592,6 +596,6 @@ export const RecipeCompareGrid: React.FC<{
           />
         </tbody>
       </table>
-    </div>
+    </Panel>
   );
 };

@@ -4,8 +4,9 @@ import { Link } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
 import { recipeAvailability } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { Grid, Row, Stack } from "~/ui/layout";
+import { Grid, Panel, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -58,9 +59,9 @@ export function MealSuggestionsPage({
           {error.message}
         </StatusText>
       ) : !data || data.recipes.length === 0 ? (
-        <Description>
-          No recipes match — try lowering the coverage filter.
-        </Description>
+        <EmptyState size="page" description="Try lowering the coverage filter.">
+          No recipes match
+        </EmptyState>
       ) : (
         <>
           <Grid cols="cards3">
@@ -141,9 +142,9 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
   // The card body is the recipe link; the footer holds "Add to meal" as a
   // sibling so planning doesn't hijack card navigation.
   return (
-    <Stack
-      gap="sm"
-      className="border border-[var(--border)] p-4 transition-colors hover:bg-accent"
+    <Panel
+      tone="default"
+      className="space-y-2 p-3 transition-colors hover:bg-muted/50"
     >
       <Link
         {...entityDetailLink("recipe", recipe.recipeId)}
@@ -184,6 +185,6 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
       <Row justify="end">
         <AddToMeal recipeId={recipe.recipeId} recipeName={recipe.recipeName} />
       </Row>
-    </Stack>
+    </Panel>
   );
 }

@@ -29,7 +29,7 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
@@ -59,7 +59,7 @@ const FLOW_LAYOUT_OPTIONS: readonly (PickerOption & {
 
 function FlowLoading() {
   return (
-    <div className="border border-[var(--border)] bg-card p-4">
+    <Panel tone="default" className="space-y-4 p-4">
       <div className="mb-4 flex items-center gap-2">
         <SparkleIcon className="size-5 text-primary" />
         <div>
@@ -74,7 +74,7 @@ function FlowLoading() {
         <Skeleton className="h-48" />
         <Skeleton className="h-48" />
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -551,7 +551,7 @@ export function RecipeFlowView({
   if (!artifact) return unavailable;
 
   return (
-    <div className="border border-[var(--border)] bg-card">
+    <Panel tone="default" flush>
       <FlowPlan
         artifact={artifact}
         recipe={scaledRecipe}
@@ -572,7 +572,7 @@ export function RecipeFlowView({
         selectedOperationId={selectedOperationId}
         onSelectOperation={setSelectedOperationId}
       />
-    </div>
+    </Panel>
   );
 }
 

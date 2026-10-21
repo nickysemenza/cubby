@@ -34,6 +34,7 @@ import {
   type CubbyColumnDef,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import { Button } from "~/ui/primitives/button";
@@ -154,9 +155,9 @@ function ExpenseAnalysisResult({
   if (!data) return null;
   if (data.rows.length === 0) {
     return (
-      <div className="border border-border p-4 text-sm">
+      <EmptyState size="inline">
         No aggregate buckets match the current Ledger filters.
-      </div>
+      </EmptyState>
     );
   }
   if (data.columnDimension) {

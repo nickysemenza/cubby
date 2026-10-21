@@ -89,7 +89,7 @@ type AuthenticatedAppShellProps = {
 /**
  * The authenticated workspace frame. The md rail is intentionally forced: a
  * person's wide/compact preference applies only when there is space for the
- * full 176px sidebar, and a tablet visit must never overwrite that preference.
+ * full 200px sidebar, and a tablet visit must never overwrite that preference.
  */
 export function AuthenticatedAppShell({
   children,

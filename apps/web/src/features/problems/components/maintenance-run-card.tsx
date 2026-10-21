@@ -14,8 +14,9 @@ import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Row, Stack } from "~/ui/layout";
+import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Progress } from "~/ui/primitives/progress";
@@ -174,7 +175,7 @@ function RunLink({ runId }: { runId: string }) {
 function ActivePass({ run }: { run: MaintenanceRunSummary }) {
   const step = run.current;
   return (
-    <Stack gap="tight" className="rounded-md bg-muted/50 px-3 py-2">
+    <Panel tone="muted" className="space-y-2 px-3 py-2">
       <Row justify="between" gap="md" wrap>
         <span className="text-sm">
           {step ? (
@@ -209,7 +210,7 @@ function ActivePass({ run }: { run: MaintenanceRunSummary }) {
             `. Resumes after ${formatInstant(step.pausedUntil, "dateShortTime")}`}
         </span>
       )}
-    </Stack>
+    </Panel>
   );
 }
 
@@ -219,11 +220,9 @@ function LastPass({ run }: { run: MaintenanceRunSummary }) {
     : null;
   const failed = run.status !== "completed";
   return (
-    <Row
-      justify="between"
-      gap="md"
-      wrap
-      className="rounded-md bg-muted/50 px-3 py-2"
+    <Panel
+      tone="muted"
+      className="flex flex-wrap items-center justify-between gap-3 px-3 py-2"
     >
       <span className="flex items-center gap-2 text-sm">
         <span
@@ -250,7 +249,7 @@ function LastPass({ run }: { run: MaintenanceRunSummary }) {
         </span>
       </span>
       <RunLink runId={run.runId} />
-    </Row>
+    </Panel>
   );
 }
 
@@ -273,15 +272,19 @@ function Backlog({ status }: { status: MaintenanceStatus }) {
           ))}
         </ul>
       ) : (
-        <Description size="xs">Nothing waiting.</Description>
+        <EmptyState size="inline">Nothing waiting.</EmptyState>
       )}
-      <Stack gap="xs">
-        <h3 className="text-sm font-medium">Image processing</h3>
-        <p className="text-xs text-muted-foreground">
-          Descriptions use the configured AI vision model and stop at the AI
-          budget. Transparent images wait for an available Apple companion.
-          Originals are retained.
-        </p>
+      <Section
+        headingAs="h3"
+        title="Image processing"
+        caption={
+          <>
+            Descriptions use the configured AI vision model and stop at the AI
+            budget. Transparent images wait for an available Apple companion.
+            Originals are retained.
+          </>
+        }
+      >
         <StaticTable
           rows={IMAGE_STATES}
           rowKey={([key]) => key}
@@ -299,7 +302,7 @@ function Backlog({ status }: { status: MaintenanceStatus }) {
             },
           ]}
         />
-      </Stack>
+      </Section>
     </Stack>
   );
 }
