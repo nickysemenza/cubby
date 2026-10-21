@@ -57,6 +57,11 @@ Spending-preview equivalence uses a small explicit graph for inherited and
 explicit categories, split Projects, refunds and signed adjustments. Keep
 the resolver/allocation comparison; do not generate household-sized random
 populations or repeat the same merge solely at larger cardinality.
+Give each inherited merge source an independent Purchase without another
+matching Expense override, so broad Purchase scope cannot hide a missing
+Vendor-default, Purchase-default or mapped-category predicate.
+The adjustment-only Purchase also needs a changed default: merely finding a
+`default` allocation row does not prove that preview reclassifies it.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.

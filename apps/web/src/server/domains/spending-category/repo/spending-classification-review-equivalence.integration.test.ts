@@ -209,7 +209,12 @@ async function seedEdgeBaskets(
     kind: at(basketKinds, index),
     vendorId: at(vendors, 0).id,
     date: "2026-01-01",
-    spendingCategoryId: index % 3 === 0 ? pick(spend).id : null,
+    spendingCategoryId:
+      at(basketKinds, index) === "adjustmentOnly"
+        ? merged
+        : index % 3 === 0
+          ? pick(spend).id
+          : null,
     spendingCategoryOrigin: index % 3 === 0 ? "manual" : "legacy",
     defaultProjectId: project(index),
   }));
@@ -282,6 +287,39 @@ async function seedReviewGraph(db: Database) {
     spendingCategoryOrigin: index === 0 ? "manual" : "legacy",
   }));
   await insertRows(db, "Purchase", purchases);
+  const mergedCategory = at(spend, 3).id;
+  const inheritedVendor = {
+    ...identity("vendor", vendors.length),
+    name: "Synthetic merge default vendor",
+    spendingProfile: "mixed_retail",
+    defaultSpendingCategoryId: mergedCategory,
+  };
+  await insertRows(db, "Vendor", [inheritedVendor]);
+  const mappedCategory = {
+    ...identity("productCategory", taxonomy.categories.length),
+    name: "Synthetic merge mapped category",
+    parentId: null,
+    spendingCategoryMode: "mapped",
+    spendingCategoryId: mergedCategory,
+  };
+  await insertRows(db, "ProductCategory", [mappedCategory]);
+  const mappedProduct = {
+    ...identity("product", products.length),
+    name: "Synthetic merge mapped product",
+    manufacturer: "Synthetic",
+    categoryId: mappedCategory.id,
+  };
+  await insertRows(db, "Product", [mappedProduct]);
+  // Separate Purchases prevent another matching Expense override from
+  // masking a missing Vendor, Purchase or mapped-category scope predicate.
+  const mergePaths = Array.from({ length: 3 }, (_, index) => ({
+    ...identity("purchase", purchases.length + index),
+    vendorId: index === 0 ? inheritedVendor.id : at(vendors, 0).id,
+    date: "2026-01-01",
+    spendingCategoryId: index === 1 ? mergedCategory : null,
+    spendingCategoryOrigin: index === 1 ? "manual" : "legacy",
+  }));
+  await insertRows(db, "Purchase", mergePaths);
   const expenses: (ReturnType<typeof identity<"expense">> &
     Line & { name: string; date: string; costType: string; trade: string })[] =
     [];
@@ -310,11 +348,18 @@ async function seedReviewGraph(db: Database) {
   );
   expense({ cost: 10.01, spendingCategoryId: at(spend, 4).id });
   expense({ cost: 3.03 });
+  mergePaths.forEach((purchase, index) =>
+    expense({
+      purchaseId: purchase.id,
+      productId: index === 2 ? mappedProduct.id : null,
+      cost: (index + 1) * 10.01,
+    }),
+  );
   await seedEdgeBaskets(db, generator, {
     spend,
     products,
     vendors,
-    firstPurchase: purchases.length,
+    firstPurchase: purchases.length + mergePaths.length,
     expense,
   });
   await insertRows(db, "Expense", expenses);
