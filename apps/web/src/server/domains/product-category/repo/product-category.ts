@@ -839,11 +839,18 @@ export async function listBoundCategoryFeatures(
 /** One batched summary map for callers that already have category ids in rows. */
 export async function loadCategorySummaries(
   db: Database | DrizzleTransaction,
+  ids?: readonly ProductCategoryId[],
 ): Promise<Map<ProductCategoryId, ProductCategorySummary>> {
+  if (ids?.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({ ...getTableColumns(productCategory), effectiveFeature })
     .from(productCategory)
-    .where(notDeleted(productCategory));
+    .where(
+      and(
+        notDeleted(productCategory),
+        ids ? inArray(productCategory.id, [...ids]) : undefined,
+      ),
+    );
   const paths = await pathsFor(
     db,
     rows.map((row) => row.id),

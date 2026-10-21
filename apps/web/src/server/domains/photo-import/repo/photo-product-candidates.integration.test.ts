@@ -118,11 +118,29 @@ describe("photo product candidates", () => {
 
   // Selected evidence cannot depend on lexical retrieval or a successful inference.
   it("reads selected Product dates, vendor and capture time independently of ranking", async () => {
+    const category = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Synthetic evidence category",
+      sortOrder: 0,
+    });
     const item = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Synthetic selected object" }),
+      makeProductInput({
+        name: "Synthetic selected object",
+        notes: "Synthetic evidence notes",
+        tags: ["synthetic"],
+        categoryId: parseShortcodeFor("productCategory", category.shortcode),
+      }),
       ctx.actor,
     );
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await getDb(ctx.db).insert(entityExternalId).values({
+      entityId: item.entityId,
+      entityKind: "product",
+      source: "synthetic",
+      kind: "retailer_sku",
+      externalId: "SYN-EVIDENCE-1",
+      isPrimary: true,
+    });
     const place = await createLocationFixture(
       ctx.db,
       makeLocationInput({
@@ -188,6 +206,21 @@ describe("photo product candidates", () => {
     const evidence = (
       await loadPhotoProductEvidence(ctx.db, [item.entityId], ctx.actor)
     ).get(item.entityId);
+    // One evidence read must supply comparison fields without separate Product reads.
+    expect(evidence).toMatchObject({
+      notes: "Synthetic evidence notes",
+      tags: ["synthetic"],
+      category: { name: "Synthetic evidence category" },
+      externalIds: [
+        expect.objectContaining({
+          source: "synthetic",
+          kind: "retailer_sku",
+          externalId: "SYN-EVIDENCE-1",
+          isPrimary: true,
+        }),
+      ],
+      identifiers: ["SYN-EVIDENCE-1"],
+    });
     expect(evidence?.purchaseLines).toEqual([
       expect.objectContaining({
         name: "Synthetic ordered line",

@@ -2368,6 +2368,10 @@ Assessment handles, so republishing evidence replaces review identity;
 StatementRow exposes an opaque read UUID while source/externalId remains its
 mutation selector. Neither acquires a UUID route or generic CRUD. Run findings
 and photo reviews keep their parent-scoped commands and specialized editors.
+Photo review's selected-Product evidence read supplies canonical notes, tags,
+category and structured external identifiers alongside purchase and image
+evidence. Comparison panels share that read instead of loading Product detail
+independently; category summaries are bounded to the selected Products.
 RunApproval remains historical storage with Run invalidation; it has no active
 producer, reader or answer UI.
 

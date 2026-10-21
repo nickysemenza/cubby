@@ -6,6 +6,7 @@ import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { settledSuggestionQuestionsInput } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   recordStatementRowsOut,
   listStatementRowsInput,
@@ -780,7 +781,7 @@ test("Statement rows page observations with full totals and keep existing review
       selector: {
         filter: { source: "mint", importFingerprint: `${name}-other` },
       },
-      data: { accountId: account.id },
+      data: { accountId: parseShortcodeFor("financialAccount", account.id) },
     },
     actor,
   );

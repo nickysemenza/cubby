@@ -63,9 +63,9 @@ const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
     // returns — there is no batch left to watch, so re-check on a fixed
     // schedule instead.
     if (invalidationCompletion)
-      return refreshed.then(() =>
-        scheduleDeferredInvalidation(queryClient, invalidations),
-      );
+      return refreshed.then(() => {
+        scheduleDeferredInvalidation(queryClient, invalidations);
+      });
     scheduleDeferredInvalidation(queryClient, invalidations);
   },
 };
