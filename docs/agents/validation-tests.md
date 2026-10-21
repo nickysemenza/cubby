@@ -289,6 +289,11 @@ The `Purchase import agent` Playwright project
 `test.use({ workerdProfile: "purchase-agent" })`)
 runs the browser against the purchase-agent workerd harness with a scripted
 model and gateway; `e2eRuntime.purchaseAgent` loads each test's script. It is
+configured against the purpose's declared model and effort; derive ordinary
+inference expectations from `importRunAgentManifest` so policy changes do not
+leave stale model pins in browser journeys. Explicit escalation scenarios
+still name the expected transition.
+It is
 excluded from the required desktop shards and runs in CI as an optional job
 (`pnpm --dir apps/web test:e2e:ci:purchase-import`). Hold the model with a
 `{ gate }` step to observe a live Run instead of racing it; a Run the browser
