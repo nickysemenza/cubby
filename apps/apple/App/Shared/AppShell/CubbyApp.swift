@@ -78,6 +78,13 @@ struct CubbyApp: App {
             .commands {
                 CubbyCommands(); SidebarCommands()
             }
+            WindowGroup("Connections", id: "connections", for: ConnectionsWorkspaceSelection.self) {
+                selection in
+                ConnectionsWorkspaceWindow(selection: selection.wrappedValue ?? .init())
+                    .environment(model)
+                    .tint(FieldGuideTokens.interaction)
+            }
+            .defaultSize(width: 1400, height: 900)
         #else
             WindowGroup { appContent }
                 .commands { CubbyCommands() }

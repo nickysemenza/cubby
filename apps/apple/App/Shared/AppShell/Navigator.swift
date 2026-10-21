@@ -13,7 +13,6 @@ final class Navigator {
     var selectedActivity: ActivitySelection?
     var browseKey: EntityKey?
     var selectedRecords: [AppSection: RecordSelection] = [:]
-    var graphWorkspace: GraphWorkspaceSession?
 
     var phoneTab: PhoneTab {
         get {

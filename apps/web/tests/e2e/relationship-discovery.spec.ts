@@ -120,7 +120,7 @@ test("a large planting branch shows its first page without an expansion click", 
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   await expect(
     page.getByLabel("Map records").getByRole("button", {
-      name: new RegExp(`^Inspect ${escapeRegExp(cropName)}`),
+      name: new RegExp(`^Inspect ${escapeRegExp(cropName)}.* Planting$`),
     }),
   ).toHaveCount(12);
 });

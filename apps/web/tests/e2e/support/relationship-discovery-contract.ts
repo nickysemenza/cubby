@@ -63,8 +63,8 @@ export function relationshipDiscoveryContract() {
       }),
     ).toBeVisible();
     await expect(
-      records.getByRole("button", {
-        name: `Inspect ${name} supporting expense Expense`,
+      page.getByRole("group", {
+        name: `Inspect ${name} supporting expense`,
         exact: true,
       }),
     ).toBeVisible();
@@ -72,6 +72,7 @@ export function relationshipDiscoveryContract() {
       page.getByLabel("Relationship graph", { exact: true }),
     ).toBeVisible();
     await expectViewportBounded(page);
+    await showRecords.click();
     await records
       .getByRole("button", {
         name: new RegExp(`^Inspect ${escapeRegExp(name)} suggested`),

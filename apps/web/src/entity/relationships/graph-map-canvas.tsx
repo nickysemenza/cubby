@@ -138,7 +138,6 @@ export function GraphMapCanvas({
   useEffect(() => {
     positionsRef.current = positions;
   }, [positions]);
-  const [compact, setCompact] = useState(false);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<unknown>(null);
   const [layingOut, setLayingOut] = useState(false);
@@ -345,9 +344,6 @@ export function GraphMapCanvas({
           Map options
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setCompact((value) => !value)}>
-            {compact ? "Detailed cards" : "Compact cards"}
-          </DropdownMenuItem>
           <DropdownMenuItem onClick={center}>Center selection</DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
@@ -369,7 +365,6 @@ export function GraphMapCanvas({
       {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
       <section
         className="graph-map min-h-0 flex-1"
-        data-compact={compact}
         aria-label="Relationship graph"
       >
         <ReactFlow<RecordNode>

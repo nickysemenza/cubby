@@ -36,7 +36,7 @@ test("connections workspace shares dense facts, linked paths, and native handoff
     page,
     "Connection patio project",
   );
-  await createEntityFixture(page, "expense", {
+  const expense = await createEntityFixture(page, "expense", {
     name: "Connection lighting purchase",
     cost: 204,
     date: "2026-09-09",
@@ -108,6 +108,18 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   const neighborURL = new URL(neighborHref, page.url()).href;
   await neighborLink.click();
   await expect(page).toHaveURL(neighborURL);
+  await page.goBack();
+  await expect(card).toBeVisible();
+  await page.getByRole("button", { name: "Fit map", exact: true }).click();
+  const factLink = graph
+    .locator(`.react-flow__node[data-id="expense:${expense.id}"] dl`)
+    .getByRole("link")
+    .first();
+  const factHref = await factLink.getAttribute("href");
+  if (!factHref) throw new Error("Expected a reference fact destination");
+  const factURL = new URL(factHref, page.url()).href;
+  await factLink.click();
+  await expect(page).toHaveURL(factURL);
   await page.goBack();
   await expect(card).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });

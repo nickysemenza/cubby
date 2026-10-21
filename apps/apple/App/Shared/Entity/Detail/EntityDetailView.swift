@@ -13,7 +13,6 @@ struct EntityDetailView: View {
     @Environment(\.developerOverlays) private var developerOverlays
     @Environment(\.dismiss) private var dismiss
     @State private var model: GenericEntityDetailModel?
-    @State private var relationshipsModel: EntityRelationshipsModel?
     @State private var relationSections: [RelationSectionModel] = []
     @State private var connectedRecords: ConnectedRecordsPreviewModel?
     @State private var photoCapture: PhotoCaptureModel?
@@ -48,7 +47,6 @@ struct EntityDetailView: View {
     private func lifecycle<V: View>(on view: V, model: GenericEntityDetailModel?) -> some View {
         view
             .task(id: id) { await setup() }
-            .onDisappear { relationshipsModel?.cancel() }
             .task(id: appModel.entityMutationRevision) {
                 guard appModel.entityMutationRevision > 0,
                     appModel.entityMutationKeys.contains(key),
@@ -201,9 +199,7 @@ struct EntityDetailView: View {
                     descriptor: descriptor, row: row,
                     relationSections: relationSections,
                     connectedRecords: connectedRecords,
-                    relationshipsModel: relationshipsModel,
                     fetchedAt: model.fetchedAt,
-                    onRelationshipAccepted: appModel.recordRelationshipMutation,
                     onCreateRelation: { creatingRelation = $0 },
                     onChanged: { Task { await refresh() } }
                 )
@@ -252,10 +248,7 @@ struct EntityDetailView: View {
 
     private func setup() async {
         if model == nil { model = GenericEntityDetailModel(descriptor: descriptor, client: appModel.client) }
-        if relationshipsModel == nil {
-            relationshipsModel = EntityRelationshipsModel(client: appModel.client)
-        }
-        guard let model, let relationshipsModel else { return }
+        guard let model else { return }
         await model.loadInitial(id: id)
         guard let row = model.row else { return }
         let survivorID = row.id
@@ -267,15 +260,12 @@ struct EntityDetailView: View {
             connectedRecords = ConnectedRecordsPreviewModel(
                 source: EntityRef(entity: key, id: survivorID), client: appModel.client)
         }
-        await relationshipsModel.loadInitial(source: EntityRef(entity: key, id: survivorID))
     }
 
     private func refresh() async {
-        guard let model, let relationshipsModel else { return }
+        guard let model else { return }
         let survivorID = model.row?.id ?? id
-        async let detailRefresh: Void = model.refresh(id: survivorID)
-        async let relationshipRefresh: Void = relationshipsModel.refresh()
-        _ = await (detailRefresh, relationshipRefresh)
+        await model.refresh(id: survivorID)
         for section in relationSections {
             await section.list.refresh()
             await section.loadConnectionEvidence()
@@ -374,11 +364,9 @@ struct EntityDetailContent: View {
     let row: EntityRow
     var relationSections: [RelationSectionModel] = []
     var connectedRecords: ConnectedRecordsPreviewModel? = nil
-    var relationshipsModel: EntityRelationshipsModel? = nil
     /// Developer overlays layer 4: when this row was fetched. `nil` in previews/fixtures that
     /// never went through `GenericEntityDetailModel`.
     var fetchedAt: Date? = nil
-    var onRelationshipAccepted: (RelationshipAcceptance) -> Void = { _ in }
     var onCreateRelation: (RelationSectionModel) -> Void = { _ in }
     var onChanged: () -> Void = {}
 
@@ -386,7 +374,6 @@ struct EntityDetailContent: View {
     @Environment(\.developerOverlays) private var developerOverlays
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
-    @State private var reviewedRelationship: RelationshipRecommendationReview?
     @State private var reportBatches = ReportBatchStore()
 
     private var presentation: EntityPresentation { descriptor.presentation }
@@ -470,12 +457,9 @@ struct EntityDetailContent: View {
             if let connectedRecords {
                 ConnectedRecordsSection(model: connectedRecords).detailContentsAnchor("connected-records")
             }
-            if let relationshipsModel {
-                ContinuousDetailSection(title: "Relationships") {
-                    EntityRelationshipsSection(
-                        model: relationshipsModel, onAccepted: onRelationshipAccepted)
-                }.detailContentsAnchor("relationships")
-            }
+            ContinuousDetailSection(title: "Connections") {
+                EntityRelationshipsSection(source: EntityRef(entity: descriptor.key, id: row.id))
+            }.detailContentsAnchor("relationships")
             ContinuousDetailSection(title: "Raw record") { RawRecordDisclosure(raw: row.raw) }
                 .detailContentsAnchor("raw-record")
         }
@@ -486,21 +470,6 @@ struct EntityDetailContent: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
         .task(id: row.id) { await loadTimelineIfDeclared() }
-        .sheet(item: $reviewedRelationship) { review in
-            if let relationshipsModel {
-                #if os(iOS)
-                    RelationshipRecommendationReviewSheet(
-                        review: review, model: relationshipsModel, onAccepted: onRelationshipAccepted
-                    )
-                    .presentationDetents([.medium, .large])
-                #else
-                    RelationshipRecommendationReviewSheet(
-                        review: review, model: relationshipsModel, onAccepted: onRelationshipAccepted
-                    )
-                    .frame(minWidth: 440, minHeight: 420)
-                #endif
-            }
-        }
         .modifier(DetailContentsNavigation(entries: contentsEntries))
         .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
         .environment(\.reportBatchStore, reportBatches)
@@ -512,11 +481,7 @@ struct EntityDetailContent: View {
         switch section.kind {
         case .fields(let keys):
             ContinuousDetailSection(title: section.title ?? "") {
-                FieldsSectionView(
-                    descriptor: descriptor, row: row, keys: keys, inlineFieldKey: inlineRelationshipFieldKey
-                ) {
-                    inlineRelationshipAlternatives
-                }
+                FieldsSectionView(descriptor: descriptor, row: row, keys: keys)
             }
         case .relation:
             if let model = relationSections.first(where: { $0.id == section.id }) {
@@ -579,8 +544,7 @@ struct EntityDetailContent: View {
                     DetailContentsEntry(
                         id: "connected-records", title: "Connected records", group: "Relations")
                 ])
-            + (relationshipsModel == nil
-                ? [] : [DetailContentsEntry(id: "relationships", title: "Relationships", group: "Relations")])
+            + [DetailContentsEntry(id: "relationships", title: "Connections", group: "Relations")]
             + [
                 DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")
             ]
@@ -602,68 +566,6 @@ struct EntityDetailContent: View {
         }
     }
 
-    // MARK: - Inline relationship alternatives
-
-    /// The field a recommendation group proposes a new value for, by the group's kind: the
-    /// expense-project group edits `projectId`, the inventory-placement group `locationId`.
-    private var inlineRelationshipFieldKey: String? {
-        guard let groups = relationshipsModel?.recommendationDocument?.groups else { return nil }
-        for group in groups {
-            switch group {
-            case .expenseProject(let group) where !group.proposals.isEmpty: return "projectId"
-            case .inventoryPlacement(let group) where !group.proposals.isEmpty: return "locationId"
-            default: continue
-            }
-        }
-        return nil
-    }
-
-    @ViewBuilder
-    private var inlineRelationshipAlternatives: some View {
-        if let basisKey = relationshipsModel?.recommendationDocument?.basisKey {
-            ForEach(inlineRelationshipProposals) { proposal in
-                InlineRelationshipAlternativeView(
-                    proposal: proposal,
-                    hasCurrentTarget: inlineRelationshipCurrentTarget != nil,
-                    review: {
-                        reviewedRelationship = .init(
-                            proposal: proposal,
-                            basisKey: basisKey,
-                            source: relationshipsModel?.source
-                                ?? EntityRef(entity: descriptor.key, id: row.id),
-                            currentTarget: inlineRelationshipCurrentTarget
-                        )
-                    }
-                )
-            }
-        }
-    }
-
-    private var inlineRelationshipCurrentTarget: String? {
-        guard let groups = relationshipsModel?.recommendationDocument?.groups else { return nil }
-        for group in groups {
-            switch group {
-            case .expenseProject(let group): return group.currentTarget?.name
-            case .inventoryPlacement(let group): return group.currentTarget?.name
-            default: continue
-            }
-        }
-        return nil
-    }
-
-    private var inlineRelationshipProposals: [ActionableRelationshipRecommendation] {
-        guard let groups = relationshipsModel?.recommendationDocument?.groups else { return [] }
-        return groups.flatMap { group -> [ActionableRelationshipRecommendation] in
-            switch group {
-            case .expenseProject(let group):
-                group.proposals.map(ActionableRelationshipRecommendation.expenseProject)
-            case .inventoryPlacement(let group):
-                group.proposals.map(ActionableRelationshipRecommendation.inventoryPlacement)
-            default:
-                []
-            }
-        }
-    }
 }
 
 #if os(macOS)
@@ -778,61 +680,8 @@ private struct HeroEditorRequest: Identifiable {
     .environment(\.developerOverlays, true)
 }
 
-#Preview("Expense project alternative") {
-    let appModel = PreviewFixtures.signedInModel()
-    let source = EntityRef(entity: .expense, id: "EXP-2345")
-    let row = EntityRow(
-        id: source.id,
-        title: "Hardware store receipt",
-        subtitle: "$84.20",
-        imageURL: nil,
-        raw: .object([
-            "id": .string(source.id),
-            "name": .string("Hardware store receipt"),
-            "cost": .number(84.20),
-            "date": .string("2026-09-12"),
-            "projectId": .string("PRJ-1001"),
-            "projectName": .string("General maintenance"),
-        ])
-    )
-    let relationships = EntityRelationshipsModel(
-        client: appModel.client,
-        initialRecommendations: .init(
-            source: .init(source),
-            basisKey: "expense-preview",
-            groups: [
-                .expenseProject(
-                    .init(
-                        kind: .expenseProject,
-                        status: .ready,
-                        currentTarget: .init(id: "PRJ-1001", name: "General maintenance"),
-                        proposals: [
-                            .init(
-                                kind: .expenseProject,
-                                expenseId: source.id,
-                                target: .init(id: "PRJ-2001", name: "Workshop shelves"),
-                                effectiveStart: "2026-09-01",
-                                effectiveEnd: "2026-09-30",
-                                sameTradeCount: 2,
-                                exactProductCount: 1,
-                                supportingExpenses: [
-                                    .init(id: "EXP-3456", name: "Shelf brackets")
-                                ],
-                                reasons: ["Matches recent carpentry expenses"]
-                            )
-                        ]
-                    )
-                )
-            ]
-        )
-    )
-    return NavigationStack {
-        EntityDetailContent(
-            descriptor: EntityCatalog[.expense],
-            row: row,
-            relationshipsModel: relationships
-        )
-        .navigationTitle(row.title)
-    }
-    .environment(appModel)
+#Preview("Connections entry") {
+    NavigationStack {
+        EntityDetailContent(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
+    }.environment(PreviewFixtures.signedInModel())
 }

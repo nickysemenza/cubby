@@ -78,13 +78,6 @@
   border-top: 1px solid var(--border);
   font-size: var(--text-2xs);
 }
-.graph-map[data-compact="true"] .graph-record-facts,
-.graph-map[data-compact="true"] .graph-record-links {
-  display: none;
-}
-.graph-map[data-compact="true"] .graph-map-record {
-  height: auto;
-}
 .graph-map-record[data-selected="true"] {
   border-color: var(--primary);
   outline: 1px solid var(--primary);

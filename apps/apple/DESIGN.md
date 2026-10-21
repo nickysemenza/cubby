@@ -42,15 +42,14 @@ Identity shows every pending Product edit with its current and proposed values a
 
 ## Hosted workspaces
 
-The retained native graph explores up to three links; the hosted Connections workspace supports four.
-
-Connections is available as a shared React workspace from the native Graph
-toolbar and a record's Relationships section. It opens an authenticated sheet
-at `/connections?nativeWorkspace=connections`, optionally scoped by `source`
-and `id`. The native title, Done action and record navigator remain native.
-The inspector's suggestion review uses the same React queue actions as web.
-The existing native graph remains available for device comparison; this hosted
-entry does not replace its canvas until device acceptance establishes parity.
+Connections uses one shared React workspace for the map, four-link exploration,
+path inspector, and suggestion review. The native Graph route renders it directly.
+A record's Connections entry opens it scoped by `source` and `id`: a full-screen
+cover on iPhone/iPad, or a resizable 1400×900 window with a full-screen command on
+Mac. The native graph canvas, depth picker, recommendation sheets, and inline
+relationship alternatives are removed. Native record fields and record navigation
+remain native; the title, Done action, authenticated session, and dismissal are
+owned by Swift. Secondary Mac windows gate hosted content on the signed-in phase.
 Only `/connections` retains this mode; navigation search and record selection
 may change within that document, while record links hand off to native.
 Connections and Run evidence share one host, session bootstrap, lifecycle and

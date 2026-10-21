@@ -100,15 +100,18 @@ loops. [Validation](../../docs/agents/validation.md) owns check selection and de
   `AppModel.handle`, which reports once). Sentry is an app-target dependency only — CubbyKit
   never imports it.
 
-## Hosted pilot boundary
+## Hosted workspace boundary
 
-Only Run evidence (transcript, logs, AI usage) is hosted in `RunEvidenceView`.
-Keep every native entity detail renderer and coverage test. Run overview, actions,
-photo review, and routing remain native. The additive pilot does not bump native
-compatibility. Its browser-session POST is the explicit exception to generated
-entity operation routes; never send the bearer to WebKit or ambient cookies to
-bootstrap. Use a fresh nonpersistent store, exact-origin main-frame bridge checks,
-and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#hosted-workspaces).
+Run evidence and Connections share `HostedWorkspaceView`. Connections owns the
+graph, path inspector, and connection review UI; do not rebuild those in SwiftUI.
+Entity details retain native fields and navigation, with a scoped full-screen
+Connections entry. iPhone/iPad use a full-screen cover; Mac uses a resizable
+workspace window. The global graph route hosts the same React workspace directly.
+Run overview, actions, photo review, and record routing remain native.
+The browser-session POST is the explicit exception to generated entity routes;
+never send the bearer to WebKit or ambient cookies to bootstrap. Use a fresh
+nonpersistent store, exact-origin main-frame checks, and captured credential
+revisions across every await. See [DESIGN.md](DESIGN.md#hosted-workspaces).
 
 ## Language and style
 

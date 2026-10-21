@@ -39,7 +39,7 @@ export function GraphRecordFacts({ node }: { node: EntityGraphNode }) {
     singleLine: true,
   });
   return facts.length ? (
-    <dl className="graph-record-facts">
+    <dl className="graph-record-facts nodrag nopan">
       {facts.slice(0, 8).map((fact) => (
         <div key={fact.label}>
           <dt>{fact.label}</dt>
