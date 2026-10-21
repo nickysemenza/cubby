@@ -2360,6 +2360,17 @@ types, SQL defaults, update callbacks, indexes, checks, foreign-key actions,
 and Drizzle relations. Child storage does not acquire an entity identity,
 shortcode, client manifest, or automatic indexes. SQL constraint expressions
 use `{columnKey}` placeholders validated against that child's columns.
+
+Child read consumers explicitly opt into the shared list workbench with their
+existing scoped query, stable read handle, navigation and named workflow
+commands. Physical storage does not opt them in. Suggestions uses immutable
+Assessment handles, so republishing evidence replaces review identity;
+StatementRow exposes an opaque read UUID while source/externalId remains its
+mutation selector. Neither acquires a UUID route or generic CRUD. Run findings
+and photo reviews keep their parent-scoped commands and specialized editors.
+RunApproval remains historical storage with Run invalidation; it has no active
+producer, reader or answer UI.
+
 A column's `generated` SQL uses the same placeholders and emits a stored
 PostgreSQL generated column; it cannot also declare a default or update callback.
 Retained mail stores text presence this way, preserving the nullable and

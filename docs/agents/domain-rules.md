@@ -208,8 +208,11 @@ Use branded identifier schemas and parse strings once at genuine ingress seams
 (auth, persisted JSON, external input, DOM events, imports, and raw SQL). Typed
 producers and resolvers return branded values directly; never reconstruct a
 brand with an assertion or unsafe converter. Tests use the deterministic
-schema-backed factories from `@cubby/schemas/testing`. UUIDs never enter URLs or
-MCP—shortcodes do. Resolve codes through `shortcode-resolver`, mint through
+schema-backed factories from `@cubby/schemas/testing`. Entity URLs and MCP
+addresses use shortcodes. An explicitly declared child read may expose an
+opaque UUID handle for stable row identity; that handle grants no entity route,
+general lookup, or mutation selector. Keep the child workflow's existing
+addressing and authority checks. Resolve entity codes through `shortcode-resolver`, mint through
 `insertWithShortcode`, never reuse them, and keep `shortcodeSchema` a
 `ZodString`.
 

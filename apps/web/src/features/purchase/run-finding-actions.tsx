@@ -1,7 +1,8 @@
+import { operationCommandRequest } from "~/contracts/define";
+import { problemsContract } from "~/contracts/problems.contract";
 import type { RunDetail } from "~/contracts/run.contract";
-import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
-import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { formatCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -15,13 +16,7 @@ export function RunFindingActions({
 }: {
   finding: Pick<RunDetail["findings"][number], "id" | "proposedFix">;
 }) {
-  const resolve = useActionMutation({
-    mutationFn: problemOperations.resolveRunFinding.mutationOptions,
-    success: (result) =>
-      result.status === "applied"
-        ? "Applied import correction"
-        : "Dismissed import finding",
-  });
+  const resolve = useWorkflowCommand();
   const canApply = canApplyFinding(finding.proposedFix);
   const replacement =
     finding.proposedFix?.kind === "replace_aggregate_line"
@@ -82,11 +77,13 @@ export function RunFindingActions({
           <Button
             size="sm"
             onClick={() =>
-              resolve.mutate({
-                id: finding.id,
-                action: "apply",
-                reviewedFingerprint: reviewFingerprint,
-              })
+              resolve.mutate(
+                operationCommandRequest(problemsContract, "resolveRunFinding", {
+                  id: finding.id,
+                  action: "apply",
+                  reviewedFingerprint: reviewFingerprint,
+                }),
+              )
             }
             disabled={resolve.isPending}
           >
@@ -96,7 +93,14 @@ export function RunFindingActions({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => resolve.mutate({ id: finding.id, action: "dismiss" })}
+          onClick={() =>
+            resolve.mutate(
+              operationCommandRequest(problemsContract, "resolveRunFinding", {
+                id: finding.id,
+                action: "dismiss",
+              }),
+            )
+          }
           disabled={resolve.isPending}
         >
           Dismiss
