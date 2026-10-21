@@ -1,0 +1,63 @@
+apps/web/DESIGN.md
+  s_9b829d577c7e4c::t_345627ad6239b5 32
+apps/web/src/entity/audit-log/audit-log-entry.tsx
+  s_9b829d577c7e4c::t_37b8b4152a31ac 8,197-202
+apps/web/src/entity/components/ref-link/leaf.tsx
+  s_9b829d577c7e4c::t_33e9c3dcb3afa7 24,334-336
+apps/web/src/entity/display/detail-field-renderers/spending-category-summary.tsx
+  s_9b829d577c7e4c::t_10ab85348db212 6,39,57
+apps/web/src/entity/display/entity-display.tsx
+  s_9b829d577c7e4c::t_b3c9678af5ce71 99,595-598
+apps/web/src/entity/entity-detail/email-review.tsx
+  s_9b829d577c7e4c::t_33448ef60c3b77 11,93-157
+apps/web/src/entity/fields/field-explanation.tsx
+  s_9b829d577c7e4c::t_85af9cdd78f4a2 26,765-787
+apps/web/src/entity/fields/field-resolution-explanation.tsx
+  s_9b829d577c7e4c::t_7acf1daa8ccadf 11,227-236
+apps/web/src/entity/presentation/spending-category-label.tsx
+  s_9b829d577c7e4c::t_16f2a33c539932 1-77
+apps/web/src/entity/presentation/spending-category-pill.tsx
+  s_9b829d577c7e4c::t_753f2fd0c357cf 1-48
+apps/web/src/entity/suggestions/suggestion-review.tsx
+  s_9b829d577c7e4c::t_50b655fdc53f96 13,172-182
+apps/web/src/features/ai/ai-usage-page.tsx
+  s_9b829d577c7e4c::t_f2cfdeef01dfa4 15,226-233
+apps/web/src/features/ai/decisions-catalog.tsx
+  s_9b829d577c7e4c::t_e6df6fdfd475d2 18,514-522
+apps/web/src/features/calendar/calendar-item-inspector.tsx
+  s_9b829d577c7e4c::t_d2f76ffce4a9d1 15,321-339
+apps/web/src/features/finance/financial-booking-correction-review.tsx
+  s_9b829d577c7e4c::t_fadd46685bfb3a 11,124-134
+apps/web/src/features/finance/spending-classification-review.tsx
+  s_9b829d577c7e4c::t_4528dd5c13f95e 17,182-190
+apps/web/src/features/purchase/purchase-import-run-detail.tsx
+  s_9b829d577c7e4c::t_cdf87982821b7a 47,539-549
+apps/web/src/features/purchase/run-finding-actions.tsx
+  s_9b829d577c7e4c::t_ec59df830a9407 3,47-61
+apps/web/src/features/run/photo-group-review.tsx
+  s_9b829d577c7e4c::t_11dc71cc0830e7 46,1370-1373
+apps/web/src/server/domains/financial-transaction/repo/financial-booking-correction.ts
+  s_9b829d577c7e4c::t_a758b2f8b1b0b4 62-63,66,70-73,84-92,155,157,168-176,195,197
+apps/web/tests/e2e/spending-classification-review.spec.ts
+  s_9b829d577c7e4c::t_332143db79619a 261
+packages/schemas/src/financial-booking.ts
+  s_9b829d577c7e4c::t_e25c7cf258a4fa 191,193
+apps/web/src/entity/presentation/category-reference.tsx
+  s_9b829d577c7e4c::t_0fd2fa0950ae36 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5fb4672e432cd096ecdfe0c147e06305703cd7fa",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
