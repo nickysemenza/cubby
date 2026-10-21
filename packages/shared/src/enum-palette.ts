@@ -256,11 +256,7 @@ const CATEGORY_ICONS = new Map<string, EnumIcon>([
   ...glyphs("EyeSlash", "eye.slash", "background excluded"),
   ...glyphs("Clock", "clock", "ephemeral scheduled pending"),
   ...glyphs("Hand", "hand.raised", "manual"),
-  ...glyphs(
-    "Users",
-    "person.2",
-    "member guest member_request household_distribution",
-  ),
+  ...glyphs("Users", "person.2", "member guest member_request"),
   ...glyphs("Link", "link", "linked related"),
   ...glyphs("LinkBreak", "link.badge.minus", "unrelated unrelated_source"),
   ...glyphs("NotePencil", "square.and.pencil", "note"),
