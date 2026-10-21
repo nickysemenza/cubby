@@ -15,8 +15,8 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 /**
  * `entity.update` collection patches. Ported from the retired
  * `product_enrichment.patch_external_ids` contract; failure modes:
- * - an add that should take the slot's primary leaves two identifiers
- *   competing, or a secondary add disturbs the primary;
+ * - an add silently overwrites identity evidence or disturbs the current
+ *   primary; an explicit promotion discards the previous primary;
  * - a remove/replace of an identifier the product does not hold (or holds
  *   with other attributes than `expect`) succeeds, or applies the patch's
  *   other items before failing;
@@ -34,6 +34,7 @@ describe("collection patches through entity.update", () => {
     );
 
   const externalIdRead = z.object({
+    id: z.guid(),
     source: z.string(),
     kind: z.string(),
     externalId: z.string(),
@@ -90,16 +91,20 @@ describe("collection patches through entity.update", () => {
     externalId,
   });
 
-  it("an add takes the slot's primary unless marked secondary, and replace promotes a secondary", async () => {
+  it("adding identifiers preserves existing values and primary, and explicit promotion retains both", async () => {
     const code = await create("Patch drill", {
       externalIds: [{ ...asin("B0PATCH001"), url: null }],
     });
 
+    const originalIds = new Map(
+      (await read(code)).externalIds.map((item) => [item.externalId, item.id]),
+    );
     await update(code, {
       externalIds: [{ op: "add", key: asin("B0PATCH002") }],
     });
     expect(await slot(code, "amazon", "asin")).toEqual([
-      { externalId: "B0PATCH002", isPrimary: true },
+      { externalId: "B0PATCH001", isPrimary: true },
+      { externalId: "B0PATCH002", isPrimary: false },
     ]);
 
     await update(code, {
@@ -108,7 +113,8 @@ describe("collection patches through entity.update", () => {
       ],
     });
     expect(await slot(code, "amazon", "asin")).toEqual([
-      { externalId: "B0PATCH002", isPrimary: true },
+      { externalId: "B0PATCH001", isPrimary: true },
+      { externalId: "B0PATCH002", isPrimary: false },
       { externalId: "B0PATCH003", isPrimary: false },
     ]);
 
@@ -122,8 +128,33 @@ describe("collection patches through entity.update", () => {
       ],
     });
     expect(await slot(code, "amazon", "asin")).toEqual([
+      { externalId: "B0PATCH001", isPrimary: false },
       { externalId: "B0PATCH002", isPrimary: false },
       { externalId: "B0PATCH003", isPrimary: true },
+    ]);
+
+    // Retrying an existing secondary Add must not promote it. An explicit
+    // primary selection demotes the previous primary without deleting it.
+    const beforeRetry = await slot(code, "amazon", "asin");
+    await update(code, {
+      externalIds: [{ op: "add", key: asin("B0PATCH001") }],
+    });
+    expect(await slot(code, "amazon", "asin")).toEqual(beforeRetry);
+    expect(
+      (await read(code)).externalIds.find(
+        (item) => item.externalId === "B0PATCH001",
+      )?.id,
+    ).toBe(originalIds.get("B0PATCH001"));
+    await update(code, {
+      externalIds: [
+        { op: "add", key: asin("B0PATCH004"), value: { isPrimary: true } },
+      ],
+    });
+    expect(await slot(code, "amazon", "asin")).toEqual([
+      { externalId: "B0PATCH001", isPrimary: false },
+      { externalId: "B0PATCH002", isPrimary: false },
+      { externalId: "B0PATCH003", isPrimary: false },
+      { externalId: "B0PATCH004", isPrimary: true },
     ]);
 
     const sku = {

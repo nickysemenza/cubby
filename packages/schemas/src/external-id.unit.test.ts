@@ -42,6 +42,21 @@ describe("external identifiers", () => {
     expect(externalIdUpdate.parse([asin])).toEqual([
       expect.objectContaining(asin),
     ]);
+    // Independent additions do not compete for primary selection. Explicit
+    // requests for two primaries in the same slot remain contradictory.
+    const additions = [
+      { op: "add", key: asin },
+      { op: "add", key: { ...asin, externalId: "B000000002" } },
+    ];
+    expect(externalIdUpdate.parse(additions)).toEqual(additions);
+    expect(
+      externalIdUpdate.safeParse(
+        additions.map((item) => ({
+          ...item,
+          value: { isPrimary: true },
+        })),
+      ).success,
+    ).toBe(false);
   });
 
   it("derives Amazon product URLs from ASIN instead of storing them", () => {

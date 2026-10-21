@@ -237,7 +237,6 @@ import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
   ensureSlotPrimaries,
-  externalIdSlotUnchanged,
   externalIdsContainIsbn,
   foldGtinIntoExternalIds,
   requireCanonicalGtin,
@@ -2139,21 +2138,13 @@ const replaceExternalIdAttributes = async (
     .where(eq(entityExternalId.id, row.id));
 };
 
-/**
- * `add`: an upsert. Unless `isPrimary: false` the identifier takes the slot's
- * primary, overwriting the current primary in place; an identifier already
- * present as a secondary is promoted, and a secondary add of a present
- * identifier only refreshes its url.
- */
+/** Add learns one identity; only explicit primary intent changes another row's role. */
 const addExternalIdToSlot = async (
   tx: DrizzleTransaction,
   id: ProductId,
   item: Extract<ExternalIdPatchItem, { op: "add" }>,
-  slotIsBeingRemoved: boolean,
 ) => {
   const { source, kind, externalId } = item.key;
-  const entry = { ...item.key, ...item.value };
-  const isPrimary = item.value?.isPrimary ?? true;
   const slotRows = await tx.query.entityExternalId.findMany({
     where: and(
       eq(entityExternalId.entityId, id),
@@ -2163,70 +2154,34 @@ const addExternalIdToSlot = async (
     ),
   });
   const sameValue = slotRows.find((row) => row.externalId === externalId);
-  const liveSlot = isPrimary
-    ? slotRows.find((row) => row.isPrimary)
-    : sameValue;
-  // A slot this call removes from is never short-circuited, even when the
-  // add names its old value.
-  if (
-    liveSlot &&
-    !slotIsBeingRemoved &&
-    externalIdSlotUnchanged(liveSlot, entry)
-  )
+  const isPrimary =
+    item.value?.isPrimary ??
+    sameValue?.isPrimary ??
+    !slotRows.some((row) => row.isPrimary);
+  const url =
+    item.value?.url === undefined
+      ? (sameValue?.url ?? null)
+      : storedExternalIdUrl({ ...item.key, url: item.value.url });
+  if (sameValue && sameValue.isPrimary === isPrimary && sameValue.url === url)
     return;
-  if (!isPrimary || (sameValue && !sameValue.isPrimary)) {
-    // The global (source, kind, externalId) unique allows one row per
-    // identifier, so a present secondary is updated, never duplicated.
-    if (isPrimary) await demoteSlotPrimary(tx, id, source, kind);
-    if (sameValue) {
-      await tx
-        .update(entityExternalId)
-        .set({
-          url: storedExternalIdUrl(entry),
-          isPrimary,
-          updatedAt: new Date(),
-        })
-        .where(eq(entityExternalId.id, sameValue.id));
-      return;
-    }
+  if (isPrimary && !sameValue?.isPrimary)
+    await demoteSlotPrimary(tx, id, source, kind);
+  if (sameValue) {
+    await tx
+      .update(entityExternalId)
+      .set({ url, isPrimary, updatedAt: new Date() })
+      .where(eq(entityExternalId.id, sameValue.id));
+  } else {
     await tx.insert(entityExternalId).values({
       entityId: id,
-      entityKind: "product" as const,
+      entityKind: "product",
       source,
       kind,
       externalId,
-      url: storedExternalIdUrl(entry),
-      isPrimary: false,
+      url,
+      isPrimary,
     });
-    return;
   }
-  await tx
-    .insert(entityExternalId)
-    .values({
-      entityId: id,
-      entityKind: "product" as const,
-      source,
-      kind,
-      externalId,
-      url: storedExternalIdUrl(entry),
-      isPrimary: true,
-    })
-    .onConflictDoUpdate({
-      // Must match the index predicate exactly: Postgres infers the arbiter
-      // index from this, and `deletedAt IS NULL` alone no longer describes
-      // any unique index on these columns.
-      target: [
-        entityExternalId.entityId,
-        entityExternalId.source,
-        entityExternalId.kind,
-      ],
-      targetWhere: sql`${entityExternalId.isPrimary} AND ${entityExternalId.deletedAt} IS NULL`,
-      set: {
-        externalId,
-        url: storedExternalIdUrl(entry),
-        updatedAt: new Date(),
-      },
-    });
 };
 
 /**
@@ -2261,10 +2216,8 @@ const applyProductExternalIdPatch = async (
     adds.map((item) => item.key.source),
   );
 
-  const removedSlots = new Set<string>();
   for (const item of items) {
     if (item.op !== "remove") continue;
-    removedSlots.add(`${item.key.source}\0${item.key.kind}`);
     await tx
       .update(entityExternalId)
       .set({ deletedAt: new Date() })
@@ -2279,13 +2232,7 @@ const applyProductExternalIdPatch = async (
       item,
     );
   }
-  for (const item of adds)
-    await addExternalIdToSlot(
-      tx,
-      id,
-      item,
-      removedSlots.has(`${item.key.source}\0${item.key.kind}`),
-    );
+  for (const item of adds) await addExternalIdToSlot(tx, id, item);
   // Restore the one-primary-per-slot invariant after every write. See
   // `ensureSlotPrimaries` for why this is a repair keyed on live state rather
   // than promotion logic inside the loops.

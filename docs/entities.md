@@ -2956,7 +2956,13 @@ A field declared with `collection: { key }` accepts patch items on
 "remove", key, value?, expect?}`. All preconditions are checked before any
 change. Text arrays (Product `aliases`, `tags`) patch in the kernel; Product
 `externalIds` patches through the Product repository, which keeps primary and
-secondary slots, GTIN normalization and global identifier ownership. Canonical
+secondary slots, GTIN normalization and global identifier ownership. Add
+preserves every identifier and the current primary; an empty slot selects its
+first value. Explicit `isPrimary: true` demotes the previous primary without
+removing it. Make primary replaces the targeted row's primary attribute;
+replacing an identity value uses a targeted remove plus add in one atomic patch,
+with the old identity in the remove key. A full array remains a full replacement.
+Canonical
 GTIN digits do not establish the observed UPC/EAN encoding: barcode displays use
 GTIN and preserve canonical digits unless encoding evidence is available. Validated
 book identities may display ISBN-13. Primary and secondary barcode displays share

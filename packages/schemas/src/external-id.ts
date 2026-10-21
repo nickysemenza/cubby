@@ -240,14 +240,14 @@ const externalIdAttributes = z.strictObject({
     .boolean()
     .optional()
     .describe(
-      "Omitted or true on add: the identifier becomes its slot's primary, replacing the current one. false: added as a secondary.",
+      "Add preserves the current primary and every existing identifier. Omit to select primary only for an empty slot; true explicitly makes this identifier primary without removing the old one; false adds a secondary.",
     ),
 });
 
 /**
  * `externalIds` patch items (`entity.update`). The Product repository applies
- * them: an add is an upsert that takes the slot's primary unless
- * `isPrimary: false`, a remove must name the live identifier exactly, and
+ * them: add preserves existing values and primary unless explicitly changed,
+ * a remove must name the live identifier exactly, and
  * removing a primary promotes the slot's oldest secondary.
  */
 export const externalIdPatch = keyedCollectionPatch(
@@ -273,7 +273,7 @@ export const externalIdPatch = keyedCollectionPatch(
     addressed.add(identity);
     const takesPrimary =
       item.op === "add"
-        ? item.value?.isPrimary !== false
+        ? item.value?.isPrimary === true
         : item.op === "replace" && item.value.isPrimary === true;
     if (!takesPrimary) continue;
     if (primaries.has(slot))
