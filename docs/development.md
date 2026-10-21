@@ -242,6 +242,8 @@ native PostgreSQL installation remain owned by their existing runners.
   Dev and production build entrypoints also ensure WASM before consuming it.
   The cached Nx target invokes the build directly and hashes Rust inputs and
   toolchain settings; unrelated root package-script changes do not invalidate it.
+  Generation and WASM preparation always enter Nx; there is no separate local
+  marker or stat-based cache deciding whether Nx runs.
   Use `node scripts/ensure.ts wasm` to prepare it explicitly through that cache;
   `pnpm wasm` forces the build command. Keep generated WASM checkout-local
   rather than copying or symlinking another worktree's output.
