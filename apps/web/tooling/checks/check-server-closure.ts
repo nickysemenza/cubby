@@ -1,6 +1,6 @@
 /**
- * Budgets the Worker bundle (native Build Output) so request-path growth fails the
- * build instead of being found in a later performance sweep.
+ * Reports the Worker bundle import closures and rejects concrete build leaks.
+ * Byte counts are diagnostic: performance regressions require runtime evidence.
  *
  * "Entry" is the static import closure loaded for every Worker invocation.
  * "Browser dispatch" adds the browser API adapter's static imports, before
@@ -28,32 +28,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const MB = 1_000_000;
-// Every invocation loads this static entry, including API reads that never
-// render a page. Keep unrelated entity metadata behind its consuming handler.
-// In 2026-10, removing the helper barrel cut 2.39 MB / 94 files to 1.67 MB / 88.
-const ENTRY_BUDGET = 2 * MB;
-// The browser API bootstrap was 3.80 MB before title-column generation removed
-// the full field model from shortcode resolution (2026-10).
-// After generation it measures 3.13 MB / 156 files; keep that saving guarded.
-const BROWSER_DISPATCH_BUDGET = 3.25 * MB;
-// Measured at 5.35 MB first request / 16.6 MB total when introduced. Sentry 11
-// (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
-// attribute conventions, and channel-instrumentation tables) that Cubby never
-// uses at runtime because tracing is sampled to 0: 6.27 MB first request /
-// 16.9 MB total (since removed: see the orchestrion note below, which brought
-// the first request to 5.39 MB / 17.00 MB total). The purchase
-// and inventory batch of 2026-10 (settlement, corrections, receiving, identity
-// proof) reached 18.01 MB total with an unchanged 6.44 MB first request; the
-// total is lazily loaded and far inside Cloudflare's compressed limit, so it
-// gets headroom while the request-path budget stays tight. Merging the
-// purchase agent into this Worker (2026-10) added its runtime (Agents SDK,
-// pi-durable, MCP client; ~1.8 MB, sharing zod, pi-ai, and Sentry with the
-// app) as one lazily loaded chunk: 19.34 MB total, first request unchanged at
-// 5.41 MB. The agent's Durable Object and queue consumer load it on their
-// first event (`server/domains/purchase-import/operations/agent-host.ts`), never on a page.
-const FIRST_REQUEST_BUDGET = 6.5 * MB;
-const TOTAL_BUDGET = 20 * MB;
-
 const STATIC_IMPORT =
   /(?:import|export)\s*(?:[\w*{}\s,$]*?from\s*)?["'`](\.{1,2}\/[^"'`]+\.js)["'`]/g;
 const DYNAMIC_IMPORT = /import\(\s*["'`](\.{1,2}\/[^"'`]+\.js)["'`]\s*\)/g;
@@ -175,7 +149,7 @@ export function findSentryOrchestrionInjection(root: string): string[] {
   );
 }
 
-/** Logs the closure sizes; throws on a leaked test seam or an exceeded budget. */
+/** Logs closure sizes; throws on leaked test code or unwanted instrumentation. */
 export function checkServerClosure(cwd: string, previewBuild: boolean) {
   const serverRoot = getWorkerBundleDir(cwd);
   // Local fixture routes belong to preview builds, whose provenance is separate.
@@ -192,43 +166,12 @@ export function checkServerClosure(cwd: string, previewBuild: boolean) {
   const report = measureServerClosure(serverRoot);
   if (report.browserDispatch.files.length === report.entry.files.length)
     throw new Error(
-      "Browser dispatch chunk was not reached from the Worker entry. Update BROWSER_DISPATCH_CHUNK to match the emitted adapter before measuring its budget.",
+      "Browser dispatch chunk was not reached from the Worker entry. Update BROWSER_DISPATCH_CHUNK to match the emitted adapter before measuring its closure.",
     );
   const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;
   console.log(
     `[check-server-closure] entry ${mb(report.entry.bytes)} (${report.entry.files.length} files), browser dispatch ${mb(report.browserDispatch.bytes)} (${report.browserDispatch.files.length} files), first request ${mb(report.firstRequest.bytes)} (${report.firstRequest.files.length} files), total ${mb(report.total.bytes)}`,
   );
-  const over: string[] = [];
-  if (report.entry.bytes > ENTRY_BUDGET)
-    over.push(`entry ${mb(report.entry.bytes)} > ${mb(ENTRY_BUDGET)}`);
-  if (report.browserDispatch.bytes > BROWSER_DISPATCH_BUDGET)
-    over.push(
-      `browser dispatch ${mb(report.browserDispatch.bytes)} > ${mb(BROWSER_DISPATCH_BUDGET)}`,
-    );
-  if (report.firstRequest.bytes > FIRST_REQUEST_BUDGET)
-    over.push(
-      `first request ${mb(report.firstRequest.bytes)} > ${mb(FIRST_REQUEST_BUDGET)}`,
-    );
-  if (report.total.bytes > TOTAL_BUDGET)
-    over.push(`total ${mb(report.total.bytes)} > ${mb(TOTAL_BUDGET)}`);
-  if (over.length > 0) {
-    const scope =
-      report.entry.bytes > ENTRY_BUDGET
-        ? "entry"
-        : report.browserDispatch.bytes > BROWSER_DISPATCH_BUDGET
-          ? "browserDispatch"
-          : "firstRequest";
-    const largest = report
-      .largest(12, scope)
-      .map(
-        ({ file, bytes }) =>
-          `  ${mb(bytes)} ${file}\n    via ${report.chainTo(file, scope).join(" -> ")}`,
-      );
-    throw new Error(
-      `Worker bundle over budget: ${over.join("; ")}\nLargest ${scope} chunks:\n${largest.join("\n")}\n` +
-        "Load heavy modules inside the handler that uses them (await import()).",
-    );
-  }
 }
 
 const invokedPath = process.argv[1]

@@ -51,7 +51,7 @@ describe("measureServerClosure", () => {
       "Sentry build-time instrumentation reached the Worker bundle",
     );
   });
-  it("rejects a build whose renamed dispatch chunk escapes the budget scope", () => {
+  it("rejects a build whose renamed dispatch chunk escapes the measured scope", () => {
     const cwd = dist({
       ".cloudflare/output/v0/workers/default/bundle/index.js":
         'const b=()=>import("./assets/api-adapter-1.js");',

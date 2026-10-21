@@ -171,38 +171,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Share the same five runners across both suites. Prepare the Worker
-          # first, then reserve two browser workers and one PostgreSQL fork.
-          - name: Browser and PostgreSQL tests (1/5)
+          # Browser shards run alone: a companion check behind a shard
+          # serializes the slowest lane's wall time.
+          - name: E2E tests (desktop 1/4)
             browser: desktop-1
-            run: >-
-              pnpm exec nx run @cubby/web:build-cf --outputStyle=stream &&
-              CUBBY_E2E_SHARD=1/5 CUBBY_POSTGRES_SHARD=1/5
-              pnpm exec nx run-many -p @cubby/web -t e2e postgres -c mixed --parallel=2 --outputStyle=stream
-          - name: Browser and PostgreSQL tests (2/5)
+            run: CUBBY_E2E_SHARD=1/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 2/4)
             browser: desktop-2
-            run: >-
-              pnpm exec nx run @cubby/web:build-cf --outputStyle=stream &&
-              CUBBY_E2E_SHARD=2/5 CUBBY_POSTGRES_SHARD=2/5
-              pnpm exec nx run-many -p @cubby/web -t e2e postgres -c mixed --parallel=2 --outputStyle=stream
-          - name: Browser and PostgreSQL tests (3/5)
+            run: CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 3/4)
             browser: desktop-3
-            run: >-
-              pnpm exec nx run @cubby/web:build-cf --outputStyle=stream &&
-              CUBBY_E2E_SHARD=3/5 CUBBY_POSTGRES_SHARD=3/5
-              pnpm exec nx run-many -p @cubby/web -t e2e postgres -c mixed --parallel=2 --outputStyle=stream
-          - name: Browser and PostgreSQL tests (4/5)
+            run: CUBBY_E2E_SHARD=3/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 4/4)
             browser: desktop-4
-            run: >-
-              pnpm exec nx run @cubby/web:build-cf --outputStyle=stream &&
-              CUBBY_E2E_SHARD=4/5 CUBBY_POSTGRES_SHARD=4/5
-              pnpm exec nx run-many -p @cubby/web -t e2e postgres -c mixed --parallel=2 --outputStyle=stream
-          - name: Browser and PostgreSQL tests (5/5)
-            browser: desktop-5
-            run: >-
-              pnpm exec nx run @cubby/web:build-cf --outputStyle=stream &&
-              CUBBY_E2E_SHARD=5/5 CUBBY_POSTGRES_SHARD=5/5
-              pnpm exec nx run-many -p @cubby/web -t e2e postgres -c mixed --parallel=2 --outputStyle=stream
+            run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: PostgreSQL integration tests
+            run: pnpm exec nx run @cubby/web:postgres --outputStyle=stream
           - name: Auxiliary, Worker, and runtime tests
             step: Auxiliary tests and builds
             run: pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only

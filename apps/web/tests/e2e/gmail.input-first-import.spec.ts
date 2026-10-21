@@ -19,6 +19,7 @@ import {
 } from "../../tooling/convergence-harness";
 import {
   createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
   ensureMemberParty,
 } from "./fixtures/core";
@@ -89,15 +90,17 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
       notDeleted(schema.vendorAccount),
     ),
   });
-  const prerequisites = await createConvergenceFixtures(
-    (entity, overrides) => {
-      if (entity === "vendor") return Promise.resolve(canonicalVendor);
-      if (entity === "vendorAccount" && existingAccount)
-        return Promise.resolve({ id: existingAccount.shortcode });
-      return createEntityFixture(page, entity, overrides);
-    },
-    member.shortcode,
-    names,
+  const prerequisites = await createFixtureGraph(page, (create) =>
+    createConvergenceFixtures(
+      (entity, overrides) => {
+        if (entity === "vendor") return Promise.resolve(canonicalVendor);
+        if (entity === "vendorAccount" && existingAccount)
+          return Promise.resolve({ id: existingAccount.shortcode });
+        return create(entity, overrides);
+      },
+      member.shortcode,
+      names,
+    ),
   );
   if (existingVendor) {
     const allowed = await entityApi(page.request).update(

@@ -12,7 +12,7 @@ import {
   createConvergenceFixtures,
 } from "../../tooling/convergence-harness";
 import {
-  createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
   ensureMemberParty,
 } from "./fixtures/core";
@@ -46,10 +46,8 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     parseShortcodeFor("ledgerParty", member.shortcode),
     actor,
   );
-  const prerequisites = await createConvergenceFixtures(
-    (entity, overrides) => createEntityFixture(page, entity, overrides),
-    member.shortcode,
-    names,
+  const prerequisites = await createFixtureGraph(page, (create) =>
+    createConvergenceFixtures(create, member.shortcode, names),
   );
   const vendorId = await resolveOrThrow(db, "vendor", prerequisites.vendor.id);
   const cardId = await resolveOrThrow(
