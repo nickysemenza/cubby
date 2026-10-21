@@ -164,7 +164,7 @@ export async function reconcileDerivedRefreshPage(
       .for("update");
     if (stored && stored.availableAt > new Date())
       return { done: true, processed: 0 };
-    const cursor = derivedRefreshReconcileCursor.parse(
+    let cursor = derivedRefreshReconcileCursor.parse(
       stored?.cursor ?? {
         phase: "inputs",
         table: 0,
@@ -177,99 +177,106 @@ export async function reconcileDerivedRefreshPage(
     let processed = 0;
     let finished = false;
     if (cursor.phase === "inputs") {
-      const table = tables[cursor.table];
-      if (!table) next = { ...cursor, phase: "orphans", after: null };
-      else {
-        const result = await getDb(tx)
-          .execute(sql`SELECT r.id::text AS id, r.fingerprint, r.owners FROM (${table.query}) r
+      // Only empty input pages share a cursor transaction. Stop at the first
+      // populated page so fingerprint/capture work retains its existing bound.
+      for (let scans = 0; scans < 8; scans++) {
+        const table = tables[cursor.table];
+        if (!table) next = { ...cursor, phase: "orphans", after: null };
+        else {
+          const result = await getDb(tx)
+            .execute(sql`SELECT r.id::text AS id, r.fingerprint, r.owners FROM (${table.query}) r
           ${cursor.after ? sql`WHERE r.id>${cursor.after}::uuid` : sql``}
           ORDER BY r.id LIMIT ${DERIVED_REFRESH_PAGE}`);
-        const rows = z.array(observedRow).parse(result.rows);
-        const keyed = rows.map((row) => ({
-          ...row,
-          key: `${table.name}:${row.id}`,
-        }));
-        const previous = storedObservedRow.array().parse(
-          keyed.length
-            ? await getDb(tx)
-                .select()
-                .from(derivedRefreshObservedInput)
-                .where(
-                  inArray(
-                    derivedRefreshObservedInput.key,
-                    keyed.map((row) => row.key),
-                  ),
-                )
-            : [],
-        );
-        const hashes = new Map(
-          previous.map((row) => [row.key, row.fingerprint]),
-        );
-        const changed = keyed.filter(
-          (row) => hashes.get(row.key) !== row.fingerprint,
-        );
-        if (changed.length) {
-          const entity = entityByTable.get(table.name);
-          const prior = new Map(previous.map((row) => [row.key, row]));
-          const refs = changed.flatMap((row) => {
-            const old = prior.get(row.key);
-            const endpointsChanged =
-              old !== undefined &&
-              old.fingerprint.split(":")[1] !== row.fingerprint.split(":")[1];
-            return entity
-              ? [
-                  {
-                    entityKind: entitySchema.parse(entity),
-                    entityId: row.id,
-                    scopes: endpointsChanged
-                      ? [...(old?.owners ?? []), ...row.owners]
-                      : [],
-                  },
-                ]
-              : [...(old?.owners ?? []), ...row.owners];
-          });
-          await advanceInputRevisions(tx, [
-            "all",
-            table.scope,
-            ...(!entity &&
-            changed.some(
-              (row) =>
-                row.owners.length === 0 &&
-                (prior.get(row.key)?.owners.length ?? 0) === 0,
-            )
-              ? [`repair:${table.scope}`]
-              : []),
-            ...(entity
-              ? changed.map((row) => `entity:${entity}:${row.id}`)
-              : []),
-          ]);
-          await captureDerivedRefresh(tx, refs, { invalidate: false });
-        }
-        if (keyed.length)
-          await getDb(tx)
-            .insert(derivedRefreshObservedInput)
-            .values(
-              keyed.map((row) => ({
-                key: row.key,
-                fingerprint: row.fingerprint,
-                owners: row.owners,
-                scope: table.scope,
-                seenAt: startedAt,
-              })),
-            )
-            .onConflictDoUpdate({
-              target: derivedRefreshObservedInput.key,
-              set: {
-                fingerprint: sql`excluded.fingerprint`,
-                owners: sql`excluded.owners`,
-                seenAt: startedAt,
-              },
+          const rows = z.array(observedRow).parse(result.rows);
+          const keyed = rows.map((row) => ({
+            ...row,
+            key: `${table.name}:${row.id}`,
+          }));
+          const previous = storedObservedRow.array().parse(
+            keyed.length
+              ? await getDb(tx)
+                  .select()
+                  .from(derivedRefreshObservedInput)
+                  .where(
+                    inArray(
+                      derivedRefreshObservedInput.key,
+                      keyed.map((row) => row.key),
+                    ),
+                  )
+              : [],
+          );
+          const hashes = new Map(
+            previous.map((row) => [row.key, row.fingerprint]),
+          );
+          const changed = keyed.filter(
+            (row) => hashes.get(row.key) !== row.fingerprint,
+          );
+          if (changed.length) {
+            const entity = entityByTable.get(table.name);
+            const prior = new Map(previous.map((row) => [row.key, row]));
+            const refs = changed.flatMap((row) => {
+              const old = prior.get(row.key);
+              const endpointsChanged =
+                old !== undefined &&
+                old.fingerprint.split(":")[1] !== row.fingerprint.split(":")[1];
+              return entity
+                ? [
+                    {
+                      entityKind: entitySchema.parse(entity),
+                      entityId: row.id,
+                      scopes: endpointsChanged
+                        ? [...(old?.owners ?? []), ...row.owners]
+                        : [],
+                    },
+                  ]
+                : [...(old?.owners ?? []), ...row.owners];
             });
-        next =
-          rows.length < DERIVED_REFRESH_PAGE
-            ? { ...cursor, table: cursor.table + 1, after: null }
-            : { ...cursor, after: rows.at(-1)?.id ?? null };
-        processed = rows.length;
+            await advanceInputRevisions(tx, [
+              "all",
+              table.scope,
+              ...(!entity &&
+              changed.some(
+                (row) =>
+                  row.owners.length === 0 &&
+                  (prior.get(row.key)?.owners.length ?? 0) === 0,
+              )
+                ? [`repair:${table.scope}`]
+                : []),
+              ...(entity
+                ? changed.map((row) => `entity:${entity}:${row.id}`)
+                : []),
+            ]);
+            await captureDerivedRefresh(tx, refs, { invalidate: false });
+          }
+          if (keyed.length)
+            await getDb(tx)
+              .insert(derivedRefreshObservedInput)
+              .values(
+                keyed.map((row) => ({
+                  key: row.key,
+                  fingerprint: row.fingerprint,
+                  owners: row.owners,
+                  scope: table.scope,
+                  seenAt: startedAt,
+                })),
+              )
+              .onConflictDoUpdate({
+                target: derivedRefreshObservedInput.key,
+                set: {
+                  fingerprint: sql`excluded.fingerprint`,
+                  owners: sql`excluded.owners`,
+                  seenAt: startedAt,
+                },
+              });
+          next =
+            rows.length < DERIVED_REFRESH_PAGE
+              ? { ...cursor, table: cursor.table + 1, after: null }
+              : { ...cursor, after: rows.at(-1)?.id ?? null };
+          processed = rows.length;
+          if (rows.length > 0) break;
+          cursor = next;
+        }
+        if (next.phase !== "inputs") break;
       }
     } else if (cursor.phase === "orphans") {
       const removed = storedObservedRow
