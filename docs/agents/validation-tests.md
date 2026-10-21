@@ -59,7 +59,9 @@ the resolver/allocation comparison; do not generate household-sized random
 populations or repeat the same merge solely at larger cardinality.
 Give each inherited merge source an independent Purchase without another
 matching Expense override, so broad Purchase scope cannot hide a missing
-Vendor-default, Purchase-default or mapped-category predicate.
+Vendor-default, Purchase-default or mapped-category predicate. Assert that each
+isolated Expense actually inherits the changed category before comparing the
+preview; a productless Vendor path needs a food-related spending profile.
 The adjustment-only Purchase also needs a changed default: merely finding a
 `default` allocation row does not prove that preview reclassifies it.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination

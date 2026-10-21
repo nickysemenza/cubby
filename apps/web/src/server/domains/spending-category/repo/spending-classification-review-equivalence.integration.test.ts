@@ -291,7 +291,7 @@ async function seedReviewGraph(db: Database) {
   const inheritedVendor = {
     ...identity("vendor", vendors.length),
     name: "Synthetic merge default vendor",
-    spendingProfile: "mixed_retail",
+    spendingProfile: "food_retail",
     defaultSpendingCategoryId: mergedCategory,
   };
   await insertRows(db, "Vendor", [inheritedVendor]);
@@ -323,8 +323,8 @@ async function seedReviewGraph(db: Database) {
   const expenses: (ReturnType<typeof identity<"expense">> &
     Line & { name: string; date: string; costType: string; trade: string })[] =
     [];
-  const expense = (line: Partial<Line>) =>
-    expenses.push({
+  const expense = (line: Partial<Line>) => {
+    const row = {
       ...identity("expense", expenses.length),
       name: `Synthetic line ${expenses.length}`,
       date: "2026-01-01",
@@ -337,7 +337,10 @@ async function seedReviewGraph(db: Database) {
       spendingCategoryId: null,
       projectId: null,
       ...line,
-    });
+    };
+    expenses.push(row);
+    return row;
+  };
   products.forEach((product, index) =>
     expense({
       purchaseId: at(purchases, index % purchases.length).id,
@@ -348,7 +351,7 @@ async function seedReviewGraph(db: Database) {
   );
   expense({ cost: 10.01, spendingCategoryId: at(spend, 4).id });
   expense({ cost: 3.03 });
-  mergePaths.forEach((purchase, index) =>
+  const mergeExpenses = mergePaths.map((purchase, index) =>
     expense({
       purchaseId: purchase.id,
       productId: index === 2 ? mappedProduct.id : null,
@@ -363,7 +366,7 @@ async function seedReviewGraph(db: Database) {
     expense,
   });
   await insertRows(db, "Expense", expenses);
-  return { ...taxonomy, products, vendors, expenses };
+  return { ...taxonomy, products, vendors, expenses, mergeExpenses };
 }
 
 // The pre-scoping preview: resolve and allocate every live Expense before and
@@ -472,6 +475,11 @@ describe("spending classification preview equivalence", () => {
     const seeded = await seedReviewGraph(ctx.db);
     // The money cases the equivalence must hold over are really present.
     const allocations = await loadExpenseJointAllocations(ctx.db);
+    for (const subject of seeded.mergeExpenses)
+      expect(
+        allocations.find((row) => row.expenseId === subject.id)
+          ?.spendingCategoryId,
+      ).toBe(at(seeded.spend, 3).id);
     const adjustments = allocations.filter((row) => row.basis !== "principal");
     const projectsByPurchase = new Map<string | null, Set<string>>();
     for (const row of allocations)
