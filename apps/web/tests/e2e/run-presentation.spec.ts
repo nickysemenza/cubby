@@ -91,8 +91,10 @@ test("related Runs show account labels and shared quality", async ({
       exact: true,
     }),
   ).toHaveAttribute("href", `/vendor-accounts/${account.shortcode}`);
-  // Complete quality paints nothing; its status stays spoken.
-  await expect(row.getByText("Complete", { exact: true })).toBeAttached();
+  // Completed records retain their score and spoken quality status.
+  await expect(row.locator('[data-cell-col="dataQuality"]')).toHaveText(
+    "100, Complete",
+  );
   await openCellExplanation(row, "How quality is determined");
   await expect(
     page.getByText("Actor attributed", { exact: true }),
@@ -105,7 +107,9 @@ test("related Runs show account labels and shared quality", async ({
   const listRow = page
     .getByRole("row")
     .filter({ hasText: "Synthetic reference vendor" });
-  await expect(listRow.getByText("Complete", { exact: true })).toBeAttached();
+  await expect(listRow.locator('[data-cell-col="dataQuality"]')).toHaveText(
+    "100, Complete",
+  );
 });
 
 // Phase work must survive target-free Runs; handoff grouping must leave errors readable.

@@ -274,10 +274,13 @@ consumer, including USDA lists. Preserve their query and destination regressions
 when replacing the control's selectors.
 
 Lazy quality-explanation journeys wait for the row's loaded assessment before
-opening it; initial trigger visibility can precede deferred enrichment. When
-moving hover or keyboard focus between timestamp cells or chart bars, scope
-assertions to `[role="tooltip"][data-open]`; the previous tooltip remains in
-the DOM through its closing animation.
+opening it; initial trigger visibility can precede deferred enrichment. Compare
+column order by `data-column-id`, since enrichment and responsive labels can
+change header text without moving a column. Complete quality cells expose the
+score and spoken status together; assert the loaded cell value. When moving
+hover or keyboard focus between timestamp cells or chart bars, scope assertions
+to the target value's tooltip and `[data-open]`: the previous tooltip can remain
+open briefly during focus transfer as well as mounted during its closing animation.
 
 Scope sidebar assertions by the section's own heading, not arbitrary descendant
 headings: nested panels and relationship graphs can repeat the same heading.
