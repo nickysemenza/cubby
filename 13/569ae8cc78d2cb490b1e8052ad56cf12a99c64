@@ -1,0 +1,43 @@
+apps/web/src/lib/auth.ts
+  s_89f5879f3c3263::t_20701ad37aa06b 99-108
+tools/oxlint/cubby/rules/visual-conventions.ts
+  s_35c2a05e7b7fae::t_3d6af3c0557b28 57,78,107-109,156-288,291-293
+tools/oxlint/anti-slop/anti-slop-rules.test.ts
+  s_2034f37bd849a7::t_d29d61eab256c8 463-466,492
+tools/oxlint/anti-slop/fixtures/no-hand-rolled-panel.tsx.txt
+  s_2034f37bd849a7::t_d172409214f7dc 15-19
+tools/oxlint/anti-slop/fixtures/visual-conventions.tsx.txt
+  s_2034f37bd849a7::t_0f75d35481c880 22-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "13569ae8cc78d2cb490b1e8052ad56cf12a99c64",
+  "prompts": {},
+  "sessions": {
+    "s_2034f37bd849a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b4d-4961-7890-a13d-4387d8ef89d5",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_35c2a05e7b7fae": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15b4b-861b-70e0-aaf5-9697f5e120b5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_89f5879f3c3263": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c23e8c35-b127-4de4-adab-ab6c272d16e1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
