@@ -205,7 +205,7 @@ export function refreshDependencyRoutes(entity: Entity): readonly Route[] {
 }
 
 /** Cursor applies to each indexed frontier; no entire closure crosses the wire. */
-export async function readRefreshDependencyPage(
+async function readRefreshDependencyPage(
   db: Database,
   route: Route,
   sourceId: string,
