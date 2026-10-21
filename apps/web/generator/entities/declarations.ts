@@ -1,8 +1,8 @@
 import type { CompiledEntityListFields } from "./list-fields.ts";
 import type { ChildTableMetadata } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { readdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { compileEntityDeclarations } from "./compile.ts";
 import { modulesChildren } from "../../../../packages/schemas/src/child-tables/modules.ts";
 import { validatePredicateBaseline } from "./predicate-baseline.ts";
@@ -17,17 +17,8 @@ import type {
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { z } from "zod";
 
-const ROOT = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "..",
-);
-export const SPEC_DIRECTORY = resolve(
-  ROOT,
-  "packages/schemas/src/entity-definitions",
-);
+import { EntityDeclarationError, SPEC_DIRECTORY } from "./source.ts";
+export { EntityDeclarationError, SPEC_DIRECTORY } from "./source.ts";
 
 export type DeclarationValue =
   | string
@@ -505,13 +496,6 @@ export type CompiledEntity = Readonly<{
 }>;
 
 export type { EntityArtifacts } from "../artifacts.ts";
-
-export class EntityDeclarationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "EntityDeclarationError";
-  }
-}
 
 const isDeclarationObject = (value: unknown): value is DeclarationObject =>
   typeof value === "object" &&

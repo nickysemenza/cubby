@@ -209,6 +209,9 @@ vocabulary such as `activity-fields.ts` owns primitive enums and labels so runti
 and native generation share exhaustive labels without a bootstrap cycle.
 Cross-client input limits live in bootstrap-safe `shared/client-constants.ts`;
 native constant rendering must not import an identifier-dependent input schema.
+The generator emits the AST-derived shortcode registry before importing read-schema
+compilers and renderers. Declaration source paths and errors live independently
+of compiler initialization so fresh-checkout generation needs no prior artifacts.
 Declaration helpers such as pagination import shared constants from their leaf
 owners, because the shared barrel also loads generated shortcode schemas.
 Existing specialist list columns declare `route.listColumns: { module, export }`;
