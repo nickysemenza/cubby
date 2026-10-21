@@ -33,7 +33,6 @@
     "apps/web/tooling/dev/dev-runtime-retry.test.ts",
     "apps/web/tooling/dev/dev-session.test.ts",
     "apps/web/tooling/native-*.test.ts",
-    "apps/web/tooling/test-run-contract.test.ts",
-    "apps/web/tooling/tester-army/tester-army-startup.test.ts"
+    "apps/web/tooling/test-run-contract.test.ts"
   ]
 }

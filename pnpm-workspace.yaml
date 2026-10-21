@@ -27,8 +27,7 @@ strictDepBuilds: false
 minimumReleaseAge: 0
 
 overrides:
-  # The mobile SDK pins its driver independently of our CLI; both must use
-  # the same upstream runner and simulator startup fixes.
+  # Keep ordinary native QA and simulator journeys on the upstream runner fixes.
   agent-device: 0.21.29
   # better-auth pins @better-auth/core to its own exact version while the
   # @better-auth/* plugins peer on a caret range; auto-installed peers resolve

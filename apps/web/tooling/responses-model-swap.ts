@@ -6,9 +6,8 @@ import { z } from "zod";
 
 /**
  * A model peer's override of the purchase agent's pinned Responses model:
- * the live coordinator eval's candidate and the live Tester Army import
- * lane's agent model both swap in through `swapResponsesModel`. The peers
- * rewrite OpenAI Responses bodies only, so a model reached over another
+ * live coordinator eval candidates swap in through `swapResponsesModel`.
+ * The peers rewrite OpenAI Responses bodies only, so a model reached over another
  * protocol is refused rather than sent upstream on the wrong one.
  */
 export const modelSwapSchema = z.object({

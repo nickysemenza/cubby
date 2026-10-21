@@ -3,7 +3,7 @@ import liveGateway from "./live-gateway";
 
 // Failure modes: the agent keeps its pinned model; the swap drops other
 // request or reasoning settings; the web peer (no swap configured) or a
-// non-Responses route is rewritten; the run bundle cannot show which wire
+// non-Responses route is rewritten; the usage report cannot show which wire
 // model actually answered; the caller's feature and operation are replaced,
 // or its diagnostics or claimed environment reach the gateway; a Workers AI
 // call takes the provider route that duplicates it into `default`.
@@ -225,7 +225,7 @@ it("keeps the caller's labels under the launcher's environment", async () => {
   });
   const unlabelled = await send(env, "/anthropic/v1/messages", "{}");
   expect(JSON.parse(unlabelled.headers.get("cf-aig-metadata") ?? "{}")).toEqual(
-    { environment: "ci", feature: "tester-army", operation: "coupled.proxy" },
+    { environment: "ci", feature: "live-evaluation", operation: "proxy" },
   );
 });
 

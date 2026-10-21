@@ -24,7 +24,7 @@ function primaryCheckoutRoot(from: string): string | undefined {
 }
 
 /**
- * One credential for an explicit opt-in tool (live evals, Tester Army), read
+ * One credential for an explicit opt-in tool (live evals), read
  * from the shell, then `envFile`, then this checkout's `apps/web/.env`, then
  * the primary checkout's. Worktrees intentionally get no `.env` copy, so the
  * primary-checkout fallback is the supported way to reach a local secret.

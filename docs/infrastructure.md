@@ -655,7 +655,7 @@ Local and preview environments retain password login.
 
 ## AI providers
 
-All billed application, Tester Army, live-evaluation, and integration-enabled
+All billed application, live-evaluation, and integration-enabled
 development calls use gateway `cubby`. Production uses the Workers AI Gateway
 binding: `AI.run` with an explicit gateway for Workers AI models, and
 `AI.gateway("cubby").run` for managed providers. Named subscriber-credit BYOK
@@ -679,7 +679,8 @@ and a spend rule split by a high-cardinality key gives every value its own
 budget ([custom metadata](https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/),
 [spend limits](https://developers.cloudflare.com/ai-gateway/features/spend-limits/)).
 Cookbook metadata used for model pricing is read before outbound
-filtering. Tester Army preserves application feature/operation attribution,
+filtering. The live-evaluation gateway peer
+(`apps/web/tooling/ai/live-gateway.ts`) preserves application feature/operation attribution,
 sets its own environment, and always bypasses gateway caching because the
 documented cache key does not include the gateway or metadata, so shared-gateway
 traffic can return another environment's cached response

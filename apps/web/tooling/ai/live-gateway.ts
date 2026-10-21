@@ -10,22 +10,17 @@ import {
   workersAiRunRequest,
 } from "@cubby/shared/ai/gateway-request";
 import { z } from "zod";
-import { isModelPricingRead } from "../ai/model-pricing-transport";
+import { isModelPricingRead } from "./model-pricing-transport";
 import { modelSwapSchema, swapResponsesModel } from "../responses-model-swap";
 
 /**
- * The coupled harness's model peer for live Tester Army journeys. The purchase
- * agent (as `cubby-test-model`) and the web Worker's structured features (as
- * `cubby-test-gateway`) both address their provider routes at a placeholder
- * host; this Worker forwards each request to Cubby's AI Gateway with the
- * Tester Army Unified Billing token, labelled with the caller's feature and
- * operation under the launcher's `ci` or `development` environment. Workers AI
- * calls go to the account `/ai/run`, never the gateway's provider route
- * (see `workersAiRunRequest`). A peer configured with
- * `RESPONSES_MODEL`/`RESPONSES_EFFORT` swaps them into its `/openai/responses`
- * calls; every other request is forwarded unchanged. Nothing is scripted:
- * every model answer is real. `/usage` reports request counts and wire models
- * per route and the HTTP status of each failed call, never content.
+ * The live-evaluation model peer. The purchase agent and web Worker address
+ * provider routes at a placeholder host; this Worker forwards requests to
+ * Cubby's AI Gateway under the launcher's environment and caller's labels.
+ * Workers AI uses the account `/ai/run` route (see `workersAiRunRequest`).
+ * Optional `RESPONSES_MODEL`/`RESPONSES_EFFORT` overrides affect only OpenAI
+ * Responses calls. `/usage` reports counts, wire models and failed statuses,
+ * never request or response content.
  */
 type Env = {
   ACCOUNT_ID: string;
@@ -65,7 +60,7 @@ function wireModel(body: ArrayBuffer) {
 }
 
 /** Labels a request whose caller sent none (or an unreadable header). */
-const PROXY_CALL = { feature: "tester-army", operation: "coupled.proxy" };
+const PROXY_CALL = { feature: "live-evaluation", operation: "proxy" };
 
 function forward(
   request: Request,

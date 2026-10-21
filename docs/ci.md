@@ -26,24 +26,20 @@ own workflow.
 
 ## Journeys
 
-Tester Army and simulator journeys live in `journeys.yaml`, outside the merge
-gate. A journey label on a same-repository PR starts its journey on the PR head
-right away, without waiting for CI: `tester-army` runs the web smoke journeys,
-`tester-army:ios` the two native shards, `tester-army:import` the coupled
-import journeys, and `simulator-e2e` the deterministic simulator journey. A
-dispatch runs one on the dispatched ref, for example
-`gh workflow run journeys.yaml --ref <branch> -f journey=tester-army-web`; the
-`journey` input is a choice of `simulator-search`, `simulator-inputs`,
-`tester-army-web`, `tester-army-visual`, `tester-army-explore`,
-`tester-army-ios`, `tester-army-both`, `tester-army-import` and
-`tester-army-all`. Unlabeled changes, `main` pushes and the nightly run start
-none. Relabeling or redispatching the same journey cancels its older run.
+Simulator journeys live in `journeys.yaml`, outside the merge gate. The
+`simulator-e2e` label on a same-repository PR starts the deterministic simulator
+journey on the PR head and subsequent pushes. Manual dispatch selects
+`simulator-search` or `simulator-inputs` on the dispatched ref. Unlabeled
+changes, `main` pushes and nightly runs start neither. Relabeling or
+redispatching cancels the older run.
 
-Native journeys restore SPM and DerivedData caches before their build.
-Native journey jobs take macOS slots beyond the two that `Apple host tests` and
-`Apple simulator build` use. The workflow holds `pull-requests: write` for the
-GitHub reporter's PR comments. See [Tester Army](tester-army.md) for replay,
-evidence and timing limits.
+Native journeys restore SPM and DerivedData caches before their build and take
+macOS slots beyond the required Apple host tests and simulator build.
+The optional Tester Army harness is retired, including its agent-driven
+navigation, coupled live import/photo smoke, visual snapshots and action
+replays. Their removal deliberately gives up that optional confidence;
+retained deterministic checks do not establish equivalent coverage for every
+retired catalog case. Required merge checks remain in `ci.yaml`.
 
 ## Cache keys and the remote cache
 
@@ -419,8 +415,8 @@ Linux's ephemeral port range, and an all-interfaces bind failed container
 startup when an outgoing connection held it. `POSTGRES_INITDB_ARGS` sets the disposable
 settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its
 PostgreSQL connection during startup; its pinned distroless image has no
-`/bin/sh` for Docker shell health checks. The optional purchase-import and
-Tester Army Linux lanes use the same service definitions. The
+`/bin/sh` for Docker shell health checks. The optional purchase-import lane
+uses the same service definitions. The
 `@claude` mention workflow (`claude.yml`) remains on demand; a new mention on
 the same issue or PR supersedes its previous response, while unrelated comments
 do not cancel it. There is no automatic PR review workflow. Preview deploys

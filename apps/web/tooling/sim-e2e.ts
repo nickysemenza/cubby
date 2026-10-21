@@ -1,9 +1,4 @@
 import { createPostgresPool } from "./postgres-pool";
-import {
-  readTesterArmySummary,
-  testerArmyRawOutput,
-} from "./tester-army/report";
-import { testerArmyReplayCommand } from "./tester-army/model";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
@@ -75,15 +70,12 @@ Modes (one per run; no mode = search/detail smoke in the iOS simulator):
                              seeded synthetic household QA pass; --hold keeps it
                              up; --journey replays only the named scripts
   --qa-photo-completion     stopped photo Run final approval updates hero and reports
-  --tester-army [--journey a,b] [--replay] [--wrong]
-                             live-model agent journeys (billed; see docs/tester-army.md)
 
 Environment:
   CUBBY_SIM_DEVICE           simulator name or UDID to prefer
   CUBBY_E2E_AGENT_DEVICE     JSON {command,targetArgs} returned by T3 device_open
   CUBBY_SIM_DB_EXTERNAL=1    skip starting PostgreSQL (already running)
   CUBBY_E2E_PREBUILT_WEB=1   trust the existing web build
-  TESTER_ARMY_*              Tester Army model/journey settings
   R2_*, BETTER_AUTH_SECRET and DATABASE_URL are set to local simulation values.
 
 Artifacts: artifacts/<lane>/<cubby_sim_hex>/ (run-manifest.json, logs, video).
@@ -91,12 +83,11 @@ Workflow guide: apps/apple/ITERATION.md; acceptance map: docs/agents/core-journe
   process.exit(0);
 }
 const journeyFlag = rawFlags.indexOf("--journey");
-/** `--journey a,b`: Tester Army journey ids, or `--qa` script names without extension. */
+/** `--journey a,b`: `--qa` script names without extension. */
 const selectedJourneys: readonly string[] = (() => {
   if (journeyFlag < 0) return [];
   const value = rawFlags[journeyFlag + 1];
   if (!value) throw new Error("--journey needs a comma-separated id list");
-  process.env.TESTER_ARMY_JOURNEYS = value;
   return value.split(",");
 })();
 const flags = rawFlags.filter(
@@ -116,11 +107,6 @@ const layout = flags.includes("--layout");
 const extendedJourney = flags.includes("--extended-journey");
 const productClarity = flags.includes("--product-clarity");
 const emojiReview = flags.includes("--emoji-review");
-const testerArmy = flags.includes("--tester-army");
-if (process.env.CUBBY_E2E_AGENT_DEVICE && testerArmy)
-  throw new Error(
-    "Shared device launcher supports finite simulator journeys; AI lanes own their driver lifecycle",
-  );
 if (process.env.CUBBY_E2E_AGENT_DEVICE) {
   const driver = sharedDeviceCommand("pnpm", [
     "exec",
@@ -133,20 +119,12 @@ if (process.env.CUBBY_E2E_AGENT_DEVICE) {
     throw new Error("Shared driver targets a different device");
   process.env.CUBBY_SIM_DEVICE = udid;
 }
-const testerArmyReplay = flags.includes("--replay");
-const wrongName = flags.includes("--wrong") || flags.includes("--wrong-name");
 const qaPhotoCompletion = flags.includes("--qa-photo-completion");
 const qa = flags.includes("--qa") || qaPhotoCompletion;
 const qaHold = flags.includes("--hold");
 if (
   extendedJourney &&
-  (headless ||
-    layout ||
-    productClarity ||
-    emojiReview ||
-    testerArmy ||
-    inputJourney ||
-    qa)
+  (headless || layout || productClarity || emojiReview || inputJourney || qa)
 )
   throw new Error(
     "--extended-journey is a standalone simulator mode; it may add --video",
@@ -164,23 +142,12 @@ if (
   (emojiReview &&
     flags.some((flag) => flag !== "--emoji-review" && flag !== "--video")) ||
   (inputJourney &&
-    (testerArmy ||
-      headless ||
+    (headless ||
       photo ||
       purchase ||
       statementCsv ||
       layout ||
       productClarity)) ||
-  (testerArmy &&
-    (inputJourney ||
-      headless ||
-      photo ||
-      purchase ||
-      statementCsv ||
-      video ||
-      layout ||
-      productClarity)) ||
-  ((testerArmyReplay || wrongName) && !testerArmy) ||
   (video && headless) ||
   (layout && (headless || photo || purchase || productClarity)) ||
   (productClarity && (headless || photo || purchase || statementCsv)) ||
@@ -201,18 +168,14 @@ if (
         "--layout",
         "--product-clarity",
         "--statement-csv",
-        "--tester-army",
-        "--replay",
-        "--wrong-name",
         "--qa",
         "--qa-photo-completion",
         "--hold",
-        "--wrong",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -220,21 +183,19 @@ const lane = qa
     ? "sim-emoji-review-e2e"
     : inputJourney
       ? "sim-input-journey-e2e"
-      : testerArmy
-        ? "sim-tester-army-e2e"
-        : productClarity
-          ? "sim-product-clarity-e2e"
-          : statementCsv
-            ? "headless-statement-csv-e2e"
-            : layout
-              ? "sim-layout-e2e"
-              : purchase
-                ? "headless-wardrobe-e2e"
-                : photo
-                  ? "headless-photo-e2e"
-                  : headless
-                    ? "headless-e2e"
-                    : "sim-e2e";
+      : productClarity
+        ? "sim-product-clarity-e2e"
+        : statementCsv
+          ? "headless-statement-csv-e2e"
+          : layout
+            ? "sim-layout-e2e"
+            : purchase
+              ? "headless-wardrobe-e2e"
+              : photo
+                ? "headless-photo-e2e"
+                : headless
+                  ? "headless-e2e"
+                  : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -262,8 +223,6 @@ mkdirSync(artifacts, { recursive: true });
 const runStartedAt = performance.now();
 const phases: Array<{ name: string; durationMs: number }> = [];
 let phase = "setup";
-/** The driver model the preflight resolved; recorded in the run bundle. */
-let testerArmyDriverModel: string | undefined;
 let nativeBuildBinary: string | undefined;
 let nativeBuildSourceVersion: string | undefined;
 /** Whether the run installed a certified bundle instead of compiling one. */
@@ -1072,20 +1031,6 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
     const durationMs = Math.round(performance.now() - runStartedAt);
     const resultsPath = path.join(artifacts, "run-results.json");
     scenarioEvidence.push(...retainRunDiagnostics(failure));
-    if (testerArmy) {
-      const summary = path.join(
-        testerArmyRawOutput(artifacts),
-        "agent-summary.json",
-      );
-      if (existsSync(summary)) {
-        const evidence = path.join(artifacts, "agent-summary.json");
-        writeFileSync(
-          evidence,
-          `${JSON.stringify(readTesterArmySummary(path.dirname(summary)), null, 2)}\n`,
-        );
-        scenarioEvidence.push(evidence);
-      }
-    }
     writeFileSync(
       resultsPath,
       `${JSON.stringify({ schemaVersion: 1, status, scenario: lane, durationMs }, null, 2)}\n`,
@@ -1096,10 +1041,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       evidence: [resultsPath, ...scenarioEvidence],
       kind: "native",
       status,
-      command:
-        testerArmy && testerArmyDriverModel
-          ? testerArmyReplayCommand(["pnpm", "test:e2e:sim", "--", ...rawFlags])
-          : ["pnpm", "test:e2e:sim", "--", ...rawFlags],
+      command: ["pnpm", "test:e2e:sim", "--", ...rawFlags],
       cases: [{ name: lane, status, durationMs }],
       profile: "worker",
       scenario: lane,
@@ -1115,14 +1057,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       fixtureVersion: 1,
       phase,
       phases,
-      runtime: testerArmy
-        ? {
-            ...runtime,
-            testerArmy: "0.19.0",
-            ...(testerArmyDriverModel && { model: testerArmyDriverModel }),
-            effort: "medium",
-          }
-        : runtime,
+      runtime,
       build,
     });
     console.log(`[${lane}] E2E artifact: ${manifest}`);
@@ -1141,7 +1076,6 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
 
 let qaIds: Record<string, string> = {};
 let qaUserId = "";
-let journeyIdsFile = "";
 
 async function seedNativeScenario(
   userId: string,
@@ -1173,16 +1107,6 @@ async function seedNativeScenario(
       qaIds = await seedNativeQa(seedPool, userId);
       qaUserId = userId;
       return { productId: qaIds.PRODUCT_ID ?? "" };
-    }
-    if (testerArmy) {
-      const { seedJourneyWorld } =
-        await import("./scenarios/tester-army-journeys");
-      journeyIdsFile = path.join(artifacts, "journey-ids.json");
-      writeFileSync(
-        journeyIdsFile,
-        JSON.stringify(await seedJourneyWorld(seedPool, userId)),
-      );
-      return { productId: "" };
     }
     if (productClarity)
       return await seedSimulatorProductClarity(seedPool, userId);
@@ -1467,43 +1391,6 @@ async function runQaJourneys(
   else await assertQaOutcomes();
 }
 
-async function runTesterArmyNativeJourney(deviceID: string): Promise<void> {
-  const output = testerArmyRawOutput(artifacts);
-  await run(
-    "pnpm",
-    [
-      "--dir",
-      webRoot,
-      "exec",
-      "e2e",
-      "run",
-      "--output",
-      output,
-      ...(process.env.TESTER_ARMY_DEBUG === "1" ? ["--debug"] : []),
-      ...(process.env.TESTER_ARMY_SHARD
-        ? ["--shard", process.env.TESTER_ARMY_SHARD]
-        : []),
-    ],
-    repoRoot,
-    undefined,
-    false,
-    {
-      ...process.env,
-      E2E_TELEMETRY_DISABLED: "1",
-      TESTER_ARMY_TARGET: "ios",
-      TESTER_ARMY_ORIGIN: process.env.TESTER_ARMY_ORIGIN,
-      TESTER_ARMY_IDS_FILE: journeyIdsFile,
-      TESTER_ARMY_DEVICE_ID: deviceID,
-      TESTER_ARMY_SESSION: `tester-army-${simName}`,
-      ...(testerArmyReplay && { TESTER_ARMY_REPLAY: "1" }),
-      ...(wrongName && { TESTER_ARMY_WRONG: "1" }),
-    },
-  );
-  const summary = readTesterArmySummary(output);
-  if (summary.status !== "passed")
-    throw new Error("Tester Army iOS journey did not pass");
-}
-
 async function runNativeJourney(
   deviceID: string,
   common: string[],
@@ -1511,7 +1398,6 @@ async function runNativeJourney(
   layoutRunID?: string,
   purchaseId?: string,
 ): Promise<void> {
-  if (testerArmy) return runTesterArmyNativeJourney(deviceID);
   // CLI replay owns a separate daemon. Release the prepare daemon so it
   // cannot retain the runner lease; this hosted daemon belongs to this job.
   if (process.env.GITHUB_ACTIONS === "true")
@@ -1646,14 +1532,6 @@ async function main(): Promise<void> {
     return errors;
   };
   try {
-    if (testerArmy) {
-      phase = "model-preflight";
-      const { testerArmyDriverIdentity, preflightTesterArmyModel } =
-        await import("./tester-army/model");
-      testerArmyDriverModel = testerArmyDriverIdentity();
-      process.env.E2E_TELEMETRY_DISABLED = "1";
-      await preflightTesterArmyModel();
-    }
     phase = "web-build";
     const buildStarted = performance.now();
     const buildAction = await ensureWebBuild(
@@ -1728,7 +1606,6 @@ async function main(): Promise<void> {
     const objectStorageUrl = runtime.objectStorageUrl;
     if (!objectStorageUrl)
       throw new Error("Native runtime is missing object storage");
-    if (testerArmy) process.env.TESTER_ARMY_ORIGIN = url.origin;
     const context = await request.newContext({
       baseURL: url.origin,
       extraHTTPHeaders: { Origin: url.origin },

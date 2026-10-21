@@ -176,7 +176,7 @@ both the app and the runner and check the runner's selected identifier
 and `TEXT_ENTRY_PHASE` timings first. agent-device binds a coordinate-chosen
 input by query index, which resolves to a different input once focusing scrolls
 the form; the pinned patch re-queries the input by its accessibility identifier
-instead (see [Tester Army](../../docs/tester-army.md)). A focused input touching
+instead. A focused input touching
 the keyboard's prediction bar is a separate layout issue; successful automation
 does not verify keyboard clearance.
 
