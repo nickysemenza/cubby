@@ -165,10 +165,17 @@ checked more than once; peak edit memory and parallel worktrees take priority.
 
 Every local and CI typecheck runs through `scripts/tsc.ts`, which invokes
 [tsrs](https://github.com/oxc-project/tsrs), a Rust port of TypeScript 7 that
-reports the same diagnostics and emits the same declaration bytes; a cold
-`pnpm typecheck` takes about 20 seconds instead of four minutes in the original
-local comparison. CI uses the same compiler and Nx result cache as local
+reports the same diagnostics and emits the same declaration bytes. CI uses
+the same compiler and Nx result cache as local
 checks; there is no alternate compiler selector or second compiler pass.
+
+The shared launcher uses one checker per process, including declaration
+producers and imported tooling callers. Parallel checkers duplicate the type
+graph; five worktrees need lower per-session memory more than one check needs
+all the cores. Programs within `typecheck:web` still run sequentially; the full
+workspace command permits two package checks at once. There is no machine-wide
+queue or memory watchdog. Keep `--build` first when invoking the
+launcher; it appends the checker policy after the caller's arguments.
 
 Runtime Vite imports continue to load real source. Compiler paths alone redirect
 HTTP handlers, SSR dispatch, server functions and middleware to the annotated
