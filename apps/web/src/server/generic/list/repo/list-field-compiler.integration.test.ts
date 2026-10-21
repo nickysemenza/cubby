@@ -459,7 +459,11 @@ describe("compiled list fields", () => {
 
   it("orders products by a derived GTIN and a related view, empties last", async () => {
     const product = (name: string, upc?: string) =>
-      createProductFixture(ctx.db, makeProductInput({ name, upc }), ctx.actor);
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name, barcode: upc }),
+        ctx.actor,
+      );
     const late = await product("Compiler late barcode", "036000291452");
     const early = await product("Compiler early barcode", "012345678905");
     const bare = await product("Compiler no barcode");

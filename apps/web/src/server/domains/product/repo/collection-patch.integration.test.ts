@@ -209,7 +209,7 @@ describe("collection patches through entity.update", () => {
   });
 
   it("removing a primary promotes the oldest surviving secondary", async () => {
-    const code = await create("Promotion drill", { upc: "012345678905" });
+    const code = await create("Promotion drill", { barcode: "012345678905" });
     await update(code, {
       externalIds: [
         { op: "add", key: gtin("00012345678912"), value: { isPrimary: false } },

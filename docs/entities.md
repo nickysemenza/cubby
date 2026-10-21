@@ -2986,6 +2986,13 @@ GTIN digits do not establish the observed UPC/EAN encoding: barcode displays use
 GTIN and preserve canonical digits unless encoding evidence is available. Validated
 book identities may display ISBN-13. Primary and secondary barcode displays share
 one renderer; provider lookup links belong to the applicable lookup workflow.
+Product create/update accepts one write-only `barcode` shortcut for barcode or
+ISBN input; `primaryGtin` remains a derived read of `externalIds`. Omission
+leaves identity alone; null retires only the current primary barcode and the
+oldest remaining barcode is promoted. Setting the shortcut selects the primary
+without removing other identifiers. Collection replacement stays explicit.
+Books inference comes from validated ISBN identity in the collection, with
+Food evidence taking precedence; the barcode editor is available in every category.
 
 ## Classification field policies
 

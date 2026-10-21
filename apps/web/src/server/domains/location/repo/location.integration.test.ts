@@ -249,7 +249,7 @@ describe("deleteLocations hierarchy", () => {
       ctx.db,
       makeProductInput({
         name: "Location Inventory Blocker",
-        upc: "800000000907",
+        barcode: "800000000907",
       }),
       ctx.actor,
     );
@@ -440,14 +440,17 @@ describe("location detail — inventoryItems agree with directItemCount", () => 
     const [bolts, washers] = await Promise.all([
       createProductFixture(
         ctx.db,
-        makeProductInput({ name: "Detail Parity Bolts", upc: "800000000914" }),
+        makeProductInput({
+          name: "Detail Parity Bolts",
+          barcode: "800000000914",
+        }),
         ctx.actor,
       ),
       createProductFixture(
         ctx.db,
         makeProductInput({
           name: "Detail Parity Washers",
-          upc: "800000000921",
+          barcode: "800000000921",
         }),
         ctx.actor,
       ),

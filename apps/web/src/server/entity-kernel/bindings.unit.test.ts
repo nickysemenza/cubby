@@ -42,8 +42,7 @@ describe("entity kernel bindings", () => {
       name: "Example product",
       aliases: [],
       tags: [],
-      upc: null,
-      isbn: null,
+      barcode: null,
       fdc_id: null,
       manufacturer: "Example maker",
       model: null,
@@ -71,7 +70,7 @@ describe("entity kernel bindings", () => {
           entity: "product",
           data: {
             ...productData,
-            upc: "00045242593057",
+            barcode: "00045242593057",
             ingredientId: "ING-ABCD",
           },
         }).success,

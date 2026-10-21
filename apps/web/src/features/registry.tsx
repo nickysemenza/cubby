@@ -56,7 +56,7 @@ import {
   productMedia,
   ProductTagsField,
   ProductUnitMappingsField,
-  ProductUpcField,
+  ProductBarcodeField,
   ProductUsdaFoodField,
 } from "~/features/product/product-editor-fields";
 import { useUpcAwareCreate } from "~/features/product/use-upc-aware-create";
@@ -557,7 +557,7 @@ export function installFeatures(): void {
       "unit-mappings": ProductUnitMappingsField,
       "label-nutrition": ProductLabelNutritionField,
       "external-ids": ProductExternalIdsField,
-      "upc-lookup": ProductUpcField,
+      "upc-lookup": ProductBarcodeField,
       "usda-food": ProductUsdaFoodField,
       "product-tags": ProductTagsField,
       // `SourceAliasesField`/`SourceRefsField` already hardcode their own

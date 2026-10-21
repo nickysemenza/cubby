@@ -1627,11 +1627,11 @@ export async function createProductRecord<TOutput>(
   // failing rolls the insert back and "failed" means failed.
   try {
     return await withTransaction(db, async (tx) => {
-      // A bare `upc` becomes a `gtin` identifier row rather than a column, and
+      // A bare barcode becomes a GTIN identifier row rather than a column, and
       // is folded into the payload so it cannot be lost to (or lose to) an
       // explicit `externalIds` on the same call.
-      const { upc, isbn, ...columnData } = productData;
-      const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
+      const { barcode, ...columnData } = productData;
+      const incomingGtin = resolvePrimaryProductCodeInput(barcode);
       const desiredExternalIds =
         incomingGtin === undefined || incomingGtin === null
           ? (externalIds ?? [])
@@ -1862,8 +1862,7 @@ export async function updateProduct<TOutput>(
 
   const classificationRequested =
     externalIdsInput !== undefined ||
-    data.upc !== undefined ||
-    data.isbn !== undefined ||
+    data.barcode !== undefined ||
     data.categoryId !== undefined ||
     ingredientId !== undefined ||
     data.fdc_id !== undefined;
@@ -1885,8 +1884,8 @@ export async function updateProduct<TOutput>(
     beforeExternalIds: Array<typeof entityExternalId.$inferSelect>,
   ) => {
     if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
-    const { upc, isbn, aliases, tags, ...columnData } = productData;
-    const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
+    const { barcode, aliases, tags, ...columnData } = productData;
+    const incomingGtin = resolvePrimaryProductCodeInput(barcode);
     const desiredExternalIds =
       externalIds === undefined
         ? undefined
@@ -1989,9 +1988,7 @@ export async function updateProduct<TOutput>(
       }
 
       const identifiersRequested =
-        externalIdsInput !== undefined ||
-        data.upc !== undefined ||
-        data.isbn !== undefined;
+        externalIdsInput !== undefined || data.barcode !== undefined;
       const beforeExternalIds =
         readOutput && !classificationRequested
           ? []
@@ -2351,8 +2348,7 @@ const applyProductExternalIdPatch = async (
 interface QuickCreateProductInput {
   name: string;
   manufacturer?: string;
-  upc?: string | null;
-  isbn?: string | null;
+  barcode?: string | null;
   expectedQuantity?: number | null;
   model?: string | null;
   fdc_id?: number | null;
@@ -2377,10 +2373,7 @@ export const quickCreateProductRecord = async (
   data: QuickCreateProductInput,
   actor: ActorContext,
 ): Promise<{ output: ProductTopLevelOut; entityId: ProductId }> => {
-  const incomingGtin = resolvePrimaryProductCodeInput({
-    upc: data.upc,
-    isbn: data.isbn,
-  });
+  const incomingGtin = resolvePrimaryProductCodeInput(data.barcode);
   const categoryId = await resolveProductCategory(
     db,
     data.categoryId ?? null,

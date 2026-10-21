@@ -380,8 +380,8 @@ describe("MCP entity kernel boundary", () => {
       callKernel(command, entityKernel);
     const ids = await Promise.all(
       [
-        { name: "Summary probe A", upc: "012345678905", fdc_id: 2_000_001 },
-        { name: "Summary probe B", upc: "036000291452" },
+        { name: "Summary probe A", barcode: "012345678905", fdc_id: 2_000_001 },
+        { name: "Summary probe B", barcode: "036000291452" },
         { name: "Summary probe C" },
       ].map(async (overrides) => {
         const created = await callEntity({

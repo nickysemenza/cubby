@@ -359,7 +359,7 @@ export const buildProductWrite = (
         aliases: [],
         tags: [],
         manufacturer: UNSPECIFIED_MANUFACTURER,
-        upc: null,
+        barcode: null,
         expectedQuantity: null,
         ingredientId: row.id,
         fdc_id: food?.fdc_id ?? null,

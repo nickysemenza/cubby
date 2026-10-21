@@ -9,7 +9,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { fdcId, upc } from "@cubby/usda";
+import { fdcId } from "@cubby/usda";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -25,7 +25,6 @@ import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   getOptionalProductShortcode,
@@ -47,28 +46,6 @@ import {
   useCreateInventoryMutation,
   useProductLookupInvalidation,
 } from "./hooks/use-inventory-mutation";
-
-/**
- * Client-side counterpart to the deleted `@cubby/schemas/isbn`'s `isbn` Zod
- * export — see `product-editor-fields.tsx`'s own doc comment for the reason
- * this lives with the form rather than `packages/schemas`. Only this
- * bespoke create form still needs it; the generic editor reads/writes
- * `primaryGtin` through `definitions.ts`'s `productIsbnInitial` instead.
- */
-const isbnFormField = z
-  .string()
-  .trim()
-  .transform((value, ctx) => {
-    const normalized = wasm.normalize_isbn(value);
-    if (!normalized) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "expected a valid ISBN-10 or ISBN-13",
-      });
-      return z.NEVER;
-    }
-    return normalized.gtin14;
-  });
 
 interface QuickInventoryAddProps {
   locationId: LocationShortcode;
@@ -109,8 +86,7 @@ const createFormSchema = z
     // The picker owns a string draft; parse the shortcode at the Product
     // mutation boundary below, where malformed values become a field error.
     categoryId: z.string().nullable(),
-    upc: upc.nullable(),
-    isbn: isbnFormField.nullable(),
+    barcode: z.string().trim().nullable(),
     fdc_id: fdcId.nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(),
@@ -123,7 +99,7 @@ const createFormSchema = z
   })
   .transform((data) => ({
     ...data,
-    upc: data.upc === "" ? null : data.upc,
+    barcode: data.barcode === "" ? null : data.barcode,
     fdc_id: data.fdc_id === 0 ? null : data.fdc_id,
   }));
 type CreateFormValues = z.input<typeof createFormSchema>;
@@ -187,8 +163,7 @@ export function QuickInventoryAdd({
       model: null,
       notes: null,
       categoryId: null,
-      upc: null,
-      isbn: null,
+      barcode: null,
       fdc_id: null,
       expectedQuantity: null,
       price: null,
@@ -223,8 +198,7 @@ export function QuickInventoryAdd({
             values.categoryId == null
               ? null
               : productCategoryShortcode.parse(values.categoryId),
-          upc: values.upc,
-          isbn: values.isbn,
+          barcode: values.barcode,
           fdc_id: values.fdc_id,
           expectedQuantity: values.expectedQuantity,
           price: values.price,
@@ -265,8 +239,7 @@ export function QuickInventoryAdd({
         model: null,
         notes: null,
         categoryId: null,
-        upc: null,
-        isbn: null,
+        barcode: null,
         fdc_id: null,
         expectedQuantity: null,
         price: null,

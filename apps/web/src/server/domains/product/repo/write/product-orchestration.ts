@@ -149,11 +149,11 @@ export async function createProductWithReadSideEffects<
     source: "product.create",
   });
 
-  const warnings = input.upc
+  const warnings = input.barcode
     ? await importCoverPhoto(
         services.db,
         services.upcLookupClient,
-        input.upc,
+        wasm.normalize_isbn(input.barcode)?.isbn13 ?? input.barcode,
         entityId,
         "product.create",
       )
@@ -444,7 +444,7 @@ export async function findOrCreateByUPC(
             db,
             {
               ...usdaIdentity(food),
-              upc,
+              barcode: upc,
               expectedQuantity: null,
               model: null,
             },
@@ -460,7 +460,7 @@ export async function findOrCreateByUPC(
           db,
           {
             ...externalIdentity(upcLookup),
-            upc,
+            barcode: upc,
             expectedQuantity: null,
             model: null,
           },
@@ -487,7 +487,7 @@ export async function findOrCreateByUPC(
           {
             name: defaultName ?? `Product ${upc}`,
             manufacturer: UNSPECIFIED_MANUFACTURER,
-            upc,
+            barcode: upc,
             expectedQuantity: null,
             model: null,
           },
@@ -559,7 +559,7 @@ async function findOrCreateByISBN(
         const { product: attached } = await updateProduct(
           db,
           shelved,
-          { isbn: canonicalGtin },
+          { barcode: canonicalGtin },
           actor,
         );
         await runMutationSideEffects(db, {
@@ -578,7 +578,7 @@ async function findOrCreateByISBN(
                 name: `Book ISBN ${normalized.isbn13}`,
                 manufacturer: UNSPECIFIED_MANUFACTURER,
               }),
-          isbn: canonicalGtin,
+          barcode: canonicalGtin,
           expectedQuantity: null,
           model: null,
         },

@@ -661,7 +661,7 @@ export default defineEntity(
           {
             id: "identifiers",
             title: "Identifiers",
-            fields: ["upc", "isbn", "externalIds"],
+            fields: ["barcode", "externalIds"],
           },
           {
             id: "nutrition",
@@ -827,7 +827,10 @@ Rules:
           },
         },
         {
-          key: "upc",
+          key: "barcode",
+          labelOverride: "Primary barcode",
+          description:
+            "Barcode or ISBN. Selects the primary barcode while preserving other identifiers; clear to remove only the current primary.",
           semanticRole: "externalIdentifier",
           kind: "text",
           nullable: true,
@@ -840,27 +843,7 @@ Rules:
             kind: "relation",
             sources: [{ label: "Product identifiers" }],
           },
-          validation: {
-            read: null,
-            create: gtin.nullable().optional(),
-            update: gtin.nullable().optional(),
-          },
-        },
-        {
-          key: "isbn",
-          semanticRole: "externalIdentifier",
-          kind: "text",
-          nullable: true,
-          control: { kind: "text", width: "half" },
-          provenance: {
-            kind: "relation",
-            sources: [{ label: "Product identifiers" }],
-          },
-          // Plain string: check-digit validation + GTIN-14 normalization now
-          // happen at the repository boundary (`resolvePrimaryProductCodeInput`
-          // in `apps/web/src/server/domains/product/repo/update-helpers.ts`), not here —
-          // `packages/schemas` cannot depend on the WASM boundary that
-          // validation needs (see `@cubby/recipebridge`).
+          // Barcode/ISBN normalization belongs to the shared WASM write boundary.
           validation: {
             read: null,
             create: z.string().trim().nullable().optional(),
@@ -1994,8 +1977,7 @@ Rules:
         "name",
         "aliases",
         "tags",
-        "upc",
-        "isbn",
+        "barcode",
         "fdc_id",
         "manufacturer",
         "model",
@@ -2020,8 +2002,7 @@ Rules:
         "name",
         "aliases",
         "tags",
-        "upc",
-        "isbn",
+        "barcode",
         "fdc_id",
         "manufacturer",
         "model",
@@ -2170,8 +2151,7 @@ Rules:
             "categoryId",
             "ingredientId",
             "growsPlantId",
-            "upc",
-            "isbn",
+            "barcode",
             "fdc_id",
             "expectedQuantity",
             "price",
@@ -2198,8 +2178,7 @@ Rules:
             "categoryId",
             "ingredientId",
             "growsPlantId",
-            "upc",
-            "isbn",
+            "barcode",
             "fdc_id",
             "expectedQuantity",
             "price",
@@ -2224,8 +2203,7 @@ Rules:
             "model",
             "notes",
             "categoryId",
-            "upc",
-            "isbn",
+            "barcode",
             "fdc_id",
             "expectedQuantity",
             "ingredientId",

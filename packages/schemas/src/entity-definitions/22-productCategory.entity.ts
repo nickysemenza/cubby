@@ -861,7 +861,8 @@ Rules:
     // A Product's effective feature (`productCategory.effective-feature`)
     // decides which identity fields it may carry. A write whose evidence a
     // feature refuses files the Product under the one feature that admits it;
-    // food evidence outranks an ISBN, so the field order here is precedence.
+    // ISBN evidence is derived from Product's identifier collection; the
+    // barcode entry field itself is valid for every category.
     classificationPolicies: [
       {
         classifier: "feature",
@@ -875,11 +876,6 @@ Rules:
           {
             field: "fdc_id",
             byValue: { food: "unknown" },
-            otherwise: "not_allowed",
-          },
-          {
-            field: "isbn",
-            byValue: { books: "unknown" },
             otherwise: "not_allowed",
           },
           {

@@ -473,7 +473,9 @@ describe("row-set filters", () => {
           ],
         },
       });
-    const scanned = await create("Row-set scanned", { upc: "012345678905" });
+    const scanned = await create("Row-set scanned", {
+      barcode: "012345678905",
+    });
     await addId(scanned, "gtin", "gtin_14", "00012345678912");
     const listedOnly = await create("Row-set listed", {});
     await addId(listedOnly, "amazon", "asin", "B0ROWSET01");

@@ -59,7 +59,7 @@ describe("usda_food.suggest_for_product", () => {
       makeProductInput({
         name: "Example Oat Flakes",
         manufacturer: "Sample Mills",
-        upc: "012345678905",
+        barcode: "012345678905",
       }),
       ctx.actor,
     );
@@ -93,7 +93,7 @@ describe("usda_food.suggest_for_product", () => {
       makeProductInput({
         name: "Example Lentil Pasta",
         manufacturer: "Sample Mills",
-        upc: "036000291452",
+        barcode: "036000291452",
         fdc_id: 777001,
       }),
       ctx.actor,

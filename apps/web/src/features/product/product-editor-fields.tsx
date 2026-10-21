@@ -31,6 +31,7 @@ import { ExternalIdKindSuggestion } from "~/features/product/external-id-kind-su
 import { IdentifyProductButton } from "~/features/product/identify-product-with-ai";
 import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
 import { upc as upcLookup } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { ChipsInput } from "~/ui/forms/chips-input";
@@ -279,11 +280,10 @@ export function ProductExternalIdsField({
   );
 }
 
-/** `product.upc`: the barcode text field plus a "Lookup" action that fills
- * name/manufacturer/price from the UPC worker — ported from the retired
- * `ProductUpcField`. Writes straight to the sibling `name`/`manufacturer`/
+/** The primary barcode shortcut plus a provider lookup that fills
+ * name/manufacturer/price. Writes straight to the sibling `name`/`manufacturer`/
  * `price` fields, the same paths the generic editor already renders them at. */
-export function ProductUpcField({
+export function ProductBarcodeField({
   form,
   field,
 }: SpecializedIntentRendererProps) {
@@ -299,7 +299,9 @@ export function ProductUpcField({
     if (!upcValue) return;
     setIsLookingUp(true);
     try {
-      const result = await upcLookup.lookup.call({ upc: upcValue });
+      const result = await upcLookup.lookup.call({
+        upc: wasm.normalize_isbn(upcValue)?.isbn13 ?? upcValue,
+      });
       if (result) {
         if (result.name)
           form.setValue("name", result.name, { shouldDirty: true });
@@ -374,7 +376,7 @@ export function ProductUsdaFoodField({
 }: SpecializedIntentRendererProps) {
   const [name, fdcValue, upcValue] = useWatch({
     control: form.control,
-    name: ["name", field.key, "upc"],
+    name: ["name", field.key, "barcode"],
   });
   const handleSelect = (food: UsdaFoodListRow) => {
     form.setValue(field.key, food.fdc_id, { shouldDirty: true });

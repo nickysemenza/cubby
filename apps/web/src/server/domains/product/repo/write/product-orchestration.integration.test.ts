@@ -141,7 +141,7 @@ describe("findOrCreateByUPC", () => {
     const upc = "011111111110";
     const existing = await quickCreateProduct(
       ctx.db,
-      { name: "Existing Widget", upc },
+      { name: "Existing Widget", barcode: upc },
       ctx.actor,
     );
     const result = await findOrCreateByUPC(
@@ -307,13 +307,13 @@ describe("findOrCreateByCode", () => {
         { kind: "isbn", value: canonical },
         ctx.actor,
       );
-    const bookProduct = async (name: string, upc?: string) =>
+    const bookProduct = async (name: string, barcode?: string) =>
       quickCreateProduct(
         ctx.db,
         {
           name,
           categoryId: (await resolveProductCategory(ctx.db, null, "books"))!,
-          ...(upc && { upc }),
+          ...(barcode && { barcode }),
         },
         ctx.actor,
       );
@@ -356,7 +356,7 @@ describe("findOrCreateByCode", () => {
     const upc = "044444444440";
     const existing = await quickCreateProduct(
       ctx.db,
-      { name: "Labelled Widget", upc },
+      { name: "Labelled Widget", barcode: upc },
       ctx.actor,
     );
     const result = await findOrCreateByCode(
@@ -375,7 +375,7 @@ describe("findOrCreateByCode", () => {
     const upc = "055555555550";
     const existing = await quickCreateProduct(
       ctx.db,
-      { name: "Scanned Widget", upc },
+      { name: "Scanned Widget", barcode: upc },
       ctx.actor,
     );
     const result = await findOrCreateByCode(
@@ -415,7 +415,7 @@ describe("applyUpcDataWithSideEffects", () => {
     const upc = "076666666669";
     const product = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Unpriced widget", upc }),
+      makeProductInput({ name: "Unpriced widget", barcode: upc }),
       ctx.actor,
     );
     const result = await applyUpcDataWithSideEffects(
@@ -442,7 +442,7 @@ describe("applyUpcDataWithSideEffects", () => {
     const upc = "077777777770";
     const product = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Ledger-priced widget", upc }),
+      makeProductInput({ name: "Ledger-priced widget", barcode: upc }),
       ctx.actor,
     );
     await createRepoEntity(
@@ -508,11 +508,11 @@ describe("product create cover-photo warnings", () => {
     const result = await executeEntity(context, {
       action: "create",
       entity: "product",
-      data: makeProductInput({ name: "Coverless widget", upc }),
+      data: makeProductInput({ name: "Coverless widget", barcode: upc }),
     });
 
     expect(result.sideEffects.warnings).toEqual([
-      `Cover photo import for ${upc.padStart(14, "0")} failed: External URL points to a private or local host`,
+      `Cover photo import for ${upc} failed: External URL points to a private or local host`,
     ]);
   });
 });

@@ -42,7 +42,6 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
-import { wasm } from "~/lib/wasm";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { treePickerItems } from "~/ui/combobox/tree-items";
 import {
@@ -235,11 +234,7 @@ export const productListOverride = defineListOverride<
                     onSave={async (newValue) => {
                       await updateProduct({
                         id: info.row.original.id,
-                        data:
-                          newValue != null &&
-                          wasm.normalize_isbn(newValue) != null
-                            ? { isbn: newValue }
-                            : { upc: newValue },
+                        data: { barcode: newValue },
                       });
                     }}
                     config={{ type: "text" }}

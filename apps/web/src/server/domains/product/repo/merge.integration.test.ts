@@ -225,10 +225,10 @@ describe("mergeProducts", () => {
 
   it("refuses to merge different ISBN editions", async () => {
     const keeper = await seedProduct("Edition One", {
-      isbn: "978-0-306-40615-7",
+      barcode: "978-0-306-40615-7",
     });
     const loser = await seedProduct("Edition Two", {
-      isbn: "978-0-13-110362-7",
+      barcode: "978-0-13-110362-7",
     });
 
     const preview = await previewMergeProducts(ctx.db, {
@@ -383,7 +383,7 @@ describe("mergeProducts", () => {
     const loser = await seedProduct("20V MAX Drill Kit", {
       model: "DCD791D2",
       // The keeper has none of these, so each is a gap the merge fills.
-      upc: "012345678905",
+      barcode: "012345678905",
       price: 199,
       notes: "From the retailer import",
     });

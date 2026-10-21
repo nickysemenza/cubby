@@ -23,7 +23,7 @@ describe("entityMutation.mutate invalidates", () => {
       entity: "product",
       data: {
         name: "Flour",
-        upc: null,
+        barcode: null,
         manufacturer: "generic",
         expectedQuantity: null,
         ingredientId: "ING-4K7M",
@@ -45,7 +45,7 @@ describe("entityMutation.mutate invalidates", () => {
       entity: "product",
       data: {
         name: "Flour",
-        upc: null,
+        barcode: null,
         manufacturer: "generic",
         expectedQuantity: null,
         ingredientId: "ING-4K7M",
@@ -65,7 +65,7 @@ describe("entityMutation.mutate invalidates", () => {
       entity: "product",
       data: {
         name: "Widget",
-        upc: null,
+        barcode: null,
         manufacturer: "generic",
         expectedQuantity: null,
         ingredientId: null,

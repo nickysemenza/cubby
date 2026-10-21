@@ -37,7 +37,7 @@ describe("displayable Product image predicate", () => {
     );
     const product = await createProductFixture(
       ctx.db,
-      makeProductInput({ name, manufacturer: "(unspecified)", upc }),
+      makeProductInput({ name, manufacturer: "(unspecified)", barcode: upc }),
       ctx.actor,
     );
     await createInventoryFixture(

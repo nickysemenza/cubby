@@ -196,7 +196,7 @@ describe("entity edit definitions", () => {
 
   it("keeps the full update intent compatible with ordinary inline editors", () => {
     const inlineFields: readonly [EditableEntity, readonly string[]][] = [
-      ["product", ["ingredientId", "upc", "fdc_id", "unitMappings"]],
+      ["product", ["ingredientId", "barcode", "fdc_id", "unitMappings"]],
       [
         "expense",
         ["lineKind", "lineBasis", "productQuantity", "orderId", "url"],
@@ -392,8 +392,8 @@ describe("entity edit definitions", () => {
   // rejects: opening the editor threw. `unitMappings`' `FieldOptions.initial`
   // (`productUnitMappingsInitial`) projects each row to its input shape
   // (`{id,a,b,source}`) before the Date ever reaches the form, and an
-  // untouched edit stays a no-op — in particular the write-only `upc`
-  // (`readKey: null`, seeded `null`) must not reach the wire as `upc: null`,
+  // untouched edit stays a no-op — in particular the write-only `barcode`
+  // (`readKey: null`, seeded `null`) must not reach the wire as `barcode: null`,
   // which `syncPrimaryGtin` would read as "retire the primary GTIN".
   it.each([
     {
@@ -448,7 +448,7 @@ describe("entity edit definitions", () => {
           source: "manual",
         },
       ]);
-      expect(values.upc).toBeNull();
+      expect(values.barcode).toBeNull();
       const untouched = buildEntityEdit(resolved, request, values);
       expect(untouched).toMatchObject({ ok: true, changed: false });
       if (!untouched.ok || untouched.command.operation !== "update")

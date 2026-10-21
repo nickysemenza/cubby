@@ -278,7 +278,7 @@ describe("MCP catalog", () => {
 
     const productId = await createdId("product", {
       name: "Catalog widget",
-      upc: "012345678905",
+      barcode: "012345678905",
     });
     // Detector rows carry Date timestamps; the action publishes their JSON.
     expect(

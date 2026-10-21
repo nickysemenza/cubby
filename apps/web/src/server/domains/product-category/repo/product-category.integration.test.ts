@@ -628,7 +628,7 @@ describe("product category hierarchy", () => {
       makeProductInput({
         name: "ISBN evidence category product",
         categoryId: bookType.output.id,
-        upc: "9780306406157",
+        barcode: "9780306406157",
       }),
       ctx.actor,
     );

@@ -101,9 +101,8 @@ export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
 
 /**
  * The category feature a Product's identity evidence implies, read from the
- * declared `productCategory.feature` field policy: an ingredient or USDA link
- * implies Food, an ISBN Books, food evidence first. Callers decide `hasIsbn`
- * from the external ids they hold.
+ * declared food field policy, then ISBN evidence from the authoritative
+ * identifier collection. Food evidence takes precedence over Books.
  */
 export const impliedProductFeature = (evidence: {
   fdc_id?: number | null;
@@ -112,11 +111,13 @@ export const impliedProductFeature = (evidence: {
   ingredientId?: string | null;
   hasIsbn?: boolean;
 }): ProductCategoryFeature | null => {
-  const present = new Set<"ingredientId" | "fdc_id" | "isbn">();
+  const present = new Set<"ingredientId" | "fdc_id">();
   if (evidence.ingredientId) present.add("ingredientId");
   if (hasFdcLink(evidence.fdc_id)) present.add("fdc_id");
-  if (evidence.hasIsbn) present.add("isbn");
-  return impliedClassification("productCategory.feature", present);
+  return (
+    impliedClassification("productCategory.feature", present) ??
+    (evidence.hasIsbn ? "books" : null)
+  );
 };
 
 export const productBulkStockTrackedInput = z.object({
@@ -882,8 +883,7 @@ export const productQuickCreatePayload = z.object({
   // These are unchanged copies of the generated create field — reference it
   // directly rather than re-declaring the same schema.
   manufacturer: generatedProductFieldSchemas.create.manufacturer,
-  upc: generatedProductFieldSchemas.create.upc,
-  isbn: generatedProductFieldSchemas.create.isbn,
+  barcode: generatedProductFieldSchemas.create.barcode,
   model: generatedProductFieldSchemas.create.model,
   notes: generatedProductFieldSchemas.create.notes,
   price: generatedProductFieldSchemas.create.price,

@@ -11,7 +11,7 @@ import {
   EXPENSE_DATE_REQUIRED_MESSAGE,
   EXPENSE_DISPOSITION_COST_TYPE,
 } from "@cubby/schemas/expense-fields";
-import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
+import { externalIdInput } from "@cubby/schemas/external-id";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
@@ -78,7 +78,7 @@ const valueFor = (record: EntityEditRecord | undefined, id: string) => {
  * means the record carries no such key. For a write-only field (`readKey:
  * null`) that is the normal state, and a `null` form value against it is
  * *unchanged* — otherwise every untouched write-only field would emit
- * `{ field: null }` on save (product's `upc: null` retires the primary GTIN
+ * `{ field: null }` on save (product's `barcode: null` retires the primary GTIN
  * through `syncPrimaryGtin`). A nullable *read* field absent from a partial
  * record still emits `null`: there the absence is an incomplete projection,
  * not "nothing stored", and an explicit clear must reach the server.
@@ -880,35 +880,19 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  * detail page's `detail-field-renderers/product.tsx` already loads the same
  * module client-side ahead of any edit dialog mounting.
  */
-const productPrimaryGtinIsbn = (
-  record: EntityEditRecord | undefined,
-): ReturnType<typeof wasm.isbn_from_gtin> | undefined => {
+/** The shortcut reads the collection's primary; unknown GTIN encodings stay canonical. */
+const productBarcodeInitial: FieldOptions<"product">["initial"] = ({
+  record,
+}) => {
   const primaryGtin = z
     .string()
     .nullable()
     .catch(null)
     .parse(record?.primaryGtin);
-  return primaryGtin == null ? undefined : wasm.isbn_from_gtin(primaryGtin);
+  return primaryGtin == null
+    ? null
+    : (wasm.isbn_from_gtin(primaryGtin)?.isbn13 ?? primaryGtin);
 };
-
-/**
- * `upc`/`isbn` are write-only inputs (`readKey: null`); a product's one
- * stored barcode reads back as `primaryGtin`, split by which display field
- * it looks like — mirrors the retired `editProductFormDefaults`
- * (`product-form.tsx`). On create there is no record, so both stay `null`.
- */
-const productUpcInitial: FieldOptions<"product">["initial"] = ({ record }) => {
-  const primaryGtin = z
-    .string()
-    .nullable()
-    .catch(null)
-    .parse(record?.primaryGtin);
-  return primaryGtin && !productPrimaryGtinIsbn(record)
-    ? displayGtin(primaryGtin)
-    : null;
-};
-const productIsbnInitial: FieldOptions<"product">["initial"] = ({ record }) =>
-  productPrimaryGtinIsbn(record)?.isbn13 ?? null;
 
 /**
  * `unitMappings`/`externalIds` read back as full rows (audit stamps, unit-
@@ -1031,8 +1015,7 @@ type EditHooksMap = { [E in EditableEntity]?: EntityEditHooks<E> };
 export const editHooks: EditHooksMap = {
   product: {
     fields: {
-      upc: { initial: productUpcInitial },
-      isbn: { initial: productIsbnInitial },
+      barcode: { initial: productBarcodeInitial },
       unitMappings: {
         initial: productUnitMappingsInitial,
         validate: productUnitMappingsValidate,
