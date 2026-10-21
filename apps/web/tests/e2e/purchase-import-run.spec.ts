@@ -1,6 +1,7 @@
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { emailImportOut } from "@cubby/schemas/email-actions";
+import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { sha256Hex } from "@cubby/shared/sha256";
 import superjson from "superjson";
 import { z } from "zod";
@@ -240,7 +241,10 @@ test("imports saved order mail from its Email page and follows the live Run to t
   const [claimed] = await claimOrder(seed);
   if (!claimed) throw new Error("Seeded original is missing");
   await agent.configure({
-    expectedInference: { model: "claude-opus-5-5", effort: "medium" },
+    expectedInference: {
+      model: importRunAgentManifest.mail_import.model,
+      effort: importRunAgentManifest.mail_import.effort,
+    },
     steps: [
       ...importOrder("mail", seed, claimed, { gate: "original-read" }),
       ...finished("mail"),
