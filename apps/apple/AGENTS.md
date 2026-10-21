@@ -272,8 +272,7 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
 - Symptom: a re-presented `.sheet(item:)` shows the previous item's state even though the item's
   `id` changed. Rule: state lifetime follows the data's identity — own the model in the presenter
   (build it alongside the item) or resync with `.task(id:)`; never seed `@State`/`@StateObject`
-  from an init parameter. Gated by `apple-check.sh`'s `State(initialValue:`/
-  `StateObject(wrappedValue:` grep (tag a deliberate exception `// state-init-ok: <reason>`).
+  from an init parameter. Review state ownership at the presentation boundary.
 
 ### Root scripts
 

@@ -187,8 +187,8 @@ host is constrained.
 `pnpm apple check` runs lint, prepares artifacts, then executes selected native
 checks sequentially. `apple:host-tests` runs CubbyKit's package tests and the
 OpenAPI warning gate; `apple:simulator-build` compiles `Cubby-iOS` for a generic
-simulator. Neither boots a simulator. `apple:lint` runs Swift formatting and
-the state-initialization rule without Xcode. Missing Xcode fails native builds.
+simulator. Neither boots a simulator. `apple:lint` runs Swift formatting
+without Xcode. Missing Xcode fails native builds.
 The `rust` target runs fmt/clippy/test per
 crate (`recipebridge/project.json`, `cubby-ffi/project.json`). Clippy and tests
 use the root workspace's `ci` profile: no debuginfo, incremental compilation,

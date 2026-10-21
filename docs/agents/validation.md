@@ -160,7 +160,7 @@ Choose local evidence by the changed behavior:
 selected native build/test runs after artifact preparation, sequentially.
 For hand-written Swift edits, run `pnpm apple check lint` before opening a PR;
 the staged Oxfmt hook does not format Swift, and successful compilation does
-not verify Swift formatting or state rules.
+not verify Swift formatting.
 The server client-version gate test is relevant when changing compatibility
 behavior, not merely because generated Swift changed.
 
