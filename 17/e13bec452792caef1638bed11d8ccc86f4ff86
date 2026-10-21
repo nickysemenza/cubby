@@ -1,0 +1,29 @@
+apps/apple/App/Shared/DesignSystem/DomainMark.swift
+  s_9b829d577c7e4c::t_a5ab3ec46bfeb3 4-5,37,43
+apps/apple/App/Shared/Photo/Library/PhotoGridBadge.swift
+  s_9b829d577c7e4c::t_12eb68af9afc22 148,155
+apps/apple/App/Shared/Photo/Library/PhotoLibraryHeader.swift
+  s_9b829d577c7e4c::t_a495f03bcfd347 631
+apps/apple/App/Shared/Report/ReportSlotView.swift
+  s_9b829d577c7e4c::t_e6df1cb4d42bd7 433,441
+apps/apple/DESIGN.md
+  s_9b829d577c7e4c::t_0222822a21a6a9 7,13
+scripts/design-tokens.ts
+  s_9b829d577c7e4c::t_910f0f0ed65ca1 172-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "17e13bec452792caef1638bed11d8ccc86f4ff86",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
