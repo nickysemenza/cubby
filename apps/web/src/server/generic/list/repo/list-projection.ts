@@ -264,7 +264,7 @@ export function listReadPlan<Row>(
   const storage =
     Object.entries(entityFieldModels).find(([key]) => key === entity)?.[1]
       .storage ?? [];
-  const privateKeys = new Set(
+  const privateKeys = new Set<string>(
     storage
       .filter((field) => field.reference !== null)
       .flatMap((field) => [field.key, field.column]),
@@ -466,7 +466,9 @@ export function listReadPlan<Row>(
                 result[output] = schema.shape[output].parse(value);
             }
           }
-          const quality = qualities?.get(identity.id);
+          const quality = isScored(entity)
+            ? qualities?.get(parseEntityId(entity, identity.id))
+            : undefined;
           if (qualities) result.dataQuality = quality;
           const referenceValues = new Map(
             references.map(({ key, instruction }, index) => [

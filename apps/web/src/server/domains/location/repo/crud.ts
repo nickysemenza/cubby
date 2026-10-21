@@ -101,7 +101,11 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { buildLocationWithChildren } from "./helpers";
+import {
+  buildLocationWithChildren,
+  locationReferenceFields,
+  locationInventoryFields,
+} from "./helpers";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 import {

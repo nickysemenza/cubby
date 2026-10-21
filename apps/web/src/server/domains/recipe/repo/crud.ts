@@ -63,6 +63,7 @@ import {
 } from "~/server/db/schema";
 import { recipeHasImages } from "~/server/domains/image/repo/image";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
+import { resolveRecipeServings } from "~/server/domains/recipe/repo/servings";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
@@ -93,9 +94,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
-
-import { recipeProvenanceFields, recipeTotalsFields } from "./helpers";
-import { resolveRecipeServings } from "./servings";
 
 export const RECIPE_DELETE_EDGE_POLICY = {
   "RecipeSection.recipeId": {
@@ -141,6 +139,8 @@ import {
   dbRecipeToAPIGraph,
   liveMealCountForRecipeSql,
   liveSectionCountForRecipeSql,
+  recipeProvenanceFields,
+  recipeTotalsFields,
 } from "~/server/domains/recipe/repo/helpers";
 import type { RecipeFilters } from "~/server/domains/recipe/repo/internal-types";
 import { recipeMetaToColumns } from "~/server/domains/recipe/repo/meta";

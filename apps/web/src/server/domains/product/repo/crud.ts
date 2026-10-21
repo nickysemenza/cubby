@@ -139,10 +139,7 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
-import {
-  resolveEntityDisplayImageLists,
-  resolveEntityDisplayImages,
-} from "~/server/entity-kernel/repo/entity-display-image";
+import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
@@ -173,6 +170,7 @@ import {
 } from "~/server/generic/list/repo/list-display-labels";
 import {
   loadListGroup,
+  listReadPlan,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
@@ -784,7 +782,7 @@ const readProductListPage = async (
       expenseTotal: extras.expenseTotal,
       purchaseDate: extras.purchaseDate,
     });
-  const page = await productScaffold.list(
+  const page = await productScaffold.raw(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -802,8 +800,6 @@ const readProductListPage = async (
                   : undefined,
                 extras: selectedExtras,
               }),
-      // Each caller hydrates the page for its own projection.
-      hydrate: (rows) => rows,
     },
   );
   // SAFETY: SQL extras use the same contracts as ProductListDB. The projection
@@ -820,7 +816,7 @@ export function pageProductRelationTargets(
   orderBy: SQL[],
   input: Pick<EntityRelationPageInput, "offset" | "limit">,
 ) {
-  return productScaffold.list(
+  return productScaffold.raw(
     db,
     {
       filters: {},
@@ -839,7 +835,6 @@ export function pageProductRelationTargets(
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(input.offset),
-      hydrate: (rows) => rows,
     },
   );
 }
@@ -883,6 +878,284 @@ export const listProductsRead = async (
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
   projection: ListProjection = { kind: "full" },
 ): Promise<ProductListReadResult> => {
+  const foodFields = productListItemOut.pick({
+    food: true,
+    unitPrice: true,
+    unitPriceMappings: true,
+    unitPriceLabel: true,
+  });
+  const wantsFood =
+    wantsListGroup(projection, "derived") &&
+    (projection.kind !== "selected" ||
+      Object.keys(foodFields.shape).some((key) =>
+        projection.fields.includes(key),
+      ));
+  const plan = listReadPlan<ProductSelectedPageRow>("product", {
+    media: true,
+    bindings: (bind) => {
+      const relations = bind.batch(({ rows }) =>
+        loadProductListRelations(
+          db,
+          rows.map((row) => row.id),
+          projection,
+          wantsFood ? prefetchFoodsOnExternalIds(rows, usdaClient) : undefined,
+        ),
+      );
+      const inventory = bind.batch(async (page) => {
+        const loaded = await relations.load(page);
+        return new Map(
+          page.rows.map((row) => {
+            const related = loaded.get(row.id);
+            if (!related)
+              throw new Error("Product list relations were not loaded");
+            return [
+              row.id,
+              mapProductListInventoryEntries(related.inventoryEntry),
+            ];
+          }),
+        );
+      });
+      const pricing = bind.batch(
+        async ({ rows }) =>
+          new Map(
+            (await enrichProductRowsWithPricing(db, rows)).map((row) => [
+              row.id,
+              row.pricing,
+            ]),
+          ),
+      );
+      const stock = bind.batch(async (page) => {
+        const [inventories, prices, ledgered] = await Promise.all([
+          inventory.load(page),
+          pricing.load(page),
+          enrichProductRowsWithQuantityLedger(db, page.rows),
+        ]);
+        return {
+          inventories,
+          prices,
+          ledgers: new Map(ledgered.map((row) => [row.id, row.quantityLedger])),
+        };
+      });
+      const owners = bind.batch(({ rows }) =>
+        loadProductOwners(
+          db,
+          rows.map((row) => row.id),
+        ),
+      );
+      const food = bind.batch(async (page) => {
+        const [related, prices] = await Promise.all([
+          relations.load(page),
+          pricing.load(page),
+        ]);
+        const seeds = page.rows.map((row) => {
+          const loaded = related.get(row.id);
+          const price = prices.get(row.id);
+          if (!loaded || !price)
+            throw new Error(
+              "Product food binding requires loaded relations and pricing",
+            );
+          return {
+            id: parseShortcodeFor("product", row.shortcode),
+            primaryGtin: primaryGtinOf(loaded.externalIds),
+            fdc_id: row.fdc_id,
+            price: row.price,
+            pricing: price,
+            labelNutrition: row.labelNutrition,
+            unitMappings: mapProductUnitMappings(
+              parseShortcodeFor("product", row.shortcode),
+              loaded.unitMappings,
+            ),
+          };
+        });
+        const enriched = await enrichProductListItems(seeds, usdaClient);
+        return new Map(
+          page.rows.map((row, index) => {
+            const value = enriched[index];
+            if (!value)
+              throw new Error("Product food batch omitted a selected row");
+            return [row.id, value];
+          }),
+        );
+      });
+      return [
+        bind(
+          productListItemOut.pick({ modelPresence: true, notesPresence: true }),
+          (row) => ({
+            modelPresence: Boolean(row.model),
+            notesPresence: Boolean(row.notes),
+          }),
+        ),
+        bind(
+          productListItemOut.pick({ dataGaps: true }),
+          (_row, { quality }) => {
+            if (!quality)
+              throw new Error("Product data gaps require loaded quality");
+            return {
+              dataGaps: productListItemOut.shape.dataGaps.parse(
+                quality.gaps.map((gap) => gap.check),
+              ),
+            };
+          },
+        ),
+        bind(
+          productListItemOut.pick({
+            category: true,
+            categoryId: true,
+            growsPlantId: true,
+            ingredient: true,
+          }),
+          (row) => ({
+            category: row.category ?? null,
+            categoryId: row.category?.id ?? null,
+            growsPlantId: row.growsPlant
+              ? parseShortcodeFor("plant", row.growsPlant.shortcode)
+              : null,
+            ingredient:
+              row.ingredient && row.ingredient.deletedAt === null
+                ? mapDbProductIngredient(row.ingredient)
+                : null,
+          }),
+        ),
+        inventory.fields(
+          productListItemOut.pick({ inventoryEntry: true }),
+          (row, loaded) => {
+            const value = loaded.get(row.id);
+            if (!value) throw new Error("Product inventory was not loaded");
+            return { inventoryEntry: value };
+          },
+        ),
+        relations.fields(
+          productListItemOut.pick({
+            externalIds: true,
+            unitMappings: true,
+            primaryGtin: true,
+            upcPresence: true,
+          }),
+          (row, loaded) => {
+            const related = loaded.get(row.id);
+            if (!related)
+              throw new Error("Product external identities were not loaded");
+            const primaryGtin = primaryGtinOf(related.externalIds);
+            return {
+              externalIds: mapProductExternalIds(related.externalIds),
+              unitMappings: mapProductUnitMappings(
+                parseShortcodeFor("product", row.shortcode),
+                related.unitMappings,
+              ),
+              primaryGtin,
+              upcPresence: Boolean(primaryGtin),
+            };
+          },
+        ),
+        relations.fields(
+          productListItemOut.pick({
+            images: true,
+            labelImages: true,
+            itemImageCount: true,
+            labelImageCount: true,
+          }),
+          (row, loaded) => {
+            const related = loaded.get(row.id);
+            if (!related)
+              throw new Error("Product image fields were not loaded");
+            const { itemImages, ...groups } = splitProductImages(
+              related.images,
+            );
+            return { ...groups, images: itemImages };
+          },
+        ),
+        stock.fields(
+          productListItemOut.pick({
+            pricing: true,
+            fieldResolutions: true,
+            quantityLedger: true,
+            onHandUnits: true,
+            quantityVariance: true,
+            stockStatus: true,
+            stockStatusItems: true,
+            ledgerExpectedQuantityLabel: true,
+            quantityVarianceLabel: true,
+          }),
+          (row, loaded) => {
+            const inventoryEntry = loaded.inventories.get(row.id);
+            const pricing = loaded.prices.get(row.id);
+            const ledger = loaded.ledgers.get(row.id);
+            if (!inventoryEntry || !pricing || !ledger)
+              throw new Error(
+                "Product stock binding requires loaded inventory, pricing and ledger",
+              );
+            const quantity = deriveProductQuantitySummary(
+              inventoryEntry,
+              ledger,
+            );
+            const fieldResolutions = productFieldResolutions(
+              {
+                ...row,
+                categoryStockTracking: row.categoryStockTracking ?? null,
+              },
+              pricing,
+            );
+            const tracking = fieldResolutions.stockTracked?.value;
+            return {
+              pricing,
+              fieldResolutions,
+              ...quantity,
+              ...productStockContext({
+                quantityLedger: ledger,
+                inventoryEntry,
+                stockTracked:
+                  tracking === true ? true : tracking === false ? false : null,
+              }),
+              ledgerExpectedQuantityLabel: expectedQuantityLabel(
+                quantity.quantityLedger,
+              ),
+              quantityVarianceLabel: quantityVarianceLabel(
+                quantity.quantityVariance,
+              ),
+            };
+          },
+        ),
+        owners.fields(
+          productListItemOut.pick({ owners: true }),
+          (row, loaded) => ({ owners: loaded.get(row.id) ?? [] }),
+        ),
+        bind(
+          productListItemOut.pick({
+            expenseCount: true,
+            expenseTotal: true,
+            componentCount: true,
+            purchaseDate: true,
+          }),
+          (row) => {
+            if (
+              row.expenseCount === undefined ||
+              row.expenseTotal === undefined ||
+              row.componentCount === undefined ||
+              row.purchaseDate === undefined
+            )
+              throw new Error("Product list aggregates were not selected");
+            return {
+              expenseCount: Number(row.expenseCount),
+              expenseTotal: Number(row.expenseTotal),
+              componentCount: Number(row.componentCount),
+              purchaseDate: row.purchaseDate,
+            };
+          },
+        ),
+        food.fields(foodFields, (row, loaded) => {
+          const value = loaded.get(row.id);
+          if (!value)
+            throw new Error("Product food binding omitted a selected row");
+          return {
+            food: value.food,
+            unitPrice: value.unitPrice,
+            unitPriceMappings: value.unitPriceMappings,
+            unitPriceLabel: unitPriceLabel(value.unitPrice),
+          };
+        }),
+      ];
+    },
+  });
   const filtered = await productWhere(db, filters);
   const [{ results, totalCount, groups }, sums] = await Promise.all([
     readProductListPage(
@@ -898,184 +1171,12 @@ export const listProductsRead = async (
       ? loadProductListSums(db, filtered.where)
       : undefined,
   ]);
-  const rows = results.map(
-    ({
-      categoryId: _categoryId,
-      ingredientId: _ingredientId,
-      growsPlantId: _growsPlantId,
-      ...row
-    }) => ({
-      ...row,
-      id: parseShortcodeFor("product", row.shortcode),
-      modelPresence: Boolean(row.model),
-      notesPresence: Boolean(row.notes),
-    }),
-  );
-  const metadata: Pick<ProductListReadResult, "count" | "groups" | "sums"> = {
+
+  return {
     count: totalCount,
     ...(sums ? { sums } : {}),
-  };
-  if (groups) metadata.groups = groups;
-  if (projection.kind === "base" || results.length === 0)
-    return { ...metadata, data: projectListRows("product", rows, projection) };
-  const ids = results.map((row) => row.id);
-  const [listRelations, qualities, priced, ledgered, displayImages, owners] =
-    await Promise.all([
-      loadProductListRelations(
-        db,
-        ids,
-        projection,
-        wantsListGroup(projection, "derived")
-          ? prefetchFoodsOnExternalIds(results, usdaClient)
-          : undefined,
-      ),
-      loadListGroup(projection, "quality", () =>
-        loadProductDataQualities(db, ids),
-      ),
-      loadListGroup(projection, "derived", () =>
-        enrichProductRowsWithPricing(db, results),
-      ),
-      loadListGroup(projection, "derived", () =>
-        enrichProductRowsWithQuantityLedger(db, results),
-      ),
-      loadListGroup(projection, "media", () =>
-        resolveEntityDisplayImageLists(
-          db,
-          ids.map((entityId) => ({ entityKind: "product", entityId })),
-        ),
-      ),
-      loadListGroup(projection, "derived", () => loadProductOwners(db, ids)),
-    ]);
-  const pricingById = new Map(priced?.map((row) => [row.id, row.pricing]));
-  const ledgerById = new Map(
-    ledgered?.map((row) => [row.id, row.quantityLedger]),
-  );
-  const deferredRows: ReturnType<typeof projectListRows> = results.map(
-    (row, index) => {
-      const relations =
-        listRelations.get(row.id) ?? emptyProductListRelations();
-      const ingredient = row.ingredient;
-      const inventory = mapProductListInventoryEntries(
-        relations.inventoryEntry,
-      );
-      const patch = { ...rows[index] };
-      if (qualities)
-        Object.assign(patch, {
-          dataQuality: qualities.get(row.id),
-          dataGaps: qualities.get(row.id)?.gaps.map((gap) => gap.check),
-        });
-      if (wantsListGroup(projection, "media")) {
-        const { itemImages, ...imageGroups } = splitProductImages(
-          relations.images,
-        );
-        Object.assign(patch, {
-          ...imageGroups,
-          images: itemImages,
-          coverImageUrl: null,
-          displayImages:
-            displayImages?.get(entityRefKey("product", row.id)) ?? [],
-        });
-      }
-      if (wantsListGroup(projection, "relations"))
-        Object.assign(patch, {
-          category: row.category,
-          categoryId: row.category?.id ?? null,
-          growsPlantId: row.growsPlant
-            ? parseShortcodeFor("plant", row.growsPlant.shortcode)
-            : null,
-          ingredient:
-            ingredient && ingredient.deletedAt === null
-              ? mapDbProductIngredient(ingredient)
-              : null,
-          inventoryEntry: inventory,
-          externalIds: mapProductExternalIds(relations.externalIds),
-          unitMappings: mapProductUnitMappings(
-            parseShortcodeFor("product", row.shortcode),
-            relations.unitMappings,
-          ),
-          primaryGtin: primaryGtinOf(relations.externalIds),
-          upcPresence: Boolean(primaryGtinOf(relations.externalIds)),
-        });
-      if (wantsListGroup(projection, "derived")) {
-        const quantity = deriveProductQuantitySummary(
-          inventory,
-          ledgerById.get(row.id)!,
-        );
-        const fieldResolutions = productFieldResolutions(
-          {
-            ...row,
-            categoryStockTracking: row.categoryStockTracking ?? null,
-          },
-          pricingById.get(row.id) ?? resolveProductPricing(row.price),
-        );
-        Object.assign(patch, {
-          pricing: pricingById.get(row.id),
-          fieldResolutions,
-          owners: owners?.get(row.id) ?? [],
-          expenseCount: Number(row.expenseCount),
-          expenseTotal: Number(row.expenseTotal),
-          componentCount: Number(row.componentCount),
-          purchaseDate: row.purchaseDate,
-          ...quantity,
-          ledgerExpectedQuantityLabel: expectedQuantityLabel(
-            quantity.quantityLedger,
-          ),
-          quantityVarianceLabel: quantityVarianceLabel(
-            quantity.quantityVariance,
-          ),
-        });
-        const tracking = fieldResolutions.stockTracked?.value;
-        Object.assign(
-          patch,
-          productStockContext({
-            quantityLedger: ledgerById.get(row.id)!,
-            inventoryEntry: inventory,
-            stockTracked:
-              tracking === true ? true : tracking === false ? false : null,
-          }),
-        );
-      }
-      return patch;
-    },
-  );
-  if (wantsListGroup(projection, "derived")) {
-    const seeds = results.map((row) => ({
-      id: parseShortcodeFor("product", row.shortcode),
-      primaryGtin: primaryGtinOf(listRelations.get(row.id)?.externalIds),
-      fdc_id: row.fdc_id,
-      price: row.price,
-      pricing: pricingById.get(row.id)!,
-      labelNutrition: row.labelNutrition,
-      unitMappings: mapProductUnitMappings(
-        parseShortcodeFor("product", row.shortcode),
-        listRelations.get(row.id)?.unitMappings ?? [],
-      ),
-    }));
-    const derived = await enrichProductListItems(seeds, usdaClient);
-    derived.forEach((values, index) =>
-      Object.assign(deferredRows[index]!, values, {
-        unitPriceLabel: unitPriceLabel(values.unitPrice),
-      }),
-    );
-  }
-  const hydrated = wantsListGroup(projection, "media")
-    ? await hydrateImageReadProjection(
-        db,
-        deferredRows,
-        new Map(
-          [...(displayImages?.values() ?? [])].flatMap((images) =>
-            images.flatMap((image) =>
-              image.representations
-                ? [[image.id, image.representations] as const]
-                : [],
-            ),
-          ),
-        ),
-      )
-    : deferredRows;
-  return {
-    ...metadata,
-    data: projectListRows("product", hydrated, projection),
+    ...(groups ? { groups } : {}),
+    data: await plan.read(db, results, projection, filtered.context),
   };
 };
 
@@ -1262,32 +1363,36 @@ export const productSearch = async (
       : undefined,
   );
 
-  return productScaffold.list(
+  const page = await productScaffold.raw(
     db,
     { filters, sorts, pagination },
     {
       where: whereClause,
       orderBy: productListOrderBy(sorts),
-      hydrate: async (results) => {
-        const categories = await loadCategorySummaries(db);
-        const resultIds = results.map((result) => result.id);
-        const [quantities, coverImageUrls, prices] = await Promise.all([
-          loadProductPickerQuantities(db, resultIds),
-          getProductCoverImageUrlsByProductIds(db, resultIds),
-          loadEffectiveProductPricesById(db, resultIds),
-        ]);
-        return results.map((result) =>
-          dbProductToPickerItemAPI({
-            ...result,
-            category: categories.get(result.categoryId!) ?? null,
-            ...quantities.get(result.id)!,
-            price: prices.get(result.id) ?? null,
-            coverImageUrl: coverImageUrls.get(result.id) ?? null,
-          }),
-        );
-      },
     },
   );
+  if (!page.data.length) return { ...page, data: [] };
+  const resultIds = page.data.map((result) => result.id);
+  const [categories, quantities, coverImageUrls, prices] = await Promise.all([
+    loadCategorySummaries(db),
+    loadProductPickerQuantities(db, resultIds),
+    getProductCoverImageUrlsByProductIds(db, resultIds),
+    loadEffectiveProductPricesById(db, resultIds),
+  ]);
+  return {
+    ...page,
+    data: page.data.map((result) =>
+      dbProductToPickerItemAPI({
+        ...result,
+        category: result.categoryId
+          ? (categories.get(result.categoryId) ?? null)
+          : null,
+        ...quantities.get(result.id)!,
+        price: prices.get(result.id) ?? null,
+        coverImageUrl: coverImageUrls.get(result.id) ?? null,
+      }),
+    ),
+  };
 };
 
 export const getProductPickerItemsByIds = async (

@@ -268,7 +268,7 @@ describe("Email data quality", () => {
           vendorId: () => undefined,
           vendorAccountId: () => undefined,
         },
-      }).list(
+      }).raw(
         ctx.db,
         {
           filters: {},
@@ -276,7 +276,7 @@ describe("Email data quality", () => {
           pagination: { pageIndex: 0, pageSize: 25 },
           readIntent: "count",
         },
-        { hydrate: (selected) => selected },
+        {},
       ),
     );
     expect(plain.result.count).toBe(120);

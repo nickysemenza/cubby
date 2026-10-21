@@ -1310,7 +1310,8 @@ predicate. Clients list such choices disabled with the reason; the kernel
 rejects them as `LIST_GROUP_BY_FIELD_UNSUPPORTED` with the same reason over
 HTTP and MCP. A related-record section's key is the record's public id and its
 label the record's title, ordered by label; an enum section follows declared
-option order. The no-value section is always last. `listScaffold.list` puts
+option order. The no-value section is always last. `listScaffold.read` and
+`listScaffold.raw` put
 the group order ahead of the sort, and its summary query (key, label, count
 over the whole filtered set, `meta.groups`) shares that order, so loaded rows
 are a prefix of the sections and clients assign them by position. A list spec

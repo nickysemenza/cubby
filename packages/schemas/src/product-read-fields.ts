@@ -15,7 +15,7 @@ import locationDefinition from "./entity-definitions/04-location.entity";
 import { imageUrlSummary } from "./image-summary";
 import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
-import { baseKind } from "./codec";
+import { ingredientApplicabilityKey } from "./codec";
 import { recipeUsageOut } from "./recipe-fields";
 import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
 const locationAncestorFields = locationListRefOut.shape;
@@ -49,7 +49,7 @@ export const productIngredientOut = z.object({
   id: ingredientShortcode,
   name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
-  naKinds: z.array(baseKind),
+  naKinds: z.array(ingredientApplicabilityKey),
   ...timestampedFields,
 });
 

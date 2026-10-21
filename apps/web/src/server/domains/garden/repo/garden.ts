@@ -195,22 +195,24 @@ type PlantingReadRow = typeof planting.$inferSelect & {
   task?: PlantingWithReferences["task"];
 };
 
-const plantingRelationFields = (row: PlantingReadRow) => ({
-  plantId: row.plant?.shortcode
-    ? parseShortcodeFor("plant", row.plant.shortcode)
-    : null,
-  sourceProductId: row.sourceProduct
-    ? parseShortcodeFor("product", row.sourceProduct.shortcode)
-    : null,
-  locationId: row.location
-    ? parseShortcodeFor("location", row.location.shortcode)
-    : null,
-  taskId: row.task ? parseShortcodeFor("task", row.task.shortcode) : null,
-  plantName: row.plant?.name ?? null,
-  sourceProductName: row.sourceProduct?.name ?? null,
-  locationName: row.location?.name ?? null,
-  taskName: row.task?.name ?? null,
-});
+const plantingRelationFields = (row: PlantingReadRow) => {
+  if (!row.plant?.shortcode)
+    throw new Error("Planting plant reference was not loaded");
+  return {
+    plantId: parseShortcodeFor("plant", row.plant.shortcode),
+    sourceProductId: row.sourceProduct
+      ? parseShortcodeFor("product", row.sourceProduct.shortcode)
+      : null,
+    locationId: row.location
+      ? parseShortcodeFor("location", row.location.shortcode)
+      : null,
+    taskId: row.task ? parseShortcodeFor("task", row.task.shortcode) : null,
+    plantName: row.plant?.name ?? null,
+    sourceProductName: row.sourceProduct?.name ?? null,
+    locationName: row.location?.name ?? null,
+    taskName: row.task?.name ?? null,
+  };
+};
 
 const plantingDerivedFields = (row: PlantingReadRow) => {
   const gardenGuideKey = resolveGardenGuideKey(row.plant?.gardenGuideKey);

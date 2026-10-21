@@ -170,7 +170,7 @@ describe("recipe repository helpers", () => {
   // bindings and detail; copying a complete list dictionary is not a regression.
   it("keeps website provenance and marks missing totals pending", () => {
     const value = recipeProvenanceFields(baseRecipe);
-    expect(value.meta.url).toBe("https://example.com/recipe");
+    expect(value.meta).toMatchObject({ url: "https://example.com/recipe" });
     expect(value.source).toEqual({
       type: "website",
       url: "https://example.com/recipe",
@@ -193,7 +193,7 @@ describe("recipe repository helpers", () => {
       sourceUrl: null,
       sourceLabel: null,
     });
-    expect(value.meta.url).toBeNull();
+    expect(value.meta).toMatchObject({ url: null });
     expect(value.source).toEqual({ type: "other" });
   });
 

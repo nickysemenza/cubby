@@ -119,11 +119,13 @@ async function seedReviews(
   },
 ) {
   const client = getDb(ctx.db);
-  const rows = input.verdicts.map((verdict, index) => ({
-    id: crypto.randomUUID(),
-    verdict,
-    at: new Date(Date.now() - ((input.agedFrom ?? 0) + index + 1) * 1000),
-  }));
+  const rows = input.verdicts.map<{ id: string; verdict: Verdict; at: Date }>(
+    (verdict, index) => ({
+      id: crypto.randomUUID(),
+      verdict,
+      at: new Date(Date.now() - ((input.agedFrom ?? 0) + index + 1) * 1000),
+    }),
+  );
   const status = input.automatic ? "applied" : "resolved";
   const data = { matchedRules: [input.stamp] };
   if (input.family === "field") {

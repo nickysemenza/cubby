@@ -229,20 +229,28 @@ const transferRead = {
         toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode!),
       }),
     ),
-    bind(ledgerTransferOut.pick({ sourceClaims: true }), (row) => ({
-      sourceClaims: row.sourceClaims?.map((claim) => ({
-        ...claim,
-        createdAt: new Date(claim.createdAt),
-        updatedAt: new Date(claim.updatedAt),
-      })),
-    })),
-    bind(ledgerTransferOut.pick({ evidenceTransactionIds: true }), (row) => ({
-      evidenceTransactionIds: row.evidenceTransactionIds?.map((id) =>
-        parseShortcodeFor("financialTransaction", id),
-      ),
-    })),
+    bind(ledgerTransferOut.pick({ sourceClaims: true }), (row) => {
+      if (row.sourceClaims === undefined)
+        throw new Error("Ledger transfer source claims were not loaded");
+      return {
+        sourceClaims: row.sourceClaims.map((claim) => ({
+          ...claim,
+          createdAt: new Date(claim.createdAt),
+          updatedAt: new Date(claim.updatedAt),
+        })),
+      };
+    }),
+    bind(ledgerTransferOut.pick({ evidenceTransactionIds: true }), (row) => {
+      if (row.evidenceTransactionIds === undefined)
+        throw new Error("Ledger transfer evidence was not loaded");
+      return {
+        evidenceTransactionIds: row.evidenceTransactionIds.map((id) =>
+          parseShortcodeFor("financialTransaction", id),
+        ),
+      };
+    }),
     bind(ledgerTransferOut.pick({ classification: true }), (row) => ({
-      classification:
+      classification: ledgerTransferOut.shape.classification.parse(
         row.fromPartyId === row.toPartyId
           ? "internal_move"
           : row.toPartyKind === "household"
@@ -250,6 +258,7 @@ const transferRead = {
             : row.fromPartyKind === "household"
               ? "household_distribution"
               : "reimbursement",
+      ),
     })),
   ],
 } satisfies ListReadOptions<

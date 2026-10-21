@@ -75,7 +75,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
   (`server/entity-kernel/repo/repository.ts`), `declaredFilterPredicates` /
-  `listScaffold` (`server/generic/list/repo/list.ts`; a list read goes through its `list`,
+  `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
+  explicit repository-only selections through `raw`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined
   `count` instead of calling
   `executeListQueryWithCount`), `insertAndReturn`,

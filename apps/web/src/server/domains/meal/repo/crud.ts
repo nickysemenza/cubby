@@ -53,7 +53,12 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { dbMealToAPI, rollupMealTotals } from "./helpers";
+import {
+  dbMealToAPI,
+  rollupMealTotals,
+  mealRecipeFields,
+  mealTotalsFields,
+} from "./helpers";
 
 type MealMutationResult = { output: MealOut; entityId: MealId };
 
