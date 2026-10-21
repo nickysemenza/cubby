@@ -1541,13 +1541,19 @@ describe("caller-driven purchase import writes", () => {
           },
         };
       });
-      await expect(
+      const [commit] = await Promise.allSettled([
         commitPurchaseImport(ctx.db, commitInput, ctx.actor, port),
-      ).rejects.toThrow(/fenced.*failed/);
+      ]);
       expect(port).toHaveBeenCalledOnce();
       expect(expiry).toEqual(
         transition === "expire" ? { expired: 1, failures: [] } : null,
       );
+      expect(commit).toMatchObject({
+        status: "rejected",
+        reason: expect.objectContaining({
+          message: expect.stringMatching(/fenced.*failed/),
+        }),
+      });
       expect(await getDb(ctx.db).select().from(purchase)).toEqual(
         beforePurchases,
       );

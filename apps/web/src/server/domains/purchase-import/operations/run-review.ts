@@ -301,7 +301,8 @@ function staleRunWhere(cutoff: Date) {
       ne(runTable.purpose, runPurpose.enum.photo_inventory),
       isNotNull(runTable.coordinatorStartedAt),
     ),
-    sql`NOT EXISTS (SELECT 1 FROM ${runOperation} WHERE ${runOperation.runId} = ${runTable.id} AND ${runOperation.startedAt} >= ${cutoff})`,
+    // Raw Date parameters use the host offset; stored timestamps are UTC wall time.
+    sql`NOT EXISTS (SELECT 1 FROM ${runOperation} WHERE ${runOperation.runId} = ${runTable.id} AND ${runOperation.startedAt} >= ${cutoff.toISOString()}::timestamp)`,
     or(isNull(runTable.heartbeatAt), lt(runTable.heartbeatAt, cutoff)),
   );
 }
