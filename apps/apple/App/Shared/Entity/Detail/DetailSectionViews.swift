@@ -183,7 +183,6 @@ struct FieldsSectionView: View {
                         }
                         .font(.subheadline)
                         .navigationLinkIndicatorVisibility(.hidden)
-                        .listRowBackground(Color.clear)
                         .listRowInsets(
                             EdgeInsets(
                                 top: 0, leading: FieldGuideTokens.Space.md,
@@ -238,16 +237,24 @@ struct FieldsSectionView: View {
     @ViewBuilder
     private func dossierField(_ field: FieldDescriptor) -> some View {
         fieldRowWithResolutionActions(field)
-            .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : 26)
+            .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : 34)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private func fieldRowWithResolutionActions(_ field: FieldDescriptor) -> some View {
         fieldRow(field)
-            .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : 26)
+            .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : listRowMinimumHeight)
             .contextMenu {
                 resolutionActions(field)
             }
+    }
+
+    private var listRowMinimumHeight: CGFloat {
+        #if os(iOS)
+            30
+        #else
+            20
+        #endif
     }
 
     @ViewBuilder
@@ -268,6 +275,7 @@ struct FieldsSectionView: View {
 
     private func isInteractive(_ field: FieldDescriptor) -> Bool {
         field.reference != nil || field.detailRenderer == .recipeSource
+            || field.format == "external-link"
             || FieldResolutionPresentation(raw: row.raw, field: field)?.isInherited == true
     }
 
@@ -318,12 +326,13 @@ struct FieldsSectionView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contextMenu { resolutionActions(field) }
-        } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
-            ?? FieldResolutionPresentation(raw: row.raw, field: field)?.emptyLabel(field: field)
-        {
+        } else if let value = displayText(field) {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 HStack(spacing: 6) {
-                    if let option = EntityFieldValue.option(in: row.raw, field: field, surface: "detail"),
+                    if let url = externalURL(field, value: value) {
+                        Link(value, destination: url).foregroundStyle(.tint)
+                    } else if let option = EntityFieldValue.option(
+                        in: row.raw, field: field, surface: "detail"),
                         let chip = StatusChip(text: value, option: option)
                     {
                         chip.textSelection(.enabled)
@@ -348,6 +357,20 @@ struct FieldsSectionView: View {
         }
     }
 
+    private func displayText(_ field: FieldDescriptor) -> String? {
+        let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
+        guard let value else { return nil }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .localizedCaseInsensitiveCompare("Not recorded") == .orderedSame ? nil : value
+    }
+
+    private func externalURL(_ field: FieldDescriptor, value: String) -> URL? {
+        guard field.format == "external-link", let url = URL(string: value),
+            ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else { return nil }
+        return url
+    }
+
     private var rows: [FieldDescriptor] {
         keys.compactMap { key in
             // The hero is the title's and the id's home; repeating them here is a form, not a record.
@@ -369,11 +392,7 @@ struct FieldsSectionView: View {
             if EntityFieldValue.reference(in: row.raw, field: field) != nil {
                 return field
             }
-            guard
-                EntityFieldValue.text(in: row.raw, field: field, surface: "detail") != nil
-                    || FieldResolutionPresentation(raw: row.raw, field: field) != nil
-                    || field.explanation != nil
-            else { return nil }
+            guard displayText(field) != nil else { return nil }
             return field
         }
     }
@@ -403,17 +422,12 @@ struct FieldsSectionView: View {
                 field: field, subject: EntityRef(entity: descriptor.key, id: row.id), items: items)
         } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             let value = reference.name ?? reference.id
-            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                FieldExplanationLabel(
-                    field: field,
-                    subject: EntityRef(entity: descriptor.key, id: row.id))
-                Spacer(minLength: FieldGuideTokens.Space.sm)
-                VStack(alignment: .trailing, spacing: 2) {
+            LabeledContent {
+                VStack(alignment: .trailing, spacing: FieldGuideTokens.Space.xs) {
                     NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                         HStack(spacing: FieldGuideTokens.Space.xs) {
                             if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
-                            Text(value).fixedSize(horizontal: false, vertical: true)
-                                .multilineTextAlignment(.trailing)
+                            Text(value).multilineTextAlignment(.trailing)
                         }
                         .foregroundStyle(.tint)
                     }
@@ -424,22 +438,31 @@ struct FieldsSectionView: View {
                         EntityFieldResolutionLabel(resolved: resolved, field: field)
                     }
                 }
+            } label: {
+                FieldExplanationLabel(
+                    field: field,
+                    subject: EntityRef(entity: descriptor.key, id: row.id))
             }
-            .frame(maxWidth: .infinity)
-        } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
-            ?? FieldResolutionPresentation(raw: row.raw, field: field)?.emptyLabel(field: field)
-        {
+        } else if let value = displayText(field) {
             LabeledContent {
                 VStack(alignment: .trailing, spacing: FieldGuideTokens.Space.xs) {
                     HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
-                        if let option = EntityFieldValue.option(in: row.raw, field: field, surface: "detail"),
+                        if let url = externalURL(field, value: value) {
+                            Link(value, destination: url)
+                                .foregroundStyle(.tint)
+                                .multilineTextAlignment(.trailing)
+                        } else if let option = EntityFieldValue.option(
+                            in: row.raw, field: field, surface: "detail"),
                             let chip = StatusChip(text: value, option: option)
                         {
                             chip.textSelection(.enabled)
                         } else if let date = EntityFieldValue.dateValue(
                             in: row.raw, field: field, surface: "detail")
                         {
-                            DateDisplay(date).textSelection(.enabled).multilineTextAlignment(.trailing)
+                            DateDisplay(date, compact: true)
+                                .textSelection(.enabled)
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(.secondary)
                         } else {
                             Text(value)
                                 .font(
@@ -449,6 +472,7 @@ struct FieldsSectionView: View {
                                 )
                                 .textSelection(.enabled)
                                 .multilineTextAlignment(.trailing)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
@@ -463,12 +487,6 @@ struct FieldsSectionView: View {
                 FieldExplanationLabel(
                     field: field,
                     subject: EntityRef(entity: descriptor.key, id: row.id))
-            }
-        } else if field.explanation != nil {
-            LabeledContent {
-                Text(field.emptyLabel ?? "Not recorded").foregroundStyle(.secondary)
-            } label: {
-                FieldExplanationLabel(field: field, subject: EntityRef(entity: descriptor.key, id: row.id))
             }
         }
     }

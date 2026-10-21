@@ -409,6 +409,18 @@ struct EntityDetailContent: View {
 
     private var presentation: EntityPresentation { descriptor.presentation }
 
+    private var activityInsertionSectionID: String? {
+        let sections = presentation.detailSections.filter { $0.id != journalSection?.id }
+        return sections.first(where: {
+            $0.title?.localizedCaseInsensitiveCompare("Record") == .orderedSame
+        })?.id ?? sections.first?.id
+    }
+
+    private var shouldShowActivity: Bool {
+        !presentation.activityRelations.isEmpty
+            && (!activityLoaded || activityError != nil || !activityEvents.isEmpty || activityCursor != nil)
+    }
+
     private var hasUnsupportedPresentation: Bool {
         let unsupportedField = descriptor.fields.contains {
             $0.showInDetail && NativePresentationCoverage.unsupportedDetail($0) != nil
@@ -518,7 +530,7 @@ struct EntityDetailContent: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        if !presentation.activityRelations.isEmpty {
+                        if shouldShowActivity {
                             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                                 if let activityError {
                                     InlineLoadFailure(message: activityError) { await loadActivity() }
@@ -674,21 +686,13 @@ struct EntityDetailContent: View {
             ForEach(presentation.detailSections) { section in
                 if section.id != journalSection?.id {
                     declared(section).detailContentsAnchor(section.id)
-                }
-            }
-            if !presentation.activityRelations.isEmpty {
-                Section {
-                    if let activityError {
-                        InlineLoadFailure(message: activityError) { await loadActivity() }
-                    } else if !activityLoaded {
-                        LoadingIndicator(label: "Loading activity")
-                    } else {
-                        DetailActivitySection(
-                            events: activityEvents, isLoadingMore: loadingOlderActivity,
-                            hasMore: activityCursor != nil,
-                            onLoadMore: { Task { await loadOlderActivity() } })
+                    if section.id == activityInsertionSectionID {
+                        phoneActivitySection
                     }
                 }
+            }
+            if activityInsertionSectionID == nil {
+                phoneActivitySection
             }
             if hasUnsupportedPresentation {
                 Section("More details") {
@@ -712,10 +716,11 @@ struct EntityDetailContent: View {
         }
         #if os(iOS)
             .listStyle(.insetGrouped)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .listSectionMargins(.top, 0)
         #else
             .listStyle(.plain)
         #endif
-        .listRowBackground(Color.clear)
         .fieldGuideDetailDensity()
         .frame(maxWidth: 900)
         .frame(maxWidth: .infinity, alignment: .top)
@@ -728,6 +733,24 @@ struct EntityDetailContent: View {
         .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
         .environment(\.reportBatchStore, reportBatches)
         .task { reportBatches.onRecordStale = onChanged }
+    }
+
+    @ViewBuilder
+    private var phoneActivitySection: some View {
+        if shouldShowActivity {
+            Section("Activity") {
+                if let activityError {
+                    InlineLoadFailure(message: activityError) { await loadActivity() }
+                } else if !activityLoaded {
+                    LoadingIndicator(label: "Loading activity")
+                } else {
+                    DetailActivitySection(
+                        events: activityEvents, isLoadingMore: loadingOlderActivity,
+                        hasMore: activityCursor != nil,
+                        onLoadMore: { Task { await loadOlderActivity() } }, showsTitle: false)
+                }
+            }
+        }
     }
 
     @ViewBuilder

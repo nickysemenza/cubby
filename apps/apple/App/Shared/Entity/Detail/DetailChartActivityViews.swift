@@ -14,10 +14,17 @@ enum DetailActivityDate {
 
 struct MonthlyExpenseSpendChart: View {
     let points: MonthlyExpenseSpendOutput
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var totalCents: Int { points.reduce(0) { $0 + $1.cents } }
     private var minimum: Int { min(0, points.map(\.cents).min() ?? 0) }
     private var maximum: Int { max(0, points.map(\.cents).max() ?? 0) }
+    private var monthTicks: [String] {
+        let interval = horizontalSizeClass == .compact ? 2 : 1
+        return points.enumerated().compactMap { index, point in
+            index.isMultiple(of: interval) ? point.month : nil
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
@@ -51,7 +58,7 @@ struct MonthlyExpenseSpendChart: View {
             .chartYScale(domain: Double(minimum)...Double(maximum == minimum ? maximum + 1 : maximum))
             .chartYAxis(.hidden)
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                AxisMarks(values: monthTicks) { value in
                     AxisValueLabel {
                         if let month = value.as(String.self) {
                             Text(monthLabel(month))
@@ -83,6 +90,7 @@ struct DetailActivitySection: View {
     let isLoadingMore: Bool
     let hasMore: Bool
     let onLoadMore: () -> Void
+    var showsTitle = true
 
     private var groups: [(day: String, events: [DetailActivityEvent])] {
         var result: [(day: String, events: [DetailActivityEvent])] = []
@@ -99,8 +107,9 @@ struct DetailActivitySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-            Text("Activity")
-                .font(.headline)
+            if showsTitle {
+                Text("Activity").font(.headline)
+            }
             if events.isEmpty {
                 Text("No activity yet.").foregroundStyle(.secondary)
             } else {
