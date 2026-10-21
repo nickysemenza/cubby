@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   cookbookReprocessEventSchema,
+  COOKBOOK_COMMAND_CHUNK,
+  cookbookImportChunkInput,
   gatewayForwardInput,
   gatewayForwardOut,
   importRecipeSchema,
@@ -119,4 +121,23 @@ describe("cookbookReprocessEventSchema", () => {
       }).success,
     ).toBe(false);
   });
+});
+
+it("refuses more ids than the server's cap in one call", () => {
+  const ids = Array.from(
+    { length: COOKBOOK_COMMAND_CHUNK + 1 },
+    (_, i) => `001.${i}`,
+  );
+  expect(
+    cookbookImportChunkInput.safeParse({
+      cookbookId: "CKB-4K7M",
+      recipeIds: ids,
+    }).success,
+  ).toBe(false);
+  expect(
+    cookbookImportChunkInput.safeParse({
+      cookbookId: "CKB-4K7M",
+      recipeIds: ids.slice(0, COOKBOOK_COMMAND_CHUNK),
+    }).success,
+  ).toBe(true);
 });

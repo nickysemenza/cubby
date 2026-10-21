@@ -297,13 +297,6 @@ describe("structured field read-to-input vectors", () => {
           }))
       : value;
 
-  it("has a case for every generated vector", () => {
-    const generated = vectors
-      .map((vector) => `${vector.entity}.${vector.field}`)
-      .filter((id) => Object.hasOwn(records, id));
-    expect(generated.sort()).toEqual(Object.keys(records).sort());
-  });
-
   it.each(Object.entries(records))(
     "%s: pins the payload the server reads, and the editor sends back the vector input",
     async (id, write) => {

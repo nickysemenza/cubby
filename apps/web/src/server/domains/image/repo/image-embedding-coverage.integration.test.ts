@@ -1,4 +1,3 @@
-import { embeddableEntities } from "@cubby/schemas/search";
 import { and, eq, isNull } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -6,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { searchDocument, derivedRefreshCaptureInbox } from "~/server/db/schema";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
@@ -17,30 +15,6 @@ import {
   createPendingImageRecord,
   createUploadedImageRecord,
 } from "./image";
-
-/**
- * Kinds that opt out of the kernel's generic mutation side effects
- * (`sideEffects: false`). Each must project and enqueue embeddings itself; a
- * new opt-out fails this test until it names where that happens.
- */
-const OPTED_OUT_OF_KERNEL_SIDE_EFFECTS = {
-  // Their operations call runMutationSideEffects with richer orchestration.
-  product: "repo/product/repository.ts",
-  location: "repo/location/repository.ts",
-  // Rows are inserted by the upload paths, covered by the tests below.
-  image: "image create paths in this file",
-};
-
-describe("embedding coverage per embeddable kind", () => {
-  it("every embeddable kind either runs kernel side effects or names its own path", () => {
-    for (const kind of embeddableEntities) {
-      const covered =
-        ENTITY_KERNEL_BINDINGS[kind].sideEffects !== false ||
-        kind in OPTED_OUT_OF_KERNEL_SIDE_EFFECTS;
-      expect(covered, `${kind} never projects or embeds on create`).toBe(true);
-    }
-  });
-});
 
 describe("image create paths project and enqueue embedding", () => {
   const ctx = withTestDb();

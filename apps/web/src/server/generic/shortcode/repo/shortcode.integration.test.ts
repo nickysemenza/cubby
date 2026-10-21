@@ -7,7 +7,6 @@
  */
 
 import { entityRefKey } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import type {
   ImageShortcode,
   IngredientShortcode,
@@ -43,7 +42,6 @@ import {
   generateUniqueShortcode,
   insertWithShortcode,
   type ShortcodeGeneratorPort,
-  SHORTCODE_TABLE,
 } from "./shortcode-utils";
 
 interface PinnedShortcodeGenerator {
@@ -71,12 +69,6 @@ function createPinnedShortcodeGenerator(): PinnedShortcodeGenerator {
 
 describe("shortcode minting", () => {
   const ctx = withTestDb();
-
-  it("covers every shortcode-bearing entity with a table", () => {
-    for (const entity of shortcodeEntities) {
-      expect(SHORTCODE_TABLE[entity]).toBeDefined();
-    }
-  });
 
   it("preserves exact entity brands through generic minting", async () => {
     expectTypeOf(

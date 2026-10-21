@@ -9,7 +9,10 @@ implementation it guards.
 
 ## Signal and speed
 
-Choose the cheapest boundary that can expose the failure. Headless HTTP/native
+Choose the cheapest boundary that can expose the failure. Classify individual
+cases in mixed service-backed suites: SQL elsewhere in a file does not make
+every assertion an integration check. Before moving a case, read its destination
+owner and preserve the existing cases. Headless HTTP/native
 service checks establish stored values, totals, provenance, ownership and error
 contracts; a small browser journey establishes navigation, editing and
 supported visible outcomes. Deterministic read-back establishes whether the
