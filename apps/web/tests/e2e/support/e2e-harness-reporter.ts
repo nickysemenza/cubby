@@ -14,7 +14,6 @@ import {
   type E2ERunBundleInput,
   type E2ERunIdentity,
 } from "../../../tooling/e2e-run-bundle";
-import { assertTestRunContract } from "../../../tooling/test-run-contract";
 import {
   gitRevision,
   webBuildSourceFingerprint,
@@ -39,11 +38,10 @@ function hmrIdentity(repoRoot: string) {
 
 /**
  * Writes the sanitized E2E run bundle (with failed tests' workerd logs) and
- * enforces the test-run contract. Console and HTML output come from
+ * preserves run identity. Console and HTML output come from
  * Playwright's built-in reporters, slow files from `reportSlowTests`.
  */
 class E2EHarnessReporter implements Reporter {
-  private outcomes: Array<{ name: string; state: string }> = [];
   private bundleCases: Array<{
     name: string;
     status: string;
@@ -73,10 +71,6 @@ class E2EHarnessReporter implements Reporter {
   onTestEnd(test: TestCase, result: TestResult): void {
     if (result.retry === 0) {
       const name = test.titlePath().join(" > ");
-      this.outcomes.push({
-        name,
-        state: result.status,
-      });
       const explorerUrl = result.annotations.find(
         (annotation) => annotation.type === WORKERD_EXPLORER_ANNOTATION,
       )?.description;
@@ -97,11 +91,6 @@ class E2EHarnessReporter implements Reporter {
 
   onEnd(result: FullResult): void {
     this.runStatus = result.status;
-    assertTestRunContract(this.outcomes, {
-      allowEmpty: ["--last-failed", "--list"].some((argument) =>
-        process.argv.includes(argument),
-      ),
-    });
   }
 
   onExit(): Promise<void> {

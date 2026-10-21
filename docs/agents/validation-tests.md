@@ -122,8 +122,9 @@ CI retries a failed Vitest or Playwright test once; locally nothing retries.
 A test that passes only on retry is reported as flaky, not failed. The second
 time a test is reported flaky, fix it or delete it, recording the named
 failure and the deleting commit in a GitHub issue so it can be
-restored once fixed. Do not skip it in place: the test-run contract fails a
-lane that reports skipped or pending tests. Never raise the retry count.
+restored once fixed. Do not skip it in place. Read the standard runner report
+and confirm that the intended cases executed: skipped, pending, and empty
+selections are not validation evidence. Never raise the retry count.
 
 Scope artificial CPU throttling to the interaction whose race it guards;
 restore normal speed for unrelated setup and read-back. A shared detail

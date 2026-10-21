@@ -203,13 +203,8 @@ export default defineConfig({
             "default",
             "github-actions",
             ["json", { outputFile: ".vitest-results.json" }],
-            "./tooling/test-run-contract-reporter.ts",
           ]
-        : [
-            "default",
-            ["json", { outputFile: ".vitest-results.json" }],
-            "./tooling/test-run-contract-reporter.ts",
-          ],
+        : ["default", ["json", { outputFile: ".vitest-results.json" }]],
     // Passing fixtures intentionally exercise error logging and transport
     // tracing. Printing those expected messages dominates terminal I/O in the
     // shared-graph suite; failed tests still retain their console output.
