@@ -14,7 +14,7 @@ import { Section } from "~/ui/layout";
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
 
 /** Home's preloaded task briefing: the generic `task.briefing` collection report. */
-export const taskBriefingReportInput = {
+const taskBriefingReportInput = {
   slot: "task.briefing",
   scope: { kind: "list", entity: "task", filters: {} },
 } as const;
@@ -50,7 +50,7 @@ export function useTaskBriefing() {
  * Today's briefing receives only this already-ranked prefix from the server;
  * it never invents a client-side score or has to fetch the actionable graph.
  */
-export function taskBriefingSecondary(briefing: {
+function taskBriefingSecondary(briefing: {
   nextCount: number;
   laterCount: number;
   blockedCount: number;
