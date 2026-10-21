@@ -1,8 +1,10 @@
 # Dependency exceptions
 
 Manifests, `pnpm-workspace.yaml`, and the lockfile own pins, peer exceptions and
-resolved transitive versions. Review these exceptions when upgrading their
-owner; remove them when upstream metadata is corrected. Advisory audits and
+resolved transitive versions. Use unmodified upstream dependency releases. Do not
+add or restore dependency source patches; keep application behavior in application
+code. Review these exceptions when upgrading their owner; remove them when
+upstream metadata is corrected. Advisory audits and
 deduplication are dependency maintenance, not validation gates.
 
 - Better Auth UI's optional API-key family has narrower `better-call` peer
@@ -14,9 +16,6 @@ deduplication are dependency maintenance, not validation gates.
   bindings and typecheck when changing either; the workspace owns the accepted range.
 - Sentry's bundler plugin requires Babel 7; its package extension supplies that
   major separately from Vite's Babel 8 dependency.
-- Agents' PiHarness patch invalidates failed pi-durable sessions at its cache
-  boundary, with ownership checks so an old session cannot discard a replacement
-  during startup. Remove it when upstream provides equivalent recovery.
 - Build-only `@esbuild-kit/*`, OpenTelemetry's `glob`, and transitive `uuid`
   dependencies remain upstream maintenance concerns. A blanket override can
   replace an API with an incompatible major inside another package.

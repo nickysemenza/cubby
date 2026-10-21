@@ -42,4 +42,4 @@ runs:
       id: runner
       with:
         path: ${{ steps.paths.outputs.paths }}
-        key: agent-device-apple-runner-v5-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-${{ steps.host-version.outputs.hash }}-${{ hashFiles('.github/actions/setup-apple-test-runner-cache/action.yml', '.github/actions/save-apple-test-runner-cache/action.yml', 'node_modules/agent-device/package.json', 'patches/agent-device@*.patch') }}
+        key: agent-device-apple-runner-v5-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-${{ steps.host-version.outputs.hash }}-${{ hashFiles('.github/actions/setup-apple-test-runner-cache/action.yml', '.github/actions/save-apple-test-runner-cache/action.yml', 'node_modules/agent-device/package.json') }}

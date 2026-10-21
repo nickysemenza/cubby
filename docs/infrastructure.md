@@ -281,8 +281,10 @@ are created or updated by `cf deploy` from the checked-in configuration's Build 
 ### Purchase agent
 
 The purchase agent coordinates import runs inside Worker `cubby`: an Agents
-SDK `Agent` hosting a pi-durable conversation through `PiHarness`. Its
-checked-in configuration is part of `apps/web/cloudflare.config.ts`:
+SDK `Agent` hosting a pi-durable conversation through `PiHarness`. It uses the
+upstream lifecycle: a failed cached session requires explicit disposal or Durable
+Object recreation before reopening; Cubby does not override the SDK's cache.
+Its checked-in configuration is part of `apps/web/cloudflare.config.ts`:
 
 - SQLite Durable Object class `PurchaseImportRunAgent` (binding
   `PURCHASE_IMPORT_RUN`), one instance named `import-run:<Run.id>` or
