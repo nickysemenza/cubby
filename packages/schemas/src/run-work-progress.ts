@@ -37,3 +37,51 @@ export const runWorkProgress = z.object({
   completed: z.array(runWorkPhase),
 });
 export type RunWorkProgress = z.infer<typeof runWorkProgress>;
+
+/** Present a recorded sample consistently in list cells and live work snapshots. */
+export function readRunWorkPhase(
+  sample: RunWorkSample,
+  status: string,
+  now: Date,
+  waiting = false,
+): RunWorkPhase {
+  const paused = status.startsWith("paused") || status === "needs_review";
+  const stale = now.getTime() - Date.parse(sample.sampledAt) > 120_000;
+  const state =
+    status === "failed" || status === "dispatch_failed"
+      ? "failed"
+      : sample.finished || status === "completed"
+        ? sample.failures
+          ? "failed"
+          : "completed"
+        : paused
+          ? "paused"
+          : waiting ||
+              sample.activity === "capacity" ||
+              sample.activity === "retry"
+            ? "waiting"
+            : "running";
+  const etaSeconds =
+    sample.total !== null && sample.ratePerSecond !== null
+      ? Math.max(
+          0,
+          Math.ceil((sample.total - sample.processed) / sample.ratePerSecond),
+        )
+      : null;
+  return {
+    ...sample,
+    state,
+    etaSeconds,
+    estimateState:
+      sample.ratePerSecond === null
+        ? null
+        : paused
+          ? "paused"
+          : stale ||
+              waiting ||
+              sample.activity === "capacity" ||
+              sample.activity === "retry"
+            ? "stale"
+            : "current",
+  };
+}

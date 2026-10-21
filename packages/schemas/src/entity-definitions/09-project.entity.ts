@@ -725,7 +725,15 @@ Rules:
         key: "taskProgress",
         labelOverride: "Tasks",
         kind: "text",
-        display: { preview: true },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Own task completion rollup" }],
+        },
+        display: {
+          preview: true,
+          list: true,
+          renderer: { list: "task-progress" },
+        },
         validation: {
           read: z.string().describe("Done over total own tasks, e.g. `3/5`"),
           create: null,

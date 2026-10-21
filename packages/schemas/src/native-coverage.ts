@@ -153,6 +153,9 @@ export const nativeCoverage = {
       "vendor-cell",
       "order-link",
       "possible-vendor",
+      "task-progress",
+      "run-throughput",
+      "run-activity",
     ]),
     // The Image row IS the picture: native draws it as the row thumbnail.
     ...ownedElsewhere(["uploaded-image"]),
