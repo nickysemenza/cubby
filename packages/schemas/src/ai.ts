@@ -744,9 +744,13 @@ export type FieldSuggestionOutcome = z.infer<
 
 /** The most questions one settled read prepares; a list page batches up to it. */
 export const SETTLED_SUGGESTION_QUESTION_MAX = 50;
-/** A single-field `suggestFields` question a list already asked. */
+/**
+ * A single-field `suggestFields` question a list already asked. `entityId`
+ * names the saved record a `preview` read looks up; `verified` reads ignore
+ * it, so a remembered decline answers every record sharing the basis.
+ */
 export const settledSuggestionQuestion = fieldSuggestionsInput
-  .pick({ basisMode: true, basis: true })
+  .pick({ entityId: true, basisMode: true, basis: true })
   .extend({ field: z.string().min(1) });
 export type SettledSuggestionQuestion = z.infer<
   typeof settledSuggestionQuestion
@@ -757,6 +761,13 @@ export const settledSuggestionQuestionsInput = z.object({
     .array(settledSuggestionQuestion)
     .min(1)
     .max(SETTLED_SUGGESTION_QUESTION_MAX),
+  /**
+   * `verified` (the default) re-prepares remembered decision inputs and
+   * returns only answers they still match. `preview` returns each saved
+   * record's last complete live answer for display while its live ask runs;
+   * it prepares nothing, calls no model and opens no Run.
+   */
+  read: z.enum(["verified", "preview"]).optional(),
 });
 export type SettledSuggestionQuestionsInput = z.infer<
   typeof settledSuggestionQuestionsInput
@@ -768,9 +779,21 @@ export type SettledSuggestionQuestionsInput = z.infer<
  * live. A reopened question also names the `inputRevision` its live ask
  * carries, so a cached answer to the old inputs is never reused.
  */
+export const settledSuggestionPreview = z.object({
+  suggestion: fieldSuggestionSchema.nullable(),
+  outcome: fieldSuggestionOutcomeSchema,
+});
+export type SettledSuggestionPreview = z.infer<typeof settledSuggestionPreview>;
+/**
+ * A `preview` read answers only `preview`: the saved record's last live answer
+ * under the same basis and decision policy, or null. It is never
+ * authoritative — a client shows it while the live ask runs, and accepts,
+ * rejects or applies nothing until that ask returns.
+ */
 export const settledSuggestionAnswer = z.object({
   outcome: fieldSuggestionOutcomeSchema.nullable(),
   revision: z.string().nullable(),
+  preview: settledSuggestionPreview.nullable().optional(),
 });
 export type SettledSuggestionAnswer = z.infer<typeof settledSuggestionAnswer>;
 /** Positional with `questions`; one failed question never fails its siblings. */

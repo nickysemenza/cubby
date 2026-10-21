@@ -1,4 +1,5 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
+import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import {
   taxonomyId,
@@ -12,7 +13,7 @@ import { markPreparationIncomplete } from "~/server/ai/evaluation-inputs";
 import { NONE_KEY } from "~/server/ai/policy/decision-choice";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { aiAnalysis } from "~/server/db/schema";
+import { aiAnalysis, run } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import {
   categoryPorts,
@@ -27,6 +28,7 @@ import {
   fieldQuestionKey,
   readSettledQuestions,
   rememberSettledQuestions,
+  savedAnswerKey,
 } from "./settled-questions";
 
 const declines: DecisionPort = async (input) => {
@@ -66,7 +68,10 @@ describe("settled suggestion questions", () => {
     ports: Parameters<typeof inferFieldAssessments>[2] = {
       decisionPort: declines,
     },
-    extra: Pick<FieldSuggestionsInput, "decisionModel"> = {},
+    extra: Pick<
+      FieldSuggestionsInput,
+      "decisionModel" | "entityId" | "savedRecord"
+    > = {},
   ) =>
     inferFieldAssessments(
       kernelCtx(ctx),
@@ -384,6 +389,167 @@ describe("settled suggestion questions", () => {
     const again = await ask(question);
     expect(again.outcomes?.projectId).toMatchObject({ answer: "none" });
     expect(await read(question)).toEqual(again.outcomes?.projectId);
+  });
+
+  // Failure modes: a saved list revisit re-prepares rosters, re-asks the
+  // model, schedules work or opens a Run before showing an answer it already
+  // computed; a weak pick or decline is never remembered for the record; a
+  // preview leaks across records, bases or a member's wrong/rejected review;
+  // a pinned replay or a form draft poisons the saved record's preview.
+  describe("saved-record previews", () => {
+    let preparations = 0;
+    const refusing = {
+      decisionPort: async () => {
+        preparations += 1;
+        throw new Error("Synthetic preview invoked the decision model");
+      },
+      registry: {
+        "product.categoryId": {
+          ...fakeRoster.registry["product.categoryId"],
+          roster: async () => {
+            preparations += 1;
+            throw new Error("Synthetic preview prepared a roster");
+          },
+        },
+      },
+    };
+    const runCount = async () =>
+      (await getDb(ctx.db).select({ id: run.id }).from(run)).length;
+    const savedAsk = (
+      question: Question,
+      entityId: string,
+      ports: Parameters<typeof inferFieldAssessments>[2],
+      extra: Pick<FieldSuggestionsInput, "decisionModel" | "savedRecord"> = {
+        savedRecord: true,
+      },
+    ) => ask(question, ports, { entityId, ...extra });
+    const readPreview = async (
+      { entity, ...question }: Question,
+      entityId: string,
+      basisMode: FieldSuggestionsInput["basisMode"] = "suggested",
+    ) => {
+      preparations = 0;
+      const runs = await runCount();
+      const { results } = await readSettledQuestions(
+        ctx.db,
+        {
+          entity,
+          read: "preview",
+          questions: [{ ...question, entityId, basisMode }],
+        },
+        refusing,
+      );
+      expect(preparations).toBe(0);
+      expect(await runCount()).toBe(runs);
+      const [result] = results;
+      if (!result?.ok) throw new Error(result?.message ?? "No preview result");
+      expect(result.value.outcome).toBeNull();
+      return result.value.preview ?? null;
+    };
+
+    it("replays a saved record's weak pick and decline without preparing", async () => {
+      const weak = await productFixture(ctx, "Synthetic weak gadget");
+      const weakQuestion = gadget("Synthetic weak gadget");
+      const weakAnswer = await savedAsk(
+        weakQuestion,
+        weak.id,
+        categoryPorts(0.5).suggestPorts,
+      );
+      expect(weakAnswer.outcomes?.categoryId).toMatchObject({
+        kind: "evaluated",
+      });
+      expect(await readPreview(weakQuestion, weak.id)).toEqual({
+        suggestion: weakAnswer.suggestions.categoryId ?? null,
+        outcome: weakAnswer.outcomes?.categoryId,
+      });
+
+      const declined = await productFixture(ctx, "Synthetic declined gadget");
+      const declinedQuestion = gadget("Synthetic declined gadget");
+      const declinedAnswer = await savedAsk(
+        declinedQuestion,
+        declined.id,
+        fakeRoster,
+      );
+      expect(declinedAnswer.outcomes?.categoryId).toMatchObject({
+        answer: "none",
+      });
+      expect(await readPreview(declinedQuestion, declined.id)).toEqual({
+        suggestion: null,
+        outcome: declinedAnswer.outcomes?.categoryId,
+      });
+    });
+
+    it("keys a preview by saved record, basis and basis mode", async () => {
+      const product = await productFixture(ctx, "Synthetic keyed gadget");
+      const other = await productFixture(ctx, "Synthetic other gadget");
+      const question = gadget("Synthetic keyed gadget");
+      await savedAsk(question, product.id, categoryPorts(0.5).suggestPorts);
+      expect(await readPreview(question, product.id)).not.toBeNull();
+      expect(await readPreview(question, other.id)).toBeNull();
+      expect(
+        await readPreview(
+          gadget("Synthetic keyed gadget, renamed"),
+          product.id,
+        ),
+      ).toBeNull();
+      expect(await readPreview(question, product.id, "provided")).toBeNull();
+    });
+
+    // A decision-policy activation changes every dependency stamp, so the
+    // preview computed under the old policy is never looked up again.
+    it("keys a preview by its field's decision policy", async () => {
+      const manifest = await producingAiManifest(ctx.db);
+      const question = {
+        ...gadget("Synthetic policy gadget"),
+        basisMode: "suggested" as const,
+        entityId: testShortcode("product", "policy"),
+      };
+      const activated = Object.fromEntries(
+        Object.entries(manifest).map(([feature, policy]) => [
+          feature,
+          { ...policy, generation: policy.generation + 1 },
+        ]),
+      );
+      expect(await savedAnswerKey(question, activated)).not.toBe(
+        await savedAnswerKey(question, manifest),
+      );
+      expect(await savedAnswerKey(question, manifest)).not.toBe(
+        await fieldQuestionKey(question, manifest),
+      );
+    });
+
+    it("drops a preview once a member marks its assessment wrong", async () => {
+      const product = await productFixture(ctx, "Synthetic reviewed gadget");
+      const question = gadget("Synthetic reviewed gadget");
+      const answer = await savedAsk(
+        question,
+        product.id,
+        categoryPorts(0.5).suggestPorts,
+      );
+      const outcome = answer.outcomes?.categoryId;
+      if (outcome?.kind !== "evaluated" || !outcome.assessmentId)
+        throw new Error("Synthetic weak pick has no assessment");
+      expect(await readPreview(question, product.id)).not.toBeNull();
+      await reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: outcome.assessmentId,
+        operationId: "synthetic:preview-miss",
+        verdict: "wrong",
+        intent: "history",
+      });
+      expect(await readPreview(question, product.id)).toBeNull();
+    });
+
+    it("never previews a pinned replay or a form draft", async () => {
+      const product = await productFixture(ctx, "Synthetic pinned gadget");
+      const question = gadget("Synthetic pinned gadget");
+      await savedAsk(question, product.id, fakeRoster, {
+        savedRecord: true,
+        decisionModel: "typesafe/jev",
+      });
+      expect(await readPreview(question, product.id)).toBeNull();
+      await savedAsk(question, product.id, fakeRoster, {});
+      expect(await readPreview(question, product.id)).toBeNull();
+    });
   });
 
   const resolveProduct = async (shortcode: string) => {

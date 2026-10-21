@@ -2,7 +2,10 @@ import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-in
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
 import superjson from "superjson";
-import { fieldSuggestionsOut } from "@cubby/schemas/ai";
+import {
+  fieldSuggestionsOut,
+  settledSuggestionQuestionsInput,
+} from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import {
   recordStatementRowsOut,
@@ -33,7 +36,11 @@ import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import {
+  dispatchesOperation,
+  dispatchOperations,
+  unbatchFor,
+} from "./support/dispatch-wire";
 import {
   gotoAuthenticatedPage,
   readExpense,
@@ -158,6 +165,117 @@ test("empty suggestion cells expose an abstention and keyboard-accessible detail
   await expect(
     page.getByText("No good fit · 98% · high", { exact: true }),
   ).toBeVisible();
+});
+
+// A saved answer must remain readable during revalidation without permitting
+// an old proposal to write. The current answer must replace it when it arrives.
+test("saved suggestion previews stay visible while current evidence is checked", async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName(testInfo, "Cached suggestion tool");
+  const category = await createEntityFixture(page, "productCategory", {
+    name: uniqueName(testInfo, "Cached category"),
+  });
+  await createEntityFixture(page, "product", { name, categoryId: null });
+  const live = Promise.withResolvers<void>();
+  const proposal = {
+    value: category.id,
+    label: "Synthetic saved category",
+    detail: null,
+    confidence: "high",
+    probability: 0.91,
+    reasoning: "Synthetic saved evidence",
+    alternatives: [],
+  };
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (
+      await unbatchFor(route, [
+        "ai.suggestFields",
+        "ai.settledSuggestionQuestions",
+      ])
+    )
+      return;
+    const [operation] = dispatchOperations(route.request());
+    if (operation?.operation === "ai.settledSuggestionQuestions") {
+      const input = settledSuggestionQuestionsInput.parse(operation.input);
+      if (input.read !== "preview") await live.promise;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          superjson.serialize({
+            ok: true,
+            data: {
+              results: input.questions.map(({ field }) => ({
+                ok: true,
+                value: {
+                  outcome: null,
+                  revision: null,
+                  preview:
+                    input.read === "preview" && field === "categoryId"
+                      ? {
+                          suggestion: proposal,
+                          outcome: {
+                            kind: "evaluated",
+                            answer: "pick",
+                            confidence: "high",
+                            probability: 0.91,
+                            alternatives: [],
+                          },
+                        }
+                      : null,
+                },
+              })),
+            },
+          }),
+        ),
+      });
+      return;
+    }
+    if (operation?.operation !== "ai.suggestFields") return route.continue();
+    await live.promise;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        superjson.serialize({
+          ok: true,
+          data: fieldSuggestionsOut.parse({
+            suggestions: {},
+            outcomes: {
+              categoryId: {
+                kind: "evaluated",
+                answer: "none",
+                confidence: "high",
+                probability: 0.98,
+                alternatives: [],
+              },
+            },
+          }),
+        }),
+      ),
+    });
+  });
+  try {
+    await gotoAuthenticatedPage(
+      page,
+      `/products?searchQuery=${encodeURIComponent(name)}`,
+    );
+    const row = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("link", { name, exact: true }) });
+    const cell = row.locator('[data-cell-col="categoryId"]');
+    const saved = cell.getByRole("button", {
+      name: /Accept.*Synthetic saved category/i,
+    });
+    await expect(saved).toBeVisible();
+    await expect(saved).toBeDisabled();
+    live.resolve();
+    await expect(
+      cell.getByRole("button", { name: /No good fit/ }),
+    ).toBeVisible();
+    await expect(saved).toHaveCount(0);
+  } finally {
+    live.resolve();
+  }
 });
 
 // Failure modes: a family drops out of the page; a record renders as a bare

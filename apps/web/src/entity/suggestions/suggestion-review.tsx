@@ -206,6 +206,7 @@ export function SuggestionReview({
   questionKey,
   pending,
   checking,
+  preview = false,
   onApply,
   onDismiss,
   onUseDifferent,
@@ -227,6 +228,9 @@ export function SuggestionReview({
   questionKey: string;
   pending?: boolean;
   checking?: boolean;
+  /** A cached answer shown while its live ask runs: displayed like an
+   * answer, but every action waits for the live one. */
+  preview?: boolean;
   onApply: () => void | Promise<void>;
   onDismiss?: () => void | Promise<void>;
   /** Opens an editor whose saved value is recorded as this suggestion's Miss. */
@@ -256,7 +260,7 @@ export function SuggestionReview({
   const { dismissed, dismiss, apply, saving, failure } = useSuggestionActions(
     key,
     onApply,
-    pending,
+    pending || preview,
     onDismiss,
   );
   const markCurrentLabel = stringLabelOf(currentLabel);
@@ -332,10 +336,12 @@ export function SuggestionReview({
           : notice
       }
       saving={saving}
-      disabled={pending}
+      disabled={pending || preview}
       failure={failure}
       onAccept={() => void apply()}
-      onReject={() => void dismiss()}
+      onReject={() => {
+        if (!preview) void dismiss();
+      }}
       onUseDifferent={onUseDifferent}
     />
   );

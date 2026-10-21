@@ -3,6 +3,7 @@ import type {
   FieldSuggestionOutcome,
   FieldSuggestionsOut,
   SettledSuggestionAnswer,
+  SettledSuggestionPreview,
   SettledSuggestionQuestion,
   SettledSuggestionQuestionsInput,
   SuggestionReviewRow,
@@ -137,6 +138,9 @@ type SuggestionRow = {
   pendingByField: ReadonlyMap<string, boolean>;
   checkingByField: ReadonlyMap<string, boolean>;
   errorByField: ReadonlyMap<string, unknown>;
+  /** The field shows a cached saved-record answer while its live ask runs;
+   * nothing may act on it until the live answer replaces it. */
+  previewByField: ReadonlyMap<string, boolean>;
 };
 /** Folds independently keyed field queries into their record's review state. */
 function mergeSuggestionRow(
@@ -148,6 +152,7 @@ function mergeSuggestionRow(
     isFetching: boolean;
     isPending: boolean;
     error: unknown;
+    preview?: boolean;
   },
 ): SuggestionRow {
   const sourceByField = new Map(previous?.sourceByField);
@@ -155,6 +160,7 @@ function mergeSuggestionRow(
   const pendingByField = new Map(previous?.pendingByField);
   const checkingByField = new Map(previous?.checkingByField);
   const errorByField = new Map(previous?.errorByField);
+  const previewByField = new Map(previous?.previewByField);
   for (const field of source.targets) {
     sourceByField.set(field, source);
     const assessmentId =
@@ -169,6 +175,7 @@ function mergeSuggestionRow(
     );
     checkingByField.set(field, query.isFetching);
     errorByField.set(field, query.error);
+    previewByField.set(field, query.preview ?? false);
   }
   return {
     record,
@@ -186,6 +193,7 @@ function mergeSuggestionRow(
     pendingByField,
     checkingByField,
     errorByField,
+    previewByField,
   };
 }
 
@@ -239,6 +247,10 @@ export interface StoredSuggestionOperations {
   /** Remembered declines for a page batch, positional with `questions`. */
   settled: (
     input: SettledSuggestionQuestionsInput,
+  ) => Promise<BatchOut<SettledSuggestionAnswer>>;
+  /** Saved-record answer previews for a page batch; omitted shows none. */
+  previews?: (
+    input: Omit<SettledSuggestionQuestionsInput, "read">,
   ) => Promise<BatchOut<SettledSuggestionAnswer>>;
 }
 
@@ -311,6 +323,8 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   review: (input) => assessment.review.call(input),
   reviewBatch: (input) => assessment.reviewBatch.call(input),
   settled: (input) => ai.settledSuggestionQuestions.call(input),
+  previews: (input) =>
+    ai.settledSuggestionQuestions.call({ ...input, read: "preview" }),
 };
 
 const recordIdentitySchema = z.object({ id: z.string() });
@@ -781,6 +795,7 @@ function actionableRowSuggestionCount(
   let count = 0;
   for (const row of rows.values()) {
     for (const [key, suggestion] of Object.entries(row.suggestions)) {
+      if (row.previewByField.get(key)) continue;
       const current = recordValue(entity, row.record, key).value;
       const question = JSON.stringify([
         entity,
@@ -890,6 +905,17 @@ const SETTLED_PENDING = {
   isPending: true,
   error: null,
 } as const;
+/** A cached answer standing in, still checking, until a live one replaces it. */
+const previewQuery = (field: string, preview: SettledSuggestionPreview) => ({
+  data: {
+    suggestions: { [field]: preview.suggestion },
+    outcomes: { [field]: preview.outcome },
+  },
+  isFetching: true,
+  isPending: false,
+  error: null,
+  preview: true,
+});
 const combineFieldQueries = (results: UseQueryResult<FieldSuggestionsOut>[]) =>
   results.map(({ data, isFetching, isPending, isError, error, refetch }) => ({
     data,
@@ -994,6 +1020,89 @@ function useSettledQuestions(
     requests,
     settledRequests,
     isFetching: results.some((result) => result.isFetching),
+  };
+}
+
+/** A saved record's single-field live ask, as its cached-preview question. */
+function savedPreviewQuestionOf(
+  source: FieldSuggestionSource,
+): { id: string; question: SettledSuggestionQuestion } | null {
+  const [field] = source.targets;
+  if (
+    !source.savedRecord ||
+    !source.entityId ||
+    source.targets.length !== 1 ||
+    !field
+  )
+    return null;
+  const question = {
+    entityId: source.entityId,
+    field,
+    basisMode: source.basisMode,
+    basis: source.basis,
+  };
+  return { id: JSON.stringify(question), question };
+}
+
+/**
+ * Each saved record's last complete live answer, read by record, basis and
+ * decision policy so a revisit shows it while the live ask revalidates it.
+ * The read is one indexed lookup per batch that prepares nothing, so it
+ * bypasses the page limiter: queued behind slow live asks, a preview would
+ * arrive no sooner than the answers it stands in for. A failed or missing
+ * preview just leaves the field checking.
+ */
+function useSavedAnswerPreviews(
+  entity: StandardEntity,
+  requests: readonly PageRequest[],
+  operations: StoredSuggestionOperations,
+) {
+  const latest = useRef(operations);
+  latest.current = operations;
+  const [batcher] = useState(() =>
+    createRequestBatcher<SettledSuggestionQuestion, SettledSuggestionAnswer>(
+      async (questions) =>
+        (await latest.current.previews?.({ entity, questions })) ?? {
+          results: questions.map(() => ({
+            ok: true as const,
+            value: { outcome: null, revision: null, preview: null },
+          })),
+        },
+      { max: SETTLED_SUGGESTION_QUESTION_MAX, concurrency: 1 },
+    ),
+  );
+  const questions = new Map<string, SettledSuggestionQuestion>();
+  if (operations.previews)
+    for (const { source } of requests) {
+      const saved = savedPreviewQuestionOf(source);
+      if (saved) questions.set(saved.id, saved.question);
+    }
+  const ids = [...questions.keys()];
+  const results = useQueries({
+    queries: ids.map((id) => {
+      const question = questions.get(id)!;
+      return {
+        queryKey: ["ai", "settled-suggestion-preview", entity, id] as const,
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          batcher.load(question, signal),
+        ...SETTLED_FRESHNESS,
+        retry: false,
+        meta: {
+          cacheTags: settledQuestionTags(entity, question),
+          silentErrors: true,
+        },
+      };
+    }),
+    combine: combineSettledQueries,
+  });
+  const previews = new Map<string, SettledSuggestionPreview>();
+  ids.forEach((id, index) => {
+    const preview = results[index]?.data?.preview;
+    if (preview) previews.set(id, preview);
+  });
+  return (source: FieldSuggestionSource) => {
+    const saved = savedPreviewQuestionOf(source);
+    return saved ? previews.get(saved.id) : undefined;
   };
 }
 
@@ -1175,6 +1284,13 @@ function BoundRecordSuggestions({
     scheduler,
   );
   const { requests } = settledQuestions;
+  // Previews are read for every candidate, so a row whose verified settled
+  // read is still preparing shows its cached answer too.
+  const savedPreviewFor = useSavedAnswerPreviews(
+    entity,
+    candidateRequests,
+    storedSuggestionOperations,
+  );
   // Identical records can share one query, while each row retains its own review state.
   const sources = [
     ...new Map(
@@ -1203,6 +1319,7 @@ function BoundRecordSuggestions({
   const rows = new Map<string, SuggestionRow>();
   for (const { record, source, outcome } of settledQuestions.settledRequests) {
     const field = source.targets[0]!;
+    const preview = outcome ? undefined : savedPreviewFor(source);
     rows.set(
       record.id,
       mergeSuggestionRow(
@@ -1217,15 +1334,29 @@ function BoundRecordSuggestions({
                 outcomes: { [field]: outcome },
               },
             }
-          : SETTLED_PENDING,
+          : preview
+            ? previewQuery(field, preview)
+            : SETTLED_PENDING,
       ),
     );
   }
   for (const { record, source } of requests) {
     const query = bySource.get(JSON.stringify(source))!;
+    // A cached answer stands in only until the live ask answers or fails; a
+    // live failure stays raw rather than hidden behind the older answer.
+    const preview =
+      query.data === undefined && !query.isError
+        ? savedPreviewFor(source)
+        : undefined;
+    const field = source.targets[0]!;
     rows.set(
       record.id,
-      mergeSuggestionRow(rows.get(record.id), record, source, query),
+      mergeSuggestionRow(
+        rows.get(record.id),
+        record,
+        source,
+        preview ? previewQuery(field, preview) : query,
+      ),
     );
   }
   const context = {
@@ -1617,6 +1748,7 @@ function ResolvedFieldSuggestion({
   const [editOpen, setEditOpen] = useState(false);
   const current = recordValue(context.entity, row.record, field);
   const suggestion = row.suggestions[field] ?? null;
+  const preview = row.previewByField.get(field) ?? false;
   const questionKey = JSON.stringify([
     context.entity,
     row.record.id,
@@ -1632,6 +1764,9 @@ function ResolvedFieldSuggestion({
     resolutionPolicy?.redundancy === "eligible" &&
     resolution.fallbackValue === suggestion?.value;
   const apply = async () => {
+    // A cached preview is unvalidated: only the live answer may be applied.
+    if (snapshot.current.row.previewByField.get(field))
+      throw new Error("Suggestion is still being checked");
     if (
       !suggestion?.value ||
       suggestionWentStale(context.entity, snapshot.current, {
@@ -1647,7 +1782,8 @@ function ResolvedFieldSuggestion({
     await context.save(row.record.id, field, suggestion, source, current.value);
   };
   const dismiss = async () => {
-    if (suggestion) await context.recordMiss(suggestion);
+    if (suggestion && !snapshot.current.row.previewByField.get(field))
+      await context.recordMiss(suggestion);
   };
   if (surface === "cell" && !row.errorByField.get(field)) {
     // Prune proposals keep the popover review: removing chips has no pill.
@@ -1676,7 +1812,7 @@ function ResolvedFieldSuggestion({
             }}
             currentValue={current.value}
             questionKey={questionKey}
-            pending={row.pendingByField.get(field) ?? false}
+            pending={(row.pendingByField.get(field) ?? false) || preview}
             inline={actionableSuggestion(
               suggestion,
               current.value,
@@ -1709,6 +1845,7 @@ function ResolvedFieldSuggestion({
         questionKey={questionKey}
         pending={row.pendingByField.get(field) ?? false}
         checking={row.checkingByField.get(field) ?? false}
+        preview={preview}
         error={row.errorByField.get(field)}
         onApply={apply}
         onDismiss={dismiss}
