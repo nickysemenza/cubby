@@ -216,6 +216,11 @@ export default defineEntity({
               value: "unspecified",
               label: "Unspecified",
               description: "Insufficient evidence",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
             },
             {
               value: "mixed_retail",
@@ -243,6 +248,9 @@ export default defineEntity({
           columnLabel: "Profile",
           list: true,
           detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Storefront", sfSymbol: "storefront" },
         },
         validation: {
           read: vendorSpendingProfile.default("unspecified"),
@@ -300,18 +308,25 @@ export default defineEntity({
               label: "Unclassified",
               description:
                 "Insufficient or mixed evidence; leave itemization expectation unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
             },
             {
               value: "required",
               label: "Expected",
               description:
                 "Household expects the order's item lines with their Products",
+              color: "info",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
                 "Household does not expect item lines; one amount is enough",
+              color: "neutral-status",
             },
           ],
         },
@@ -319,6 +334,8 @@ export default defineEntity({
           columnLabel: "Item lines",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         resolution: {
           reset: { itemizationExpectation: null },
@@ -440,12 +457,28 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "online_account", label: "Online account" },
-            { value: "receipt_only", label: "Receipt only" },
-            { value: "not_expected", label: "Not expected" },
+            {
+              value: "online_account",
+              label: "Online account",
+            },
+            {
+              value: "receipt_only",
+              label: "Receipt only",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+            },
           ],
         },
-        display: { columnLabel: "Evidence", list: true, detail: true },
+        display: {
+          columnLabel: "Evidence",
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Receipt", sfSymbol: "receipt" },
+        },
         validation: {
           read: vendorOrderEvidence.nullable(),
           create: vendorOrderEvidence.nullable().default(null),
@@ -640,15 +673,21 @@ export default defineEntity({
             {
               value: "not_started",
               label: "Not started",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
             {
               value: "in_progress",
               label: "In progress",
-              color: "var(--warning)",
+              color: "warning",
             },
-            { value: "done", label: "Done", color: "var(--positive)" },
+            {
+              value: "done",
+              label: "Done",
+              color: "positive",
+            },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",

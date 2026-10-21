@@ -228,11 +228,23 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "stock", label: "Stock" },
-            { value: "installed", label: "Installed" },
+            {
+              value: "stock",
+              label: "Stock",
+            },
+            {
+              value: "installed",
+              label: "Installed",
+            },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-pantry",
+          optionGlyph: { phosphor: "MapPin", sfSymbol: "mappin" },
+        },
         validation: {
           read: inventoryPlacement.describe(
             "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
@@ -256,6 +268,18 @@ export default defineEntity({
           read: null,
           create: inventoryOwnershipMode.optional(),
           update: inventoryOwnershipMode.optional(),
+        },
+        display: {
+          optionRole: "category",
+          optionColor: "domain-pantry",
+          optionGlyph: {
+            phosphor: "ArrowBendDownRight",
+            sfSymbol: "arrow.turn.down.right",
+          },
+          valueOptions: [
+            { value: "inherit", label: "Inherit" },
+            { value: "explicit", label: "Explicit" },
+          ],
         },
       },
       {

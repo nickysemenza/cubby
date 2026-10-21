@@ -1,3 +1,4 @@
+import { renderOptionGlyphs } from "./option-glyphs.ts";
 import type { ChildTableDeclaration } from "../../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import {
   entityFieldControlKinds as fieldControlKinds,
@@ -1487,7 +1488,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  references: readonly Entity[];\n" +
         "};\n\n" +
         "type EntityPortSourceRef = { module: string; export: string };\n" +
-        "type EntityInspectorOptionValue = string | number | boolean | null;\n" +
+        "type EntityInspectorOptionValue = string | number | boolean | null | Readonly<{phosphor: string; sfSymbol: string}>;\n" +
         "type EntityInspectorOption = Readonly<Record<string, EntityInspectorOptionValue>>;\n" +
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
@@ -1632,6 +1633,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "// Generated filter field assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const entityFilterFieldMaps = {\n${filterFieldBindings}\n} satisfies Partial<Record<Entity, Record<string, z.ZodType>>>;\n`,
     },
+    renderOptionGlyphs(entities),
     ...renderSwiftEntityCatalog(entities),
     ...renderStructuredValueSchemas(entities),
     ...renderSwiftSharedConstants(),

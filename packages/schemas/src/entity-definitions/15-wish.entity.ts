@@ -139,9 +139,19 @@ export default defineEntity({
           detail: true,
           // The Status column reads `acquiredAt` as a state, not a date.
           valueOptions: [
-            { value: "acquired", label: "Acquired", color: "var(--positive)" },
-            { value: "wanted", label: "Wanted", color: "var(--slate)" },
+            {
+              value: "acquired",
+              label: "Acquired",
+              color: "positive",
+            },
+            {
+              value: "wanted",
+              label: "Wanted",
+              color: "neutral-status",
+            },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: z.date().nullable(),
@@ -158,9 +168,19 @@ export default defineEntity({
           renderer: { detail: "wish-candidates" },
           // Roster for a candidate row's `inventoried` flag in the list.
           valueOptions: [
-            { value: "yes", label: "In inventory", color: "var(--positive)" },
-            { value: "no", label: "Not stocked", color: "var(--slate)" },
+            {
+              value: "yes",
+              label: "In inventory",
+              color: "positive",
+            },
+            {
+              value: "no",
+              label: "Not stocked",
+              color: "neutral-status",
+            },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "relation",

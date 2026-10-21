@@ -36,7 +36,6 @@ import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
 } from "~/entity/suggestions/field-suggestion";
-import { colorizeSelectOptions } from "~/lib/select-options";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
@@ -1568,7 +1567,7 @@ export function renderOptionCell(
   detail?: ReactNode,
 ): ReactNode {
   if (value == null || value === "") return <NoneValue />;
-  const option = colorizeSelectOptions(options).find((o) => o.value === value);
+  const option = options.find((o) => o.value === value);
   return (
     <EnumPill
       optionRole={option?.role}

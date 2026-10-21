@@ -55,7 +55,11 @@ export function FinancialSettlementStatus({
     (candidate) => candidate.value === settlement.status,
   );
   return (
-    <EnumPill color={option?.color ?? "var(--slate)"}>
+    <EnumPill
+      optionRole={option?.role}
+      glyph={option?.glyph}
+      color={option?.color ?? "var(--slate)"}
+    >
       {option?.label ?? settlement.status} · {settlement.transactionCount}
     </EnumPill>
   );

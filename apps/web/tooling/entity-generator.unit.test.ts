@@ -337,6 +337,18 @@ describe("typed entity compiler", () => {
             {
               key: "kind",
               kind: "enum" as const,
+              display: {
+                optionRole: "category",
+                optionColor: "neutral-status",
+                optionGlyph: {
+                  phosphor: "Shapes",
+                  sfSymbol: "square.on.circle",
+                },
+                valueOptions: [
+                  { value: "a", label: "A" },
+                  { value: "b", label: "B" },
+                ],
+              },
               validation: {
                 read: z.enum(["a", "b"]),
                 create: z.enum(["a", "b"]).optional(),
@@ -1567,6 +1579,11 @@ describe("typed entity compiler", () => {
         create: null,
         update: null,
       },
+      display: {
+        optionRole: "category",
+        optionColor: "neutral-status",
+        optionGlyph: { phosphor: "Shapes", sfSymbol: "square.on.circle" },
+      },
     };
     const compile = (options: Array<{ value: string; label: string }> | null) =>
       compileEntityDeclarations([
@@ -1616,7 +1633,12 @@ describe("typed entity compiler", () => {
               kind: "derived",
               sources: [{ label: "Workflow state" }],
             },
-            display: { detail: true },
+            display: {
+              detail: true,
+              optionRole: "category",
+              optionColor: "neutral-status",
+              optionGlyph: { phosphor: "Shapes", sfSymbol: "square.on.circle" },
+            },
             validation: { read: z.enum(["open"]), create: null, update: null },
           },
           {
@@ -2132,6 +2154,15 @@ describe("entity table storage", () => {
     key: "status",
     kind: "enum",
     validation: { read: z.enum(["open", "done"]), create: null, update: null },
+    display: {
+      optionRole: "category",
+      optionColor: "neutral-status",
+      optionGlyph: { phosphor: "Shapes", sfSymbol: "square.on.circle" },
+      valueOptions: [
+        { value: "open", label: "open" },
+        { value: "done", label: "done" },
+      ],
+    },
   };
   const loose = {
     key: "note",

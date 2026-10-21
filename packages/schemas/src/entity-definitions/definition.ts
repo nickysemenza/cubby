@@ -1,4 +1,8 @@
-import { enumRoles } from "@cubby/shared/enum-palette";
+import {
+  colorTokenSchema,
+  enumIconSchema,
+  enumRoles,
+} from "@cubby/shared/enum-palette";
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
 import { sortDirection } from "../pagination";
@@ -287,9 +291,7 @@ const buildMetadataSchemas = () => {
     .strict();
 
   /** One glyph for web (Phosphor component name) and Apple (SF Symbol). */
-  const enumOptionIconSchema = z
-    .object({ phosphor: nonEmptyString(), sfSymbol: nonEmptyString() })
-    .strict();
+  const enumOptionIconSchema = enumIconSchema;
 
   const entityFieldControlMetadataSchema = z
     .object({
@@ -303,11 +305,11 @@ const buildMetadataSchemas = () => {
               label: nonEmptyString(),
               /** What choosing this option means, shown where it is displayed. */
               description: nonEmptyString().optional(),
-              /** Web swatch (a CSS custom property) the value's pill uses. */
-              color: nonEmptyString().optional(),
-              /** The value's glyph on both clients; status rosters infer one. */
+              /** Named design token; compilation emits the client color. */
+              color: colorTokenSchema.optional(),
+              /** Contextual glyph, or the explicitly selected status tone's default. */
               glyph: enumOptionIconSchema.optional(),
-              /** Compiler-filled from the roster (`display.optionRole` or inferred). */
+              /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
             })
             .strict(),
@@ -536,9 +538,9 @@ const buildMetadataSchemas = () => {
             .object({
               value: nonEmptyString(),
               label: nonEmptyString(),
-              color: nonEmptyString().optional(),
+              color: colorTokenSchema.optional(),
               glyph: enumOptionIconSchema.optional(),
-              /** Compiler-filled from the roster (`display.optionRole` or inferred). */
+              /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
             })
             .strict(),
@@ -548,10 +550,13 @@ const buildMetadataSchemas = () => {
         .default(null),
       /**
        * Whether this field's roster reads as states (`status`: tinted fill and
-       * a glyph) or kinds (`category`: quiet tint and semantic glyph). Omitted, the shared enum
-       * palette infers it: every option carrying a condition color is status.
+       * a glyph) or kinds (`category`: quiet tint and semantic glyph). Every
+       * roster declares this here or on its shared options.
        */
       optionRole: z.enum(enumRoles).nullable().optional().default(null),
+      /** Explicit defaults shared by this field's choices; individual options may override. */
+      optionColor: colorTokenSchema.nullable().optional().default(null),
+      optionGlyph: enumIconSchema.nullable().optional().default(null),
       /**
        * A fact on the entity's hover preview card. An entity that declares
        * any shows exactly those, in model order; one that declares none falls
@@ -584,6 +589,8 @@ const buildMetadataSchemas = () => {
         referencePreviewLimit,
         valueOptions,
         optionRole,
+        optionColor,
+        optionGlyph,
         preview,
       }) => ({
         list,
@@ -605,6 +612,8 @@ const buildMetadataSchemas = () => {
         referencePreviewLimit,
         valueOptions,
         optionRole,
+        optionColor,
+        optionGlyph,
         preview,
       }),
     );
@@ -2342,6 +2351,8 @@ const buildMetadataSchemas = () => {
               label: nonEmptyString(),
               meta: z.boolean({ error: "must be a boolean" }).optional(),
               color: nonEmptyString().optional(),
+              role: z.enum(enumRoles).optional(),
+              glyph: enumIconSchema.optional(),
               /**
                * The filter fields this preset sets on a `range` descriptor
                * (`{ costMin: 500 }`); the generator turns the roster into the

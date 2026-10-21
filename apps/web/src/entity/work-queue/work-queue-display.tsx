@@ -5,10 +5,12 @@ import type {
   WorkWaitingFor,
   WorkExplanation,
 } from "@cubby/schemas/work-queue";
+import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
+import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
+import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderOptionCell } from "~/entity/table/column-helpers";
-import { colorizeSelectOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ChipCluster } from "~/ui/common/chip-cluster";
 import { Button } from "~/ui/primitives/button";
@@ -118,9 +120,7 @@ export function WorkActionDetails({
 
 /** One roster, so a member keeps the same color on every queue surface. */
 export const memberOptionsOf = (members: readonly WorkQueueMember[]) =>
-  colorizeSelectOptions(
-    members.map((member) => ({ value: member.id, label: member.name })),
-  );
+  members.map((member) => ({ value: member.id, label: member.name }));
 
 export function waitingForLabel(waitingFor: WorkWaitingFor) {
   switch (waitingFor.kind) {
@@ -143,11 +143,20 @@ export function WaitingForPill({
   switch (waitingFor.kind) {
     case "either":
       return (
-        <EnumPill description="Either member can do this work">Either</EnumPill>
+        <EnumPill
+          icon={<UsersIcon />}
+          description="Either member can do this work"
+        >
+          Either
+        </EnumPill>
       );
     case "unresolved":
       return (
-        <EnumPill color="var(--warning)" description={waitingFor.reason}>
+        <EnumPill
+          icon={<QuestionIcon />}
+          color="var(--warning)"
+          description={waitingFor.reason}
+        >
           Unresolved
         </EnumPill>
       );
@@ -176,6 +185,7 @@ export function GapChip({
 }) {
   return (
     <EnumPill
+      icon={<WarningIcon />}
       color={
         isDefectDataCheck(gap.check) ? "var(--destructive)" : "var(--warning)"
       }

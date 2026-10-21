@@ -13,7 +13,6 @@ import {
 } from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field.js";
-import { productCategoryFeatureGlyphs } from "./select-control-options.js";
 
 export default defineEntity({
   key: "productCategory",
@@ -170,15 +169,27 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "inherit", label: "Inherit" },
-            { value: "mapped", label: "Mapped" },
-            { value: "blocked", label: "Keep unresolved" },
+            {
+              value: "inherit",
+              label: "Inherit",
+            },
+            {
+              value: "mapped",
+              label: "Mapped",
+            },
+            {
+              value: "blocked",
+              label: "Keep unresolved",
+            },
           ],
         },
         display: {
           columnLabel: "Spending mode",
           list: true,
           detail: true,
+          optionRole: "category",
+          optionColor: "neutral-status",
+          optionGlyph: { phosphor: "Tag", sfSymbol: "tag" },
         },
         validation: {
           read: spendingCategoryMappingMode.default("inherit"),
@@ -294,78 +305,114 @@ export default defineEntity({
           options: [
             {
               value: "food",
-              glyph: productCategoryFeatureGlyphs["food"],
+              glyph: {
+                phosphor: "ForkKnife",
+                sfSymbol: "fork.knife",
+              },
               label: "Food",
               description:
                 "Edible/consumable products tracked against nutrition (USDA-linkable)",
             },
             {
               value: "books",
-              glyph: productCategoryFeatureGlyphs["books"],
+              glyph: {
+                phosphor: "BookOpen",
+                sfSymbol: "book",
+              },
               label: "Books",
               description: "Books, manuals, and other bound reading matter",
             },
             {
               value: "tools",
-              glyph: productCategoryFeatureGlyphs["tools"],
+              glyph: {
+                phosphor: "Wrench",
+                sfSymbol: "wrench.and.screwdriver",
+              },
               label: "Tools",
               description: "Durable hand or power tools",
             },
             {
               value: "tool-consumables",
-              glyph: productCategoryFeatureGlyphs["tool-consumables"],
+              glyph: {
+                phosphor: "Disc",
+                sfSymbol: "opticaldisc",
+              },
               label: "Tool consumables",
               description:
                 "Consumed alongside tool use: blades, bits, abrasives",
             },
             {
               value: "tool-accessories",
-              glyph: productCategoryFeatureGlyphs["tool-accessories"],
+              glyph: {
+                phosphor: "Gear",
+                sfSymbol: "gearshape",
+              },
               label: "Tool accessories",
               description: "Non-consumed attachments and add-ons for tools",
             },
             {
               value: "storage",
-              glyph: productCategoryFeatureGlyphs["storage"],
+              glyph: {
+                phosphor: "Archive",
+                sfSymbol: "archivebox",
+              },
               label: "Storage",
               description:
                 "Bins, totes, shelving, and other organizational containers",
             },
             {
               value: "hardware",
-              glyph: productCategoryFeatureGlyphs["hardware"],
+              glyph: {
+                phosphor: "Lightning",
+                sfSymbol: "bolt",
+              },
               label: "Hardware",
               description: "Fasteners, fittings, and small hardware components",
             },
             {
               value: "electronics",
-              glyph: productCategoryFeatureGlyphs["electronics"],
+              glyph: {
+                phosphor: "Cpu",
+                sfSymbol: "cpu",
+              },
               label: "Electronics",
               description: "Electronic devices and components",
             },
             {
               value: "software",
-              glyph: productCategoryFeatureGlyphs["software"],
+              glyph: {
+                phosphor: "Package",
+                sfSymbol: "shippingbox",
+              },
               label: "Software",
               description: "Software, licenses, and digital subscriptions",
             },
             {
               value: "household",
-              glyph: productCategoryFeatureGlyphs["household"],
+              glyph: {
+                phosphor: "Couch",
+                sfSymbol: "sofa",
+              },
               label: "Household",
               description:
                 "General household goods with no more specific feature",
             },
             {
               value: "supplies",
-              glyph: productCategoryFeatureGlyphs["supplies"],
+              glyph: {
+                phosphor: "Sparkle",
+                sfSymbol: "sparkles",
+              },
               label: "Supplies",
               description:
                 "Consumable general-purpose supplies (tape, paper, cleaning, …)",
             },
             {
               value: "apparel",
-              glyph: productCategoryFeatureGlyphs["apparel"],
+              glyph: {
+                phosphor: "TShirt",
+                sfSymbol: "tshirt",
+              },
               label: "Apparel",
               description: "Clothing, footwear, and wearable accessories",
             },
@@ -387,6 +434,9 @@ Rules:
           detail: true,
           width: "md",
           mobile: { slot: "meta", priority: 10 },
+          optionRole: "category",
+          optionColor: "neutral-status",
+          optionGlyph: { phosphor: "ForkKnife", sfSymbol: "fork.knife" },
         },
         explanation: {
           ruleId: "productCategory.effective-feature",

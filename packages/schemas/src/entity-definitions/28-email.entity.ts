@@ -30,37 +30,134 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 const EMAIL_SCOPE_REASON =
   "Link state is relative to one Purchase, Vendor or Vendor account.";
 
-const relevanceOptions = mailboxClassification.options.map((value) => ({
-  value,
-  label: MAILBOX_CLASSIFICATION_LABEL[value],
-}));
-const stageOptions = mailboxClassificationStage.options.map((value) => ({
-  value,
-  label: MAILBOX_CLASSIFICATION_STAGE_LABEL[value],
-}));
-const statusOptions = emailStatus.options.map((value) => ({
-  value,
-  label: value[0]!.toUpperCase() + value.slice(1),
-}));
-const linkStateColors = {
-  linked: "var(--positive)",
-  suggested: "var(--warning)",
-  dismissed: "var(--muted-foreground)",
-  none: "var(--muted-foreground)",
-} as const;
-const linkStateOptions = emailLinkState.options.map((value) => ({
-  value,
-  label: EMAIL_LINK_STATE_LABEL[value],
-  color: linkStateColors[value],
-}));
-const importOutcomeOptions = [
-  { value: "imported", label: "Imported" },
-  { value: "importing", label: "Importing" },
-  { value: "failed", label: "Import failed" },
-  { value: "not_imported", label: "Not imported" },
-] as const satisfies readonly {
-  value: (typeof emailImportOutcome.options)[number];
+const relevanceOptions = [
+  {
+    value: "related",
+    label: MAILBOX_CLASSIFICATION_LABEL["related"],
+  },
+  {
+    value: "unrelated",
+    label: MAILBOX_CLASSIFICATION_LABEL["unrelated"],
+  },
+  {
+    value: "uncertain",
+    label: MAILBOX_CLASSIFICATION_LABEL["uncertain"],
+    color: "neutral-status",
+    glyph: {
+      phosphor: "Question",
+      sfSymbol: "questionmark.circle",
+    },
+  },
+] satisfies {
+  value: string;
   label: string;
+  color?: import("@cubby/shared/enum-palette").ColorToken;
+  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
+}[];
+const stageOptions = [
+  {
+    value: "rule",
+    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["rule"],
+  },
+  {
+    value: "decision",
+    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["decision"],
+  },
+  {
+    value: "model",
+    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["model"],
+  },
+  {
+    value: "resolution",
+    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["resolution"],
+  },
+] satisfies {
+  value: string;
+  label: string;
+  color?: import("@cubby/shared/enum-palette").ColorToken;
+  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
+}[];
+const statusOptions = [
+  {
+    value: "pending",
+    label: "Pending",
+  },
+  {
+    value: "researching",
+    label: "Researching",
+  },
+  {
+    value: "completed",
+    label: "Completed",
+  },
+  {
+    value: "blocked",
+    label: "Blocked",
+  },
+  {
+    value: "deleted",
+    label: "Deleted",
+  },
+  {
+    value: "excluded",
+    label: "Excluded",
+  },
+] satisfies {
+  value: string;
+  label: string;
+  color?: import("@cubby/shared/enum-palette").ColorToken;
+  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
+}[];
+
+const linkStateOptions = [
+  {
+    value: "linked",
+    label: EMAIL_LINK_STATE_LABEL["linked"],
+    color: "positive",
+  },
+  {
+    value: "suggested",
+    label: EMAIL_LINK_STATE_LABEL["suggested"],
+    color: "warning",
+  },
+  {
+    value: "dismissed",
+    label: EMAIL_LINK_STATE_LABEL["dismissed"],
+    color: "neutral-status",
+  },
+  {
+    value: "none",
+    label: EMAIL_LINK_STATE_LABEL["none"],
+    color: "neutral-status",
+  },
+] satisfies {
+  value: string;
+  label: string;
+  color?: import("@cubby/shared/enum-palette").ColorToken;
+  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
+}[];
+const importOutcomeOptions = [
+  {
+    value: "imported",
+    label: "Imported",
+  },
+  {
+    value: "importing",
+    label: "Importing",
+  },
+  {
+    value: "failed",
+    label: "Import failed",
+  },
+  {
+    value: "not_imported",
+    label: "Not imported",
+  },
+] satisfies {
+  value: string;
+  label: string;
+  color?: import("@cubby/shared/enum-palette").ColorToken;
+  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
 }[];
 
 /** The promoted processing ledger owns identity and headers; retained content is optional. */
@@ -167,7 +264,14 @@ export default defineEntity({
         labelOverride: "Relevance",
         control: { kind: "select", options: relevanceOptions },
         // The list cell names the deciding stage, e.g. "Uncertain · Rule".
-        display: { list: true, detail: true, labelPath: "relevanceLabel" },
+        display: {
+          list: true,
+          detail: true,
+          labelPath: "relevanceLabel",
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Link", sfSymbol: "link" },
+        },
         validation: readOnly(mailboxClassification.nullable()),
       },
       labelField("relevanceLabel", "Relevance and its deciding stage"),
@@ -177,7 +281,14 @@ export default defineEntity({
         nullable: true,
         labelOverride: "Relevance stage",
         control: { kind: "select", options: stageOptions },
-        display: { list: true, listHidden: true, detail: true },
+        display: {
+          list: true,
+          listHidden: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "ListChecks", sfSymbol: "checklist" },
+        },
         validation: readOnly(mailboxClassificationStage.nullable()),
       },
       {
@@ -198,6 +309,9 @@ export default defineEntity({
           columnLabel: "Relevance",
           list: true,
           detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Link", sfSymbol: "link" },
         },
         provenance: {
           kind: "derived",
@@ -236,7 +350,13 @@ export default defineEntity({
         key: "status",
         kind: "enum",
         control: { kind: "select", options: statusOptions },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: { phosphor: "Envelope", sfSymbol: "envelope" },
+        },
         validation: readOnly(emailStatus),
       },
       {
@@ -336,7 +456,13 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, listHidden: true, width: "sm" },
+        display: {
+          list: true,
+          listHidden: true,
+          width: "sm",
+          optionRole: "status",
+          optionColor: "neutral-status",
+        },
         validation: readOnly(emailLinkState),
       },
       {
@@ -387,7 +513,17 @@ export default defineEntity({
             { label: "Accepted import sources and the Email's import Run" },
           ],
         },
-        display: { list: true, listHidden: true, detail: true },
+        display: {
+          list: true,
+          listHidden: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: {
+            phosphor: "FileArrowDown",
+            sfSymbol: "square.and.arrow.down",
+          },
+        },
         validation: readOnly(emailImportOutcome),
       },
       {

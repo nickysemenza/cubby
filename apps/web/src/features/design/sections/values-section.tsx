@@ -87,7 +87,12 @@ export function ValuesSection() {
               {demoStatusOptions
                 .filter((option) => !option.meta)
                 .map((option) => (
-                  <EnumPill key={option.value} color={option.color}>
+                  <EnumPill
+                    key={option.value}
+                    optionRole={option.role}
+                    glyph={option.glyph}
+                    color={option.color}
+                  >
                     {option.label}
                   </EnumPill>
                 ))}

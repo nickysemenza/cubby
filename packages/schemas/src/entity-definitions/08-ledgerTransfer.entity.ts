@@ -228,24 +228,26 @@ export default defineEntity({
             {
               value: "internal_move",
               label: "Internal move",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
             {
               value: "contribution",
               label: "Contribution",
-              color: "var(--positive)",
+              color: "positive",
             },
             {
               value: "household_distribution",
               label: "Household distribution",
-              color: "var(--primary)",
+              color: "info",
             },
             {
               value: "reimbursement",
               label: "Reimbursement",
-              color: "var(--warning)",
+              color: "warning",
             },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",

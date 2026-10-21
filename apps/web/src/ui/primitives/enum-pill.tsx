@@ -1,7 +1,7 @@
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
 import {
-  colorizeEnumOptions,
   type EnumIcon,
-  type EnumRole,
 } from "@cubby/shared/enum-palette";
 import type { ReactElement, ReactNode } from "react";
 
@@ -15,18 +15,6 @@ import {
 } from "~/ui/primitives/tooltip";
 
 /**
- * Full-strength ink on its own surface for each condition tone. Neutral
- * ("not started", "none") reads as the inset muted chip.
- */
-const STATUS_TONES: Readonly<Record<string, string>> = {
-  "var(--positive)": "bg-positive-surface text-positive",
-  "var(--warning)": "bg-warning-surface text-warning-ink",
-  "var(--destructive)": "bg-destructive-surface text-destructive",
-  "var(--info)": "bg-info-surface text-info",
-  "var(--neutral-status)": "bg-muted text-muted-foreground",
-};
-
-/**
  * Shared chip geometry for both roles. `border-transparent` keeps the 1px
  * box so a suggestion's dashed boundary can paint without shifting the value.
  */
@@ -36,23 +24,10 @@ function optionTint(color: string) {
   return `color-mix(in srgb, ${color} 12%, var(--background))`;
 }
 
-/**
- * The shared palette decides both facts for a lone value: a one-option
- * roster is `status` exactly when its color is a condition tone, and a
- * status option carries its value's (or tone's) inferred glyph.
- */
-function paletteFor(
-  value: string | undefined,
-  color: string | undefined,
-  role?: EnumRole,
-) {
-  return colorizeEnumOptions([{ value: value ?? "", color }], role)[0];
-}
-
 type ValueProps = {
   /** Option color: a condition tone for status, a category tint otherwise. */
   color?: string;
-  /** The option's declared or inferred glyph (Phosphor name). */
+  /** The option's compiled glyph (Phosphor name). */
   glyph?: EnumIcon | null;
   /** A caller-drawn leading mark; a declared `glyph` wins over it. */
   icon?: ReactNode;
@@ -92,96 +67,18 @@ function Lead({
   );
 }
 
-/**
- * A state ("Done", "Blocked"): its glyph, then the label, in the tone's
- * full-strength ink on the tone's surface. Glyph and word carry the meaning;
- * color reinforces it.
- */
-function StatusValue({
-  color = "var(--neutral-status)",
-  glyph,
-  icon,
-  description,
-  children,
-  className,
-  value,
-}: ValueProps & {
-  /** Stored value, so `blocked`/`paused` keep their own glyph when inferred. */
-  value?: string;
-}) {
-  const tone = STATUS_TONES[color];
-  const lead =
-    glyph ?? (icon ? null : (paletteFor(value, color, "status")?.glyph ?? null));
-  const pill = (
-    <Pill
-      data-enum-role="status"
-      className={cn(CHIP, "ps-1", tone, className)}
-      style={
-        tone
-          ? undefined
-          : {
-              backgroundColor: optionTint(color),
-              color,
-            }
-      }
-    >
-      <Lead glyph={lead} icon={icon} />
-      <span className="min-w-0 truncate">{children}</span>
-    </Pill>
-  );
-  return withDescription(pill, description);
-}
-
-/**
- * A kind ("Credit card", "Travel"): a quiet option tint and matching glyph.
- * The label keeps foreground ink for contrast on every category surface.
- */
-function CategoryValue({
-  color,
-  glyph,
-  icon,
-  description,
-  children,
-  className,
-}: ValueProps) {
-  const pill = (
-    <Pill
-      data-enum-role="category"
-      className={cn(CHIP, "text-foreground", !color && "bg-muted", className)}
-      style={color ? {
-        backgroundColor: optionTint(color),
-      } : undefined}
-    >
+/** Render supplied presentation; raw unrecognized values stay neutral and readable. */
+export function EnumPill({
+  optionRole = "category", value: _value,
+  color = "var(--brand-neutral-status)", glyph, icon, description, children, className,
+}: ValueProps & {optionRole?: string | null; value?: string}) {
+  return withDescription(
+    <Pill data-enum-role={optionRole ?? "category"}
+      className={cn(CHIP, "text-foreground", className)}
+      style={{backgroundColor: optionTint(color)}}>
       <Lead glyph={glyph} icon={icon} color={color} />
       <span className="min-w-0 truncate">{children}</span>
-    </Pill>
-  );
-  return withDescription(pill, description);
-}
-
-/** The role an option renders as: declared, else inferred from its color. */
-function enumRoleFor(role: EnumRole | null | undefined, color?: string) {
-  return role ?? paletteFor(undefined, color)?.role ?? "category";
-}
-
-/**
- * The one presentation for a declared enum value: `StatusValue` for states,
- * `CategoryValue` for kinds. Callers without an option role (computed
- * statuses, timeline kinds) get it from the color.
- */
-export function EnumPill({
-  optionRole,
-  value,
-  ...props
-}: ValueProps & {
-  /** The roster's role; omitted, the color decides. */
-  optionRole?: EnumRole | null;
-  value?: string;
-}) {
-  return enumRoleFor(optionRole, props.color) === "status" ? (
-    <StatusValue value={value} {...props} />
-  ) : (
-    <CategoryValue {...props} />
+    </Pill>, description,
   );
 }
 
@@ -200,12 +97,12 @@ export function BooleanValue({
 }) {
   return value ? (
     <span className="inline-flex items-center gap-1 text-positive">
-      <OptionGlyph name="Check" className="size-3.5" />
+      <CheckIcon aria-hidden className="size-3.5" />
       <span className="sr-only">{trueLabel}</span>
     </span>
   ) : (
     <span className="inline-flex items-center text-muted-foreground">
-      <OptionGlyph name="Minus" weight="regular" className="size-3.5" />
+      <MinusIcon aria-hidden weight="regular" className="size-3.5" />
       <span className="sr-only">{falseLabel}</span>
     </span>
   );

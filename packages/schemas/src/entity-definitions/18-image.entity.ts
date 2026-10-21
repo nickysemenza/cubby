@@ -192,10 +192,24 @@ export default defineEntity({
           mobile: { slot: "meta", priority: 20 },
           // Read-only, so no select control declares the roster.
           valueOptions: [
-            { value: "PENDING", label: "Pending", color: "var(--slate)" },
-            { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
-            { value: "FAILED", label: "Failed", color: "var(--destructive)" },
+            {
+              value: "PENDING",
+              label: "Pending",
+              color: "neutral-status",
+            },
+            {
+              value: "UPLOADED",
+              label: "Uploaded",
+              color: "positive",
+            },
+            {
+              value: "FAILED",
+              label: "Failed",
+              color: "destructive",
+            },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: z.enum(generatedImageStatusValues),
@@ -267,6 +281,17 @@ export default defineEntity({
           columnLabel: "Render",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
+          valueOptions: [
+            {
+              value: "unverified",
+              label: "Unverified",
+              color: "neutral-status",
+            },
+            { value: "verified", label: "Verified", color: "positive" },
+            { value: "failed", label: "Failed", color: "destructive" },
+          ],
         },
         validation: {
           read: z.enum(generatedImageRenderStatusValues).nullable(),
@@ -282,6 +307,22 @@ export default defineEntity({
           columnLabel: "Storage",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
+          valueOptions: [
+            {
+              value: "unverified",
+              label: "Unverified",
+              color: "neutral-status",
+            },
+            { value: "available", label: "Available", color: "positive" },
+            { value: "missing", label: "Missing", color: "destructive" },
+            {
+              value: "metadata_mismatch",
+              label: "Metadata mismatch",
+              color: "destructive",
+            },
+          ],
         },
         validation: {
           read: z.enum(generatedImageStorageStatusValues).nullable(),
@@ -295,13 +336,36 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "own", label: "Own" },
-            { value: "catalog", label: "Catalog" },
-            { value: "unknown", label: "Unknown" },
-            { value: "screenshot", label: "Screenshot" },
+            {
+              value: "own",
+              label: "Own",
+            },
+            {
+              value: "catalog",
+              label: "Catalog",
+            },
+            {
+              value: "unknown",
+              label: "Unknown",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
+            {
+              value: "screenshot",
+              label: "Screenshot",
+            },
           ],
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          optionRole: "category",
+          optionColor: "neutral-status",
+          optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
+        },
         validation: {
           read: z.enum(imageSourceValues),
           create: null,
@@ -479,6 +543,13 @@ export default defineEntity({
           detail: true,
           // Every value is a state of the attribution, "derived" included.
           optionRole: "status",
+          optionColor: "neutral-status",
+          valueOptions: [
+            { value: "none", label: "None", color: "neutral-status" },
+            { value: "derived", label: "Derived", color: "neutral-status" },
+            { value: "ambiguous", label: "Ambiguous", color: "warning" },
+            { value: "confirmed", label: "Confirmed", color: "positive" },
+          ],
         },
         validation: {
           read: imageCaptureAttribution,

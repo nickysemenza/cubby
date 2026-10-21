@@ -161,17 +161,43 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "partial", label: "Partial" },
-            { value: "recorded", label: "Recorded" },
-            { value: "not_applicable", label: "Not applicable" },
-            { value: "unclassified", label: "Unclassified" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "partial",
+              label: "Partial",
+              color: "warning",
+            },
+            {
+              value: "recorded",
+              label: "Recorded",
+              color: "positive",
+            },
+            {
+              value: "not_applicable",
+              label: "Not applicable",
+              color: "neutral-status",
+            },
+            {
+              value: "unclassified",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
           ],
         },
         display: {
           columnLabel: "Booked",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: financialTransactionCoverage.shape.booking,
@@ -189,17 +215,43 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "partial", label: "Partial" },
-            { value: "present", label: "Present" },
-            { value: "not_expected", label: "Not expected" },
-            { value: "unknown", label: "Unclassified" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "partial",
+              label: "Partial",
+              color: "warning",
+            },
+            {
+              value: "present",
+              label: "Present",
+              color: "positive",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              color: "neutral-status",
+            },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
           ],
         },
         display: {
           columnLabel: "Documented",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: financialTransactionCoverage.shape.document,
@@ -217,17 +269,43 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "partial", label: "Partial" },
-            { value: "present", label: "Present" },
-            { value: "not_expected", label: "Not expected" },
-            { value: "unknown", label: "Unclassified" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "partial",
+              label: "Partial",
+              color: "warning",
+            },
+            {
+              value: "present",
+              label: "Present",
+              color: "positive",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              color: "neutral-status",
+            },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
           ],
         },
         display: {
           columnLabel: "Itemized",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: financialTransactionCoverage.shape.itemization,
@@ -245,17 +323,43 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "missing", label: "Missing" },
-            { value: "partial", label: "Partial" },
-            { value: "present", label: "Present" },
-            { value: "not_expected", label: "Not expected" },
-            { value: "unknown", label: "Unclassified" },
+            {
+              value: "missing",
+              label: "Missing",
+              color: "destructive",
+            },
+            {
+              value: "partial",
+              label: "Partial",
+              color: "warning",
+            },
+            {
+              value: "present",
+              label: "Present",
+              color: "positive",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              color: "neutral-status",
+            },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
+            },
           ],
         },
         display: {
           columnLabel: "Products",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: financialTransactionCoverage.shape.products,
@@ -358,18 +462,25 @@ export default defineEntity({
               label: "Unclassified",
               description:
                 "Insufficient or mixed evidence; leave itemization expectation unclassified",
+              color: "neutral-status",
+              glyph: {
+                phosphor: "Question",
+                sfSymbol: "questionmark.circle",
+              },
             },
             {
               value: "required",
               label: "Expected",
               description:
                 "Household expects the order's item lines with their Products",
+              color: "info",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
                 "Household does not expect item lines; one amount is enough",
+              color: "neutral-status",
             },
           ],
         },
@@ -377,6 +488,8 @@ export default defineEntity({
           columnLabel: "Evidence",
           list: true,
           detail: true,
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         resolution: {
           reset: { itemizationExpectation: null },
@@ -466,13 +579,19 @@ export default defineEntity({
           readPath: "purchaseId",
           format: "presence",
           valueOptions: [
-            { value: "yes", label: "Has purchase", color: "var(--slate)" },
+            {
+              value: "yes",
+              label: "Has purchase",
+              color: "neutral-status",
+            },
             {
               value: "no",
               label: "No purchase",
-              color: "var(--muted-foreground)",
+              color: "neutral-status",
             },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",
@@ -486,29 +605,63 @@ export default defineEntity({
           kind: "select",
           initial: { value: "purchase" },
           options: [
-            { value: "purchase", label: "Purchase", color: "var(--primary)" },
-            { value: "refund", label: "Refund", color: "var(--positive)" },
+            {
+              value: "purchase",
+              label: "Purchase",
+              color: "info",
+            },
+            {
+              value: "refund",
+              label: "Refund",
+              color: "positive",
+            },
             {
               value: "account_transfer",
               label: "Account transfer",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
             {
               value: "credit_card_payment",
               label: "Card payment",
-              color: "var(--slate)",
+              color: "neutral-status",
             },
-            { value: "fee", label: "Fee", color: "var(--warning)" },
-            { value: "interest", label: "Interest", color: "var(--warning)" },
-            { value: "income", label: "Income", color: "var(--positive)" },
-            { value: "adjustment", label: "Adjustment", color: "var(--slate)" },
-            { value: "other", label: "Other", color: "var(--slate)" },
+            {
+              value: "fee",
+              label: "Fee",
+              color: "warning",
+            },
+            {
+              value: "interest",
+              label: "Interest",
+              color: "warning",
+            },
+            {
+              value: "income",
+              label: "Income",
+              color: "positive",
+            },
+            {
+              value: "adjustment",
+              label: "Adjustment",
+              color: "neutral-status",
+            },
+            {
+              value: "other",
+              label: "Other",
+              color: "neutral-status",
+            },
           ],
         },
         display: {
           list: true,
           detail: true,
           width: "sm",
+          optionRole: "category",
+          optionColor: "domain-finance",
+          optionGlyph: {
+            phosphor: "ArrowsLeftRight",
+            sfSymbol: "arrow.left.arrow.right",
+          },
         },
         validation: {
           read: financialTransactionKind,
@@ -523,16 +676,34 @@ export default defineEntity({
           kind: "select",
           initial: { value: "pending" },
           options: [
-            { value: "expected", label: "Expected", color: "var(--slate)" },
-            { value: "pending", label: "Pending", color: "var(--slate)" },
-            { value: "posted", label: "Posted", color: "var(--positive)" },
-            { value: "void", label: "Void", color: "var(--destructive)" },
+            {
+              value: "expected",
+              label: "Expected",
+              color: "neutral-status",
+            },
+            {
+              value: "pending",
+              label: "Pending",
+              color: "neutral-status",
+            },
+            {
+              value: "posted",
+              label: "Posted",
+              color: "positive",
+            },
+            {
+              value: "void",
+              label: "Void",
+              color: "destructive",
+            },
           ],
         },
         display: {
           list: true,
           detail: true,
           mobile: { slot: "meta", priority: 20 },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: financialTransactionStatus,
@@ -717,24 +888,34 @@ export default defineEntity({
           list: true,
           width: "sm",
           valueOptions: [
-            { value: "bare", label: "No purchase", color: "var(--slate)" },
-            { value: "lump", label: "Lump order", color: "var(--warning)" },
+            {
+              value: "bare",
+              label: "No purchase",
+              color: "neutral-status",
+            },
+            {
+              value: "lump",
+              label: "Lump order",
+              color: "warning",
+            },
             {
               value: "itemized_match",
               label: "Itemized, matches",
-              color: "var(--positive)",
+              color: "positive",
             },
             {
               value: "itemized_mismatch",
               label: "Itemized, differs",
-              color: "var(--destructive)",
+              color: "destructive",
             },
             {
               value: "shared",
               label: "Shared charge",
-              color: "var(--primary)",
+              color: "info",
             },
           ],
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",

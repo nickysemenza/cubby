@@ -721,7 +721,7 @@ function ChecklistEditor({
                 <span className="flex min-w-0 items-center justify-between gap-2">
                   {option?.glyph ? (
                     <EnumPill
-                      optionRole="status"
+                      optionRole={option.role}
                       value={option.value}
                       glyph={option.glyph}
                       color={option.color}

@@ -9,7 +9,6 @@ import type { NumberRange } from "@cubby/shared";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
-import { colorizeSelectOptions } from "~/lib/select-options";
 import type { PickerRecordSource } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
@@ -289,7 +288,7 @@ export function barFieldFromConfig(
     icon: config.icon,
     placeholder: type === "text" ? `Filter ${label.toLowerCase()}…` : undefined,
     options: config.options
-      ? colorizeSelectOptions(config.options).map((option) => ({
+      ? config.options.map((option) => ({
           ...option,
           hint: optionHints?.[option.value] ?? option.hint,
         }))

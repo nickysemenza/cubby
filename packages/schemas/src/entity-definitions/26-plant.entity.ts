@@ -107,15 +107,308 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
-          options: gardenCropKeys.map((key) => ({
-            value: key,
-            label: gardenCropLabel(key),
-          })),
+          options: [
+            {
+              value: "artichoke",
+              label: "Artichoke",
+            },
+            {
+              value: "basil",
+              label: "Basil",
+            },
+            {
+              value: "bean-fava",
+              label: "Fava bean",
+            },
+            {
+              value: "bean-runner",
+              label: "Runner bean",
+            },
+            {
+              value: "bean-snap",
+              label: "Snap bean",
+            },
+            {
+              value: "beet",
+              label: "Beet",
+            },
+            {
+              value: "broccoli",
+              label: "Broccoli",
+            },
+            {
+              value: "brussels-sprout",
+              label: "Brussels sprout",
+            },
+            {
+              value: "cabbage",
+              label: "Cabbage",
+            },
+            {
+              value: "carrot",
+              label: "Carrot",
+            },
+            {
+              value: "cauliflower",
+              label: "Cauliflower",
+            },
+            {
+              value: "celery",
+              label: "Celery",
+            },
+            {
+              value: "chard",
+              label: "Swiss chard",
+            },
+            {
+              value: "collard",
+              label: "Collard",
+            },
+            {
+              value: "corn",
+              label: "Early corn",
+            },
+            {
+              value: "cucumber",
+              label: "Cucumber",
+            },
+            {
+              value: "eggplant",
+              label: "Eggplant",
+            },
+            {
+              value: "garlic",
+              label: "Garlic",
+            },
+            {
+              value: "kale",
+              label: "Kale",
+            },
+            {
+              value: "kohlrabi",
+              label: "Kohlrabi",
+            },
+            {
+              value: "leek",
+              label: "Leek",
+            },
+            {
+              value: "lettuce",
+              label: "Lettuce",
+            },
+            {
+              value: "mustard",
+              label: "Mustard greens",
+            },
+            {
+              value: "onion",
+              label: "Onion",
+            },
+            {
+              value: "parsnip",
+              label: "Parsnip",
+            },
+            {
+              value: "pea",
+              label: "Pea",
+            },
+            {
+              value: "pepper",
+              label: "Pepper",
+            },
+            {
+              value: "potato",
+              label: "Potato",
+            },
+            {
+              value: "radish",
+              label: "Radish",
+            },
+            {
+              value: "rhubarb",
+              label: "Rhubarb",
+            },
+            {
+              value: "shallot",
+              label: "Shallot",
+            },
+            {
+              value: "spinach",
+              label: "Spinach",
+            },
+            {
+              value: "squash-summer",
+              label: "Summer squash",
+            },
+            {
+              value: "squash-winter",
+              label: "Winter squash",
+            },
+            {
+              value: "sunflower",
+              label: "Sunflower",
+            },
+            {
+              value: "tomato",
+              label: "Tomato",
+            },
+            {
+              value: "turnip",
+              label: "Turnip",
+            },
+            {
+              value: "melon",
+              label: "Melon",
+            },
+            {
+              value: "pumpkin",
+              label: "Pumpkin",
+            },
+            {
+              value: "rutabaga",
+              label: "Rutabaga",
+            },
+            {
+              value: "watermelon",
+              label: "Watermelon",
+            },
+            {
+              value: "asian-greens",
+              label: "Asian greens",
+            },
+            {
+              value: "broccoli-raab",
+              label: "Broccoli raab",
+            },
+            {
+              value: "cilantro",
+              label: "Cilantro",
+            },
+            {
+              value: "dill",
+              label: "Dill",
+            },
+            {
+              value: "parsley",
+              label: "Parsley",
+            },
+            {
+              value: "sorrel",
+              label: "Sorrel",
+            },
+            {
+              value: "shiso",
+              label: "Shiso",
+            },
+            {
+              value: "tomatillo",
+              label: "Tomatillo",
+            },
+            {
+              value: "epazote",
+              label: "Epazote",
+            },
+            {
+              value: "fenugreek",
+              label: "Fenugreek",
+            },
+            {
+              value: "scallion",
+              label: "Scallion",
+            },
+            {
+              value: "bean-yardlong",
+              label: "Yardlong bean",
+            },
+            {
+              value: "saffron",
+              label: "Saffron",
+            },
+            {
+              value: "celery-leaf",
+              label: "Leaf celery",
+            },
+            {
+              value: "alyssum",
+              label: "Alyssum",
+            },
+            {
+              value: "nasturtium",
+              label: "Nasturtium",
+            },
+            {
+              value: "marigold",
+              label: "Marigold",
+            },
+            {
+              value: "mint",
+              label: "Mint",
+            },
+            {
+              value: "thyme",
+              label: "Thyme",
+            },
+            {
+              value: "oregano",
+              label: "Oregano",
+            },
+            {
+              value: "mexican-oregano",
+              label: "Mexican oregano",
+            },
+            {
+              value: "chives",
+              label: "Chives",
+            },
+            {
+              value: "garlic-chives",
+              label: "Garlic chives",
+            },
+            {
+              value: "rau-ram",
+              label: "Vietnamese coriander",
+            },
+            {
+              value: "hoja-santa",
+              label: "Hoja santa",
+            },
+            {
+              value: "strawberry",
+              label: "Strawberry",
+            },
+            {
+              value: "passion-fruit",
+              label: "Passion fruit",
+            },
+            {
+              value: "citrus",
+              label: "Citrus",
+            },
+            {
+              value: "curry-leaf",
+              label: "Curry leaf",
+            },
+            {
+              value: "sichuan-pepper",
+              label: "Sichuan pepper",
+            },
+            {
+              value: "plum",
+              label: "Plum",
+            },
+            {
+              value: "poppy",
+              label: "Poppy",
+            },
+          ],
         },
         display: {
           columnLabel: "Guide",
           list: true,
           detail: true,
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: { phosphor: "Plant", sfSymbol: "leaf" },
         },
         validation: {
           read: gardenCropKey.nullable(),
@@ -130,15 +423,29 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "yes", label: "Yes" },
-            { value: "maybe", label: "Maybe" },
-            { value: "no", label: "No" },
+            {
+              value: "yes",
+              label: "Yes",
+              color: "positive",
+            },
+            {
+              value: "maybe",
+              label: "Maybe",
+              color: "warning",
+            },
+            {
+              value: "no",
+              label: "No",
+              color: "destructive",
+            },
           ],
         },
         display: {
           list: true,
           detail: true,
           mobile: { slot: "trailing", priority: 10 },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: {
           read: plantVerdict.nullable(),
@@ -178,11 +485,22 @@ export default defineEntity({
         control: {
           kind: "select",
           options: [
-            { value: "open-pollinated", label: "Open-pollinated" },
-            { value: "hybrid", label: "Hybrid" },
+            {
+              value: "open-pollinated",
+              label: "Open-pollinated",
+            },
+            {
+              value: "hybrid",
+              label: "Hybrid",
+            },
           ],
         },
-        display: { detail: true },
+        display: {
+          detail: true,
+          optionRole: "category",
+          optionColor: "domain-house",
+          optionGlyph: { phosphor: "Flower", sfSymbol: "camera.macro" },
+        },
         validation: {
           read: plantBreeding.nullable(),
           create: plantBreeding.nullable().default(null),

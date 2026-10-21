@@ -26,7 +26,7 @@ export type ScalarDisplayValue =
       label: string;
       color: string;
       icon?: ReactNode;
-      /** Roster role: states take a tone surface; kinds take a quiet matching tint. */
+      /** Compiled roster role; presentation is supplied by the owning declaration. */
       role?: EnumRole;
       glyph?: EnumIcon | null;
       description?: string;
