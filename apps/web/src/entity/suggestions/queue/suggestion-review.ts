@@ -1,17 +1,17 @@
 import type { assessmentReviewInput } from "@cubby/schemas/assessment";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
-import {
-  statementTransactionApplication,
-  type StatementSuggestionOut,
-  type StatementTransactionAction,
-  type StatementTransactionApplication,
-  type statementTransactionField,
+import type {
+  StatementSuggestionOut,
+  StatementTransactionAction,
+  StatementTransactionApplication,
+  statementTransactionField,
 } from "@cubby/schemas/statement-suggestion";
 import type {
   SuggestionActionVerb,
   SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
+import { omitBy } from "es-toolkit";
 import type { z } from "zod";
 
 export type ReviewItem = z.input<typeof assessmentReviewInput>;
@@ -51,15 +51,10 @@ export function statementApplication(
   // Draft controls clear choices with undefined; Feedback correction values
   // must contain ordinary JSON while preserving explicit standalone nulls.
   const booking = choice.booking
-    ? statementTransactionApplication.shape.booking
-        .unwrap()
-        .parse(
-          Object.fromEntries(
-            Object.entries(choice.booking).filter(
-              ([, value]) => value !== undefined,
-            ),
-          ),
-        )
+    ? {
+        ...omitBy(choice.booking, (value) => value === undefined),
+        rejectedPurchaseIds: choice.booking.rejectedPurchaseIds ?? [],
+      }
     : undefined;
   return {
     kind: "statement_transaction",

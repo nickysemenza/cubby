@@ -137,6 +137,15 @@ describe("statement suggestion review items", () => {
     expect(item.application).not.toHaveProperty("kindOverride");
   });
 
+  it("preserves partial vendor input without throwing during preview rendering", () => {
+    expect(() =>
+      applyItem(suggestion(), {
+        action: "attach",
+        booking: { reviewedVendorName: " ", rejectedPurchaseIds: [] },
+      }),
+    ).not.toThrow();
+  });
+
   it("dismisses into history with the charge's suppression key", () => {
     expect(dismissItem(suggestion())).toMatchObject({
       verdict: "dismissed",
