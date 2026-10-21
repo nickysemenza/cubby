@@ -5,6 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "pg";
 import { expect, it } from "vitest";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { ensureDerivedRefreshRun } from "~/server/generic/derived-refresh/repo/refresh-run";
+import { createPostgresPool } from "../postgres-pool";
+import { buildScenarioDatabase } from "../scenarios/context";
 import { prepareDevDatabase, pruneCheckoutDatabases } from "./corpus-template";
 import { testServiceConfig } from "../test-service-config";
 import { resolveDevProfile } from "../dev-services/dev-profile";
@@ -12,6 +16,7 @@ import { databaseIdentifier } from "../schema-template";
 
 // Failure modes: clone loses auth/audit/search/image rows; startup overwrites
 // edits; collection drops an active checkout or an unlabelled local database.
+// Queued refresh work must be able to open a Run as the reserved system actor.
 it("clones the application corpus, retains checkout edits, and collects only abandoned labelled checkouts", async () => {
   const config = testServiceConfig();
   const host = config.host;
@@ -53,6 +58,25 @@ it("clones the application corpus, retains checkout edits, and collects only aba
         expect(backgroundTaskMessageSchema.safeParse(row.body).success).toBe(
           true,
         );
+      const pool = createPostgresPool({ connectionString: url });
+      try {
+        const refresh = await ensureDerivedRefreshRun(
+          buildScenarioDatabase(pool),
+        );
+        if (!refresh)
+          throw new Error("The corpus has no scheduled refresh work");
+        const actor = await db.query(
+          'SELECT purpose, "actorUserId", "actorName" FROM "Run" WHERE id = $1',
+          [refresh.id],
+        );
+        expect(actor.rows[0]).toEqual({
+          purpose: "derived_refresh",
+          actorUserId: systemActor().userId,
+          actorName: "System",
+        });
+      } finally {
+        await pool.end();
+      }
       await db.query(
         `UPDATE cubby_dev_fixture SET state = 'retained' WHERE pack = 'core'`,
       );

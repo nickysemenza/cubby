@@ -101,8 +101,10 @@ background publications are stored in the template's development-only
 search-index repair initializes its search documents in pages and queues
 embedding work. Bootstrap leaves durable derived-refresh captures intact rather
 than draining every root's overlapping dependency graph. Clones hand those envelopes to the local
-Worker queue on startup, deleting them only after acceptance. A partial handoff
-may redeliver; handlers retain their freshness checks. Import, account and corpus
+Worker queue on startup, deleting them only after acceptance. The corpus and
+startup handoff idempotently prepare the reserved system actor before its
+scheduled Runs can open, including when an existing completed corpus is reused.
+A partial handoff may redeliver; handlers retain their freshness checks. Import, account and corpus
 timings
 are logged separately. Once finalized, a new checkout database is a physical
 `CREATE DATABASE … TEMPLATE …` clone. Test pools remain per namespace and
