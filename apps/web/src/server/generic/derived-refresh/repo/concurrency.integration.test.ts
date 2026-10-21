@@ -122,6 +122,12 @@ describe("derived refresh publication ownership", () => {
         return result;
       },
     );
+    const readScopes = () =>
+      getDb(ctx.db)
+        .select()
+        .from(derivedRefreshScope)
+        .where(eq(derivedRefreshScope.entityId, subject.entityId));
+    let advanced: Awaited<ReturnType<typeof readScopes>> = [];
     const old = processDerivedRefreshPage(ctx.db);
     await entered.promise;
     try {
@@ -130,15 +136,13 @@ describe("derived refresh publication ownership", () => {
         .set({ leaseExpiresAt: new Date(0) });
       expect((await processDerivedRefreshPage(ctx.db)).processed).toBe(1);
       expect((await processDerivedRefreshPage(ctx.db)).processed).toBe(1);
+      advanced = await readScopes();
     } finally {
       release.resolve();
     }
     expect(await old).toMatchObject({ processed: 0, errors: [] });
-    const [scope] = await getDb(ctx.db)
-      .select()
-      .from(derivedRefreshScope)
-      .where(eq(derivedRefreshScope.entityId, subject.entityId));
-    expect(scope?.phase).toBe("recipe");
+    expect(advanced).not.toEqual([]);
+    expect(await readScopes()).toEqual(advanced);
   });
 
   it("yields publication contention without consuming the failure budget", async () => {

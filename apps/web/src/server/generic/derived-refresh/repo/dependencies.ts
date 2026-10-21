@@ -222,3 +222,50 @@ export async function readRefreshDependencyPage(
     traverse: route.transitive === true,
   }));
 }
+
+/** Share one publication envelope across empty routes, never across row pages. */
+export async function readRefreshDependencyPacket(
+  db: Database,
+  routes: readonly Route[],
+  sourceId: string,
+  cursor: { route: number; after: string | null },
+) {
+  const refs: Awaited<ReturnType<typeof readRefreshDependencyPage>> = [];
+  let routeIndex = cursor.route;
+  let after = cursor.after;
+  // Bound preparation even for declarations with many empty routes. A packet
+  // still publishes at most one indexed page (100 references).
+  for (let queries = 0; queries < 8; queries++) {
+    const route = routes[routeIndex];
+    if (!route) break;
+    let page: typeof refs;
+    try {
+      page = await readRefreshDependencyPage(db, route, sourceId, after);
+    } catch (error) {
+      // Persist only the successful empty prefix. The next lease retries this
+      // exact failed cursor through the ordinary semantic failure budget.
+      if (routeIndex === cursor.route) throw error;
+      break;
+    }
+    if (page.length === DERIVED_REFRESH_PAGE)
+      return {
+        refs: page,
+        cursor: {
+          route: routeIndex,
+          after: page.at(-1)?.entityId ?? null,
+          done: false,
+        },
+      };
+    routeIndex++;
+    after = null;
+    if (page.length)
+      return {
+        refs: page,
+        cursor: { route: routeIndex, after, done: routeIndex >= routes.length },
+      };
+  }
+  return {
+    refs,
+    cursor: { route: routeIndex, after, done: routeIndex >= routes.length },
+  };
+}
