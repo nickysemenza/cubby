@@ -182,7 +182,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   member grading/replay overrides; media always routes to the vision model.
   Provenance callers use `decisionModelFor` with the same arguments, including
   injected ports (which retain the feature model unless explicitly overridden).
-  Legacy automatic pins remain readable but do not route new questions.
+  Retired persisted routing fields are transformed by migration, not retained
+  in runtime schemas or compatibility fallbacks.
 
 - Prompt requests: `AI_FEATURES` typed `feature.request` renderers; pure prompt
   definitions in `server/ai/policy/prompts/`. `decisionCatalogRows` in

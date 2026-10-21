@@ -1414,6 +1414,9 @@ export async function publishChargeProposal(
             retainedSpendingCheckpoint = statementLabelCheckpoint.parse({
               revision: STATEMENT_LABEL_REVISION,
               model: previousProducer.model,
+              models:
+                reusable.checkpoint?.models ??
+                (previousProducer.model ? [previousProducer.model] : []),
               judgment,
               kind: true,
               counterparty: true,
@@ -1461,6 +1464,7 @@ export async function publishChargeProposal(
           : statementLabelCheckpoint.safeParse({
               revision: producer.revision,
               model: producer.model,
+              models: producer.model ? [producer.model] : [],
               judgment,
               kind: true,
               counterparty: true,

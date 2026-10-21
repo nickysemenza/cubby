@@ -171,14 +171,14 @@ function prepareLabelledJudgment(
   const checkpoint: StatementLabelCheckpoint = {
     revision: STATEMENT_LABEL_REVISION,
     model: previous?.model ?? null,
-    models: previous?.models ?? (previous?.model ? [previous.model] : []),
+    models: previous?.models ?? [],
     judgment,
     kind: previous?.kind ?? false,
     counterparty: previous?.counterparty ?? false,
     spending: previous?.spending ?? false,
   };
   const recordModel = (model: string) => {
-    checkpoint.models = [...new Set([...(checkpoint.models ?? []), model])];
+    checkpoint.models = [...new Set([...checkpoint.models, model])];
     checkpoint.model =
       checkpoint.models.length === 1 ? checkpoint.models[0]! : null;
   };

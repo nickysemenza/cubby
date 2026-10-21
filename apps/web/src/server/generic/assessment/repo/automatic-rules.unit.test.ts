@@ -81,7 +81,6 @@ describe("field.addition", () => {
     kind: "addition",
     confidence: 0.97,
     model: "typesafe/jev",
-    pinnedModel: "typesafe/jev",
   };
 
   // Failure: a confident correction overwrites a member value, or ordinary
@@ -90,10 +89,9 @@ describe("field.addition", () => {
     expect(matchFieldRules(facts)[0]?.key).toBe("field.addition");
     expect(matchFieldRules({ ...facts, kind: "correction" })).toEqual([]);
     expect(matchFieldRules({ ...facts, confidence: 0.949 })).toEqual([]);
-    expect(
-      matchFieldRules({ ...facts, confidence: 0.95, pinnedModel: null })[0]
-        ?.key,
-    ).toBe("field.addition");
+    expect(matchFieldRules({ ...facts, confidence: 0.95 })[0]?.key).toBe(
+      "field.addition",
+    );
   });
 
   it("keeps review-required fields and pruning out of automatic assignments", () => {

@@ -130,8 +130,6 @@ const fieldSnapshot = z.object({
   field: z.string(),
   currentValue: z.json(),
   fieldDecisionId: z.uuid().nullable().default(null),
-  /** Legacy automatic snapshot pin, retained only for reading old work. */
-  decisionModel: supportedDecisionModelSchema.optional(),
   decisionModelOverride: supportedDecisionModelSchema.optional(),
   basis: z.record(z.string(), z.string().nullable()),
 });
@@ -1044,7 +1042,7 @@ export async function executeAiRefreshTarget(
           predecessorIds: target.assessmentIds,
           evaluationId: id,
           provenance: saved.provenance,
-          rules: { pinnedModel: model, auditSample: ports.auditSample },
+          rules: { auditSample: ports.auditSample },
         },
         entry
           ? [

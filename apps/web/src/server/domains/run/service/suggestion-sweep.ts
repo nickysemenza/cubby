@@ -504,8 +504,6 @@ export async function executeSuggestionSweepTarget(
         evaluationId: item.id,
         provenance: result.provenance,
         rules: {
-          pinnedModel:
-            result.provenance.model ?? input.decisionModelOverride ?? null,
           auditSample: ports.auditSample,
         },
       },
@@ -663,6 +661,6 @@ export function makeSweepSuggestion(args: {
     runnerUpConfidence: args.decision.runnerUpConfidence ?? null,
     model: args.model,
     pairKey: args.pairKey ?? null,
-    served: args.served,
+    served: args.served ?? true,
   };
 }

@@ -162,7 +162,7 @@ export const statementLabelCheckpoint = z.object({
   revision: z.string(),
   /** One producer only when all retained decision answers used that model. */
   model: z.string().nullable(),
-  models: z.array(z.string()).optional(),
+  models: z.array(z.string()),
   judgment: statementTransactionJudgment,
   kind: z.boolean(),
   counterparty: z.boolean(),

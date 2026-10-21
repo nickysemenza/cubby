@@ -6,13 +6,15 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
   feedback,
   auditLog,
   run as runTable,
+  aiEvaluation,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
@@ -39,12 +41,20 @@ describe("shared Assessment history", () => {
   // The trigger migration must retain populated legacy history and honor the
   // explicit comparison flag even when its model equals a legacy Run pin.
   it("preserves legacy history while migrating explicit served decisions", async () => {
+    const predecessor = readFileSync(
+      new URL(
+        "../../../../../drizzle/0001_explicit_served_decisions.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    await getDb(ctx.db).execute(sql.raw(predecessor));
     const item = await productFixture(ctx, "Synthetic legacy serving");
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
     await getDb(ctx.db)
       .update(runTable)
       .set({
-        input: sql`jsonb_build_object('decisionModel','typesafe/jev')`,
+        input: sql`${JSON.stringify({ decisionModel: "typesafe/jev", retained: "synthetic" })}::jsonb`,
       })
       .where(eq(runTable.id, runId));
     const values = {
@@ -70,20 +80,83 @@ describe("shared Assessment history", () => {
       .from(assessment)
       .where(eq(assessment.id, legacy.id));
     expect(history?.served).toBe(true);
+    const work = await enqueueAiEvaluation(ctx.db, {
+      runId,
+      workKey: "synthetic-cutover",
+      shareKey: null,
+      feature: "synthetic-cutover",
+      executionKind: "suggestion_sweep",
+      target: {
+        kind: "field",
+        entity: "product",
+        recordId: values.recordId,
+        field: "notes",
+        assessmentIds: [],
+      },
+      provenance: {
+        dependencies: [],
+        inputFingerprint: "synthetic",
+        optionFingerprint: "",
+        model: null,
+      },
+      snapshot: {
+        decisionModel: "typesafe/jev",
+        decisionModelOverride: "@cf/cloudflare/clef",
+        input: { decisionModel: "typesafe/jev", retained: "synthetic" },
+      },
+      result: {
+        entries: [
+          { model: "typesafe/jev", pairKey: values.pairKey },
+          { model: "@cf/cloudflare/clef", pairKey: values.pairKey },
+        ],
+      },
+    });
     const migration = readFileSync(
       new URL(
-        "../../../../../drizzle/0001_explicit_served_decisions.sql",
+        "../../../../../drizzle/0002_decision_routing_hard_cutover.sql",
         import.meta.url,
       ),
       "utf8",
     );
-    await getDb(ctx.db).execute(sql.raw(migration));
+    await withTransactionDatabase(ctx.db, async (tx) => {
+      for (const statement of migration.split("--> statement-breakpoint")) {
+        if (statement.trim()) await getDb(tx).execute(sql.raw(statement));
+      }
+    });
     expect(
       await getDb(ctx.db)
         .select()
         .from(assessment)
         .where(eq(assessment.id, legacy.id)),
     ).toEqual([history]);
+    const [migratedRun] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    expect(migratedRun?.input).toEqual({ retained: "synthetic" });
+    const [migratedWork] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, work.id));
+    expect(migratedWork?.snapshot).toEqual({
+      decisionModelOverride: "@cf/cloudflare/clef",
+      input: { retained: "synthetic" },
+    });
+    expect(migratedWork?.result).toEqual({
+      entries: [
+        { model: "typesafe/jev", pairKey: values.pairKey, served: true },
+        {
+          model: "@cf/cloudflare/clef",
+          pairKey: values.pairKey,
+          served: false,
+        },
+      ],
+    });
+    const [migratedState] = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.id, legacy.id));
+    expect(migratedState?.data).toMatchObject({ served: true });
     const [comparison] = await getDb(ctx.db)
       .insert(assessmentState)
       .values({ ...values, field: "manufacturer", data: { served: false } })
@@ -94,6 +167,18 @@ describe("shared Assessment history", () => {
       .from(assessment)
       .where(eq(assessment.id, comparison.id));
     expect(unserved?.served).toBe(false);
+    await expect(
+      getDb(ctx.db)
+        .insert(assessmentState)
+        .values({
+          ...values,
+          field: "model",
+        }),
+    ).rejects.toMatchObject({
+      cause: {
+        message: "Paired field assessments require an explicit served flag",
+      },
+    });
   });
   const publication = () => ({
     publicationKey: "synthetic:assessment:retry",

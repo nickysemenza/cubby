@@ -15,8 +15,6 @@ import { aiEvaluation, email, run } from "~/server/db/schema";
 export const reclassificationSnapshot = z.object({
   publicId: z.string(),
   checksum: z.string().nullable(),
-  /** Legacy automatic pin; only the distinct explicit override can route. */
-  decisionModel: supportedDecisionModelSchema.optional(),
   decisionModelOverride: supportedDecisionModelSchema.optional(),
 });
 
