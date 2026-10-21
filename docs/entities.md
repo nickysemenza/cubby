@@ -1529,9 +1529,24 @@ validation, errors, cancellation checkpoints, tracing, and console
 observability.
 
 Ordinary browser calls POST a SuperJSON operation envelope to
-`/api/browser/dispatch`. The Worker routes this path directly to the shared
-dispatcher; operation and entity labels remain in request headers for DevTools
-and tracing. SSR invokes that dispatcher in-process.
+`/api/operations/<operation>`. Concurrent reads share a
+`/api/operations/batch~<operation>,<operation>` request and stream their results
+independently. URLs contain registered operation names, never input values;
+the server rejects a path/body mismatch. The Worker routes these paths directly
+to the shared dispatcher without loading the React server handler. Operation
+and entity trace headers remain available; SSR invokes the dispatcher in-process.
+Direct browser requests enforce the same native hosted-workspace version gate
+as Start requests; an already-open outdated WebView cannot bypass it.
+This transport retains query coalescing and independent settlement, which the
+framework server-function transport does not supply across operations. That
+capability comparison is not a measured production latency advantage.
+
+All query requests share the concurrency limit, including singleton reads and
+unanswered items retried after a broken batch stream. Only recognized transient
+database failures receive bounded backoff; mutations are never replayed by this
+transport. Terminal failures include the preceding failed attempts and their
+diagnostics. Superseded browser endpoints are removed in place; open clients
+reload after the cutover.
 
 The dispatcher measures selected-handler loading in
 `start.dispatch.load.<operation>` before the operation's execution span. Include

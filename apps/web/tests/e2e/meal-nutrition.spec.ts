@@ -1,6 +1,6 @@
 import type { Route } from "@playwright/test";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 import { seedMealNutritionPrerequisite } from "./fixtures/recipes";
 import {
   openDetailActions,
@@ -49,7 +49,9 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   );
   await dialog.getByRole("button", { name: "Add food" }).click();
   const dispatcherUrl = (await firstSaveRequest).url();
-  expect(new URL(dispatcherUrl).pathname).toBe(BROWSER_OPERATION_PATH);
+  expect(new URL(dispatcherUrl).pathname).toBe(
+    browserOperationPath("meal.saveFood"),
+  );
   expect(new URL(dispatcherUrl).search).toBe("");
   await expect(dialog).not.toBeVisible();
 

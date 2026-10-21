@@ -1,6 +1,6 @@
 import { generatedBrowserRoutes } from "~/entity/generated/entity-routes.gen";
 
-import { BROWSER_OPERATION_PATH } from "./browser-operation-path";
+import { isBrowserOperationPath } from "./browser-operation-path";
 
 export const UNMATCHED_TRACE_ROUTE = "/:unmatched";
 export const SERVER_FUNCTION_TRACE_ROUTE = "/_serverFn/:functionId";
@@ -32,7 +32,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/activities",
   "/activity",
   "/ai",
-  BROWSER_OPERATION_PATH,
   "/api/ai/chatgpt",
   "/api/debug/timing",
   "/api/debug/usda-release",
@@ -184,6 +183,7 @@ export const httpRouteTemplate = (
   }
 
   const normalized = normalizePathname(pathname);
+  if (isBrowserOperationPath(normalized)) return "/api/operations/:operations";
   if (STATIC_TRACE_ROUTES.has(normalized)) return normalized;
 
   for (const route of DYNAMIC_TRACE_ROUTES) {

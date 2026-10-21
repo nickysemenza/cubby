@@ -447,11 +447,12 @@ describe("runStartOperation", () => {
     expect(markCalendarDirty).not.toHaveBeenCalled();
   });
 
-  it("exposes authenticated causes without returning server stacks", async () => {
-    const codedInfrastructureError = Object.assign(
-      new Error("Connection reset by upstream"),
-      { code: "ECONNRESET" },
-    );
+  it("exposes full authenticated messages and scrubbed server stacks", async () => {
+    const message = `${"SQL detail ".repeat(300)}Connection reset by upstream`;
+    const codedInfrastructureError = Object.assign(new Error(message), {
+      code: "ECONNRESET",
+    });
+    codedInfrastructureError.stack = `${" at fixture\n".repeat(300)}password=synthetic-secret`;
     const unknown = await runStartOperation({
       operation: "entity.detail",
       type: "query",
@@ -468,12 +469,10 @@ describe("runStartOperation", () => {
       error: {
         code: "INTERNAL_SERVER_ERROR",
         reason: "UNKNOWN_ERROR",
-        message: "Connection reset by upstream",
+        message,
         diagnostics: {
           stage: "run",
-          causes: [
-            { code: "ECONNRESET", message: "Connection reset by upstream" },
-          ],
+          causes: [{ code: "ECONNRESET", message }],
         },
       },
     });
@@ -500,7 +499,22 @@ describe("runStartOperation", () => {
     });
     expect(inspections).toHaveLength(2);
     expect(inspections.every(({ error }) => error instanceof Error)).toBe(true);
-    expect(JSON.stringify(unknown)).not.toContain('"stack"');
+    expect(JSON.stringify(unknown)).toContain("[REDACTED]");
+    expect(JSON.stringify(unknown)).not.toContain("synthetic-secret");
+    expect(unknown).toMatchObject({
+      error: {
+        diagnostics: {
+          causes: [
+            {
+              stack: codedInfrastructureError.stack.replace(
+                "synthetic-secret",
+                "[REDACTED]",
+              ),
+            },
+          ],
+        },
+      },
+    });
   });
 
   it("keeps authentication-provider failures private", async () => {

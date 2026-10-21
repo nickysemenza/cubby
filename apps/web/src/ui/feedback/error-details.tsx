@@ -27,10 +27,12 @@ export function ErrorDetailsBody({ error }: { error: unknown }) {
   const [copied, setCopied] = useState(false);
   const detail = getAppErrorDetails(error);
   const diagnostics = detail.diagnostics;
-  let causePath = "";
+  const occurrences = new Map<string, number>();
   const causes = diagnostics?.causes.map((cause) => {
-    causePath += `/${JSON.stringify(cause)}`;
-    return { cause, path: causePath };
+    const kind = JSON.stringify([cause.name, cause.code, cause.status]);
+    const occurrence = occurrences.get(kind) ?? 0;
+    occurrences.set(kind, occurrence + 1);
+    return { cause, path: `${kind}:${occurrence}` };
   });
   return (
     <div className="flex min-w-0 flex-col gap-2 text-xs break-words">
@@ -47,17 +49,31 @@ export function ErrorDetailsBody({ error }: { error: unknown }) {
         </div>
       )}
       {causes?.map(({ cause, path }) => (
-        <div key={path}>
+        <div key={path} className="whitespace-pre-wrap">
           <span className="font-mono">
             {cause.name}
             {cause.code ? ` (${cause.code})` : ""}
             {cause.status ? ` [${cause.status}]` : ""}:{" "}
           </span>
           {cause.message}
+          {cause.stack && (
+            <pre className="mt-1 font-mono break-words whitespace-pre-wrap">
+              {cause.stack}
+            </pre>
+          )}
         </div>
       ))}
       {diagnostics?.truncated && (
-        <p>Additional details are available in server diagnostics.</p>
+        <p>Repeated or cyclic causes are shown once.</p>
+      )}
+      {(diagnostics?.http || diagnostics?.retries) && (
+        <pre className="font-mono break-words whitespace-pre-wrap">
+          {JSON.stringify(
+            { http: diagnostics.http, retries: diagnostics.retries },
+            null,
+            2,
+          )}
+        </pre>
       )}
       {detail.requestId && (
         <div className="font-mono">Request ID: {detail.requestId}</div>
@@ -141,14 +157,19 @@ export function showErrorToast(error: UnparsedError, message?: string) {
     toast.error(title, { id });
     return;
   }
-  toast.error(title, {
-    id,
-    action: {
-      label: "Details",
-      onClick: () => {
-        toast.dismiss(id);
-        openErrorDetailsDialog(error);
+  toast.error(
+    <span className="block max-h-32 overflow-y-auto break-words whitespace-pre-wrap">
+      {title}
+    </span>,
+    {
+      id,
+      action: {
+        label: "Details",
+        onClick: () => {
+          toast.dismiss(id);
+          openErrorDetailsDialog(error);
+        },
       },
     },
-  });
+  );
 }

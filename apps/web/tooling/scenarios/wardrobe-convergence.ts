@@ -21,7 +21,7 @@ import type { Database } from "~/server/db";
 import superjson from "superjson";
 
 import { runContract } from "~/contracts/run.contract";
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { isBrowserOperationPath } from "~/lib/browser-operation-path";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { unparsedStartOperationResultSchema } from "~/server/operation-runtime/start-operation.contract";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
@@ -440,7 +440,7 @@ async function reviewLateChargeInBrowser(input: {
       try {
         const runsResponsePromise = page.waitForResponse(
           (response) =>
-            response.url().endsWith(BROWSER_OPERATION_PATH) &&
+            isBrowserOperationPath(new URL(response.url()).pathname) &&
             (response.request().postData() ?? "").includes('"run.history"'),
         );
         await page.goto(`${input.origin}/purchases/${input.purchaseId}`);

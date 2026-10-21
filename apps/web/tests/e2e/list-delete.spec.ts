@@ -70,7 +70,7 @@ test("task list selection delete shows the impact preview, then removes the rows
     releaseDelete = resolve;
   });
   let intercepted = false;
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (!isDelete(route.request())) {
       await route.continue();
       return;

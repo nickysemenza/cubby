@@ -95,7 +95,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
     },
     { active: false },
   );
-  await page.route("**/api/browser/dispatch", async (route) => {
+  await page.route("**/api/operations/*", async (route) => {
     if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
       return;
     if (
@@ -145,7 +145,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
   await expect(
     dialog.getByRole("textbox", { name: "Emoji", exact: true }),
   ).toHaveValue("🥕");
-  await page.unroute("**/api/browser/dispatch");
+  await page.unroute("**/api/operations/*");
   await dialog.getByRole("textbox", { name: "Emoji", exact: true }).fill("👩🏽‍🍳");
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();

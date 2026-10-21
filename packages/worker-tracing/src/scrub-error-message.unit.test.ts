@@ -1,10 +1,48 @@
 import { describe, expect, it } from "vitest";
 
-import { scrubCredentialValues } from "./scrub-error-message";
+import {
+  scrubCredentialValues,
+  scrubErrorMessage,
+} from "./scrub-error-message";
 
 const scrub = scrubCredentialValues;
 
 describe("scrubCredentialValues", () => {
+  it("scrubs credential labels inside escaped JSON messages and encoded keys", () => {
+    const message = JSON.stringify({
+      code: "UPSTREAM_ERROR",
+      message: 'failure: {"password":"synthetic-secret"}',
+    });
+    expect(scrubErrorMessage(message)).not.toContain("synthetic-secret");
+    const nested = JSON.stringify({ message: JSON.stringify({ message }) });
+    expect(scrubErrorMessage(nested)).not.toContain("synthetic-secret");
+    expect(
+      scrubErrorMessage('{"pass\\u0077ord":"synthetic-secret"}'),
+    ).not.toContain("synthetic-secret");
+    const ordinary = '{ "message": "Synthetic failure", "status": 503 }';
+    expect(scrubErrorMessage(ordinary)).toBe(ordinary);
+    const escapedQuote = JSON.stringify({
+      password: 'prefix"synthetic-secret',
+    });
+    expect(JSON.parse(scrubErrorMessage(escapedQuote))).toEqual({
+      password: "[REDACTED]",
+    });
+    expect(scrubErrorMessage(`failure: ${escapedQuote}`)).not.toContain(
+      "synthetic-secret",
+    );
+    expect(
+      scrubErrorMessage(
+        JSON.stringify({ message: `failure: ${escapedQuote}` }),
+      ),
+    ).not.toContain("synthetic-secret");
+  });
+  it("preserves diagnostic tails beyond 2000 characters while scrubbing credentials", () => {
+    const prefix = "x".repeat(4000);
+    expect(
+      scrubErrorMessage(`${prefix} password=synthetic-secret SQLSTATE 53300`),
+    ).toBe(`${prefix} password=[REDACTED] SQLSTATE 53300`);
+  });
+
   it("keeps product names and prose that share a credential label", () => {
     for (const text of [
       "Basic Tee, size M",

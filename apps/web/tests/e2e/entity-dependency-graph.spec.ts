@@ -246,7 +246,7 @@ test("a high-degree focus stays readable and expands only the requested branch",
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/api/browser/dispatch", async (route) => {
+  await page.route("**/api/operations/*", async (route) => {
     if (await unbatchFor(route, ["entity.graph"])) return;
     if (dispatchesOperation(route.request(), "entity.graph")) {
       blocked = true;
@@ -272,7 +272,7 @@ test("a high-degree focus stays readable and expands only the requested branch",
     await (await response).finished();
   } finally {
     release();
-    await page.unroute("**/api/browser/dispatch");
+    await page.unroute("**/api/operations/*");
   }
   await page.getByRole("button", { name: "Map options", exact: true }).click();
   await page

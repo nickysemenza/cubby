@@ -15,7 +15,7 @@ test("imports an incomplete cookbook bundle, retries its staged photo, and prese
     buffer: fixture.bytes,
   };
   let failPhoto = true;
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (await unbatchFor(route, ["recipe.attachCookbookRecipePhoto"])) return;
     if (
       failPhoto &&

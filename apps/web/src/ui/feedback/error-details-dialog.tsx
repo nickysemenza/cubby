@@ -33,10 +33,16 @@ export function ErrorDetailsDialogHost() {
         if (!next) closeErrorDetailsDialog();
       }}
       title="Technical details"
-      description={error == null ? "" : getAppErrorDetails(error).message}
       size="md"
     >
-      {error != null && <ErrorDetailsBody error={error} />}
+      {error != null && (
+        <>
+          <p className="break-words whitespace-pre-wrap">
+            {getAppErrorDetails(error).message}
+          </p>
+          <ErrorDetailsBody error={error} />
+        </>
+      )}
     </Overlay>
   );
 }

@@ -81,11 +81,12 @@ struct ErrorDecodingTests {
 
     @Test func diagnosticExtensionsPreserveCausesAndLinks() throws {
         let body = Data(
-            #"{"code":"INTERNAL_SERVER_ERROR","message":"Connection limit exceeded","diagnostics":{"origin":"server","operation":"entity.list","stage":"run","causes":[{"name":"Error","message":"Connection limit exceeded","code":"53300"}],"sentryEventId":"sample-event","sentryUrl":"https://example.invalid/event","cfRayId":"sample-ray"}}"#
+            #"{"code":"INTERNAL_SERVER_ERROR","message":"Connection limit exceeded","diagnostics":{"origin":"server","operation":"entity.list","stage":"run","causes":[{"name":"Error","message":"Connection limit exceeded","code":"53300","stack":"Error: fixture\n at fixture"}],"sentryEventId":"sample-event","sentryUrl":"https://example.invalid/event","cfRayId":"sample-ray"}}"#
                 .utf8)
         let error = CubbyAPIError.decode(status: 500, operationID: "entity.list", body: body)
         let detail = try #require(error.detail)
         #expect(detail.diagnostics?.causes.first?.code == "53300")
+        #expect(detail.diagnostics?.causes.first?.stack == "Error: fixture\n at fixture")
         #expect(detail.diagnostics?.sentryEventId == "sample-event")
         #expect(detail.diagnostics?.cfRayId == "sample-ray")
     }

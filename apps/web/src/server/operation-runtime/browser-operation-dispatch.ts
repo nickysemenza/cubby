@@ -1,8 +1,13 @@
 import superjson from "superjson";
 import { z } from "zod";
 
+import { browserOperationPath } from "~/lib/browser-operation-path";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
+import {
+  appleClientUpdateError,
+  appleClientUpdateRequired,
+} from "~/server/http/apple-client-gate";
 import { getRequestId } from "~/server/observability/tracing";
 import { startOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
 import { dispatchStartOperation } from "~/server/operation-runtime/start-operation-dispatch.server";
@@ -29,6 +34,12 @@ export async function handleBrowserOperationDispatch(
   request: Request,
 ): Promise<Response> {
   const headers = { "cache-control": "no-store" };
+  const outdated = appleClientUpdateRequired(request.headers);
+  if (outdated)
+    return Response.json(appleClientUpdateError(outdated), {
+      status: 426,
+      headers,
+    });
   if (request.method !== "POST")
     return Response.json(
       superjson.serialize({
@@ -58,6 +69,11 @@ export async function handleBrowserOperationDispatch(
     // than falling through to the single-operation parser's misleading error.
     if (batchBodySchema.safeParse(body).success) {
       const batched = { data: startOperationDispatchBatch.parse(body) };
+      z.literal(
+        browserOperationPath(
+          batched.data.batch.map(({ operation }) => operation),
+        ),
+      ).parse(new URL(request.url).pathname);
       // Each operation still authenticates and settles independently; the
       // batch shares only this isolate and its request-scoped database pool.
       // Results stream as NDJSON in finish order, so a fast read never waits
@@ -108,6 +124,9 @@ export async function handleBrowserOperationDispatch(
       });
     }
     const input = startOperationDispatchInput.parse(body);
+    z.literal(browserOperationPath(input.operation)).parse(
+      new URL(request.url).pathname,
+    );
     const result = await dispatchStartOperation({
       ...input,
       request: { headers: request.headers, signal: request.signal },

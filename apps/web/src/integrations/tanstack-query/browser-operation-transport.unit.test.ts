@@ -1,7 +1,7 @@
 import superjson from "superjson";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 import type { ErrorDiagnostics } from "~/lib/error-diagnostics";
 import type { StartOperationId } from "~/lib/start-operation-observability";
 
@@ -75,6 +75,125 @@ const poolFailure = (
 });
 
 describe("browser operation transport", () => {
+  it.each(["application/x-ndjson", "text/html"])(
+    "retains HTTP metadata when a %s batch body disconnects",
+    async (contentType) => {
+      stubDispatch((body) => {
+        if (!body.batch)
+          return new Response("Synthetic singleton failure", { status: 503 });
+        let pulls = 0;
+        return new Response(
+          new ReadableStream({
+            pull(controller) {
+              if (pulls++ === 0)
+                controller.enqueue(
+                  new TextEncoder().encode("synthetic partial line"),
+                );
+              else controller.error(new Error("Synthetic stream disconnected"));
+            },
+          }),
+          {
+            headers: {
+              "content-type": contentType,
+              "x-request-id": "stream-request",
+            },
+          },
+        );
+      });
+      const failures = await Promise.all([
+        dispatchBrowserOperation("dashboard.counts", {}, transport()).catch(
+          (error) => error,
+        ),
+        dispatchBrowserOperation("entity.list", {}, transport()).catch(
+          (error) => error,
+        ),
+      ]);
+      for (const error of failures)
+        expect(error).toMatchObject({
+          data: {
+            diagnostics: {
+              retries: [
+                {
+                  requestId: "stream-request",
+                  diagnostics: {
+                    causes: [{ message: "Synthetic stream disconnected" }],
+                    http: {
+                      status: 200,
+                      body:
+                        contentType === "application/x-ndjson"
+                          ? "synthetic partial line"
+                          : undefined,
+                      contentType,
+                      elapsedMs: expect.any(Number),
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        });
+    },
+  );
+  it("retains malformed success bodies and original batch HTTP failures in terminal errors", async () => {
+    const { fetchMock } = stubDispatch((body) =>
+      body.batch
+        ? new Response("Synthetic batch unavailable", {
+            status: 503,
+            headers: { "cf-ray": "batch-ray" },
+          })
+        : new Response("<html>synthetic malformed response</html>", {
+            headers: { "x-request-id": "single-request" },
+          }),
+    );
+    const errors = await Promise.all([
+      dispatchBrowserOperation("dashboard.counts", {}, transport()).catch(
+        (error) => error,
+      ),
+      dispatchBrowserOperation("entity.list", {}, transport()).catch(
+        (error) => error,
+      ),
+    ]);
+    for (const error of errors)
+      expect(error).toMatchObject({
+        data: {
+          code: "INVALID_TRANSPORT_RESPONSE",
+          requestId: "single-request",
+          diagnostics: {
+            http: { body: "<html>synthetic malformed response</html>" },
+            retries: [
+              {
+                diagnostics: {
+                  cfRayId: "batch-ray",
+                  http: { body: "Synthetic batch unavailable", status: 503 },
+                },
+              },
+            ],
+          },
+        },
+      });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+  it("keeps each singleton's trace headers when the header-group batcher is reused", async () => {
+    const { fetchMock } = stubDispatch();
+    for (const operation of ["dashboard.counts", "entity.list"] as const) {
+      await dispatchBrowserOperation(
+        operation,
+        {},
+        {
+          headers: {
+            "x-cubby-operation": operation,
+            "x-cubby-operation-kind": "query",
+            ...(operation === "entity.list"
+              ? { "x-cubby-operation-entity": "product" }
+              : {}),
+          },
+        },
+      );
+    }
+    const second = new Headers(fetchMock.mock.calls[1]?.[1].headers);
+    expect(second.get("x-cubby-operation")).toBe("entity.list");
+    expect(second.get("x-cubby-operation-entity")).toBe("product");
+  });
   // Work partitioned for an invocation budget must not be coalesced again by transport.
   it("keeps opted-out reads in separate requests while default reads coalesce", async () => {
     const { sent } = stubDispatch();
@@ -242,7 +361,16 @@ describe("browser operation transport", () => {
       transport(),
     ).catch((error) => error);
     await vi.runAllTimersAsync();
-    expect(await thrown).toBe(transportError);
+    expect(await thrown).toMatchObject({
+      message: transportError.message,
+      data: {
+        code: "NETWORK_ERROR",
+        diagnostics: {
+          stage: "http",
+          causes: [{ message: transportError.message }],
+        },
+      },
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -295,7 +423,17 @@ describe("browser operation transport", () => {
       transport(),
     );
     await vi.runAllTimersAsync();
-    expect(await result).toEqual(poolFailure("request-3"));
+    expect(await result).toMatchObject(poolFailure("request-3"));
+    expect(await result).toMatchObject({
+      error: {
+        diagnostics: {
+          retries: [
+            { attempt: 1, requestId: "request-1" },
+            { attempt: 2, requestId: "request-2" },
+          ],
+        },
+      },
+    });
     expect(sent).toHaveLength(3);
     await dispatchBrowserOperation(
       "ai.applyFinanceCategorySuggestion",
@@ -366,7 +504,13 @@ describe("browser operation transport", () => {
       ),
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]![0]).toBe(BROWSER_OPERATION_PATH);
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      browserOperationPath([
+        "entity.connectedRecords",
+        "entityMedia.displayImages",
+        "dashboard.counts",
+      ]),
+    );
     expect(sent[0]!.batch!.map((item) => item.operation)).toEqual([
       "entity.connectedRecords",
       "entityMedia.displayImages",

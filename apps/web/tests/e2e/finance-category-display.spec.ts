@@ -327,7 +327,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
     releaseRequest = resolve;
   });
   let requestBlocked = false;
-  await page.route("**/api/browser/dispatch", async (route) => {
+  await page.route("**/api/operations/*", async (route) => {
     if (await unbatchFor(route, ["ai.suggestFields"])) return;
     const request = suggestionRequest.safeParse(route.request().postDataJSON());
     if (

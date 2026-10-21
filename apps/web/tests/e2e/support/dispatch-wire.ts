@@ -2,7 +2,7 @@ import type { Request, Response, Route } from "@playwright/test";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { isBrowserOperationPath } from "~/lib/browser-operation-path";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 
 /**
@@ -23,7 +23,7 @@ export type DispatchedOperation = z.infer<typeof itemSchema>;
 export function dispatchOperations(request: Request): DispatchedOperation[] {
   if (
     request.method() !== "POST" ||
-    new URL(request.url()).pathname !== BROWSER_OPERATION_PATH
+    !isBrowserOperationPath(new URL(request.url()).pathname)
   )
     return [];
   const parsed = bodySchema.safeParse(

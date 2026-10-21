@@ -22,7 +22,7 @@ import * as Sentry from "@sentry/cloudflare";
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
 
-import { BROWSER_OPERATION_PATH } from "./lib/browser-operation-path";
+import { isBrowserOperationPath } from "./lib/browser-operation-path";
 import {
   TELEMETRY_SCHEMA_VERSION,
   withHtmlNoCache,
@@ -341,45 +341,44 @@ const handler = {
                               // non-standard WebSocket slot verbatim.
                               return response;
                             }
-                            const invoke =
-                              url.pathname === BROWSER_OPERATION_PATH
+                            const invoke = isBrowserOperationPath(url.pathname)
+                              ? (
+                                  await withTrace(
+                                    "cf.importBrowserOperation",
+                                    (importSpan) => {
+                                      importSpan.setAttribute(
+                                        "cubby.module.import_state",
+                                        browserOperationImportState,
+                                      );
+                                      return getBrowserOperation();
+                                    },
+                                  )
+                                ).handleBrowserOperationDispatch
+                              : isHttpOperationPath(url.pathname)
                                 ? (
                                     await withTrace(
-                                      "cf.importBrowserOperation",
+                                      "cf.importHttpApi",
                                       (importSpan) => {
                                         importSpan.setAttribute(
                                           "cubby.module.import_state",
-                                          browserOperationImportState,
+                                          httpApiImportState,
                                         );
-                                        return getBrowserOperation();
+                                        return getHttpApi();
                                       },
                                     )
-                                  ).handleBrowserOperationDispatch
-                                : isHttpOperationPath(url.pathname)
-                                  ? (
-                                      await withTrace(
-                                        "cf.importHttpApi",
-                                        (importSpan) => {
-                                          importSpan.setAttribute(
-                                            "cubby.module.import_state",
-                                            httpApiImportState,
-                                          );
-                                          return getHttpApi();
-                                        },
-                                      )
-                                    ).handleHttpOperation
-                                  : (
-                                      await withTrace(
-                                        "cf.importHandler",
-                                        (importSpan) => {
-                                          importSpan.setAttribute(
-                                            "cubby.module.import_state",
-                                            handlerImportState,
-                                          );
-                                          return getHandler();
-                                        },
-                                      )
-                                    ).default.fetch;
+                                  ).handleHttpOperation
+                                : (
+                                    await withTrace(
+                                      "cf.importHandler",
+                                      (importSpan) => {
+                                        importSpan.setAttribute(
+                                          "cubby.module.import_state",
+                                          handlerImportState,
+                                        );
+                                        return getHandler();
+                                      },
+                                    )
+                                  ).default.fetch;
                             // Scoped here rather than around the whole handler body: this
                             // is the only region where request-scoped work runs, and
                             // waitUntil must belong to THIS request's context.
