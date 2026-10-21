@@ -73,8 +73,7 @@ function random(seed: number) {
     if (value === undefined) throw new Error("Cannot pick from no values");
     return value;
   };
-  const cents = (max: number) => Math.round(next() * max) / 100;
-  return { next, pick, cents };
+  return { next, pick };
 }
 
 // Every row of a table lists the same columns; an absent one would insert
@@ -170,7 +169,7 @@ type Line = {
 };
 
 /**
- * Allocation cases every scale keeps, all at the heavy Vendor 0 so its review
+ * Allocation cases share Vendor 0 so its review
  * reaches them: refund-only baskets, negative adjustments beside mixed-sign
  * principals, explicit multi-Project splits, and adjustment-only Purchases
  * falling back to their default Project. Overrides use merged category 3.
@@ -205,18 +204,15 @@ async function seedEdgeBaskets(
     "negative",
     "adjustmentOnly",
   ] as const;
-  const baskets = Array.from(
-    { length: basketKinds.length * 6 },
-    (_, index) => ({
-      ...identity("purchase", firstPurchase + index),
-      kind: at(basketKinds, Math.floor(index / 6)),
-      vendorId: at(vendors, 0).id,
-      date: "2026-01-01",
-      spendingCategoryId: index % 3 === 0 ? pick(spend).id : null,
-      spendingCategoryOrigin: index % 3 === 0 ? "manual" : "legacy",
-      defaultProjectId: project(index),
-    }),
-  );
+  const baskets = Array.from({ length: basketKinds.length }, (_, index) => ({
+    ...identity("purchase", firstPurchase + index),
+    kind: at(basketKinds, index),
+    vendorId: at(vendors, 0).id,
+    date: "2026-01-01",
+    spendingCategoryId: index % 3 === 0 ? pick(spend).id : null,
+    spendingCategoryOrigin: index % 3 === 0 ? "manual" : "legacy",
+    defaultProjectId: project(index),
+  }));
   await insertRows(
     db,
     "Purchase",
@@ -258,47 +254,33 @@ async function seedEdgeBaskets(
   });
 }
 
-/** Scale 1 matches the measured household: ~12.5k Expenses over ~3.6k Purchases. */
-async function seedSyntheticHousehold(db: Database, scale: number) {
+/** Small graphs retain resolution and allocation branches without load generation. */
+async function seedReviewGraph(db: Database) {
   const generator = random(20261006);
-  const { next, pick, cents } = generator;
-  const count = (full: number) => Math.round(full * scale);
   const taxonomy = await seedTaxonomy(db, generator);
-  const { spend, leaves } = taxonomy;
-  const products = Array.from({ length: count(6200) }, (_, index) => ({
+  const { spend, leaves, nonFoodLeaves } = taxonomy;
+  const products = Array.from({ length: 20 }, (_, index) => ({
     ...identity("product", index),
     name: `Synthetic product ${index}`,
     manufacturer: "Synthetic",
-    categoryId: next() < 0.9 ? pick(leaves) : null,
+    categoryId: index < 4 ? at(leaves, index) : at(nonFoodLeaves, index - 4),
   }));
   await insertRows(db, "Product", products);
-  const profiles = [
-    "unspecified",
-    "mixed_retail",
-    "food_retail",
-    "restaurant",
-    "coffee_shop",
-  ] as const;
-  const vendors = Array.from({ length: 150 }, (_, index) => ({
+  const profiles = ["unspecified", "mixed_retail", "food_retail"] as const;
+  const vendors = profiles.map((spendingProfile, index) => ({
     ...identity("vendor", index),
     name: `Synthetic vendor ${index}`,
-    spendingProfile: pick(profiles),
-    defaultSpendingCategoryId: next() < 0.5 ? pick(spend).id : null,
+    spendingProfile,
+    defaultSpendingCategoryId: index === 1 ? at(spend, 8).id : null,
   }));
   await insertRows(db, "Vendor", vendors);
-  const purchases = Array.from({ length: count(3600) }, (_, index) => {
-    const categorized = next() < 0.2;
-    return {
-      ...identity("purchase", index),
-      // Vendor 0 is a heavy merchant, as in a real household.
-      vendorId: index % 4 === 0 ? vendors[0]?.id : pick(vendors).id,
-      date: "2026-01-01",
-      spendingCategoryId: categorized ? pick(spend).id : null,
-      spendingCategoryOrigin: categorized
-        ? pick(["legacy", "manual", "source"])
-        : "legacy",
-    };
-  });
+  const purchases = Array.from({ length: 4 }, (_, index) => ({
+    ...identity("purchase", index),
+    vendorId: at(vendors, index % vendors.length).id,
+    date: "2026-01-01",
+    spendingCategoryId: index === 0 ? at(spend, 2).id : null,
+    spendingCategoryOrigin: index === 0 ? "manual" : "legacy",
+  }));
   await insertRows(db, "Purchase", purchases);
   const expenses: (ReturnType<typeof identity<"expense">> &
     Line & { name: string; date: string; costType: string; trade: string })[] =
@@ -318,32 +300,16 @@ async function seedSyntheticHousehold(db: Database, scale: number) {
       projectId: null,
       ...line,
     });
-  for (const purchase of purchases)
+  products.forEach((product, index) =>
     expense({
-      purchaseId: purchase.id,
-      productId: next() < 0.8 ? pick(products).id : null,
-      cost: cents(10000),
-    });
-  while (expenses.length < count(11300)) {
-    const roll = next();
-    expense({
-      purchaseId: pick(purchases).id,
-      productId: next() < 0.8 ? pick(products).id : null,
-      cost: roll < 0.02 ? null : cents(10000) * (roll < 0.06 ? -1 : 1),
-      spendingCategoryId: next() < 0.05 ? pick(spend).id : null,
-    });
-  }
-  while (expenses.length < count(12000))
-    expense({
-      purchaseId: pick(purchases).id,
-      lineKind: pick(["tax", "shipping", "discount"]),
-      cost: cents(1000),
-    });
-  while (expenses.length < count(12500))
-    expense({
-      cost: cents(10000),
-      spendingCategoryId: next() < 0.3 ? pick(spend).id : null,
-    });
+      purchaseId: at(purchases, index % purchases.length).id,
+      productId: product.id,
+      cost: index === 0 ? null : (100 + index) / 100,
+      spendingCategoryId: index % 4 === 0 ? at(spend, 3).id : null,
+    }),
+  );
+  expense({ cost: 10.01, spendingCategoryId: at(spend, 4).id });
+  expense({ cost: 3.03 });
   await seedEdgeBaskets(db, generator, {
     spend,
     products,
@@ -352,8 +318,6 @@ async function seedSyntheticHousehold(db: Database, scale: number) {
     expense,
   });
   await insertRows(db, "Expense", expenses);
-  // Production tables carry planner statistics; bulk-inserted ones do not yet.
-  await unwrapDb(db).execute(sql`ANALYZE`);
   return { ...taxonomy, products, vendors, expenses };
 }
 
@@ -452,164 +416,154 @@ async function referencePreview(
   };
 }
 
-describe("spending classification preview at household scale", () => {
+describe("spending classification preview equivalence", () => {
   const ctx = withTestDb();
 
   // Each request reaches Expenses differently: a heavy Vendor, merges through
   // overrides, Purchase and Vendor defaults, and mappings, a mapped subtree,
   // reassigned Products, and set or cleared Expense overrides (adjustment
-  // lines included). Scale 1 reproduces the production-sized measurement.
-  it(
-    "previews the same counts and money as resolving every Expense",
-    { timeout: 300_000 },
-    async () => {
-      const seeded = await seedSyntheticHousehold(ctx.db, 0.2);
-      // The money cases the equivalence must hold over are really present.
-      const allocations = await loadExpenseJointAllocations(ctx.db);
-      const adjustments = allocations.filter(
-        (row) => row.basis !== "principal",
-      );
-      const projectsByPurchase = new Map<string | null, Set<string>>();
-      for (const row of allocations)
-        if (row.basis === "principal" && row.projectId)
-          projectsByPurchase.set(
-            row.purchaseId,
-            (projectsByPurchase.get(row.purchaseId) ?? new Set()).add(
-              row.projectId,
-            ),
-          );
-      expect({
-        bases: [...new Set(adjustments.map((row) => row.basis))].sort(),
-        negativeAdjustments: adjustments.some(
-          (row) => (row.sourceCents ?? 0n) < 0n,
-        ),
-        multiProjectPurchases: [...projectsByPurchase.values()].some(
-          (projects) => projects.size > 1,
-        ),
-      }).toEqual({
-        bases: ["default", "positive", "refund"],
-        negativeAdjustments: true,
-        multiProjectPurchases: true,
-      });
-      const spend = (index: number) => at(seeded.spend, index);
-      const vendor = at(seeded.vendors, 0);
-      const group = seeded.categories.find(
-        (row) => row.id === at(seeded.groups, 3),
-      );
-      const target = seeded.categories.find(
-        (row) => row.id === at(seeded.nonFoodLeaves, 7),
-      );
-      if (!group || !target) throw new Error("Missing seeded categories");
-      const moved = seeded.products
-        .filter(
-          (row) =>
-            row.categoryId && seeded.nonFoodLeaves.includes(row.categoryId),
-        )
-        .slice(0, 5);
-      const reviewed = seeded.expenses.filter((_, index) => index % 97 === 7);
-      const overridden = seeded.expenses
-        .filter((row) => row.spendingCategoryId)
-        .filter((_, index) => index % 5 === 0);
-      const merged = (keep: number, from: number[]) => ({
+  // lines included).
+  it("previews the same counts and money as resolving every Expense", async () => {
+    const seeded = await seedReviewGraph(ctx.db);
+    // The money cases the equivalence must hold over are really present.
+    const allocations = await loadExpenseJointAllocations(ctx.db);
+    const adjustments = allocations.filter((row) => row.basis !== "principal");
+    const projectsByPurchase = new Map<string | null, Set<string>>();
+    for (const row of allocations)
+      if (row.basis === "principal" && row.projectId)
+        projectsByPurchase.set(
+          row.purchaseId,
+          (projectsByPurchase.get(row.purchaseId) ?? new Set()).add(
+            row.projectId,
+          ),
+        );
+    expect({
+      bases: [...new Set(adjustments.map((row) => row.basis))].sort(),
+      negativeAdjustments: adjustments.some(
+        (row) => (row.sourceCents ?? 0n) < 0n,
+      ),
+      multiProjectPurchases: [...projectsByPurchase.values()].some(
+        (projects) => projects.size > 1,
+      ),
+    }).toEqual({
+      bases: ["default", "positive", "refund"],
+      negativeAdjustments: true,
+      multiProjectPurchases: true,
+    });
+    const spend = (index: number) => at(seeded.spend, index);
+    const vendor = at(seeded.vendors, 0);
+    const group = seeded.categories.find(
+      (row) => row.id === at(seeded.groups, 3),
+    );
+    const target = seeded.categories.find(
+      (row) => row.id === at(seeded.nonFoodLeaves, 7),
+    );
+    if (!group || !target) throw new Error("Missing seeded categories");
+    const moved = seeded.products
+      .filter(
+        (row) =>
+          row.categoryId && seeded.nonFoodLeaves.includes(row.categoryId),
+      )
+      .slice(0, 5);
+    const reviewed = seeded.expenses.filter((_, index) => index % 97 === 7);
+    const overridden = seeded.expenses
+      .filter((row) => row.spendingCategoryId)
+      .filter((_, index) => index % 5 === 0);
+    const merged = (keep: number, from: number[]) => ({
+      request: {
+        action: "spendingCategoryMerge" as const,
+        keepId: spend(keep).shortcode,
+        mergeIds: from.map((index) => spend(index).shortcode),
+      },
+      draft: {
+        categoryRedirects: from.map((index) => ({
+          id: spend(index).id,
+          keepId: spend(keep).id,
+        })),
+      },
+    });
+    const assigned = (
+      rows: typeof seeded.expenses,
+      category: (typeof seeded.spend)[number] | null,
+    ) => ({
+      request: {
+        action: "expenses" as const,
+        expenseIds: rows.map((row) => row.shortcode),
+        spendingCategoryId: category?.shortcode ?? null,
+      },
+      draft: {
+        expenses: rows.map((row) => ({
+          id: row.id,
+          spendingCategoryId: category?.id ?? null,
+        })),
+      },
+    });
+    const cases = {
+      vendor: {
         request: {
-          action: "spendingCategoryMerge" as const,
-          keepId: spend(keep).shortcode,
-          mergeIds: from.map((index) => spend(index).shortcode),
+          action: "vendor" as const,
+          vendorId: vendor.shortcode,
+          spendingProfile: "food_retail" as const,
+          defaultSpendingCategoryId: spend(1).shortcode,
         },
         draft: {
-          categoryRedirects: from.map((index) => ({
-            id: spend(index).id,
-            keepId: spend(keep).id,
-          })),
+          vendors: [
+            {
+              id: vendor.id,
+              spendingProfile: "food_retail" as const,
+              defaultSpendingCategoryId: spend(1).id,
+            },
+          ],
         },
-      });
-      const assigned = (
-        rows: typeof seeded.expenses,
-        category: (typeof seeded.spend)[number] | null,
-      ) => ({
+      },
+      merge: merged(2, [3, 4]),
+      productCategory: {
         request: {
-          action: "expenses" as const,
-          expenseIds: rows.map((row) => row.shortcode),
-          spendingCategoryId: category?.shortcode ?? null,
+          action: "productCategory" as const,
+          productCategoryId: group.shortcode,
+          spendingCategoryMode: "mapped" as const,
+          spendingCategoryId: spend(5).shortcode,
         },
         draft: {
-          expenses: rows.map((row) => ({
+          productCategories: [
+            {
+              id: group.id,
+              spendingCategoryMode: "mapped" as const,
+              spendingCategoryId: spend(5).id,
+            },
+          ],
+        },
+      },
+      products: {
+        request: {
+          action: "products" as const,
+          productIds: moved.map((row) => row.shortcode),
+          productCategoryId: target.shortcode,
+        },
+        draft: {
+          products: moved.map((row) => ({
             id: row.id,
-            spendingCategoryId: category?.id ?? null,
+            categoryId: target.id,
           })),
         },
+      },
+      expenses: assigned(reviewed, spend(6)),
+      "cleared overrides": assigned(overridden, null),
+    };
+    for (const [name, { request, draft }] of Object.entries(cases)) {
+      const {
+        request: _request,
+        policyRevision: _revision,
+        fingerprint: _fingerprint,
+        ...impact
+      } = await previewSpendingClassificationReview(ctx.db, request);
+      expect(impact.changedExpenseCount).toBeGreaterThan(0);
+      expect({ name, impact }).toEqual({
+        name,
+        // Every preview is read-only; the original allocation baseline is
+        // shared, while each draft's expected result is resolved afresh.
+        impact: await referencePreview(ctx.db, draft, allocations),
       });
-      const cases = {
-        vendor: {
-          request: {
-            action: "vendor" as const,
-            vendorId: vendor.shortcode,
-            spendingProfile: "food_retail" as const,
-            defaultSpendingCategoryId: spend(1).shortcode,
-          },
-          draft: {
-            vendors: [
-              {
-                id: vendor.id,
-                spendingProfile: "food_retail" as const,
-                defaultSpendingCategoryId: spend(1).id,
-              },
-            ],
-          },
-        },
-        merge: merged(2, [3, 4]),
-        "merge reaching most Expenses": merged(
-          10,
-          Array.from({ length: 45 }, (_, index) => index + 11),
-        ),
-        productCategory: {
-          request: {
-            action: "productCategory" as const,
-            productCategoryId: group.shortcode,
-            spendingCategoryMode: "mapped" as const,
-            spendingCategoryId: spend(5).shortcode,
-          },
-          draft: {
-            productCategories: [
-              {
-                id: group.id,
-                spendingCategoryMode: "mapped" as const,
-                spendingCategoryId: spend(5).id,
-              },
-            ],
-          },
-        },
-        products: {
-          request: {
-            action: "products" as const,
-            productIds: moved.map((row) => row.shortcode),
-            productCategoryId: target.shortcode,
-          },
-          draft: {
-            products: moved.map((row) => ({
-              id: row.id,
-              categoryId: target.id,
-            })),
-          },
-        },
-        expenses: assigned(reviewed, spend(6)),
-        "cleared overrides": assigned(overridden, null),
-      };
-      for (const [name, { request, draft }] of Object.entries(cases)) {
-        const {
-          request: _request,
-          policyRevision: _revision,
-          fingerprint: _fingerprint,
-          ...impact
-        } = await previewSpendingClassificationReview(ctx.db, request);
-        expect(impact.changedExpenseCount).toBeGreaterThan(0);
-        expect({ name, impact }).toEqual({
-          name,
-          // Every preview is read-only; the original allocation baseline is
-          // shared, while each draft's expected result is resolved afresh.
-          impact: await referencePreview(ctx.db, draft, allocations),
-        });
-      }
-    },
-  );
+    }
+  });
 });

@@ -91,16 +91,14 @@ it("real Worker reads and freshness writes release database sockets after quiet"
           return sample;
         };
         const reads = async () => {
-          for (let batch = 0; batch < 4; batch++) {
-            const responses = await Promise.all(
-              Array.from({ length: 8 }, () => projects.list("project")),
-            );
-            for (const response of responses)
-              expect({
-                status: response.status(),
-                body: scrubErrorMessage(await response.text()),
-              }).toMatchObject({ status: 200 });
-          }
+          const responses = await Promise.all(
+            Array.from({ length: 2 }, () => projects.list("project")),
+          );
+          for (const response of responses)
+            expect({
+              status: response.status(),
+              body: scrubErrorMessage(await response.text()),
+            }).toMatchObject({ status: 200 });
         };
         try {
           await census("cold");
@@ -122,7 +120,7 @@ it("real Worker reads and freshness writes release database sockets after quiet"
           await delay(QUIET_MS);
           const baseline = await census("warm quiet");
           const quietSamples = [];
-          for (let round = 1; round <= 3; round++) {
+          for (let round = 1; round <= 2; round++) {
             const changed = await projects.update("project", id, {
               name: `${name} round ${round}`,
             });

@@ -57,10 +57,10 @@ test("a column header menu groups and ungroups the list", async ({ page }) => {
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
-  // The caret is hover chrome: it takes no width until its header is hovered.
   const openMenu = async () => {
-    await page.locator('th[data-column-id="status"]').hover();
-    await page.getByRole("button", { name: "Status column menu" }).click();
+    const menu = page.getByRole("button", { name: "Status column menu" });
+    await menu.focus();
+    await menu.press("Enter");
   };
 
   await openMenu();
