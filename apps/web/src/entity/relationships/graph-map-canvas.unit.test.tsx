@@ -69,6 +69,7 @@ it("reorganizes retained positions only when clicked and anchors later expansion
     viewport: { x: 32, y: 32, zoom: 1 },
   };
   const props = {
+    root: nodes[0]!,
     nodes,
     edges: [],
     anchors: new Map([[member, root]]),

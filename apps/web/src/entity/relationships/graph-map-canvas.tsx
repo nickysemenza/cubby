@@ -118,7 +118,7 @@ export function GraphMapCanvas({
   camera,
   toolbarTarget,
 }: {
-  root?: { entityKind: EntityGraphNode["entityKind"]; entityId: string };
+  root: { entityKind: EntityGraphNode["entityKind"]; entityId: string };
   nodes: EntityGraphNode[];
   edges: EntityGraphEdge[];
   anchors: ReadonlyMap<string, string>;
@@ -217,7 +217,7 @@ export function GraphMapCanvas({
     return related;
   }, [nodes, edges]);
   const depths = useMemo(() => {
-    const first = root ?? nodes[0];
+    const first = root;
     const result = new Map<string, number>();
     if (!first) return result;
     const queue = [graphRefKey(first)];
@@ -231,7 +231,7 @@ export function GraphMapCanvas({
         }
       }
     return result;
-  }, [root, nodes, relatedRecords]);
+  }, [root, relatedRecords]);
   const baseNodes: RecordNode[] = useMemo(
     () =>
       nodes.flatMap((record) => {
