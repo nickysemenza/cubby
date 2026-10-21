@@ -325,7 +325,10 @@ export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {
 export async function waitForFormHydration(page: Page) {
   await waitForAppHydration(page);
   await expect(
-    page.getByRole("button", { name: /^(Create|Save|Move)(\s|$)/ }),
+    // Row reorder buttons ("Move section 1 up") are not submit controls.
+    page.getByRole("button", {
+      name: /^(Create|Save|Move)(?!.*\s(up|down)$)(\s|$)/,
+    }),
   ).toBeVisible({ timeout: 15000 });
 }
 
