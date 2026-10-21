@@ -1,0 +1,41 @@
+apps/apple/App/Shared/DesignSystem/FieldGuideDetailDensity.swift
+  s_e76cd5771b33ea::t_e9ab2f01faaa8b 8,12-13
+apps/apple/App/Shared/Entity/Detail/ConnectedSectionView.swift
+  s_e76cd5771b33ea::t_4015af2a9f3d67 85
+apps/apple/App/Shared/Entity/Detail/EntityDetailView.swift
+  s_4045d1ea7ec5a2::t_52318e6007c0c2 152-153,189-215,288,398-407,437-627,657-667,669-672,679-692,701-709,711,713-717,723-726,737-739,743-745,748-753,756,779-783,786-805,808-810,829-880,975,985
+apps/apple/App/Tests/Entity/Detail/DetailActivityDateTests.swift
+  s_e76cd5771b33ea::t_bd3e8012d13cc6 1-15
+apps/apple/App/Shared/Entity/Detail/DetailChartActivityViews.swift
+  s_4045d1ea7ec5a2::t_68f2d89002492a 1-178
+apps/apple/App/Shared/Entity/Detail/EntityFieldResolutionLabel.swift
+  s_4045d1ea7ec5a2::t_897a1be320d3f2 10-23,25
+apps/web/generator/http-api/swift-operations.ts
+  s_4045d1ea7ec5a2::t_606014bd3decb9 157-158
+apps/web/src/contracts/entity-graph.contract.ts
+  s_4045d1ea7ec5a2::t_0891189cb614d5 45,52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5decdd3499a3f23bc98d96086475229095965e9f",
+  "prompts": {},
+  "sessions": {
+    "s_4045d1ea7ec5a2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15f95-5f13-7c30-9aea-0f43d7a0bfae",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_e76cd5771b33ea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15f95-2744-7da3-add2-d479d4489989",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
