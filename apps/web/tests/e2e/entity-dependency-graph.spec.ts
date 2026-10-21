@@ -355,7 +355,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   );
   await expect(page).toHaveURL((url) => url.pathname === "/graph");
   const graph = page.getByLabel("Relationship graph", { exact: true });
-  const nodes = graph.locator(".react-flow__node");
+  const nodes = graph.locator(".react-flow__node:has(.graph-map-record)");
   await expect(nodes).toHaveCount(2);
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   const inventoryBranch = page
