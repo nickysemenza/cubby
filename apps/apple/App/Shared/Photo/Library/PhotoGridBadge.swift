@@ -145,14 +145,14 @@ struct PhotoGridCellState: Equatable, Sendable {
 }
 
 /// The grid badge's category tint: the first `PhotoImportCatalog.categories` entry a photo's hits contain,
-/// colored by its *index* into the token ramp — never by category key, so no category name is a
+/// colored by its *index* into the category ramp — never by category key, so no category name is a
 /// Swift literal here.
 enum PhotoCategoryTint {
     static func color(for categories: [String]) -> Color? {
         guard
             let index = PhotoImportCatalog.categories.firstIndex(where: { categories.contains($0.key) })
         else { return nil }
-        return FieldGuideTokens.chartRamp[index % FieldGuideTokens.chartRamp.count]
+        return FieldGuideTokens.categoryRamp[index % FieldGuideTokens.categoryRamp.count]
     }
 }
 

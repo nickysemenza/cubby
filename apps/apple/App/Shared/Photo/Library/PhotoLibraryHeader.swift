@@ -628,7 +628,7 @@ struct CategoryChip: View {
 
     private var tint: Color {
         let index = PhotoImportCatalog.categories.firstIndex { $0.key == category.key } ?? 0
-        return FieldGuideTokens.chartRamp[index % FieldGuideTokens.chartRamp.count]
+        return FieldGuideTokens.categoryRamp[index % FieldGuideTokens.categoryRamp.count]
     }
 
     var body: some View {
