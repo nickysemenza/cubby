@@ -6,6 +6,7 @@ import {
   fieldSuggestionSchema,
   fieldSuggestionOutcomeSchema,
 } from "@cubby/schemas/ai";
+import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion";
 import {
   parseEntityId,
   type IngredientId,
@@ -247,6 +248,30 @@ export const inferFieldAssessments = async (
 ) => {
   const runId = await actorAiRun(context, { runKey: input.runKey });
   const manifest = await producingAiManifest(context.db);
+  const recordId = input.entityId
+    ? await resolveOrThrow(context.db, input.entity, input.entityId)
+    : null;
+  if (
+    input.savedRecord === true &&
+    recordId &&
+    input.basisMode === "suggested" &&
+    !input.decisionModel
+  ) {
+    const { scheduleSavedFieldQuestion } =
+      await import("~/server/domains/run/service/ai-refresh");
+    for (const field of input.targets)
+      await scheduleSavedFieldQuestion(
+        context.db,
+        {
+          kind: "field",
+          entity: input.entity,
+          recordId,
+          field,
+          assessmentIds: [],
+        },
+        { suggestPorts: ports },
+      );
+  }
   const captured = await withAiInputs(false, () =>
     suggestFields(context.db, runId, input, {
       ...ports,
@@ -254,9 +279,7 @@ export const inferFieldAssessments = async (
     }),
   );
   const output = captured.result;
-  const recordId = input.entityId
-    ? await resolveOrThrow(context.db, input.entity, input.entityId)
-    : null;
+
   for (const [field, outcome] of Object.entries(output.outcomes ?? {})) {
     if (outcome.kind !== "evaluated") continue;
     const suggestion = output.suggestions[field];
@@ -415,7 +438,12 @@ export const inferFieldAssessments = async (
       .parse(withheldResult.rows);
     if (withheld) {
       output.suggestions[field] = null;
-      if (output.outcomes) delete output.outcomes[field];
+      if (output.outcomes)
+        output.outcomes[field] = {
+          ...outcome,
+          assessmentId: prediction.id,
+          reviewStatus: "rejected",
+        };
       continue;
     }
     const original = z
@@ -434,10 +462,14 @@ export const inferFieldAssessments = async (
           : originalJudgment.outcome;
   }
   // A pinned model replays one record for grading; only live answers settle
-  // a question. A saved record's own context (`entityId`) keeps its finance
-  // review fingerprint instead. Everything else the answer read beyond the
+  // a question. Dedicated saved finance/vendor context keeps its review
+  // fingerprint instead. IDs used for canonical automation do not bypass
+  // remembered declines. Everything else the answer read beyond the
   // basis is pinned by the input signature and rechecked on read.
-  if (!input.decisionModel && !input.entityId) {
+  if (
+    !input.decisionModel &&
+    !(input.entityId && usesSavedFieldSuggestionContext(input.entity))
+  ) {
     const settled = await Promise.all(
       Object.entries(output.outcomes ?? {})
         .filter(

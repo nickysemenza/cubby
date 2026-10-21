@@ -109,6 +109,57 @@ const recordRows =
 const suggestionsTable = (page: Page) =>
   page.getByRole("table", { name: "Suggestions" });
 
+// Failure: an evaluated empty category looks like an unexplained dash, or its
+// explanation can only be reached with a mouse.
+test("empty suggestion cells expose an abstention and keyboard-accessible details", async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName(testInfo, "Unclassified tool");
+  await createEntityFixture(page, "product", { name, categoryId: null });
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (await unbatchFor(route, ["ai.suggestFields"])) return;
+    if (!dispatchesOperation(route.request(), "ai.suggestFields"))
+      return route.continue();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        superjson.serialize({
+          ok: true,
+          data: fieldSuggestionsOut.parse({
+            suggestions: {},
+            outcomes: {
+              categoryId: {
+                kind: "evaluated",
+                answer: "none",
+                confidence: "high",
+                probability: 0.98,
+                alternatives: [],
+              },
+            },
+          }),
+        }),
+      ),
+    });
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?searchQuery=${encodeURIComponent(name)}`,
+  );
+  const row = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name, exact: true }) });
+  const category = row.locator('[data-cell-col="categoryId"]');
+  const status = category.getByRole("button", { name: /No good fit/ });
+  await expect(status).toBeVisible();
+  await expect(status).toHaveText("No good fit");
+  await status.focus();
+  await expect(status).toBeFocused();
+  await status.press("Enter");
+  await expect(
+    page.getByText("No good fit · 98% · high", { exact: true }),
+  ).toBeVisible();
+});
+
 // Failure modes: a family drops out of the page; a record renders as a bare
 // shortcode or a category as the generic grey reference chip; Accept on a
 // field or Confirm on a connection writes nothing.
@@ -485,9 +536,9 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   ).toBeVisible();
 });
 
-// The migration-seeded rules read through `suggestions.rules`: Field assignment
-// carried forward On, Statement attach Off until reviews make it eligible.
-test("Automatic rules lists each seeded rule with its state and switch", async ({
+// Field fill is a fixed policy; measured statement matching retains its switch
+// and cannot be enabled before its reviewed precision window is eligible.
+test("Automatic rules lists measured rules with their state and switch", async ({
   page,
 }) => {
   await gotoAuthenticatedPage(page, "/suggestions");
@@ -495,10 +546,7 @@ test("Automatic rules lists each seeded rule with its state and switch", async (
   await expect(page).toHaveURL(/status=rules/);
   const rules = page.getByRole("list", { name: "Automatic rules" });
   const field = rules.getByRole("listitem", { name: "Field assignment" });
-  await expect(field.getByText("On", { exact: true })).toBeVisible();
-  await expect(
-    field.getByRole("switch", { name: "Field assignment automatic rule" }),
-  ).toHaveAttribute("aria-checked", "true");
+  await expect(field).toHaveCount(0);
   const attach = rules.getByRole("listitem", { name: "Statement attach" });
   await expect(attach.getByText("Off", { exact: true })).toBeVisible();
   await expect(attach.getByText("Not yet eligible")).toBeVisible();

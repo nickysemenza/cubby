@@ -12,7 +12,7 @@ export const AUTOMATIC_RULE_KEYS = [
   "statement_transaction.book_spending",
 ] as const;
 
-/** Widening assignment policy starts a fresh measured window. */
+/** Field policy receipt revision; the field rule is no longer a measured switch. */
 export const FIELD_ASSIGNMENT_REVISION = "2026-10-20.1";
 
 export const automaticRuleFamily = z.enum(AUTOMATIC_RULE_FAMILIES);

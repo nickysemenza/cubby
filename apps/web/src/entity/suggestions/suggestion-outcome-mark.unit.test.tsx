@@ -200,6 +200,90 @@ describe("describeOutcome headline copy", () => {
 });
 
 describe("SuggestionOutcomeMark", () => {
+  it.each([false, true])(
+    "keeps grid navigation keys available for pending=%s",
+    (pending) => {
+      const onKeyDown = vi.fn();
+      document.addEventListener("keydown", onKeyDown);
+      try {
+        render(
+          <SuggestionOutcomeMark
+            surface="cell"
+            pending={pending}
+            outcome={pending ? null : { kind: "skipped", reason: "no_signal" }}
+          />,
+        );
+        const trigger = screen.getByRole("button");
+        fireEvent.keyDown(trigger, { key: "ArrowDown" });
+        expect(onKeyDown).toHaveBeenCalledTimes(1);
+        fireEvent.keyDown(trigger, { key: "Enter" });
+        fireEvent.keyDown(trigger, { key: " " });
+        expect(onKeyDown).toHaveBeenCalledTimes(1);
+      } finally {
+        document.removeEventListener("keydown", onKeyDown);
+      }
+    },
+  );
+  it.each<FieldSuggestionOutcome>([
+    pickOutcome({ answer: "none", reviewStatus: "rejected" }),
+    { kind: "skipped", reason: "no_signal", reviewStatus: "rejected" },
+  ])(
+    "preserves persisted rejection metadata on an empty field (%o)",
+    (outcome) => {
+      render(<SuggestionOutcomeMark surface="cell" outcome={outcome} />);
+      const trigger = screen.getByRole("button", { name: /Rejected/ });
+      expect(trigger).toHaveTextContent("Rejected");
+      expect(trigger).not.toHaveAttribute("tabindex", "-1");
+      fireEvent.click(trigger);
+      expect(
+        screen.queryByRole("button", { name: /Accept/ }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("distinguishes a queued query from one actively checking", () => {
+    render(<SuggestionOutcomeMark surface="cell" pending checking={false} />);
+    expect(
+      screen.getByRole("button", { name: /Suggestion pending/ }),
+    ).toHaveTextContent("Pending");
+    expect(
+      screen.queryByRole("button", { name: /Checking suggestion/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps an empty cell's settled outcome keyboard accessible", () => {
+    render(
+      <SuggestionOutcomeMark
+        surface="cell"
+        outcome={pickOutcome({ answer: "none" })}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: /No good fit/ });
+    expect(trigger).not.toHaveAttribute("tabindex", "-1");
+    expect(trigger).toHaveTextContent("No good fit");
+  });
+
+  it("retains a dismissed empty-field explanation", () => {
+    render(
+      <SuggestionOutcomeMark
+        surface="cell"
+        suggestion={suggestion}
+        actionable
+        dismissed
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Dismissed/ })).toHaveTextContent(
+      "Dismissed",
+    );
+  });
+
+  it("does not imply an empty field was never evaluated without history", () => {
+    render(<SuggestionOutcomeMark surface="cell" />);
+    expect(
+      screen.getByRole("button", { name: /Evaluation status unavailable/ }),
+    ).toHaveTextContent("Status unknown");
+  });
+
   it("renders nothing when neither outcome nor suggestion is given", () => {
     const { container } = render(<SuggestionOutcomeMark />);
     expect(container).toBeEmptyDOMElement();

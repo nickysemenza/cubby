@@ -126,9 +126,6 @@ test("edits compound emoji, clears it, and browses inherited category membership
     .getByRole("button", { name: "Edit Product Category", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Edit Product Category" });
-  await dialog
-    .getByRole("button", { name: "Suggest emoji", exact: true })
-    .click();
   await expect(
     dialog.getByRole("textbox", { name: "Emoji", exact: true }),
   ).toHaveValue("");

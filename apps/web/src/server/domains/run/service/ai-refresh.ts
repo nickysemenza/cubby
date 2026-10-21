@@ -65,6 +65,7 @@ import { prepareProductPairPublication } from "~/server/domains/product/repo/mat
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import {
@@ -252,6 +253,72 @@ async function prepareField(
   return { snapshot, provenance, lastWrite };
 }
 
+/** An old Worker must not enqueue or recover work for another executable policy. */
+async function currentAiRefreshActivation(db: Database) {
+  const current = await readAiRefreshActivation(db);
+  if (!current?.enabled) return null;
+  const compiled = await compiledRefreshManifest();
+  if (
+    Object.keys(current.manifest).length !== Object.keys(compiled).length ||
+    Object.entries(compiled).some(
+      ([feature, policy]) =>
+        current.manifest[feature]?.promptVersion !== policy.promptVersion ||
+        current.manifest[feature]?.policyFingerprint !==
+          policy.policyFingerprint,
+    )
+  )
+    return null;
+  return current;
+}
+
+/** Live saved-record questions enqueue the same canonical work as discovery.
+ * Client draft basis and the inactive interactive prediction never authorize writes.
+ */
+export async function scheduleSavedFieldQuestion(
+  db: Database,
+  target: Extract<AiEvaluationTarget, { kind: "field" }>,
+  ports: AiRefreshPorts = {},
+) {
+  const activation = await currentAiRefreshActivation(db);
+  if (!activation) return;
+  const prepared = await prepareField(db, target, ports);
+  if (
+    !prepared ||
+    (prepared.snapshot.currentValue !== null &&
+      prepared.snapshot.currentValue !== "")
+  )
+    return;
+  const key = await sha256Hex(
+    JSON.stringify({
+      target: {
+        entity: target.entity,
+        recordId: target.recordId,
+        field: target.field,
+      },
+      provenance: prepared.provenance,
+    }),
+  );
+  const result = await scheduleEvaluationRun(
+    db,
+    systemActor(),
+    {
+      purpose: "ai_refresh",
+      trigger: "scheduled",
+      status: "running",
+      clientKey: `ai-refresh:field:${key}`,
+      input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+    },
+    [{ target, provenance: prepared.provenance, snapshot: prepared.snapshot }],
+  );
+  if (result.kind === "deferred")
+    log.info("Saved field evaluation scheduling deferred", {
+      reason: result.reason,
+      entity: target.entity,
+      recordId: target.recordId,
+      field: target.field,
+    });
+}
+
 async function scheduleProductIdentityDiscovery(
   db: Database,
   activation: z.infer<typeof aiRefreshActivation>,
@@ -381,6 +448,15 @@ export async function discoverAiRefresh(
   }
   for (const rows of grouped.values()) {
     try {
+      // Current pending advice is reconsidered even when its inference inputs
+      // have not changed. Applied/rejected rows cannot re-enter this path.
+      const pendingIds = rows
+        .filter((row) => row.status === "pending")
+        .map((row) => row.id);
+      const automatic = await applyAutomaticRules(db, pendingIds, {
+        context: ports.context,
+      });
+      if (automatic.applied.length) continue;
       const first = rows[0]!;
       const target = aiEvaluationTarget.parse({
         kind: "field",
@@ -1024,20 +1100,9 @@ export async function executeAiRefreshTarget(
 }
 
 export async function recoverAiRefresh(db: Database) {
-  const current = await readAiRefreshActivation(db);
+  const current = await currentAiRefreshActivation(db);
   // The singleton owns activation. An old Worker can still receive recovery work.
-  if (!current?.enabled) return false;
-  const compiled = await compiledRefreshManifest();
-  if (
-    Object.keys(current.manifest).length !== Object.keys(compiled).length ||
-    Object.entries(compiled).some(
-      ([feature, policy]) =>
-        current.manifest[feature]?.promptVersion !== policy.promptVersion ||
-        current.manifest[feature]?.policyFingerprint !==
-          policy.policyFingerprint,
-    )
-  )
-    return false;
+  if (!current) return false;
   const { reconcileWorkflowRuns } =
     await import("~/server/workflows/runs/lifecycle");
   await reconcileWorkflowRuns(db);

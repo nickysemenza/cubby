@@ -271,7 +271,34 @@ export async function readSettledQuestions(
     input.questions,
     async (question, index): Promise<SettledSuggestionAnswer> => {
       const entry = byKey.get(keys[index]!);
-      if (!entry) return { outcome: null, revision: null };
+      if (!entry) {
+        // A first read can establish structural source eligibility without
+        // model inference or inventing a historical answer.
+        const prepared = await withAiInputs(
+          true,
+          () =>
+            suggestFields(
+              db,
+              PREPARATION_RUN,
+              {
+                entity: input.entity,
+                basisMode: question.basisMode,
+                basis: question.basis,
+                targets: [question.field],
+              },
+              { ...ports, recordUsage: false },
+            ),
+          { providerFree: true },
+        );
+        const outcome = prepared?.result.outcomes?.[question.field];
+        return {
+          outcome:
+            !prepared?.incomplete && outcome?.kind === "skipped"
+              ? outcome
+              : null,
+          revision: null,
+        };
+      }
       // A member's recorded miss reopens the question under that review's
       // identity, so the live answer cached before it is never restored.
       return recheck(

@@ -27,7 +27,7 @@ export const recordEmojiField = {
   control: {
     kind: "text",
     placeholder: "Choose an emoji",
-    suggest: { basis: ["name"], reviewRequired: true },
+    suggest: { basis: ["name"] },
   },
   display: { detail: true },
   validation: {

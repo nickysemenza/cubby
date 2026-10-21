@@ -9,7 +9,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { ClassicV2 } from "loading-dev";
-import type { MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, ReactNode, SyntheticEvent } from "react";
 
 import { cn } from "~/lib/utils";
 import { Stack } from "~/ui/layout";
@@ -35,8 +35,13 @@ const MIN_LISTED_ALTERNATIVE = 0.05;
 /** Beyond the top three the popover stops being a glance. */
 const MAX_LISTED_ALTERNATIVES = 3;
 
-function stopPropagation(event: MouseEvent) {
+function stopPropagation(event: SyntheticEvent) {
   event.stopPropagation();
+}
+
+// Disclosures own activation; navigation keys still belong to the grid.
+function stopActivationKey(event: KeyboardEvent) {
+  if (event.key === "Enter" || event.key === " ") event.stopPropagation();
 }
 
 /** `FieldSuggestionHint`'s callers (form fields, `external-id-kind-suggestion.tsx`)
@@ -180,6 +185,12 @@ function headlineSegments({
 }: DescribeOutcomeArgs & {
   outcome: FieldSuggestionOutcome;
 }): HeadlineSegments {
+  if (outcome.reviewStatus === "rejected")
+    return {
+      prefix: "Rejected suggestion",
+      bold: null,
+      suffix: " — this answer was rejected for these inputs",
+    };
   if (outcome.kind === "skipped") return skippedSegments(outcome.reason);
   if (outcome.answer === "none") return declinedSegments(outcome, prune);
   return pickSegments(outcome, {
@@ -224,12 +235,14 @@ function OutcomePopoverBody({
   surface,
   alternatives,
   removals,
+  reasoning,
   review,
 }: {
   segments: HeadlineSegments;
   surface: SuggestionOutcomeSurface;
   alternatives: readonly FieldSuggestionAlternative[];
   removals: readonly FieldSuggestionRemoval[];
+  reasoning?: string;
   review?: ReactNode;
 }) {
   // A review body states its own runner-up and removals.
@@ -271,6 +284,7 @@ function OutcomePopoverBody({
           ))}
         </Stack>
       ) : null}
+      {!review && reasoning ? <p>{reasoning}</p> : null}
       {review}
     </Stack>
   );
@@ -296,7 +310,9 @@ function MarkGlyph({
   surface,
   accented,
   actionable,
+  compactLabel,
 }: {
+  compactLabel?: string;
   headlineText: string;
   surface: SuggestionOutcomeSurface;
   /** Cobalt: there is a live proposal to act on from this glyph. */
@@ -308,10 +324,16 @@ function MarkGlyph({
       openOnHover
       closeDelay={150}
       aria-label={headlineText}
-      tabIndex={surface === "cell" && !actionable ? -1 : undefined}
+      tabIndex={
+        surface === "cell" && !actionable && !compactLabel ? -1 : undefined
+      }
       onMouseDown={stopPropagation}
       onClick={stopPropagation}
-      className={glyphTriggerClass(surface)}
+      onKeyDown={stopActivationKey}
+      className={cn(
+        glyphTriggerClass(surface),
+        compactLabel && "w-auto gap-1 px-1 text-xs text-muted-foreground",
+      )}
     >
       <SparkleIcon
         className={cn(
@@ -323,6 +345,7 @@ function MarkGlyph({
               : "text-muted-foreground",
         )}
       />
+      {compactLabel}
     </PopoverTrigger>
   );
 }
@@ -332,9 +355,13 @@ function MarkGlyph({
  * error once it fails. */
 function UnsettledMark({
   pending,
+  checking = pending,
   error,
   surface,
+  empty,
 }: {
+  empty: boolean;
+  checking?: boolean;
   pending?: boolean;
   error?: unknown;
   surface: SuggestionOutcomeSurface;
@@ -345,10 +372,14 @@ function UnsettledMark({
   // click (the dialog's Create). Forms already have their own status line.
   if (surface === "line") return null;
   const failed = error !== undefined && error !== null;
-  if (!failed && !pending) return null;
+  if (!failed && !pending && !(empty && surface === "cell")) return null;
   const text = failed
     ? `Suggestion unavailable: ${getErrorMessage(error)}`
-    : "Checking suggestion…";
+    : pending
+      ? checking
+        ? "Checking suggestion…"
+        : "Suggestion pending — waiting to check"
+      : "Evaluation status unavailable — no evaluation history was returned";
   return (
     <Popover>
       <PopoverTrigger
@@ -357,13 +388,28 @@ function UnsettledMark({
         aria-label={text}
         onMouseDown={stopPropagation}
         onClick={stopPropagation}
-        className={glyphTriggerClass(surface)}
+        onKeyDown={stopActivationKey}
+        className={cn(
+          glyphTriggerClass(surface),
+          empty && "w-auto gap-1 px-1 text-xs text-muted-foreground",
+        )}
       >
         {failed ? (
           <WarningCircleIcon className="size-3 text-destructive" />
-        ) : (
+        ) : pending ? (
           <ClassicV2 size={12} className="text-muted-foreground" />
+        ) : (
+          <SparkleIcon className="size-3" />
         )}
+        {empty
+          ? failed
+            ? "Failed"
+            : pending
+              ? checking
+                ? "Checking…"
+                : "Pending"
+              : "Status unknown"
+          : null}
       </PopoverTrigger>
       <PopoverContent side="bottom" className="w-auto max-w-xs p-2 text-xs">
         {text}
@@ -393,6 +439,7 @@ export function SuggestionOutcomeMark({
   dismissed = false,
   prune = false,
   pending,
+  checking,
   error,
   review,
 }: {
@@ -414,14 +461,23 @@ export function SuggestionOutcomeMark({
    * mounting it late pushed every later fact down mid-tap (a reset button
    * tapped as the decision model settled received the tap on empty space). */
   pending?: boolean;
+  checking?: boolean;
   /** The field's query failed; shown instead of silently omitting the mark. */
   error?: unknown;
   review?: ReactNode;
 }) {
   const resolvedOutcome =
     outcome ?? (suggestion ? outcomeFromSuggestion(suggestion) : null);
-  if (!resolvedOutcome)
-    return <UnsettledMark pending={pending} error={error} surface={surface} />;
+  if (!resolvedOutcome || (surface !== "line" && (pending || error != null)))
+    return (
+      <UnsettledMark
+        pending={pending}
+        checking={checking}
+        error={error}
+        surface={surface}
+        empty={!currentValue?.trim()}
+      />
+    );
 
   const args: DescribeOutcomeArgs & { outcome: FieldSuggestionOutcome } = {
     outcome: resolvedOutcome,
@@ -433,16 +489,36 @@ export function SuggestionOutcomeMark({
     actionable,
     prune,
   };
-  const segments = headlineSegments(args);
+  const segments = dismissed
+    ? { prefix: "Dismissed — ", bold: null, suffix: describeOutcome(args) }
+    : headlineSegments(args);
   const headlineText = segmentsToText(segments);
   const alternatives =
-    resolvedOutcome.kind === "evaluated" ? resolvedOutcome.alternatives : [];
+    suggestion?.alternatives ??
+    (resolvedOutcome.kind === "evaluated" ? resolvedOutcome.alternatives : []);
   const removals =
     suggestion?.operation === "remove" ? suggestion.removals : [];
 
   const glyph = (
     <MarkGlyph
       headlineText={headlineText}
+      compactLabel={
+        surface === "cell" && !currentValue?.trim()
+          ? dismissed
+            ? "Dismissed"
+            : actionable
+              ? "Needs review"
+              : resolvedOutcome.reviewStatus === "rejected"
+                ? "Rejected"
+                : resolvedOutcome.kind === "skipped"
+                  ? resolvedOutcome.reason === "no_signal"
+                    ? "No evidence"
+                    : "Not checked"
+                  : resolvedOutcome.answer === "none"
+                    ? "No good fit"
+                    : "Below threshold"
+          : undefined
+      }
       surface={surface}
       accented={actionable && !dismissed}
       actionable={actionable}
@@ -466,6 +542,7 @@ export function SuggestionOutcomeMark({
           surface={surface}
           alternatives={alternatives}
           removals={removals}
+          reasoning={suggestion?.reasoning}
           review={review}
         />
       </PopoverContent>

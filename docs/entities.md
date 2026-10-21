@@ -948,10 +948,44 @@ confident Emails and their member resolutions retain their domain authority.
 Applied field targets, including inactive saved-form applications and rejected
 member corrections with retained application receipts, are
 reevaluated against current values when evidence or policy changes. Automatic
-field assignments admit both additions and corrections on eligible declared
-fields, regardless of who wrote the old value. Declared review requirements,
-validation and inherited/derived resolution still apply; pruning and merging
-are separate actions. Feedback preserves historical application receipts.
+field assignments fill only empty effective values on eligible declared fields
+at confidence >= 0.95, with supporting basis evidence and a winner at least
+0.10 ahead of any runner-up. Populated values, saved field decisions (including
+clears or any other audited update), rejected values, unserved trials and suppressed proposals never auto-apply.
+Current input fingerprints fence every write; inherited values count as populated.
+Automatic acceptance also requires complete dependency stamps matching the current
+executable AI policy. Missing, incomplete, or stale provenance requires a new
+canonical evaluation before application.
+Create previews use the same confidence threshold and preserve populated draft
+values. A field with declared resolution stays reviewable when its authoritative
+draft resolver has not established an empty effective value.
+The scheduled AI refresh discovery pass attempts existing pending proposals before
+preparing another evaluation, even when inference inputs have not changed and no
+client visits the record. Fresh eligible backlog applies through the same audited
+transaction as new proposals; stale backlog is reevaluated through normal refresh.
+Saved-record list and detail questions opt into canonical background evaluation
+with `savedRecord`; the server prepares evidence from the saved entity rather
+than trusting the client's displayed basis. Interactive form predictions remain
+inactive and never schedule automatic writes, even when editing a saved record.
+Admission deferrals keep interactive answers available; the next live question
+retries canonical scheduling. Live scheduling waits for activation to match the
+executable policy, just as recovery does.
+Applied and rejected rows cannot re-enter pending application, and unchanged
+settled inputs skip repeated inference. Below-threshold or ambiguous proposals
+remain available for review. This field policy needs no measured-rule switch,
+Sweep model pin or audit holdback; statement financial automation retains its
+separate measured/import contracts. Validation and inherited/derived resolution
+still apply; pruning and merging are separate actions. Feedback preserves
+historical application receipts.
+
+Mandatory field review is limited to concrete consequential exceptions declared
+with `reviewRequired`: FinancialAccount issuer/network and sole purchaser establish
+financial identity and attribution; Expense line kind changes accounting role; Cookbook and Device Product links
+identify specific owned objects. Ordinary descriptive fields, including record
+emoji and Vendor spending category/itemization, use the common empty-field
+policy. Effective derived itemization values are populated and remain protected.
+Vendor spending profiles default to `unspecified`, a populated value that remains
+reviewable; removing its mandatory-review flag does not treat that sentinel as empty.
 The mutable AssessmentState projection retains the latest evaluation's input and
 policy alongside its application metadata whenever no replacement is published,
 including when an exact wrong review or retained value suppression filters every
@@ -2906,7 +2940,7 @@ question's live ask carries the read's input revision (the new input
 signature, prefixed by the member review that marked the decline a miss
 when there is one), so an answer
 cached for its old inputs is not reused. Replacements are serialized per
-question, and the newest memory row wins. Member reviews and writes to the
+question, and the newest memory row wins. Existing outcome variants retain optional `reviewStatus: "rejected"` when a retained member rejection withholds the proposal. First reads return known skipped source states (`no_signal`, `no_candidates`, or `resolved`) without inventing evaluation history. Member reviews and writes to the
 entity kinds a question declares (its entity, the field's vocabulary,
 referenced basis records) recheck mounted questions; a roster that reads a
 kind outside those tags is rechecked on the next page read, not live on a

@@ -3,7 +3,10 @@ import type {
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import {
+  basisValueOf,
+  usesSavedFieldSuggestionContext,
+} from "@cubby/schemas/field-suggestion";
 export { basisValueOf } from "@cubby/schemas/field-suggestion";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcode } from "@cubby/shared";
@@ -205,22 +208,29 @@ export function isBasisSufficient(
   return false;
 }
 
+const suggestionRecordIdentitySchema = z.object({ id: z.string() });
+
 export function financeSuggestionEntityId(
   entity: string,
   record: unknown,
 ): string | undefined {
-  if (
-    !["financialTransaction", "purchase", "expense", "vendor"].includes(entity)
-  )
-    return undefined;
-  const parsed = z.object({ id: z.string() }).safeParse(record);
-  return parsed.success && parseShortcode(parsed.data.id)?.type === entity
-    ? parsed.data.id
+  if (!usesSavedFieldSuggestionContext(entity)) return undefined;
+  const parsed = suggestionRecordIdentitySchema.safeParse(record);
+  return parsed.success
+    ? savedSuggestionEntityId(entity, parsed.data)
     : undefined;
+}
+
+export function savedSuggestionEntityId(
+  entity: string,
+  record: z.infer<typeof suggestionRecordIdentitySchema>,
+): string | undefined {
+  return parseShortcode(record.id)?.type === entity ? record.id : undefined;
 }
 
 export interface FieldSuggestionSource {
   readonly entityId?: string;
+  readonly savedRecord?: boolean;
   /** Assessment UUID backing live inference, when the server publishes it. */
   readonly assessmentId?: string;
   basisMode: "provided" | "suggested";

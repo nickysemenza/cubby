@@ -105,6 +105,50 @@ describe("settled suggestion questions", () => {
     basis: { name, manufacturer: null },
   });
 
+  // Failure: a first read reports unknown despite an unusable source basis.
+  it("returns a source status before any remembered answer exists", async () => {
+    expect((await readAnswer(gadget(""))).outcome).toEqual({
+      kind: "skipped",
+      reason: "no_signal",
+    });
+  });
+
+  // Failure: first-read preparation errors become successful unknown answers.
+  it("reports raw first-read preparation failure while preserving sibling answers", async () => {
+    const spec = fakeRoster.registry["product.categoryId"];
+    const { results } = await readSettledQuestions(
+      ctx.db,
+      {
+        entity: "product",
+        questions: [
+          { ...gadget("Synthetic failing roster"), basisMode: "suggested" },
+          { ...gadget(""), basisMode: "suggested" },
+        ],
+      },
+      {
+        ...fakeRoster,
+        registry: {
+          "product.categoryId": {
+            ...spec,
+            roster: async () => {
+              throw new Error(
+                "Synthetic upstream SQLSTATE 23514 preparation failure",
+              );
+            },
+          },
+        },
+      },
+    );
+    expect(results[0]).toEqual({
+      ok: false,
+      message: "Synthetic upstream SQLSTATE 23514 preparation failure",
+    });
+    expect(results[1]).toMatchObject({
+      ok: true,
+      value: { outcome: { kind: "skipped", reason: "no_signal" } },
+    });
+  });
+
   it("remembers a decline until its basis changes or a member records a miss", async () => {
     const answer = await ask(
       gadget("Synthetic unplaceable gadget"),
@@ -286,7 +330,9 @@ describe("settled suggestion questions", () => {
     expect(missed.revision).toMatch(/^miss:/u);
     // The live retry repeats the rejected assessment and is withheld.
     const retry = await ask(question);
-    expect(retry.outcomes?.locationId).toBeUndefined();
+    expect(retry.outcomes?.locationId).toMatchObject({
+      reviewStatus: "rejected",
+    });
     expect((await readAnswer(question)).revision).toBe(missed.revision);
 
     await insertWithShortcode(ctx.db, "location", {

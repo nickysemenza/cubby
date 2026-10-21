@@ -17,6 +17,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   SUGGESTION_LIST_PAGE_MAX,
@@ -91,7 +92,7 @@ import {
   suggestionContextKeys,
   isBasisSufficient,
   basisValueOf,
-  financeSuggestionEntityId,
+  savedSuggestionEntityId,
   productionEntitySuggestionsOperations,
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
@@ -102,6 +103,7 @@ import {
   suggestionBasisLabels,
   type SuggestionProvenance,
 } from "./suggestion-body";
+import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
 import {
   actionableSuggestion,
   suggestionReviewKey,
@@ -133,6 +135,7 @@ type SuggestionRow = {
   suggestions: Record<string, FieldSuggestion | null>;
   outcomes: Record<string, FieldSuggestionOutcome>;
   pendingByField: ReadonlyMap<string, boolean>;
+  checkingByField: ReadonlyMap<string, boolean>;
   errorByField: ReadonlyMap<string, unknown>;
 };
 /** Folds independently keyed field queries into their record's review state. */
@@ -150,6 +153,7 @@ function mergeSuggestionRow(
   const sourceByField = new Map(previous?.sourceByField);
   const assessmentIdByField = new Map(previous?.assessmentIdByField);
   const pendingByField = new Map(previous?.pendingByField);
+  const checkingByField = new Map(previous?.checkingByField);
   const errorByField = new Map(previous?.errorByField);
   for (const field of source.targets) {
     sourceByField.set(field, source);
@@ -163,6 +167,7 @@ function mergeSuggestionRow(
       field,
       query.data === undefined && (query.isFetching || query.isPending),
     );
+    checkingByField.set(field, query.isFetching);
     errorByField.set(field, query.error);
   }
   return {
@@ -179,6 +184,7 @@ function mergeSuggestionRow(
       ...query.data?.outcomes,
     },
     pendingByField,
+    checkingByField,
     errorByField,
   };
 }
@@ -529,7 +535,8 @@ function suggestionRequestsForRecord(
         record,
         source: {
           entity,
-          entityId: financeSuggestionEntityId(entity, record),
+          entityId: savedSuggestionEntityId(entity, record),
+          savedRecord: true,
           basisMode: empty ? ("suggested" as const) : ("provided" as const),
           targets: [target.key],
           basis,
@@ -831,12 +838,18 @@ type StoredPageRead = {
 const firstStoredPageQuery = (results: UseQueryResult<StoredPageRead>[]) =>
   results[0];
 /** A single-field question the server can answer from remembered declines;
- * a question that reads saved record context (`entityId`) is always live. */
+ * dedicated saved finance/vendor context is always live. Other record IDs
+ * identify canonical automation without bypassing remembered declines. */
 function settledQuestionOf(
   source: FieldSuggestionSource,
 ): { id: string; question: SettledSuggestionQuestion } | null {
   const [field] = source.targets;
-  if (source.entityId || source.targets.length !== 1 || !field) return null;
+  if (
+    (source.entityId && usesSavedFieldSuggestionContext(source.entity)) ||
+    source.targets.length !== 1 ||
+    !field
+  )
+    return null;
   const question = { field, basisMode: source.basisMode, basis: source.basis };
   return { id: JSON.stringify(question), question };
 }
@@ -1639,10 +1652,16 @@ function ResolvedFieldSuggestion({
   if (surface === "cell" && !row.errorByField.get(field)) {
     // Prune proposals keep the popover review: removing chips has no pill.
     if (
+      row.outcomes[field]?.reviewStatus !== "rejected" &&
       suggestion?.operation !== "remove" &&
       suggestion?.value &&
       suggestion.value !== current.value &&
-      suggestion.probability !== null
+      suggestion.probability !== null &&
+      actionableSuggestion(
+        suggestion,
+        current.value,
+        source.basisMode === "provided",
+      )
     )
       return (
         <RecordSuggestionScope value={row}>
@@ -1672,7 +1691,11 @@ function ResolvedFieldSuggestion({
       );
     // Keep the row scope: a nested FieldSuggestionApply (an inline cell
     // editor) reads it to reuse this row's answer instead of asking again.
-    if (suggestion?.operation !== "remove")
+    if (
+      suggestion?.operation !== "remove" &&
+      current.value?.trim() &&
+      !row.pendingByField.get(field)
+    )
       return (
         <RecordSuggestionScope value={row}>{children}</RecordSuggestionScope>
       );
@@ -1685,6 +1708,7 @@ function ResolvedFieldSuggestion({
         currentLabel={current.label}
         questionKey={questionKey}
         pending={row.pendingByField.get(field) ?? false}
+        checking={row.checkingByField.get(field) ?? false}
         error={row.errorByField.get(field)}
         onApply={apply}
         onDismiss={dismiss}
@@ -1789,9 +1813,38 @@ export function RecordFieldSuggestion({
         {children}
       </StoredSuggestionField>
     );
-  if (!row) return children;
-  const source = row.sourceByField.get(field);
-  if (!source) return children;
+  const source = row?.sourceByField.get(field);
+  if (!row || !source) {
+    if (
+      !fieldModel?.control?.suggest ||
+      !parsed.success ||
+      recordValue(context.entity, parsed.data, field).value?.trim()
+    )
+      return children;
+    const targets = suggestTargetsFor(context.entity, [field]);
+    const basis = recordSuggestionBasis(context.entity, targets, parsed.data);
+    const resolutions = recordFieldResolutions(parsed.data);
+    const basisLoaded = targets.basisKeys.every((key) => {
+      const basisField = findEntityField(context.entity, key);
+      return (
+        parsed.data[basisField?.readKey ?? key] !== undefined ||
+        resolutions[key] !== undefined
+      );
+    });
+    const outcome: FieldSuggestionOutcome | null =
+      basisLoaded && !isBasisSufficient(context.entity, targets, basis)
+        ? { kind: "skipped", reason: "no_signal" }
+        : null;
+    const mark = <SuggestionOutcomeMark surface={surface} outcome={outcome} />;
+    return surface === "cell" ? (
+      <CellFrame trailing={mark}>{children}</CellFrame>
+    ) : (
+      <>
+        {children}
+        {mark}
+      </>
+    );
+  }
   return (
     <ResolvedFieldSuggestion
       context={context}
@@ -1897,7 +1950,23 @@ function LiveSuggestionCell({
     pending,
     dismiss,
   );
-  if (actions.dismissed) return children;
+  if (actions.dismissed && currentValue?.trim()) return children;
+  if (actions.dismissed)
+    return (
+      <CellFrame
+        trailing={
+          <SuggestionOutcomeMark
+            suggestion={suggestion}
+            currentValue={currentValue}
+            surface="cell"
+            actionable={inline}
+            dismissed
+          />
+        }
+      >
+        {children}
+      </CellFrame>
+    );
   const runnerUp = suggestion.alternatives[0];
   return (
     <GhostSuggestionCell

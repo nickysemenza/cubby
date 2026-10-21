@@ -499,6 +499,8 @@ export type FinanceCategoryApplyInput = z.infer<
 
 export const fieldSuggestionsInput = z.object({
   entityId: z.string().min(1).optional(),
+  /** Record surfaces request canonical automatic work; form drafts remain interactive. */
+  savedRecord: z.boolean().optional(),
   basisMode: z.enum(["provided", "suggested"]),
   entity: z.enum(shortcodeEntities),
   targets: z.array(z.string().min(1)).min(1),
@@ -719,10 +721,12 @@ export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
 export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("skipped"),
+    reviewStatus: z.literal("rejected").optional(),
     reason: z.enum(["no_signal", "no_candidates", "resolved"]),
   }),
   z.object({
     kind: z.literal("evaluated"),
+    reviewStatus: z.literal("rejected").optional(),
     assessmentId: assessmentChildHandle.optional(),
     answer: z.enum(["pick", "none"]),
     confidence,

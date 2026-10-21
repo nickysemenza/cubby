@@ -54,11 +54,12 @@ const savedRun = async (
   return row;
 };
 
-// Regression modes: an Addition above threshold publishes pending and then
-// applies only through the field.addition Automatic rule, as automatic
-// Feedback naming it, except its audit sample; low-confidence assignments
-// remain pending; paired decisions share provenance and never apply;
-// pause/resume checkpoints by unprocessed record and field.
+// Regression modes: an empty-field Addition above threshold publishes pending
+// and then applies only through the field.addition policy, as automatic
+// Feedback naming it, without a measured audit holdback; Corrections and
+// low-confidence assignments remain pending; paired decisions share
+// provenance and never apply; pause/resume checkpoints by unprocessed record
+// and field.
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
 
@@ -127,50 +128,35 @@ describe("persisted Suggestion sweeps", () => {
     expect(events.some((event) => event.authority === "member")).toBe(false);
   });
 
-  it("holds the audit sample pending and applies the other matches", async () => {
-    const [held, applied] = await Promise.all(
+  it("fills a measured-rule audit sample like every other empty-field match", async () => {
+    const [sampled, applied] = await Promise.all(
       ["Synthetic audited", "Synthetic unaudited"].map((name) =>
         productFixture(ctx, name),
       ),
     );
-    const heldId = await recordId(ctx.db, held!.id, "product");
+    const sampledId = await recordId(ctx.db, sampled!.id, "product");
     const started = await startSuggestionSweep(
       ctx.db,
       {
         entity: "product",
         fields: ["categoryId"],
-        filters: { ids: [held!.id, applied!.id] },
+        filters: { ids: [sampled!.id, applied!.id] },
       },
       {
         context: kernelCtx(ctx),
         ...categoryPorts(),
-        auditSample: (_family, subjectKey) => subjectKey.includes(heldId),
+        auditSample: (_family, subjectKey) => subjectKey.includes(sampledId),
       },
     );
     const rows = await runSuggestions(ctx.db, started.id);
-    expect(rows).toHaveLength(2);
-    const audit = rows.find((row) => row.recordId === heldId)!;
-    expect(audit).toMatchObject({
-      status: "pending",
-      data: expect.objectContaining({
-        auditSample: true,
-        matchedRules: [expect.stringMatching(/^field\.addition@/)],
-      }),
-    });
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(eq(feedback.assessmentId, audit.id)),
-    ).toEqual([]);
-    expect(rows.find((row) => row.recordId !== heldId)).toMatchObject({
-      status: "applied",
-      data: expect.objectContaining({ auditSample: false }),
-    });
-    expect(await productCategoryId(ctx.db, held!.id)).toBeNull();
-    expect(await productCategoryId(ctx.db, applied!.id)).toBe(
-      taxonomyId(SUGGESTED_CATEGORY),
-    );
+    expect(rows).toEqual([
+      expect.objectContaining({ status: "applied" }),
+      expect.objectContaining({ status: "applied" }),
+    ]);
+    for (const product of [sampled!, applied!])
+      expect(await productCategoryId(ctx.db, product.id)).toBe(
+        taxonomyId(SUGGESTED_CATEGORY),
+      );
   });
 
   it("checkpoints no-proposal targets by public id and field for filter-selected rows only", async () => {
@@ -360,7 +346,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(await runSuggestions(ctx.db, started.id)).toHaveLength(2);
   });
 
-  it("applies a high-confidence Correction and keeps a low-confidence Addition pending", async () => {
+  it("keeps a high-confidence Correction and a low-confidence Addition pending", async () => {
     const context = kernelCtx(ctx);
     const correction = await productFixture(ctx, "Synthetic corrected item", {
       categoryId: taxonomyId("tools"),
@@ -377,12 +363,12 @@ describe("persisted Suggestion sweeps", () => {
     expect(await runSuggestions(ctx.db, highRun.id)).toEqual([
       expect.objectContaining({
         kind: "correction",
-        status: "applied",
+        status: "pending",
         confidence: 0.97,
       }),
     ]);
     expect(await productCategoryId(ctx.db, correction.id)).toBe(
-      taxonomyId(SUGGESTED_CATEGORY),
+      taxonomyId("tools"),
     );
 
     const lowRun = await sweep(addition.id, 0.6);

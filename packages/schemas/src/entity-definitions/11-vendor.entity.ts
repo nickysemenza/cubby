@@ -207,9 +207,8 @@ export default defineEntity({
           kind: "select",
           suggest: {
             basis: ["name", "website", "notes"],
-            reviewRequired: true,
             rules: [
-              `Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Return a proposal only.`,
+              `Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Preserve existing decisions.`,
             ],
           },
           options: [
@@ -261,7 +260,6 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: {
             basis: ["name", "website", "notes", "spendingProfile"],
-            reviewRequired: true,
           },
         },
         display: {
@@ -292,11 +290,8 @@ export default defineEntity({
           kind: "select",
           suggest: {
             basis: ["name", "website", "notes"],
-            // The stored column reads blank under a value derived from order
-            // evidence, so a confident proposal must never auto-apply.
-            reviewRequired: true,
             rules: [
-              `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
+              `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Never overwrite explicit decisions or effective values derived from order evidence.`,
             ],
           },
           options: [

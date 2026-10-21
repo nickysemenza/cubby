@@ -5,7 +5,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { getDb } from "~/server/db/helpers";
@@ -24,7 +24,6 @@ import {
   reviewAssessment,
   reviewAssessmentBatch,
 } from "~/server/generic/assessment/repo/assessment-review";
-import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import {
   acceptSuggestion,
@@ -58,15 +57,6 @@ import {
 // the review queue.
 describe("Suggestion review", () => {
   const ctx = withTestDb();
-
-  // Manual review needs pending corrections even when confident assignments
-  // would otherwise be accepted by the enabled Automatic rule.
-  beforeEach(() =>
-    setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: "field.addition",
-      enabled: false,
-    }),
-  );
 
   const sweepCategories = async (productIds: string[]) =>
     (
@@ -769,7 +759,7 @@ describe("Suggestion review", () => {
     expect(saved?.spendingCategoryId).toBeNull();
   });
 
-  it("requires review for Vendor default categories with Expense history at either confidence", async () => {
+  it("fills an eligible Vendor default category with Expense history at 95% and keeps one below threshold reviewable", async () => {
     const context = kernelCtx(ctx);
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Synthetic vendor category",
@@ -793,7 +783,7 @@ describe("Suggestion review", () => {
       return suggestion("defaultSpendingCategoryId", {
         value: category.shortcode,
         label: category.name,
-        // The declared review requirement applies above and below the confidence threshold.
+        // Expense history only freshness-checks the proposal; confidence decides fill.
         probability: input.entityId === autoVendor.shortcode ? 0.95 : 0.7,
         financeReview: {
           entity: "vendor",
@@ -821,16 +811,16 @@ describe("Suggestion review", () => {
         .where(eq(vendorTable.id, id));
       return saved?.defaultSpendingCategoryId;
     };
-    expect(await vendorCategory(autoVendor.id)).toBeNull();
+    expect(await vendorCategory(autoVendor.id)).toBe(category.id);
     expect(await vendorCategory(reviewedVendor.id)).toBeNull();
 
     const pending = await listSuggestions(ctx.db, {
       runId: await runCode(ctx.db, started.id),
       minConfidence: 0,
     });
-    expect(pending.map(({ recordId }) => recordId).sort()).toEqual(
-      vendors.map(({ shortcode }) => shortcode).sort(),
-    );
+    expect(pending.map(({ recordId }) => recordId)).toEqual([
+      reviewedVendor.shortcode,
+    ]);
     for (const row of pending)
       await acceptSuggestion(ctx.db, context, { id: row.id });
     expect(await vendorCategory(autoVendor.id)).toBe(category.id);

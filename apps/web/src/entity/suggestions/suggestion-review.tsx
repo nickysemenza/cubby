@@ -14,7 +14,6 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Description } from "~/ui/primitives/description";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
-import { useRowActive } from "../../ui/data-table/row-activity";
 import { formatProbability, stringLabelOf } from "./field-suggestion";
 import { SuggestionBody } from "./suggestion-body";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
@@ -206,6 +205,7 @@ export function SuggestionReview({
   currentLabel,
   questionKey,
   pending,
+  checking,
   onApply,
   onDismiss,
   onUseDifferent,
@@ -226,6 +226,7 @@ export function SuggestionReview({
   currentLabel?: ReactNode;
   questionKey: string;
   pending?: boolean;
+  checking?: boolean;
   onApply: () => void | Promise<void>;
   onDismiss?: () => void | Promise<void>;
   /** Opens an editor whose saved value is recorded as this suggestion's Miss. */
@@ -258,25 +259,16 @@ export function SuggestionReview({
     pending,
     onDismiss,
   );
-  const rowActive = useRowActive();
   const markCurrentLabel = stringLabelOf(currentLabel);
   // Cleared the bar or not is a fact about the proposal itself, independent
   // of whether the person went on to reject it — a rejected-but-actionable
   // suggestion still reads "Suggested X", not "Leaning X … needs 85%".
-  const meetsBar = actionableSuggestion(suggestion, currentValue, alternative);
+  const meetsBar =
+    outcome?.reviewStatus !== "rejected" &&
+    actionableSuggestion(suggestion, currentValue, alternative);
   if (!meetsBar || dismissed) {
-    if (quiet) return <>{children}</>;
-    // A status-only mark (checking, unavailable, declined) is quiet on an idle
-    // table row; an actionable proposal below always shows. See row-activity.
-    if (surface === "cell" && !rowActive)
-      return (
-        <MarkedValue
-          surface={surface}
-          mark={<span aria-hidden className="size-5 shrink-0" />}
-        >
-          {children}
-        </MarkedValue>
-      );
+    if (quiet && surface !== "cell") return <>{children}</>;
+    if (currentValue?.trim() && !pending && !error) return <>{children}</>;
     return (
       <MarkedValue
         surface={surface}
@@ -293,6 +285,7 @@ export function SuggestionReview({
             dismissed={dismissed}
             prune={prune}
             pending={pending}
+            checking={checking}
             error={error}
           />
         }
