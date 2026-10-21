@@ -2,3 +2,6 @@
 # before build, typecheck and test). These remaining ones are committed.
 **/drizzle/meta/*.json linguist-generated
 **/migrations/meta/*.json linguist-generated
+
+# Full schema snapshots are generation inputs, not useful line diffs.
+**/drizzle/meta/*_snapshot.json -diff

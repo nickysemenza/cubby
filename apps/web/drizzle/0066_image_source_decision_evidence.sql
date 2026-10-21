@@ -1,1 +1,0 @@
-ALTER TABLE "Image" ADD COLUMN "sourceEvidence" jsonb;

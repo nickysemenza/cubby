@@ -1,1 +1,0 @@
-ALTER TABLE "Purchase" ADD CONSTRAINT "Purchase_spendingCategoryOrigin_check" CHECK ("Purchase"."spendingCategoryOrigin" IN ('legacy', 'manual', 'source'));

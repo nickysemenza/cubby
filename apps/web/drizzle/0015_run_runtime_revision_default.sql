@@ -1,1 +1,0 @@
-ALTER TABLE "Run" ALTER COLUMN "runtimeRevision" SET DEFAULT 'pi-durable@1';

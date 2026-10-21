@@ -1,1 +1,0 @@
-CREATE INDEX "Expense_bookingTransactionCode_idx" ON "Expense" USING btree ("bookingTransactionCode");

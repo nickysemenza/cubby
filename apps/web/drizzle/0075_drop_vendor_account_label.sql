@@ -1,1 +1,0 @@
-ALTER TABLE "VendorAccount" DROP COLUMN "label";

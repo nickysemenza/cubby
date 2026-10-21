@@ -1,1 +1,0 @@
-ALTER TABLE "ImageProcessingJob" DROP COLUMN "publicId";
