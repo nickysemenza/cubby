@@ -5,6 +5,36 @@ import { settleDecisionWork } from "./decision-work-batch";
 // Failure modes: waiting on a model holds a preparation slot and deadlocks the
 // batch; a skipped/failed item blocks siblings; dependent decisions never flush.
 describe("finite decision work", () => {
+  it("rejects a late sibling ask after failure without reviving its owner", async () => {
+    const gate = Promise.withResolvers<void>();
+    const sent: number[] = [];
+    const results = await settleDecisionWork<number, number, number, number>(
+      [0, 1],
+      async (item, ask) => {
+        if (item === 0) {
+          const siblings = await Promise.all([
+            Promise.reject(new Error("synthetic failed target")),
+            gate.promise.then(() => ask(99)),
+          ]);
+          return siblings[1]!;
+        }
+        const first = await ask(1);
+        gate.resolve();
+        const second = await ask(first + 1);
+        return ask(second + 1);
+      },
+      async (questions) => {
+        sent.push(...questions);
+        return questions.map((value) => ({ status: "fulfilled", value }));
+      },
+      2,
+    );
+    expect(results).toEqual([
+      { status: "rejected", reason: new Error("synthetic failed target") },
+      { status: "fulfilled", value: 3 },
+    ]);
+    expect(sent).toEqual([1, 2, 3]);
+  });
   it("resumes simultaneous asks once per owner without stranding later waves", async () => {
     const results = await settleDecisionWork<number, number, number, number>(
       [1, 2, 3, 4, 5, 6],

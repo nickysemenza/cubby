@@ -8,10 +8,7 @@ import type {
   SettledSuggestionQuestionsInput,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
-import {
-  FIELD_SUGGESTIONS_BATCH_MAX,
-  SETTLED_SUGGESTION_QUESTION_MAX,
-} from "@cubby/schemas/ai";
+import { SETTLED_SUGGESTION_QUESTION_MAX } from "@cubby/schemas/ai";
 import type {
   AssessmentReviewBatchOut,
   AssessmentReviewOut,
@@ -968,12 +965,12 @@ function useSettledQuestions(
   latest.current = { operations, scheduler };
   const [batcher] = useState(() =>
     createRequestBatcher<SettledSuggestionQuestion, SettledSuggestionAnswer>(
-      (questions, signal) =>
-        latest.current.scheduler.run(
-          () => latest.current.operations.settled({ entity, questions }),
-          signal,
-        ),
-      { max: SETTLED_SUGGESTION_QUESTION_MAX, concurrency: 1 },
+      (questions) => latest.current.operations.settled({ entity, questions }),
+      {
+        max: SETTLED_SUGGESTION_QUESTION_MAX,
+        concurrency: 1,
+        admit: (work, signal) => latest.current.scheduler.run(work, signal),
+      },
     ),
   );
   const questions = new Map<string, SettledSuggestionQuestion>();
@@ -1185,29 +1182,21 @@ function BoundRecordSuggestions({
   const scheduler = parentScheduler ?? ownScheduler;
   const latestBatch = useRef({ operations, scheduler });
   latestBatch.current = { operations, scheduler };
-  const [liveBatcher] = useState(() =>
-    createRequestBatcher<FieldSuggestionSource, FieldSuggestionsOut>(
-      async (items, signal) => {
-        const batch = latestBatch.current.operations.suggestFieldsBatch;
-        if (!batch) throw new Error("Suggestion batch transport unavailable");
-        return batch.call(
-          {
-            items: items.map((item) => ({
-              ...item,
-              targets: [...item.targets],
-            })),
-          },
-          { signal, batch: false },
-        );
-      },
-      {
-        max: FIELD_SUGGESTIONS_BATCH_MAX,
-        concurrency: 1,
-        admit: (work, signal) =>
-          latestBatch.current.scheduler.run(work, signal),
-      },
-    ),
-  );
+  const liveBatcher = useRef<Promise<
+    ReturnType<
+      typeof import("./record-suggestion-batch").createRecordSuggestionBatch
+    >
+  > | null>(null);
+  const loadLiveSuggestion = (
+    source: FieldSuggestionSource,
+    signal: AbortSignal,
+  ) => {
+    liveBatcher.current ??= import("./record-suggestion-batch").then(
+      ({ createRecordSuggestionBatch }) =>
+        createRecordSuggestionBatch(() => latestBatch.current),
+    );
+    return liveBatcher.current.then((batcher) => batcher.load(source, signal));
+  };
   const financeApply = useFinanceCategoryApply(operations);
   const update = useEntityCommands(entity, { mutationPort });
   const [correctionRecord, setCorrectionRecord] =
@@ -1359,7 +1348,7 @@ function BoundRecordSuggestions({
       ...operations.suggestFields.queryOptions(source),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         operations.suggestFieldsBatch
-          ? liveBatcher.load(source, signal)
+          ? loadLiveSuggestion(source, signal)
           : scheduler.run(
               () => operations.suggestFields.call(source, { signal }),
               signal,

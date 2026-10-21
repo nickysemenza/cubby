@@ -99,6 +99,10 @@ export async function settleDecisionWork<T, Q, A, V>(
       owner.ready.push(() => {
         const ask = (question: Q) =>
           new Promise<A>((answer, fail) => {
+            if (owner.phase === "done") {
+              fail(new Error("Decision work item has already settled"));
+              return;
+            }
             if (owner.phase === "running") active--;
             owner.phase = "waiting";
             owner.pending++;
