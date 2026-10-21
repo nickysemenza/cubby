@@ -89,7 +89,9 @@ belongs to the Workflow instance, so a new `step.do` alone does not reset it
 Statement Sweeps also bound generation and label page sizes. The driver owns
 those executable bounds; continuation retains the RunStep cursors and the
 attempt/cancellation fences instead of starting generation over.
-The shared `WORKFLOW_EXECUTION_LIMITS` policy configures a four-million
+`packages/shared/src/workflow-platform-limits.json` owns the platform allowance.
+Deployment config reads its bytes; the runtime `WORKFLOW_EXECUTION_LIMITS`
+policy imports it to size application paths. The policy configures a four-million
 subrequest allowance, 512 suggestions / 1,024 new questions per model page,
 three batch attempts and a 500-page hard ceiling. Model pages spend 1/65 and
 database-only pages 1/400 of one shared allowance across all phases. Generation

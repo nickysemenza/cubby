@@ -7,7 +7,7 @@ import {
 } from "cf/config";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
+import { z } from "zod";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
 
@@ -16,6 +16,22 @@ type WorkflowDefinition = {
   worker: string;
   exportName: string;
 };
+
+// Read shared data as bytes: importing runtime modules here makes Cloudflare's
+// Vite plugin deny them to the Worker module loader.
+const workflowPlatformLimits = z
+  .object({ subrequests: z.number().int().positive() })
+  .parse(
+    JSON.parse(
+      readFileSync(
+        new URL(
+          "../../packages/shared/src/workflow-platform-limits.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ),
+  );
 
 const RUN_WORKFLOWS: Record<
   "AI_REFRESH" | "MAIL_DISCOVERY" | "STEP_RUN",
@@ -42,7 +58,7 @@ export const productionWorker = defineWorker({
   },
   limits: {
     cpuMs: 45000,
-    subrequests: WORKFLOW_EXECUTION_LIMITS.subrequests,
+    subrequests: workflowPlatformLimits.subrequests,
   },
   observability: {
     enabled: true,

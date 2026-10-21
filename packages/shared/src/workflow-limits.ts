@@ -1,8 +1,10 @@
+import platformLimits from "./workflow-platform-limits.json" with { type: "json" };
+
 // Static application-path sizing, not a meter of platform subrequest usage.
 // Workflow subrequests are configurable up to ten million (checked 2026-10-20).
 // https://developers.cloudflare.com/workflows/reference/limits/
 // Keep headroom for bookkeeping, successor dispatch and failure recovery.
-const subrequests = 4_000_000;
+const { subrequests } = platformLimits;
 const reservedSubrequests = 800_000;
 const maxDecisionQuestionsPerPage = 1_024;
 const pageAttempts = 3;
