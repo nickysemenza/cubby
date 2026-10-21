@@ -184,7 +184,8 @@ A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
 browser, database, and Worker harness; only `workerdProfile` may split
-workers (`tooling/e2e-worker-pool.unit.test.ts`). Each split costs a shard a
+workers. Review fixture options directly rather than policing source spelling
+with a test. Each split costs a shard a
 worker restart, so a signed-out spec uses the test-scoped
 `test.use({ signedIn: false })`, and Gmail specs are named `gmail.*.spec.ts`
 so the one-worker `Gmail profile tests` project runs them together at the start
