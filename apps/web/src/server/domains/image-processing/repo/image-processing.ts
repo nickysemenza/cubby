@@ -1556,8 +1556,7 @@ export async function getImageProcessingReadProjection(
         notDeleted(aiAnalysis),
       ),
     )
-    .orderBy(desc(aiAnalysis.createdAt))
-    .limit(20);
+    .orderBy(desc(aiAnalysis.createdAt));
   const toAnalysis = (entry: (typeof history)[number]) => {
     const result = imageDescriptionResult.safeParse(entry.result);
     const promptRevision = Number(entry.promptVersion);
@@ -1579,10 +1578,13 @@ export async function getImageProcessingReadProjection(
       preferred: false,
     };
   };
-  const analyses = history.flatMap((entry) => {
-    const parsed = toAnalysis(entry);
-    return parsed ? [parsed] : [];
+  const candidates = history.flatMap((entry, rawIndex) => {
+    const analysis = toAnalysis(entry);
+    return analysis ? [{ rawIndex, analysis }] : [];
   });
+  const analyses = candidates
+    .filter((entry) => entry.rawIndex < 20)
+    .map((entry) => entry.analysis);
   const isPreferred = (entry: (typeof analyses)[number]) => {
     const fingerprint = parseImageDescriptionInputFingerprint(
       entry.inputFingerprint,
@@ -1599,30 +1601,7 @@ export async function getImageProcessingReadProjection(
     );
   };
   // Bounded history must not hide the preferred or available current-source result.
-  const currentCandidates = await getDb(db)
-    .select({
-      provider: aiAnalysis.provider,
-      model: aiAnalysis.model,
-      promptVersion: aiAnalysis.promptVersion,
-      resultSchemaRevision: aiAnalysis.resultSchemaRevision,
-      inputFingerprint: aiAnalysis.inputFingerprint,
-      result: aiAnalysis.result,
-      runtime: aiAnalysis.runtime,
-      createdAt: aiAnalysis.createdAt,
-    })
-    .from(aiAnalysis)
-    .where(
-      and(
-        eq(aiAnalysis.entityKind, "image"),
-        eq(aiAnalysis.entityId, imageId),
-        eq(aiAnalysis.feature, "image-description"),
-        notDeleted(aiAnalysis),
-      ),
-    )
-    .orderBy(desc(aiAnalysis.createdAt));
-  const available = currentCandidates
-    .map((entry) => toAnalysis(entry))
-    .filter((entry) => entry !== null);
+  const available = candidates.map((entry) => entry.analysis);
   const currentPreferred =
     available.find(isPreferred) ??
     available.find(

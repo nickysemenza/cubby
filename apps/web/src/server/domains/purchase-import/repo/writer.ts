@@ -90,11 +90,6 @@ import { validateProductPolicy } from "~/server/generic/inheritance/repo/inherit
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
-  aggregateReplacementApprovalFingerprint,
-  loadAggregateReplacementSnapshot,
-  redistributeReplacementAttributions,
-} from "./aggregate-replacement";
-import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
@@ -1527,8 +1522,11 @@ export async function importVendorOrder(
           ),
         )
         .for("update");
-      const current = await existingExpenses(tx, target.id);
-      const decision = decideLineWrite(current, candidate.lines);
+    }
+    const current =
+      target && !identityOnly ? await existingExpenses(tx, target.id) : [];
+    const decision = decideLineWrite(current, candidate.lines);
+    if (target && !identityOnly) {
       const [priorSourceOrder] =
         decision.kind === "no_op"
           ? await tx
@@ -1701,7 +1699,6 @@ export async function importVendorOrder(
     const productLines: NonNullable<
       ImportSourceAssociationInput["productBindings"]
     >[number][] = [];
-    let replacementExpenseId: string | null = null;
     const rowMutations: Array<{
       targetKind: "expense" | "product";
       targetId: string;
@@ -1759,7 +1756,6 @@ export async function importVendorOrder(
         : "Imported order requires review.";
     // An identified Purchase retains its original candidate before incomplete
     // pricing or dates can support canonical Expense rows.
-    const lines = identityOnly ? [] : candidate.lines;
     if (identityOnly) {
       const productsByExternalIdentity = new Map<string, string>();
       for (const [lineIndex, line] of candidate.lines.entries()) {
@@ -1858,44 +1854,9 @@ export async function importVendorOrder(
         ),
       );
     } else {
-      const current = await existingExpenses(tx, purchaseId);
-      const decision = decideLineWrite(current, lines);
-      if (decision.kind === "conflict") {
-        // A fresh accepted original can support existing Product lines without
-        // repeating financial lines or changing the first source snapshot.
-        for (const resolution of explicitResolutions) {
-          if (
-            resolution.kind === "existing" &&
-            candidate.lines[resolution.lineIndex]?.lineKind === "principal" &&
-            current.some(
-              (line) =>
-                line.lineKind === "principal" &&
-                line.productId === resolution.productId,
-            )
-          )
-            productLines.push({
-              lineIndex: resolution.lineIndex,
-              productId: parseEntityId("product", resolution.productId),
-            });
-        }
-        findingIds.push(
-          await fileFinding(
-            tx,
-            input,
-            purchaseId,
-            "duplicate_lines",
-            "Existing purchase lines are not the single replaceable aggregate shape.",
-            null,
-          ),
-        );
-      } else if (decision.kind === "review_aggregate") {
-        // `decideLineWrite` offers only an unclaimed lone productless line
-        // whose amount equals the extracted total; lines an import already
-        // claimed are never replaceable.
-        replacementExpenseId = decision.aggregate.id;
-      } else if (decision.kind === "no_op") {
+      if (decision.kind === "no_op") {
         const productsByExternalIdentity = new Map<string, string>();
-        for (const [lineIndex, line] of lines.entries()) {
+        for (const [lineIndex, line] of candidate.lines.entries()) {
           const identity = identityDecisions[lineIndex];
           if (!identity || identity.lineKind !== "principal") continue;
           if (identity.unresolvedReason) {
@@ -2197,48 +2158,6 @@ export async function importVendorOrder(
           runId: runEntityId.parse(input.runId),
         }),
       });
-    }
-    if (replacementExpenseId) {
-      const reviewedIdentities = identityDecisions.map((decision) => ({
-        ...decision,
-        expenseOnly: decision.expenseOnly ?? false,
-      }));
-      const preview = await loadAggregateReplacementSnapshot(
-        tx,
-        purchaseId,
-        replacementExpenseId,
-      );
-      const reviewedLineAttributions =
-        await redistributeReplacementAttributions(
-          tx,
-          preview.allocations,
-          lines,
-        );
-      findingIds.push(
-        await fileFinding(
-          tx,
-          input,
-          purchaseId,
-          "duplicate_lines",
-          "Review replacing the recorded aggregate with these receipt lines. The preview preserves category, project, notes and each party's exact cents.",
-          {
-            kind: "replace_aggregate_line",
-            purchaseId,
-            lines,
-            reviewSnapshot: {
-              ...preview.snapshot,
-              fingerprint: await aggregateReplacementApprovalFingerprint(
-                preview.snapshot.fingerprint,
-                lines,
-                reviewedIdentities,
-                reviewedLineAttributions,
-              ),
-            },
-            reviewedLineIdentities: reviewedIdentities,
-            reviewedLineAttributions,
-          },
-        ),
-      );
     }
     await recordRunWrites(
       tx,

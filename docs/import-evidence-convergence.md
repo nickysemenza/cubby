@@ -244,9 +244,15 @@ original hash. A different trailing mask, an unpositioned row, or a suffixless
 pre-change name still raises the immutable-evidence conflict on replay.
 
 Retailer preparation can explicitly target an orderless Purchase. Receipt
-itemization proposes a replacement finding with original lines, proposed
-identities, and exact beneficiary/funder amounts. Approval binds the full
-proposal and original graph; changed proposals or edited originals fail.
+itemization that changes recorded lines proposes `reconcile_source_order`
+before accepting its headers, attachments, Product bindings or payments. The
+writer carries one locked line-admission decision and Expense snapshot through
+ordinary line writes; a new Purchase is admitted from an empty snapshot.
+The existing source-reconciliation review owns replacement proposals with
+original lines, proposed identities, and exact beneficiary/funder amounts.
+Approval binds the full proposal and original graph; changed proposals or
+edited originals fail. Historical stored `replace_aggregate_line` approvals
+remain applicable through their existing reviewed-snapshot consumer.
 Photo groups remain editable and require approval before Product and inventory
 writes. Imported source claims alone do not establish reviewed itemization.
 
