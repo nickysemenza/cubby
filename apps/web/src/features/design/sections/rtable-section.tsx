@@ -1,6 +1,12 @@
 import { capitalize } from "@cubby/shared";
 import type { RowSelectionState } from "@tanstack/react-table";
-import { useCallback, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   createCurrencyColumn,
@@ -14,6 +20,8 @@ import {
 } from "~/entity/table/column-helpers";
 import { EditableCell } from "~/entity/table/editable-cell";
 import RTable from "~/entity/table/table";
+import { formatCurrency } from "~/lib/number-format";
+import { Picker } from "~/ui/combobox/picker";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { numberCellData, specFromCellData } from "~/ui/data-table/cell-data";
@@ -26,7 +34,8 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
-import { Stack } from "~/ui/layout";
+import { CellBar, CellSparkline } from "~/ui/data-table/visuals/cell-visual";
+import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import {
@@ -60,9 +69,61 @@ function domainSections(rows: readonly DemoProduct[]) {
   return { sorted, groupConfig: { choice: DOMAIN_GROUP_CHOICE, groups } };
 }
 
+// Memoized table rows retain their cell closures; context updates presentation
+// without replacing columns or discarding row selection and edits.
+const CellPresentation = createContext(true);
+
+const PRESENTATIONS = [
+  { value: "visual", label: "Visual cells" },
+  { value: "plain", label: "Plain values" },
+];
+
+// Fixed synthetic evidence, independent of ordering, grouping, and edits.
+const gridEvidence = new Map(
+  demoProducts.map((row, index) => [
+    row.id,
+    {
+      target: [4, 2, 6, 3][index % 4] ?? 4,
+      previousPrice:
+        index % 5 === 0
+          ? null
+          : row.price === null
+            ? null
+            : Math.round(row.price * ([0.9, 1.1, 1][index % 3] ?? 1) * 100) /
+              100,
+      history: [1, 0.85, null, 0.95, 1.05, 1].map((factor) =>
+        factor === null || row.price === null
+          ? null
+          : Math.round(row.price * factor * 100) / 100,
+      ),
+    },
+  ]),
+);
+const stockMaximum = Math.max(1, ...demoProducts.map((row) => row.onHand));
+const priceMaximum = Math.max(
+  1,
+  ...[...gridEvidence.values()].flatMap((item) =>
+    item.history.filter((value) => value !== null),
+  ),
+);
+const historyMonths = ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+
+const coverageValue = (row: DemoProduct) => {
+  const target = gridEvidence.get(row.id)?.target;
+  return target === undefined ? null : row.onHand / target;
+};
+const priceChangeValue = (row: DemoProduct) => {
+  const previous = gridEvidence.get(row.id)?.previousPrice;
+  return row.price === null || previous == null ? null : row.price - previous;
+};
+const priceHistoryValue = (row: DemoProduct) =>
+  gridEvidence.get(row.id)?.history.at(-1) ?? null;
+
 export function RTableSection() {
   const [rows, setRows] = useState(demoProducts);
   const [grouped, setGrouped] = useState(false);
+  const [presentation, setPresentation] = useState("visual");
+  const visual = presentation === "visual";
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [executing, setExecuting] = useState<BulkAction<DemoProduct> | null>(
     null,
@@ -131,26 +192,45 @@ export function RTableSection() {
             id: "onHand",
             header: "On hand",
             meta: attachCubbyColumnMeta<DemoProduct>({
-              className: "w-20",
+              className: "w-28",
               numeric: true,
               mono: true,
               cellData: onHandData,
             }),
-            cell: ({ row, getValue }) => (
-              <EditableCell
-                value={getValue()}
-                onSave={(onHand) =>
-                  update(row.original.id, { onHand: onHand ?? 0 })
-                }
-                clipboard={specFromCellData(onHandData, row.original)}
-                config={{ type: "number", step: "1" }}
-                renderValue={(value) => (
-                  <span className={value === 0 ? "text-warning" : undefined}>
-                    {value ?? "—"}
-                  </span>
-                )}
-              />
-            ),
+            cell: function OnHandCell({ row, getValue }) {
+              const visual = useContext(CellPresentation);
+              const value = getValue();
+              const editor = (
+                <EditableCell
+                  value={value}
+                  onSave={(onHand) =>
+                    update(row.original.id, { onHand: onHand ?? 0 })
+                  }
+                  clipboard={specFromCellData(onHandData, row.original)}
+                  config={{ type: "number", step: "1" }}
+                  renderValue={(current) => (
+                    <span
+                      className={current === 0 ? "text-warning" : undefined}
+                    >
+                      {current ?? "—"}
+                    </span>
+                  )}
+                />
+              );
+              return (
+                <CellBar
+                  value={visual ? value : null}
+                  maximum={stockMaximum}
+                  label={
+                    visual
+                      ? `On hand: ${value}; fixed scale 0–${stockMaximum}; bar capped at maximum`
+                      : `On hand: ${value}`
+                  }
+                >
+                  {editor}
+                </CellBar>
+              );
+            },
           }),
         );
         add(
@@ -158,6 +238,100 @@ export function RTableSection() {
             header: "Price",
             className: "w-24",
             editable: { onSave: (price, row) => update(row.id, { price }) },
+          }),
+        );
+        add(
+          helper.accessor(coverageValue, {
+            id: "coverage",
+            header: "Stock / target",
+            meta: attachCubbyColumnMeta<DemoProduct>({
+              className: "w-32",
+              numeric: true,
+              mono: true,
+              cellData: numberCellData("number", coverageValue),
+            }),
+            cell: function CoverageCell({ row }) {
+              const visual = useContext(CellPresentation);
+              const target = gridEvidence.get(row.original.id)?.target;
+              if (target === undefined) return "—";
+              const value = row.original.onHand;
+              const label = `${value} / ${target}`;
+              return visual ? (
+                <CellBar
+                  value={value}
+                  maximum={target}
+                  label={`${label} units; illustrative stock target; bar capped at 100%`}
+                >
+                  <span className="text-muted-foreground">{label}</span>
+                </CellBar>
+              ) : (
+                <span className="text-muted-foreground">{label}</span>
+              );
+            },
+          }),
+        );
+        add(
+          helper.accessor(priceChangeValue, {
+            id: "priceChange",
+            header: "Price change",
+            meta: attachCubbyColumnMeta<DemoProduct>({
+              className: "w-28",
+              numeric: true,
+              mono: true,
+              cellData: numberCellData("currency", priceChangeValue),
+            }),
+            cell: function PriceChangeCell({ getValue }) {
+              const delta = getValue();
+              if (delta === null)
+                return <span className="text-muted-foreground">—</span>;
+              return (
+                <span
+                  title="Current price minus previous observed price"
+                  className="text-muted-foreground"
+                >
+                  {delta > 0 ? "+" : ""}
+                  {formatCurrency(delta)}
+                </span>
+              );
+            },
+          }),
+        );
+        add(
+          helper.accessor(priceHistoryValue, {
+            id: "priceHistory",
+            header: "May–Oct price",
+            meta: attachCubbyColumnMeta<DemoProduct>({
+              className: "w-44",
+              numeric: true,
+              mono: true,
+              cellData: numberCellData("currency", priceHistoryValue),
+            }),
+            cell: function PriceHistoryCell({ row, getValue }) {
+              const visual = useContext(CellPresentation);
+              const history = gridEvidence.get(row.original.id)?.history ?? [];
+              const label = history
+                .map(
+                  (value, index) =>
+                    `${historyMonths[index]}: ${value === null ? "unknown" : formatCurrency(value)}`,
+                )
+                .join("; ");
+              const value = getValue();
+              const text = value === null ? "—" : formatCurrency(value);
+              return visual ? (
+                <CellSparkline
+                  samples={history}
+                  minimum={0}
+                  maximum={priceMaximum}
+                  label={label}
+                >
+                  <span className="text-muted-foreground">{text}</span>
+                </CellSparkline>
+              ) : (
+                <span className="text-muted-foreground" title={label}>
+                  {text}
+                </span>
+              );
+            },
           }),
         );
         add(
@@ -176,6 +350,11 @@ export function RTableSection() {
 
   const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
+    initialColumnVisibility: {
+      location: false,
+      purchasedOn: false,
+      updatedAt: false,
+    },
   });
   const table = useCubbyTable({
     data: grouping?.sorted ?? rows,
@@ -220,48 +399,71 @@ export function RTableSection() {
   ];
 
   return (
-    <Stack gap="md">
-      <p className="text-xs text-muted-foreground">
-        Production lists reach RTable through <code>ListWorkbench</code> and the
-        entity manifest; this one is built directly over synthetic rows. Click a
-        cell to edit (changes stay on this page), drag across cells to select a
-        range and copy or paste it, tick rows for bulk actions, resize or
-        reorder columns from the Columns menu, and group by domain.
-      </p>
-      <RTable
-        table={table}
-        ariaLabel="Synthetic pantry products"
-        embedded
-        showColumnMenu
-        showCellSelectionStats
-        groupConfig={grouping?.groupConfig}
-        additionalToolbarContent={
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-pressed={grouped}
-            onClick={() => setGrouped((value) => !value)}
-          >
-            Group by domain
-          </Button>
-        }
-        bulkActionBar={
-          <BulkActionBar
-            selectedCount={selectedRows.length}
-            selectedRows={selectedRows}
-            actions={actions}
-            onExecute={async (action, selected) => {
-              setExecuting(action);
-              await action.onExecute(selected);
-              setExecuting(null);
-            }}
-            onClearSelection={() => setRowSelection({})}
-            isExecuting={executing !== null}
-            currentAction={executing}
+    <CellPresentation.Provider value={visual}>
+      <Stack gap="md">
+        <p className="text-xs text-muted-foreground">
+          Production lists reach RTable through <code>ListWorkbench</code> and
+          the entity manifest; this one is built directly over synthetic rows.
+          Double-click a cell or press Enter to edit (changes stay on this
+          page), drag across cells to select a range and copy or paste it, tick
+          rows for bulk actions, resize or reorder columns from the Columns
+          menu, and group by domain.
+        </p>
+        <Row align="center" gap="md" wrap>
+          <Picker
+            mode="segmented"
+            label="Cell presentation"
+            options={PRESENTATIONS}
+            value={presentation}
+            onValueChange={(value) => setPresentation(value ?? "visual")}
           />
-        }
-        emptyState="No synthetic products."
-      />
-    </Stack>
+          <p className="text-xs text-muted-foreground">
+            Fixed scales: stock 0–{stockMaximum}, prices {formatCurrency(0)}–
+            {formatCurrency(priceMaximum)}, May–Oct 2026.
+          </p>
+        </Row>
+        <p className="text-xs text-muted-foreground">
+          Histories and stock targets are illustrative. Gaps mean unknown; price
+          changes show direction, not good or bad. Edit On hand to compare the
+          magnitude and target bars. History stays fixed when the current price
+          changes. Presentation changes stay on this page; production
+          declarations and saved views are not connected.
+        </p>
+        <RTable
+          table={table}
+          ariaLabel="Synthetic pantry products"
+          embedded
+          showColumnMenu
+          showCellSelectionStats
+          groupConfig={grouping?.groupConfig}
+          additionalToolbarContent={
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={grouped}
+              onClick={() => setGrouped((value) => !value)}
+            >
+              Group by domain
+            </Button>
+          }
+          bulkActionBar={
+            <BulkActionBar
+              selectedCount={selectedRows.length}
+              selectedRows={selectedRows}
+              actions={actions}
+              onExecute={async (action, selected) => {
+                setExecuting(action);
+                await action.onExecute(selected);
+                setExecuting(null);
+              }}
+              onClearSelection={() => setRowSelection({})}
+              isExecuting={executing !== null}
+              currentAction={executing}
+            />
+          }
+          emptyState="No synthetic products."
+        />
+      </Stack>
+    </CellPresentation.Provider>
   );
 }

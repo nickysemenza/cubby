@@ -6,7 +6,7 @@ import { expect, test } from "./support/e2e-test";
 // their local state.
 test("design showcase renders every section and its live demos", async ({
   page,
-}) => {
+}, testInfo) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
@@ -60,11 +60,44 @@ test("design showcase renders every section and its live demos", async ({
   // Oat milk starts with 2 on hand; the bulk action writes page state only.
   const table = page.locator("#rtable");
   const oatMilk = table.getByRole("row", { name: /Oat milk/ });
+  // Visuals must preserve the actual values and editing; gaps cannot invent
+  // observations, and switching presentation must retain edited row state.
+  await expect(oatMilk.getByRole("cell", { name: /^2 \/ 4/ })).toBeVisible();
+  await expect(
+    oatMilk.locator("svg[viewBox='0 0 80 20'] path"),
+  ).toHaveAttribute("d", /M[^M]*L[^M]*M[^M]*L/);
+  await expect(oatMilk.getByText(/Jul: unknown/)).toHaveCount(1);
+  await table
+    .getByRole("button", { name: "Plain values", exact: true })
+    .click();
+  await expect(oatMilk.getByText(/Jul: unknown/)).toHaveCount(0);
+  await expect(oatMilk.getByRole("cell", { name: /^2 \/ 4/ })).toBeVisible();
+  await table
+    .getByRole("button", { name: "Visual cells", exact: true })
+    .click();
   await oatMilk.getByRole("checkbox").check();
   await table.getByRole("button", { name: "Mark restocked" }).click();
   await expect(
-    oatMilk.getByRole("cell", { name: "3", exact: true }),
+    oatMilk.getByRole("button", { name: "3", exact: true }),
   ).toBeVisible();
+  await expect(oatMilk.getByRole("cell", { name: /^3 \/ 4/ })).toBeVisible();
+  await table.screenshot({ path: testInfo.outputPath("rtable-desktop.png") });
+  const desktop = page.viewportSize();
+  await page.setViewportSize({ width: 402, height: 900 });
+  await expect
+    .poll(() =>
+      table.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return (
+          bounds.left >= 0 &&
+          bounds.right <= window.innerWidth &&
+          element.scrollWidth <= element.clientWidth
+        );
+      }),
+    )
+    .toBe(true);
+  await table.screenshot({ path: testInfo.outputPath("rtable-phone.png") });
+  if (desktop) await page.setViewportSize(desktop);
 
   await page
     .getByRole("button", { name: "Search demo actions", exact: true })
