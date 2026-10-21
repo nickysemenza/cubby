@@ -10,8 +10,9 @@ accessible without a view switch. Select a section hash to verify scrolling,
 focus and history; empty sections retain headings, index entries and actions.
 When adding editable fields, complete editor-test record baselines, including
 nullable output projections, and run the untouched-submit regression: an absent
-baseline can make an untouched form appear changed. After changing
-any test fixture or query, use the web `typecheck` command: `typecheck:app`
+baseline can make an untouched form appear changed. Run the web `typecheck`
+command after the final test fixture or query edit, even when its runtime test
+passes; an earlier check does not cover later test repairs. `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
