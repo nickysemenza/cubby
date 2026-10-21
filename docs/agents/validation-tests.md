@@ -347,8 +347,8 @@ the full optional preview command. Auxiliary uploads its JSON report and browser
 failure attachments (`.vitest/attachments/`) before Worker tests can overwrite
 the shared report.
 
-Shared list, table, card and detail presentation capabilities have one owner
-here: populated/empty/loading states, responsive layout, overflow, focus and
+Shared list, table, card, detail and photo-review presentation capabilities have
+one owner here: populated/empty/loading states, responsive layout, overflow, focus and
 interaction state. Use actual declarations, column modules and renderers with
 schema-valid responses through their existing operation seam. Record outbound
 requests; do not implement a second filter engine. A capability matrix replaces
@@ -359,7 +359,11 @@ Keep server inclusion/exclusion, full-filter totals and stored effects at the
 real HTTP or PostgreSQL boundary. Keep a small real browser composition suite
 for navigation/history, actual inspectors, grouped/nested loading and retry,
 asset rendering and consequential edits. Component responses cannot establish
-those contracts. When moving coverage, name the retained owner or the deliberate
+those contracts. Photo-review candidate strength, failure/retry and approval
+availability use the real review renderer with schema-valid responses; proposal
+mutation/inference rules stay in PostgreSQL coverage, and approval, stock
+receiving, variant merges and Expense linking retain real browser journeys.
+When moving coverage, name the retained owner or the deliberate
 coverage tradeoff in the deleting commit. Use the `ui` jsdom tier for a distinct
 failure that does not need native browser behavior; avoid duplicating the same
 shared capability in both tiers.
