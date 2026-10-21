@@ -2109,10 +2109,14 @@ pending statement suggestions per page. Apply always revalidates authoritative
 statement evidence, so delayed retirement cannot authorize a stale action.
 Connection retirement similarly scans at most 16 pending Assessments per page,
 including guarded field suggestions, against the shared input revision. It
+owns guarded connection evidence exclusively; generic field retirement must not
+treat a missing generic live-input fingerprint as stale connection evidence. It
 finishes an epoch before restarting for newer edits and fences status updates
 against intervening input or review changes. Preparation runs outside publication
 locks and retains only candidate/version projections, not stored basis snapshots.
-Connection retirement and the ordinary refresh frontier each advance before the
+The epoch also includes the household date; pending date-dependent Project-tool
+evidence schedules a wake at the next household day boundary even without a write.
+Both retirement scans and the ordinary refresh frontier advance before the
 driver continues, so continuous edits cannot starve projection work.
 The projection frontier completes before recipe or embedding providers are
 consulted. Provider backoff therefore cannot block new queue-driven projection

@@ -8,6 +8,7 @@ import { derivedRefreshWork, searchDocument } from "~/server/db/schema";
 import type { StepRunOwner } from "~/server/domains/run/repo/run-step";
 import type { StepContext } from "~/server/domains/run/service/step-run";
 import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/repo/refresh-ports.boundary";
+import * as statementRetirement from "~/server/generic/derived-refresh/repo/statement-retirement";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -91,6 +92,45 @@ describe("derived refresh driver fairness", () => {
       );
       expect(page.kind).toBe("progress");
     } finally {
+      queue.restore();
+    }
+  });
+  it("advances ordinary projections while statement retirement remains unfinished", async () => {
+    const queue = captureBackgroundQueue();
+    const statements = vi
+      .spyOn(statementRetirement, "processStatementRetirementPage")
+      .mockResolvedValue({ done: false, processed: 100 });
+    try {
+      const subject = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic retirement fairness" }),
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .delete(searchDocument)
+        .where(eq(searchDocument.entityId, subject.entityId));
+      const [driver] = await derivedRefreshDrivers(
+        ctx.db,
+        fromPartial<StepRunOwner>({}),
+      );
+      if (!driver) throw new Error("Derived refresh driver missing");
+      let title: string | undefined;
+      for (let page = 0; page < 10 && title === undefined; page++) {
+        expect(
+          await driver.page(
+            fromPartial<StepContext>({ db: ctx.db, retrying: false }),
+          ),
+        ).toMatchObject({ kind: "progress", done: false });
+        title = (
+          await getDb(ctx.db)
+            .select({ title: searchDocument.title })
+            .from(searchDocument)
+            .where(eq(searchDocument.entityId, subject.entityId))
+        )[0]?.title;
+      }
+      expect(title).toBe("Synthetic retirement fairness");
+    } finally {
+      statements.mockRestore();
       queue.restore();
     }
   });

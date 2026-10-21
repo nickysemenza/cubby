@@ -80,21 +80,15 @@ export const derivedRefreshDrivers: StepRunDrivers = async () => [
       }
       const connections = await processConnectionRetirementPage(db);
       const statements = await processStatementRetirementPage(db);
-      if (!statements.done)
-        return {
-          kind: "progress",
-          done: false,
-          delta: { done: statements.processed, failed: 0 },
-        };
       const page = await processDerivedRefreshPage(db);
       // Edits may keep the connection epoch dirty; its scan must not starve
       // projection/frontier work that is also needed to settle those inputs.
-      if (!connections.done)
+      if (!connections.done || !statements.done)
         return {
           kind: "progress",
           done: false,
           delta: {
-            done: connections.processed + page.processed,
+            done: connections.processed + statements.processed + page.processed,
             failed: page.errors.length,
           },
           errors: page.errors.map((message) => ({
@@ -136,9 +130,12 @@ export const derivedRefreshDrivers: StepRunDrivers = async () => [
       if (retryAt)
         return {
           kind: "paused",
-          reason: semanticEmbeddingsConfigured()
-            ? "Derived refresh retry scheduled"
-            : "Embedding provider or Vectorize binding is unavailable",
+          reason:
+            retryAt.getTime() > Date.now()
+              ? "Derived refresh scheduled"
+              : semanticEmbeddingsConfigured()
+                ? "Derived refresh retry scheduled"
+                : "Embedding provider or Vectorize binding is unavailable",
           until: new Date(
             Math.max(
               retryAt.getTime(),

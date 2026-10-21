@@ -413,7 +413,7 @@ async function workQueueProjection(
     'Review them on the Suggestions page.'::text AS "nextAction",
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
     FROM ${suggestionTable} LEFT JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
-    WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${assessmentFamily.enum.field} AND ${reviewableSuggestionSql}
+    WHERE ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${assessmentFamily.enum.field} AND ${reviewableSuggestionSql}
       ${own}
     HAVING count(*) > 0`);
   }
@@ -930,7 +930,7 @@ async function queryWorkQueue(
     work_connection_prediction AS MATERIALIZED (
       SELECT a.id, a.subject, a.fingerprint, a.evidence->'candidate'->'target' AS target
       FROM "Assessment" a JOIN "AssessmentState" s ON s.id=a.id
-      WHERE s.family=${assessmentFamily.enum.recommendation} AND s.active AND s.status=${suggestionStatus.enum.pending}
+      WHERE a.served AND s.family=${assessmentFamily.enum.recommendation} AND s.active AND s.status=${suggestionStatus.enum.pending}
         AND a.subject->>'scope' LIKE 'connection.%'
     ),
     ${sql.join(

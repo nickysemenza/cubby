@@ -1,3 +1,4 @@
+import { assessmentPublication } from "@cubby/schemas/assessment";
 import { dataCheckMessage } from "@cubby/schemas/data-quality";
 import { testUserId } from "@cubby/schemas/testing";
 import {
@@ -14,6 +15,7 @@ import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
+  assessment,
   expense,
   run,
   runFinding,
@@ -21,6 +23,7 @@ import {
 } from "~/server/db/schema";
 import * as connections from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -62,13 +65,50 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       costType: "tools",
       cost: 20,
     });
-    await connections.publishEntityConnection(ctx.db, {
+    const proposal = await connections.publishEntityConnection(ctx.db, {
       relation: "product-expense",
       source: { entityKind: "product", entityId: item.id },
       target: { entityKind: "expense", entityId: line.output.id },
       label: "Synthetic acquisition",
       evidence: { reasons: [], contradictions: [], unknowns: [] },
     });
+    const [original] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, proposal.review.assessmentId));
+    if (!original) throw new Error("Synthetic connection assessment missing");
+    // Removing read-time reconstruction must retain the served-only gate:
+    // an unserved trial is not household work, even with identical evidence.
+    await publishAssessment(
+      ctx.db,
+      assessmentPublication.parse({
+        ...original,
+        publicationKey: "synthetic-unserved-queue-trial",
+        served: false,
+      }),
+    );
+    await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: "synthetic-inactive-guarded-field",
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: "expense",
+          recordId: line.entityId,
+          field: "productId",
+        },
+        judgment: { value: item.id },
+        fingerprint: "synthetic-inactive-field",
+        producer: null,
+        evidence: {},
+      },
+      {
+        active: false,
+        suggestedValue: item.id,
+        data: { connectionEvidence: original.evidence },
+      },
+    );
     const expensive = vi
       .spyOn(connections, "readEntityConnectionsBatch")
       .mockRejectedValue(
@@ -88,6 +128,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         }),
       );
       expect(expensive).not.toHaveBeenCalled();
+      expect(page.meta.totalCount).toBe(1);
     } finally {
       expensive.mockRestore();
     }
