@@ -31,7 +31,7 @@ import { ExternalIdKindSuggestion } from "~/features/product/external-id-kind-su
 import { IdentifyProductButton } from "~/features/product/identify-product-with-ai";
 import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
 import { upc as upcLookup } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { wasm } from "~/lib/wasm";
+import { barcodeForLookup } from "~/lib/barcode";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { ChipsInput } from "~/ui/forms/chips-input";
@@ -300,7 +300,7 @@ export function ProductBarcodeField({
     setIsLookingUp(true);
     try {
       const result = await upcLookup.lookup.call({
-        upc: wasm.normalize_isbn(upcValue)?.isbn13 ?? upcValue,
+        upc: barcodeForLookup(upcValue),
       });
       if (result) {
         if (result.name)

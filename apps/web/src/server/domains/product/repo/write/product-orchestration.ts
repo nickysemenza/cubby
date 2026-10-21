@@ -33,6 +33,7 @@ import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 
+import { barcodeForLookup } from "~/lib/barcode";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { wasm } from "~/lib/wasm";
@@ -55,8 +56,11 @@ import {
 } from "~/server/domains/product/repo/write/scan-code";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
-import { createAppError } from "~/server/errors/app-error";
-import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import { AppError, createAppError } from "~/server/errors/app-error";
+import {
+  isUniqueViolation,
+  runWithConflictRecovery,
+} from "~/server/errors/db-errors";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type {
@@ -65,6 +69,10 @@ import type {
 } from "./product-writes";
 
 const log = createLogger("product-orchestration");
+
+const isProductCodeConflict = (error: unknown) =>
+  isUniqueViolation(error) ||
+  (error instanceof AppError && error.reason === "PRODUCT_ALREADY_EXISTS");
 
 interface ProductWriteServices<
   TOutput extends ProductMutationSnapshot = ProductWithFoodOut,
@@ -153,7 +161,7 @@ export async function createProductWithReadSideEffects<
     ? await importCoverPhoto(
         services.db,
         services.upcLookupClient,
-        wasm.normalize_isbn(input.barcode)?.isbn13 ?? input.barcode,
+        barcodeForLookup(input.barcode),
         entityId,
         "product.create",
       )
@@ -500,6 +508,7 @@ export async function findOrCreateByUPC(
       if (!winner) throw error;
       return matched(winner);
     },
+    isProductCodeConflict,
   );
 }
 
@@ -602,6 +611,7 @@ async function findOrCreateByISBN(
       if (!winner) throw error;
       return matched(winner);
     },
+    isProductCodeConflict,
   );
 }
 

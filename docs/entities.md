@@ -2993,6 +2993,11 @@ oldest remaining barcode is promoted. Setting the shortcut selects the primary
 without removing other identifiers. Collection replacement stays explicit.
 The shortcut builds a collection add/promotion or targeted remove; it shares
 the collection writer's collision checks and primary repair.
+Find-or-create recovers both database and domain identity conflicts by rereading
+the exact requested GTIN after rollback; explicit create/update still refuses
+collisions. Provider lookups compact formatting while retaining the supplied
+barcode width, and translate validated book identity to ISBN-13. The native
+specialized barcode control retains ordinary text entry.
 Books inference comes from validated ISBN identity in the collection, with
 Food evidence taking precedence; the barcode editor is available in every category.
 

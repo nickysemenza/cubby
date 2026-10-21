@@ -36,7 +36,10 @@ import {
 import { findOrCreateByCode } from "~/server/domains/product/repo/write/product-orchestration";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
-import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import {
+  isUniqueViolation,
+  runWithConflictRecovery,
+} from "~/server/errors/db-errors";
 import {
   resolveCreatedOrInvariant,
   resolveOrThrow,
@@ -176,7 +179,7 @@ export async function scanAtLocation(
         sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       };
     },
-    SLOT_CONSTRAINT,
+    (error) => isUniqueViolation(error, SLOT_CONSTRAINT),
   );
 }
 

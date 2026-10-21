@@ -85,7 +85,10 @@ import {
   singularAttachmentImageIds,
 } from "~/server/entity-kernel/repo/singular-attachment";
 import { createAppError } from "~/server/errors/app-error";
-import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import {
+  isUniqueViolation,
+  runWithConflictRecovery,
+} from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { type ListPage, listScaffold } from "~/server/generic/list/repo/list";
 import { listAll } from "~/server/generic/list/repo/list-all";
@@ -271,7 +274,7 @@ export const upsertCookbook = async (
       if (!winner) throw error;
       return commit(winner.id);
     },
-    "Cookbook_name_key",
+    (error) => isUniqueViolation(error, "Cookbook_name_key"),
   );
 };
 

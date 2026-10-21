@@ -70,7 +70,10 @@ import {
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
-import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import {
+  isUniqueViolation,
+  runWithConflictRecovery,
+} from "~/server/errors/db-errors";
 import {
   computeChanges,
   logAuditEntry,
@@ -919,7 +922,7 @@ const upsertRecipeMatching = async (
       if (!winner) throw error;
       return updateMatched(winner.id);
     },
-    constraint,
+    (error) => isUniqueViolation(error, constraint),
   );
 };
 
