@@ -13,6 +13,33 @@ const echo = vi.fn(async (items: Item[]): Promise<BatchOut<string>> => ({
 const live = () => new AbortController().signal;
 
 describe("request batcher", () => {
+  it("drops cancelled queued siblings at admission and remaps the remaining answer", async () => {
+    const admitted = Promise.withResolvers<void>();
+    const gate = Promise.withResolvers<void>();
+    const send = vi.fn(echo);
+    const batcher = createRequestBatcher(send, {
+      admit: async (work, _signal) => {
+        admitted.resolve();
+        await gate.promise;
+        return work();
+      },
+    });
+    const cancelled = new AbortController();
+    const pending = Promise.allSettled([
+      batcher.load(input("cancelled"), cancelled.signal),
+      batcher.load(input("remaining"), live()),
+    ]);
+    await admitted.promise;
+    cancelled.abort();
+    gate.resolve();
+    expect(await pending).toMatchObject([
+      { status: "rejected" },
+      { status: "fulfilled", value: "answer:remaining" },
+    ]);
+    expect(
+      send.mock.calls.map(([items]) => items.map((item) => item.id)),
+    ).toEqual([["remaining"]]);
+  });
   it("answers rows requested in the same tick with one request, in order", async () => {
     const send = vi.fn(echo);
     const batcher = createRequestBatcher(send);

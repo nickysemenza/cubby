@@ -21,6 +21,7 @@ import {
 } from "~/server/ai/evaluation-inputs";
 import {
   suggestFields,
+  withFieldSuggestionBatch,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
 import {
@@ -319,50 +320,52 @@ export async function readSettledQuestions(
     if (parsed.success && !byKey.has(row.key))
       byKey.set(row.key, { remembered: parsed.data, missId: row.missId });
   }
-  return settleBatch(
-    input.questions,
-    async (question, index): Promise<SettledSuggestionAnswer> => {
-      const entry = byKey.get(keys[index]!);
-      if (!entry) {
-        // A first read can establish structural source eligibility without
-        // model inference or inventing a historical answer.
-        const prepared = await withAiInputs(
-          true,
-          () =>
-            suggestFields(
-              db,
-              PREPARATION_RUN,
-              {
-                entity: input.entity,
-                basisMode: question.basisMode,
-                basis: question.basis,
-                targets: [question.field],
-              },
-              { ...ports, recordUsage: false },
-            ),
-          { providerFree: true },
+  return withFieldSuggestionBatch(() =>
+    settleBatch(
+      input.questions,
+      async (question, index): Promise<SettledSuggestionAnswer> => {
+        const entry = byKey.get(keys[index]!);
+        if (!entry) {
+          // A first read can establish structural source eligibility without
+          // model inference or inventing a historical answer.
+          const prepared = await withAiInputs(
+            true,
+            () =>
+              suggestFields(
+                db,
+                PREPARATION_RUN,
+                {
+                  entity: input.entity,
+                  basisMode: question.basisMode,
+                  basis: question.basis,
+                  targets: [question.field],
+                },
+                { ...ports, recordUsage: false },
+              ),
+            { providerFree: true },
+          );
+          const outcome = prepared?.result.outcomes?.[question.field];
+          return {
+            outcome:
+              !prepared?.incomplete && outcome?.kind === "skipped"
+                ? outcome
+                : null,
+            revision: null,
+          };
+        }
+        // A member's recorded miss reopens the question under that review's
+        // identity, so the live answer cached before it is never restored.
+        return recheck(
+          db,
+          input.entity,
+          question,
+          entry.remembered,
+          entry.missId,
+          ports,
         );
-        const outcome = prepared?.result.outcomes?.[question.field];
-        return {
-          outcome:
-            !prepared?.incomplete && outcome?.kind === "skipped"
-              ? outcome
-              : null,
-          revision: null,
-        };
-      }
-      // A member's recorded miss reopens the question under that review's
-      // identity, so the live answer cached before it is never restored.
-      return recheck(
-        db,
-        input.entity,
-        question,
-        entry.remembered,
-        entry.missId,
-        ports,
-      );
-    },
-    { concurrency: 1 },
+      },
+      { concurrency: 1 },
+    ),
   );
 }
 
@@ -392,10 +395,17 @@ async function readSavedAnswerPreviews(
     ...new Set(keys.filter((key): key is string => key !== null)),
   ];
   const preview = sql`${aiAnalysis.result}->${"preview"}::text`;
-  const answerAssessment = sql`coalesce(
+  const answerAssessmentText = sql`coalesce(
     ${preview}->${"outcome"}::text->>${"assessmentId"}::text,
     ${preview}->${"suggestion"}::text->>${"assessmentId"}::text
   )`;
+  // Stored legacy previews may lack a valid assessment handle. Cast the
+  // lookup value, preserving UUID indexes on AssessmentState and Feedback.
+  const answerAssessment = sql`CASE
+    WHEN ${answerAssessmentText} ~ ${"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}
+    THEN (${answerAssessmentText})::uuid
+    ELSE NULL
+  END`;
   const { rejected, superseded } = suggestionStatus.enum;
   const rows = lookups.length
     ? await getDb(db)
@@ -405,7 +415,7 @@ async function readSavedAnswerPreviews(
           withheld: sql<boolean>`(
             EXISTS (
               SELECT 1 FROM ${assessmentState} AS "answer"
-              WHERE "answer"."id"::text = ${answerAssessment}
+              WHERE "answer"."id" = ${answerAssessment}
                 AND (
                   "answer"."status" IN (${rejected}, ${superseded})
                   OR EXISTS (
@@ -419,7 +429,7 @@ async function readSavedAnswerPreviews(
             )
             OR EXISTS (
               SELECT 1 FROM ${feedback}
-              WHERE ${feedback.assessmentId}::text = ${answerAssessment}
+              WHERE ${feedback.assessmentId} = ${answerAssessment}
                 AND ${feedback.authority} = ${"member"}
                 AND ${feedback.verdict} = ${"wrong"}
             )

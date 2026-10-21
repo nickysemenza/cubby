@@ -5,6 +5,8 @@ import { wasm } from "~/lib/wasm";
 import {
   decisionChoiceFitsContext,
   runDecisionChoice,
+  runDecisionChoices,
+  type DecisionChoiceResult,
   type DecisionPort,
 } from "~/server/ai/decision-model";
 import { MAIL_ATTACHMENT_PURPOSE_FEATURE } from "~/server/ai/policy/features";
@@ -30,6 +32,35 @@ export const attachmentEvidenceFingerprint = (attachment: AttachmentEvidence) =>
     checksum: attachment.checksum,
   });
 
+function attachmentPrompts(
+  mail: Pick<RetainedMail, "sender" | "subject" | "content" | "rawChecksum">,
+  attachments: readonly AttachmentEvidence[],
+) {
+  const html = mail.content.bodyHtml
+    ? wasm.compact_email_html(mail.content.bodyHtml)
+    : null;
+  return attachments.map((attachment) =>
+    MAIL_ATTACHMENT_PURPOSE_FEATURE.prompt(
+      JSON.stringify({
+        email: {
+          sender: mail.sender,
+          subject: mail.subject,
+          checksum: mail.rawChecksum,
+          bodyText: mail.content.bodyText,
+          htmlText: html?.text ?? null,
+          htmlComplete: !html?.truncated,
+        },
+        attachment,
+      }),
+    ),
+  );
+}
+
+const promotesDocument = (result: DecisionChoiceResult) =>
+  result.confidence === "high" &&
+  MAIL_ATTACHMENT_PURPOSE_FEATURE.choices[result.selectedIndex ?? -1] ===
+    "purchase_document";
+
 /** Only a confident useful-document decision promotes a file; uncertainty retains the original. */
 export async function shouldPromoteMailAttachment(
   mail: Pick<RetainedMail, "sender" | "subject" | "content" | "rawChecksum">,
@@ -37,22 +68,7 @@ export async function shouldPromoteMailAttachment(
   usage: AiRunContext,
   port?: DecisionPort,
 ) {
-  const html = mail.content.bodyHtml
-    ? wasm.compact_email_html(mail.content.bodyHtml)
-    : null;
-  const prompt = MAIL_ATTACHMENT_PURPOSE_FEATURE.prompt(
-    JSON.stringify({
-      email: {
-        sender: mail.sender,
-        subject: mail.subject,
-        checksum: mail.rawChecksum,
-        bodyText: mail.content.bodyText,
-        htmlText: html?.text ?? null,
-        htmlComplete: !html?.truncated,
-      },
-      attachment,
-    }),
-  );
+  const prompt = attachmentPrompts(mail, [attachment])[0]!;
   if (!decisionChoiceFitsContext(prompt)) return false;
   const result = await runDecisionChoice({
     ...prompt,
@@ -60,11 +76,34 @@ export async function shouldPromoteMailAttachment(
     usage,
     port,
   });
-  return (
-    result.confidence === "high" &&
-    MAIL_ATTACHMENT_PURPOSE_FEATURE.choices[result.selectedIndex ?? -1] ===
-      "purchase_document"
+  return promotesDocument(result);
+}
+
+/** Share email preparation and cache/model admission without changing attachment evidence. */
+export async function shouldPromoteMailAttachments(
+  mail: Pick<RetainedMail, "sender" | "subject" | "content" | "rawChecksum">,
+  attachments: readonly AttachmentEvidence[],
+  usage: AiRunContext,
+  port?: DecisionPort,
+) {
+  if (!attachments.length) return [];
+  const prompts = attachmentPrompts(mail, attachments);
+  const eligible = prompts.flatMap((prompt, index) =>
+    decisionChoiceFitsContext(prompt) ? [{ prompt, index }] : [],
   );
+  const results = await runDecisionChoices(
+    eligible.map(({ prompt }) => ({
+      ...prompt,
+      feature: MAIL_ATTACHMENT_PURPOSE_FEATURE,
+      usage,
+      port,
+    })),
+  );
+  const promotions = attachments.map(() => false);
+  eligible.forEach(({ index }, position) => {
+    promotions[index] = promotesDocument(results[position]!);
+  });
+  return promotions;
 }
 
 /** Inference runs before the linking transaction; publication rechecks the exact evidence snapshot. */
@@ -82,36 +121,35 @@ export async function prepareMailAttachmentDecisions(
     string,
     { fingerprint: string; promote: boolean }
   >();
-  if (rows.length) {
-    let usage: AiRunContext | undefined;
-    for (const attachment of rows) {
-      if (!attachment.imageId && !attachment.pendingObjectKey) {
-        decisions.set(attachment.id, {
-          fingerprint: attachmentEvidenceFingerprint(attachment),
-          promote: false,
-        });
-        continue;
-      }
-      usage ??= {
-        db,
-        runId: await ensureRun(db, actor, aiCallRunInput(actor)),
-        operation: "mail-attachment-purpose",
-      };
-      const promote = await shouldPromoteMailAttachment(
-        mail,
-        {
-          filename: attachment.filename,
-          mimeType: attachment.mimeType,
-          checksum: attachment.checksum,
-        },
-        usage,
-        port,
-      );
-      decisions.set(attachment.id, {
-        fingerprint: attachmentEvidenceFingerprint(attachment),
-        promote,
-      });
-    }
+  const eligible = rows.filter(
+    (attachment) => attachment.imageId || attachment.pendingObjectKey,
+  );
+  const promoted = new Map<string, boolean>();
+  if (eligible.length) {
+    const usage: AiRunContext = {
+      db,
+      runId: await ensureRun(db, actor, aiCallRunInput(actor)),
+      operation: "mail-attachment-purpose",
+    };
+    const results = await shouldPromoteMailAttachments(
+      mail,
+      eligible.map((attachment) => ({
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        checksum: attachment.checksum,
+      })),
+      usage,
+      port,
+    );
+    eligible.forEach((attachment, index) =>
+      promoted.set(attachment.id, results[index]!),
+    );
+  }
+  for (const attachment of rows) {
+    decisions.set(attachment.id, {
+      fingerprint: attachmentEvidenceFingerprint(attachment),
+      promote: promoted.get(attachment.id) ?? false,
+    });
   }
   return { mailChecksum: mail.rawChecksum, decisions };
 }

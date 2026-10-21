@@ -40,6 +40,7 @@ export function createRequestBatcher<TInput, TOutput>(
     max = 25,
     concurrency = 2,
     sendOne,
+    admit,
   }: {
     max?: number;
     concurrency?: number;
@@ -48,6 +49,8 @@ export function createRequestBatcher<TInput, TOutput>(
      * lone item nothing, and queueing it behind slow full batches stalls it.
      */
     sendOne?: (input: TInput, signal: AbortSignal) => Promise<TOutput>;
+    /** Final shared admission; cancelled siblings are trimmed after it opens. */
+    admit?: (work: () => Promise<void>, signal: AbortSignal) => Promise<void>;
   } = {},
 ) {
   const limiter = createConcurrencyLimiter(concurrency);
@@ -73,23 +76,27 @@ export function createRequestBatcher<TInput, TOutput>(
       if (result.ok) entry.resolve(result.value);
       else entry.reject(new Error(result.message));
     };
-    const deliver = (index: number, result: BatchResult<TOutput>) => {
-      const entry = batch[index];
-      if (entry) settle(entry, result);
+    const sendLive = async () => {
+      const live = batch.filter((entry) => !entry.signal.aborted);
+      if (!live.length) throw abortError();
+      const deliver = (index: number, result: BatchResult<TOutput>) => {
+        const entry = live[index];
+        if (entry) settle(entry, result);
+      };
+      const out = await send(
+        live.map((entry) => entry.input),
+        controller.signal,
+        deliver,
+      );
+      out?.results.forEach((result, index) => deliver(index, result));
     };
     limiter
       .run(
-        () =>
-          send(
-            batch.map((entry) => entry.input),
-            controller.signal,
-            deliver,
-          ),
+        () => (admit ? admit(sendLive, controller.signal) : sendLive()),
         controller.signal,
       )
       .then(
-        (out) => {
-          out?.results.forEach((result, index) => deliver(index, result));
+        () => {
           // Settlement is idempotent: this only reaches items never answered.
           for (const entry of batch)
             entry.reject(new Error("Batch omitted this item"));

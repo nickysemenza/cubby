@@ -1,11 +1,9 @@
+import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
 import superjson from "superjson";
-import {
-  fieldSuggestionsOut,
-  settledSuggestionQuestionsInput,
-} from "@cubby/schemas/ai";
+import { settledSuggestionQuestionsInput } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import {
   recordStatementRowsOut,
@@ -124,15 +122,19 @@ test("empty suggestion cells expose an abstention and keyboard-accessible detail
   const name = uniqueName(testInfo, "Unclassified tool");
   await createEntityFixture(page, "product", { name, categoryId: null });
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
-    if (await unbatchFor(route, ["ai.suggestFields"])) return;
-    if (!dispatchesOperation(route.request(), "ai.suggestFields"))
+    if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
+      return;
+    if (
+      !dispatchesOperation(route.request(), "ai.suggestFields") &&
+      !dispatchesOperation(route.request(), "ai.suggestFieldsBatch")
+    )
       return route.continue();
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(
         superjson.serialize({
           ok: true,
-          data: fieldSuggestionsOut.parse({
+          data: fieldSuggestionsReply(route.request(), {
             suggestions: {},
             outcomes: {
               categoryId: {
@@ -192,6 +194,7 @@ test("saved suggestion previews stay visible while current evidence is checked",
     if (
       await unbatchFor(route, [
         "ai.suggestFields",
+        "ai.suggestFieldsBatch",
         "ai.settledSuggestionQuestions",
       ])
     )
@@ -232,14 +235,18 @@ test("saved suggestion previews stay visible while current evidence is checked",
       });
       return;
     }
-    if (operation?.operation !== "ai.suggestFields") return route.continue();
+    if (
+      operation?.operation !== "ai.suggestFields" &&
+      operation?.operation !== "ai.suggestFieldsBatch"
+    )
+      return route.continue();
     await live.promise;
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(
         superjson.serialize({
           ok: true,
-          data: fieldSuggestionsOut.parse({
+          data: fieldSuggestionsReply(route.request(), {
             suggestions: {},
             outcomes: {
               categoryId: {
@@ -911,15 +918,19 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
     { active: false, runId },
   );
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
-    if (await unbatchFor(route, ["ai.suggestFields"])) return;
-    if (!dispatchesOperation(route.request(), "ai.suggestFields"))
+    if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
+      return;
+    if (
+      !dispatchesOperation(route.request(), "ai.suggestFields") &&
+      !dispatchesOperation(route.request(), "ai.suggestFieldsBatch")
+    )
       return route.continue();
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(
         superjson.serialize({
           ok: true,
-          data: fieldSuggestionsOut.parse({
+          data: fieldSuggestionsReply(route.request(), {
             suggestions: {
               tags: {
                 assessmentId: prediction.id,

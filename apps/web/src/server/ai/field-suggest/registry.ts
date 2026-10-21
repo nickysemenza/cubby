@@ -9,6 +9,8 @@
  * in each file — the `satisfies Record<Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>, FieldSuggestSpec>`
  * below makes a missing entry a typecheck failure in both directions.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   entityFieldModels,
   type GeneratedSuggestFieldKey,
@@ -57,10 +59,10 @@ import {
   type LocationPutAwayCandidate,
 } from "~/server/domains/location/repo/lookup";
 import {
-  listBoundCategoryFeatures,
-  listProductCategoryTreeOptions,
+  listBoundCategoryFeatures as loadBoundCategoryFeatures,
+  listProductCategoryTreeOptions as loadProductCategoryTreeOptions,
 } from "~/server/domains/product-category/repo/product-category";
-import { projectNameOptions } from "~/server/domains/project/repo/lookup";
+import { projectNameOptions as loadProjectNameOptions } from "~/server/domains/project/repo/lookup";
 import { listSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
 import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
 import { semanticEntityCandidates } from "~/server/generic/embedding/service/semantic-search.service";
@@ -72,6 +74,38 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 
 import { issuerCandidates, hasCreditCardIdentity } from "./account-evidence";
 import { rankCategoryCandidates } from "./category-ranking";
+
+const preparation = new AsyncLocalStorage<{
+  categories?: ReturnType<typeof loadProductCategoryTreeOptions>;
+  projects?: ReturnType<typeof loadProjectNameOptions>;
+  spending?: ReturnType<typeof loadSpendingCategoryRoster>;
+  features?: ReturnType<typeof loadBoundCategoryFeatures>;
+}>();
+
+/** Share saved vocabularies only inside one finite, authoritative list read. */
+export const withFieldSuggestionPreparation = <T>(work: () => Promise<T>) =>
+  preparation.run({}, work);
+
+function listProductCategoryTreeOptions(db: Database) {
+  const current = preparation.getStore();
+  return current
+    ? (current.categories ??= loadProductCategoryTreeOptions(db))
+    : loadProductCategoryTreeOptions(db);
+}
+
+function projectNameOptions(db: Database) {
+  const current = preparation.getStore();
+  return current
+    ? (current.projects ??= loadProjectNameOptions(db))
+    : loadProjectNameOptions(db);
+}
+
+function listBoundCategoryFeatures(db: Database) {
+  const current = preparation.getStore();
+  return current
+    ? (current.features ??= loadBoundCategoryFeatures(db))
+    : loadBoundCategoryFeatures(db);
+}
 
 /**
  * `V`/`C`-typed members use method shorthand on purpose: TypeScript checks a
@@ -316,6 +350,15 @@ function pruneCandidates(raw: RawBasis, arrayKey: string): readonly string[] {
 type SpendingCategoryCandidate = SpendingCategoryOut & { path: string };
 
 async function spendingCategoryRoster(
+  db: Database,
+): Promise<SpendingCategoryCandidate[]> {
+  const current = preparation.getStore();
+  return current
+    ? (current.spending ??= loadSpendingCategoryRoster(db))
+    : loadSpendingCategoryRoster(db);
+}
+
+async function loadSpendingCategoryRoster(
   db: Database,
 ): Promise<SpendingCategoryCandidate[]> {
   const rows: SpendingCategoryOut[] = [];

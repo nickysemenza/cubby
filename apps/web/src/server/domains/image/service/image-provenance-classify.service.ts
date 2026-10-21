@@ -9,6 +9,7 @@ import type {
   ClassifyImageProvenanceOut,
 } from "@cubby/schemas/maintenance";
 
+import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import { decideImageProvenanceWithEvidence } from "~/server/ai/semantic-decisions";
 import type { Database } from "~/server/db";
@@ -150,7 +151,13 @@ export async function classifyImageProvenance(
   let unresolved = 0;
   let preparedClassifications = 0;
   let preparedCaptureDates = 0;
-  for (const row of rows) {
+  const decisions = await settleDecisionWorkItems(rows, async (row) => ({
+    row,
+    decision: await ports.decide(row, usage),
+  }));
+  for (const result of decisions) {
+    if (result.status === "rejected") throw result.reason;
+    const { row, decision } = result.value;
     const analysisTime =
       row.capturedAt === null ? analysisCapturedAt.get(row.id) : undefined;
     const updates: ImageSourceClassificationPublication = {
@@ -160,7 +167,6 @@ export async function classifyImageProvenance(
         ? { analysisCapturedAt: analysisTime }
         : {}),
     };
-    const decision = await ports.decide(row, usage);
     if (isConcrete(decision.value) && decision.confidence === "high") {
       updates.source = decision.value;
       updates.sourceEvidence = imageSourceEvidence.parse({

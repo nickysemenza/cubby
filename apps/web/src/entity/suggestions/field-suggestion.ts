@@ -251,12 +251,14 @@ export interface FieldSuggestionSource {
  * via `.withTransport(...)` without touching the hook itself. */
 export interface EntitySuggestionsOperations {
   suggestFields: typeof ai.suggestFields;
+  suggestFieldsBatch?: typeof ai.suggestFieldsBatch;
   applyFinanceCategorySuggestion?: typeof ai.applyFinanceCategorySuggestion;
 }
 
 export const productionEntitySuggestionsOperations: EntitySuggestionsOperations =
   {
     suggestFields: ai.suggestFields,
+    suggestFieldsBatch: ai.suggestFieldsBatch,
     applyFinanceCategorySuggestion: ai.applyFinanceCategorySuggestion,
   };
 

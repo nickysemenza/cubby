@@ -11,7 +11,7 @@ import {
   suggestionSweepRunProgress,
 } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
-import { selectDecisionModel } from "@cubby/shared/ai/models";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
@@ -153,7 +153,7 @@ async function suggestTarget(
   const primaryCall = await withAiInputs(false, () =>
     recommend(db, runId, fieldInput, {
       ...ports.suggestPorts,
-      decisionModel: input.decisionModel,
+      decisionModel: input.decisionModelOverride,
     }),
   );
   const manifest = await producingAiManifest(db);
@@ -163,6 +163,15 @@ async function suggestTarget(
     const entries: SweepSuggestion[] = [];
     return { primary: null, entries, financeReviewFingerprint: null };
   }
+  const model =
+    [...primaryCall.inputs]
+      .reverse()
+      .find(
+        (call) =>
+          call.operation === `suggestFields.${input.entity}.${input.field}`,
+      )?.model ??
+    input.decisionModelOverride ??
+    "unknown";
   const primary = makeSweepSuggestion({
     currentValue: target.currentValue,
     decision: {
@@ -174,11 +183,11 @@ async function suggestTarget(
           : jsonValue(decision.alternatives[0].value),
       runnerUpConfidence: decision.alternatives[0]?.probability,
     },
-    model: input.decisionModel,
+    model,
     pairKey,
+    served: true,
   });
   if (primary) {
-    primary.model = primaryCall.inputs[0]?.model ?? input.decisionModel;
     primary.reviewKey = await fieldReviewIdentity({
       entity: input.entity,
       recordId: target.entityId,
@@ -199,8 +208,9 @@ async function suggestTarget(
     stage: "paired_model";
     reason: string;
   }[] = [];
-  if (pairKey) {
-    const pairedModel = alternateModel(input.decisionModel);
+  const primaryDecisionModel = supportedDecisionModelSchema.safeParse(model);
+  if (pairKey && primaryDecisionModel.success) {
+    const pairedModel = alternateModel(primaryDecisionModel.data);
     try {
       const paired = await recommend(db, runId, fieldInput, {
         ...ports.suggestPorts,
@@ -217,6 +227,7 @@ async function suggestTarget(
           },
           model: pairedModel,
           pairKey,
+          served: false,
         });
       if (pairedRow) entries.push(pairedRow);
     } catch (error) {
@@ -318,7 +329,7 @@ export async function prepareSuggestionSweep(
         entity: input.entity,
         target,
         fieldDecisionId,
-        model: input.decisionModel,
+        model: input.decisionModelOverride ?? null,
         paired: Boolean(pairKey),
         taxonomy: input.taxonomyRevision,
         manifest,
@@ -363,7 +374,7 @@ export async function prepareSuggestionSweep(
           optionFingerprint:
             manifest[fieldPolicyKey(input.entity, target.field)]
               ?.policyFingerprint ?? "",
-          model: input.decisionModel,
+          model: input.decisionModelOverride ?? null,
         },
         snapshot,
       },
@@ -464,7 +475,8 @@ export async function executeSuggestionSweepTarget(
       optionFingerprint:
         manifest[fieldPolicyKey(input.entity, target.field)]
           ?.policyFingerprint ?? "",
-      model: captured.inputs[0]?.model ?? input.decisionModel,
+      model:
+        captured.result.primary?.model ?? input.decisionModelOverride ?? null,
     };
     saved = sweepResult.safeParse({ ...captured.result, provenance });
     if (!saved.success) throw saved.error;
@@ -492,7 +504,8 @@ export async function executeSuggestionSweepTarget(
         evaluationId: item.id,
         provenance: result.provenance,
         rules: {
-          pinnedModel: input.decisionModel,
+          pinnedModel:
+            result.provenance.model ?? input.decisionModelOverride ?? null,
           auditSample: ports.auditSample,
         },
       },
@@ -578,13 +591,14 @@ export async function startSuggestionSweep(
   }: SweepInput & { trigger?: SweepTrigger; parentRunId?: RunId },
   ports: SuggestionSweepPorts,
 ) {
-  const decisionModel = ports.decisionModel?.() ?? selectDecisionModel();
+  const decisionModelOverride =
+    ports.decisionModel?.() ?? ports.suggestPorts?.decisionModel;
   const taxonomyRevision = await spendingClassificationRevision(db);
   const actor = { ...ports.context.actorContext, runId: null };
   const storedInput = suggestionSweepRunInput.parse({
     kind: "suggestion_sweep",
     ...input,
-    decisionModel,
+    decisionModelOverride,
     taxonomyRevision,
   });
   const initialProgress = suggestionSweepRunProgress.parse({
@@ -635,8 +649,9 @@ const equalValue = (left: SuggestionValue, right: SuggestionValue) =>
 export function makeSweepSuggestion(args: {
   currentValue: SuggestionValue;
   decision: SweepDecision;
-  model: SupportedDecisionModel;
+  model: string;
   pairKey?: string | null;
+  served?: boolean;
 }): SweepSuggestion | null {
   if (equalValue(args.currentValue, args.decision.value)) return null;
   return {
@@ -648,5 +663,6 @@ export function makeSweepSuggestion(args: {
     runnerUpConfidence: args.decision.runnerUpConfidence ?? null,
     model: args.model,
     pairKey: args.pairKey ?? null,
+    served: args.served,
   };
 }

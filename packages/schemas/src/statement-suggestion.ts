@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 
 import {
   financialTransactionKind as kind,
@@ -20,7 +19,7 @@ import {
 } from "./financial-booking";
 
 /** Bump with any statement label prompt/model-policy change; retained votes carry this revision. */
-export const STATEMENT_LABEL_REVISION = "2026-10-17.1";
+export const STATEMENT_LABEL_REVISION = "2026-10-20.1";
 
 export const statementTransactionAction = z.enum([
   "create",
@@ -161,7 +160,9 @@ export type StatementTransactionJudgment = z.infer<
 /** Unpublished model work owned by one pending assessment, fenced by its inputs. */
 export const statementLabelCheckpoint = z.object({
   revision: z.string(),
-  model: supportedDecisionModelSchema,
+  /** One producer only when all retained decision answers used that model. */
+  model: z.string().nullable(),
+  models: z.array(z.string()).optional(),
   judgment: statementTransactionJudgment,
   kind: z.boolean(),
   counterparty: z.boolean(),

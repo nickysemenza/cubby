@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 
 import type { DecisionPort } from "./decision-model";
+import { withAiInputs } from "./evaluation-inputs";
+import { IMAGE_PROVENANCE_CLASSIFICATION_FEATURE } from "./policy/features";
 import {
+  decideImageProvenanceWithEvidence,
   decideProductVariantComparison,
   decideProductVariantComparisons,
   decideUpcOfferComparability,
@@ -36,6 +39,40 @@ const portFor = (choiceIndex: number, probability: number): DecisionPort =>
   });
 
 describe("semantic decision adapters", () => {
+  it("keeps singleton and batch routing identical for the same complete pair", async () => {
+    const pair = {
+      firstTitle: "Synthetic red hat",
+      secondTitle: "Synthetic blue hat",
+    };
+    const single = await withAiInputs(true, () =>
+      decideProductVariantComparison({ ...pair, usage }),
+    );
+    const batch = await withAiInputs(true, () =>
+      decideProductVariantComparisons({ comparisons: [pair], usage }),
+    );
+    expect(single.inputs).toHaveLength(1);
+    expect(batch.inputs).toEqual(single.inputs);
+  });
+
+  it("records the injected port's actual model in image provenance", async () => {
+    const result = await decideImageProvenanceWithEvidence({
+      input: {
+        filename: "synthetic.png",
+        width: 100,
+        height: 100,
+        sourceAssetUrl: null,
+        sourcePageUrl: null,
+        sourceName: null,
+        sightingSourceTypes: [],
+        hasExifCamera: false,
+        hasExifCaptureTime: false,
+        analysisSummary: null,
+      },
+      usage,
+      port: portFor(0, 0.95),
+    });
+    expect(result.model).toBe(IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.model);
+  });
   it("maps closed choices to their typed variant relations", async () => {
     const result = await decideProductVariantComparison({
       firstTitle: "Synthetic boots, size 7",

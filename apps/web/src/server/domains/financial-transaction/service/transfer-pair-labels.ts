@@ -1,10 +1,6 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
 import type { TransferPairLeg } from "@cubby/schemas/transfer-pair-suggestion";
-import {
-  selectDecisionModel,
-  type SupportedDecisionModel,
-} from "@cubby/shared/ai/models";
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 
 import {
@@ -15,6 +11,7 @@ import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import {
   decisionChoiceFitsContext,
+  decisionModelFor,
   type DecisionPort,
   settleDecisionChoices,
   type DecisionChoiceArgs,
@@ -50,7 +47,7 @@ type Usage = Question["usage"];
 function movementQuestion(
   leg: TransferPairLeg,
   opposite: TransferPairLeg,
-  context: { model: SupportedDecisionModel; port?: DecisionPort; usage: Usage },
+  context: { port?: DecisionPort; usage: Usage },
 ): Question | null {
   const prompt = TRANSFER_PAIR_MOVEMENT_FEATURE.prompt(
     JSON.stringify({
@@ -68,7 +65,6 @@ function movementQuestion(
   return {
     ...prompt,
     feature: TRANSFER_PAIR_MOVEMENT_FEATURE,
-    decisionModel: context.model,
     port: context.port,
     usage: context.usage,
   };
@@ -188,8 +184,7 @@ export async function labelTransferPairSuggestions(
           skippedIds.push(row.id);
           return null;
         }
-        const model = selectDecisionModel({ key: row.data.pairKey });
-        return { current, model, index };
+        return { current, index };
       } catch (error) {
         recordFailure(index, error);
         return null;
@@ -209,7 +204,7 @@ export async function labelTransferPairSuggestions(
     });
   const questions = ready.flatMap((pair) => {
     const { outflow, inflow } = pair.current.judgment;
-    const context = { model: pair.model, port: input.port, usage };
+    const context = { port: input.port, usage };
     return (["outflow", "inflow"] as const).flatMap((leg) => {
       const args = movementQuestion(
         leg === "outflow" ? outflow : inflow,
@@ -233,14 +228,22 @@ export async function labelTransferPairSuggestions(
     const choice =
       TRANSFER_PAIR_MOVEMENT_FEATURE.choices[answer.value.selectedIndex ?? -1];
     pair.labels[leg] = choice
-      ? { choice, confidence: answer.value.confidence, model: pair.model }
+      ? {
+          choice,
+          confidence: answer.value.confidence,
+          model: decisionModelFor(answer.item.args),
+        }
       : null;
   }
   await forEachConcurrently(
     ready,
     TRANSFER_PAIR_PUBLISH_CONCURRENCY,
     async (item) => {
-      const { current, model, index } = item;
+      const { current, index } = item;
+      const model =
+        item.labels.outflow?.model === item.labels.inflow?.model
+          ? (item.labels.outflow?.model ?? null)
+          : null;
       try {
         if (item.errors.length)
           throw (

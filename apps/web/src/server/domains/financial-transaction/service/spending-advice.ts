@@ -41,7 +41,7 @@ export async function adviseSpending(
   input: {
     judgment: StatementTransactionJudgment;
     runId: RunId;
-    model: SupportedDecisionModel;
+    model?: SupportedDecisionModel;
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
   },

@@ -137,7 +137,6 @@ export async function identifyOriginalImage(
   ): Parameters<typeof runDecisionChoice>[0] => ({
     ...prompt,
     feature: IMAGE_IDENTIFICATION_FEATURE,
-    decisionModel: IMAGE_IDENTIFICATION_MODEL,
     usage,
   });
   const decide = (prompt: DecisionChoicePrompt) =>

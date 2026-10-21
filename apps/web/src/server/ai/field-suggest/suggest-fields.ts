@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   decisionConfidence,
   financeCategoryReviewSchema,
@@ -43,6 +45,7 @@ import {
 } from "~/server/ai/decision-model";
 import {
   fieldSuggestSpecFor,
+  withFieldSuggestionPreparation,
   type FieldSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { type AiSelectionSpec } from "~/server/ai/policy/decision-choice";
@@ -94,6 +97,8 @@ const defaultResolveLabels: LabelResolverPort = async (db, codes) => {
 };
 
 export interface SuggestFieldsPorts {
+  /** One accounting group per operation within a finite list batch. */
+  usageFor?: (operation: string) => AiSelectionUsage;
   decisionPort?: DecisionPort;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
@@ -122,6 +127,7 @@ function suggestionUsage(
   operation: string,
   ports: SuggestFieldsPorts | undefined,
 ): AiSelectionUsage {
+  if (ports?.usageFor) return ports.usageFor(operation);
   return {
     db: ports?.recordUsage === false ? undefined : db,
     runId,
@@ -841,6 +847,36 @@ function basisValueLimitFor(entity: string, key: string): number {
 }
 
 async function savedSuggestionContext(
+  db: Database,
+  input: FieldSuggestionsInput,
+) {
+  const batch = savedContexts.getStore();
+  if (!batch) return loadSavedSuggestionContext(db, input);
+  const key = JSON.stringify([
+    input.entity,
+    input.entityId,
+    input.targets.includes("spendingCategoryId"),
+    input.targets.some(
+      (target) =>
+        target === "defaultSpendingCategoryId" || target === "spendingProfile",
+    ),
+  ]);
+  let result = batch.get(key);
+  if (!result) {
+    result = loadSavedSuggestionContext(db, input);
+    batch.set(key, result);
+  }
+  return result;
+}
+
+const savedContexts = new AsyncLocalStorage<
+  Map<string, ReturnType<typeof loadSavedSuggestionContext>>
+>();
+
+export const withFieldSuggestionBatch = <T>(work: () => Promise<T>) =>
+  savedContexts.run(new Map(), () => withFieldSuggestionPreparation(work));
+
+async function loadSavedSuggestionContext(
   db: Database,
   input: FieldSuggestionsInput,
 ) {

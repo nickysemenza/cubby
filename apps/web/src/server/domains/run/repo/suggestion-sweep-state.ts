@@ -59,6 +59,7 @@ export const sweepSuggestionSchema = z.object({
   runnerUpConfidence: z.number().nullable(),
   model: z.string(),
   pairKey: z.string().nullable(),
+  served: z.boolean().optional(),
 });
 export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
 
@@ -106,10 +107,10 @@ export async function saveSweepSuggestions(
     /** The field's decision policy prunes an unordered set. */
     unordered: boolean;
     /**
-     * A Sweep's pinned decision model: its proposals are matched against
-     * Automatic rules. Other publishers (connections) never match one.
+     * The served decision's actual model qualifies Automatic rule matching.
+     * Other publishers (connections) never match one.
      */
-    rules?: { pinnedModel: string; auditSample?: AuditSampler };
+    rules?: { pinnedModel: string | null; auditSample?: AuditSampler };
   },
   entries: readonly SweepSuggestion[],
   financeReviewFingerprint: string | null,
@@ -313,7 +314,8 @@ export async function saveSweepSuggestions(
                 kind: entry.kind,
                 confidence: entry.confidence,
                 model: entry.model,
-                pinnedModel: input.rules.pinnedModel,
+                pinnedModel:
+                  entry.served === false ? null : input.rules.pinnedModel,
               }),
               fieldSubjectKey({
                 entity: input.entity,
@@ -344,6 +346,7 @@ export async function saveSweepSuggestions(
             pairKey: entry.pairKey,
             kind: entry.kind,
             data: {
+              ...(entry.served === undefined ? {} : { served: entry.served }),
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
               ...stamp,

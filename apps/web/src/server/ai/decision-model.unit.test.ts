@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DECISION_MAX_CANDIDATES,
+  decisionModelFor,
   type DecisionChoiceResponse,
   type DecisionPort,
   runDecisionChoice,
@@ -57,6 +58,45 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.resetModules();
+});
+
+describe("decisionModelFor", () => {
+  // Provenance callers must name the same model as singleton/batch execution,
+  // and the trial key must include every rendered question input.
+  it("routes the full question and preserves explicit overrides and injected ports", async () => {
+    const models = await import("@cubby/shared/ai/models");
+    const { buildChoiceInput } = await import("./policy/decision-choice");
+    const select = vi.spyOn(models, "selectDecisionModel");
+    const question = {
+      ...base,
+      decisionModel: undefined,
+      choices: ["red", "blue"],
+    };
+    decisionModelFor(question);
+    expect(select).toHaveBeenLastCalledWith({
+      key: JSON.stringify([
+        question.feature.feature,
+        question.feature.promptVersion,
+        buildChoiceInput(question),
+      ]),
+    });
+    expect(
+      decisionModelFor({ ...question, decisionModel: "@cf/cloudflare/clef" }),
+    ).toBe("@cf/cloudflare/clef");
+    expect(
+      decisionModelFor({
+        ...question,
+        port: decisionPortFor("c0", { c0: 0.9, none: 0.1 }),
+      }),
+    ).toBe(question.feature.model);
+    expect(
+      decisionModelFor({
+        ...question,
+        decisionModel: "typesafe/jev",
+        images: ["data:image/png;base64,AAAA"],
+      }),
+    ).toBe("@cf/cloudflare/clef");
+  });
 });
 
 describe("runDecisionChoice", () => {
@@ -787,6 +827,60 @@ describe("runDecisionChoices", () => {
       results[0],
     ]);
     expect(requests).toHaveLength(1);
+  });
+
+  // Independent list operations must share one decision wave without losing
+  // their individual cache keys. A warm sibling must never reach the model.
+  it("batches prepared list misses and reuses answers across singleton entry points", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runDecisionChoice, settleDecisionWorkItems } =
+      await import("./decision-model");
+    const requests: number[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const input = JSON.parse(String(init?.body)).input;
+      requests.push(Object.keys(input.questions).length);
+      return Response.json({
+        result: {
+          answers: Object.fromEntries(
+            Object.keys(input.questions).map((key) => [
+              key,
+              {
+                type: "choice",
+                choice: "c0",
+                confidence: 1,
+                probabilities: { c0: 1 },
+              },
+            ]),
+          ),
+        },
+      });
+    });
+    const inputs = ["warm", "cold-a", "cold-b"].map((label) => ({
+      ...base,
+      feature: FIELD_SUGGESTION_FEATURE,
+      subject: `synthetic list ${label} ${crypto.randomUUID()}`,
+      choices: ["one"],
+      allowNone: false,
+    }));
+    await runDecisionChoice(inputs[0]!);
+    const { withAiInputs } = await import("./evaluation-inputs");
+    const expected = await Promise.all(
+      inputs.map((input) => withAiInputs(true, () => runDecisionChoice(input))),
+    );
+    const results = await settleDecisionWorkItems(inputs, (input) =>
+      withAiInputs(false, () => runDecisionChoice(input)),
+    );
+    expect(results.every((result) => result.status === "fulfilled")).toBe(true);
+    expect(
+      results.map((result) =>
+        result.status === "fulfilled" ? result.value.inputs : null,
+      ),
+    ).toEqual(expected.map((result) => result.inputs));
+    expect(requests).toEqual([1, 2]);
+    await runDecisionChoice(inputs[1]!);
+    await settleDecisionWorkItems([...inputs].reverse(), runDecisionChoice);
+    expect(requests).toEqual([1, 2]);
   });
 
   it("splits at the context bound without dropping questions", async () => {

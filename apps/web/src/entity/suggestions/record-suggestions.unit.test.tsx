@@ -143,6 +143,60 @@ function Surface({
 }
 
 describe("record suggestions", () => {
+  // A virtualized list's loaded records are not all active. Mounting the
+  // next row must ask it in a domain batch without re-asking a warm sibling.
+  it("batches only mounted rows and retains each field's cache on scrolling", async () => {
+    const records = ["first", "second", "offscreen"].map((name) => ({
+      id: testShortcode("product", name),
+      name,
+      manufacturer: null,
+      categoryId: null,
+    }));
+    const single = vi.fn(async () => ({ suggestions: {}, outcomes: {} }));
+    const batches: FieldSuggestionsInput[][] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(single),
+      suggestFieldsBatch: ai.suggestFieldsBatch.withTransport(
+        async ({ input }) => {
+          batches.push(input.items);
+          return {
+            results: input.items.map(() => ({
+              ok: true as const,
+              value: { suggestions: {}, outcomes: { categoryId: decline } },
+            })),
+          };
+        },
+      ),
+    };
+    const List = ({ count }: { count: number }) => (
+      <RecordSuggestionsProvider
+        entity="product"
+        records={records}
+        viewportOnly
+        fieldKeys={["categoryId"]}
+        operations={operations}
+        storedSuggestionOperations={emptyStoredSuggestionOperations}
+      >
+        {records.slice(0, count).map((record) => (
+          <RecordSuggestionBoundary key={record.id} record={record}>
+            <RecordFieldSuggestion record={record} field="categoryId">
+              <span>{record.name}</span>
+            </RecordFieldSuggestion>
+          </RecordSuggestionBoundary>
+        ))}
+      </RecordSuggestionsProvider>
+    );
+    const view = render(<List count={2} />, { wrapper: harness.wrapper });
+    await waitFor(() => expect(batches.flat()).toHaveLength(2));
+    expect(single).not.toHaveBeenCalled();
+    expect(batches).toHaveLength(1);
+    view.rerender(<List count={3} />);
+    await waitFor(() => expect(batches.flat()).toHaveLength(3));
+    expect(batches.flat().map((input) => input.entityId)).toEqual(
+      records.map((record) => record.id),
+    );
+  });
+
   it("explains an empty cell skipped for insufficient basis without asking", async () => {
     const asked = vi.fn();
     const operations: EntitySuggestionsOperations = {

@@ -1,5 +1,5 @@
 import {
-  selectDecisionModel,
+  type SupportedDecisionModel,
   supportedDecisionModelSchema,
 } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -15,19 +15,25 @@ import { aiEvaluation, email, run } from "~/server/db/schema";
 export const reclassificationSnapshot = z.object({
   publicId: z.string(),
   checksum: z.string().nullable(),
-  decisionModel: supportedDecisionModelSchema,
+  /** Legacy automatic pin; only the distinct explicit override can route. */
+  decisionModel: supportedDecisionModelSchema.optional(),
+  decisionModelOverride: supportedDecisionModelSchema.optional(),
 });
 
 export async function prepareReclassification(
   db: Database,
   runId: typeof run.$inferSelect.id,
   emails: readonly (typeof email.$inferSelect)[],
-  decisionModel = selectDecisionModel(),
+  decisionModelOverride?: SupportedDecisionModel,
 ) {
   const manifest = await compiledRefreshManifest();
   for (const [sequence, item] of emails.entries()) {
     const inputFingerprint = await sha256Hex(
-      JSON.stringify({ checksum: item.checksum, decisionModel, manifest }),
+      JSON.stringify({
+        checksum: item.checksum,
+        decisionModelOverride: decisionModelOverride ?? null,
+        manifest,
+      }),
     );
     await enqueueAiEvaluation(
       db,
@@ -55,12 +61,12 @@ export async function prepareReclassification(
           dependencies: [],
           inputFingerprint,
           optionFingerprint: "",
-          model: decisionModel,
+          model: decisionModelOverride ?? null,
         },
         snapshot: reclassificationSnapshot.parse({
           publicId: item.shortcode,
           checksum: item.checksum,
-          decisionModel,
+          decisionModelOverride,
         }),
       },
       sequence,

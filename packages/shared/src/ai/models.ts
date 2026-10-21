@@ -262,14 +262,13 @@ const CLEF_TRAFFIC_SHARE = 0.5;
 /**
  * The trial split. A `key` (the decision's own input) always maps to the same
  * model, so a repeated question reuses that model's cached answer while the
- * share still holds across distinct inputs; no key samples per call.
+ * share still holds across distinct inputs. Text decisions require a key.
  */
 export function selectDecisionModel(
-  options: { vision?: boolean; key?: string } = {},
+  options: { vision: true; key?: string } | { vision?: false; key: string },
 ): SupportedDecisionModel {
   if (options.vision) return CLEF_MODEL;
-  const draw =
-    options.key === undefined ? Math.random() : unitHash(options.key);
+  const draw = unitHash(options.key);
   return draw < 1 - CLEF_TRAFFIC_SHARE ? DECISION_MODEL : CLEF_MODEL;
 }
 

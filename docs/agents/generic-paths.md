@@ -175,6 +175,15 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   parsing, validation and candidate retrieval. An authoritative supplied value
   or exact protocol match needs no model judgment.
 
+- Decision routing: `decision-model.ts` owns the deterministic text trial choice,
+  keyed by feature, prompt version and the complete `buildChoiceInput` result
+  before cache lookup. Singleton and batch paths share it. Production wrappers
+  never sample or persist a Run, row or snapshot model pin. Preserve explicit
+  member grading/replay overrides; media always routes to the vision model.
+  Provenance callers use `decisionModelFor` with the same arguments, including
+  injected ports (which retain the feature model unless explicitly overridden).
+  Legacy automatic pins remain readable but do not route new questions.
+
 - Prompt requests: `AI_FEATURES` typed `feature.request` renderers; pure prompt
   definitions in `server/ai/policy/prompts/`. `decisionCatalogRows` in
   `decision-catalog.ts` owns decision discovery, over the field rows in

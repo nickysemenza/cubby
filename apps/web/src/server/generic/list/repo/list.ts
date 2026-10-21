@@ -1123,7 +1123,8 @@ const suggestionPredicate = (
       AND s."recordId" = ${sql.identifier(getTableName(table))}."id"
       AND s."status" = ${suggestionStatus.enum.pending}
       AND r."deletedAt" IS NULL
-      AND (s."pairKey" IS NULL OR r."input"->>'decisionModel' = s."model")
+      AND COALESCE((s.data->>'served')::boolean,
+        s."pairKey" IS NULL OR r."input"->>'decisionModel' = s."model", false)
       ${kind}
   )`;
   return or(

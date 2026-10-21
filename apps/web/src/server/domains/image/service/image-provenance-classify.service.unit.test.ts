@@ -62,6 +62,31 @@ const portsFor = (
 });
 
 describe("classifyImageProvenance", () => {
+  // Independent preparations must start together; publication still waits for
+  // every outcome and retains roster order when decisions finish out of order.
+  it("prepares independent rows before waiting for the first decision", async () => {
+    const rows = [
+      candidate("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+      candidate("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+    ];
+    let release: (() => void) | undefined;
+    const firstReady = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ports = portsFor(rows, async (row) => {
+      if (row.id === rows[0]?.id) await firstReady;
+      else release?.();
+      return decision("catalog");
+    });
+    const result = await classifyImageProvenance(
+      db,
+      { dryRun: false, batchSize: 2, maxBatches: 1 },
+      systemActor(),
+      ports,
+    );
+    expect(result.classified).toBe(2);
+    expect(ports.publish).toHaveBeenCalledOnce();
+  });
   it("does not publish any prepared row when a later model decision fails", async () => {
     const rows = [
       candidate("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),

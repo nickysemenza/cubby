@@ -823,7 +823,7 @@ the shared decision runner. Independent all-or-fail decisions use
 typed work item. Its cooperative option owns the Workflow's yield scope. Both wait for every started request before returning, including
 when a sibling fails. Callers do not maintain parallel question-index arrays.
 Cache hits retain their individual keys, while owned cache misses share requests
-only within the same feature, sampled model, usage context, and embedded image
+only within the same feature, selected model, usage context, and embedded image
 content. Shared images are sent once per batch; different media and text-only
 questions stay in separate requests. Batches carry at most 64 independently
 scoped questions and stay within the runner's serialized text budget; larger
@@ -831,6 +831,20 @@ sets split without dropping candidates. Waiting on another request's cache lease
 does not hold up owned misses. Each upstream batch records usage once and still
 passes through gateway egress admission. Dependent decision phases wait for their
 required answers before starting another batch.
+Finite collections that must prepare evidence or perform dependent choices use
+`settleDecisionWorkItems`. It bounds preparation, releases preparation slots
+while questions wait, and submits compatible cache misses in waves. Each
+question retains its originating input-capture context; each work item retains
+its own usage attribution and outcome. Use a shared usage object only when
+the collection has one attribution owner. Mail attachments prepare their email
+evidence once; image provenance freezes its roster and rejects failed decisions
+before publication. USDA and ingredient-merge batches retain per-ingredient
+errors; UPC offer judgments share one request context inside each lookup, while
+the outer UPC loop retains quota and rate-limit stopping behavior.
+Paired field audits record `AssessmentState.data.served` explicitly. List
+filters and the immutable Assessment publication trigger use that flag, with
+the legacy Run/model comparison only for older rows that lack it; serving a
+primary answer never requires pinning the Run's model.
 Product identity grounding batches source-literal questions before eligible
 relation questions; usage is attributed to the literal or relation phase, while
 individual dimension prompts, source literals, and fingerprints stay in receipts.

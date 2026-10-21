@@ -1,12 +1,16 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
+import { FIELD_SUGGESTIONS_BATCH_MAX } from "@cubby/schemas/ai";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { NONE_KEY } from "~/server/ai/policy/decision-choice";
-import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
+import {
+  inferFieldAssessments,
+  inferFieldAssessmentsBatch,
+} from "~/server/domains/run/operations/ai.server";
 import {
   kernelCtx,
   productFixture,
@@ -101,6 +105,39 @@ describe("settled suggestion read cost", () => {
       data: { notes: "Synthetic unrelated edit" },
     });
     const afterWrite = await measured(read);
+    const runKey = crypto.randomUUID();
+    const items = names.map((name) => ({
+      entity: "product" as const,
+      basisMode: "suggested" as const,
+      targets: ["categoryId"],
+      basis: { name, manufacturer: null },
+      runKey,
+    }));
+    const singletonRevisit = await measured(async () => {
+      for (const item of items)
+        await inferFieldAssessments(kernelCtx(ctx), item, {
+          decisionPort: declines,
+        });
+    });
+    const batchRevisit = await measured(async () => {
+      const results = [];
+      for (
+        let offset = 0;
+        offset < items.length;
+        offset += FIELD_SUGGESTIONS_BATCH_MAX
+      ) {
+        const batch = await inferFieldAssessmentsBatch(
+          kernelCtx(ctx),
+          {
+            items: items.slice(offset, offset + FIELD_SUGGESTIONS_BATCH_MAX),
+          },
+          { decisionPort: declines },
+        );
+        results.push(...batch.results);
+      }
+      return results;
+    });
+    expect(batchRevisit.result.every((result) => result.ok)).toBe(true);
     const hits = (result: Awaited<ReturnType<typeof read>>) =>
       result.results.filter((item) => item.ok && item.value.outcome !== null)
         .length;
@@ -130,6 +167,18 @@ describe("settled suggestion read cost", () => {
         sqlStatements: afterWrite.sqlStatements,
         wallMs: afterWrite.wallMs,
       },
+      singletonRevisit: {
+        dispatches: ROWS,
+        sqlStatements: singletonRevisit.sqlStatements,
+        wallMs: singletonRevisit.wallMs,
+      },
+      batchRevisit: {
+        dispatches: Math.ceil(ROWS / FIELD_SUGGESTIONS_BATCH_MAX),
+        sqlStatements: batchRevisit.sqlStatements,
+        wallMs: batchRevisit.wallMs,
+      },
+      limits:
+        "Synthetic local timings; revisit variants reuse published answers, stub model responses and one run key. No browser latency, response bytes, production query plan or real model latency measured.",
     };
     mkdirSync(dirname(output), { recursive: true });
     writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);

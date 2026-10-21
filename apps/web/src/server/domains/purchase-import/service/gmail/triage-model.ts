@@ -1,13 +1,11 @@
 import type { emailClassificationObservationInput } from "@cubby/schemas/email-observations";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import {
-  selectDecisionModel,
-  type SupportedDecisionModel,
-} from "@cubby/shared/ai/models";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import type { z } from "zod";
 
 import {
   decisionChoiceFitsContext,
+  decisionModelFor,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
 import {
@@ -33,7 +31,7 @@ export type GmailClassificationCall = Pick<
 
 type OnClassificationCall = (call: GmailClassificationCall) => void;
 
-/** `decisionModel` pins Jev or Clef for a replay; omitted samples the trial split. */
+/** `decisionModel` is an explicit replay override; omitted routes by question input. */
 export const productionMailTriage =
   (
     db: Database,
@@ -44,18 +42,19 @@ export const productionMailTriage =
   async (subject) => {
     const prompt = MAILBOX_TRIAGE_FEATURE.prompt(subject);
     if (!decisionChoiceFitsContext(prompt)) return "uncertain";
-    const model = decisionModel ?? selectDecisionModel();
-    const result = await runDecisionChoice({
+    const question = {
       ...prompt,
       feature: MAILBOX_TRIAGE_FEATURE,
-      decisionModel: model,
+      decisionModel,
       usage: {
         db,
         runId: runEntityId.parse(runId),
         operation: "mailbox-triage",
         beforePaidRequest: paidRunPreflight(db, runEntityId.parse(runId)),
       },
-    });
+    };
+    const model = decisionModelFor(question);
+    const result = await runDecisionChoice(question);
     onCall?.({
       model,
       promptVersion: MAILBOX_TRIAGE_FEATURE.promptVersion,

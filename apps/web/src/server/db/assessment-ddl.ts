@@ -52,7 +52,7 @@ BEGIN
       COALESCE(NEW.provenance->>'inputFingerprint',NEW."financeReviewFingerprint"),
       CASE WHEN NEW.model = 'unknown' THEN NULL ELSE jsonb_build_object('kind','model','model',NEW.model,'revision',NULL,'runId',NEW."runId",'evaluationId',NEW."evaluationId") END,
       jsonb_build_object('currentValue',NEW."currentValue",'provenance',NEW.provenance),
-      NEW."pairKey" IS NULL OR EXISTS(SELECT 1 FROM "Run" r WHERE r.id=NEW."runId" AND r."deletedAt" IS NULL AND r.input->>'decisionModel'=NEW.model), NEW."createdAt");
+      COALESCE((NEW.data->>'served')::boolean, NEW."pairKey" IS NULL OR EXISTS(SELECT 1 FROM "Run" r WHERE r.id=NEW."runId" AND r."deletedAt" IS NULL AND r.input->>'decisionModel'=NEW.model)), NEW."createdAt");
   END IF;
   RETURN NEW;
 END;
