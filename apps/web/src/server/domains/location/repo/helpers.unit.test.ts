@@ -1,7 +1,4 @@
-import {
-  locationListItemOut,
-  locationListRefOut,
-} from "@cubby/schemas/location";
+import { locationListRefOut } from "@cubby/schemas/location";
 import {
   testCompleteDataQuality,
   testEntityId,
@@ -16,7 +13,11 @@ import { describe, expect, it } from "vitest";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { resolveProductPricing } from "~/server/domains/product/repo/pricing";
 
-import { dbLocationToAPI, dbLocationToListAPI } from "./helpers";
+import {
+  dbLocationToAPI,
+  locationReferenceFields,
+  locationInventoryFields,
+} from "./helpers";
 import type { LocationListDB } from "./internal-types";
 
 const LOCATION_ID = testEntityId(
@@ -226,12 +227,10 @@ describe("location mappers", () => {
     const pricingByProductId = new Map([
       [PRODUCT_ID, resolveProductPricing(product.price)],
     ]);
-    const result = dbLocationToListAPI(
-      row,
-      pricingByProductId,
-      undefined,
-      testCompleteDataQuality(),
-    );
+    const result = {
+      ...locationReferenceFields(row),
+      ...locationInventoryFields(row, pricingByProductId),
+    };
 
     expect(result.parent).toEqual({
       id: testShortcode("location", "LOC-2345"),
@@ -272,9 +271,5 @@ describe("location mappers", () => {
     ]);
     expect(result.inventoryEntries[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntries[0]?.product).not.toHaveProperty("deletedAt");
-    // `displayImages` is attached by `withDisplayImages` in the list function,
-    // not by this mapper, so the contract parse gets it here.
-    const listRow = { ...result, displayImages: [] };
-    expect(locationListItemOut.parse(listRow)).toEqual(listRow);
   });
 });

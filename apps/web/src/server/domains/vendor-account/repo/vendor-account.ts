@@ -6,7 +6,7 @@ import type {
   VendorAccountShortcode,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   VendorAccountCreateInput,
@@ -27,7 +27,6 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -51,17 +50,13 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  hydrateListRead,
-  loadListGroup,
-  wantsListGroup,
+  listReadPlan,
+  type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { finalizeMerge } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
-import {
-  lookupEntityReferences,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
@@ -286,78 +281,69 @@ export const loadVendorAccountRunActivity = async (
 
 // includes-deleted: both FKs are required, so a tombstoned vendor or party
 // still names the account's scope rather than failing the read.
-const hydrateRead = async (
+const accountRead = {
+  references: {
+    vendorId: {
+      kind: "lookup",
+      name: "vendorName",
+      missing: "error",
+      includeDeleted: true,
+    },
+    ledgerPartyId: {
+      kind: "lookup",
+      name: "ledgerPartyName",
+      missing: "error",
+      includeDeleted: true,
+    },
+  },
+  bindings: (bind) => {
+    const activity = bind.batch(({ db, rows }) =>
+      loadVendorAccountRunActivity(
+        db,
+        rows.map((row) => row.id),
+      ),
+    );
+    const counts = bind.batch(async ({ db, rows }) => {
+      const values = await unwrapDb(db)
+        .select({ accountId: purchase.vendorAccountId, count: count() })
+        .from(purchase)
+        .where(
+          and(
+            inArray(
+              purchase.vendorAccountId,
+              rows.map((row) => row.id),
+            ),
+            notDeleted(purchase),
+          ),
+        )
+        .groupBy(purchase.vendorAccountId);
+      return new Map(values.map((row) => [row.accountId, row.count]));
+    });
+    return [
+      activity.fields(
+        vendorAccountOut.pick({ lastRunAt: true, lastSuccessAt: true }),
+        (row, loaded) => ({
+          lastRunAt: loaded.get(row.id)?.lastRunAt ?? null,
+          lastSuccessAt: loaded.get(row.id)?.lastSuccessAt ?? null,
+        }),
+      ),
+      counts.fields(
+        vendorAccountOut.pick({ purchaseCount: true }),
+        (row, loaded) => ({ purchaseCount: loaded.get(row.id) ?? 0 }),
+      ),
+    ];
+  },
+} satisfies ListReadOptions<VendorAccountRow>;
+const hydrateRead = (
   db: Database | DrizzleTransaction,
   rows: VendorAccountRow[],
   projection: ListProjection,
-): Promise<ListReadRow[]> => {
-  return hydrateListRead(db, "vendorAccount", rows, projection, {
-    load: () =>
-      Promise.all([
-        loadListGroup(projection, "relations", () =>
-          lookupEntityReferences(
-            db,
-            "vendor",
-            rows.map((row) => row.vendorId),
-            { includeDeleted: true },
-          ),
-        ),
-        loadListGroup(projection, "relations", () =>
-          lookupEntityReferences(
-            db,
-            "ledgerParty",
-            rows.map((row) => row.ledgerPartyId),
-            { includeDeleted: true },
-          ),
-        ),
-        loadListGroup(projection, "derived", () =>
-          loadVendorAccountRunActivity(
-            db,
-            rows.map((row) => row.id),
-          ),
-        ),
-        loadListGroup(projection, "derived", async () => {
-          if (rows.length === 0) return new Map();
-          const counts = await unwrapDb(db)
-            .select({ accountId: purchase.vendorAccountId, count: count() })
-            .from(purchase)
-            .where(
-              and(
-                inArray(
-                  purchase.vendorAccountId,
-                  rows.map((row) => row.id),
-                ),
-                notDeleted(purchase),
-              ),
-            )
-            .groupBy(purchase.vendorAccountId);
-          return new Map(counts.map((row) => [row.accountId, row.count]));
-        }),
-      ]),
-    mapRow: (row, { loaded: [vendors, parties, activity, purchaseCounts] }) => {
-      const vendor = vendors?.get(row.vendorId);
-      const party = parties?.get(row.ledgerPartyId);
-      const result = {
-        ...row,
-        id: parseShortcodeFor("vendorAccount", row.shortcode),
-      };
-      if (activity)
-        Object.assign(result, {
-          lastRunAt: activity.get(row.id)?.lastRunAt ?? null,
-          lastSuccessAt: activity.get(row.id)?.lastSuccessAt ?? null,
-          purchaseCount: purchaseCounts?.get(row.id) ?? 0,
-        });
-      if (wantsListGroup(projection, "relations"))
-        Object.assign(result, {
-          vendorId: vendor?.id,
-          vendorName: vendor?.name,
-          ledgerPartyId: party?.id,
-          ledgerPartyName: party?.name,
-        });
-      return result;
-    },
-  });
-};
+) =>
+  listReadPlan<VendorAccountRow>("vendorAccount", accountRead).read(
+    db,
+    rows,
+    projection,
+  );
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: VendorAccountRow[],
@@ -389,7 +375,7 @@ export const listVendorAccountsRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
@@ -400,7 +386,7 @@ export const listVendorAccountsRead = (
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+      read: accountRead,
     },
   );
 

@@ -1,5 +1,4 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
-import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { totalsPreview } from "@cubby/schemas/nutrition";
@@ -164,36 +163,38 @@ const sectionIngredientToAPI = (
   }
 };
 
+type RecipeProvenanceRow = RecipeSelect & {
+  cookbook?: { shortcode: string; name?: string } | null;
+  forkedFrom?: { shortcode: string; name: string } | null;
+  /** Live Notion page identifiers (`RECIPE_SOURCE_RELATIONS`). */
+  externalIds?: { externalId: string }[];
+};
+
+export const recipeProvenanceFields = (recipeData: RecipeProvenanceRow) => ({
+  // A Website recipe's page is `sourceUrl`; the API exposes it as meta.url.
+  meta: recipeMetaFromColumns(
+    recipeData,
+    recipeData.sourceType === "Website" ? recipeData.sourceUrl : null,
+  ),
+  source: recipeSourceFromDb({
+    sourceType: recipeData.sourceType,
+    sourceUrl: recipeData.sourceUrl,
+    sourceLabel: recipeData.sourceLabel,
+    cookbookName: recipeData.cookbook?.name ?? null,
+    cookbookShortcode: recipeData.cookbook?.shortcode ?? null,
+    notionPageId: recipeData.externalIds?.[0]?.externalId ?? null,
+  }),
+});
+
 export const dbRecipeToTopLevel = (
-  // The cookbook/forkedFrom joins are optional: only the relation-loaded reads
-  // carry them, and a recipe read without them just renders unlinked (no
-  // source badge, no fork pointer) rather than forcing every caller to join a
-  // table it doesn't otherwise need.
-  recipeData: RecipeSelect & {
-    cookbook?: { shortcode: string; name?: string } | null;
-    forkedFrom?: { shortcode: string; name: string } | null;
-    /** Live Notion page identifiers (`RECIPE_SOURCE_RELATIONS`). */
-    externalIds?: { externalId: string }[];
-  },
+  recipeData: RecipeProvenanceRow,
 ): RecipeTopLevel => {
   return {
     id: parseShortcodeFor("recipe", recipeData.shortcode),
     name: recipeData.name,
     createdAt: recipeData.createdAt,
     updatedAt: recipeData.updatedAt,
-    // A Website recipe's page is `sourceUrl`; the API exposes it as meta.url.
-    meta: recipeMetaFromColumns(
-      recipeData,
-      recipeData.sourceType === "Website" ? recipeData.sourceUrl : null,
-    ),
-    source: recipeSourceFromDb({
-      sourceType: recipeData.sourceType,
-      sourceUrl: recipeData.sourceUrl,
-      sourceLabel: recipeData.sourceLabel,
-      cookbookName: recipeData.cookbook?.name ?? null,
-      cookbookShortcode: recipeData.cookbook?.shortcode ?? null,
-      notionPageId: recipeData.externalIds?.[0]?.externalId ?? null,
-    }),
+    ...recipeProvenanceFields(recipeData),
     yield: recipeData.yield,
     servings: recipeData.servings,
     fieldResolutions: resolveRecipeServings(recipeData),
@@ -211,38 +212,19 @@ type RecipeShallowOut = Omit<
   "meals" | "sectionCount" | "displayImages" | "dataQuality"
 >;
 
+export const recipeTotalsFields = (
+  recipeData: Pick<RecipeSelect, "totals" | "totalsComputedAt">,
+) => {
+  const totals = totalsForRead(recipeData.totals, recipeData.totalsComputedAt);
+  return { totals, ...totalsPreview(totals) };
+};
+
 export const dbRecipeToAPIShallow: (
   recipeParam: RecipeSelect,
-) => RecipeShallowOut = (recipeData) => {
-  const totals = totalsForRead(recipeData.totals, recipeData.totalsComputedAt);
-  return {
-    ...dbRecipeToTopLevel(recipeData),
-    totals,
-    ...totalsPreview(totals),
-  };
-};
-
-export type RecipeListDB = RecipeSelect & {
-  mealCount: number | string;
-  sectionCount: number | string;
-};
-
-export const dbRecipeToListAPI = (
-  recipeData: RecipeListDB,
-  displayImages: DisplayImageSummary[],
-  dataQuality: DataQuality,
-): RecipeListItem => {
-  const { mealCount, sectionCount, ...rest } = recipeData;
-  return {
-    ...dbRecipeToAPIShallow(rest),
-    // count() returns bigint (string over the wire), so coerce — mirrors the
-    // ingredient list's appearsInRecipes/recipeCount handling.
-    meals: Number(mealCount),
-    sectionCount: Number(sectionCount),
-    displayImages,
-    dataQuality,
-  };
-};
+) => RecipeShallowOut = (recipeData) => ({
+  ...dbRecipeToTopLevel(recipeData),
+  ...recipeTotalsFields(recipeData),
+});
 
 const mapRecipeSections = (
   sections: RecipeDeepDB["sections"] | RecipeGraphDB["sections"],

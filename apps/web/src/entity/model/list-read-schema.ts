@@ -8,6 +8,9 @@ import {
   type ListReadRow,
 } from "./list-read-fields";
 
+export const listReadSchema = (entity: ListEntity) =>
+  ENTITY_LIST_READ_SCHEMAS[entity].schema;
+
 export const listReadFields = (entity: ListEntity) =>
   ENTITY_LIST_READ_SCHEMAS[entity].fields;
 

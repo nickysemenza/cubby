@@ -73,11 +73,7 @@ import {
 } from "~/server/generic/entity-links/repo/entity-links";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  hydrateListRead,
-  loadListGroup,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveAllOrThrow,
@@ -305,6 +301,21 @@ type GardenEntryReadRow = Omit<
 > &
   Partial<Pick<GardenEntryWithReferences, "plantings" | "images">>;
 
+const entryPlantingFields = (links: GardenEntryWithReferences["plantings"]) => {
+  const plantings = links
+    .flatMap((link) => (link.planting ? [link.planting] : []))
+    .sort((left, right) => left.shortcode.localeCompare(right.shortcode));
+  return {
+    plantingIds: plantings.map((linked) =>
+      parseShortcodeFor("planting", linked.shortcode),
+    ),
+    plantings: plantings.map((linked) => ({
+      id: parseShortcodeFor("planting", linked.shortcode),
+      name: plantingDisplayName(linked.plant),
+    })),
+  };
+};
+
 const mapEntryRead = (
   row: GardenEntryReadRow,
   projection: ListProjection,
@@ -320,19 +331,10 @@ const mapEntryRead = (
     }),
   };
   if (wantsListGroup(projection, "relations")) {
-    const plantings = (row.plantings ?? [])
-      .flatMap((link) => (link.planting ? [link.planting] : []))
-      .sort((left, right) => left.shortcode.localeCompare(right.shortcode));
     Object.assign(result, {
       locationId: parseShortcodeFor("location", row.location.shortcode),
       locationName: row.location.name,
-      plantingIds: plantings.map((linked) =>
-        parseShortcodeFor("planting", linked.shortcode),
-      ),
-      plantings: plantings.map((linked) => ({
-        id: parseShortcodeFor("planting", linked.shortcode),
-        name: plantingDisplayName(linked.plant),
-      })),
+      ...entryPlantingFields(row.plantings ?? []),
     });
   }
   if (wantsListGroup(projection, "media"))
@@ -873,7 +875,7 @@ export const plantingListRead = async (
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
 ) => {
-  return plantingScaffold.list(
+  return plantingScaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
@@ -897,12 +899,37 @@ export const plantingListRead = async (
               : undefined,
           },
         }),
-      hydrate: (rows, selected) =>
-        hydrateListRead(db, "planting", rows, selected, {
-          media: true,
-          load: async () => undefined,
-          mapRow: (row, { quality }) => mapPlantingRead(row, selected, quality),
-        }),
+      read: {
+        media: true,
+        bindings: (bind) => [
+          bind(plantingListItemOut.pick({ displayName: true }), (row) => ({
+            displayName: plantingDisplayName(row.plant),
+          })),
+          bind(
+            plantingListItemOut.pick({
+              plantId: true,
+              sourceProductId: true,
+              locationId: true,
+              taskId: true,
+              plantName: true,
+              sourceProductName: true,
+              locationName: true,
+              taskName: true,
+            }),
+            plantingRelationFields,
+          ),
+          bind(
+            plantingListItemOut.pick({
+              guideSowWindow: true,
+              guideTransplantWindow: true,
+              expectedHarvestStart: true,
+              expectedHarvestEnd: true,
+              expectedHarvest: true,
+            }),
+            plantingDerivedFields,
+          ),
+        ],
+      },
     },
   );
 };
@@ -954,7 +981,7 @@ export const gardenEntryListRead = async (
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
 ) => {
-  return gardenEntryScaffold.list(
+  return gardenEntryScaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
@@ -972,29 +999,53 @@ export const gardenEntryListRead = async (
               : undefined,
           },
         }),
-      hydrate: (rows, selected) =>
-        hydrateListRead(db, "gardenEntry", rows, selected, {
-          media: true,
-          load: () =>
-            loadListGroup(selected, "relations", () =>
-              loadEntryPlantings(
-                db,
-                rows.map((row) => row.id),
-              ),
+      read: {
+        media: true,
+        bindings: (bind) => {
+          const plantings = bind.batch(({ rows }) =>
+            loadEntryPlantings(
+              db,
+              rows.map((row) => row.id),
             ),
-          mapRow: (row, { loaded: plantingsByEntry, quality }) =>
-            mapEntryRead(
-              {
-                ...row,
-                plantings: plantingsByEntry?.get(row.id),
-                images: (row.images ?? []).flatMap((entry) =>
+          );
+          return [
+            bind(gardenEntryListItemOut.pick({ displayName: true }), (row) => ({
+              displayName: gardenEntryDisplayName({
+                kind: row.kind,
+                observedOn: row.observedOn,
+                locationName: row.location.name,
+              }),
+            })),
+            bind(
+              gardenEntryListItemOut.pick({
+                locationId: true,
+                locationName: true,
+              }),
+              (row) => ({
+                locationId: parseShortcodeFor(
+                  "location",
+                  row.location.shortcode,
+                ),
+                locationName: row.location.name,
+              }),
+            ),
+            plantings.fields(
+              gardenEntryListItemOut.pick({
+                plantingIds: true,
+                plantings: true,
+              }),
+              (row, loaded) => entryPlantingFields(loaded.get(row.id) ?? []),
+            ),
+            bind(gardenEntryListItemOut.pick({ images: true }), (row) => ({
+              images: mapImages(
+                (row.images ?? []).flatMap((entry) =>
                   "image" in entry ? [entry] : [],
                 ),
-              },
-              selected,
-              quality,
-            ),
-        }),
+              ),
+            })),
+          ];
+        },
+      },
     },
   );
 };

@@ -12,7 +12,6 @@ import {
 } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
-  LocationListItemOut,
   LocationListRefOut,
   LocationOut,
   LocationValuation,
@@ -40,7 +39,6 @@ import {
   primaryGtinOf,
 } from "~/server/domains/product/repo/mappers";
 import type { ProductPricing } from "~/server/domains/product/repo/pricing";
-import { valuationLabel } from "~/server/generic/list/repo/list-display-labels";
 
 /**
  * Transform a location DB record to API format.
@@ -83,21 +81,20 @@ const dbLocationToListRef = (
   type: parseLocationType(locationData.type),
 });
 
-export const dbLocationToListAPI = <Q extends DataQuality | undefined>(
-  locationData: LocationListDB,
-  pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
-  valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
-  dataQuality: Q,
-): Omit<LocationListItemOut, "displayImages" | "dataQuality"> & {
-  dataQuality: Q;
-} => ({
-  ...dbLocationToAPI(locationData, valuations, dataQuality),
-  valuationLabel: valuationLabel(valuations?.get(locationData.id)),
+export const locationReferenceFields = (
+  locationData: Pick<LocationListDB, "parent" | "children">,
+) => ({
   parent:
     locationData.parent && isNotDeleted(locationData.parent)
       ? dbLocationToListRef(locationData.parent)
       : null,
   children: mapRelation(locationData.children, dbLocationToListRef),
+});
+
+export const locationInventoryFields = (
+  locationData: Pick<LocationListDB, "inventoryEntries">,
+  pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
+) => ({
   inventoryEntries: mapRelation(
     locationData.inventoryEntries.filter((entry) =>
       isNotDeleted(entry.product),

@@ -5,7 +5,6 @@ import { expenseCostSign, expenseListItemOut } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import { and, inArray, type SQL, sql } from "drizzle-orm";
 
-import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -25,8 +24,6 @@ import {
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { disposalPurchaseIds } from "~/server/domains/product/repo/ownership";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   ListContext,
   listFilterValues,
@@ -41,7 +38,7 @@ import {
 } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  loadListGroup,
+  type ListReadOptions,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
@@ -57,7 +54,12 @@ import {
   loadExpenseProjectAllocations,
 } from "./expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
-import { dbExpenseToAPI } from "./helpers";
+import {
+  expenseRelationFields,
+  expenseDerivedFields,
+  expenseResolutionFields,
+  expenseMediaFields,
+} from "./helpers";
 
 /** Lift a Purchase predicate into the Expense selection. Deleted purchases must
  * not let expenses match their former vendor or other charge attributes. */
@@ -299,11 +301,11 @@ export const expenseListRead = async (
   // resolves once.
   const context = await expenseScaffold.context(db, request);
   const where = await buildExpenseWhereClause(db, filters, { context });
-  const page = expenseScaffold.list(db, request, {
+  const page = expenseScaffold.read(db, request, {
     context,
     where,
     load: (where) => loadExpensePage(db, where, projection),
-    hydrate: (rows) => hydrateExpenseRows(db, rows, projection),
+    read: expenseRead(db),
   });
   if (readIntent !== "page" || projection.kind !== "full") return page;
   const [result, [sum]] = await Promise.all([
@@ -335,77 +337,107 @@ const loadExpensePage = (
   });
 };
 
-const hydrateExpenseRows = async (
-  db: Database,
-  rows: Awaited<ReturnType<typeof loadExpensePage>>,
-  projection: ListProjection,
-) => {
-  if (projection.kind === "base")
-    return projectListRows(
-      "expense",
-      rows.map((row) => ({ ...row, id: row.shortcode })),
-      projection,
-    );
-  const [allocations, dataQualities, spendingAllocations] = await Promise.all([
-    loadListGroup(projection, "relations", () =>
-      loadExpenseProjectAllocations(
-        db,
-        rows.map((row) => row.id),
-      ),
-    ),
-    loadListGroup(projection, "quality", () =>
-      loadDataQualities(
-        db,
-        "expense",
-        rows.map((row) => row.id),
-      ),
-    ),
-    // Derived trade/cost-type resolutions read the same allocation shares.
-    loadListGroup(projection, ["relations", "derived"], () =>
+type ExpenseListRow = Awaited<ReturnType<typeof loadExpensePage>>[number];
+const expenseJoinedRow = (row: ExpenseListRow) => {
+  if (row.purchase && !("vendor" in row.purchase))
+    throw new Error("Expense vendor relation was not loaded");
+  return {
+    ...row,
+    project: row.project ?? null,
+    product: row.product ?? null,
+    purchase: row.purchase ?? null,
+  };
+};
+const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
+  media: true,
+  bindings: (bind) => {
+    const spending = bind.batch(({ rows }) =>
       loadExpenseSpendingAllocations(
         db,
         rows.map((row) => row.id),
       ),
-    ),
-  ]);
-  const allocationsByExpense = new Map<
-    (typeof rows)[number]["id"],
-    NonNullable<typeof allocations>
-  >();
-  for (const allocation of allocations ?? []) {
-    const existing = allocationsByExpense.get(allocation.expenseId) ?? [];
-    existing.push(allocation);
-    allocationsByExpense.set(allocation.expenseId, existing);
-  }
-
-  const selectedRows = rows.map((row) => {
-    const purchase = row.purchase;
-    if (purchase && !("vendor" in purchase))
-      throw new Error("Expense vendor relation was not loaded");
-    const attributions =
-      row.attributions?.map((value) => {
-        if (!("ledgerParty" in value))
-          throw new Error("Expense attribution relation was not loaded");
-        return value;
-      }) ?? [];
-    return {
-      ...row,
-      project: row.project ?? null,
-      product: row.product ?? null,
-      purchase: purchase ?? null,
-      attributions,
-      sourceClaims: row.sourceClaims ?? [],
-      projectAllocations: allocationsByExpense.get(row.id) ?? [],
-      spendingCategoryAllocations: spendingAllocations?.get(row.id),
-    };
-  });
-  const mapRow = (row: (typeof selectedRows)[number]) =>
-    dbExpenseToAPI(row, dataQualities?.get(row.id));
-  const mapped = wantsListGroup(projection, "media")
-    ? await withDisplayImages(db, "expense", selectedRows, mapRow)
-    : selectedRows.map(mapRow);
-  return projectListRows("expense", mapped, projection);
-};
+    );
+    const projects = bind.batch(async ({ rows }) => {
+      const values = await loadExpenseProjectAllocations(
+        db,
+        rows.map((row) => row.id),
+      );
+      const byExpense = new Map<ExpenseListRow["id"], typeof values>();
+      for (const value of values) {
+        const group = byExpense.get(value.expenseId) ?? [];
+        group.push(value);
+        byExpense.set(value.expenseId, group);
+      }
+      return byExpense;
+    });
+    const allocations = bind.batch(async (page) => ({
+      projects: await projects.load(page),
+      spending: await spending.load(page),
+    }));
+    return [
+      allocations.fields(
+        expenseListItemOut.pick({
+          projectId: true,
+          projectName: true,
+          productId: true,
+          productName: true,
+          purchaseId: true,
+          vendorId: true,
+          vendor: true,
+          beneficiaries: true,
+          funders: true,
+          sourceClaims: true,
+          spendingCategoryId: true,
+          spendingCategoryName: true,
+          projectAllocations: true,
+          spendingCategoryAllocations: true,
+        }),
+        (row, loaded) => {
+          if (!row.attributions || !row.sourceClaims)
+            throw new Error("Expense audit children were not loaded");
+          const attributions = row.attributions.map((value) => {
+            if (!("ledgerParty" in value))
+              throw new Error("Expense attribution relation was not loaded");
+            return value;
+          });
+          return expenseRelationFields({
+            ...expenseJoinedRow(row),
+            attributions,
+            sourceClaims: row.sourceClaims,
+            projectAllocations: loaded.projects.get(row.id) ?? [],
+            spendingCategoryAllocations: loaded.spending.get(row.id),
+          });
+        },
+      ),
+      spending.fields(
+        expenseListItemOut.pick({
+          trade: true,
+          purchaseDate: true,
+          purchaseDisplayLabel: true,
+          orderId: true,
+          orderUrl: true,
+        }),
+        (row, loaded) =>
+          expenseDerivedFields({
+            ...expenseJoinedRow(row),
+            spendingCategoryAllocations: loaded.get(row.id),
+          }),
+      ),
+      allocations.fields(
+        expenseListItemOut.pick({ fieldResolutions: true }),
+        (row, loaded) =>
+          expenseResolutionFields({
+            ...expenseJoinedRow(row),
+            projectAllocations: loaded.projects.get(row.id) ?? [],
+            spendingCategoryAllocations: loaded.spending.get(row.id),
+          }),
+      ),
+      bind(expenseListItemOut.pick({ vendorLogo: true }), (row) =>
+        expenseMediaFields(expenseJoinedRow(row)),
+      ),
+    ];
+  },
+});
 
 export const expenseList = completeListReader(
   expenseListItemOut,

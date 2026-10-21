@@ -98,7 +98,6 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listGroupFields,
-  hydrateListRead,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
 import { planSlotCollisions } from "~/server/generic/merge/repo/collisions";
@@ -612,7 +611,7 @@ export const vendorListRead = async (
   } = vendorColumns;
   const request = { filters, sorts, pagination, readIntent, projection };
   const context = await vendorScaffold.context(db, request);
-  return vendorScaffold.list(db, request, {
+  return vendorScaffold.read(db, request, {
     context,
     where: buildVendorWhereClause(filters, context),
     select: async (page) => {
@@ -647,25 +646,19 @@ export const vendorListRead = async (
           );
       return query;
     },
-    hydrate: (rows) =>
-      hydrateListRead(db, "vendor", rows, projection, {
-        load: async () => undefined,
-        mapRow: (row) => {
-          const agentHints = vendorAgentHints.parse(row.agentHints);
-          return {
-            ...row,
-            id: parseShortcodeFor("vendor", row.shortcode),
-            orderEvidence: vendorOrderEvidence
-              .nullable()
-              .parse(row.orderEvidence),
-            agentHints,
-            agentHintsLabel: agentHintsLabel(agentHints),
-            ...listGroupFields(projection, "media", () => ({
-              logo: vendorLogoToAPI(row.logo ?? null),
-            })),
-          };
-        },
-      }),
+    read: {
+      references: { defaultSpendingCategoryId: { kind: "public" } },
+      bindings: (bind) => [
+        bind(vendorOut.pick({ agentHintsLabel: true }), (row) => ({
+          agentHintsLabel: agentHintsLabel(
+            vendorAgentHints.parse(row.agentHints),
+          ),
+        })),
+        bind(vendorOut.pick({ logo: true }), (row) => ({
+          logo: vendorLogoToAPI(row.logo ?? null),
+        })),
+      ],
+    },
   });
 };
 

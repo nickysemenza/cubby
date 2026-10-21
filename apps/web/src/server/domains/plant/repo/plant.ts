@@ -20,7 +20,6 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import type { ListReadRow } from "~/entity/model/list-read-fields";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -47,9 +46,8 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  hydrateListRead,
-  loadListGroup,
-  wantsListGroup,
+  listReadPlan,
+  type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
@@ -58,10 +56,7 @@ import {
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
-import {
-  lookupEntityReferences,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /** A plant keeps its garden history and seed stock; both block a delete. */
@@ -96,54 +91,39 @@ type PlantRow = typeof plant.$inferSelect;
 
 const scaffold = listScaffold("plant", plant);
 
-const hydrateRead = async (
-  db: Database | DrizzleTransaction,
-  rows: PlantRow[],
-  projection: ListProjection,
-): Promise<ListReadRow[]> => {
-  return hydrateListRead(db, "plant", rows, projection, {
-    load: () =>
-      loadListGroup(projection, "relations", () =>
-        lookupEntityReferences(
-          db,
-          "ingredient",
-          rows.map((row) => row.ingredientId),
-        ),
-      ),
-    mapRow: (row, { loaded: ingredients }) => {
-      const key = resolveGardenGuideKey(row.gardenGuideKey);
-      const linked = row.ingredientId
-        ? ingredients?.get(row.ingredientId)
-        : undefined;
-      const windows = wantsListGroup(projection, "derived")
-        ? guideWindowsFor(key)
-        : undefined;
-      const result = {
-        ...row,
-        id: parseShortcodeFor("plant", row.shortcode),
-        gardenGuideKey: key,
-        displayName: plantDisplayName(row.name, row.gardenGuideKey),
-      };
-      if (wantsListGroup(projection, "relations"))
-        Object.assign(result, {
-          ingredientId: linked?.id ?? null,
-          ingredientName: linked?.name ?? null,
-        });
-      if (windows)
-        Object.assign(result, {
+const plantReadOptions = {
+  references: {
+    ingredientId: { kind: "lookup", name: "ingredientName", missing: "null" },
+  },
+  bindings: (bind) => [
+    bind(plantOut.pick({ gardenGuideKey: true, displayName: true }), (row) => ({
+      gardenGuideKey: resolveGardenGuideKey(row.gardenGuideKey),
+      displayName: plantDisplayName(row.name, row.gardenGuideKey),
+    })),
+    bind(
+      plantOut.pick({
+        guideSowWindow: true,
+        guideTransplantWindow: true,
+        routes: true,
+      }),
+      (row) => {
+        const key = resolveGardenGuideKey(row.gardenGuideKey);
+        const windows = guideWindowsFor(key);
+        return {
           guideSowWindow: windows.sow,
           guideTransplantWindow: windows.transplant,
           routes: plantRoutesFor(key, Number(householdLocalDate().slice(5, 7))),
-        });
-      return result;
-    },
-  });
-};
+        };
+      },
+    ),
+  ],
+} satisfies ListReadOptions<PlantRow>;
+const plantRead = listReadPlan<PlantRow>("plant", plantReadOptions);
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: PlantRow[],
 ): Promise<PlantOut[]> =>
-  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+  (await plantRead.read(db, rows, { kind: "full" })).map((row) =>
     plantOut.parse(row),
   );
 
@@ -154,11 +134,11 @@ export const listPlantsRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
-      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+      read: plantReadOptions,
     },
   );
 

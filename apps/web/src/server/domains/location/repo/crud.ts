@@ -22,7 +22,6 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 
-import { projectListRows } from "~/entity/model/list-read-schema";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
@@ -63,6 +62,7 @@ import {
   loadLiveInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
 import { getHomeLocation } from "~/server/domains/location/repo/home";
+import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import type {
   LocationFilters,
   LocationWithParentChild,
@@ -71,7 +71,6 @@ import { rollupLocationValuations } from "~/server/domains/location/repo/locatio
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
   defineMutationWriter,
@@ -92,10 +91,8 @@ import {
 } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  loadListGroup,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { valuationLabel } from "~/server/generic/list/repo/list-display-labels";
+import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
@@ -104,11 +101,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import {
-  buildLocationWithChildren,
-  dbLocationToAPI,
-  dbLocationToListAPI,
-} from "./helpers";
+import { buildLocationWithChildren } from "./helpers";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 import {
@@ -642,7 +635,7 @@ const locationValuations = listPrepare(async (db) => {
 
 const qb = new QueryBuilder();
 
-// Inner-joins Product (notDeleted) because dbLocationToListAPI drops inventory
+// Inner-joins Product (notDeleted) because the Location inventory projection drops inventory
 // entries whose product is soft-deleted — without that join, a shelf holding
 // only deleted products would count as "has inventory" but render empty.
 // Installed fixtures aren't browsable stock, so `stockOnly()`.
@@ -729,11 +722,7 @@ export const locationListRead = async (
   const prepared = context.has(locationValuations)
     ? context.get(locationValuations)
     : undefined;
-  const entryValuations =
-    prepared?.entryValuations ??
-    (readIntent !== "count" && wantsListGroup(projection, "relations")
-      ? await loadLiveInventoryValuations(db)
-      : undefined);
+  const entryValuations = prepared?.entryValuations;
 
   // A count never orders, and skipped the prepare a valuation sort reads.
   const orderByClause: SQL[] =
@@ -741,7 +730,7 @@ export const locationListRead = async (
       ? []
       : locationScaffold.orderBy(sorts, {}, filters, context);
 
-  return locationScaffold.list(
+  return locationScaffold.read(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -770,66 +759,91 @@ export const locationListRead = async (
               : undefined,
           },
         }),
-      hydrate: async (results) => {
-        const hydratedResults = results.map((row) => ({
-          ...row,
-          product:
-            row.product && "category" in row.product ? row.product : null,
-          inventoryEntries: (row.inventoryEntries ?? []).flatMap((entry) =>
-            "product" in entry ? [entry] : [],
-          ),
-          images: (row.images ?? []).flatMap((entry) =>
-            "image" in entry ? [entry] : [],
-          ),
-        }));
-        const pageProducts = hydratedResults.flatMap((row) =>
-          row.inventoryEntries.map((entry) => entry.product),
-        );
-        const [pricingByProductId, valuations, dataQualities] =
-          await Promise.all([
-            loadListGroup(projection, "relations", () =>
-              loadProductPricing(db, pageProducts),
-            ),
-            loadListGroup(projection, "derived", () =>
-              prepared
-                ? Promise.resolve(
-                    rollupLocationValuations(
-                      prepared.inputs.entries,
-                      prepared.inputs.locations,
-                    ),
-                  )
-                : computeLocationValuations(db, entryValuations),
-            ),
-            loadListGroup(projection, "quality", () =>
-              loadDataQualities(
-                db,
-                "location",
-                results.map((row) => row.id),
+      read: {
+        media: true,
+        bindings: (bind) => {
+          const entryValues = bind.batch(() =>
+            entryValuations
+              ? Promise.resolve(entryValuations)
+              : loadLiveInventoryValuations(db),
+          );
+          const inventory = bind.batch(async (page) => {
+            const rows = page.rows;
+            const entries = rows.flatMap((row) =>
+              (row.inventoryEntries ?? []).flatMap((entry) =>
+                "product" in entry ? [entry] : [],
               ),
+            );
+            const [pricing, valuations] = await Promise.all([
+              loadProductPricing(
+                db,
+                entries.map((entry) => entry.product),
+              ),
+              entryValues.load(page),
+            ]);
+            return { pricing, valuations };
+          });
+          const valuations = bind.batch(async (page) =>
+            prepared
+              ? rollupLocationValuations(
+                  prepared.inputs.entries,
+                  prepared.inputs.locations,
+                )
+              : computeLocationValuations(db, await entryValues.load(page)),
+          );
+          return [
+            bind(locationListItemOut.pick({ type: true }), (row) => ({
+              type: parseLocationType(row.type),
+            })),
+            bind(locationListItemOut.pick({ product: true }), (row) => ({
+              product: mapLocationIdentityProduct({
+                ...row,
+                product:
+                  row.product && "category" in row.product ? row.product : null,
+              }),
+            })),
+            bind(
+              locationListItemOut.pick({ parent: true, children: true }),
+              (row) =>
+                locationReferenceFields({
+                  parent: row.parent ?? null,
+                  children: row.children ?? [],
+                }),
             ),
-          ]);
-        const valuedResults = hydratedResults.map((row) => ({
-          ...row,
-          children: row.children ?? [],
-          parent: row.parent ?? null,
-          inventoryEntries: attachInventoryValuations(
-            row.inventoryEntries ?? [],
-            entryValuations ?? new Map(),
-          ),
-        }));
-        const mapRow = (row: (typeof valuedResults)[number]) =>
-          wantsListGroup(projection, "relations")
-            ? dbLocationToListAPI(
-                row,
-                pricingByProductId ?? new Map(),
-                valuations,
-                dataQualities?.get(row.id),
-              )
-            : dbLocationToAPI(row, valuations, dataQualities?.get(row.id));
-        const mapped = wantsListGroup(projection, "media")
-          ? await withDisplayImages(db, "location", valuedResults, mapRow)
-          : valuedResults.map(mapRow);
-        return projectListRows("location", mapped, projection);
+            bind(locationListItemOut.pick({ images: true }), (row) => ({
+              images: mapImages(
+                (row.images ?? []).flatMap((entry) =>
+                  "image" in entry ? [entry] : [],
+                ),
+              ),
+            })),
+            inventory.fields(
+              locationListItemOut.pick({ inventoryEntries: true }),
+              (row, loaded) =>
+                locationInventoryFields(
+                  {
+                    inventoryEntries: attachInventoryValuations(
+                      (row.inventoryEntries ?? []).flatMap((entry) =>
+                        "product" in entry ? [entry] : [],
+                      ),
+                      loaded.valuations,
+                    ),
+                  },
+                  loaded.pricing,
+                ),
+            ),
+            valuations.fields(
+              locationListItemOut.pick({
+                valuation: true,
+                valuationLabel: true,
+              }),
+              (row, loaded) => ({
+                valuation: loaded.get(row.id) ?? null,
+                valuationLabel: valuationLabel(loaded.get(row.id)),
+              }),
+            ),
+          ];
+        },
       },
     },
   );
@@ -973,37 +987,41 @@ export const locationSearch = async (
   // surfaces cannot drift.
   const whereClause = locationScaffold.where(filters);
 
-  return locationScaffold.list(
+  const page = await locationScaffold.raw(
     db,
     { filters, sorts, pagination },
     {
       where: whereClause,
       // The picker's own sort roster, not the list's declared one.
       orderBy: buildOrderBy(location, sorts, [...locationPickerSortableFields]),
-      hydrate: async (rows): Promise<LocationPickerItemOut[]> => {
-        const ids = rows.map((row) => row.id);
-        const [ancestorsById, coverById, productCoverById] = await Promise.all([
-          loadLocationAncestors(db, ids),
-          loadLocationCoverImages(db, ids),
-          loadIdentityProductCoverImages(
-            db,
-            rows.flatMap((row) => (row.productId ? [row.productId] : [])),
-          ),
-        ]);
-        return rows.map((row) => ({
-          id: parseShortcodeFor("location", row.shortcode),
-          name: row.name,
-          type: parseLocationType(row.type),
-          aliases: row.aliases ?? [],
-          ancestors: ancestorsById.get(row.id) ?? [],
-          coverImage:
-            coverById.get(row.id) ??
-            (row.productId ? productCoverById.get(row.productId) : null) ??
-            null,
-        }));
-      },
     },
   );
+  if (!page.data.length) return { ...page, data: [] };
+  const rows = page.data;
+
+  const ids = rows.map((row) => row.id);
+  const [ancestorsById, coverById, productCoverById] = await Promise.all([
+    loadLocationAncestors(db, ids),
+    loadLocationCoverImages(db, ids),
+    loadIdentityProductCoverImages(
+      db,
+      rows.flatMap((row) => (row.productId ? [row.productId] : [])),
+    ),
+  ]);
+  return {
+    ...page,
+    data: rows.map((row) => ({
+      id: parseShortcodeFor("location", row.shortcode),
+      name: row.name,
+      type: parseLocationType(row.type),
+      aliases: row.aliases ?? [],
+      ancestors: ancestorsById.get(row.id) ?? [],
+      coverImage:
+        coverById.get(row.id) ??
+        (row.productId ? productCoverById.get(row.productId) : null) ??
+        null,
+    })),
+  };
 };
 
 /**

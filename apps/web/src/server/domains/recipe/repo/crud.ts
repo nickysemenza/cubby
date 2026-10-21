@@ -82,10 +82,7 @@ import {
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { recipeListLabels } from "~/server/generic/list/repo/list-display-labels";
-import {
-  hydrateListRead,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
@@ -96,6 +93,9 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
+
+import { recipeProvenanceFields, recipeTotalsFields } from "./helpers";
+import { resolveRecipeServings } from "./servings";
 
 export const RECIPE_DELETE_EDGE_POLICY = {
   "RecipeSection.recipeId": {
@@ -139,8 +139,6 @@ export const RECIPE_DELETE_EDGE_POLICY = {
 import {
   dbRecipeToAPI,
   dbRecipeToAPIGraph,
-  dbRecipeToAPIShallow,
-  dbRecipeToTopLevel,
   liveMealCountForRecipeSql,
   liveSectionCountForRecipeSql,
 } from "~/server/domains/recipe/repo/helpers";
@@ -505,7 +503,7 @@ export const recipeListRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) => {
-  return recipeScaffold.list(
+  return recipeScaffold.read(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -532,25 +530,58 @@ export const recipeListRead = async (
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: async (rows, selected) =>
-        hydrateListRead(db, "recipe", rows, selected, {
-          media: true,
-          load: async () => undefined,
-          mapRow: (row) => {
-            const result = dbRecipeToTopLevel(row);
-            if (wantsListGroup(selected, "relations"))
-              Object.assign(result, { meals: Number(row.mealCount) });
-            if (wantsListGroup(selected, "derived")) {
-              const shallow = dbRecipeToAPIShallow(row);
-              Object.assign(result, {
-                ...shallow,
-                ...recipeListLabels(shallow),
+      read: {
+        media: true,
+        bindings: (bind) => [
+          bind(
+            recipeListItemOut.pick({ meta: true, source: true }),
+            recipeProvenanceFields,
+          ),
+          // The flat list intentionally carries no fork graph; detail owns its richer provenance.
+          bind(
+            recipeListItemOut.pick({
+              forkedFromRecipeId: true,
+              forkedFromRecipeName: true,
+            }),
+            () => ({ forkedFromRecipeId: null, forkedFromRecipeName: null }),
+          ),
+          bind(recipeListItemOut.pick({ meals: true }), (row) => {
+            if (row.mealCount === null)
+              throw new Error("Recipe meal count was not loaded");
+            return { meals: Number(row.mealCount) };
+          }),
+          bind(recipeListItemOut.pick({ fieldResolutions: true }), (row) => ({
+            fieldResolutions: resolveRecipeServings(row),
+          })),
+          bind(
+            recipeListItemOut.pick({
+              totals: true,
+              cost: true,
+              calories: true,
+              protein: true,
+              carbs: true,
+              fat: true,
+              costTotalLabel: true,
+              caloriesTotalLabel: true,
+              totalMinutesLabel: true,
+              sectionCount: true,
+            }),
+            (row) => {
+              if (row.sectionCount === null)
+                throw new Error("Recipe section count was not loaded");
+              const values = recipeTotalsFields(row);
+              return {
+                ...values,
+                ...recipeListLabels({
+                  totals: values.totals,
+                  meta: recipeProvenanceFields(row).meta,
+                }),
                 sectionCount: Number(row.sectionCount),
-              });
-            }
-            return result;
-          },
-        }),
+              };
+            },
+          ),
+        ],
+      },
     },
   );
 };

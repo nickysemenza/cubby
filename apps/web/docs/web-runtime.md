@@ -141,6 +141,23 @@ publication. Ordinary `entity.listEnrichment` reads remain provider-free.
 Queued batches discard cancelled members after shared admission; started work
 retains normal publication and freshness checks.
 
+Canonical repository lists use `listScaffold.read` with schema-picked output
+bindings in `list-projection.ts`. The assembler selects and validates present
+canonical scalars, converts root identity, excludes private foreign keys, and
+owns quality/media completion. Reference instructions distinguish stored UUID
+lookups from already projected public IDs. Domain bindings retain their typed
+computations and page-batch inputs; their output schema determines admission
+from the canonical partition. Shared batches memoize once for the selected page,
+including explicit dependencies between domain computations. Unknown demand or
+conflicting writers fail before selection; count and empty pages never load
+bindings. A skipped field remains absent, and a required field missing from a
+selected source or binding fails before schema defaults run.
+
+Narrow pickers and internal target readers use `listScaffold.raw` and keep their
+own output contract. Both methods share authoritative filtering, sorting,
+pagination, exact counts, prepared context and selected-ID order restoration.
+There is no public full-row hydration callback.
+
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;
 optional statistics such as a Product barcode cannot gate opening the dialog.

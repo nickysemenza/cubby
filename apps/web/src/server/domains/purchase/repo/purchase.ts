@@ -153,11 +153,7 @@ import {
   reconciliationLabel,
   settlementLabel,
 } from "~/server/generic/list/repo/list-display-labels";
-import {
-  listGroupFields,
-  hydrateListRead,
-  loadListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { listGroupFields } from "~/server/generic/list/repo/list-projection";
 import {
   finalizeMerge,
   mergeNotes,
@@ -688,7 +684,7 @@ export const purchaseListRead = async (
     documentCount,
     ...core
   } = purchaseColumns;
-  return purchaseScaffold.list(
+  return purchaseScaffold.read(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -727,104 +723,165 @@ export const purchaseListRead = async (
           .limit(page.limit)
           .offset(page.offset);
       },
-      hydrate: (rows) =>
-        hydrateListRead(db, "purchase", rows, projection, {
-          media: true,
-          load: () =>
-            loadListGroup(projection, "derived", async () => {
-              const ids = rows.map((row) => row.id);
-              const [financials, categories] = await Promise.all([
-                loadPurchaseFinancialAggregates(db, ids),
-                loadPurchaseSpendingCategorySummaries(db, ids),
-              ]);
-              return { financials, categories };
-            }),
-          mapRow: (row, { loaded: derived }) => {
-            const financial =
-              derived?.financials.get(row.id) ??
-              emptyPurchaseFinancialAggregate();
-            const reconciliation = reconcilePurchase({
-              statedTotal: row.statedTotal,
-              expenseTotal: Number(row.vendorExpenseTotal),
-              expenseCount: Number(row.vendorExpenseCount),
-              unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
-              postedRefundTotal: financial.postedRefundTotal,
-            });
-            const financialReconciliation = calculateFinancialReconciliation({
-              settleableExpenseTotal: row.settleableExpenseTotal!,
-              settleableUnpricedExpenseCount:
-                row.settleableUnpricedExpenseCount!,
-              ...financial,
-            });
-            return {
-              ...row,
-              purchaserOverrideId: row.purchaserOverrideId
-                ? parseShortcodeFor("ledgerParty", row.purchaserOverrideId)
-                : null,
-              id: parseShortcodeFor("purchase", row.shortcode),
+      read: {
+        media: true,
+        references: { purchaserOverrideId: { kind: "public" } },
+        bindings: (bind) => {
+          const financials = bind.batch(({ rows }) =>
+            loadPurchaseFinancialAggregates(
+              db,
+              rows.map((row) => row.id),
+            ),
+          );
+          const categories = bind.batch(({ rows }) =>
+            loadPurchaseSpendingCategorySummaries(
+              db,
+              rows.map((row) => row.id),
+            ),
+          );
+          return [
+            bind(purchaseOut.pick({ displayName: true }), (row) => ({
               displayName: purchaseLabel({
                 orderId: row.orderId,
                 displayLabel: row.displayLabel,
                 vendorName: row.vendorName,
                 date: row.date,
               }),
-              ...listGroupFields(projection, "relations", () => ({
-                spendingCategoryName: row.spendingCategoryName ?? null,
-                spendingCategoryId: row.spendingCategoryShortcode
-                  ? parseShortcodeFor(
-                      "spendingCategory",
-                      row.spendingCategoryShortcode,
-                    )
-                  : null,
-                vendorId: parseShortcodeFor("vendor", row.vendorShortcode!),
-                vendorAccountId: row.vendorAccountShortcode
-                  ? parseShortcodeFor(
-                      "vendorAccount",
-                      row.vendorAccountShortcode,
-                    )
-                  : null,
-                defaultProjectId: row.defaultProjectShortcode
-                  ? parseShortcodeFor("project", row.defaultProjectShortcode)
-                  : null,
-                orderUrl: purchaseOrderUrl({
-                  orderUrlTemplate: row.vendorOrderUrlTemplate ?? null,
-                  orderId: row.orderId,
-                }),
-              })),
-              ...listGroupFields(projection, "media", () => ({
+            })),
+            bind(
+              purchaseOut.pick({
+                spendingCategoryId: true,
+                vendorId: true,
+                vendorAccountId: true,
+                defaultProjectId: true,
+                orderUrl: true,
+              }),
+              (row) => {
+                if (!row.vendorShortcode)
+                  throw new Error("Purchase vendor was not loaded");
+                return {
+                  spendingCategoryId: row.spendingCategoryShortcode
+                    ? parseShortcodeFor(
+                        "spendingCategory",
+                        row.spendingCategoryShortcode,
+                      )
+                    : null,
+                  vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
+                  vendorAccountId: row.vendorAccountShortcode
+                    ? parseShortcodeFor(
+                        "vendorAccount",
+                        row.vendorAccountShortcode,
+                      )
+                    : null,
+                  defaultProjectId: row.defaultProjectShortcode
+                    ? parseShortcodeFor("project", row.defaultProjectShortcode)
+                    : null,
+                  orderUrl: purchaseOrderUrl({
+                    orderUrlTemplate: row.vendorOrderUrlTemplate ?? null,
+                    orderId: row.orderId,
+                  }),
+                };
+              },
+            ),
+            bind(
+              purchaseOut.pick({ images: true, vendorLogo: true }),
+              (row) => ({
                 images: [],
                 vendorLogo: row.vendorLogoKey
                   ? { url: getR2PublicUrl(row.vendorLogoKey) }
                   : null,
-              })),
-              ...listGroupFields(projection, "derived", () => ({
-                coverage: row.coverage!,
-                fieldResolutions: row.fieldResolutions,
+              }),
+            ),
+            bind(
+              purchaseOut.pick({
+                coverage: true,
+                bookingCoverage: true,
+                documentCoverage: true,
+                itemizationCoverage: true,
+                productsCoverage: true,
+                expenseCountLabel: true,
+              }),
+              (row) => {
+                if (
+                  !row.coverage ||
+                  row.expenseCount === undefined ||
+                  row.unpricedExpenseCount === undefined
+                )
+                  throw new Error(
+                    "Purchase coverage and expense counts were not loaded",
+                  );
+                return {
+                  coverage: row.coverage,
+                  bookingCoverage: row.coverage.booking,
+                  documentCoverage: row.coverage.document,
+                  itemizationCoverage: row.coverage.itemization,
+                  productsCoverage: row.coverage.products,
+                  expenseCountLabel: expenseCountLabel(
+                    Number(row.expenseCount),
+                    Number(row.unpricedExpenseCount),
+                  ),
+                };
+              },
+            ),
+            categories.fields(
+              purchaseOut.pick({ spendingCategorySummary: true }),
+              (row, loaded) => ({
                 spendingCategorySummary:
-                  derived?.categories.get(row.id) ??
-                  emptySpendingCategorySummary(),
-                bookingCoverage: row.coverage!.booking,
-                documentCoverage: row.coverage!.document,
-                itemizationCoverage: row.coverage!.itemization,
-                productsCoverage: row.coverage!.products,
-                reconciliation,
-                financialReconciliation,
-                expenseCountLabel: expenseCountLabel(
-                  Number(row.expenseCount),
-                  Number(row.unpricedExpenseCount),
-                ),
-                reconciliationLabel: reconciliationLabel({
+                  loaded.get(row.id) ?? emptySpendingCategorySummary(),
+              }),
+            ),
+            financials.fields(
+              purchaseOut.pick({
+                reconciliation: true,
+                financialReconciliation: true,
+                reconciliationLabel: true,
+                financialReconciliationLabel: true,
+              }),
+              (row, loaded) => {
+                const financial =
+                  loaded.get(row.id) ?? emptyPurchaseFinancialAggregate();
+                if (
+                  row.settleableExpenseTotal === undefined ||
+                  row.settleableUnpricedExpenseCount === undefined ||
+                  row.vendorExpenseTotal === undefined ||
+                  row.vendorExpenseCount === undefined ||
+                  row.vendorUnpricedExpenseCount === undefined ||
+                  row.expenseTotal === undefined
+                )
+                  throw new Error(
+                    "Purchase reconciliation aggregates were not loaded",
+                  );
+                const reconciliation = reconcilePurchase({
                   statedTotal: row.statedTotal,
-                  expenseTotal: Number(row.expenseTotal),
+                  expenseTotal: Number(row.vendorExpenseTotal),
+                  expenseCount: Number(row.vendorExpenseCount),
+                  unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
+                  postedRefundTotal: financial.postedRefundTotal,
+                });
+                const financialReconciliation =
+                  calculateFinancialReconciliation({
+                    settleableExpenseTotal: row.settleableExpenseTotal,
+                    settleableUnpricedExpenseCount:
+                      row.settleableUnpricedExpenseCount,
+                    ...financial,
+                  });
+                return {
                   reconciliation,
-                }),
-                financialReconciliationLabel: settlementLabel(
                   financialReconciliation,
-                ),
-              })),
-            };
-          },
-        }),
+                  reconciliationLabel: reconciliationLabel({
+                    statedTotal: row.statedTotal,
+                    expenseTotal: Number(row.expenseTotal),
+                    reconciliation,
+                  }),
+                  financialReconciliationLabel: settlementLabel(
+                    financialReconciliation,
+                  ),
+                };
+              },
+            ),
+          ];
+        },
+      },
     },
   );
 };
@@ -861,7 +918,7 @@ export function pagePurchaseRelationTargets(
   orderBy: SQL[],
   input: Pick<EntityRelationPageInput, "offset" | "limit">,
 ) {
-  return purchaseScaffold.list(
+  return purchaseScaffold.raw(
     db,
     {
       filters: {},
@@ -880,7 +937,6 @@ export function pagePurchaseRelationTargets(
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(input.offset),
-      hydrate: (rows) => rows,
     },
   );
 }

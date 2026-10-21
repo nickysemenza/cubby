@@ -1,7 +1,6 @@
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import {
   recipeGraphOut,
-  recipeListItemOut,
   recipeOut,
   recipeUsageOut,
 } from "@cubby/schemas/recipe";
@@ -18,7 +17,8 @@ import { computeRecipeUsages } from "./helpers";
 import {
   dbRecipeToAPI,
   dbRecipeToAPIGraph,
-  dbRecipeToListAPI,
+  recipeProvenanceFields,
+  recipeTotalsFields,
 } from "./helpers";
 import type { RecipeDeepDB, RecipeGraphDB } from "./internal-types";
 
@@ -166,117 +166,35 @@ const fullRecipeRow = {
 } satisfies RecipeDeepDB;
 
 describe("recipe repository helpers", () => {
-  it("returns the declared meals count without the former mealCount field", () => {
-    const result = dbRecipeToListAPI(
-      { ...baseRecipe, mealCount: "3", sectionCount: "2" },
-      [],
-      testCompleteDataQuality(),
+  // Provenance URL choice and pending totals are domain behavior shared by list
+  // bindings and detail; copying a complete list dictionary is not a regression.
+  it("keeps website provenance and marks missing totals pending", () => {
+    const value = recipeProvenanceFields(baseRecipe);
+    expect(value.meta.url).toBe("https://example.com/recipe");
+    expect(value.source).toEqual({
+      type: "website",
+      url: "https://example.com/recipe",
+    });
+    expect(recipeTotalsFields(baseRecipe).totals).toEqual(
+      withMacros({
+        cost: { status: "pending", reason: "totals_missing" },
+        nutrition: buildNutrition(() => ({
+          status: "pending",
+          reason: "totals_missing",
+        })),
+      }),
     );
-
-    expect(result.meals).toBe(3);
-    expect(result).not.toHaveProperty("mealCount");
-    expect(recipeListItemOut.parse(result)).toEqual(result);
   });
 
-  describe("dbRecipeToListAPI base fields", () => {
-    const listOf = (
-      recipe: Omit<
-        Parameters<typeof dbRecipeToListAPI>[0],
-        "mealCount" | "sectionCount"
-      >,
-    ) =>
-      dbRecipeToListAPI(
-        { ...recipe, mealCount: 0, sectionCount: 0 },
-        [],
-        testCompleteDataQuality(),
-      );
-
-    it("converts website recipe with URL without leaking DB-only fields", () => {
-      const result = listOf(baseRecipe);
-
-      expect(result).toEqual({
-        id: "RCP-A3F2",
-        name: "Test Recipe",
-        // No computed totals yet, so the preview figures are unknown.
-        cost: null,
-        calories: null,
-        protein: null,
-        carbs: null,
-        fat: null,
-        createdAt: CREATED_AT,
-        updatedAt: UPDATED_AT,
-        yield: null,
-        servings: null,
-        fieldResolutions: {
-          servings: {
-            mode: "inherit",
-            storedValue: null,
-            value: null,
-            fallbackValue: null,
-            source: "No serving yield",
-            sourceEntity: null,
-            matchesFallback: true,
-            canReset: false,
-          },
-        },
-        tags: [],
-        notes: null,
-        forkedFromRecipeId: null,
-        forkedFromRecipeName: null,
-        totals: withMacros({
-          cost: { status: "pending", reason: "totals_missing" },
-          nutrition: buildNutrition(() => ({
-            status: "pending",
-            reason: "totals_missing",
-          })),
-        }),
-        meta: {
-          url: "https://example.com/recipe",
-          times: {
-            active: null,
-            total: null,
-            prep: null,
-            cook: null,
-            activeMinutes: null,
-            totalMinutes: null,
-            prepMinutes: null,
-            cookMinutes: null,
-          },
-          equipment: null,
-          page: null,
-        },
-        source: {
-          type: "website",
-          url: "https://example.com/recipe",
-        },
-        meals: 0,
-        sectionCount: 0,
-        displayImages: [],
-        dataQuality: testCompleteDataQuality(),
-      });
-      expect(result).not.toHaveProperty("deletedAt");
-      expect(result).not.toHaveProperty("totalsComputedAt");
-      expect(result).not.toHaveProperty("sourceType");
-      expect(result).not.toHaveProperty("sourceUrl");
-      expect(recipeListItemOut.parse(result)).toEqual(result);
+  it("keeps non-website recipes unlinked", () => {
+    const value = recipeProvenanceFields({
+      ...baseRecipe,
+      sourceType: "Other",
+      sourceUrl: null,
+      sourceLabel: null,
     });
-
-    it("converts non-website recipe without URL", () => {
-      const result = listOf({
-        ...baseRecipe,
-        sourceType: "Other",
-        sourceUrl: null,
-        sourceLabel: null,
-      });
-
-      expect(result).toMatchObject({
-        id: testShortcode("recipe", "RCP-A3F2"),
-        name: "Test Recipe",
-        meta: { url: null },
-        source: { type: "other" },
-      });
-      expect(recipeListItemOut.parse(result)).toEqual(result);
-    });
+    expect(value.meta.url).toBeNull();
+    expect(value.source).toEqual({ type: "other" });
   });
 
   it("maps full recipe detail rows exactly and filters soft-deleted relations", () => {

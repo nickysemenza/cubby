@@ -6,11 +6,7 @@ import {
   type EmailOut,
 } from "@cubby/schemas/email";
 import { emailImportOutcome } from "@cubby/schemas/email-fields";
-import {
-  parseEntityId,
-  parseShortcodeFor,
-  userId,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   mailboxClassification,
   mailboxClassificationStage,
@@ -64,10 +60,12 @@ import {
 } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
+import {
+  listReadPlan,
+  type ListReadOptions,
+} from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type EmailRow = typeof emailTable.$inferSelect;
 
@@ -313,120 +311,115 @@ END`;
 /** Who reads the list, for `ownedByViewer`; null reads as nobody's. */
 type EmailViewer = { userId: string } | null;
 
-const hydrateRead = async (
+const emailRead = (
   db: Database | DrizzleTransaction,
-  rows: EmailRow[],
-  projection: ListProjection,
   viewer: EmailViewer,
   scope: EmailPurchaseScope | null = null,
-) =>
-  hydrateListRead(db, "email", rows, projection, {
-    media: true,
-    load: async () => {
+): ListReadOptions<EmailRow> => ({
+  media: true,
+  // includes-deleted: immutable mail metadata retains its original owner and Run.
+  references: {
+    ledgerPartyId: {
+      kind: "lookup",
+      name: "ledgerPartyName",
+      missing: "error",
+      includeDeleted: true,
+    },
+    runId: { kind: "lookup", missing: "null", includeDeleted: true },
+  },
+  bindings: (bind) => {
+    const facts = bind.batch(async ({ rows }) => {
       // includes-deleted: immutable mail metadata keeps naming its owner and Run.
-      const [parties, runs, associations, reviews, purchaseLinks, owners] =
-        await Promise.all([
-          lookupEntityReferences(
-            db,
-            "ledgerParty",
-            rows.map((row) => row.ledgerPartyId),
-            { includeDeleted: true },
-          ),
-          lookupEntityReferences(
-            db,
-            "run",
-            rows.map((row) => row.runId),
-            { includeDeleted: true },
-          ),
-          rows.length === 0
-            ? []
-            : await unwrapDb(db)
-                .select({
-                  id: emailTable.id,
-                  linked: emailLinkedSql(),
-                  reviewConflict: emailReviewConflictSql(),
-                  importOutcome: importOutcomeSql,
-                })
-                .from(emailTable)
-                .where(
-                  and(
-                    inArray(
-                      emailTable.id,
-                      rows.map((row) => row.id),
-                    ),
-                    notDeleted(emailTable),
+      const [associations, reviews, purchaseLinks, owners] = await Promise.all([
+        rows.length === 0
+          ? []
+          : await unwrapDb(db)
+              .select({
+                id: emailTable.id,
+                linked: emailLinkedSql(),
+                reviewConflict: emailReviewConflictSql(),
+                importOutcome: importOutcomeSql,
+              })
+              .from(emailTable)
+              .where(
+                and(
+                  inArray(
+                    emailTable.id,
+                    rows.map((row) => row.id),
+                  ),
+                  notDeleted(emailTable),
+                ),
+              ),
+        rows.length === 0
+          ? []
+          : await unwrapDb(db)
+              .select({
+                emailId: emailTable.id,
+                classification: emailFeedbackClassificationSql(
+                  sql`${feedback}`,
+                ),
+                reason: feedback.reason,
+              })
+              .from(emailTable)
+              .innerJoin(
+                ledgerParty,
+                eq(ledgerParty.id, emailTable.ledgerPartyId),
+              )
+              .innerJoin(
+                emailClassificationObservation,
+                and(
+                  eq(emailClassificationObservation.emailId, emailTable.id),
+                  eq(
+                    emailClassificationObservation.checksum,
+                    emailTable.checksum,
                   ),
                 ),
-          rows.length === 0
-            ? []
-            : await unwrapDb(db)
-                .select({
-                  emailId: emailTable.id,
-                  classification: emailFeedbackClassificationSql(
-                    sql`${feedback}`,
+              )
+              .innerJoin(
+                feedback,
+                and(
+                  eq(
+                    emailFeedbackObservationIdSql(sql`${feedback}`),
+                    sql`${emailClassificationObservation.id}::text`,
                   ),
-                  reason: feedback.reason,
-                })
-                .from(emailTable)
-                .innerJoin(
-                  ledgerParty,
-                  eq(ledgerParty.id, emailTable.ledgerPartyId),
-                )
-                .innerJoin(
-                  emailClassificationObservation,
-                  and(
-                    eq(emailClassificationObservation.emailId, emailTable.id),
-                    eq(
-                      emailClassificationObservation.checksum,
-                      emailTable.checksum,
-                    ),
-                  ),
-                )
-                .innerJoin(
-                  feedback,
-                  and(
-                    eq(
-                      emailFeedbackObservationIdSql(sql`${feedback}`),
-                      sql`${emailClassificationObservation.id}::text`,
-                    ),
-                    eq(feedback.authority, "member"),
-                    eq(feedback.actorUserId, ledgerParty.userId),
-                    emailFeedbackHasClassificationSql(sql`${feedback}`),
-                  ),
-                )
-                .where(
-                  and(
-                    inArray(
-                      emailTable.id,
-                      rows.map((row) => row.id),
-                    ),
-                    notDeleted(emailTable),
-                    notDeleted(ledgerParty),
-                  ),
-                )
-                .orderBy(desc(feedback.createdAt), desc(feedback.id)),
-          readEmailPurchaseLinks(
-            db,
-            rows.map((row) => parseEntityId("email", row.id)),
-            scope,
-          ),
-          viewer === null || rows.length === 0
-            ? []
-            : unwrapDb(db)
-                .select({ id: ledgerParty.id })
-                .from(ledgerParty)
-                .where(
-                  and(
-                    inArray(
-                      ledgerParty.id,
-                      rows.map((row) =>
-                        parseEntityId("ledgerParty", row.ledgerPartyId),
-                      ),
-                    ),
-                    eq(ledgerParty.userId, userId.parse(viewer.userId)),
-                  ),
+                  eq(feedback.authority, "member"),
+                  eq(feedback.actorUserId, ledgerParty.userId),
+                  emailFeedbackHasClassificationSql(sql`${feedback}`),
                 ),
-        ]);
+              )
+              .where(
+                and(
+                  inArray(
+                    emailTable.id,
+                    rows.map((row) => row.id),
+                  ),
+                  notDeleted(emailTable),
+                  notDeleted(ledgerParty),
+                ),
+              )
+              .orderBy(desc(feedback.createdAt), desc(feedback.id)),
+        readEmailPurchaseLinks(
+          db,
+          rows.map((row) => parseEntityId("email", row.id)),
+          scope,
+        ),
+        viewer === null || rows.length === 0
+          ? []
+          : unwrapDb(db)
+              .select({ id: ledgerParty.id })
+              .from(ledgerParty)
+              .where(
+                and(
+                  inArray(
+                    ledgerParty.id,
+                    rows.map((row) =>
+                      parseEntityId("ledgerParty", row.ledgerPartyId),
+                    ),
+                  ),
+                  eq(ledgerParty.userId, userId.parse(viewer.userId)),
+                ),
+              ),
+      ]);
       const latestReviews = new Map<
         typeof emailTable.$inferSelect.id,
         (typeof reviews)[number]
@@ -436,8 +429,6 @@ const hydrateRead = async (
           latestReviews.set(review.emailId, review);
       return {
         reviews: latestReviews,
-        parties,
-        runs,
         linked: new Map(associations.map((row) => [row.id, row.linked])),
         reviewConflict: new Map(
           associations.map((row) => [row.id, row.reviewConflict]),
@@ -451,35 +442,60 @@ const hydrateRead = async (
         purchaseLinks,
         viewerParties: new Set<string>(owners.map((row) => row.id)),
       };
-    },
-    mapRow: (row, { loaded }) => {
-      const party = loaded.parties.get(row.ledgerPartyId);
-      if (!party) throw new Error("Email owner reference is missing");
-      return {
-        ...row,
-        id: parseShortcodeFor("email", row.shortcode),
-        displayName: row.subject?.trim() || row.sender?.trim() || row.shortcode,
-        relevanceLabel: relevanceLabel(
-          mailboxClassification.nullable().parse(row.classification),
-          mailboxClassificationStage.nullable().parse(row.classificationStage),
-        ),
-        ledgerPartyId: party.id,
-        ledgerPartyName: party.name,
-        runId:
-          row.runId === null ? null : (loaded.runs.get(row.runId)?.id ?? null),
-        linked: loaded.linked.get(row.id) ?? false,
-        reviewConflict: loaded.reviewConflict.get(row.id) ?? false,
-        purchaseLinks: loaded.purchaseLinks.get(row.id) ?? [],
-        ownedByViewer: loaded.viewerParties.has(row.ledgerPartyId),
-        linkState: strongestLinkState(loaded.purchaseLinks.get(row.id) ?? []),
-        importOutcome: loaded.importOutcome.get(row.id) ?? "not_imported",
-        reviewedClassification:
-          loaded.reviews.get(row.id)?.classification ?? null,
-        reviewedClassificationReason:
-          loaded.reviews.get(row.id)?.reason ?? null,
-      };
-    },
-  });
+    });
+    return [
+      bind(
+        emailOut.pick({ displayName: true, relevanceLabel: true }),
+        (row) => ({
+          displayName:
+            row.subject?.trim() || row.sender?.trim() || row.shortcode,
+          relevanceLabel: relevanceLabel(
+            mailboxClassification.nullable().parse(row.classification),
+            mailboxClassificationStage
+              .nullable()
+              .parse(row.classificationStage),
+          ),
+        }),
+      ),
+      facts.fields(
+        emailOut.pick({
+          linked: true,
+          reviewConflict: true,
+          purchaseLinks: true,
+          ownedByViewer: true,
+          linkState: true,
+          importOutcome: true,
+          reviewedClassification: true,
+          reviewedClassificationReason: true,
+        }),
+        (row, loaded) => ({
+          linked: loaded.linked.get(row.id) ?? false,
+          reviewConflict: loaded.reviewConflict.get(row.id) ?? false,
+          purchaseLinks: loaded.purchaseLinks.get(row.id) ?? [],
+          ownedByViewer: loaded.viewerParties.has(row.ledgerPartyId),
+          linkState: strongestLinkState(loaded.purchaseLinks.get(row.id) ?? []),
+          importOutcome: loaded.importOutcome.get(row.id) ?? "not_imported",
+          reviewedClassification:
+            loaded.reviews.get(row.id)?.classification ?? null,
+          reviewedClassificationReason:
+            loaded.reviews.get(row.id)?.reason ?? null,
+        }),
+      ),
+    ];
+  },
+});
+const hydrateRead = (
+  db: Database | DrizzleTransaction,
+  rows: EmailRow[],
+  projection: ListProjection,
+  viewer: EmailViewer,
+  scope: EmailPurchaseScope | null = null,
+) =>
+  listReadPlan<EmailRow>("email", emailRead(db, viewer, scope)).read(
+    db,
+    rows,
+    projection,
+  );
 
 /** The Email list read for one viewer (`ownedByViewer` depends on who reads). */
 const emailListRead =
@@ -496,10 +512,9 @@ const emailListRead =
     const scope = context.has(emailScope)
       ? context.get(emailScope)
       : await resolveEmailScope(db, filters);
-    return scaffold.list(db, request, {
+    return scaffold.read(db, request, {
       context,
-      hydrate: (rows, selected) =>
-        hydrateRead(db, rows, selected, viewer, scope),
+      read: emailRead(db, viewer, scope),
     });
   };
 

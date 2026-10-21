@@ -249,7 +249,7 @@ const expenseSpendingCategoryAllocationSource = (
       : "Principal line allocation";
 
 const expenseSpendingCategoryFieldResolution = (
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
   purchaseRow: ExpenseRow["purchase"],
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
   if (
@@ -322,7 +322,7 @@ const expenseSpendingCategoryFieldResolution = (
 };
 
 const expenseProjectResolutionSource = (
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
   mode: "allocated" | "explicit" | "inherit" | "none",
   storedProjectShortcode: string | null,
   effectiveProjectShortcode: string | null,
@@ -342,7 +342,7 @@ const expenseProjectResolutionSource = (
 };
 
 const expenseProjectFieldResolution = (
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
   purchaseRow: ExpenseRow["purchase"],
   storedProjectShortcode: string | null,
   effectiveProjectShortcode: string | null,
@@ -394,7 +394,7 @@ const expenseProjectFieldResolution = (
  * A typed trade on the adjustment keeps it (and its cost type) explicit.
  */
 const allocatedShareResolution = <K extends "trades" | "costTypes">(
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
   key: K,
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] | null => {
   if (
@@ -423,7 +423,7 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
 };
 
 const expenseCostTypeFieldResolution = (
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] =>
   allocatedShareResolution(row, "costTypes") ?? {
     mode: "explicit",
@@ -437,7 +437,7 @@ const expenseCostTypeFieldResolution = (
   };
 
 const expenseTradeFieldResolution = (
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
   purchaseRow: ExpenseRow["purchase"],
   effectiveProjectShortcode: string | null,
   effectiveTrade: ExpenseOut["trade"],
@@ -483,7 +483,7 @@ const expenseTradeFieldResolution = (
 };
 
 const expenseProjectAllocations = (
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
 ): ExpenseOut["projectAllocations"] =>
   row.projectAllocations
     ?.filter(
@@ -507,7 +507,7 @@ const expenseProjectAllocations = (
     }));
 
 const expenseProjectId = (
-  row: ExpenseRow,
+  row: ExpenseComputationRow,
   effectiveProjectShortcode: string | null,
 ) =>
   brandJoinShortcode(
@@ -517,12 +517,12 @@ const expenseProjectId = (
       : effectiveProjectShortcode,
   );
 
-const expenseProjectName = (row: ExpenseRow) =>
+const expenseProjectName = (row: ExpenseComputationRow) =>
   row.effectiveProjectName === undefined
     ? resolveLiveJoinName(row.project)
     : row.effectiveProjectName;
 
-const expenseEvidenceFields = (row: ExpenseRow) => ({
+const expenseEvidenceFields = (row: ExpenseComputationRow) => ({
   spendingCategoryId: row.spendingCategoryShortcode
     ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
     : null,
@@ -533,13 +533,75 @@ const expenseEvidenceFields = (row: ExpenseRow) => ({
     : null,
 });
 
-export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
-  row: ExpenseRow,
-  dataQuality: Q,
-): Omit<ExpenseOut, "dataQuality"> & { dataQuality: Q } => {
-  // A soft-deleted Purchase reads as no Purchase at all — the same rule
-  // `resolveLiveJoinName` applies to project/product below, so a deleted parent
-  // renders blank rather than as live data.
+type ExpenseComputationRow = Omit<ExpenseRow, "attributions" | "sourceClaims">;
+
+export const expenseRelationFields = (row: ExpenseRow) => {
+  const purchaseRow = row.purchase?.deletedAt === null ? row.purchase : null;
+
+  const effectiveProjectShortcode =
+    row.effectiveProjectShortcode === undefined
+      ? resolveLiveJoinShortcode(row.project)
+      : row.effectiveProjectShortcode;
+
+  return {
+    spendingCategoryId: expenseEvidenceFields(row).spendingCategoryId,
+    spendingCategoryName: expenseEvidenceFields(row).spendingCategoryName,
+    projectId: expenseProjectId(row, effectiveProjectShortcode),
+    projectName: expenseProjectName(row),
+    productId: brandJoinShortcode(
+      "product",
+      resolveLiveJoinShortcode(row.product),
+    ),
+    productName: resolveLiveJoinName(row.product),
+    purchaseId: purchaseRow
+      ? parseShortcodeFor("purchase", purchaseRow.shortcode)
+      : null,
+    vendorId:
+      purchaseRow?.vendor != null
+        ? parseShortcodeFor("vendor", purchaseRow.vendor.shortcode)
+        : null,
+    vendor: purchaseRow ? resolveLiveJoinName(purchaseRow.vendor) : null,
+    ...expenseAuditChildren(row),
+    projectAllocations: expenseProjectAllocations(row),
+    spendingCategoryAllocations: row.spendingCategoryAllocations?.map(
+      (allocation) => ({
+        spendingCategoryId: allocation.spendingCategoryShortcode
+          ? parseShortcodeFor(
+              "spendingCategory",
+              allocation.spendingCategoryShortcode,
+            )
+          : null,
+        spendingCategoryName: allocation.spendingCategoryName,
+        amount: allocation.amount,
+        basis: allocation.basis,
+        incomplete: allocation.incomplete,
+      }),
+    ),
+  };
+};
+
+export const expenseDerivedFields = (row: ExpenseComputationRow) => {
+  const purchaseRow = row.purchase?.deletedAt === null ? row.purchase : null;
+
+  const effectiveTrade =
+    row.effectiveTrade === undefined ? row.trade : row.effectiveTrade;
+
+  return {
+    trade: effectiveTrade,
+    purchaseDate: purchaseRow?.date ?? null,
+    purchaseDisplayLabel: purchaseRow?.displayLabel ?? null,
+    orderId: purchaseRow?.orderId ?? null,
+    orderUrl:
+      purchaseRow?.vendor?.deletedAt === null
+        ? purchaseOrderUrl({
+            orderUrlTemplate: purchaseRow.vendor.orderUrlTemplate,
+            orderId: purchaseRow.orderId,
+          })
+        : null,
+  };
+};
+
+export const expenseResolutionFields = (row: ExpenseComputationRow) => {
   const purchaseRow = row.purchase?.deletedAt === null ? row.purchase : null;
 
   const effectiveProjectShortcode =
@@ -551,60 +613,6 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
   const storedProjectShortcode = resolveLiveJoinShortcode(row.project);
 
   return {
-    id: parseShortcodeFor("expense", row.shortcode),
-    name: row.name,
-    cost: row.cost,
-    date: row.date,
-    ...expenseEvidenceFields(row),
-    lineKind: row.lineKind,
-    lineBasis: row.lineBasis,
-    costType: row.costType,
-    trade: effectiveTrade,
-    url: row.url,
-    notes: row.notes,
-    future: row.future,
-    projectId: expenseProjectId(row, effectiveProjectShortcode),
-    projectName: expenseProjectName(row),
-    productId: brandJoinShortcode(
-      "product",
-      resolveLiveJoinShortcode(row.product),
-    ),
-    productName: resolveLiveJoinName(row.product),
-    productQuantity: row.productQuantity,
-    // `vendor` and `orderId` are no longer columns on `Expense` — the Purchase
-    // owns them, and they resolve through this join. Keeping the SAME output
-    // keys is deliberate: it's what let the ledger's Vendor / Order # columns,
-    // the MCP surface, and the purchase-import skill survive the split
-    // untouched.
-    //
-    // `vendorId` is the Purchase's vendor FK, denormalized — always present on a
-    // live Purchase regardless of whether the VENDOR itself was soft-deleted
-    // (same "shortcode is a permanent tombstone" reasoning as
-    // `purchaseOut.vendorId`); `vendor` (the display name) is separately
-    // gated on the vendor's own liveness via `resolveLiveJoinName`.
-    purchaseId: purchaseRow
-      ? parseShortcodeFor("purchase", purchaseRow.shortcode)
-      : null,
-    purchaseDate: purchaseRow?.date ?? null,
-    purchaseDisplayLabel: purchaseRow?.displayLabel ?? null,
-    vendorId:
-      purchaseRow?.vendor != null
-        ? parseShortcodeFor("vendor", purchaseRow.vendor.shortcode)
-        : null,
-    vendor: purchaseRow ? resolveLiveJoinName(purchaseRow.vendor) : null,
-    vendorLogo: purchaseVendorLogo(purchaseRow),
-    orderId: purchaseRow?.orderId ?? null,
-    // Derived, never stored: the vendor's own order page for this order. Gated
-    // on the vendor's liveness like `vendor` above — a soft-deleted vendor's
-    // template shouldn't keep producing links.
-    orderUrl:
-      purchaseRow?.vendor?.deletedAt === null
-        ? purchaseOrderUrl({
-            orderUrlTemplate: purchaseRow.vendor.orderUrlTemplate,
-            orderId: purchaseRow.orderId,
-          })
-        : null,
-    ...expenseAuditChildren(row),
     fieldResolutions:
       row.effectiveProjectShortcode === undefined
         ? undefined
@@ -627,23 +635,36 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
             ),
             costType: expenseCostTypeFieldResolution(row),
           },
-    projectAllocations: expenseProjectAllocations(row),
-    spendingCategoryAllocations: row.spendingCategoryAllocations?.map(
-      (allocation) => ({
-        spendingCategoryId: allocation.spendingCategoryShortcode
-          ? parseShortcodeFor(
-              "spendingCategory",
-              allocation.spendingCategoryShortcode,
-            )
-          : null,
-        spendingCategoryName: allocation.spendingCategoryName,
-        amount: allocation.amount,
-        basis: allocation.basis,
-        incomplete: allocation.incomplete,
-      }),
-    ),
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
   };
 };
+
+export const expenseMediaFields = (row: Pick<ExpenseRow, "purchase">) => ({
+  vendorLogo: purchaseVendorLogo(
+    row.purchase?.deletedAt === null ? row.purchase : null,
+  ),
+});
+
+export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
+  row: ExpenseRow,
+  dataQuality: Q,
+): Omit<ExpenseOut, "dataQuality"> & { dataQuality: Q } => ({
+  id: parseShortcodeFor("expense", row.shortcode),
+  name: row.name,
+  cost: row.cost,
+  date: row.date,
+  ...expenseEvidenceFields(row),
+  lineKind: row.lineKind,
+  lineBasis: row.lineBasis,
+  costType: row.costType,
+  url: row.url,
+  notes: row.notes,
+  future: row.future,
+  productQuantity: row.productQuantity,
+  ...expenseRelationFields(row),
+  ...expenseDerivedFields(row),
+  ...expenseResolutionFields(row),
+  ...expenseMediaFields(row),
+  dataQuality,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});

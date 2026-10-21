@@ -36,6 +36,7 @@ import {
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { cookbookSummary } from "@cubby/schemas/recipe";
 import type {
   CookbookFilters,
   CookbookSummary,
@@ -74,7 +75,6 @@ import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
   defineMutationWriter,
@@ -87,11 +87,14 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { type ListPage, listScaffold } from "~/server/generic/list/repo/list";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
+import {
+  listReadPlan,
+  type ListReadOptions,
+} from "~/server/generic/list/repo/list-projection";
+import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -356,49 +359,40 @@ const loadCookbookProductCovers = (db: Database, rows: CookbookSummaryRow[]) =>
     rows.flatMap((r) => (r.productId ? [r.productId] : [])),
   );
 
-/** A cookbook row's own facts; quality and media are separate list groups. */
-const cookbookCore = (
-  {
-    productId,
-    productShortcode,
-    productName,
-    coverKey,
-    ...r
-  }: CookbookSummaryRow,
-  productCovers: ReadonlyMap<string, string>,
-) => ({
-  ...r,
-  id: parseShortcodeFor("cookbook", r.shortcode),
-  coverUrl: coverKey ? getR2PublicUrl(coverKey) : null,
-  product:
-    productId && productShortcode && productName
-      ? {
-          id: parseShortcodeFor("product", productShortcode),
-          name: productName,
-          coverUrl: productCovers.get(productId) ?? null,
-        }
-      : null,
+const cookbookRead = (db: Database): ListReadOptions<CookbookSummaryRow> => ({
+  media: true,
+  bindings: (bind) => {
+    const covers = bind.batch(({ rows }) =>
+      loadCookbookProductCovers(db, rows),
+    );
+    return [
+      bind(cookbookSummary.pick({ coverUrl: true }), (row) => ({
+        coverUrl: row.coverKey ? getR2PublicUrl(row.coverKey) : null,
+      })),
+      covers.fields(cookbookSummary.pick({ product: true }), (row, loaded) => ({
+        product:
+          row.productId && row.productShortcode && row.productName
+            ? {
+                id: parseShortcodeFor("product", row.productShortcode),
+                name: row.productName,
+                coverUrl: loaded.get(row.productId) ?? null,
+              }
+            : null,
+      })),
+    ];
+  },
 });
-
 const hydrateCookbookSummaries = async (
   db: Database,
   rows: CookbookSummaryRow[],
-): Promise<CookbookSummary[]> => {
-  const [productCovers, dataQualities] = await Promise.all([
-    loadCookbookProductCovers(db, rows),
-    loadDataQualities(
+): Promise<CookbookSummary[]> =>
+  (
+    await listReadPlan<CookbookSummaryRow>("cookbook", cookbookRead(db)).read(
       db,
-      "cookbook",
-      rows.map((r) => r.id),
-    ),
-  ]);
-
-  return withDisplayImages(db, "cookbook", rows, (row) => ({
-    ...cookbookCore(row, productCovers),
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    dataQuality: dataQualities.get(row.id)!,
-  }));
-};
+      rows,
+      { kind: "full" },
+    )
+  ).map((row) => cookbookSummary.parse(row));
 
 // `recipeCount` is the grouped count, not a column.
 const cookbookScaffold = listScaffold("cookbook", cookbook, {
@@ -406,25 +400,6 @@ const cookbookScaffold = listScaffold("cookbook", cookbook, {
 });
 
 /** The kernel list: declared filters, the generated sort roster, paging. */
-export const cookbookList = (
-  db: Database,
-  filters: CookbookFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) =>
-  cookbookScaffold.list(
-    db,
-    { filters, sorts, pagination },
-    {
-      select: (page) => selectCookbookSummaryRows(db, page),
-      hydrate: (rows) => hydrateCookbookSummaries(db, rows),
-    },
-  );
-
-/**
- * The progressive read every client browses: the same page as `cookbookList`,
- * with the generic loader owning the deferred quality and media groups.
- */
 export const cookbookListRead = (
   db: Database,
   filters: CookbookFilters,
@@ -432,25 +407,19 @@ export const cookbookListRead = (
   pagination: PaginationParams,
   projection: ListProjection,
 ) =>
-  cookbookScaffold.list(
+  cookbookScaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
       select: (page) => selectCookbookSummaryRows(db, page),
-      hydrate: (rows, selected) =>
-        hydrateListRead(db, "cookbook", rows, selected, {
-          media: true,
-          // Quality and media are the generic loader's deferred groups; the
-          // core facts must not depend on them. An enrichment request projects
-          // only its groups and the id, so it skips the product covers.
-          load: () =>
-            selected.kind === "enrichment"
-              ? Promise.resolve(new Map())
-              : loadCookbookProductCovers(db, rows),
-          mapRow: (row, { loaded }) => cookbookCore(row, loaded),
-        }),
+      read: cookbookRead(db),
     },
   );
+
+export const cookbookList = completeListReader(
+  cookbookSummary,
+  cookbookListRead,
+);
 
 export const getCookbookSummary = async (
   db: Database,

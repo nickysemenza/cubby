@@ -5,10 +5,7 @@ import type {
   LedgerPartyId,
   LedgerPartyShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  ENTITY_NOT_FOUND_REASON,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
+import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyCreateInput,
   LedgerPartyFilters,
@@ -21,7 +18,6 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -55,7 +51,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
+import { listReadPlan } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   finalizeMerge,
@@ -320,24 +316,13 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
 
 type LedgerPartyRow = typeof ledgerParty.$inferSelect;
 
-const hydrateRead = (
-  db: Database | DrizzleTransaction,
-  rows: LedgerPartyRow[],
-  projection: ListProjection,
-): Promise<ListReadRow[]> =>
-  hydrateListRead(db, "ledgerParty", rows, projection, {
-    load: async () => undefined,
-    mapRow: (row) => ({
-      ...row,
-      id: parseShortcodeFor("ledgerParty", row.shortcode),
-    }),
-  });
+const ledgerPartyRead = listReadPlan<LedgerPartyRow>("ledgerParty");
 
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: LedgerPartyRow[],
 ): Promise<LedgerPartyOut[]> =>
-  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+  (await ledgerPartyRead.read(db, rows, { kind: "full" })).map((row) =>
     ledgerPartyOut.parse(row),
   );
 
@@ -496,7 +481,7 @@ export const listLedgerPartiesRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     {
       filters,
@@ -506,7 +491,6 @@ export const listLedgerPartiesRead = (
     },
     {
       where: buildLedgerPartyWhere(filters),
-      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
     },
   );
 

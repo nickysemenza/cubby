@@ -1,14 +1,133 @@
+import { productListItemOut } from "@cubby/schemas/product";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { selectListReadRows } from "~/entity/model/list-read-schema";
+import { db } from "~/server/db";
 
 import {
   expandListGroups,
   loadListGroup,
+  listReadPlan,
   selectedListProjection,
 } from "./list-projection";
 
 describe("list projection group execution", () => {
+  // Skipped FKs, loaded nulls and missing required/defaulted outputs are three
+  // distinct states. Shared page dependencies must never run per row.
+  it("assembles only admitted canonical fields and memoizes typed page batches", async () => {
+    type Row = { id: string; shortcode: string; ingredientId: string | null };
+    let batches = 0;
+    const plan = listReadPlan<Row>("plant", {
+      references: { ingredientId: { kind: "public" } },
+      bindings: (bind) => {
+        const batch = bind.batch(async ({ rows }) => {
+          batches++;
+          return new Map(rows.map((row) => [row.id, "Synthetic ingredient"]));
+        });
+        return [
+          batch.fields(
+            z.object({ ingredientName: z.string().nullable() }),
+            (row, names) => ({ ingredientName: names.get(row.id) ?? null }),
+          ),
+        ];
+      },
+    });
+    const rows = [
+      { id: "private-one", shortcode: "PLANT-4K7M", ingredientId: null },
+      { id: "private-two", shortcode: "PLANT-8R2T", ingredientId: null },
+    ];
+    const ids = selectedListProjection("plant", ["id"]);
+    expect(await plan.read(db, rows, ids)).toEqual([
+      { id: "PLANT-4K7M" },
+      { id: "PLANT-8R2T" },
+    ]);
+    expect(batches).toBe(0);
+    expect(
+      await plan.read(db, [{ ...rows[0]!, ingredientId: "private-uuid" }], ids),
+    ).toEqual([{ id: "PLANT-4K7M" }]);
+    const selected = selectedListProjection("plant", [
+      "ingredientId",
+      "ingredientName",
+    ]);
+    expect(await plan.read(db, rows, selected)).toEqual([
+      {
+        id: "PLANT-4K7M",
+        ingredientId: null,
+        ingredientName: "Synthetic ingredient",
+      },
+      {
+        id: "PLANT-8R2T",
+        ingredientId: null,
+        ingredientName: "Synthetic ingredient",
+      },
+    ]);
+    expect(batches).toBe(1);
+    const lookup = listReadPlan<Row>("plant", {
+      references: {
+        ingredientId: {
+          kind: "lookup",
+          name: "ingredientName",
+          missing: "null",
+        },
+      },
+    });
+    expect(await lookup.read(db, rows, selected)).toEqual(
+      rows.map((row) => ({
+        id: row.shortcode,
+        ingredientId: null,
+        ingredientName: null,
+      })),
+    );
+    expect(await plan.read(db, [], selected)).toEqual([]);
+    expect(batches).toBe(1);
+    await expect(
+      plan.read(db, [{ ...rows[0]!, ingredientId: "private-uuid" }], selected),
+    ).rejects.toThrow("Invalid");
+    const missing = listReadPlan<Row>("product", {
+      bindings: (bind) => [
+        bind(
+          productListItemOut.pick({ unitPrice: true }).partial(),
+          () => ({}),
+        ),
+      ],
+    });
+    await expect(
+      missing.read(
+        db,
+        [{ id: "private", shortcode: "PRD-4K7M", ingredientId: null }],
+        selectedListProjection("product", ["unitPrice"]),
+      ),
+    ).rejects.toThrow("Requested record field was not loaded: unitPrice");
+    expect(() =>
+      listReadPlan<Row>("plant", {
+        bindings: (bind) => [
+          bind(z.object({ unknownField: z.string() }), () => ({
+            unknownField: "x",
+          })),
+        ],
+      }),
+    ).toThrow("Unknown list binding field");
+    expect(() =>
+      listReadPlan<Row>("product", {
+        bindings: (bind) => [
+          bind(productListItemOut.pick({ unitPrice: true }), () => ({
+            unitPrice: null,
+          })),
+          bind(productListItemOut.pick({ unitPrice: true }), () => ({
+            unitPrice: null,
+          })),
+        ],
+      }),
+    ).toThrow("Multiple list binding writers");
+    await expect(
+      plan.read(db, [], {
+        kind: "selected",
+        fields: ["unknownField"],
+        groups: [],
+      }),
+    ).rejects.toThrow("Unknown list field");
+  });
   // Selected reads must load their owning group, reject misspelled demand
   // even for empty pages, and never let schema defaults hide unloaded fields.
   it("loads selected field dependencies without media and rejects absent defaulted fields", async () => {

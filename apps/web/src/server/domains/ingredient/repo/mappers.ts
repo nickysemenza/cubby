@@ -1,6 +1,5 @@
 export {
   dbIngredientToAPI,
-  dbIngredientToListValues,
   dbIngredientToTopLevel,
   mapIngredientProducts,
   mapIngredientProductsLean,

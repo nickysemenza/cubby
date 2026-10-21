@@ -38,7 +38,6 @@ import {
 } from "drizzle-orm";
 import type { z } from "zod";
 
-import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   effectiveFieldSql,
@@ -75,15 +74,11 @@ import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  hydrateListRead,
-  loadListGroup,
-  wantsListGroup,
+  listReadPlan,
+  type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
-import {
-  lookupEntityReferences,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
@@ -305,84 +300,99 @@ const categoryResolutions = (
   };
 };
 
-const hydrateRead = async (
+const categoryRead = {
+  references: {
+    spendingCategoryId: {
+      kind: "lookup",
+      name: "spendingCategoryName",
+      emoji: "spendingCategoryEmoji",
+      missing: "null",
+    },
+    parentId: { kind: "lookup", name: "parentName", missing: "null" },
+  },
+  bindings: (bind) => {
+    const mappings = bind.batch(({ db, rows }) =>
+      loadCategoryConnections(
+        db,
+        rows.map((row) => row.id),
+      ),
+    );
+    const paths = bind.batch(({ db, rows }) =>
+      pathsFor(
+        db,
+        rows.map((row) => row.id),
+      ),
+    );
+    const counts = bind.batch(({ db, rows }) =>
+      productCountsFor(
+        db,
+        rows.map((row) => row.id),
+      ),
+    );
+    return [
+      bind(productCategoryOut.pick({ feature: true }), (row) => ({
+        feature: parseFeature(row.feature),
+      })),
+      mappings.fields(
+        productCategoryOut.pick({
+          spendingCategoryMapping: true,
+          effectiveSpendingCategory: true,
+        }),
+        (row, loaded) => ({
+          spendingCategoryMapping: loaded.get(row.id),
+          effectiveSpendingCategory: mappedCategoryIdentity(loaded.get(row.id)),
+        }),
+      ),
+      paths.fields(
+        productCategoryOut.pick({ path: true, pathLabel: true }),
+        (row, loaded) => {
+          const path = loaded.get(row.id) ?? [];
+          return {
+            path: path.map((part) => ({
+              id: parseShortcodeFor("productCategory", part.id),
+              name: part.name,
+            })),
+            pathLabel: categoryPathLabel(path),
+          };
+        },
+      ),
+      // Field resolution depends on the same connection facts as core mappings.
+      bind
+        .batch(async (page) => ({
+          facts: await inheritedFactsFor(
+            page.db,
+            page.rows.map((row) => row.id),
+          ),
+          mappings: await mappings.load(page),
+        }))
+        .fields(
+          productCategoryOut.pick({ fieldResolutions: true }),
+          (row, loaded) => ({
+            fieldResolutions: {
+              ...categoryResolutions(row, loaded.facts.get(row.id)),
+              effectiveSpendingCategory: spendingCategoryResolution(
+                loaded.mappings.get(row.id),
+              ),
+            },
+          }),
+        ),
+      counts.fields(
+        productCategoryOut.pick({ productCount: true }),
+        (row, loaded) => ({ productCount: loaded.get(row.id) ?? 0 }),
+      ),
+    ];
+  },
+} satisfies ListReadOptions<CategoryRow>;
+const hydrateRead = (
   db: Database | DrizzleTransaction,
   rows: CategoryRow[],
   projection: ListProjection,
-): Promise<ListReadRow[]> => {
-  const ids = rows.map((row) => row.id);
-  return hydrateListRead(db, "productCategory", rows, projection, {
-    load: () =>
-      Promise.all([
-        loadCategoryConnections(db, ids),
-        loadListGroup(projection, "relations", () => pathsFor(db, ids)),
-        loadListGroup(projection, "derived", () => inheritedFactsFor(db, ids)),
-        loadListGroup(projection, "derived", () => productCountsFor(db, ids)),
-        lookupEntityReferences(
-          db,
-          "spendingCategory",
-          rows.map((row) => row.spendingCategoryId),
-        ),
-        loadListGroup(projection, "relations", () =>
-          lookupEntityReferences(
-            db,
-            "productCategory",
-            rows.map((row) => row.parentId),
-          ),
-        ),
-      ]),
-    mapRow: (
-      row,
-      {
-        loaded: [
-          mappings,
-          paths,
-          facts,
-          productCounts,
-          spendingCategories,
-          parents,
-        ],
-      },
-    ) => {
-      const path = paths?.get(row.id) ?? [];
-      const parent = row.parentId ? parents?.get(row.parentId) : undefined;
-      const spendingCategory = row.spendingCategoryId
-        ? spendingCategories.get(row.spendingCategoryId)
-        : undefined;
-      const result = {
-        ...row,
-        id: parseShortcodeFor("productCategory", row.shortcode),
-        feature: parseFeature(row.feature),
-        spendingCategoryMapping: mappings.get(row.id),
-        effectiveSpendingCategory: mappedCategoryIdentity(mappings.get(row.id)),
-        spendingCategoryName: spendingCategory?.name ?? null,
-        spendingCategoryEmoji: spendingCategory?.emoji ?? null,
-        spendingCategoryId: spendingCategory?.id ?? null,
-      };
-      if (wantsListGroup(projection, "relations"))
-        Object.assign(result, {
-          parentId: parent?.id ?? null,
-          parentName: parent?.name ?? null,
-          path: path.map((part) => ({
-            id: parseShortcodeFor("productCategory", part.id),
-            name: part.name,
-          })),
-          pathLabel: categoryPathLabel(path),
-        });
-      if (wantsListGroup(projection, "derived"))
-        Object.assign(result, {
-          fieldResolutions: {
-            ...categoryResolutions(row, facts?.get(row.id)),
-            effectiveSpendingCategory: spendingCategoryResolution(
-              mappings.get(row.id),
-            ),
-          },
-          productCount: productCounts?.get(row.id) ?? 0,
-        });
-      return result;
-    },
-  });
-};
+) =>
+  listReadPlan<CategoryRow>("productCategory", categoryRead).read(
+    db,
+    rows,
+    projection,
+  );
 function mappedCategoryIdentity(
   mapping: z.infer<typeof categoryMappingSchema> | undefined,
 ) {
@@ -412,12 +422,12 @@ export const listProductCategoriesRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
       where: buildProductCategoryWhere(filters),
-      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+      read: categoryRead,
     },
   );
 

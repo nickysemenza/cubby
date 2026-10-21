@@ -54,7 +54,10 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
+import {
+  listReadPlan,
+  type ListReadOptions,
+} from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   finalizeMerge,
@@ -118,14 +121,12 @@ async function stockTrackingFor(
   );
 }
 
-const hydrate = (
-  db: Database | DrizzleTransaction,
-  rows: Row[],
-  projection: ListProjection,
-) =>
-  hydrateListRead(db, "spendingCategory", rows, projection, {
-    load: () =>
-      Promise.all([
+const categoryRead = {
+  references: { parentId: { kind: "lookup", missing: "null" } },
+  bindings: (bind) => {
+    const tracking = bind.batch(({ db, rows }) => stockTrackingFor(db, rows));
+    const connections = bind.batch(async ({ db }) => {
+      const [mappings, categories] = await Promise.all([
         loadCategoryConnections(db),
         unwrapDb(db)
           .select({
@@ -135,42 +136,59 @@ const hydrate = (
           })
           .from(productCategory)
           .where(notDeleted(productCategory)),
-        lookupEntityReferences(
-          db,
-          "spendingCategory",
-          rows.map((row) => row.parentId),
-        ),
-        stockTrackingFor(db, rows),
-      ]),
-    mapRow: (row, { loaded: [mappings, categories, parents, tracking] }) => {
-      const stockTracked = resolveStockTrackingField(
-        row.stockTracked,
-        tracking.get(row.id) ?? null,
-        "category decision",
-        "spendingCategory",
-      );
-      return {
-        ...row,
-        id: parseShortcodeFor("spendingCategory", row.shortcode),
-        stockTracked: z.boolean().nullable().parse(stockTracked.value),
-        fieldResolutions: { stockTracked },
-        parentId: row.parentId ? (parents.get(row.parentId)?.id ?? null) : null,
-        productCategories: categories.flatMap((category) => {
-          const mapping = mappings.get(category.id);
-          return mapping?.category?.id === row.shortcode
-            ? [
-                {
-                  id: parseShortcodeFor("productCategory", category.code),
-                  name: `${mapping.path}${mapping.state === "inherited" ? " (inherited)" : ""}`,
-                  emoji: category.emoji,
-                  inherited: mapping.state === "inherited",
-                },
-              ]
-            : [];
+      ]);
+      return { mappings, categories };
+    });
+    return [
+      tracking.fields(
+        spendingCategoryOut.pick({
+          stockTracked: true,
+          fieldResolutions: true,
         }),
-      };
-    },
-  });
+        (row, loaded) => {
+          const stockTracked = resolveStockTrackingField(
+            row.stockTracked,
+            loaded.get(row.id) ?? null,
+            "category decision",
+            "spendingCategory",
+          );
+          return {
+            stockTracked: z.boolean().nullable().parse(stockTracked.value),
+            fieldResolutions: { stockTracked },
+          };
+        },
+      ),
+      connections.fields(
+        spendingCategoryOut.pick({ productCategories: true }),
+        (row, { mappings, categories }) => ({
+          productCategories: categories.flatMap((category) => {
+            const mapping = mappings.get(category.id);
+            return mapping?.category?.id === row.shortcode
+              ? [
+                  {
+                    id: parseShortcodeFor("productCategory", category.code),
+                    name: `${mapping.path}${mapping.state === "inherited" ? " (inherited)" : ""}`,
+                    emoji: category.emoji,
+                    inherited: mapping.state === "inherited",
+                  },
+                ]
+              : [];
+          }),
+        }),
+      ),
+    ];
+  },
+} satisfies ListReadOptions<Row>;
+const hydrate = (
+  db: Database | DrizzleTransaction,
+  rows: Row[],
+  projection: ListProjection,
+) =>
+  listReadPlan<Row>("spendingCategory", categoryRead).read(
+    db,
+    rows,
+    projection,
+  );
 const listRead = (
   db: Database,
   filters: SpendingCategoryFilters,
@@ -178,10 +196,10 @@ const listRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     { filters, sorts, pagination, projection },
-    { hydrate: (rows, selected) => hydrate(db, rows, selected) },
+    { read: categoryRead },
   );
 const list = completeListReader(spendingCategoryOut, listRead);
 export const listSpendingCategories = list;

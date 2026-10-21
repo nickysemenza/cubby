@@ -14,12 +14,11 @@ import type {
   LedgerPartyId,
   ProductId,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -46,15 +45,11 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  hydrateListRead,
-  loadListGroup,
-  wantsListGroup,
+  listReadPlan,
+  type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
-import {
-  lookupEntityReferences,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 
@@ -92,49 +87,18 @@ type DeviceRow = typeof device.$inferSelect;
 
 const scaffold = listScaffold("device", device);
 
-const hydrateRead = async (
-  db: Database | DrizzleTransaction,
-  rows: DeviceRow[],
-  projection: ListProjection,
-): Promise<ListReadRow[]> => {
-  return hydrateListRead(db, "device", rows, projection, {
-    load: () =>
-      Promise.all([
-        loadListGroup(projection, "relations", () =>
-          lookupEntityReferences(
-            db,
-            "ledgerParty",
-            rows.map((row) => row.ledgerPartyId),
-          ),
-        ),
-        loadListGroup(projection, "relations", () =>
-          lookupEntityReferences(
-            db,
-            "product",
-            rows.map((row) => row.productId),
-          ),
-        ),
-      ]),
-    mapRow: (row, { loaded: [parties, products] }) => {
-      const party = row.ledgerPartyId ? parties?.get(row.ledgerPartyId) : null;
-      const hardware = row.productId ? products?.get(row.productId) : null;
-      const result = { ...row, id: parseShortcodeFor("device", row.shortcode) };
-      if (wantsListGroup(projection, "relations"))
-        Object.assign(result, {
-          ledgerPartyId: party?.id ?? null,
-          productId: hardware?.id ?? null,
-          ledgerPartyName: party?.name ?? null,
-          productName: hardware?.name ?? null,
-        });
-      return result;
-    },
-  });
-};
+const deviceRead = {
+  references: {
+    ledgerPartyId: { kind: "lookup", name: "ledgerPartyName", missing: "null" },
+    productId: { kind: "lookup", name: "productName", missing: "null" },
+  },
+} satisfies ListReadOptions<DeviceRow>;
+const devicePlan = listReadPlan<DeviceRow>("device", deviceRead);
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: DeviceRow[],
 ): Promise<DeviceOut[]> =>
-  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+  (await devicePlan.read(db, rows, { kind: "full" })).map((row) =>
     deviceOut.parse(row),
   );
 
@@ -148,11 +112,11 @@ export const listDevicesRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
-      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+      read: deviceRead,
     },
   );
 

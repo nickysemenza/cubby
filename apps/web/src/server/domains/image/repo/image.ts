@@ -27,6 +27,7 @@ import {
 import {
   attachableImageEntityId,
   IMAGE_METADATA_REVISION,
+  imageWithEntitySchema,
   storedImageEmbeddedMetadataSchema,
 } from "@cubby/schemas/image";
 import {
@@ -158,7 +159,8 @@ import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
+import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   findDirectImageSearchOwnerRefs,
   refreshCapturedImageSearchOwnerRefs,
@@ -1090,16 +1092,27 @@ const attachmentAssociation = (
  * Expects relations to be loaded via `with` clause - no additional queries.
  * Note: Soft-deleted join table records filtered at query time, but we still check entity deletedAt.
  */
-const imageWithRelationsToAPI = (
-  imageData: ImageWithRelations,
-  capturedByParty: { shortcode: string; name: string } | null = null,
-): ImageWithEntity => {
-  const associations: ImageAssociation[] = imageData.attachments.flatMap(
+const imageAssociations = (
+  imageData: Pick<ImageWithRelations, "attachments">,
+): ImageAssociation[] => {
+  const associations = imageData.attachments.flatMap(
     (attachment): ImageAssociation[] => {
       const association = attachmentAssociation(attachment);
       return association === null ? [] : [association];
     },
   );
+  return associations.sort(
+    (a, b) =>
+      a.entityKind.localeCompare(b.entityKind) ||
+      a.entityName.localeCompare(b.entityName) ||
+      a.entityId.localeCompare(b.entityId),
+  );
+};
+
+const imageWithRelationsToAPI = (
+  imageData: ImageWithRelations,
+  capturedByParty: { shortcode: string; name: string } | null = null,
+): ImageWithEntity => {
   return {
     id: parseShortcodeFor("image", imageData.shortcode),
     url: getR2PublicUrl(imageData.key),
@@ -1134,12 +1147,7 @@ const imageWithRelationsToAPI = (
     ),
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
-    associations: associations.sort(
-      (a, b) =>
-        a.entityKind.localeCompare(b.entityKind) ||
-        a.entityName.localeCompare(b.entityName) ||
-        a.entityId.localeCompare(b.entityId),
-    ),
+    associations: imageAssociations(imageData),
   };
 };
 
@@ -1352,66 +1360,103 @@ const loadImageRows = (db: Database, where: SQL) =>
   getDb(db).query.image.findMany({ where, with: imageEntityRelations });
 type ImageRelationRow = Awaited<ReturnType<typeof loadImageRows>>[number];
 
-/** Batched API projection of a page of image rows (representations, issues, targets, …). */
-/** An image row's own facts; quality and media are separate list groups. */
-const hydrateImageCore = async (db: Database, images: ImageRelationRow[]) => {
-  const imageShortcodes = images.map((item) => item.shortcode);
-  const [
-    representations,
-    processingIssues,
-    importTargets,
-    analysisSummaries,
-    capturedByParties,
-  ] = await Promise.all([
-    loadImageRepresentations(db, imageShortcodes),
-    loadImageProcessingIssues(db, imageShortcodes),
-    loadImportTargets(db, imageShortcodes),
-    loadImageAnalysisSummaries(db, imageShortcodes),
-    loadCapturedByParties(
-      db,
-      images.map((item) => item.capturedByPartyId),
-    ),
-  ]);
-  return images.map((item) => ({
-    ...imageWithRelationsToAPI(
-      item,
-      item.capturedByPartyId
-        ? (capturedByParties.get(item.capturedByPartyId) ?? null)
-        : null,
-    ),
-    representations: representations.get(item.shortcode),
-    processingIssue: processingIssues.get(item.shortcode) ?? null,
-    importTarget: importTargets.get(item.shortcode) ?? null,
-    analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
-  }));
-};
+const imageRead = (db: Database): ListReadOptions<ImageRelationRow> => ({
+  media: true,
+  bindings: (bind) => {
+    const representations = bind.batch(({ rows }) =>
+      loadImageRepresentations(
+        db,
+        rows.map((row) => row.shortcode),
+      ),
+    );
+    const issues = bind.batch(({ rows }) =>
+      loadImageProcessingIssues(
+        db,
+        rows.map((row) => row.shortcode),
+      ),
+    );
+    const targets = bind.batch(({ rows }) =>
+      loadImportTargets(
+        db,
+        rows.map((row) => row.shortcode),
+      ),
+    );
+    const analyses = bind.batch(({ rows }) =>
+      loadImageAnalysisSummaries(
+        db,
+        rows.map((row) => row.shortcode),
+      ),
+    );
+    const parties = bind.batch(({ rows }) =>
+      loadCapturedByParties(
+        db,
+        rows.map((row) => row.capturedByPartyId),
+      ),
+    );
+    return [
+      bind(
+        imageWithEntitySchema.pick({
+          url: true,
+          provenanceEvidenceLabel: true,
+        }),
+        (row) => ({
+          url: getR2PublicUrl(row.key),
+          provenanceEvidenceLabel: provenanceEvidenceLabel(
+            row.provenanceEvidence,
+          ),
+        }),
+      ),
+      bind(imageWithEntitySchema.pick({ associations: true }), (row) => ({
+        associations: imageAssociations(row),
+      })),
+      parties.fields(
+        imageWithEntitySchema.pick({
+          capturedByPartyId: true,
+          capturedByName: true,
+        }),
+        (row, loaded) => {
+          const party = row.capturedByPartyId
+            ? loaded.get(row.capturedByPartyId)
+            : null;
+          return {
+            capturedByPartyId: party
+              ? parseShortcodeFor("ledgerParty", party.shortcode)
+              : null,
+            capturedByName: party?.name ?? null,
+          };
+        },
+      ),
+      representations.fields(
+        imageWithEntitySchema.pick({ representations: true }),
+        (row, loaded) => ({ representations: loaded.get(row.shortcode) }),
+      ),
+      issues.fields(
+        imageWithEntitySchema.pick({ processingIssue: true }),
+        (row, loaded) => ({
+          processingIssue: loaded.get(row.shortcode) ?? null,
+        }),
+      ),
+      targets.fields(
+        imageWithEntitySchema.pick({ importTarget: true }),
+        (row, loaded) => ({ importTarget: loaded.get(row.shortcode) ?? null }),
+      ),
+      analyses.fields(
+        imageWithEntitySchema.pick({ analysisSummary: true }),
+        (row, loaded) => ({
+          analysisSummary: loaded.get(row.shortcode) ?? null,
+        }),
+      ),
+    ];
+  },
+});
 
-const hydrateImageRows = async (db: Database, images: ImageRelationRow[]) => {
-  const [core, dataQualities] = await Promise.all([
-    hydrateImageCore(db, images),
-    loadDataQualities(
-      db,
-      "image",
-      images.map((item) => parseEntityId("image", item.id)),
-    ),
-  ]);
-  return core.map((row, index) => ({
-    ...row,
-    // SAFETY: `core` is `images` mapped in order.
-    dataQuality: dataQualities.get(parseEntityId("image", images[index]!.id)),
-  }));
-};
-
-const imageListWith = async <Out>(
+const imageListWith = async (
   db: Database,
   filters: ImageListFilters,
   sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
   pagination: { pageIndex: number; pageSize: number },
   request: { readIntent?: ListReadIntent; projection?: ListProjection },
-  hydrate: (
-    images: ImageRelationRow[],
-    projection: ListProjection,
-  ) => Promise<Out[]>,
+  read: ListReadOptions<ImageRelationRow>,
 ) => {
   const runCodes = oneOrManyValues(filters.runId);
   // A photo-inventory run's capture order overrides the caller's own sort:
@@ -1433,62 +1478,38 @@ const imageListWith = async <Out>(
           )`,
         });
 
-  return imageScaffold.list(
+  return imageScaffold.read(
     db,
     { filters, sorts, pagination, ...request },
     {
       orderBy: runOrder,
       load: (where) => loadImageRows(db, where),
-      hydrate,
+      read,
     },
   );
 };
 
-export const imageList = (
-  db: Database,
-  filters: ImageListFilters,
-  sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
-  pagination: { pageIndex: number; pageSize: number },
-  readIntent: ListReadIntent = "page",
-) =>
-  imageListWith(db, filters, sorts, pagination, { readIntent }, (images) =>
-    hydrateImageRows(db, images),
-  );
-
-/**
- * The progressive read every client browses; the generic loader owns the
- * deferred quality and media groups (an uploaded image displays itself).
- */
+/** Complete and progressive reads share the same admitted image bindings. */
 export const imageListRead = (
   db: Database,
   filters: ImageListFilters,
   sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
   pagination: { pageIndex: number; pageSize: number },
-  projection: ListProjection,
+  projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   imageListWith(
     db,
     filters,
     sorts,
     pagination,
-    { projection },
-    (images, selected) =>
-      hydrateListRead(db, "image", images, selected, {
-        media: true,
-        // Quality and media are the generic loader's deferred groups; the
-        // core facts must not depend on them, and an enrichment request
-        // projects only its groups, so it skips the core hydration.
-        load: async () => {
-          if (selected.kind === "enrichment") return new Map();
-          const hydrated = await hydrateImageCore(db, images);
-          return new Map(images.map((row, index) => [row.id, hydrated[index]]));
-        },
-        mapRow: (row, { loaded }) =>
-          loaded.get(row.id) ?? {
-            id: parseShortcodeFor("image", row.shortcode),
-          },
-      }),
+    { projection, readIntent },
+    imageRead(db),
   );
+export const imageList = completeListReader(
+  imageWithEntitySchema,
+  imageListRead,
+);
 
 export const getImageById = async (
   db: Database,
