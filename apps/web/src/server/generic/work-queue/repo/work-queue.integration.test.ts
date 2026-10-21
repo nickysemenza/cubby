@@ -1,5 +1,6 @@
 import { assessmentPublication } from "@cubby/schemas/assessment";
 import { dataCheckMessage } from "@cubby/schemas/data-quality";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { testUserId } from "@cubby/schemas/testing";
 import {
   workQueueHouseholdInput,
@@ -48,6 +49,7 @@ import {
 // prices and exception fingerprints; unrelated check reads must not require it.
 // Entity predicates and diagnostics may overlap, but must preserve scoped
 // results, declaration order and the one shared Project-attention snapshot.
+// A grouped read whose sections disagree with its page order misfiles rows.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
 
@@ -269,6 +271,27 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         waiting: waiting.meta.totalCount,
       },
     });
+    // Sections sort ahead of the requested order, so loaded rows are a prefix
+    // of the summary and its counts cover the whole filtered set.
+    const grouped = await read({
+      query: prefix,
+      group: "recordType",
+      sort: [{ orderBy: "amount", direction: "desc" }],
+    });
+    const sections = grouped.meta.groups ?? [];
+    expect(sections.length).toBeGreaterThan(1);
+    expect(
+      grouped.items.map((row) =>
+        row.entity ? entitySummary[row.entity].singular : "Problem",
+      ),
+    ).toEqual(
+      sections.flatMap((section) => Array(section.count).fill(section.label)),
+    );
+    const recordType = grouped.items[0]?.entity;
+    if (!recordType) throw new Error("Grouped page has no record row");
+    const typed = await read({ query: prefix, entity: recordType });
+    expect(typed.meta.totalCount).toBe(sections[0]?.count);
+    expect(typed.items.every((row) => row.entity === recordType)).toBe(true);
     expect(review.items.some((row) => row.source === "reconciliation")).toBe(
       true,
     );

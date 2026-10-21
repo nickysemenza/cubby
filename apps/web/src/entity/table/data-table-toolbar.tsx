@@ -186,11 +186,7 @@ function ActionsMenu<TData extends RowData>({
  * "Order". Writes the same `sorting` state the column headers do; a cleared
  * sort falls back to the entity's declared default order.
  */
-export function SortMenu<TData extends RowData>({
-  table,
-}: {
-  table: Table<TData>;
-}) {
+function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
   const columns = sortableColumns(table);
   if (columns.length === 0) return null;
   const [active] = table.state.sorting;
@@ -284,7 +280,12 @@ export function SortMenu<TData extends RowData>({
   );
 }
 
-function GroupMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
+/** Group by over the table meta's choices; absent when it offers none. */
+export function GroupMenu<TData extends RowData>({
+  table,
+}: {
+  table: Table<TData>;
+}) {
   const grouping = table.options.meta?.grouping;
   if (!grouping?.choices.length) return null;
   const active = grouping.choices.find(

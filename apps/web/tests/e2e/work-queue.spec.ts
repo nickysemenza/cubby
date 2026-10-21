@@ -64,7 +64,7 @@ test("Work queue filters routing before paging and opens its source record", asy
   // with the shared vendor's logo task even before it has a purchase.
   await expect(
     page
-      .getByRole("list", { name: "Work queue", exact: true })
+      .getByRole("table", { name: "Work queue", exact: true })
       .getByRole("link", {
         name: `${prefix} shared product`,
         exact: true,
@@ -177,8 +177,8 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
     page,
     `/work-queue?query=${encodeURIComponent(prefix)}&source=research&sort=-name`,
   );
-  const list = page.getByRole("list", { name: "Work queue", exact: true });
-  const first = list.getByRole("listitem").filter({
+  const list = page.getByRole("table", { name: "Work queue", exact: true });
+  const first = list.getByRole("row").filter({
     has: page.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
   });
   await first
@@ -206,7 +206,7 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
     .click();
   // Scrolling the page to the last loaded row pulls the next page.
   await expect(async () => {
-    await list.getByRole("listitem").last().scrollIntoViewIfNeeded();
+    await list.getByRole("row").last().scrollIntoViewIfNeeded();
     await expect(
       list.getByRole("link", { name: `${prefix} Alpha`, exact: true }),
     ).toBeVisible({ timeout: 1_000 });
@@ -221,7 +221,7 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
   await expect(list.getByRole("link").first()).toHaveText(`${prefix} Alpha`);
   await expect(page).toHaveURL(/sort=name/);
   await list
-    .getByRole("listitem")
+    .getByRole("row")
     .filter({
       has: page.getByRole("link", { name: `${prefix} Alpha`, exact: true }),
     })
@@ -327,10 +327,10 @@ test("Work queue Run navigation reads passive retained details", async ({
 });
 
 // Failure modes: the queue sits inside a contained gutter instead of reaching
-// the workbench edges, a row loses its record type, the next action
-// disappears, or keyboard activation of Details bubbles to the row's
-// inspector/navigation handler.
-test("Work queue rows show the source record's type and next action", async ({
+// the workbench edges, a row loses its record type, Details loses the next
+// action the row no longer repeats, or keyboard activation of Details bubbles
+// to the row's inspector/navigation handler.
+test("Work queue rows show the source record's type and action details", async ({
   page,
 }, testInfo) => {
   test.setTimeout(60_000);
@@ -342,11 +342,8 @@ test("Work queue rows show the source record's type and next action", async ({
     `/work-queue?query=${encodeURIComponent(name)}&source=research`,
   );
   const record = page.getByRole("link", { name, exact: true });
-  const row = page.getByRole("listitem").filter({ has: record });
+  const row = page.getByRole("row").filter({ has: record });
   await expect(row.getByText("Product", { exact: true })).toBeVisible();
-  await expect(row).toContainText(
-    "Review missing facts and add verified evidence.",
-  );
   const queueUrl = page.url();
   const details = row.getByRole("button", {
     name: "Action details",
@@ -371,9 +368,9 @@ test("Work queue rows show the source record's type and next action", async ({
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
   }
-  // Full-width rows inside the page gutter (24px a side), not a contained column.
+  // A full-width table reaching the workbench edges, not a contained column.
   const list = await page
-    .getByRole("list", { name: "Work queue", exact: true })
+    .getByRole("table", { name: "Work queue", exact: true })
     .boundingBox();
   const main = await page.getByRole("main").boundingBox();
   expect(list && main && main.width - list.width).toBeLessThanOrEqual(50);
@@ -436,7 +433,7 @@ test("Work queue loads all tab counts with its page read", async ({
   );
   await expect(
     page
-      .getByRole("list", { name: "Work queue", exact: true })
+      .getByRole("table", { name: "Work queue", exact: true })
       .getByRole("link", { name: prefix, exact: true }),
   ).toHaveAttribute("href", `/products/${item.id}`);
   const views = page.getByRole("navigation", { name: "Work views" });

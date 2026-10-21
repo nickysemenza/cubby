@@ -15,6 +15,7 @@ import {
 } from "./identifiers";
 import {
   createSortParamsSchema,
+  listGroupSummarySchema,
   mcpPaginationFields,
   oneOrMany,
   partyFilterList,
@@ -238,6 +239,13 @@ export const workQueuePageInput = z.object({
   sort: workQueueSortSchema.optional(),
 });
 
+/** Projected values the household queue can section by, ahead of its sort. */
+export const workQueueGroupSchema = z.enum([
+  "recordType",
+  "waitingFor",
+  "nextAction",
+]);
+
 /** Household UI filters select routing metadata; they confer no source access. */
 export const workQueueHouseholdInput = workQueuePageInput.extend({
   /**
@@ -253,6 +261,9 @@ export const workQueueHouseholdInput = workQueuePageInput.extend({
   waitingForPresence: presenceFilter.describe(
     "has/none waiting for, ORed with picked members",
   ),
+  /** Rows about any of these record types; Problems rows have none. */
+  entity: oneOrMany(z.enum(shortcodeEntities)).optional(),
+  group: workQueueGroupSchema.optional(),
 });
 
 export const workQueueOutSchema = z.object({
@@ -269,6 +280,8 @@ export const workQueueOutSchema = z.object({
       review: z.number().int().nonnegative(),
       waiting: z.number().int().nonnegative(),
     }),
+    /** The grouped read's sections of the whole filtered set, in page order. */
+    groups: z.array(listGroupSummarySchema).optional(),
   }),
 });
 
@@ -282,3 +295,4 @@ export type WorkQueueMember = z.infer<typeof workQueueMemberSchema>;
 export type WorkQueueKind = z.infer<typeof workQueueKindSchema>;
 export type WorkWaitingFor = z.infer<typeof workWaitingForSchema>;
 export type WorkQueueGap = z.infer<typeof workQueueGapSchema>;
+export type WorkQueueGroup = z.infer<typeof workQueueGroupSchema>;
