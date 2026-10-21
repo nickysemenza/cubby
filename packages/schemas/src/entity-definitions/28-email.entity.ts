@@ -30,84 +30,18 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 const EMAIL_SCOPE_REASON =
   "Link state is relative to one Purchase, Vendor or Vendor account.";
 
-const relevanceOptions = [
-  {
-    value: "related",
-    label: MAILBOX_CLASSIFICATION_LABEL["related"],
-  },
-  {
-    value: "unrelated",
-    label: MAILBOX_CLASSIFICATION_LABEL["unrelated"],
-  },
-  {
-    value: "uncertain",
-    label: MAILBOX_CLASSIFICATION_LABEL["uncertain"],
-    color: "neutral-status",
-    glyph: {
-      phosphor: "Question",
-      sfSymbol: "questionmark.circle",
-    },
-  },
-] satisfies {
-  value: string;
-  label: string;
-  color?: import("@cubby/shared/enum-palette").ColorToken;
-  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
-}[];
-const stageOptions = [
-  {
-    value: "rule",
-    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["rule"],
-  },
-  {
-    value: "decision",
-    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["decision"],
-  },
-  {
-    value: "model",
-    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["model"],
-  },
-  {
-    value: "resolution",
-    label: MAILBOX_CLASSIFICATION_STAGE_LABEL["resolution"],
-  },
-] satisfies {
-  value: string;
-  label: string;
-  color?: import("@cubby/shared/enum-palette").ColorToken;
-  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
-}[];
-const statusOptions = [
-  {
-    value: "pending",
-    label: "Pending",
-  },
-  {
-    value: "researching",
-    label: "Researching",
-  },
-  {
-    value: "completed",
-    label: "Completed",
-  },
-  {
-    value: "blocked",
-    label: "Blocked",
-  },
-  {
-    value: "deleted",
-    label: "Deleted",
-  },
-  {
-    value: "excluded",
-    label: "Excluded",
-  },
-] satisfies {
-  value: string;
-  label: string;
-  color?: import("@cubby/shared/enum-palette").ColorToken;
-  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
-}[];
+const relevanceOptions = mailboxClassification.options.map((value) => ({
+  value,
+  label: MAILBOX_CLASSIFICATION_LABEL[value],
+}));
+const stageOptions = mailboxClassificationStage.options.map((value) => ({
+  value,
+  label: MAILBOX_CLASSIFICATION_STAGE_LABEL[value],
+}));
+const statusOptions = emailStatus.options.map((value) => ({
+  value,
+  label: value[0]!.toUpperCase() + value.slice(1),
+}));
 
 const linkStateOptions = [
   {

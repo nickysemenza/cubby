@@ -346,72 +346,10 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          options: [
-            {
-              value: "account_sync",
-              label: RUN_PURPOSE_LABEL["account_sync"],
-            },
-            {
-              value: "mail_import",
-              label: RUN_PURPOSE_LABEL["mail_import"],
-            },
-            {
-              value: "purchase_validation",
-              label: RUN_PURPOSE_LABEL["purchase_validation"],
-            },
-            {
-              value: "product_enrichment",
-              label: RUN_PURPOSE_LABEL["product_enrichment"],
-            },
-            {
-              value: "photo_inventory",
-              label: RUN_PURPOSE_LABEL["photo_inventory"],
-            },
-            {
-              value: "ai_suggest",
-              label: RUN_PURPOSE_LABEL["ai_suggest"],
-            },
-            {
-              value: "suggestion_sweep",
-              label: RUN_PURPOSE_LABEL["suggestion_sweep"],
-            },
-            {
-              value: "ai_refresh",
-              label: RUN_PURPOSE_LABEL["ai_refresh"],
-            },
-            {
-              value: "background",
-              label: RUN_PURPOSE_LABEL["background"],
-            },
-            {
-              value: "file_import",
-              label: RUN_PURPOSE_LABEL["file_import"],
-            },
-            {
-              value: "mail_search",
-              label: RUN_PURPOSE_LABEL["mail_search"],
-            },
-            {
-              value: "mail_discovery",
-              label: RUN_PURPOSE_LABEL["mail_discovery"],
-            },
-            {
-              value: "mail_reclassify",
-              label: RUN_PURPOSE_LABEL["mail_reclassify"],
-            },
-            {
-              value: "maintenance",
-              label: RUN_PURPOSE_LABEL["maintenance"],
-            },
-            {
-              value: "derived_refresh",
-              label: RUN_PURPOSE_LABEL["derived_refresh"],
-            },
-            {
-              value: "sweep",
-              label: RUN_PURPOSE_LABEL["sweep"],
-            },
-          ],
+          options: runPurpose.options.map((value) => ({
+            value,
+            label: RUN_PURPOSE_LABEL[value],
+          })),
         },
         display: {
           list: true,
@@ -697,32 +635,10 @@ export default defineEntity({
         },
         control: {
           kind: "select",
-          options: [
-            {
-              value: "member_request",
-              label: "member request",
-            },
-            {
-              value: "scheduled",
-              label: "scheduled",
-            },
-            {
-              value: "source_discovered",
-              label: "source discovered",
-            },
-            {
-              value: "import_completed",
-              label: "import completed",
-            },
-            {
-              value: "evidence_changed",
-              label: "evidence changed",
-            },
-            {
-              value: "retry",
-              label: "retry",
-            },
-          ],
+          options: runCause.options.map((value) => ({
+            value,
+            label: value.replaceAll("_", " "),
+          })),
         },
         validation: readOnly(runCause.nullable()),
       },

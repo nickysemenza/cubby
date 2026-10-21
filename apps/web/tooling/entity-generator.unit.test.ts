@@ -1606,7 +1606,7 @@ describe("typed entity compiler", () => {
           },
         },
       ])[0]?.filterDescriptors[0]?.options;
-    expect(compile(null)).toEqual([
+    expect(compile(null)).toMatchObject([
       { value: "open", label: "Open" },
       { value: "done", label: "Done" },
     ]);

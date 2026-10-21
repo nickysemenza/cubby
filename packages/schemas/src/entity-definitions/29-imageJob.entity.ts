@@ -18,25 +18,10 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
   update: null,
 });
 
-const kindOptions = [
-  {
-    value: "subject_lift",
-    label: ACTIVITY_KIND_LABEL["subject_lift"],
-  },
-  {
-    value: "describe_image",
-    label: ACTIVITY_KIND_LABEL["describe_image"],
-  },
-  {
-    value: "identify_image",
-    label: ACTIVITY_KIND_LABEL["identify_image"],
-  },
-] satisfies {
-  value: string;
-  label: string;
-  color?: import("@cubby/shared/enum-palette").ColorToken;
-  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
-}[];
+const kindOptions = imageProcessingJobKind.options.map((value) => ({
+  value,
+  label: ACTIVITY_KIND_LABEL[value],
+}));
 
 const stateOptions = [
   {
