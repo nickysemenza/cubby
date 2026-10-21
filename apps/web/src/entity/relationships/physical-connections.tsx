@@ -77,9 +77,7 @@ function ConnectionDirectionList({
             {group.items.map((item) => (
               <RecordRow
                 key={`${item.kind}:${item.id}`}
-                leading={
-                  <EntityIcon entity={item.kind} colored className="size-3.5" />
-                }
+                leading={<EntityIcon entity={item.kind} className="size-3.5" />}
                 primary={
                   <ConnectionItemLink
                     kind={item.kind}

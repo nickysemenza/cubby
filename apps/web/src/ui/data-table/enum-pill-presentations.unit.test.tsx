@@ -49,11 +49,12 @@ describe("enum values by role", () => {
     ).not.toBeNull();
   });
 
-  it("draws a kind as the neutral chip whatever its tint", () => {
+  it("draws a kind on a quiet matching tint with readable label ink", () => {
     render(<EnumPill color="var(--category-3)">Credit card</EnumPill>);
     const pill = pillFor("Credit card");
     expect(pill).toHaveAttribute("data-enum-role", "category");
-    expect(pill).toHaveClass("bg-muted");
+    expect(pill.style.backgroundColor).toContain("var(--category-3)");
+    expect(pill).toHaveClass("text-foreground");
     expect(pill.className).not.toMatch(/positive|warning|destructive/);
   });
 

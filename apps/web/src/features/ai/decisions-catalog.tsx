@@ -142,7 +142,6 @@ function catalogColumns() {
             {row.original.entity ? (
               <EntityIcon
                 entity={row.original.entity}
-                colored
                 aria-hidden="true"
                 className="size-3.5 shrink-0"
               />
@@ -598,7 +597,6 @@ export function DecisionsCatalog({
               aside: (
                 <EntityIcon
                   entity={entity}
-                  colored
                   aria-hidden="true"
                   className="size-3.5"
                 />

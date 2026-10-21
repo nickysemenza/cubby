@@ -40,7 +40,6 @@ export function RecordEmoji({
     <EntityIcon
       entity={icon.success ? icon.data : entity}
       size={size}
-      colored
       aria-hidden="true"
       className={className}
     />

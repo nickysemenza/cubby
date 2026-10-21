@@ -396,7 +396,7 @@ function Identity({ entity }: { entity: Entity }) {
   const metadata = metadataFor(entity);
   return (
     <div className="flex min-w-0 items-start gap-2">
-      <EntityIcon entity={entity} colored className="mt-1 size-5 shrink-0" />
+      <EntityIcon entity={entity} className="mt-1 size-5 shrink-0" />
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="font-serif text-lg leading-tight">{entity}</span>

@@ -21,6 +21,7 @@ import {
   type NavGroup,
   type NavItem,
   navItemLinkProps,
+  navIconClass,
 } from "./nav-items";
 
 export function SidebarRailGroup({
@@ -60,7 +61,7 @@ export function SidebarRailGroup({
           }
         >
           <Icon
-            className="size-3.5 text-foreground"
+            className={cn("size-3.5", navIconClass(group))}
             weight={active ? "bold" : "regular"}
             aria-hidden="true"
           />
@@ -110,7 +111,10 @@ export function SidebarRailLeaf({
           />
         }
       >
-        <Icon className="size-3.5" weight={active ? "bold" : "regular"} />
+        <Icon
+          className={cn("size-3.5", navIconClass(item))}
+          weight={active ? "bold" : "regular"}
+        />
       </TooltipTrigger>
       <TooltipContent side="right" role="tooltip">
         {item.label}
@@ -132,7 +136,10 @@ function SidebarFlyoutItem({
       render={<Link {...navItemLinkProps(item, active)} />}
       className={cn("gap-2", active && "bg-accent")}
     >
-      <Icon weight={active ? "bold" : "regular"} />
+      <Icon
+        className={navIconClass(item)}
+        weight={active ? "bold" : "regular"}
+      />
       {item.label}
       {item.entity && <NavigationCountBadge entity={item.entity} />}
     </DropdownMenuItem>

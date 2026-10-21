@@ -14,7 +14,7 @@ export type EntitySelectOption = Readonly<{
   color?: string;
   /** Compiler-filled roster role: states tint, kinds stay neutral. */
   role?: EnumRole;
-  /** Declared (or status-inferred) glyph; becomes `icon` for pickers. */
+  /** Declared or shared semantic glyph; becomes `icon` for pickers. */
   glyph?: EnumIcon;
 }>;
 
@@ -68,7 +68,11 @@ const ENTITY_SELECT_OPTIONS = {
   // The capture form's `"auto"` sentinel asks the server's role Decision
   // before create; `buildData` strips it before validation.
   "expense.lineKind": [
-    { value: "auto", label: "Decide from receipt evidence" },
+    {
+      value: "auto",
+      label: "Decide from receipt evidence",
+      glyph: { phosphor: "Sparkle", sfSymbol: "sparkles" },
+    },
   ],
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;
 

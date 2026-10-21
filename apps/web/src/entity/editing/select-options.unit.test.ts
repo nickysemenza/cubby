@@ -52,11 +52,12 @@ describe("presentEntitySelectOptions", () => {
       },
     ]);
 
-    expect(
-      options.map(({ value, color, icon }) => ({ value, color, icon })),
-    ).toEqual([
-      { value: "item_line", color: "var(--custom)", icon: "x" },
-      { value: "auto", color: "var(--category-1)", icon: undefined },
+    expect(options.map(({ value, color }) => ({ value, color }))).toEqual([
+      { value: "item_line", color: "var(--custom)" },
+      { value: "auto", color: "var(--category-1)" },
     ]);
+    expect(options[0]?.icon).toBe("x");
+    expect(options[1]?.glyph?.phosphor).toBe("Sparkle");
+    expect(isValidElement(options[1]?.icon)).toBe(true);
   });
 });

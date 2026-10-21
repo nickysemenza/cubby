@@ -79,7 +79,6 @@ function ProductPillWithFood({ product }: { product: IngredientProduct }) {
             <EntityIcon
               entity="usda-food"
               size={12}
-              colored
               aria-label="Linked to USDA food data"
             />
           </TooltipTrigger>

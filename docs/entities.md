@@ -3234,8 +3234,9 @@ Enum presentation color overrides live in the field's `control.options` or
 generic list, detail, and hero chips consume those declarations. Use shared
 semantic tokens (`var(--warning)`, `var(--slate)`) or brand domain tokens
 (`var(--brand-domain-house)`); the design-token generator derives Apple's
-adaptive asset lookup. Unknown expectation and acquisition values are amber,
-expected evidence is teal, and explicitly not-expected evidence is neutral.
+adaptive asset lookup. Unknown expectation and acquisition values infer neutral
+gray; expected evidence uses the info tone, and explicitly not-expected evidence
+remains neutral.
 Color supplements the visible label.
 
 Specialized surfaces, including task-board trade badges and native journal

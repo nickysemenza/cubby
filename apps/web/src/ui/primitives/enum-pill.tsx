@@ -32,6 +32,10 @@ const STATUS_TONES: Readonly<Record<string, string>> = {
  */
 const CHIP = "overflow-hidden border-transparent whitespace-nowrap";
 
+function optionTint(color: string) {
+  return `color-mix(in srgb, ${color} 12%, var(--background))`;
+}
+
 /**
  * The shared palette decides both facts for a lone value: a one-option
  * roster is `status` exactly when its color is a condition tone, and a
@@ -116,7 +120,7 @@ function StatusValue({
         tone
           ? undefined
           : {
-              backgroundColor: `color-mix(in srgb, ${color} 12%, var(--background))`,
+              backgroundColor: optionTint(color),
               color,
             }
       }
@@ -129,8 +133,8 @@ function StatusValue({
 }
 
 /**
- * A kind ("Credit card", "Travel"): a neutral inset chip. The optional glyph
- * takes the option's color; the chip itself never carries a condition tone.
+ * A kind ("Credit card", "Travel"): a quiet option tint and matching glyph.
+ * The label keeps foreground ink for contrast on every category surface.
  */
 function CategoryValue({
   color,
@@ -143,7 +147,10 @@ function CategoryValue({
   const pill = (
     <Pill
       data-enum-role="category"
-      className={cn(CHIP, "bg-muted text-foreground/80", className)}
+      className={cn(CHIP, "text-foreground", !color && "bg-muted", className)}
+      style={color ? {
+        backgroundColor: optionTint(color),
+      } : undefined}
     >
       <Lead glyph={glyph} icon={icon} color={color} />
       <span className="min-w-0 truncate">{children}</span>

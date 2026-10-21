@@ -6,7 +6,13 @@ import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
 import { Page } from "~/entity/page/page";
+import { cn } from "~/lib/utils";
 import { Grid, Row, Stack } from "~/ui/layout";
+import {
+  domainIconClass,
+  domainForEntity,
+  domainForRoute,
+} from "~/ui/navigation/domain-wayfinding";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
@@ -144,7 +150,10 @@ export function ApplicationDirectory({
                 aria-labelledby={`${filterId}-${group.key}`}
               >
                 <Row gap="sm" className="border-b border-border pb-3">
-                  <group.icon className="size-5 text-foreground" aria-hidden />
+                  <group.icon
+                    className={cn("size-5", domainIconClass(group.key))}
+                    aria-hidden
+                  />
                   <h2
                     id={`${filterId}-${group.key}`}
                     className="text-base font-semibold"
@@ -186,7 +195,14 @@ function DirectoryLink({
         className="group flex min-h-11 items-start gap-3 rounded-md px-2 py-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted"
       >
         <destination.icon
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          className={cn(
+            "mt-0.5 size-4 shrink-0 text-muted-foreground",
+            domainIconClass(
+              destination.entity
+                ? domainForEntity(destination.entity)
+                : domainForRoute(destination.to ?? "/"),
+            ),
+          )}
           aria-hidden
         />
         <span className="min-w-0 flex-1">

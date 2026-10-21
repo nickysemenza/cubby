@@ -548,7 +548,7 @@ const buildMetadataSchemas = () => {
         .default(null),
       /**
        * Whether this field's roster reads as states (`status`: tinted fill and
-       * a glyph) or kinds (`category`: neutral chip). Omitted, the shared enum
+       * a glyph) or kinds (`category`: quiet tint and semantic glyph). Omitted, the shared enum
        * palette infers it: every option carrying a condition color is status.
        */
       optionRole: z.enum(enumRoles).nullable().optional().default(null),

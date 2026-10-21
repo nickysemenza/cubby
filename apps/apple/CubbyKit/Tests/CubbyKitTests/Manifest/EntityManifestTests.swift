@@ -14,7 +14,8 @@ struct EntityManifestTests {
         let encoded = try JSONEncoder().encode(field.controlOptions)
         let options = try #require(JSONSerialization.jsonObject(with: encoded) as? [[String: Any]])
         #expect(
-            options.first { $0["value"] as? String == "unknown" }?["color"] as? String == "var(--warning)")
+            options.first { $0["value"] as? String == "unknown" }?["color"] as? String
+                == "var(--neutral-status)")
         #expect(
             options.first { $0["value"] as? String == "required" }?["color"] as? String
                 == "var(--info)")

@@ -10,11 +10,17 @@ import { useVirtualKeyboard } from "~/ui/hooks/use-virtual-keyboard";
 import { Row } from "~/ui/layout";
 
 import { resolveMobileRoute } from "./mobile-route-descriptor";
-import { bottomNavItems, publicNavItems, useActiveTo } from "./nav-items";
+import {
+  bottomNavItems,
+  publicNavItems,
+  navIconClass,
+  useActiveTo,
+} from "./nav-items";
 import { WorkspaceNavigator } from "./workspace-navigator";
 
 type BottomNavItemProps = {
   icon?: Icon;
+  iconClassName?: string;
   label: string;
   active?: boolean;
   /**
@@ -43,6 +49,7 @@ interface LinkPreloadProps {
  */
 function BottomNavItem({
   icon: Icon,
+  iconClassName,
   label,
   active = false,
   as: Comp = Link,
@@ -72,7 +79,7 @@ function BottomNavItem({
     >
       {Icon && (
         <Icon
-          className="size-5"
+          className={cn("size-5", iconClassName)}
           weight={active ? "fill" : "regular"}
           aria-hidden="true"
         />
@@ -111,6 +118,7 @@ export function BottomNav() {
                 key={item.to}
                 to={item.to}
                 icon={item.icon}
+                iconClassName={navIconClass(item)}
                 label={item.label}
                 active={
                   (item.to === "/" && activeTab === "today") ||
@@ -148,6 +156,7 @@ export function BottomNav() {
                 key={item.to}
                 to={item.to}
                 icon={item.icon}
+                iconClassName={navIconClass(item)}
                 label={item.label}
                 active={item.to === activeTo}
               />

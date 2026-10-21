@@ -61,7 +61,7 @@ export const QuickActionsMenu = ({ expanded }: { expanded?: boolean }) => {
             >
               {action.entity ? (
                 <>
-                  <EntityIcon entity={action.entity} colored />
+                  <EntityIcon entity={action.entity} />
                   <span>New {entities[action.entity].label}</span>
                 </>
               ) : (

@@ -464,7 +464,6 @@ function SchemaTable({
                 >
                   <EntityIcon
                     entity={row.entity}
-                    colored
                     className="size-3.5 shrink-0"
                   />
                   {row.entity}

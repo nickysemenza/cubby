@@ -104,7 +104,7 @@ function SearchHitIcon({
       />
     );
   }
-  return <EntityIcon entity={entity} colored className={className} />;
+  return <EntityIcon entity={entity} className={className} />;
 }
 
 const mediaVariants = {

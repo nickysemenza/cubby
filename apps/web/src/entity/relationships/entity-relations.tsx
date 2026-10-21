@@ -790,7 +790,6 @@ function RelationshipBranches({
                     leading={
                       <EntityIcon
                         entity={node.entityKind}
-                        colored
                         className="size-3.5"
                       />
                     }
@@ -1139,11 +1138,7 @@ function VisitedRecords({
             >
               <ArrowRightIcon className="size-3.5" />
             </Button>
-            <EntityIcon
-              entity={selected.entityKind}
-              colored
-              className="size-4"
-            />
+            <EntityIcon entity={selected.entityKind} className="size-4" />
             <GraphRecordLink node={selected} href={hrefFor(selected, router)} />
             <span className="text-xs text-muted-foreground">
               {entityLabel(selected.entityKind)} · visit {cursor + 1} of{" "}

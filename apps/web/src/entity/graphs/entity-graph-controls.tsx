@@ -105,7 +105,7 @@ export function EntityGraphControls({
             thumb: {
               imageUrl: node.imageUrl ?? null,
               fallback: entity ? (
-                <EntityIcon entity={entity} size={14} colored />
+                <EntityIcon entity={entity} size={14} />
               ) : null,
             },
           };

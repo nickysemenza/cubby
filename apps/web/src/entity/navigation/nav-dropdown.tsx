@@ -9,7 +9,12 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 
-import { type NavGroup, navItemLinkProps, useActiveTo } from "./nav-items";
+import {
+  type NavGroup,
+  navItemLinkProps,
+  navIconClass,
+  useActiveTo,
+} from "./nav-items";
 
 export const NavDropdown = ({ group }: { group: NavGroup }) => {
   const { label, icon: Icon, children } = group;
@@ -27,7 +32,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
         title={label}
       >
         <Icon
-          className="size-3.5"
+          className={cn("size-3.5", navIconClass(group))}
           weight={isGroupActive ? "bold" : "regular"}
         />
         <span className="hidden lg:inline">{label}</span>
@@ -44,7 +49,10 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
               }
               className={cn("gap-2", item.to === activeTo && "bg-accent")}
             >
-              <ItemIcon weight={item.to === activeTo ? "bold" : "regular"} />
+              <ItemIcon
+                className={navIconClass(item)}
+                weight={item.to === activeTo ? "bold" : "regular"}
+              />
               {item.label}
             </DropdownMenuItem>
           );

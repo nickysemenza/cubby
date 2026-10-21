@@ -102,7 +102,7 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
       ...item,
       thumb: {
         imageUrl,
-        fallback: <EntityIcon entity="productCategory" size={14} colored />,
+        fallback: <EntityIcon entity="productCategory" size={14} />,
       },
     };
   });

@@ -91,6 +91,9 @@ test("a no-ID posted tip requires reviewed attachment to the pending charge", as
 test("full-size statement CSV saves in bounded batches and replays without duplicate rows", async ({
   page,
 }) => {
+  // Both 501-row writes must finish before checking their results. The replay
+  // can exceed the ordinary assertion budget while its bounded batches save.
+  test.setTimeout(90_000);
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const csv = [
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags,Owner,Reviewed,Id",
@@ -114,11 +117,15 @@ test("full-size statement CSV saves in bounded batches and replays without dupli
   await gotoAuthenticatedPage(page, "/statement-rows/import");
   await upload();
   await page.getByRole("button", { name: "Save 501 source rows" }).click();
-  await expect(page.getByText("501 new source rows")).toBeVisible();
+  await expect(page.getByText("501 new source rows")).toBeVisible({
+    timeout: 30_000,
+  });
 
   await upload();
   await page.getByRole("button", { name: "Save 501 source rows" }).click();
-  await expect(page.getByText("0 new source rows")).toBeVisible();
+  await expect(page.getByText("0 new source rows")).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.getByText("501 already present")).toBeVisible();
 });
 

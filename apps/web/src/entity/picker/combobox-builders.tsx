@@ -211,7 +211,7 @@ function searchHitThumb(hit: SearchHit, entity: SearchableEntity): PickerThumb {
     fallback: hit.emoji ? (
       <RecordEmoji entity={entity} emoji={hit.emoji} />
     ) : (
-      <EntityIcon entity={entity} size={14} colored />
+      <EntityIcon entity={entity} size={14} />
     ),
   };
 }
@@ -310,7 +310,7 @@ function productPickerBase(
     ...(secondary && { secondary }),
     thumb: {
       imageUrl: coverImageUrl,
-      fallback: <EntityIcon entity="product" size={14} colored />,
+      fallback: <EntityIcon entity="product" size={14} />,
     },
   };
 }

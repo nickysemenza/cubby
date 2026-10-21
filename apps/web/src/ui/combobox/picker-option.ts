@@ -19,9 +19,8 @@ export interface PickerOption {
   icon?: React.ReactNode;
   color?: string;
   /**
-   * The option's state glyph (Phosphor name for web, SF Symbol for Apple).
-   * `colorizeEnumOptions` sets it only on status rosters (or where declared),
-   * so a category option keeps its tone dot.
+   * The option's semantic glyph (Phosphor name for web, SF Symbol for Apple).
+   * Shared completion supplies status and category glyphs; a declaration may override them.
    */
   glyph?: { phosphor: string; sfSymbol: string };
   /**
@@ -60,7 +59,7 @@ export interface PickerOption {
 
 /** The one `PickerOption` → picker row mapping. */
 export function pickerOptionItem(option: PickerOption): ComboboxItem {
-  // A status option leads with its state glyph; a category keeps its dot.
+  // Both roster roles lead with their semantic glyph when no caller mark is supplied.
   const glyph = option.icon == null ? option.glyph?.phosphor : undefined;
   if (glyph && OPTION_GLYPH_NAMES.has(glyph))
     return pickerOptionItem({

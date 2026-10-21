@@ -61,7 +61,7 @@ export function EntityCover({
   const placeholderContent =
     fallback ??
     (entity ? (
-      <EntityIcon entity={entity} colored className="size-4" />
+      <EntityIcon entity={entity} className="size-4" />
     ) : (
       <ImageBrokenIcon
         className="size-4 text-muted-foreground/40"
