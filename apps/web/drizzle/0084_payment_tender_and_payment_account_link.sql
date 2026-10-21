@@ -1,4 +1,0 @@
-ALTER TABLE "EntityLink" DROP CONSTRAINT "EntityLink_kind_check";--> statement-breakpoint
-ALTER TABLE "PurchasePaymentEvidence" ADD COLUMN "tender" text DEFAULT 'unknown' NOT NULL;--> statement-breakpoint
-ALTER TABLE "EntityLink" ADD CONSTRAINT "EntityLink_kind_check" CHECK (("kind", "fromKind", "toKind") IN (('wishCandidate', 'wish', 'product'), ('purchaseProduct', 'purchase', 'product'), ('purchasePaymentAccount', 'purchase', 'financialAccount'), ('projectTool', 'project', 'product'), ('gardenEntryPlanting', 'gardenEntry', 'planting'), ('productComponent', 'product', 'product'), ('taskDependency', 'task', 'task'), ('projectDependency', 'project', 'project')));--> statement-breakpoint
-ALTER TABLE "PurchasePaymentEvidence" ADD CONSTRAINT "PurchasePaymentEvidence_tender_check" CHECK ("PurchasePaymentEvidence"."tender" IN ('card', 'stored_value', 'unknown'));

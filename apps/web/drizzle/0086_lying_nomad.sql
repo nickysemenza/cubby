@@ -1,2 +1,0 @@
-DROP INDEX "Run_one_active_vendor_account_key";--> statement-breakpoint
-CREATE UNIQUE INDEX "Run_one_active_vendor_account_key" ON "Run" USING btree ("vendorAccountId") WHERE "Run"."vendorAccountId" IS NOT NULL AND "Run"."status" IN ('running', 'paused', 'paused_auth', 'paused_offline', 'paused_approval');

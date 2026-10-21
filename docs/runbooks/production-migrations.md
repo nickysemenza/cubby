@@ -73,3 +73,41 @@ which SQL is compatible with the deployed code; the owner must review that
 boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
+
+## Baseline consolidation
+
+Neon is the only persistent application database; dev and CI databases are
+synthetic and disposable. The current baseline replaces the retired series
+through `0103_statement_charge_history`. Fresh databases apply
+`0000_baseline.sql`, including derived DDL, optional Neon diagnostics, and
+fresh-install Automatic rule defaults. `db:check` compares the resulting
+catalog with `schema.ts` plus desired-state derived DDL.
+
+`meta/_baseline.json` pins the baseline SQL hash and the count and SHA-256
+fingerprint of the complete retired ledger. The fingerprint hashes the ordered
+`created_at:hash\n` rows (decimal timestamps, original SQL SHA-256 hashes).
+On encountering that exact ledger, the normal runner transactionally replaces
+only `drizzle.__drizzle_migrations` rows with the baseline record, then applies
+any post-baseline migrations. It never executes baseline SQL on that database,
+changes application data, or resets the database. Partial, edited, extra, or
+unknown histories fail closed. An interrupted transaction retains the old
+ledger; rerunning after successful adoption follows the ordinary prefix path.
+The baseline hash is immutable after adoption.
+
+Before merging a consolidation, serialize with production deployment and verify
+that Neon has applied the complete retired journal, including any staged
+contractions. Clear any obsolete `PRODUCTION_MIGRATION_THROUGH` boundary before
+the new baseline deploy; retired tags are deliberately rejected. Compare a
+fresh baseline catalog with production using `db:check --against-production`
+and record the retired ledger fingerprint read-only. After deployment, verify
+one baseline bookkeeping row and unchanged application data/schema. No reset or
+manual deletion of production bookkeeping is part of this procedure. If Neon
+is behind, apply its missing original migrations from the preceding revision
+before deploying the consolidation. Retired SQL and its preservation tests
+remain in Git history; new migrations get populated-predecessor coverage.
+
+Only the newest schema snapshot is retained. Drizzle Kit uses it to generate
+the next SQL diff; it does not apply snapshots to the database. After generation,
+delete older `*_snapshot.json` files while retaining SQL, `_journal.json`, and
+`_baseline.json`. `db:check` enforces this, and snapshot line diffs are suppressed
+by `.gitattributes`; review the SQL and journal for executable changes.

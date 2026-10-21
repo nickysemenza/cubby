@@ -1,1 +1,0 @@
-ALTER TABLE "RunEvidence" ALTER COLUMN "targetId" DROP NOT NULL;

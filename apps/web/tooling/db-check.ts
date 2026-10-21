@@ -1,6 +1,6 @@
 import { createPostgresPool } from "./postgres-pool";
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { sql } from "drizzle-orm";
@@ -55,6 +55,15 @@ async function checkGeneratedState(): Promise<string[]> {
     MIGRATIONS_FOLDER,
     `meta/${String(last.idx).padStart(4, "0")}_snapshot.json`,
   );
+  const obsolete = readdirSync(join(MIGRATIONS_FOLDER, "meta")).filter(
+    (name) =>
+      name.endsWith("_snapshot.json") &&
+      name !== `${String(last.idx).padStart(4, "0")}_snapshot.json`,
+  );
+  if (obsolete.length > 0)
+    problems.push(
+      `Remove superseded generation snapshots from drizzle/meta: ${obsolete.join(", ")}. Keep only the latest snapshot; SQL and journal history remain immutable.`,
+    );
   const previous = JSON.parse(readFileSync(snapshotPath, "utf8"));
   const current = generateDrizzleJson(schema, previous.id, ["public"]);
   const pending = await generateMigration(previous, current);

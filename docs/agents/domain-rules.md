@@ -46,8 +46,15 @@ migration to extend, use `pnpm db:generate --custom --name=description`.
 Do not copy the entire desired-state script into another migration or add a
 generator wrapper or hash lock. The catalog check detects missing SQL changes.
 
-Migrations are the one committed generated artifact and are immutable once
-merged — the runner refuses bookkeeping that is not a prefix of the journal.
+Migration SQL and journal entries are immutable once merged, except for an
+explicitly authorized baseline consolidation following the
+[production migration runbook](../runbooks/production-migrations.md#baseline-consolidation).
+Keep only the latest `drizzle/meta/*_snapshot.json`: it is generation state,
+not applied history. After `db:generate`, delete superseded snapshots;
+`db:check` rejects them. Snapshots remain committed so generation can recognize
+renames and drops, but `.gitattributes` suppresses their full-schema line diffs.
+The runner refuses bookkeeping that is not a prefix of the journal, apart from
+the exact retired-ledger adoption described in the runbook.
 A stored-shape transform accompanying schema work is a custom migration
 (`drizzle-kit generate --custom`). For an explicitly authorized one-off data-only
 correction, use a transactional update and verify preservation and read-back;

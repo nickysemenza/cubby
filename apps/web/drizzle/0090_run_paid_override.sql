@@ -1,4 +1,0 @@
-ALTER TABLE "RunControlEvent" DROP CONSTRAINT "RunControlEvent_action_check";--> statement-breakpoint
-ALTER TABLE "RunControlEvent" ADD COLUMN "paidOverBudgetUsd" double precision;--> statement-breakpoint
-ALTER TABLE "RunControlEvent" ADD CONSTRAINT "RunControlEvent_paid_over_budget_check" CHECK ("RunControlEvent"."paidOverBudgetUsd" IS NULL OR ("RunControlEvent"."action" = 'run_now_paid' AND "RunControlEvent"."paidOverBudgetUsd" > 0));--> statement-breakpoint
-ALTER TABLE "RunControlEvent" ADD CONSTRAINT "RunControlEvent_action_check" CHECK ("RunControlEvent"."action" IN ('prompt', 'abort', 'pause', 'resume', 'cancel', 'approve', 'reject', 'retry', 'retry_dispatch', 'upload_evidence', 'no_evidence_available', 'escalate_sol', 'run_now_paid'));

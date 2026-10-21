@@ -1,5 +1,6 @@
 import { createPostgresPool } from "./postgres-pool";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -38,10 +39,6 @@ const readMigrationJournal = (migrationsFolder: string) => {
   return entries;
 };
 
-/** Ordered committed boundaries for predecessor-schema preservation tests. */
-export const migrationTags = () =>
-  readMigrationJournal(MIGRATIONS_FOLDER).map((entry) => entry.tag);
-
 /**
  * Drizzle's migrator applies every journal entry newer than the LAST
  * bookkeeping row's `created_at` and never compares hashes. A database whose
@@ -52,6 +49,7 @@ export const migrationTags = () =>
 export async function assertMigrationBookkeeping(
   db: NodePgDatabase,
   journal: readonly MigrationMeta[],
+  migrationsFolder?: string,
 ): Promise<number> {
   const { rows: bookkeeping } = await db.execute<{ exists: boolean }>(
     sql`SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS exists`,
@@ -73,6 +71,44 @@ export async function assertMigrationBookkeeping(
       "Refusing to migrate: public has tables but drizzle.__drizzle_migrations records no migrations " +
         "(a push-built database). Rebuild it with `pnpm dev reset`.",
     );
+  }
+  // Baseline adoption is enabled only by the migration runner. Inspection-only
+  // callers of this assertion must never mutate bookkeeping.
+  const baselinePath =
+    migrationsFolder === undefined
+      ? undefined
+      : join(migrationsFolder, "meta/_baseline.json");
+  if (
+    baselinePath &&
+    existsSync(baselinePath) &&
+    applied[0]?.hash !== journal[0]?.hash
+  ) {
+    const baseline = z
+      .object({
+        baselineHash: z.string(),
+        retiredCount: z.number().int().positive(),
+        retiredDigest: z.string(),
+      })
+      .parse(JSON.parse(readFileSync(baselinePath, "utf8")));
+    const digest = createHash("sha256")
+      .update(applied.map((row) => `${row.created_at}:${row.hash}\n`).join(""))
+      .digest("hex");
+    const first = journal[0];
+    if (
+      first &&
+      first.hash === baseline.baselineHash &&
+      applied.length === baseline.retiredCount &&
+      digest === baseline.retiredDigest
+    ) {
+      // Only the complete, byte-for-byte retired ledger can adopt this baseline.
+      // No baseline DDL or seed writes run against the existing public schema.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`DELETE FROM drizzle.__drizzle_migrations`);
+        await tx.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+          VALUES (${first.hash}, ${first.folderMillis})`);
+      });
+      return 1;
+    }
   }
   applied.forEach((row, index) => {
     const expected = journal[index];
@@ -119,7 +155,11 @@ export async function migrateDatabase(
     throw new Error(
       `Refusing to migrate: --through=${options.through} is not an exact migration tag in the journal.`,
     );
-  const appliedCount = await assertMigrationBookkeeping(db, journal);
+  const appliedCount = await assertMigrationBookkeeping(
+    db,
+    journal,
+    migrationsFolder,
+  );
   if (appliedCount > boundary + 1)
     throw new Error(
       `Refusing to migrate: database is already beyond --through=${options.through}; last applied migration is ${entries[appliedCount - 1]?.tag}. No migrations were applied.`,

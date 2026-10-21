@@ -1,1 +1,0 @@
-ALTER TABLE "PhotoGroupProposal" ADD COLUMN "review" jsonb;
