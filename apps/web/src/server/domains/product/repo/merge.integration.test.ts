@@ -1,7 +1,7 @@
 import { GTIN_SOURCE } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { taxonomyId } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -162,6 +162,14 @@ describe("mergeProducts", () => {
       });
     }
 
+    const before = await getDb(ctx.db).query.entityAttachment.findMany({
+      where: and(
+        inArray(entityAttachment.entityId, [keeper.id, incoming.id]),
+        notDeleted(entityAttachment),
+      ),
+      columns: { entityId: true, imageId: true },
+    });
+    expect(before).toHaveLength(2);
     const preview = await previewProductMergeDecisions(ctx.db, {
       keepId: keeper.id,
       mergeId: incoming.id,
@@ -191,6 +199,32 @@ describe("mergeProducts", () => {
           action: "combine",
         }),
       ]),
+    );
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [incoming.shortcode] },
+      TEST_ACTOR,
+    );
+    const saved = await getDb(ctx.db).query.product.findFirst({
+      where: eq(product.id, keeper.id),
+      columns: { name: true, aliases: true },
+    });
+    expect(saved?.name).toBe("ForgeWear pocket tee black small");
+    expect(saved?.aliases).toContain("Dark pocket shirt from photo");
+    const after = await getDb(ctx.db).query.entityAttachment.findMany({
+      where: and(
+        eq(entityAttachment.entityId, keeper.id),
+        notDeleted(entityAttachment),
+      ),
+      orderBy: [asc(entityAttachment.sortOrder)],
+      columns: { imageId: true },
+    });
+    expect(after.map((row) => row.imageId).sort()).toEqual(
+      before.map((row) => row.imageId).sort(),
+    );
+    // Combining own/catalog photos does not silently choose a different cover.
+    expect(after[0]?.imageId).toBe(
+      before.find((row) => row.entityId === keeper.id)?.imageId,
     );
   });
 
