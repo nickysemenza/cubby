@@ -32,6 +32,9 @@ For a same-kind fixture cohort without intermediate reads, use
 `createEntityFixtures`; it writes through the kernel in one transaction and
 settles the frontier after the cohort commits. This keeps background publication
 from repeatedly processing partially created fixture cohorts.
+For a mixed-entity prerequisite graph, use `createFixtureGraph` with its supplied
+kernel writer. It commits the graph and settles projections once; keep fixtures
+with intermediate browser reads outside that transaction.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.
@@ -217,7 +220,10 @@ profile throws when its routes and the compiled Worker's queue consumer names
 differ in either direction. That check covers consumer queue names only, not
 producers, Durable Objects, Hyperdrive, or service bindings, so it is not
 exhaustive binding coverage; `tooling/workerd-runtime-profiles.integration.test.ts`
-probes each profile's queues in a running harness.
+probes every real consumer and the database destination in the coupled runtime.
+Required offline/Gmail browser journeys and purchase-agent integration scenarios
+exercise the other profiles. Separate absence-of-consumer probes for those
+harness profiles are deliberately omitted.
 
 A browser spec may declare `objectStoragePublicUrl` for an HTTPS source identity
 while its bucket remains local. Its asset transport must forward requests to the

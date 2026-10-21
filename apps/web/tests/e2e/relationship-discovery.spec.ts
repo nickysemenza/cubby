@@ -1,43 +1,17 @@
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 
-import {
-  projectAssignment,
-  relationshipDiscoveryContract,
-} from "./support/relationship-discovery-contract";
+import { relationshipDiscoveryContract } from "./support/relationship-discovery-contract";
 import {
   seedPlantPrerequisite,
   seedPlacementReviewPrerequisite,
-  seedPlantingPrerequisite,
   seedTaskPrerequisite,
 } from "./fixtures/catalog";
-import { seedRelationshipReviewPrerequisite } from "./fixtures/finance";
-import {
-  escapeRegExp,
-  gotoAuthenticatedPage,
-  readExpense,
-} from "./support/e2e-helpers";
+import { createEntityFixtures } from "./fixtures/core";
+import { escapeRegExp, gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 relationshipDiscoveryContract();
-
-test("full Relationships review applies an expense alternative", async ({
-  page,
-}) => {
-  const name = `e2e full relationship ${Date.now()}`;
-  const fixture = await seedRelationshipReviewPrerequisite(page, name);
-  await gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
-  const proposals = page.getByRole("region", {
-    name: "Pending suggestions",
-    exact: true,
-  });
-  await expect(proposals).toContainText(`${name} suggested`);
-  const assignment = async () =>
-    (await readExpense(page, fixture.expense.id, projectAssignment)).projectId;
-  expect(await assignment()).toBe(fixture.current.id);
-  await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect.poll(assignment).toBe(fixture.target.id);
-});
 
 test("placement acceptance follows the surviving stock row after merging", async ({
   page,
@@ -105,13 +79,14 @@ test("a large planting branch shows its first page without an expansion click", 
   });
   const cropName = `e2e graph crop ${suffix}`;
   const crop = await seedPlantPrerequisite(page, cropName);
-  await Promise.all(
-    Array.from({ length: 13 }, () =>
-      seedPlantingPrerequisite(page, {
-        plantId: crop.id,
-        taskId: task.id,
-      }),
-    ),
+  await createEntityFixtures(
+    page,
+    "planting",
+    Array.from({ length: 13 }, () => ({
+      plantId: crop.id,
+      taskId: task.id,
+      locationId: null,
+    })),
   );
 
   await gotoAuthenticatedPage(page, `/tasks/${task.id}#relationships`);

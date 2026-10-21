@@ -151,16 +151,29 @@ export async function createEntityFixtures<E extends CreatableEntity>(
   entity: E,
   overrides: readonly EntityOverrides<E>[],
 ): Promise<CreatedEntity[]> {
+  return createFixtureGraph(page, async (create) => {
+    const rows: CreatedEntity[] = [];
+    for (const input of overrides) rows.push(await create(entity, input));
+    return rows;
+  });
+}
+
+/** Prerequisites with no intermediate reads publish only their committed graph. */
+export async function createFixtureGraph<Result>(
+  page: Page,
+  build: (
+    create: <E extends CreatableEntity>(
+      entity: E,
+      overrides: EntityOverrides<E>,
+    ) => Promise<CreatedEntity>,
+  ) => Promise<Result>,
+): Promise<Result> {
   const userId = await fixtureUserId(page);
   const created = await withTransactionDatabase(getFixtureDb(), async (db) => {
     const context = buildKernelContext(db, userId);
-    const rows: CreatedEntity[] = [];
-    for (const input of overrides) {
-      rows.push(
-        await createEntity(context, entity, input, { faker: e2eFaker() }),
-      );
-    }
-    return rows;
+    return build((entity, input) =>
+      createEntity(context, entity, input, { faker: e2eFaker() }),
+    );
   });
   await drainDerivedRefreshFrontier(getFixtureDb());
   return created;

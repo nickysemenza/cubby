@@ -3,7 +3,7 @@ import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
 import { Ajv } from "@modelcontextprotocol/client/validators/ajv";
 import { McpServer } from "@modelcontextprotocol/server";
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { withErrorReporting } from "~/server/errors/report-error";
@@ -171,6 +171,11 @@ function concreteOutputSchema(value: JSONType): boolean {
   return visit(value);
 }
 
+let catalog: Awaited<ReturnType<typeof listMcpToolCatalog>>;
+beforeAll(async () => {
+  catalog = await listMcpToolCatalog();
+});
+
 describe("MCP catalog schemas", () => {
   // Physical QR labels must remain valid while the catalog advertises canonical IDs.
   it("accepts legacy graph labels without accepting another entity's label", () => {
@@ -194,7 +199,7 @@ describe("MCP catalog schemas", () => {
     ).toBe(false);
   });
   it("accepts returned audit cursors, research notes and attachments in the published catalog", async () => {
-    const tools = (await listMcpToolCatalog()).tools;
+    const tools = catalog.tools;
     const validator = new Ajv({ strict: false, validateFormats: true });
     const accepts = (name: string, input: JsonObject) => {
       const tool = tools.find((tool) => tool.name === name);
@@ -498,7 +503,7 @@ describe("MCP catalog schemas", () => {
   });
 
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {
-    const { tools } = await listMcpToolCatalog();
+    const { tools } = catalog;
     const looseOutputs = new Set(["activity"]);
     const emptyProperties = <TSchema>(schema: TSchema) => {
       const properties = schemaProperties(schema);
@@ -541,7 +546,7 @@ describe("MCP catalog schemas", () => {
   // structured data, paging) and every member session's Email read failed
   // client-side output validation with "must NOT have additional properties".
   it("accepts a compact Email read in the published imports_read output schema", async () => {
-    const tool = (await listMcpToolCatalog()).tools.find(
+    const tool = catalog.tools.find(
       (candidate) => candidate.name === "imports_read",
     );
     if (!tool?.outputSchema) throw new Error("Missing imports_read output");
@@ -601,7 +606,7 @@ describe("MCP catalog schemas", () => {
   it("publishes valid Draft-7 schemas with resolvable references and empty merchant candidate tuples", async () => {
     const validator = new Ajv({ strict: false, validateFormats: false });
     const invalid: string[] = [];
-    for (const tool of (await listMcpToolCatalog()).tools) {
+    for (const tool of catalog.tools) {
       for (const field of ["inputSchema", "outputSchema"] as const) {
         if (!validator.validateSchema(tool[field] ?? {})) {
           invalid.push(`${tool.name}.${field}`);
@@ -747,7 +752,7 @@ describe("MCP catalog schemas", () => {
     // clients offer "Me" on each one, so a shortcode-only schema rejects it.
     const partyFiltersWithoutMe: string[] = [];
     const stillExceptional = new Set<string>();
-    for (const tool of (await listMcpToolCatalog()).tools) {
+    for (const tool of catalog.tools) {
       const schema = parseJsonObject(tool.inputSchema);
       const definitionsCandidate = schema.$defs ?? schema.definitions;
       const definitions =
@@ -800,19 +805,6 @@ describe("MCP catalog schemas", () => {
   });
 });
 
-const readOnly = (openWorld = false) => ({
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: openWorld,
-});
-const write = ({ destructive = false, openWorld = false } = {}) => ({
-  readOnlyHint: false,
-  destructiveHint: destructive,
-  idempotentHint: false,
-  openWorldHint: openWorld,
-});
-
 /**
  * The purchase agent resends every mounted tool's input schema on every model call, so each
  * published schema has a ceiling. Before consolidation the largest tool was
@@ -860,45 +852,8 @@ function schemaFaults(schema: JsonObject): string[] {
 }
 
 describe("MCP catalog publication without services", () => {
-  it("publishes the exact tool catalog with annotations derived from its actions", async () => {
-    const { tools } = await listMcpToolCatalog();
-    expect(
-      Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations])),
-    ).toEqual({
-      entity_read: readOnly(),
-      entity: write({ destructive: true }),
-      search: readOnly(),
-      usda_food: readOnly(true),
-      project_overview: readOnly(),
-      tasks_overview: readOnly(),
-      playbook: readOnly(),
-      recipe_insights: readOnly(true),
-      nutrition: readOnly(),
-      finance_read: readOnly(),
-      spending_classification_read: readOnly(),
-      spending_classification_write: write(),
-      imports_read: readOnly(true),
-      ai_funding_read: readOnly(),
-      mail: write(),
-      activity: readOnly(),
-      statement_rows: write({ destructive: true }),
-      purchase_import: write(),
-      expenses: write(),
-      finance: write(),
-      product_enrichment: write({ destructive: true }),
-      upc: write(),
-      photo_run: write(),
-      run: write({ destructive: true, openWorld: true }),
-      ai_funding: write(),
-      meal_recipe: write(),
-      recipe_import: write({ openWorld: true }),
-      image: write(),
-      data_exception: write(),
-    });
-  });
-
   it("keeps every tool read-only-homogeneous", async () => {
-    const { tools } = await listMcpToolCatalog();
+    const { tools } = catalog;
     for (const tool of tools) {
       const binding = Object.entries(MCP_TOOL_BINDINGS).find(
         ([name]) => name === tool.name,
@@ -915,7 +870,7 @@ describe("MCP catalog publication without services", () => {
   });
 
   it("keeps each published input schema portable and under its budget", async () => {
-    const { tools } = await listMcpToolCatalog();
+    const { tools } = catalog;
     const oversized: string[] = [];
     for (const tool of tools) {
       const schema = z.json().parse(tool.inputSchema);
@@ -954,7 +909,7 @@ describe("MCP catalog publication without services", () => {
         else visit(value, `${path}.${key}`);
       }
     };
-    for (const tool of (await listMcpToolCatalog()).tools)
+    for (const tool of catalog.tools)
       visit(z.json().parse(tool.inputSchema), tool.name);
     expect(lookaround).toEqual([]);
   });

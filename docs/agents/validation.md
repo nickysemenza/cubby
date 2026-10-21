@@ -51,6 +51,13 @@ other revisions; missing timing artifacts do not justify rerunning a whole tier.
 Optimize both the PR's slowest lane and total work contending across local
 sessions. Consolidate duplicated coverage while retaining its named regressions
 on PRs; moving checks to nightly is not a speed improvement.
+Keep load generation and throughput sampling out of ordinary correctness
+regressions. Use the smallest fixture graph that crosses the relevant page or
+batch boundary; force external admission refusals at the provider seam instead
+of generating enough records to saturate it. Assert committed outcomes and the
+forbidden work directly, rather than pinning throughput, exact catalog
+membership, or incidental response sizes. Large populations belong only in an
+explicit performance measurement that needs that scale.
 Report setup separately from scenario time. A failed provenance/startup check
 is not a scenario result. Before declaring shared schema inputs ready, run the
 read-only `loadEntityDeclarationBundle` strict probe; do not infer readiness from
