@@ -1,11 +1,12 @@
 import type { assessmentReviewInput } from "@cubby/schemas/assessment";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
-import type {
-  StatementSuggestionOut,
-  StatementTransactionAction,
-  StatementTransactionApplication,
-  statementTransactionField,
+import {
+  statementTransactionApplication,
+  type StatementSuggestionOut,
+  type StatementTransactionAction,
+  type StatementTransactionApplication,
+  type statementTransactionField,
 } from "@cubby/schemas/statement-suggestion";
 import type {
   SuggestionActionVerb,
@@ -47,6 +48,19 @@ export function statementApplication(
       : undefined;
   const target =
     choice.transactionId ?? suggestion.candidates[0]?.transactionId;
+  // Draft controls clear choices with undefined; Feedback correction values
+  // must contain ordinary JSON while preserving explicit standalone nulls.
+  const booking = choice.booking
+    ? statementTransactionApplication.shape.booking
+        .unwrap()
+        .parse(
+          Object.fromEntries(
+            Object.entries(choice.booking).filter(
+              ([, value]) => value !== undefined,
+            ),
+          ),
+        )
+    : undefined;
   return {
     kind: "statement_transaction",
     action: choice.action,
@@ -60,7 +74,7 @@ export function statementApplication(
       choice.action === "create"
         ? suggestion.candidates.map((candidate) => candidate.transactionId)
         : [],
-    ...(choice.booking && { booking: choice.booking }),
+    ...(booking && { booking }),
   };
 }
 

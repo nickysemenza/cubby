@@ -1,3 +1,4 @@
+import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import { shortcode } from "@cubby/schemas/identifiers";
 import {
   statementSuggestionOut,
@@ -92,7 +93,17 @@ describe("statement suggestion review items", () => {
       action: "attach",
       transactionId: FTX_B,
       fields: ["status"],
+      booking: {
+        vendorId: undefined,
+        reviewedVendorName: "Example Grocer",
+        purchaseId: null,
+        rejectedPurchaseIds: [],
+      },
     });
+    // Feedback correction values cross a JSON boundary; cleared optional
+    // choices must be absent while deliberate null choices survive.
+    expect(assessmentReviewInput.safeParse(item).success).toBe(true);
+    expect(item.application).toMatchObject({ booking: { purchaseId: null } });
     expect(item.verdict).toBe("wrong");
     expect(item.application).toMatchObject({
       transactionId: FTX_B,
