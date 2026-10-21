@@ -2050,7 +2050,10 @@ edge and gets the toggle like any other.
 ### Background derived data
 
 Searchable entities use persisted `SearchDocument` rows for lexical search and
-embedding input. An ordinary write records a durable dirty root and known
+embedding input. Source preparation constructs SQL only for requested entity
+kinds; a typed empty union arm keeps the source columns stable, and recursive
+location paths are included only for Location sources.
+An ordinary write records a durable dirty root and known
 old/new endpoints after all authoritative changes in its transaction. It does
 not enumerate dependents, refresh projections, fingerprint a corpus, run AI
 admission, or fetch expanded mutation detail. Capture work scales with the

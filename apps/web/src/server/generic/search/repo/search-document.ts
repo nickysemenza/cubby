@@ -213,6 +213,9 @@ async function getSearchDocumentSources(
   entityIds?: readonly string[],
   page?: { cursor?: SearchDocumentCursor; pageSize?: number },
 ): Promise<SearchDocumentSource[]> {
+  const selectedKinds = [...new Set(entityKinds)];
+  if (selectedKinds.length === 0) return [];
+
   const types = sql.join(
     entityKinds.map((entityKind) => sql`${entityKind}`),
     sql`, `,
@@ -222,7 +225,7 @@ async function getSearchDocumentSources(
   // `hand-rolled-any-array` guard accepts. It is deliberately NOT a JS array
   // interpolated into `sql` — drizzle renders that as a row constructor — and
   // not `eqAny`/`inArray`, which emit `IN ($1, …, $n)`: this is raw SQL over
-  // fifteen aliased tables, and a parameter per id is the cost being removed.
+  // independently aliased branches, and a parameter per id is the cost being removed.
   const hasIds = entityIds != null;
 
   /**
@@ -245,20 +248,15 @@ async function getSearchDocumentSources(
       ORDER BY name_source.id LIMIT ${page.pageSize})`
       : undefined;
 
-  // One branch per searchable entity, `satisfies Record<SearchableEntity, SQL>`
-  // so the compiler — not a reviewer — is what notices a new `searchable: true`
-  // entity. Without it the new entity still gets a `searchDocumentBuilders`
-  // entry (also exhaustive) and still passes every type check, while its branch
-  // is simply absent from the union: `getSearchDocumentSource` returns null,
-  // `refreshSearchDocument` marks the document missing forever, and the entity
-  // never appears in global search. Nothing else in the pipeline sees that hole.
+  // Exhaustive builders make newly searchable kinds a compiler obligation;
+  // a missing source must not silently become a permanently missing document.
   const branches = {
-    image: sql`
+    image: () => sql`
       SELECT 'image'::text AS "entityKind", i."id"::text AS "entityId", i."shortcode",
         i.filename AS title, NULL::text AS subtitle, 'image'::text AS "typeHint",
         ARRAY[]::text[] AS aliases, ARRAY[i."contentType"]::text[] AS keywords
       FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)}`,
-    product: sql`
+    product: () => sql`
       SELECT 'product'::text AS "entityKind", p."id"::text AS "entityId", p."shortcode",
         p."name" AS title, p."manufacturer" AS subtitle, ${categorySummarySql(sql`p."categoryId"`)}->>'name' AS "typeHint",
         p."aliases" AS aliases,
@@ -266,21 +264,21 @@ async function getSearchDocumentSources(
                   WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
                  ARRAY[]::text[]) || ARRAY[p."model", p."manufacturer"]::text[] AS keywords
       FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)}`,
-    recipe: sql`
+    recipe: () => sql`
       SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
       FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND ${requested(sql`r."id"`)}`,
-    ingredient: sql`
+    ingredient: () => sql`
       SELECT 'ingredient', i."id"::text, i."shortcode", i."name", NULL, NULL, i."aliases", ARRAY[]::text[]
       FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND ${requested(sql`i."id"`)}`,
-    cookbook: sql`
+    cookbook: () => sql`
       SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
       FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND ${requested(sql`c."id"`)}`,
-    location: sql`
+    location: () => sql`
       SELECT 'location', l."id"::text, l."shortcode", l."name",
         (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
         l."type", l."aliases", ARRAY[l."type"]::text[]
       FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)}`,
-    inventory: sql`
+    inventory: () => sql`
       SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", ${categorySummarySql(sql`p."categoryId"`)}->>'name', p."aliases",
         ARRAY[l."name", l."type", p."manufacturer"]::text[] ||
         COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
@@ -288,24 +286,24 @@ async function getSearchDocumentSources(
                  ARRAY[]::text[])
       FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
       WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND ${requested(sql`ie."id"`)}`,
-    meal: sql`
+    meal: () => sql`
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
       FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)}`,
-    project: sql`
+    project: () => sql`
       SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."emoji", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveFieldSql("project", "locations", "p")}
       FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)}`,
-    task: sql`
+    task: () => sql`
       SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", ${effectiveFieldSql("task", "trade", "t")}, ARRAY[]::text[], ARRAY[${effectiveFieldSql("task", "trade", "t")}, sp."name"]::text[]
       FROM "Task" t LEFT JOIN "Project" p ON p."id" = ${effectiveFieldSql("task", "projectId", "t")} AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = ${effectiveFieldSql("task", "subjectProductId", "t")} AND sp."deletedAt" IS NULL
       WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND ${requested(sql`t."id"`)}`,
-    vendor: sql`
+    vendor: () => sql`
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
       FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND ${requested(sql`v."id"`)}`,
-    purchase: sql`
+    purchase: () => sql`
       SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", pu."notes", v."name", v."website", pu."date"::text]::text[]
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
       WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)}`,
-    financialAccount: sql`
+    financialAccount: () => sql`
       SELECT ${"financialAccount"}::text, fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
         ARRAY(
           SELECT term
@@ -316,28 +314,28 @@ async function getSearchDocumentSources(
           SELECT card->>'last4' FROM jsonb_array_elements(fa."cardNumbers") card
         )
       FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND ${"financialAccount"}::text IN (${types}) AND ${requested(sql`fa."id"`)}`,
-    financialTransaction: sql`
+    financialTransaction: () => sql`
       SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
       WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)}`,
-    expense: sql`
+    expense: () => sql`
       SELECT 'expense', e."id"::text, e."shortcode", e."name", names."projectNames", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType", e."notes"]::text[]
       FROM "Expense" e
       LEFT JOIN (${expenseDerivedReadSql("names", { expenseIds: expenseNameIds })}) names ON names."expenseId" = e."id"
       WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)}`,
-    wish: sql`
+    wish: () => sql`
       SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
       FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND ${requested(sql`w."id"`)}`,
     // The crop label lives in static data, not SQL, so the title is the plant
     // name and the crop key rides along as a search term.
-    plant: sql`
+    plant: () => sql`
       SELECT 'plant', p."id"::text, p."shortcode", p."name",
         concat_ws(' · ', p."gardenGuideKey", p."verdict"), p."verdict",
         ARRAY[]::text[], ARRAY[p."gardenGuideKey", p."latinName"]::text[]
       FROM "Plant" p
       WHERE p."deletedAt" IS NULL AND 'plant' IN (${types}) AND ${requested(sql`p."id"`)}`,
     // Title is the plant name (see `plant` above for why not its crop label).
-    planting: sql`
+    planting: () => sql`
       SELECT 'planting', pl."id"::text, pl."shortcode",
         COALESCE(p."name", 'Unknown plant'),
         concat_ws(' · ', pl."status", l."name"), pl."status",
@@ -351,7 +349,7 @@ async function getSearchDocumentSources(
     // live linked planting display names.  The correlated aggregate keeps the
     // source projection one row per GardenEntry even when an entry names many
     // plantings.
-    gardenEntry: sql`
+    gardenEntry: () => sql`
       SELECT 'gardenEntry', ge."id"::text, ge."shortcode",
         (CASE ge."kind" WHEN ${gardenEntryKind.enum.note} THEN 'Note' WHEN ${gardenEntryKind.enum.harvest} THEN 'Harvest' ELSE 'Move' END)
           || ' · ' || to_char(ge."observedOn", 'YYYY-MM-DD') || ' · ' || l."name",
@@ -364,15 +362,16 @@ async function getSearchDocumentSources(
       FROM "GardenEntry" ge
       JOIN "Location" l ON l."id" = ge."locationId" AND l."deletedAt" IS NULL
       WHERE ge."deletedAt" IS NULL AND 'gardenEntry' IN (${types}) AND ${requested(sql`ge."id"`)}`,
-  } satisfies Record<SearchableEntity, SQL>;
+  } satisfies Record<SearchableEntity, () => SQL>;
 
-  // Postgres takes a UNION's column NAMES and TYPES from its FIRST branch, and
-  // `product` is the only branch that spells the aliases (and the only one
-  // whose `typeHint` is a real enum column). It therefore leads explicitly,
-  // rather than by whatever order this record or the manifest happens to have.
-  const { product: productBranch, ...otherBranches } = branches;
+  // An empty typed arm owns the shared columns independently of the first
+  // requested kind. Only requested source builders are constructed/planned.
+  const header = sql`SELECT NULL::text AS "entityKind", NULL::text AS "entityId",
+    NULL::text AS shortcode, NULL::text AS title, NULL::text AS subtitle,
+    NULL::text AS "typeHint", ARRAY[]::text[] AS aliases,
+    ARRAY[]::text[] AS keywords WHERE false`;
   const union = sql.join(
-    [productBranch, ...Object.values(otherBranches)],
+    [header, ...selectedKinds.map((kind) => branches[kind]())],
     sql` UNION ALL `,
   );
 
@@ -380,16 +379,8 @@ async function getSearchDocumentSources(
     ? sql`WHERE (source."entityKind", source."entityId"::uuid) > (${page.cursor.entityKind}, ${page.cursor.entityId}::uuid)`
     : sql``;
   const limit = page?.pageSize ? sql`LIMIT ${page.pageSize}` : sql``;
-  const result = await unwrapDb(db).execute<{
-    entityKind: SearchableEntity;
-    entityId: string;
-    shortcode: string;
-    title: string;
-    subtitle: string | null;
-    typeHint: string | null;
-    aliases: string[] | null;
-    keywords: string[] | null;
-  }>(sql`
+  const locationPath = selectedKinds.includes("location")
+    ? sql`
     WITH RECURSIVE location_path AS (
       SELECT l.id AS "rootId", l.id, l."parentId", l.name, 0 AS depth
       FROM "Location" l
@@ -402,6 +393,19 @@ async function getSearchDocumentSources(
       JOIN location_path child ON child."parentId" = parent.id
       WHERE parent."deletedAt" IS NULL
     )
+  `
+    : sql``;
+  const result = await unwrapDb(db).execute<{
+    entityKind: SearchableEntity;
+    entityId: string;
+    shortcode: string;
+    title: string;
+    subtitle: string | null;
+    typeHint: string | null;
+    aliases: string[] | null;
+    keywords: string[] | null;
+  }>(sql`
+    ${locationPath}
     SELECT * FROM (${union}) source
     ${cursor}
     ORDER BY source."entityKind", source."entityId"::uuid
