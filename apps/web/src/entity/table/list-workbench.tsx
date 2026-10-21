@@ -23,7 +23,8 @@ import RTable, { type NestToggle, type RTableProps } from "./table";
  * assemble that implementation detail once; ListWorkbench consumes it once.
  */
 export interface ListWorkbenchModel<TItem extends RowData> {
-  entity: Entity;
+  entity?: Entity;
+  navigation?: { kind: "none" };
   table: CubbyTable<TItem>;
   isLoading?: boolean;
   error?: unknown;
@@ -68,6 +69,7 @@ export interface ServerListWorkbenchModel<
 type CallerOwnedProps<TItem extends RowData> = Pick<
   RTableProps<TItem>,
   | "actions"
+  | "rowDetail"
   | "ariaLabel"
   | "emptyState"
   | "filterOptionHints"
@@ -166,6 +168,8 @@ export function useBoundedListWorkbench<
   };
 }
 
+const noDetailsHref = () => undefined;
+
 /**
  * Render a list hook's complete workbench while leaving domain choices local:
  * columns are supplied to the hook; actions, contextual status, honest empty
@@ -199,6 +203,12 @@ export function ListWorkbench<TItem extends RowData>({
         toolbarMode={embedded ? "internal" : "auto"}
         additionalToolbarContent={contextualStatus}
         {...callerOwned}
+        {...(model.navigation?.kind === "none"
+          ? {
+              getMobileDetailsHref: noDetailsHref,
+              disableMobileDetailsHref: true,
+            }
+          : {})}
       />
       {model.deleteDialog}
     </>

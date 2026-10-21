@@ -114,6 +114,7 @@ const importFingerprint = sql<string>`(
 )`;
 
 const columns = {
+  id: statementRow.id,
   source: statementRow.source,
   externalId: statementRow.externalId,
   rowPosition: statementRow.rowPosition,

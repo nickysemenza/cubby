@@ -30,6 +30,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { KeyNumbers } from "~/ui/common/key-numbers";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Row, Stack } from "~/ui/layout";
 import { badgeVariantColor } from "~/ui/primitives/badge";
 import { Input } from "~/ui/primitives/input";
@@ -45,13 +46,13 @@ import {
   createPlainDateColumn,
   renderOptionCell,
 } from "../../entity/table/column-helpers";
-import RTable from "../../entity/table/table";
+import { ListWorkbench } from "../../entity/table/list-workbench";
+import { useChildListWorkbench } from "../../entity/table/use-child-list-workbench";
 import { useTableState } from "../../entity/table/use-table-state";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "../../ui/data-table/table-features";
-import { useTableConfig } from "../../ui/data-table/use-table-config";
 
 const route = getRouteApi("/_authenticated/statement-rows/");
 
@@ -61,7 +62,6 @@ type MatchStateSearchValue = StatementRowMatchState | "all";
 // Stable defaults — a fresh `[]`/`{}` per render would destabilize every
 // memo downstream while a query is loading (apps/web/AGENTS.md's
 // `unstable-hook-default` rule).
-const NO_ROWS: StatementRowOut[] = [];
 const NO_SOURCES: string[] = [];
 
 const MATCH_STATE_VALUES = [
@@ -333,6 +333,39 @@ const isStatementRowSortField = (
 ): value is StatementRowSortField =>
   statementRowSortableFields.some((field) => field === value);
 
+/** Preserve the operation descriptor and cancellation while adapting its page shape. */
+const statementRowsPlan: ListQueryOptionsFn<
+  StatementRowFilters,
+  StatementRowOut
+> = ({ filters, pagination, sort }) => {
+  const firstSort = sort?.[0];
+  const input: Parameters<typeof statementRow.list.call>[0] = {
+    filters,
+    pagination,
+    sort: [
+      {
+        orderBy:
+          firstSort && isStatementRowSortField(firstSort.orderBy)
+            ? firstSort.orderBy
+            : "statementDate",
+        direction: firstSort?.direction ?? "asc",
+      },
+    ],
+  };
+  const options = statementRow.list.queryOptions(input);
+  return {
+    queryKey: options.queryKey,
+    meta: options.meta,
+    execute: async (signal) => {
+      const page = await statementRow.list.call(input, { signal });
+      return {
+        items: page.data,
+        meta: { ...pagination, totalCount: page.count },
+      };
+    },
+  };
+};
+
 export function StatementRowList() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
@@ -353,48 +386,14 @@ export function StatementRowList() {
     [navigate],
   );
 
-  // Sort + pagination are local UI state, not URL-synced — mirroring
-  // usdafoodlist.tsx, the referenced non-entity RTable model. Only the filter
-  // state (above) needs to be linkable.
-  const tableState = useTableState({ initialSort: "statementDate" });
-
+  const tableState = useTableState({
+    initialSort: "statementDate",
+    readUrlState: false,
+  });
   const filters = useMemo(() => buildFilters(search), [search]);
 
-  // Filters aren't routed through TanStack's columnFilters (they're custom
-  // URL state, not header-column filters), so they miss useTableState's
-  // built-in "reset to page 1 on filter change" behavior — do it explicitly,
-  // or switching filters mid-page-3 strands the user on a stale/empty page.
-  const filtersKey = JSON.stringify(filters);
-  const previousFiltersKey = useRef(filtersKey);
-  const { setPagination } = tableState;
-  useEffect(() => {
-    if (previousFiltersKey.current === filtersKey) return;
-    previousFiltersKey.current = filtersKey;
-    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
-  }, [filtersKey, setPagination]);
-
-  const sortParams = tableState.getSortParams();
-  const sort: { orderBy: StatementRowSortField; direction: "asc" | "desc" } =
-    isStatementRowSortField(sortParams.orderBy)
-      ? {
-          orderBy: sortParams.orderBy,
-          direction: sortParams.direction,
-        }
-      : { orderBy: "statementDate", direction: sortParams.direction };
-
-  const listQuery = useQuery(
-    statementRow.list.queryOptions({
-      filters,
-      sort: [sort],
-      pagination: tableState.pagination,
-    }),
-  );
-  usePageCount(listQuery.data?.count);
-
-  // The amount column's footer would otherwise sum only the loaded PAGE
-  // (createCurrencyColumn falls back to a client-side reduction). The tiles'
-  // summary already splits the full-filtered-set total by match state, so the
-  // footer reads the selected state's share from that same request.
+  // Tiles and footer share one full-filtered-set summary, independent of
+  // loaded pages. An unavailable total leaves the footer empty.
   const summaryQuery = useQuery(summaryQueryOptions(filters));
 
   const columns = useMemo(
@@ -583,7 +582,6 @@ export function StatementRowList() {
     [],
   );
 
-  const totalCount = listQuery.data?.count ?? 0;
   const summary = summaryQuery.data;
   const amountTotal =
     summary &&
@@ -592,20 +590,19 @@ export function StatementRowList() {
       : summary.amountTotal);
   const serverTotals = useMemo(
     () =>
-      amountTotal === undefined
-        ? undefined
-        : { totalCount, sums: { amount: amountTotal } },
-    [totalCount, amountTotal],
+      amountTotal === undefined ? undefined : { sums: { amount: amountTotal } },
+    [amountTotal],
   );
 
-  const table = useTableConfig({
-    data: listQuery.data?.data ?? NO_ROWS,
+  const workbench = useChildListWorkbench({
+    read: statementRowsPlan,
+    filters,
     columns,
     tableState,
-    totalCount,
-    getRowId: (row) => `${row.source}:${row.externalId}`,
+    navigation: { kind: "none" },
     serverTotals,
   });
+  usePageCount(workbench.isLoading ? undefined : workbench.totalCount);
 
   return (
     <Stack gap="md">
@@ -620,12 +617,7 @@ export function StatementRowList() {
         onSelectMatchState={(matchState) => updateFilter({ matchState })}
       />
       <StatementRowFilterBar search={search} onUpdate={updateFilter} />
-      <RTable
-        table={table}
-        isLoading={listQuery.isLoading}
-        error={listQuery.error}
-        ariaLabel="Statement Rows Table"
-      />
+      <ListWorkbench model={workbench.model} ariaLabel="Statement Rows Table" />
     </Stack>
   );
 }

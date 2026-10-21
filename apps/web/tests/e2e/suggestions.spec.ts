@@ -8,6 +8,7 @@ import { settledSuggestionQuestionsInput } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import {
   recordStatementRowsOut,
+  listStatementRowsInput,
   recordStatementRowsInput,
   type StatementRowInput,
 } from "@cubby/schemas/statement-row";
@@ -18,6 +19,7 @@ import { answering } from "~/server/domains/statement-import/repo/statement-deci
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { z } from "zod";
 
+import { shiftPlainDate } from "~/lib/household-date";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { user } from "~/server/db/auth.schema";
 import { product as productTable, feedback } from "~/server/db/schema";
@@ -396,6 +398,26 @@ test("Suggestions lists every family with named records and category pills, and 
     ),
   ).toContainText(categoryName);
 
+  // The shared workbench must clear selected actions when server sort swaps
+  // the query, without applying or dismissing the selected proposal.
+  await field
+    .getByRole("checkbox", { name: "Select row", exact: true })
+    .check();
+  const selected = page.getByRole("region", {
+    name: "Selected rows",
+    exact: true,
+  });
+  await expect(selected).toBeVisible();
+  await expect(
+    selected.getByRole("button", { name: /^Never suggest/ }),
+  ).toBeDisabled();
+  await page.getByRole("combobox", { name: "Sort", exact: true }).click();
+  await page.getByRole("option", { name: "Most impact", exact: true }).click();
+  await expect(selected).toHaveCount(0);
+  await expect(
+    field.getByRole("checkbox", { name: "Select row", exact: true }),
+  ).not.toBeChecked();
+
   // Confirming the acquisition changes the Product's classification evidence.
   // Its older category advice must be replaced by a fresh assessment.
   await connection
@@ -689,6 +711,122 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
       .getByRole("row")
       .filter({ hasText: hardware }),
   ).toContainText("Matched");
+});
+
+// Shared infinite paging must cross the first page while totals still cover
+// the full scope. Switching provider must replace both rows and amount.
+test("Statement rows page observations with full totals and keep existing review links", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const name = uniqueName(testInfo, "Paged observations");
+  const account = await createEntityFixture(page, "financialAccount", {
+    name,
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    sourceAliases: ["monarch", "mint"].map((source) => ({
+      source,
+      alias: name,
+      externalAccountId: null,
+    })),
+  });
+  const rows = Array.from({ length: 101 }, (_, index) => ({
+    rowPosition: index + 1,
+    accountDescriptor: name,
+    statementDate: shiftPlainDate("2026-05-04", 100 - index),
+    providerAmount: -1,
+    merchant: name,
+    rawDescription: `${name} ${String(index + 1).padStart(3, "0")}`,
+  }));
+  await recordStatementRows(
+    db,
+    recordStatementRowsInput.parse({
+      import: {
+        source: "monarch",
+        fingerprint: `${name}-first`,
+        label: "synthetic-pages.csv",
+        dateKind: "posted",
+        rowCountDeclared: rows.length,
+      },
+      rows,
+    }),
+    actor,
+  );
+  await recordStatementRows(
+    db,
+    recordStatementRowsInput.parse({
+      import: {
+        source: "mint",
+        fingerprint: `${name}-other`,
+        label: "synthetic-other.csv",
+        dateKind: "posted",
+        rowCountDeclared: 1,
+      },
+      rows: [
+        {
+          ...rows[0],
+          rowPosition: 1,
+          accountDescriptor: name,
+          statementDate: "2026-05-04",
+          providerAmount: -7,
+          rawDescription: `${name} other`,
+        },
+      ],
+    }),
+    actor,
+  );
+  const pages: number[] = [];
+  page.on("request", (request) => {
+    for (const item of dispatchOperations(request)) {
+      if (item.operation !== "statementRow.list") continue;
+      const parsed = listStatementRowsInput.safeParse(item.input);
+      if (parsed.success && parsed.data.filters?.source === "monarch")
+        pages.push(parsed.data.pagination?.pageIndex ?? 0);
+    }
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/statement-rows?source=monarch&matchState=unmatched&q=${encodeURIComponent(name)}`,
+  );
+  const table = page.getByRole("table", { name: "Statement Rows Table" });
+  await expect(table.locator("tfoot")).toContainText("$101.00");
+  const pane = page.getByRole("region", {
+    name: "Statement Rows Table keyboard navigation",
+    exact: true,
+  });
+  await pane.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => pages.includes(1)).toBe(true);
+  await pane.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(
+    table.getByRole("row").filter({ hasText: `${name} 101` }),
+  ).toBeVisible();
+  await expect(table.locator("tfoot")).toContainText("$101.00");
+  await page.getByRole("combobox", { name: "Source", exact: true }).click();
+  await page.getByRole("option", { name: "mint", exact: true }).click();
+  await expect(
+    table.getByRole("row").filter({ hasText: `${name} other` }),
+  ).toBeVisible();
+  await expect(table.locator("tfoot")).toContainText("$7.00");
+  await expect(
+    table.getByRole("row").filter({ hasText: `${name} 101` }),
+  ).toHaveCount(0);
+  const review = table.getByRole("link", {
+    name: "Review suggestions",
+    exact: true,
+  });
+  await expect(review).toHaveAttribute(
+    "href",
+    new RegExp(
+      `record=financialAccount%3A${account.id}|record=financialAccount:${account.id}`,
+    ),
+  );
+  await review.click();
+  await expect(page).toHaveURL(/\/suggestions\?/);
+  await expect(page).toHaveURL(new RegExp(account.id));
 });
 
 // Failure mode: Find suggestions starts a Sweep without showing what it will

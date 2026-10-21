@@ -144,8 +144,12 @@ export const statementImportOut = z.object({
 export type StatementImportOut = z.infer<typeof statementImportOut>;
 
 export const statementRowOut = z.object({
-  // Public identity is (source, externalId). v2 names a file occurrence; v1
-  // references remain valid for historical evidence. UUIDs stay internal.
+  // Opaque read/selection handle only; mutations still address (source, externalId).
+  id: z
+    .guid()
+    .readonly()
+    .describe("Opaque read handle; not a route or mutation selector."),
+  // v2 names a file occurrence; v1 references remain valid for historical evidence.
   source: z.string(),
   externalId: z.string(),
   importFingerprint: z.string(),

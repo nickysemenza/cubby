@@ -74,6 +74,55 @@ const record = (
 describe("statement row ledger", () => {
   const ctx = withTestDb();
 
+  // Opaque handles must survive replay, distinguish observations and keep
+  // the paged roster/count aligned with the full-filtered-set footer.
+  it("keeps opaque read IDs across reimport and filtered pages", async () => {
+    const rows = [1, 2, 3].map((rowPosition) => rowInput({ rowPosition }));
+    const fingerprint = "read-handle-pages";
+    await record(ctx.db, ctx.actor, rows, { fingerprint, rowCountDeclared: 3 });
+    await record(ctx.db, ctx.actor, [rowInput({ rowPosition: 1 })], {
+      fingerprint: "another-read-handle-export",
+      rowCountDeclared: 1,
+    });
+    const filters = { source: "monarch", importFingerprint: fingerprint };
+    const sort = { orderBy: "statementDate", direction: "asc" as const };
+    const first = await listStatementRows(
+      ctx.db,
+      filters,
+      { pageIndex: 0, pageSize: 2 },
+      sort,
+    );
+    const second = await listStatementRows(
+      ctx.db,
+      filters,
+      { pageIndex: 1, pageSize: 2 },
+      sort,
+    );
+    expect(first.count).toBe(3);
+    expect(second.count).toBe(3);
+    expect(first.data).toHaveLength(2);
+    expect(second.data).toHaveLength(1);
+    const original = [...first.data, ...second.data];
+    expect(new Set(original.map((row) => row.id)).size).toBe(3);
+    for (const row of original)
+      expect(row.id).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/);
+    expect(new Set(original.map((row) => row.externalId)).size).toBe(3);
+    expect(
+      (await getStatementRowSummary(ctx.db, filters)).amountTotal,
+    ).toBeCloseTo(3 * 128.5);
+    expect(first.data.reduce((sum, row) => sum + row.amount, 0)).toBeCloseTo(
+      2 * 128.5,
+    );
+    await record(ctx.db, ctx.actor, rows, { fingerprint, rowCountDeclared: 3 });
+    const repeated = await listStatementRows(
+      ctx.db,
+      filters,
+      { pageIndex: 0, pageSize: 4 },
+      sort,
+    );
+    expect(repeated.data).toEqual(original);
+  });
+
   // Failure modes: reviewed normalization creates another row, moves first
   // ownership, rewrites provider evidence, or accepts a different account mask.
   it("links reviewed repeated-mask evidence without creating or rewriting statement rows", async () => {

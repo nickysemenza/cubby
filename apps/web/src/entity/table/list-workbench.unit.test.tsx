@@ -1,14 +1,28 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import type {
+  ListQueryOptionsFn,
+  ListQueryResponse,
+} from "~/ui/hooks/use-paginated-table-core";
 
 import {
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
 import { ListWorkbench } from "./list-workbench";
+import { useChildListWorkbench } from "./use-child-list-workbench";
+import { useTableState } from "./use-table-state";
 
 installFeatures();
 
@@ -133,5 +147,136 @@ describe("ListWorkbench", () => {
       screen.queryByRole("button", { name: "Saved views" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Rows per page")).not.toBeInTheDocument();
+  });
+});
+
+// A retained event handler and an in-flight action outlive the render that
+// created them. E2E cannot deterministically hold both React selection lifetimes.
+describe("child workbench selection scopes", () => {
+  const childColumns = createCubbyColumnCollection<TestRow>((add) => {
+    add(helper.accessor("name", { header: "Name", id: "name" }));
+  });
+  async function mountChild() {
+    const browser = createBrowserTestHarness();
+    browserHarnesses.push(browser);
+    await browser.loadRouter();
+    const nextPage = Promise.withResolvers<ListQueryResponse<TestRow>>();
+    const completion = Promise.withResolvers<{ success: boolean }>();
+    let executions = 0;
+    const read: ListQueryOptionsFn<string, TestRow> = ({
+      filters,
+      pagination,
+    }) => ({
+      queryKey: ["child-selection", filters, pagination.pageSize],
+      execute: async () =>
+        filters === "first"
+          ? {
+              items: [
+                { id: "00000000-0000-4000-8000-000000000001", name: "Hammer" },
+              ],
+              meta: { ...pagination, totalCount: 1 },
+            }
+          : nextPage.promise,
+    });
+    const hook = renderHook(
+      ({ scope }) => {
+        const tableState = useTableState({ readUrlState: false });
+        return useChildListWorkbench({
+          read,
+          filters: scope,
+          tableState,
+          columns: childColumns,
+          navigation: { kind: "none" },
+          selection: {
+            actions: [
+              {
+                id: "settle",
+                label: "Settle selected",
+                onExecute: async () => {
+                  executions += 1;
+                  return completion.promise;
+                },
+              },
+            ],
+          },
+        });
+      },
+      { initialProps: { scope: "first" }, wrapper: browser.routerWrapper },
+    );
+    await waitFor(() => expect(hook.result.current.data).toHaveLength(1));
+    const select = () =>
+      act(() =>
+        hook.result.current.model.table
+          .getRowModel()
+          .rows[0]?.toggleSelected(true),
+      );
+    const resolveNext = async () => {
+      await act(async () =>
+        nextPage.resolve({
+          items: [
+            {
+              id: "00000000-0000-4000-8000-000000000001",
+              name: "Hammer, new scope",
+            },
+          ],
+          meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+        }),
+      );
+      await waitFor(() =>
+        expect(hook.result.current.data[0]?.name).toBe("Hammer, new scope"),
+      );
+    };
+    return {
+      ...hook,
+      select,
+      resolveNext,
+      completion,
+      executions: () => executions,
+    };
+  }
+
+  it("clears selection and rejects retained actions while another scope's rows are placeholders", async () => {
+    const child = await mountChild();
+    child.select();
+    const oldBar = render(child.result.current.model.bulkActionBar);
+    expect(
+      screen.getByRole("button", { name: "Settle selected" }),
+    ).toBeEnabled();
+    child.rerender({ scope: "second" });
+    expect(
+      child.result.current.model.table.getFilteredSelectedRowModel().rows,
+    ).toHaveLength(0);
+    expect(
+      child.result.current.model.table.getRowModel().rows[0]?.getCanSelect(),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Settle selected" }));
+    expect(child.executions()).toBe(0);
+    oldBar.unmount();
+    await child.resolveNext();
+    child.select();
+    expect(
+      child.result.current.model.table.getFilteredSelectedRowModel().rows,
+    ).toHaveLength(1);
+    await act(async () => child.completion.resolve({ success: true }));
+  });
+
+  it("keeps a new same-ID selection after returning to a scope while its old action completes", async () => {
+    const child = await mountChild();
+    child.select();
+    const oldBar = render(child.result.current.model.bulkActionBar);
+    fireEvent.click(screen.getByRole("button", { name: "Settle selected" }));
+    expect(child.executions()).toBe(1);
+    child.rerender({ scope: "second" });
+    await child.resolveNext();
+    child.rerender({ scope: "first" });
+    await waitFor(() =>
+      expect(child.result.current.data[0]?.name).toBe("Hammer"),
+    );
+    child.select();
+    await act(async () => child.completion.resolve({ success: true }));
+    expect(
+      child.result.current.model.table.getFilteredSelectedRowModel().rows,
+    ).toHaveLength(1);
+    oldBar.unmount();
   });
 });
