@@ -35,7 +35,9 @@ export function GraphRecordLink({
 
 export function GraphRecordFacts({ node }: { node: EntityGraphNode }) {
   const record = node.preview ?? {};
-  const facts = entityPreviewFacts(node.entityKind, record, 8);
+  const facts = entityPreviewFacts(node.entityKind, record, 8, {
+    singleLine: true,
+  });
   return facts.length ? (
     <dl className="graph-record-facts">
       {facts.slice(0, 8).map((fact) => (

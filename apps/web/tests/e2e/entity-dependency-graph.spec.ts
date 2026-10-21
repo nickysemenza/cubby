@@ -79,6 +79,21 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   await page.getByRole("button", { name: "Fit map", exact: true }).click();
+  expect(
+    await graph.locator(".graph-map-record").evaluateAll((cards) =>
+      cards.every((card) => {
+        const frame = card.getBoundingClientRect();
+        return [...card.querySelectorAll("dl dd")].every((fact) => {
+          const bounds = fact.getBoundingClientRect();
+          return (
+            bounds.left >= frame.left - 1 &&
+            bounds.right <= frame.right + 1 &&
+            bounds.bottom <= frame.bottom + 1
+          );
+        });
+      }),
+    ),
+  ).toBe(true);
   if (process.env.CUBBY_CONNECTIONS_VISUAL === "1")
     await page.screenshot({
       path: testInfo.outputPath("dense-connections-desktop.png"),
@@ -318,9 +333,9 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page
     .getByRole("button", { name: "Previous record", exact: true })
     .click();
-  await expect(nodes).toHaveCount(3);
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   await page.getByRole("button", { name: "Next record", exact: true }).click();
-  await expect(nodes).toHaveCount(3);
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   await page.getByLabel("Find explored records").fill(locationName);
   await records
     .getByRole("button", {
@@ -331,7 +346,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page.getByRole("link", { name: "Open record", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/locations/${location.id}$`));
   await page.goBack();
-  await expect(nodes).toHaveCount(3);
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   await page
     .getByRole("button", { name: "Previous record", exact: true })
     .click();

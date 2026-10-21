@@ -1047,6 +1047,7 @@ export function entityPreviewFacts<TRecord extends object>(
   entity: Entity,
   record: TRecord,
   limit = 4,
+  options: { singleLine?: boolean } = {},
 ): { label: string; value: ReactNode }[] {
   const { preview } = entitySummary[entity].detail;
   const keys = entityPreviewFieldKeys(entity);
@@ -1065,7 +1066,7 @@ export function entityPreviewFacts<TRecord extends object>(
     if (!known) continue;
     facts.push({
       label: field.label,
-      value: renderCompactFieldValue(entity, record, field),
+      value: renderCompactFieldValue(entity, record, field, options),
     });
   }
   return facts;
