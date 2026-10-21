@@ -959,11 +959,19 @@ export const compilePresentation = (
     facts.readSchemas.detail,
     "detail",
   );
+  const listReadable = readableFields(
+    fieldModel,
+    facts.readSchemas.list,
+    "list",
+  );
   const preview = fieldModel.fields
     .filter((field) => field.display.preview)
     .map((field) => {
       // The card renders one compact value per fact; a json blob has none.
-      if (!readable.has(field.key) || field.kind === "json")
+      if (
+        (!readable.has(field.key) && !listReadable.has(field.key)) ||
+        field.kind === "json"
+      )
         throw new EntityDeclarationError(
           `${context}: display.preview field "${field.key}" must be a readable, non-json field.`,
         );

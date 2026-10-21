@@ -1269,7 +1269,7 @@ keep an `expandRef`. `display.preview` marks the facts of the hover preview card
 (compiled to `detail.preview`, in model order); a computed figure the card
 needs is a read-only projection field on the server output, never a web-side
 map. An entity with no preview field falls back to its hero stats and first
-detail section. Detail overrides may provide a dynamic
+detail section. List-only figures needed by compact cards declare `display.preview` explicitly; removing a detail hero stat must not silently remove its compact read. Detail overrides may provide a dynamic
 label when the value changes its meaning, such as ISBN versus UPC. Static labels
 remain declared. `EntityBasicInfo.afterFields` anchors computed facts after a
 declared detail field without inventing persisted fields or API contracts.
@@ -2988,7 +2988,7 @@ Their single local collection draft keeps an immutable saved baseline and explic
 Add, Replace, Remove and Make primary intent; normalization removes this local
 wrapper before input validation and submission. Mounted optional web controls may register
 undefined leaves; the local value parser omits those unset leaves while preserving
-the strict saved baseline. Untouched collections are omitted.
+the strict saved baseline. Register and write the row-intent array as one form field: a background refresh preserves the whole dirty collection, including null removal intent, rather than merging nested saved identities. Untouched collections are omitted.
 An invalid dirty native draft keeps Save reachable so the existing error handler
 shows its diagnostic above preserved input; a valid empty patch remains unsavable.
 Create materializes the initial full collection. Record collections declare

@@ -4,6 +4,7 @@ import { type FieldValues, FormProvider, useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { collectionDraft, type CollectionDescriptor } from "./collection-edit";
 import { structuredSchemaFor } from "./structured-schema";
 import { StructuredValueField } from "./structured-value-field";
 
@@ -21,12 +22,16 @@ function Harness({
   initial,
   creating = true,
   onSubmit,
+  collection,
+  refreshed,
 }: {
   entity: string;
   field: string;
   label: string;
   initial: z.core.util.JSONType;
   creating?: boolean;
+  collection?: CollectionDescriptor;
+  refreshed?: z.core.util.JSONType;
   onSubmit: (value: z.core.util.JSONType) => void;
 }) {
   const schema = structuredSchemaFor(entity, field);
@@ -34,14 +39,28 @@ function Harness({
   const form = useForm<FieldValues>({ defaultValues: { [field]: initial } });
   return (
     <FormProvider {...form}>
-      <form onSubmit={form.handleSubmit((values) => onSubmit(values[field]))}>
+      <form
+        data-dirty={Object.keys(form.formState.dirtyFields).length > 0}
+        onSubmit={form.handleSubmit((values) => onSubmit(values[field]))}
+      >
         <StructuredValueField
           form={form}
           name={field}
           label={label}
           schema={schema}
           creating={creating}
+          collection={collection}
         />
+        {refreshed && (
+          <button
+            type="button"
+            onClick={() =>
+              form.reset({ [field]: refreshed }, { keepDirtyValues: true })
+            }
+          >
+            Refresh saved snapshot
+          </button>
+        )}
         <button type="submit">Save</button>
       </form>
     </FormProvider>
@@ -60,6 +79,51 @@ const choose = (name: string, option: string) => {
 };
 
 describe("StructuredValueField", () => {
+  it("retains explicit saved-row removal across a same-record refresh", async () => {
+    const saved = [
+      {
+        source: "synthetic",
+        kind: "catalog_number",
+        externalId: "A",
+        isPrimary: true,
+        url: null,
+      },
+    ];
+    const onSubmit = vi.fn();
+    render(
+      <Harness
+        entity="product"
+        field="externalIds"
+        label="External IDs"
+        creating={false}
+        initial={collectionDraft(saved, false)}
+        refreshed={collectionDraft(saved, false)}
+        collection={{
+          key: ["source", "kind", "externalId"],
+          primary: { key: "isPrimary", scope: ["source", "kind"] },
+        }}
+        onSubmit={onSubmit}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove External IDs 1" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh saved snapshot" }),
+    );
+    expect(screen.getByText(/Removal will be applied on Save/u)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          collectionEdit: expect.objectContaining({
+            rows: [expect.objectContaining({ value: null })],
+          }),
+        }),
+      ),
+    );
+  });
+
   it("edits a source claim without ever showing or dropping its identity key", async () => {
     const onSubmit = vi.fn();
     const claims = inputOf("expense", "sourceClaims");

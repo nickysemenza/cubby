@@ -882,6 +882,7 @@ Rules:
           // asks for one.
           control: { kind: "text", width: "half", required: true },
           display: {
+            preview: true,
             width: "md",
             mobile: { slot: "subtitle", priority: 20 },
             listHidden: true,
@@ -906,7 +907,7 @@ Rules:
           kind: "text",
           nullable: true,
           control: { kind: "text", width: "half" },
-          display: { width: "md", listHidden: true },
+          display: { preview: true, width: "md", listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().optional(),
@@ -968,6 +969,7 @@ Rules:
             },
           },
           display: {
+            preview: true,
             width: "md",
             renderer: { detail: "product-category" },
             mobile: { slot: "subtitle", priority: 30 },
@@ -1281,7 +1283,11 @@ Rules:
           description:
             "Interchangeable goods bought from any seller with no single listing that identifies them (loose produce, bulk meat, herb bunches). Not expected to carry a brand, identifier, or Amazon ASIN.",
           control: { kind: "checkbox" },
-          display: { columnLabel: "Commodity", listHidden: true },
+          display: {
+            preview: true,
+            columnLabel: "Commodity",
+            listHidden: true,
+          },
           validation: {
             read: z.boolean(),
             create: z.boolean().optional().default(false),
@@ -1629,6 +1635,7 @@ Rules:
           key: "expenseTotal",
           kind: "number",
           display: {
+            preview: true,
             listHidden: true,
             width: "sm",
             format: "signedCurrency",
@@ -1657,6 +1664,7 @@ Rules:
           key: "componentCount",
           kind: "number",
           display: {
+            preview: true,
             detail: false,
             width: "sm",
             mobile: { slot: "meta", priority: 44 },
@@ -1884,6 +1892,7 @@ Rules:
           kind: "number",
           nullable: true,
           display: {
+            preview: true,
             detail: false,
             listHidden: true,
             mobile: { slot: "trailing", priority: 0 },

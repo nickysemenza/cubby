@@ -11,6 +11,7 @@ import {
   Controller,
   get,
   useFormState,
+  useController,
   useWatch,
   type FieldValues,
   type UseFormReturn,
@@ -139,6 +140,12 @@ function CollectionEditor({
   rowSummary?: (row: CollectionRow) => ReactNode;
   newRow?: (row: CollectionRow) => CollectionRow;
 }) {
+  // Rows are one atomic intent value; recursive dirty tracking must not split
+  // immutable identities from nullable removal values during a refresh.
+  useController({
+    control: props.form.control,
+    name: `${props.path}.collectionEdit.rows`,
+  });
   const raw = useWatch({ control: props.form.control, name: props.path });
   const { errors } = useFormState({
     control: props.form.control,
@@ -158,10 +165,19 @@ function CollectionEditor({
   const item = props.schema.node.array.item;
   const fields = props.schema.node.array.item.node.object.fields;
   const state = parsed.data.collectionEdit;
-  const write = (suffix: string, value: unknown) =>
-    props.form.setValue(`${props.path}.collectionEdit.${suffix}`, value, {
+  const writeRows = (rows: typeof state.rows) =>
+    props.form.setValue(`${props.path}.collectionEdit.rows`, rows, {
       shouldDirty: true,
     });
+  const updateRow = (
+    index: number,
+    patch: Partial<(typeof state.rows)[number]>,
+  ) =>
+    writeRows(
+      state.rows.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, ...patch } : row,
+      ),
+    );
   const summary = (row: CollectionRow) =>
     rowSummary?.(row) ??
     collection.key.map((key) => String(row[key] ?? "")).join(" · ");
@@ -225,7 +241,7 @@ function CollectionEditor({
                       size="sm"
                       variant="ghost"
                       aria-label={`Replace ${noun}`}
-                      onClick={() => write(`rows.${index}.replacing`, true)}
+                      onClick={() => updateRow(index, { replacing: true })}
                     >
                       Replace
                     </Button>
@@ -250,19 +266,20 @@ function CollectionEditor({
                         onClick={() => {
                           const primary = collection.primary;
                           if (!primary || !row.value) return;
-                          state.rows.forEach((other, otherIndex) => {
-                            if (
+                          writeRows(
+                            state.rows.map((other, otherIndex) =>
                               other.value &&
                               primary.scope.every(
                                 (key) =>
                                   other.value?.[key] === row.value?.[key],
                               )
-                            )
-                              write(
-                                `rows.${otherIndex}.primaryIntent`,
-                                otherIndex === index,
-                              );
-                          });
+                                ? {
+                                    ...other,
+                                    primaryIntent: otherIndex === index,
+                                  }
+                                : other,
+                            ),
+                          );
                         }}
                       >
                         Make primary
@@ -274,7 +291,7 @@ function CollectionEditor({
                     size="sm"
                     variant="ghost"
                     aria-label={`Remove ${noun}`}
-                    onClick={() => write(`rows.${index}.value`, null)}
+                    onClick={() => updateRow(index, { value: null })}
                   >
                     Remove
                   </Button>
@@ -290,7 +307,7 @@ function CollectionEditor({
         variant="outline"
         onClick={() => {
           const value = z.record(z.string(), z.json()).parse(blank(item, true));
-          write("rows", [
+          writeRows([
             ...state.rows,
             {
               localKey: crypto.randomUUID(),

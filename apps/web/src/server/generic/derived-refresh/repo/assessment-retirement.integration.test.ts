@@ -141,23 +141,27 @@ describe("assessment invalidation boundaries", () => {
       subject.entityId,
       "tags",
     );
-    const rows = await getDb(ctx.db)
-      .insert(assessmentState)
-      .values(
-        Array.from({ length: 101 }, () => ({
-          entity: "product",
-          recordId: subject.entityId,
-          field: "tags",
-          currentValue: [],
-          suggestedValue: [],
-          confidence: 0.5,
-          model: "synthetic-model",
-          kind: "correction",
-          status: "pending",
-          data: { liveInputFingerprint: fingerprint },
-        })),
-      )
-      .returning({ id: assessmentState.id });
+    const rows = [];
+    for (let index = 0; index < 101; index++) {
+      rows.push(
+        await publishFieldAssessment(
+          ctx.db,
+          {
+            entity: "product",
+            recordId: subject.entityId,
+            field: "tags",
+            currentValue: [],
+            suggestedValue: [],
+            confidence: 0.5,
+            model: "synthetic-model",
+            kind: "correction",
+            status: "pending",
+            data: { liveInputFingerprint: fingerprint },
+          },
+          true,
+        ),
+      );
+    }
     const stale = [...rows].sort((a, b) => a.id.localeCompare(b.id)).at(-1);
     if (!stale) throw new Error("Synthetic tail judgment missing");
     await getDb(ctx.db)

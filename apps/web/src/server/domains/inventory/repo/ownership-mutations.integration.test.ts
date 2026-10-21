@@ -218,7 +218,7 @@ describe("inventory ownership mutations", () => {
         ["id", "product", "effectiveOwnership"],
       ]) {
         await expect(read(fields)).rejects.toThrow(
-          "Requested record field was not loaded: effectiveOwnership",
+          "Inventory ownership trace was not loaded",
         );
       }
     } finally {
