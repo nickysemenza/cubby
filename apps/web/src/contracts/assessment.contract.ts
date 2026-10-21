@@ -32,6 +32,7 @@ export const assessmentContract = defineContract("assessment", {
     native: "Review an Assessment, with optional saved application",
   }),
   reviewBatch: mutation({
+    command: { label: "Review suggestions", confirmation: null },
     input: assessmentReviewBatchInput,
     output: assessmentReviewBatchOut,
     invalidates: [

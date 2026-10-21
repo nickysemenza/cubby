@@ -162,6 +162,12 @@ own output contract. Both methods share authoritative filtering, sorting,
 pagination, exact counts, prepared context and selected-ID order restoration.
 There is no public full-row hydration callback.
 
+Review outcomes and completion callbacks belong to the submitting view visit.
+Capture its identity before dispatch and compare it on completion; a query key
+alone cannot distinguish leaving a view and returning to it. Cache invalidation
+still completes for authorized writes. Ordinary workflow commands execute through
+the generated operation catalog with its mutation metadata and optional scope.
+
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;
 optional statistics such as a Product barcode cannot gate opening the dialog.

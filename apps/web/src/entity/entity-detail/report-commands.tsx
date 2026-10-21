@@ -10,7 +10,6 @@ import {
   commitPreparedInput,
 } from "@cubby/schemas/report-choice";
 import { workflowCommandBody } from "@cubby/schemas/workflow-command";
-import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -18,10 +17,10 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { Picker } from "~/entity/picker/picker";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { readPathValue } from "~/entity/read-path";
-import { runHref } from "~/entity/routing/purchase-import-links";
 import {
   recipe,
   run,
@@ -37,47 +36,7 @@ import { Input } from "~/ui/primitives/input";
 
 /** Runs ordinary commands with the catalog's validation, cache ripple and result effects. */
 export function useReportCommands() {
-  const queryClient = useQueryClient();
-  const ordinary = useActionMutation({
-    mutationFn: () => ({
-      mutationFn: async (
-        request: Extract<ReportCommandRequest, { kind: "operation" }>,
-      ) => {
-        const declared = workflowCommandOptions(request.operation);
-        const { command } = declared;
-        const options = {
-          mutationFn: declared.mutationFn,
-          mutationKey: declared.mutationKey,
-          meta: declared.meta,
-          onError: () => undefined,
-        };
-        // The inner mutation retains the operation's meta, so the existing global cache ripple
-        // and side-effect handling observe the actual operation and exact submitted body.
-        const result = await queryClient
-          .getMutationCache()
-          .build(queryClient, options)
-          .execute(request.body);
-        const successor = command.navigateRunPath
-          ? readPathValue(result, command.navigateRunPath)
-          : undefined;
-        if (typeof successor === "string")
-          window.location.assign(runHref(successor));
-        const facts = (command.resultFields ?? []).flatMap((field) => {
-          const value = readPathValue(result, field.path);
-          return typeof value === "string" || typeof value === "number"
-            ? [`${field.label}: ${value}`]
-            : [];
-        });
-        const message = facts.length ? facts.join("; ") : undefined;
-        if (typeof message === "string" || command.success)
-          toast.success(
-            typeof message === "string" ? message : command.success,
-          );
-        return { request, result };
-      },
-    }),
-    error: "Could not run command",
-  });
+  const ordinary = useWorkflowCommand();
   const reprocess = useActionMutation({
     mutationFn: recipe.reprocessCookbookOnce.mutationOptions,
     error: "Could not reprocess the cookbook",
