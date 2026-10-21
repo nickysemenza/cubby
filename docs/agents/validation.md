@@ -40,7 +40,7 @@ two outputs of the same generator. Hold a hand-written registry to declarations
 with types, not a key-set test: `satisfies Record<GeneratedUnion, …>` in
 TypeScript, an exhaustive `switch` over a generated per-status enum in Swift
 (`native-coverage.ts` emits `Implemented…ID`). Pinning a documented deliberate
-exception stays.
+exception stays. Removing a registry test also removes exports that existed only to expose its internals to that test.
 Prioritize ordinary household workflows. Expensive cold-start, legacy-recovery,
 and test-harness failure permutations may be deleted without equivalent
 replacement when their rare failure is not worth the CI and maintenance cost.

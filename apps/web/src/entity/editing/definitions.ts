@@ -1081,7 +1081,7 @@ type EditHooksMap = { [E in EditableEntity]?: EntityEditHooks<E> };
  * declaration cannot say. Every other entity's editor is generated from its
  * `model.intents`, controls and canonical schemas alone.
  */
-export const editHooks: EditHooksMap = {
+const editHooks: EditHooksMap = {
   product: {
     fields: {
       barcode: { initial: productBarcodeInitial },
