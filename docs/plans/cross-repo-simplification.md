@@ -83,9 +83,10 @@ beside it in `luna-tooling-inventory.*`.
 - Child storage does not imply entity identity or editability. Shared child-row
   reads require explicit opt-in identity/navigation and workflow commands;
   preserve distinct domain lifecycles.
-- #2749's replacement deployment is verified. Queue/retry/dead-letter drainage
-  remains an engineering evidence task; direct-cutover permission is not
-  permission to lose pending household work.
+- #2749's replacement deployment and queue drainage are verified. The read-only
+  provider check observed zero unacknowledged messages and bytes twice; the
+  live consumer has no dead-letter queue. Retired producer references are absent.
+  Provider counts are best-effort point-in-time evidence, not an application ledger.
 - The tooling inventory contains 179 non-test files and 92 tests across its
   scoped directories, including five `.sh` files. These are not 179 standalone
   CLIs. A reachable script is not automatically a capability worth retaining.
