@@ -11,14 +11,14 @@ import Testing
 @MainActor
 struct NativeCoverageViewPathTests {
     #if os(macOS)
-        @Test func cachedRunListUsesNativeLayoutAndPreservesItsSession() {
+        @Test func cachedRunListOpensAsTableAndPreservesItsSession() {
             let client = CubbyClient(
                 baseURL: URL(string: "https://example.invalid")!,
                 credentials: CredentialProvider(
                     host: "example.invalid", store: InMemorySessionTokenStore()))
             let session = NativeBrowserSession(client: client)
             let runs = session.list(for: .run)
-            #expect(runs.view == .shelf)
+            #expect(runs.view == .table)
             #expect(session.list(for: .run) === runs)
         }
     #endif
