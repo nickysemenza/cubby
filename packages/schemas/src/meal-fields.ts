@@ -50,3 +50,14 @@ export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
 export const mealTotals = nutritionTotals;
 export type MealTotals = z.infer<typeof mealTotals>;
+
+import { displayImagesField } from "./display-images";
+import { listLabel } from "./entity-definitions/label-field";
+export function mealReadSchemas<S extends z.ZodRawShape>(base: z.ZodObject<S>) {
+  const list = base.extend({
+    displayImages: displayImagesField,
+    // Server-composed text for the Cost column.
+    costTotalLabel: listLabel,
+  });
+  return { output: base, list, detail: base };
+}

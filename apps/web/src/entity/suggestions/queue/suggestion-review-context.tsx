@@ -1,23 +1,27 @@
-import type { AssessmentReviewOut } from "@cubby/schemas/assessment";
+import {
+  assessmentReviewBatchOut,
+  type AssessmentReviewOut,
+} from "@cubby/schemas/assessment";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import type { StatementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
-import { useQueryClient } from "@tanstack/react-query";
 import { chunk } from "es-toolkit";
 import {
   createContext,
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { assessment } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { assessmentContract } from "~/contracts/assessment.contract";
+import { operationCommandRequest } from "~/contracts/define";
+import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 
 import type {
   ReviewItem,
@@ -102,18 +106,24 @@ export function SuggestionReviewProvider({
     result: NonNullable<AssessmentReviewOut["applicationResult"]>,
   ) => Promise<void>;
 }) {
-  const queryClient = useQueryClient();
+  const { mutateAsync: executeCommand } = useWorkflowCommand();
+  const visit = useRef({ scope });
+  if (visit.current.scope !== scope) visit.current = { scope };
+  const renderedVisit = visit.current;
   const [state, setState] = useState<ReviewState>(() => freshState(scope));
   if (state.scope !== scope) setState(freshState(scope));
 
   const review = useCallback<ReviewContext["review"]>(
     async (rows, build) => {
+      const submittedVisit = renderedVisit;
+      if (visit.current !== submittedVisit) return [];
       const pairs = rows.flatMap((row) => {
         const item = build(row);
         return item ? [{ row, item }] : [];
       });
       if (!pairs.length) return [];
       setState((previous) => {
+        if (visit.current !== submittedVisit) return previous;
         const outcomes = new Map(previous.outcomes);
         for (const { row } of pairs) outcomes.set(row.id, { state: "pending" });
         return { ...previous, outcomes };
@@ -121,14 +131,21 @@ export function SuggestionReviewProvider({
       const failures: ReviewFailure[] = [];
       for (const batch of chunk(pairs, REVIEW_BATCH_MAX)) {
         try {
-          const results = await assessment.reviewBatch.call({
-            items: batch.map(({ item }) => item),
-          });
+          const { result } = await executeCommand(
+            operationCommandRequest(assessmentContract, "reviewBatch", {
+              items: batch.map(({ item }) => item),
+            }),
+          );
+          const results = assessmentReviewBatchOut.parse(result);
           for (const [index, result] of results.entries()) {
             const pair = batch[index];
             if (pair && !result.ok)
               failures.push({ row: pair.row, error: result.error });
-            if (result.ok && result.applicationResult)
+            if (
+              visit.current === submittedVisit &&
+              result.ok &&
+              result.applicationResult
+            )
               await onApplied?.(result.applicationResult);
           }
         } catch (error) {
@@ -140,6 +157,7 @@ export function SuggestionReviewProvider({
         failures.map((failure) => [failure.row.id, failure]),
       );
       setState((previous) => {
+        if (visit.current !== submittedVisit) return previous;
         const outcomes = new Map(previous.outcomes);
         for (const { row } of pairs) {
           const failure = failed.get(row.id);
@@ -158,15 +176,9 @@ export function SuggestionReviewProvider({
           ],
         };
       });
-      await invalidateOperationTags(
-        queryClient,
-        assessment.reviewBatch.invalidates({
-          items: pairs.map(({ item }) => item),
-        }),
-      );
       return failures;
     },
-    [queryClient, onApplied],
+    [executeCommand, onApplied, renderedVisit],
   );
 
   const value = useMemo<ReviewContext>(() => {

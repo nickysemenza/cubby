@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
@@ -249,7 +250,7 @@ export default defineEntity({
           "Explicit purchaser. Clear to inherit from card access or linked vendor/email evidence.",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().default(null),
@@ -261,7 +262,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "ledgerParty" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: null,
@@ -297,8 +298,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Booked",
-          list: true,
-          detail: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -346,8 +345,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Documented",
-          list: true,
-          detail: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -395,8 +392,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Itemized",
-          list: true,
-          detail: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -449,8 +444,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Products",
-          list: true,
-          detail: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -461,6 +454,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "coverage",
         kind: "json",
         provenance: {
@@ -488,8 +482,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Categories",
-          list: true,
-          detail: true,
           renderer: {
             detail: "spending-category-summary",
             list: "spending-category-summary",
@@ -511,7 +503,7 @@ export default defineEntity({
         kind: "enum",
         labelOverride: "Fallback provenance",
         display: {
-          detail: true,
+          list: false,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Clock", sfSymbol: "clock" },
@@ -540,11 +532,7 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
-        display: {
-          columnLabel: "Fallback",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Fallback" },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -552,12 +540,14 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "fieldResolutions",
         kind: "json",
         validation: {
@@ -608,8 +598,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Evidence",
-          list: true,
-          detail: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -666,7 +654,7 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: projectShortcode.nullable(),
           create: projectShortcode.nullable().default(null),
@@ -687,7 +675,7 @@ export default defineEntity({
             rules: [TRADE_SUGGEST_RULE],
           },
         },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: tradeSchema.nullable(),
           create: tradeSchema.nullable().default(null),
@@ -703,12 +691,7 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "orderId", "notes"] },
         },
-        display: {
-          list: true,
-          detail: true,
-          labelPath: "vendorName",
-          renderer: { list: "vendor-cell" },
-        },
+        display: { labelPath: "vendorName", renderer: { list: "vendor-cell" } },
         validation: {
           read: vendorShortcode,
           create: vendorShortcode,
@@ -724,12 +707,7 @@ export default defineEntity({
           kind: "text",
           placeholder: "Vendor order / receipt #",
         },
-        display: {
-          list: true,
-          detail: true,
-          labelPath: "orderId",
-          renderer: { list: "order-link" },
-        },
+        display: { labelPath: "orderId", renderer: { list: "order-link" } },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -745,7 +723,7 @@ export default defineEntity({
           kind: "specialized",
           renderer: "entity-select",
         },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: vendorAccountShortcode.nullable(),
           create: vendorAccountShortcode.nullable().default(null),
@@ -762,8 +740,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Label",
-          list: true,
-          detail: true,
           width: "lg",
           mobile: { slot: "subtitle", priority: 5, interactive: true },
         },
@@ -782,8 +758,6 @@ export default defineEntity({
           initial: "today",
         },
         display: {
-          list: true,
-          detail: true,
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
         },
@@ -807,8 +781,6 @@ export default defineEntity({
           placeholder: "What the receipt says",
         },
         display: {
-          list: true,
-          detail: true,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
           width: "sm",
@@ -827,7 +799,7 @@ export default defineEntity({
           kind: "textarea",
           placeholder: "Anything worth remembering",
         },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -875,6 +847,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -884,6 +857,7 @@ export default defineEntity({
         },
       },
       {
+        display: {},
         // Resolved through the join; null only if the vendor was soft-deleted.
         key: "vendorName",
         kind: "text",
@@ -895,6 +869,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "vendorLogo",
         kind: "json",
         nullable: true,
@@ -905,6 +880,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         // Link out to the vendor's own order page, derived at read time from
         // `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`). Read-only
         // and absent from the create/update shapes — nothing stores it, and null
@@ -924,7 +900,7 @@ export default defineEntity({
         // The count beside its unpriced lines ("5 · 2 unpriced"), composed by
         // the server; the field itself stays the numeric sort value.
         display: {
-          list: true,
+          detail: false,
           labelPath: "expenseCountLabel",
           width: "sm",
           mobile: { slot: "meta", priority: 50 },
@@ -946,6 +922,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         // Live Expenses whose cost has not been recorded yet.
         key: "unpricedExpenseCount",
         kind: "number",
@@ -964,8 +941,8 @@ export default defineEntity({
         // `SUM(Expense.cost)`: a negative total (a net credit) reads as money
         // in, a positive one (spend) stays neutral.
         display: {
+          detail: false,
           columnLabel: "Total",
-          list: true,
           width: "sm",
           format: "signedCurrency",
           mobile: { slot: "trailing", priority: 5 },
@@ -994,7 +971,7 @@ export default defineEntity({
         key: "reconciliation",
         kind: "json",
         display: {
-          list: true,
+          detail: false,
           labelPath: "reconciliationLabel",
           renderer: { list: "reconciliation-status" },
           valueOptions: [
@@ -1055,11 +1032,10 @@ export default defineEntity({
         key: "financialReconciliation",
         kind: "json",
         display: {
+          detail: false,
           columnLabel: "Financial",
-          list: true,
           labelPath: "financialReconciliationLabel",
           renderer: { list: "financial-settlement" },
-          // Roster for `financialReconciliation.status`.
           valueOptions: [
             {
               value: "unknown",
@@ -1121,7 +1097,7 @@ export default defineEntity({
         key: "documentCount",
         kind: "number",
         display: {
-          list: true,
+          detail: false,
           width: "xs",
           mobile: { slot: "meta", priority: 70 },
         },
@@ -1142,6 +1118,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "images",
         kind: "json",
         provenance: {
@@ -1172,7 +1149,7 @@ export default defineEntity({
         kind: "number",
         labelOverride: "Transactions",
         display: {
-          list: true,
+          detail: false,
           listHidden: true,
           width: "xs",
           readPath: "financialReconciliation.transactionCount",
@@ -1204,6 +1181,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         // `purchaseLabel({...})` — order id, else vendor + date, else vendor,
         // with a nonblank `displayLabel` appended. `displayLabel` alone is
         // nullable and user-editable, so it cannot serve as the title field.
@@ -1212,6 +1190,7 @@ export default defineEntity({
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: {
@@ -1221,6 +1200,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "updatedAt",
         kind: "timestamp",
         validation: {
@@ -2185,7 +2165,7 @@ export default defineEntity({
       ],
     },
     images: {
-      storage: "gallery",
+      storage: imageAssociationStorage.shape.purchase.value,
       displaySources: [
         {
           relationPath: ["products"],

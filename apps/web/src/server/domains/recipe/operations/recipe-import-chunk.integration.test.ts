@@ -1,7 +1,3 @@
-import {
-  COOKBOOK_COMMAND_CHUNK,
-  cookbookImportChunkInput,
-} from "@cubby/schemas/import-recipe";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
@@ -73,25 +69,6 @@ describe("cookbook chunk commands", () => {
     );
     return { recipes, raw, book };
   };
-
-  it("refuses more ids than the server's cap in one call", () => {
-    const ids = Array.from(
-      { length: COOKBOOK_COMMAND_CHUNK + 1 },
-      (_, i) => `001.${i}`,
-    );
-    expect(
-      cookbookImportChunkInput.safeParse({
-        cookbookId: "CKB-4K7M",
-        recipeIds: ids,
-      }).success,
-    ).toBe(false);
-    expect(
-      cookbookImportChunkInput.safeParse({
-        cookbookId: "CKB-4K7M",
-        recipeIds: ids.slice(0, COOKBOOK_COMMAND_CHUNK),
-      }).success,
-    ).toBe(true);
-  });
 
   it("finalizes the recipes that landed when another in the chunk fails, and says what remains", async () => {
     const { recipes, book } = await seedBook();

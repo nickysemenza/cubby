@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 import { devicePlatform } from "../device-fields.js";
 import {
   deviceShortcode,
@@ -49,7 +48,7 @@ export default defineEntity({
         semanticRole: "externalIdentifier",
         kind: "text",
         control: { kind: "text", placeholder: "Installation identifier" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.string().min(1),
           create: z.string().trim().min(1),
@@ -60,7 +59,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "Device name" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().min(1),
           create: z.string().trim().min(1),
@@ -84,8 +83,6 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "DeviceMobile", sfSymbol: "iphone" },
@@ -101,7 +98,7 @@ export default defineEntity({
         control: { kind: "text" },
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.string().nullable(),
           create: z.string().trim().nullable().optional(),
@@ -113,7 +110,7 @@ export default defineEntity({
         control: { kind: "text" },
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.string().nullable(),
           create: z.string().trim().nullable().optional(),
@@ -125,7 +122,7 @@ export default defineEntity({
         control: { kind: "text", placeholder: "ISO date and time" },
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true, format: "timestamp" },
+        display: { format: "timestamp" },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -136,11 +133,7 @@ export default defineEntity({
         key: "automaticWork",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: {
-          columnLabel: "Automatic",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Automatic" },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(true),
@@ -151,11 +144,7 @@ export default defineEntity({
         key: "remotePaused",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: {
-          columnLabel: "Paused",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Paused" },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -168,10 +157,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-        },
+        display: {},
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().optional(),
@@ -189,7 +175,7 @@ export default defineEntity({
           // The Product link identifies the physical device used for activity attribution.
           suggest: { basis: ["name", "platform"], reviewRequired: true },
         },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().optional(),
@@ -197,6 +183,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         nullable: true,
@@ -211,6 +198,7 @@ export default defineEntity({
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "productName",
         kind: "text",
         nullable: true,
@@ -226,6 +214,7 @@ export default defineEntity({
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -237,13 +226,13 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: { read: z.date(), create: null, update: null },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: { read: z.date(), create: null, update: null },
       },
       { key: "shortcode", kind: "text" },

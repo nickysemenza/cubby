@@ -5,6 +5,52 @@ import Testing
 
 @Suite("AuditEntryFolding")
 struct AuditEntryFoldingTests {
+    @Test func identifierEffectsRetainEveryCommittedValueAndPrimaryChange() throws {
+        func row(_ value: String, primary: Bool) -> JSONValue {
+            [
+                "source": "sample", "kind": "catalog_number", "externalId": .string(value),
+                "url": "https://example.com/catalog", "isPrimary": .bool(primary),
+            ]
+        }
+        let before: JSONValue = .array([row("OLD", primary: true), row("KEEP", primary: false)])
+        let after: JSONValue = .array(
+            [row("KEEP", primary: true)] + (0..<30).map { row("CODE-\($0)", primary: false) })
+        var raw = try #require(try JSONValue(encoding: audit("a", minute: 0)).objectValue)
+        raw["changes"] = ["externalIds": ["from": before, "to": after]]
+        let entry = try JSONValue.object(raw).decoded(AuditLogEntryOut.self)
+        let effects = entry.identifierEffects
+        #expect(effects.count == 32)
+        #expect(effects.joined().count > 500)
+        #expect(effects.contains { $0.contains("Removed:") && $0.contains("OLD") })
+        #expect(effects.contains { $0.contains("Made primary:") && $0.contains("KEEP") })
+        #expect(
+            effects.contains {
+                $0.contains("CODE-29") && $0.contains("Secondary")
+                    && $0.contains("https://example.com/catalog")
+            })
+        #expect(IdentifierPresentation.effects(before: nil, after: after).isEmpty)
+    }
+
+    @Test func legacyBarcodeURLChangesRemainReadableWithoutInputRepair() {
+        let before: JSONValue = [
+            [
+                "source": "gtin", "kind": "gtin_14", "externalId": "09780306406158",
+                "url": "https://example.com/old", "isPrimary": true,
+            ]
+        ]
+        let after: JSONValue = [
+            [
+                "source": "gtin", "kind": "gtin_14", "externalId": "09780306406158",
+                "url": "https://example.com/new", "isPrimary": true,
+            ]
+        ]
+        let effects = IdentifierPresentation.effects(before: before, after: after)
+        #expect(effects.count == 1)
+        #expect(effects.first?.contains("Changed URL:") == true)
+        #expect(effects.first?.contains("https://example.com/old → https://example.com/new") == true)
+        #expect(effects.first?.contains("GTIN: 09780306406158") == true)
+    }
+
     private func audit(
         _ key: String, minute: Int, action: String = "update", id: String = "PRD-4K7M",
         user: String = "user-a", channel: String = "web", field: String = "name"

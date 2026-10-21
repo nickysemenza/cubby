@@ -31,11 +31,13 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { photoFieldCrossCheck } from "~/server/domains/photo-import/repo/photo-correctness";
+import { loadCategorySummaries } from "~/server/domains/product-category/repo/product-category";
 import {
   getProductCoverImageUrlsByProductIds,
   getProductImagesByProductIds,
 } from "~/server/domains/product/repo/crud";
 import { loadProductInventoryEntries } from "~/server/domains/product/repo/lookup";
+import { mapProductExternalIds } from "~/server/domains/product/repo/mappers";
 import {
   productIdentityOverlap,
   productIdentityWords,
@@ -603,16 +605,16 @@ export async function loadPhotoProductEvidence(
           name: product.name,
           manufacturer: product.manufacturer,
           model: product.model,
+          notes: product.notes,
+          tags: product.tags,
+          categoryId: product.categoryId,
         })
         .from(product)
         .where(and(inArray(product.id, ids), notDeleted(product)))
     : [];
   const externalIds = ids.length
     ? await getDb(db)
-        .select({
-          id: entityExternalId.entityId,
-          value: entityExternalId.externalId,
-        })
+        .select()
         .from(entityExternalId)
         .where(
           and(
@@ -621,12 +623,17 @@ export async function loadPhotoProductEvidence(
           ),
         )
     : [];
-  const [covers, quantities, inventoryEntries, galleries] = await Promise.all([
-    getProductCoverImageUrlsByProductIds(db, ids),
-    loadProductQuantitySummaries(db, ids),
-    loadProductInventoryEntries(db, ids),
-    getProductImagesByProductIds(db, ids),
-  ]);
+  const [covers, quantities, inventoryEntries, galleries, categories] =
+    await Promise.all([
+      getProductCoverImageUrlsByProductIds(db, ids),
+      loadProductQuantitySummaries(db, ids),
+      loadProductInventoryEntries(db, ids),
+      getProductImagesByProductIds(db, ids),
+      loadCategorySummaries(
+        db,
+        products.flatMap((item) => (item.categoryId ? [item.categoryId] : [])),
+      ),
+    ]);
   const expenseRows = ids.length
     ? await getDb(db)
         .select({
@@ -688,9 +695,17 @@ export async function loadPhotoProductEvidence(
         coverUrl: covers.get(item.id) ?? null,
         manufacturer: item.manufacturer,
         model: item.model,
+        notes: item.notes,
+        tags: item.tags,
+        category: item.categoryId
+          ? (categories.get(item.categoryId) ?? null)
+          : null,
+        externalIds: mapProductExternalIds(
+          externalIds.filter((entry) => entry.entityId === item.id),
+        ),
         identifiers: externalIds
-          .filter((entry) => entry.id === item.id)
-          .map((entry) => entry.value),
+          .filter((entry) => entry.entityId === item.id)
+          .map((entry) => entry.externalId),
         purchaseLineCount: expenseCountByProduct.get(item.id) ?? 0,
         quantity: quantities.get(item.id),
         inventoryEntries: inventoryEntries.get(item.id) ?? [],

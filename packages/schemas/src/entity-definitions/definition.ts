@@ -5,6 +5,7 @@ import {
 } from "@cubby/shared/enum-palette";
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
+import { dataQuality } from "../data-quality-shape";
 import { sortDirection } from "../pagination";
 import {
   dataQualityCheckKind,
@@ -416,11 +417,8 @@ const buildMetadataSchemas = () => {
 
   const entityFieldDisplayMetadataSchema = z
     .object({
-      list: z.boolean({ error: "must be a boolean" }).optional().default(false),
-      detail: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
+      list: z.boolean({ error: "must be a boolean" }).optional(),
+      detail: z.boolean({ error: "must be a boolean" }).optional(),
       columnIdOverride: nonEmptyString().nullable().optional().default(null),
       standard: z.enum(["name", "image"]).nullable().optional().default(null),
       /**
@@ -669,6 +667,12 @@ const buildMetadataSchemas = () => {
         .strictObject({
           key: z.union([z.literal("value"), z.array(nonEmptyString()).min(1)]),
           readPath: nonEmptyString().optional(),
+          primary: z
+            .strictObject({
+              key: nonEmptyString(),
+              scope: z.array(nonEmptyString()).min(1),
+            })
+            .optional(),
         })
         .nullable()
         .optional()
@@ -2798,6 +2802,14 @@ const buildMetadataSchemas = () => {
       identifiers: entityIdentifiersMetadataSchema,
       presentation: entityPresentationMetadataSchema,
       fields: entityContractMetadataSchema.nullable(),
+      readSchemas: z
+        .object({
+          output: declaredZodSchema,
+          list: declaredZodSchema,
+          detail: declaredZodSchema,
+        })
+        .strict()
+        .optional(),
       model: entityFieldModelMetadataSchema.optional(),
       storage: entityTableStorageMetadataSchema.optional(),
       children: z.array(childTableMetadataSchema).optional().default([]),
@@ -2947,18 +2959,104 @@ export function parseEntityDeclarationMetadata(
   throw new Error(`${path} ${issue.message}.`);
 }
 
-/** Preserve literal field keys and schema types without inspecting Zod internals. */
-export const defineEntity = <const T extends EntityDeclaration>(
+export type RawReadSchemas = Readonly<{
+  output: z.ZodType;
+  list: z.ZodType;
+  detail: z.ZodType;
+}>;
+
+type OwnCheckId<D> = D extends {
+  capabilities: {
+    dataQuality: { checks: readonly { id: infer Id extends string }[] };
+  };
+}
+  ? Id
+  : never;
+export type ReadSchemaFacts<D> = Readonly<{
+  ownDataCheck: z.ZodEnum<{ [Id in OwnCheckId<D>]: Id }>;
+}>;
+type BaseReadFields<D> = (D extends ReadableDeclaration
+  ? ReadFieldSchemas<D>
+  : {}) &
+  (D extends { capabilities: { dataQuality: object } }
+    ? { dataQuality: typeof dataQuality }
+    : {});
+export type BaseReadSchema<D> = z.ZodObject<BaseReadFields<D>>;
+type DefaultReadSchemas<D> = Readonly<{
+  output: BaseReadSchema<D>;
+  list: BaseReadSchema<D>;
+  detail: BaseReadSchema<D>;
+}>;
+
+type ValidDeclaration<T> = T &
+  (InvalidLabelPaths<NoInfer<T>> extends never
+    ? unknown
+    : { invalidLabelPath: InvalidLabelPaths<NoInfer<T>> }) &
+  (InvalidReferenceFields<NoInfer<T>> extends never
+    ? unknown
+    : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> });
+
+/** Own check ids are shared with canonical projections and the generated global catalog. */
+export function ownDataCheckSchema<
+  const D extends Pick<EntityDeclaration, "capabilities">,
+>(declaration: D): ReadSchemaFacts<D>["ownDataCheck"] {
+  const ids =
+    declaration.capabilities.dataQuality?.checks.map((check) => check.id) ?? [];
+  if (new Set(ids).size !== ids.length)
+    throw new Error("capabilities.dataQuality.checks contains duplicate ids.");
+  // SAFETY: the enum is constructed exclusively from this declaration's own literal check IDs.
+  return z.enum(ids) as ReadSchemaFacts<D>["ownDataCheck"];
+}
+
+/** One constructor owns the raw read object and its synthesized quality field. */
+export function defaultReadSchemas<
+  const D extends {
+    model?: ReadableDeclaration["model"];
+    capabilities?: { dataQuality?: unknown };
+  },
+>(declaration: D): DefaultReadSchemas<D> {
+  const fields = declaration.model
+    ? readFieldSchemas({ model: declaration.model })
+    : {};
+  // SAFETY: the validated keyed field map and raw quality capability exactly mirror BaseReadFields<D>; field instances are retained.
+  const base = z.object({
+    ...fields,
+    ...(declaration.capabilities?.dataQuality ? { dataQuality } : {}),
+  }) as BaseReadSchema<D>;
+  return { output: base, list: base, detail: base };
+}
+
+/** Preserve exact Zod instances and literal declaration types; composers run once. */
+export function defineEntity<
+  const T extends EntityDeclaration,
+  S extends RawReadSchemas,
+>(
   declaration: T &
-    (InvalidLabelPaths<NoInfer<T>> extends never
-      ? unknown
-      : {
-          invalidLabelPath: InvalidLabelPaths<NoInfer<T>>;
-        }) &
     (InvalidReferenceFields<NoInfer<T>> extends never
       ? unknown
       : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> }),
-): T => declaration;
+  compose: (base: BaseReadSchema<T>, facts: ReadSchemaFacts<T>) => S,
+): T & { readSchemas: S };
+export function defineEntity<const T extends EntityDeclaration>(
+  declaration: ValidDeclaration<T>,
+): T & { readSchemas: DefaultReadSchemas<T> };
+export function defineEntity(
+  declaration: EntityDeclaration,
+  compose?: (
+    base: z.ZodObject,
+    facts: ReadSchemaFacts<EntityDeclaration>,
+  ) => RawReadSchemas,
+): EntityDeclaration & { readSchemas: RawReadSchemas } {
+  const schemas = defaultReadSchemas(declaration);
+  return {
+    ...declaration,
+    readSchemas: compose
+      ? compose(schemas.output, {
+          ownDataCheck: ownDataCheckSchema(declaration),
+        })
+      : schemas,
+  };
+}
 
 type ReferenceItem<E extends ShortcodeType> =
   | ShortcodeFor<E>
@@ -3006,7 +3104,8 @@ type ReadableDeclaration = {
     fields: readonly {
       key: string;
       readKeyOverride?: string | null;
-      validation?: { read: z.ZodType | null };
+      readKey?: string | null;
+      validation?: { read?: z.ZodType | null };
     }[];
     output: readonly string[];
   };
@@ -3122,7 +3221,10 @@ const modeFieldSchemas = <
 export type FieldSchemas<D extends MutableDeclaration & ReadableDeclaration> = {
   create: ModeFieldSchemas<D, "create">;
   update: ModeFieldSchemas<D, "update">;
-  read: ReadFieldSchemas<D>;
+  read: ReadFieldSchemas<D> &
+    (D extends { capabilities: { dataQuality: object } }
+      ? { dataQuality: typeof dataQuality }
+      : {});
 };
 
 export function fieldSchemasOf<
@@ -3131,7 +3233,7 @@ export function fieldSchemasOf<
   return {
     create: modeFieldSchemas(definition, "create"),
     update: modeFieldSchemas(definition, "update"),
-    read: readFieldSchemas(definition),
+    read: defaultReadSchemas(definition).output.shape,
   };
 }
 
@@ -3143,7 +3245,10 @@ export function readFieldSchemas<const D extends ReadableDeclaration>(
     const field = definition.model.fields.find((field) => field.key === key);
     if (!field?.validation?.read)
       throw new Error(`Missing declared read schema for ${key}`);
-    return [field.readKeyOverride ?? key, field.validation.read];
+    return [
+      field.readKeyOverride ?? field.readKey ?? key,
+      field.validation.read,
+    ];
   });
   // SAFETY: the explicit output roster selects exact declared keys; missing schemas fail above.
   return Object.fromEntries(entries) as ReadFieldSchemas<D>;

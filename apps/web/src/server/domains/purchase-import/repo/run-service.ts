@@ -3,7 +3,6 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import {
   imageId,
   imageShortcode,
-  ledgerPartyId,
   userId,
   parseEntityRef,
   runEntityId,
@@ -131,6 +130,10 @@ import {
   releaseUnsettledMailRunSources,
   transferMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import {
+  loadRunController,
+  loadRunControlScopeByShortcode,
+} from "~/server/domains/run/repo/control-scope";
 import { getRunHeaderByShortcode } from "~/server/domains/run/repo/run";
 import {
   DEBUG_EVENT_KIND,
@@ -1824,38 +1827,19 @@ export async function recordRunControlEvent(
   const input = z
     .object({ runPublicId: runShortcode, action: runControlAction })
     .parse(rawInput);
-  const scope = await loadRunScopeByShortcode(db, input.runPublicId);
-  const [controller] = await getDb(db)
-    .select({
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      ledgerPartyId: ledgerParty.id,
-      ledgerPartyShortcode: ledgerParty.shortcode,
-      ledgerPartyName: ledgerParty.name,
-      ledgerPartyKind: ledgerParty.kind,
-    })
-    .from(ledgerParty)
-    .innerJoin(user, eq(user.id, ledgerParty.userId))
-    .where(
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
+  const scope = await loadRunControlScopeByShortcode(db, input.runPublicId);
+  const controller = await loadRunController(db, actor);
   if (!controller)
     throw new Error("Purchase import run is not owned by this member");
   const [event] = await getDb(db)
     .insert(runControlEvent)
     .values({
-      runId: scope.public.runId,
+      runId: scope.runId,
       action: input.action,
       controllerUserId: userId.parse(controller.userId),
       controllerName: controller.name,
       controllerEmail: controller.email,
-      controllerLedgerPartyId: ledgerPartyId.parse(controller.ledgerPartyId),
+      controllerLedgerPartyId: controller.ledgerPartyId,
       controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
       controllerLedgerPartyName: controller.ledgerPartyName,
       controllerLedgerPartyKind: controller.ledgerPartyKind,
@@ -1874,38 +1858,19 @@ export async function controlRun(
   rawInput: z.input<typeof runControlInput>,
 ) {
   const input = runControlInput.parse(rawInput);
-  const scope = await loadRunScopeByShortcode(db, input.runPublicId);
-  const [controller] = await getDb(db)
-    .select({
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      ledgerPartyId: ledgerParty.id,
-      ledgerPartyShortcode: ledgerParty.shortcode,
-      ledgerPartyName: ledgerParty.name,
-      ledgerPartyKind: ledgerParty.kind,
-    })
-    .from(ledgerParty)
-    .innerJoin(user, eq(user.id, ledgerParty.userId))
-    .where(
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
+  const scope = await loadRunControlScopeByShortcode(db, input.runPublicId);
+  const controller = await loadRunController(db, actor);
   if (!controller)
     throw new Error("Purchase import run is not owned by this member");
   if (
-    scope.public.purpose !== "photo_inventory" &&
+    scope.purpose !== "photo_inventory" &&
     scope.ledgerPartyId !== controller.ledgerPartyId
   )
     throw new Error("Only the member this Run belongs to can control it");
   return withTransaction(db, async (tx) => {
-    if (scope.public.vendorAccountId)
+    if (scope.vendorAccountId)
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${scope.public.vendorAccountId}))`,
+        sql`SELECT pg_advisory_xact_lock(hashtext(${scope.vendorAccountId}))`,
       );
     const [locked] = await tx
       .select({
@@ -1932,13 +1897,13 @@ export async function controlRun(
         historyCursorUrl: runTable.historyCursorUrl,
       })
       .from(runTable)
-      .where(eq(runTable.id, scope.public.runId))
+      .where(eq(runTable.id, scope.runId))
       .limit(1)
       // A key-preserving lock: this transaction also touches child rows
       // whose foreign keys share-lock the Run, so a full lock could deadlock.
       .for("no key update");
     if (!locked) throw new Error("Purchase import run was not found");
-    if (locked.vendorAccountId !== scope.public.vendorAccountId)
+    if (locked.vendorAccountId !== scope.vendorAccountId)
       throw new Error("Purchase import control account changed.");
     if (locked.ledgerPartyId !== scope.ledgerPartyId)
       throw new Error("Purchase import control owner changed.");
@@ -1958,8 +1923,8 @@ export async function controlRun(
         throw new Error("Only agent import runs can be started again");
       const sourceTargets = (
         await (locked.purpose === "photo_inventory"
-          ? selectPhotoRestartTargets(tx, scope.public.runId)
-          : selectRestartTargets(tx, scope.public.runId))
+          ? selectPhotoRestartTargets(tx, scope.runId)
+          : selectRestartTargets(tx, scope.runId))
       ).map((target) => ({
         entityId: target.entityId,
         entityKind: target.entityKind,
@@ -1990,7 +1955,7 @@ export async function controlRun(
         actorLedgerPartyKind: controller.ledgerPartyKind,
         vendorAccountId: locked.vendorAccountId,
         vendorId: locked.vendorId,
-        predecessorRunId: scope.public.runId,
+        predecessorRunId: scope.runId,
         parentRunId:
           locked.purpose === "mail_import" ? locked.parentRunId : null,
         purpose: locked.purpose,
@@ -2019,7 +1984,7 @@ export async function controlRun(
             })),
           );
       } else if (locked.purpose === "mail_import") {
-        await transferMailRunSources(tx, scope.public.runId, successorId);
+        await transferMailRunSources(tx, scope.runId, successorId);
       }
       return {
         publicId: input.runPublicId,
@@ -2035,12 +2000,12 @@ export async function controlRun(
       };
     }
     await tx.insert(runControlEvent).values({
-      runId: scope.public.runId,
+      runId: scope.runId,
       action: input.action,
       controllerUserId: userId.parse(controller.userId),
       controllerName: controller.name,
       controllerEmail: controller.email,
-      controllerLedgerPartyId: ledgerPartyId.parse(controller.ledgerPartyId),
+      controllerLedgerPartyId: controller.ledgerPartyId,
       controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
       controllerLedgerPartyName: controller.ledgerPartyName,
       controllerLedgerPartyKind: controller.ledgerPartyKind,
@@ -2065,11 +2030,11 @@ export async function controlRun(
           coordinatorModel: coordinatorModelFor(locked.purpose),
           updatedAt: new Date(),
         })
-        .where(eq(runTable.id, scope.public.runId));
+        .where(eq(runTable.id, scope.runId));
       return {
         publicId: input.runPublicId,
         status: "running" as const,
-        dispatchRunId: scope.public.runId,
+        dispatchRunId: scope.runId,
         dispatchPublicId: input.runPublicId,
         dispatchPurpose: locked.purpose,
         dispatchEventId,
@@ -2090,7 +2055,7 @@ export async function controlRun(
           status: runTable.status,
         })
         .from(runTable)
-        .where(eq(runTable.predecessorRunId, scope.public.runId))
+        .where(eq(runTable.predecessorRunId, scope.runId))
         .orderBy(desc(runTable.startedAt))
         .limit(1);
       if (existingSuccessor) {
@@ -2121,7 +2086,7 @@ export async function controlRun(
               .from(photoRunImage)
               .where(
                 and(
-                  eq(photoRunImage.runId, scope.public.runId),
+                  eq(photoRunImage.runId, scope.runId),
                   inArray(photoRunImage.state, [
                     "pending",
                     "prepared",
@@ -2131,15 +2096,14 @@ export async function controlRun(
                   ]),
                 ),
               )
-          : (await selectRestartTargets(tx, scope.public.runId)).filter(
-              (target) =>
-                [
-                  "pending",
-                  "prepared",
-                  "unresolved",
-                  "needs_evidence",
-                  "unavailable",
-                ].includes(target.state),
+          : (await selectRestartTargets(tx, scope.runId)).filter((target) =>
+              [
+                "pending",
+                "prepared",
+                "unresolved",
+                "needs_evidence",
+                "unavailable",
+              ].includes(target.state),
             );
       if (!unresolvedTargets.length)
         throw new Error("This Run has no unresolved targets to retry");
@@ -2167,7 +2131,7 @@ export async function controlRun(
         actorLedgerPartyKind: locked.actorLedgerPartyKind,
         vendorAccountId: successorVendorAccountId,
         vendorId: locked.vendorId,
-        predecessorRunId: scope.public.runId,
+        predecessorRunId: scope.runId,
         parentRunId:
           locked.purpose === "mail_import" ? locked.parentRunId : null,
         purpose: locked.purpose,
@@ -2197,7 +2161,7 @@ export async function controlRun(
       } else if (locked.purpose === "mail_import") {
         await transferMailRunSources(
           tx,
-          scope.public.runId,
+          scope.runId,
           successorId,
           unresolvedTargets.map((target) => target.workKey),
         );
@@ -2232,19 +2196,19 @@ export async function controlRun(
           endedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(runTable.id, scope.public.runId));
+        .where(eq(runTable.id, scope.runId));
       await tx
         .update(runApproval)
         .set({ state: "invalidated", invalidatedAt: new Date() })
         .where(
           and(
-            eq(runApproval.runId, scope.public.runId),
+            eq(runApproval.runId, scope.runId),
             inArray(runApproval.state, ["pending", "granted"]),
           ),
         );
       await failOperationsForRun(
         tx,
-        scope.public.runId,
+        scope.runId,
         dispatchAbort
           ? "Dispatch aborted by its owner"
           : "Run cancelled by its owner",
@@ -2257,7 +2221,7 @@ export async function controlRun(
       await tx
         .update(runTable)
         .set({ status: "paused", updatedAt: new Date() })
-        .where(eq(runTable.id, scope.public.runId));
+        .where(eq(runTable.id, scope.runId));
       return {
         publicId: input.runPublicId,
         status: "paused" as const,
@@ -2286,11 +2250,11 @@ export async function controlRun(
           endedAt: null,
           updatedAt: new Date(),
         })
-        .where(eq(runTable.id, scope.public.runId));
+        .where(eq(runTable.id, scope.runId));
       return {
         publicId: input.runPublicId,
         status: "running" as const,
-        dispatchRunId: scope.public.runId,
+        dispatchRunId: scope.runId,
         dispatchPublicId: input.runPublicId,
         dispatchPurpose: locked.purpose,
         dispatchEventId,

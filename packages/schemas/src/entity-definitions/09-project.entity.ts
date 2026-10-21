@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
@@ -229,6 +230,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "fieldResolutions",
         kind: "json",
         validation: {
@@ -241,11 +243,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "What are you working on?" },
-        display: {
-          list: true,
-          detail: true,
-          standard: "name",
-        },
+        display: { standard: "name" },
         validation: {
           read: z.string().min(1),
           create: z.string().min(1),
@@ -259,11 +257,7 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.projectStatus,
         },
-        display: {
-          mobile: { slot: "subtitle", priority: 10 },
-          list: true,
-          detail: true,
-        },
+        display: { mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: projectStatusSchema,
           create: projectStatusSchema.default("planning"),
@@ -290,10 +284,7 @@ Rules:
             ],
           },
         },
-        display: {
-          list: true,
-          detail: true,
-        },
+        display: {},
         validation: {
           read: projectKindSchema.nullable(),
           create: projectKindSchema.nullable().default(null),
@@ -305,7 +296,7 @@ Rules:
         kind: "text-array",
         collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true },
+        display: { list: false },
         resolution: {
           reset: { locationsMode: "inherit", locations: [] },
           none: { locationsMode: "explicit", locations: [] },
@@ -378,8 +369,6 @@ Rules:
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           columnLabel: "Assignee",
-          list: true,
-          detail: true,
           width: "md",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
@@ -444,6 +433,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "assigneeName",
         kind: "text",
         validation: { read: z.string().nullable(), create: null, update: null },
@@ -463,7 +453,7 @@ Rules:
             rules: [TRADE_SUGGEST_RULE],
           },
         },
-        display: { detail: true },
+        display: { list: false },
         resolution: {
           reset: { defaultTrade: null },
           redundancy: "eligible",
@@ -507,8 +497,6 @@ Rules:
         display: {
           mobile: { slot: "trailing", priority: 10 },
           columnLabel: "Estimate",
-          list: true,
-          detail: true,
           preview: true,
         },
         validation: {
@@ -525,11 +513,7 @@ Rules:
         nullable: true,
         reference: { entity: "project" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          columnLabel: "Parent",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Parent" },
         validation: {
           read: projectShortcode.nullable(),
           create: projectShortcode.nullable().default(null),
@@ -541,11 +525,7 @@ Rules:
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: {
-          list: true,
-          detail: true,
-          format: "plainDate",
-        },
+        display: { format: "plainDate" },
         validation: {
           read: plainDate
             .describe("Manual start override; usually null")
@@ -559,11 +539,7 @@ Rules:
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: {
-          list: true,
-          detail: true,
-          format: "plainDate",
-        },
+        display: { format: "plainDate" },
         validation: {
           read: plainDate
             .describe("Manual end override; usually null")
@@ -578,7 +554,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().describe("Freeform markdown").nullable(),
           create: z.string().nullable().default(null),
@@ -595,11 +571,7 @@ Rules:
           sources: [{ label: "Google Drive folder identifier" }],
         },
         control: { kind: "text", renderer: "url" },
-        display: {
-          columnLabel: "Drive folder",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Drive folder" },
         validation: {
           read: googleDriveFolderUrl,
           create: googleDriveFolderUrl.default(null),
@@ -616,11 +588,7 @@ Rules:
           sources: [{ label: "Notion page identifier" }],
         },
         control: { kind: "text", renderer: "url" },
-        display: {
-          columnLabel: "Notion page",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Notion page" },
         validation: {
           read: notionPageUrl,
           create: notionPageUrl.default(null),
@@ -632,11 +600,7 @@ Rules:
         kind: "identifier",
         reference: { entity: "project", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: {
-          columnLabel: "Blocked by",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Blocked by" },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -647,6 +611,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -659,7 +624,7 @@ Rules:
         key: "parentProjectName",
         kind: "text",
         nullable: true,
-        display: { list: true },
+        display: { detail: false },
         provenance: {
           kind: "derived",
           sources: [{ entity: "project", relation: "parent" }],
@@ -683,10 +648,7 @@ Rules:
         key: "childProjectIds",
         kind: "identifier",
         reference: { entity: "project", multiple: true },
-        display: {
-          columnLabel: "Subprojects",
-          list: true,
-        },
+        display: { detail: false, columnLabel: "Subprojects" },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -697,7 +659,7 @@ Rules:
         key: "blockingIds",
         kind: "identifier",
         reference: { entity: "project", multiple: true },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -705,6 +667,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: {
@@ -716,7 +679,7 @@ Rules:
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,
@@ -724,6 +687,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "rollup",
         kind: "json",
         validation: {
@@ -736,7 +700,12 @@ Rules:
       {
         key: "spent",
         kind: "number",
-        display: { preview: true, format: "currency" },
+        display: {
+          detail: false,
+          list: false,
+          preview: true,
+          format: "currency",
+        },
         validation: {
           read: z
             .number()
@@ -754,8 +723,8 @@ Rules:
           sources: [{ label: "Own task completion rollup" }],
         },
         display: {
+          detail: false,
           preview: true,
-          list: true,
           labelPath: "taskProgress",
           renderer: { list: "task-progress" },
         },
@@ -766,6 +735,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "dates",
         kind: "json",
         validation: {
@@ -1534,7 +1504,7 @@ Rules:
   search: "semantic",
   capabilities: {
     images: {
-      storage: "gallery",
+      storage: imageAssociationStorage.shape.project.value,
       displaySources: [
         {
           relationPath: ["tasks"],
@@ -1573,7 +1543,7 @@ Rules:
       ],
       routing: {
         category: "home",
-        candidateFields: ["name", "description", "notes"],
+        candidateFields: ["name", "notes"],
         temporalFields: ["startDate", "endDate"],
         lifecycleFilters: [
           {
@@ -1582,7 +1552,7 @@ Rules:
           },
         ],
         signals: {
-          ocrFields: ["name", "description", "notes"],
+          ocrFields: ["name", "notes"],
           classifierLabels: ["toolbox"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },

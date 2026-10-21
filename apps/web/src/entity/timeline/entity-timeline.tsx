@@ -384,8 +384,10 @@ function Amount({ amount }: { amount: number | null | undefined }) {
 }
 
 function EventLine({ event }: { event: EntityTimelineEvent }) {
+  const audit = event.kind.startsWith("audit:");
   return (
     <RecordRow
+      clip={!audit}
       leading={
         <RecordDot
           color={kindColor(event.kind)}
@@ -407,7 +409,15 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
         </>
       }
       secondary={
-        event.detail ? <ShortcodeProse>{event.detail}</ShortcodeProse> : null
+        event.detail ? (
+          audit ? (
+            <span className="break-words whitespace-pre-wrap">
+              {event.detail}
+            </span>
+          ) : (
+            <ShortcodeProse>{event.detail}</ShortcodeProse>
+          )
+        ) : null
       }
       trailing={<Amount amount={event.amount} />}
     />

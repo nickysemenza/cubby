@@ -39,4 +39,20 @@ struct ScanCodeTests {
             #expect(ScanCodes.gtin14(vector.input) == vector.gtin14, "input \(vector.input)")
         }
     }
+
+    @Test func identifierPresentationMatchesSharedVectors() throws {
+        struct Vector: Decodable { let canonical: String; let label: String; let value: String }
+        struct File: Decodable { let presentation: [Vector] }
+        for vector in try GoldenVectors.decode(File.self, named: "gtin").presentation {
+            let shown = try #require(
+                IdentifierPresentation([
+                    "source": "gtin", "kind": "gtin_14", "externalId": .string(vector.canonical),
+                    "isPrimary": true,
+                ]))
+            #expect(shown.label == vector.label)
+            #expect(shown.value == vector.value)
+            #expect(shown.canonical == (vector.value == vector.canonical ? nil : vector.canonical))
+            #expect(shown.url == nil)
+        }
+    }
 }

@@ -147,7 +147,7 @@ export async function seedLocalFixturePack(
       await create("product", {
         name: "Synthetic incomplete product",
         model: null,
-        upc: null,
+        barcode: null,
         notes: null,
         expectedQuantity: null,
         ingredientId: null,

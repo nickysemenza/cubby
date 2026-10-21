@@ -98,8 +98,12 @@ public final class GenericEntityEditModel {
 
     /// The fields the editor shows: in the mode's payload roster and with a control.
     public var visibleFields: [FieldDescriptor] {
-        descriptor.fields.filter { field in
+        let fields = descriptor.fields.filter { field in
             field.controlKind != nil && (isCreate ? field.inCreate : field.inUpdate)
+        }
+        let hasCollectionControl = fields.contains { $0.collection?.primary != nil }
+        return fields.filter {
+            isCreate || !hasCollectionControl || $0.controlRenderer?.rawValue != "upc-lookup"
         }
     }
 
@@ -230,6 +234,20 @@ public final class GenericEntityEditModel {
     /// The update patch for the current draft; unchanged values are left out.
     public func patch() throws -> EntityPatch {
         var patch = try EntityPatch.diff(original: original, draft: wireDraft(), nullableKeys: nullableKeys)
+        for field in visibleFields where field.collection?.primary != nil {
+            guard let collection = field.collection else { continue }
+            guard let state = CollectionEdit.decode(draft[field.key]) else {
+                // A partial/failed read cannot stand in for an empty saved collection.
+                if draft[field.key] != original?[field.key] && draft[field.key] != .null {
+                    throw CollectionEdit.EditError.missingBaseline
+                }
+                patch.values.removeValue(forKey: field.key)
+                continue
+            }
+            let value = try collectionWire(state, field: field, collection: collection)
+            patch.values.removeValue(forKey: field.key)
+            if value.arrayValue?.isEmpty == false { patch.values[field.key] = value }
+        }
         if imageField("pendingImageIds"), !pendingUploads.isEmpty {
             patch.values["pendingImageIds"] = Self.codes(pendingUploads)
         }
@@ -256,11 +274,46 @@ public final class GenericEntityEditModel {
     /// optional text left out), every other field as drafted.
     private func wireDraft() -> [String: JSONValue] {
         draft.reduce(into: [:]) { wire, entry in
-            if let schema = descriptor.field(entry.key)?.valueSchema {
+            if let state = CollectionEdit.decode(entry.value), let field = descriptor.field(entry.key),
+                let collection = field.collection
+            {
+                if isCreate {
+                    wire[entry.key] = state.initialValue(collection: collection) {
+                        try self.collectionRow($0, field: field)
+                    }
+                } else if let original = original?[entry.key] {
+                    wire[entry.key] = original
+                }
+            } else if let schema = descriptor.field(entry.key)?.valueSchema {
                 wire[entry.key] = StructuredValue.wireValue(entry.value, schema: schema)
             } else {
                 wire[entry.key] = entry.value
             }
+        }
+    }
+
+    private func collectionRow(_ row: [String: JSONValue], field: FieldDescriptor) throws -> [String:
+        JSONValue]
+    {
+        guard let schema = field.valueSchema, case .array(let item) = schema.node else { return row }
+        let projected =
+            StructuredValue.wireValue(StructuredValue.project(.object(row), to: item), schema: item)
+            .objectValue ?? row
+        return field.controlRenderer?.rawValue == "external-ids"
+            ? try IdentifierPresentation.storedRow(projected) : projected
+    }
+
+    private func collectionWire(_ state: CollectionEdit, field: FieldDescriptor, collection: FieldCollection)
+        throws -> JSONValue
+    {
+        guard let schema = field.valueSchema, case .array(let item) = schema.node,
+            case .object(let fields) = item.node
+        else {
+            throw CollectionEdit.EditError.missingBaseline
+        }
+        let attributes = fields.map(\.key).filter { $0 != "id" && !collection.key.contains($0) }
+        return try state.wireValue(collection: collection, attributes: attributes) {
+            try self.collectionRow($0, field: field)
         }
     }
 
@@ -281,7 +334,12 @@ public final class GenericEntityEditModel {
             return missingRequiredKeys.isEmpty
         case .update:
             guard original != nil, loadError == nil else { return false }
-            return hasImageChanges || ((try? patch())?.isEmpty == false)
+            if hasImageChanges { return true }
+            do {
+                return try !patch().isEmpty
+            } catch {
+                return true
+            }
         }
     }
 
@@ -300,6 +358,12 @@ public final class GenericEntityEditModel {
         do {
             switch mode {
             case .create:
+                for field in visibleFields {
+                    if let collection = field.collection, let state = CollectionEdit.decode(draft[field.key])
+                    {
+                        _ = try collectionWire(state, field: field, collection: collection)
+                    }
+                }
                 savedID = try await client.create(descriptor, body: createBody())
             case .update(let id):
                 try await client.update(descriptor, id: id, patch: try patch())
@@ -366,7 +430,9 @@ public final class GenericEntityEditModel {
         var seeded: [String: JSONValue] = [:]
         for field in visibleFields {
             if let value = original[field.key] {
-                seeded[field.key] = value
+                seeded[field.key] =
+                    field.collection?.primary != nil && value.arrayValue != nil
+                    ? CollectionEdit(value: value, creating: false).json : value
             } else if field.reference?.multiple == true,
                 let projected = descriptor.fields.first(where: {
                     $0.key != field.key
@@ -413,6 +479,9 @@ public final class GenericEntityEditModel {
         // reference is a create-only key the control may not render).
         for (key, value) in prefill where seeded[key] == nil {
             seeded[key] = value
+        }
+        for field in visibleFields where field.collection?.primary != nil {
+            seeded[field.key] = CollectionEdit(value: seeded[field.key] ?? .array([]), creating: true).json
         }
         draft = seeded
     }

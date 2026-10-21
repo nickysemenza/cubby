@@ -119,6 +119,12 @@ pub fn normalize_isbn(value: String) -> Option<NormalizedIsbn> {
     recipebridge::normalize_isbn(&value).map(NormalizedIsbn::from)
 }
 
+/// Recognize an ISBN from canonical storage using recipebridge's validated rule.
+#[uniffi::export]
+pub fn isbn_from_gtin(value: String) -> Option<NormalizedIsbn> {
+    recipebridge::isbn_from_gtin(&value).map(NormalizedIsbn::from)
+}
+
 /// Classify a raw scanner code as a GTIN-14 (ISBN check-digit match, or a
 /// plausible-length all-digit barcode zero-padded to 14). `None` when
 /// neither applies. See `recipebridge::scan_code_gtin14` for the exact rule.

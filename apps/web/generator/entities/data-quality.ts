@@ -1,5 +1,4 @@
-import { z } from "zod";
-
+import { dataQuality } from "../../../../packages/schemas/src/data-quality-shape.ts";
 import {
   EntityDeclarationError,
   type CompiledEntity,
@@ -82,10 +81,7 @@ const qualityField = (entityKey: string): EntityField => ({
     columnLabel: null,
     preview: false,
   },
-  // The real read schema is `dataQuality` from `@cubby/schemas/data-quality`,
-  // spliced in by the field-schema renderer: the compiler cannot import it
-  // without importing the check registry it is about to generate.
-  validation: { read: z.unknown(), create: null, update: null },
+  validation: { read: dataQuality, create: null, update: null },
 });
 
 /**

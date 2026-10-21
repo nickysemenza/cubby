@@ -1,15 +1,10 @@
+import ingredientDefinition from "./entity-definitions/02-ingredient.entity";
 import { z } from "zod";
 import { productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { generatedIngredientFieldSchemas } from "./generated/entity-field-schemas.ingredient.gen";
-import {
-  ingredientShortcode,
-  productShortcode,
-  recipeShortcode,
-} from "./identifiers";
+import { ingredientShortcode, recipeShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
-  productNutritionDisplay,
   productWithMappingsAndFoodMcpEntityOut,
   productWithMappingsAndFoodOut,
   productWithMappingsMcpEntityOut,
@@ -17,14 +12,12 @@ import {
 } from "./product";
 import { baseKind } from "./problems";
 import {
-  recipeRefOut,
   recipeTopLevel,
   recipeRefMcpEntityOut,
   recipeUsageRefMcpEntityOut,
   recipeUsageOut,
 } from "./recipe";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { displayImagesField } from "./display-images";
 import { ingredientBaseFilterFields } from "./generated/ingredient.gen";
 
 export {
@@ -36,8 +29,8 @@ export {
 } from "./generated/ingredient.gen";
 
 export const ingredientBaseFields = {
-  name: generatedIngredientFieldSchemas.read.name,
-  aliases: generatedIngredientFieldSchemas.read.aliases,
+  name: ingredientDefinition.readSchemas.output.shape.name,
+  aliases: ingredientDefinition.readSchemas.output.shape.aliases,
 };
 
 export const ingredientBase = z.object(ingredientBaseFields);
@@ -78,11 +71,10 @@ export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
 export type IngredientSortField = GeneratedEntitySortField<"ingredient">;
 
-export const ingredientOutFields = {
-  ...generatedIngredientFieldSchemas.read,
-};
+export const ingredientOutFields =
+  ingredientDefinition.readSchemas.output.shape;
 
-export const ingredientOut = z.object(ingredientOutFields);
+export const ingredientOut = ingredientDefinition.readSchemas.output;
 export type IngredientOut = z.infer<typeof ingredientOut>;
 
 /**
@@ -153,24 +145,11 @@ export type IngredientWithRecipesAndProductOut = z.infer<
  * nutrition and a price (nutrition and cost-per-nutrient must share a basis),
  * a package label before USDA. `display` is that product's `nutritionDisplay`.
  */
-export const ingredientNutritionProductOut = z.object({
-  productId: productShortcode,
-  name: z.string(),
-  manufacturer: z.string(),
-  display: productNutritionDisplay,
-});
-export type IngredientNutritionProductOut = z.infer<
-  typeof ingredientNutritionProductOut
->;
-
-export const ingredientWithFoodOut = z.object({
-  ...ingredientOutFields,
-  recipe: recipeTopLevel.nullable(),
-  recipeUsages: z.array(recipeUsageOut),
-  appearsInRecipes: z.array(recipeTopLevel),
-  product: z.array(productWithMappingsAndFoodOut),
-  nutritionProduct: ingredientNutritionProductOut.nullable(),
-});
+export {
+  ingredientNutritionProductOut,
+  type IngredientNutritionProductOut,
+} from "./ingredient-read-fields";
+export const ingredientWithFoodOut = ingredientDefinition.readSchemas.detail;
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
 /** Generic MCP entity detail with storage-only child identifiers removed. */
@@ -214,13 +193,7 @@ export type IngredientWithFoodLeanOut = z.infer<
 
 // The ingredient list row: lean ingredient + DB-only products, plus {id,name}
 // refs of recipes it appears in. USDA summaries hydrate separately.
-export const ingredientListItemOut = z.object({
-  ...ingredientOutFields,
-  displayImages: displayImagesField,
-  product: z.array(productWithMappingsOut),
-  appearsInRecipes: z.array(recipeRefOut),
-  ownRecipeCount: z.number().int(),
-});
+export const ingredientListItemOut = ingredientDefinition.readSchemas.list;
 export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
 
 /** Generic MCP entity list row with storage-only product child ids removed. */

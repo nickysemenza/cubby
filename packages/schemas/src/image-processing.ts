@@ -485,3 +485,46 @@ export const releaseCompanionImageProcessingInput = z.object({
 export const releaseCompanionImageProcessingOutput = z.object({
   released: z.boolean(),
 });
+
+import { runShortcode } from "./identifier-fields";
+import { imageAssociationStorage } from "./entity-definitions/image-associations";
+import { runTargetState } from "./activity-fields";
+import { imageAnalysisSummarySchema } from "./image-identification";
+export const imageProcessingIssue = z.enum(["failed", "review_needed"]);
+export const imageAssociationEntity = imageAssociationStorage.keyof();
+export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
+export const imageAssociationSchema = z.object({
+  entityKind: imageAssociationEntity,
+  entityId: z.string().min(1),
+  entityName: z.string().min(1),
+  role: imageAssociationRole,
+});
+export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
+
+export const importTargetSummarySchema = z.object({
+  runId: runShortcode,
+  state: runTargetState,
+  position: z.number().int().nullable(),
+});
+export type ImportTargetSummary = z.infer<typeof importTargetSummarySchema>;
+
+export function imageReadSchemas<
+  S extends z.ZodRawShape & { dataQuality: z.ZodType },
+>(base: z.ZodObject<S>) {
+  const field = <K extends keyof S>(key: K): S[K] => base.shape[key];
+  const { dataQuality: _quality, ...outputFields } = base.shape;
+  const output = z.object(outputFields);
+  const related = base.extend({
+    // Optional like `processingIssue`/`importTarget`/`analysisSummary` below:
+    // `imageWithRelationsToAPI` builds the base shape and every real producer
+    // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
+    // batch-loaded score.
+    dataQuality: field("dataQuality").optional(),
+    associations: z.array(imageAssociationSchema),
+    processingIssue: imageProcessingIssue.nullable().optional(),
+    importTarget: importTargetSummarySchema.nullable().optional(),
+    analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
+  });
+
+  return { output, list: related, detail: related };
+}

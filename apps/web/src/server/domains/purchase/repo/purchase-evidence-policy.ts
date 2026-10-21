@@ -359,7 +359,7 @@ const financialTransactionIsReimbursementSql = (alias: string): SQL => sql`(
     AND ep_reimbursement."deletedAt" IS NULL
 )`;
 
-const linkedPurchaseItemizationExpectationSql = (
+export const linkedPurchaseItemizationExpectationSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL =>
@@ -397,6 +397,20 @@ export const financialTransactionItemizationExpectationSql = (
   WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
   ELSE COALESCE(${column(alias, "itemizationExpectation")},${financialTransactionPolicyExpectationSql(alias, purchaseOverride)}) END`;
 
+/** Aggregate policy names a source only for exactly one live linked Purchase.
+ * This counts the full set, independently of any contributor disclosure limit. */
+export const linkedPurchaseItemizationSourceSql = (
+  alias: string,
+  purchaseOverride?: SQL,
+): SQL =>
+  purchaseOverride !== undefined
+    ? sql`(SELECT jsonb_build_object('entityKind','purchase','entityId',ep_source_purchase.shortcode,'name',ep_source_purchase."displayLabel") FROM "Purchase" ep_source_purchase WHERE ep_source_purchase.id = ${purchaseOverride} AND ep_source_purchase."deletedAt" IS NULL)`
+    : sql`(SELECT CASE WHEN count(*) = 1 THEN
+    jsonb_build_object('entityKind','purchase','entityId',min(ep_source_purchase.shortcode),'name',min(ep_source_purchase."displayLabel")) ELSE NULL END
+    FROM "FinancialTransactionAllocation" ep_source_allocation
+    JOIN "Purchase" ep_source_purchase ON ep_source_purchase.id = ep_source_allocation."purchaseId" AND ep_source_purchase."deletedAt" IS NULL
+    WHERE ep_source_allocation."transactionId" = ${column(alias, "id")} AND ep_source_allocation."deletedAt" IS NULL)`;
+
 export const financialTransactionEvidenceFieldResolutionsSql = (
   alias: string,
   purchaseOverride?: SQL,
@@ -406,16 +420,7 @@ export const financialTransactionEvidenceFieldResolutionsSql = (
     alias,
     purchaseOverride,
   );
-  // Aggregate policy has a single source link only when exactly one live
-  // Purchase participates; choosing one of several would misstate provenance.
-  const purchaseSource =
-    purchaseOverride !== undefined
-      ? sql`(SELECT jsonb_build_object('entityKind','purchase','entityId',ep_source_purchase.shortcode,'name',ep_source_purchase."displayLabel") FROM "Purchase" ep_source_purchase WHERE ep_source_purchase.id = ${purchaseOverride} AND ep_source_purchase."deletedAt" IS NULL)`
-      : sql`(SELECT CASE WHEN count(*) = 1 THEN
-    jsonb_build_object('entityKind','purchase','entityId',min(ep_source_purchase.shortcode),'name',min(ep_source_purchase."displayLabel")) ELSE NULL END
-    FROM "FinancialTransactionAllocation" ep_source_allocation
-    JOIN "Purchase" ep_source_purchase ON ep_source_purchase.id = ep_source_allocation."purchaseId" AND ep_source_purchase."deletedAt" IS NULL
-    WHERE ep_source_allocation."transactionId" = ${column(alias, "id")} AND ep_source_allocation."deletedAt" IS NULL)`;
+
   return evidenceFieldResolutionsSql({
     stored: column(alias, "itemizationExpectation"),
     value: financialTransactionItemizationExpectationSql(
@@ -428,7 +433,7 @@ export const financialTransactionEvidenceFieldResolutionsSql = (
       WHEN ${column(alias, "itemizationExpectation")} IS NOT NULL THEN 'transaction override'
       WHEN ${linked} IS NOT NULL THEN 'linked purchase policies'
       WHEN ${categoryEvidenceSourceSql(alias)} IS NOT NULL THEN 'spending category policy' ELSE 'unclassified policy' END`,
-    sourceEntity: sql`CASE WHEN ${reimbursed} THEN NULL WHEN ${linked} IS NOT NULL THEN ${purchaseSource} ELSE ${categoryEvidenceSourceSql(alias)} END`,
+    sourceEntity: sql`CASE WHEN ${reimbursed} THEN NULL WHEN ${linked} IS NOT NULL THEN ${linkedPurchaseItemizationSourceSql(alias, purchaseOverride)} ELSE ${categoryEvidenceSourceSql(alias)} END`,
   });
 };
 

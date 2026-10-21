@@ -44,19 +44,28 @@ export interface RootMutationSuccessRuntime {
     queryClient: QueryClient;
     result: Result;
     invalidations: InvalidationTagSet;
-  }): void;
+    invalidationCompletion?: { removeInactive?: boolean };
+  }): void | Promise<void>;
 }
 
 const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
   registeredInvalidations: (operation, variables) =>
     operationInvalidationTags(operation, variables) ??
     EMPTY_INVALIDATION_TAG_SET,
-  afterSuccess: ({ queryClient, invalidations }) => {
-    void invalidateOperationTags(queryClient, invalidations);
+  afterSuccess: ({ queryClient, invalidations, invalidationCompletion }) => {
+    const refreshed = invalidateOperationTags(
+      queryClient,
+      invalidations,
+      invalidationCompletion,
+    );
     // A mutation's own derived work (an AI description, a recomputed
     // valuation, a refreshed embedding) lands on the queue shortly after this
     // returns — there is no batch left to watch, so re-check on a fixed
     // schedule instead.
+    if (invalidationCompletion)
+      return refreshed.then(() => {
+        scheduleDeferredInvalidation(queryClient, invalidations);
+      });
     scheduleDeferredInvalidation(queryClient, invalidations);
   },
 };
@@ -100,10 +109,11 @@ export function getContext(
                 variables,
               );
         if (invalidations.length === 0) return;
-        mutationSuccessRuntime.afterSuccess({
+        return mutationSuccessRuntime.afterSuccess({
           queryClient,
           result: data,
           invalidations,
+          invalidationCompletion: mutation.meta?.invalidationCompletion,
         });
       },
     }),

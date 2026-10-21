@@ -10,10 +10,12 @@ import {
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { USDAClient } from "~/server/clients/usda";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createIngredient } from "~/server/domains/ingredient/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -298,6 +300,47 @@ describe("product list price footer", () => {
 // the loaded page or exclude real negative Expense lines.
 describe("product list staged projections", () => {
   const ctx = withTestDb();
+
+  // A shared relations loader must not admit external work for an unused food binding.
+  it("does not prefetch USDA for selected stock fields, but joins food reads", async () => {
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Selected food admission", fdc_id: 123456 }),
+      ctx.actor,
+    );
+    let lookups = 0;
+    const usda: Pick<USDAClient, "findFoodsBatch"> = {
+      findFoodsBatch: async (inputs) => {
+        lookups += inputs.length;
+        return inputs.map(() => null);
+      },
+    };
+    const filters = { ids: [item.id] };
+    const pagination = { pageIndex: 0, pageSize: 10 };
+    const stock = await listProductsRead(
+      ctx.db,
+      filters,
+      [],
+      pagination,
+      "page",
+      usda,
+      selectedListProjection("product", ["pricing", "stockStatus"]),
+    );
+    expect(stock.data[0]).toHaveProperty("pricing");
+    expect(stock.data[0]).not.toHaveProperty("food");
+    expect(lookups).toBe(0);
+    const food = await listProductsRead(
+      ctx.db,
+      filters,
+      [],
+      pagination,
+      "page",
+      usda,
+      selectedListProjection("product", ["food"]),
+    );
+    expect(food.data[0]).toHaveProperty("food");
+    expect(lookups).toBeGreaterThan(0);
+  });
 
   it("reads the same filtered page with two base queries and no deferred or private fields", async () => {
     const ingredient = await createIngredient(

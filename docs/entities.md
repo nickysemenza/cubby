@@ -16,6 +16,13 @@ metadata and applies defaults before typed compilation. Cross-entity
 references, capability compatibility, field rosters, and physical storage remain
 semantic compiler checks. Field-validation Zod instances pass through unchanged.
 
+Declaration loading and artifact generation use the same effective compilation
+pass. It captures explicit overrides before deriving image sources and inverse
+relations, derives detail sections before validating data-quality placements,
+then validates the complete graph against entity and module child storage.
+Image routing names actual model fields; disabled create routes do not count as
+active alternatives. Counterfactual override comparisons use this same pass.
+
 ## Declared board lists
 
 A `kind: "board"` list view configures grouping choices, card fields, intrinsic filters,
@@ -202,6 +209,9 @@ vocabulary such as `activity-fields.ts` owns primitive enums and labels so runti
 and native generation share exhaustive labels without a bootstrap cycle.
 Cross-client input limits live in bootstrap-safe `shared/client-constants.ts`;
 native constant rendering must not import an identifier-dependent input schema.
+The generator emits the AST-derived shortcode registry before importing read-schema
+compilers and renderers. Declaration source paths and errors live independently
+of compiler initialization so fresh-checkout generation needs no prior artifacts.
 Declaration helpers such as pagination import shared constants from their leaf
 owners, because the shared barrel also loads generated shortcode schemas.
 Existing specialist list columns declare `route.listColumns: { module, export }`;
@@ -777,7 +787,10 @@ update route or multi-select delete UI.
 table, bound in `apps/web/src/server/db/helpers/crud.ts`
 `imageJoinBindings`, whose keys are checked against `GalleryEntity`),
 `"cover"` (a single `coverImageId` column, cookbook), or `"logo"` (a single
-direct logo FK, vendor). The manifest keeps the storage boolean `hasImages`
+direct logo FK, vendor). The source-only `entity-definitions/image-associations.ts`
+facet owns association targets and their storage modes; entity declarations and
+Image validators consume it directly, without generated policy imports.
+The manifest keeps the storage boolean `hasImages`
 (`gallery`/`cover`) alongside `imageStorage`. Every public entity list and
 detail read carries server-resolved `displayImages: [{ id, url }]`; details
 also carry directly owned `attachments` with their role and position.
@@ -818,13 +831,24 @@ must not survive as label conditions in SQL.
 The model owns scalar validation and physical column factories as well as
 presentation. `model.storage` declares stored columns; `create`, `update`,
 `output` and `audit` select fields for their respective consumers.
-The generator emits field schemas and storage factories; canonical schemas
-compose those generated fields with explicit relationship and domain validators.
-Each `entity-field-schemas.<entity>.gen.ts` map is `fieldSchemasOf(definition)`:
-the create/update/read schemas are read off the declaration by roster key at
-load time (never by field index, so a mid-roster insert cannot shift another
-field's schema) and are the declaration's own Zod instances, which is what the
-field-map-drift test checks.
+`defineEntity` constructs the raw `readSchemas.output`, `list`, and `detail`
+objects once. Simple declarations share one base object; domain composers passed
+as its second argument extend or narrow that base in declaration-safe schema
+owners. Product keeps its richer food/detail composition, Location keeps its
+recursive detail shape, and Recipe keeps its lean list. Canonical public exports
+and generated wrappers reuse those instances; relationship and domain schema
+literals have one owner. `model.output` selects the base fields, not the complete
+list/detail roster. Generated field maps still select create/update/read
+validators by key, retaining their original Zod instances.
+
+The base constructor owns the synthesized `dataQuality` field. Its composer
+facts include the declaration's own check-ID enum, built by the same
+`ownDataCheckSchema` helper used by the global generated check catalog. A raw
+composer never imports generated field maps or the generated quality registry.
+Public list/detail consumers and the compiler apply the existing media
+decorators after declarations initialize; those decorators do not belong in
+`defineEntity`, whose Image dependency would cycle.
+
 Generic MCP inputs reuse the canonical create/update contracts. MCP output
 contracts name their audience-specific projections explicitly, which can extend
 canonical outputs; specialized tool digests retain their own projections.
@@ -837,7 +861,6 @@ model: {
     key: "name",
     kind: "text",
     control: { kind: "text" },
-    display: { list: true, detail: true },
     validation: {
       read: z.string(),
       create: z.string().trim().min(1),
@@ -853,8 +876,15 @@ model: {
 Field defaults are non-nullable, a label derived from the camel-case key, and a
 read key equal to that key. Use `labelOverride` for a different label and
 `readKeyOverride: null` for fields without a scalar read
-projection. Missing controls and display flags expose no UI. A reference
-defaults to one entity. A label defaults to the humanized key (a reference
+projection. Missing controls expose no editor. Omitted display flags derive
+from each effective surface schema: the value or reference identity must exist
+and have a supported rendering strategy. A read key or reference declaration
+alone does not establish availability. Explicit `false` omits an eligible field;
+explicit `true` cannot admit an unavailable field. Default-equal flags, labels,
+read keys, column IDs, and list orders fail shared compilation. Fields consumed
+as another field's label or item list default to hidden on both surfaces, so
+helper projections do not become duplicate facts. Other deliberate omissions
+remain explicit. A reference defaults to one entity. A label defaults to the humanized key (a reference
 drops its `Id`; a `<field>Presence` filter field reads "<Field> present").
 Explicit labels, nullability, read keys, and renderers override these
 defaults. Declaration inputs use `display.columnIdOverride` and
@@ -867,8 +897,9 @@ label** for composed presentation text. A reference normally projects
 `<stem>Name` or a nested record's `name`. A custom display label must declare
 `display.labelPath`; both web and native reference renderers read that path
 before the conventional name and preserve the target's identity. Never put an
-identifier in a label projection. `defineEntity` checks label and detail-label
-paths against declared readable Zod fields at TypeScript compile time, including
+identifier in a label projection. `defineEntity` checks simple declarations' label and detail-label paths at
+TypeScript compile time. Shared compilation validates every displayed path
+against its actual decorated list/detail schema, including
 nested properties and array projections. Compile-only schema contracts use
 `*.typecheck.ts` entry points in Knip and run through the schema TypeScript
 check without being imported by the application. The generator also rejects custom
@@ -1149,12 +1180,10 @@ uses the title field's declared width and otherwise keeps the canonical
 `w-64`; contextual `nameClassName` remains the low-level escape hatch. There is
 no second standard-column roster in the browser registry.
 
-`display.detailOrder` optionally orders detail facts independently of model and
-list order; it must be a nonnegative integer. Unspecified facts retain model
-order after explicitly ordered facts. `display.listOrder` does the same for
-generated list columns (model order also drives form field order, so it cannot
-be re-sequenced), and `display.columnId` keeps a stable column id when the
-field key differs — ids are saved layouts, filter bindings, sort ids and
+Compiled `display.detailOrder` places the title first, then follows model order.
+`display.listOrderOverride` orders list columns independently (model order also
+drives form fields); it must be a nonnegative integer differing from the default.
+`display.columnIdOverride` keeps a stable column ID when the field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
 Task and Project assignees use the identifier field’s member-scoped LedgerParty
@@ -1210,15 +1239,22 @@ displays the inherited value beside its `FieldResolutionBadge`, while the
 field itself keeps reading the stored value for edits.
 
 Every list column falls in one of three buckets. A generic column is a
-declared `list: true` scalar rendered by `createEntityDisplayColumns` with no
+schema-eligible scalar with `display.list` enabled, rendered by `createEntityDisplayColumns` with no
 code. A declared column with a named renderer is rendered by the platform's
 manifest registry (a badge, a link, or a relation label) and retains the
 declared label and sort. A legacy override remains only as a migration seam for
 specialist columns not yet manifest-owned. An explicit
 `add()` outside the declaration is reserved for client-hydrated data, relation
 projections, a second projection that hosts a filter control, and the
-synthetic identity column. A `list: true` field with `readKeyOverride: null` needs an
-override; column compilation fails otherwise. `display.listHidden` owns a
+synthetic identity column. A field without a scalar read key needs a valid surface read path, a real nested
+reference identity, or a classified renderer with a proven input projection.
+The compiler traverses dotted keys, `[n]`, and `[]` through optional, nullable,
+lazy, and compatible union schemas; opaque transforms do not invent properties.
+It validates list labels on lists and detail labels/items on detail. Named
+renderers are classified by the existing `native-coverage.ts` owner during
+shared compilation. Whole-row renderers declare their minimum consumed inputs
+beside that disposition. `unsupported` remains a disclosed native gap; compiler
+schema checks do not prove executable web or native registration. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
 field model. `display.valueOptions` is the label/tone roster for an
@@ -1233,7 +1269,7 @@ keep an `expandRef`. `display.preview` marks the facts of the hover preview card
 (compiled to `detail.preview`, in model order); a computed figure the card
 needs is a read-only projection field on the server output, never a web-side
 map. An entity with no preview field falls back to its hero stats and first
-detail section. Detail overrides may provide a dynamic
+detail section. List-only figures needed by compact cards declare `display.preview` explicitly; removing a detail hero stat must not silently remove its compact read. Detail overrides may provide a dynamic
 label when the value changes its meaning, such as ISBN versus UPC. Static labels
 remain declared. `EntityBasicInfo.afterFields` anchors computed facts after a
 declared detail field without inventing persisted fields or API contracts.
@@ -1274,7 +1310,8 @@ predicate. Clients list such choices disabled with the reason; the kernel
 rejects them as `LIST_GROUP_BY_FIELD_UNSUPPORTED` with the same reason over
 HTTP and MCP. A related-record section's key is the record's public id and its
 label the record's title, ordered by label; an enum section follows declared
-option order. The no-value section is always last. `listScaffold.list` puts
+option order. The no-value section is always last. `listScaffold.read` and
+`listScaffold.raw` put
 the group order ahead of the sort, and its summary query (key, label, count
 over the whole filtered set, `meta.groups`) shares that order, so loaded rows
 are a prefix of the sections and clients assign them by position. A list spec
@@ -2323,6 +2360,21 @@ types, SQL defaults, update callbacks, indexes, checks, foreign-key actions,
 and Drizzle relations. Child storage does not acquire an entity identity,
 shortcode, client manifest, or automatic indexes. SQL constraint expressions
 use `{columnKey}` placeholders validated against that child's columns.
+
+Child read consumers explicitly opt into the shared list workbench with their
+existing scoped query, stable read handle, navigation and named workflow
+commands. Physical storage does not opt them in. Suggestions uses immutable
+Assessment handles, so republishing evidence replaces review identity;
+StatementRow exposes an opaque read UUID while source/externalId remains its
+mutation selector. Neither acquires a UUID route or generic CRUD. Run findings
+and photo reviews keep their parent-scoped commands and specialized editors.
+Photo review's selected-Product evidence read supplies canonical notes, tags,
+category and structured external identifiers alongside purchase and image
+evidence. Comparison panels share that read instead of loading Product detail
+independently; category summaries are bounded to the selected Products.
+RunApproval remains historical storage with Run invalidation; it has no active
+producer, reader or answer UI.
+
 A column's `generated` SQL uses the same placeholders and emits a stored
 PostgreSQL generated column; it cannot also declare a default or update callback.
 Retained mail stores text presence this way, preserving the nullable and
@@ -2918,12 +2970,63 @@ table each (ADR 0007):
   remain live relationships in Connected records, including purchase documents
   and accepted/reviewed Emails; they never certify a researched field.
 
+### Collection changes
+
 A field declared with `collection: { key }` accepts patch items on
 `entity.update` as well as a full replacement: `{op: "add" | "replace" |
 "remove", key, value?, expect?}`. All preconditions are checked before any
 change. Text arrays (Product `aliases`, `tags`) patch in the kernel; Product
 `externalIds` patches through the Product repository, which keeps primary and
-secondary slots, GTIN normalization and global identifier ownership.
+secondary slots, GTIN normalization and global identifier ownership. Add
+preserves every identifier and the current primary; an empty slot selects its
+first value. Explicit `isPrimary: true` demotes the previous primary without
+removing it. Make primary replaces the targeted row's primary attribute;
+replacing an identity value uses a targeted remove plus add in one atomic patch,
+with the old identity in the remove key. A full array remains a full replacement
+for explicit API callers. Ordinary web/native update editors submit keyed patches.
+Their single local collection draft keeps an immutable saved baseline and explicit
+Add, Replace, Remove and Make primary intent; normalization removes this local
+wrapper before input validation and submission. Mounted optional web controls may register
+undefined leaves; the local value parser omits those unset leaves while preserving
+the strict saved baseline. Register and write the row-intent array as one form field: a background refresh preserves the whole dirty collection, including null removal intent, rather than merging nested saved identities. Untouched collections are omitted.
+An invalid dirty native draft keeps Save reachable so the existing error handler
+shows its diagnostic above preserved input; a valid empty patch remains unsavable.
+Create materializes the initial full collection. Record collections declare
+`primary: { key: "isPrimary", scope: ["source", "kind"] }` when role controls apply.
+Attribute replacements carry the stored URL and primary role as expectations.
+Baseline identity keys preserve literal nonbarcode bytes exactly; only declared
+barcode kinds use Rust identity normalization, while source follows its slug policy.
+
+Canonical
+GTIN digits do not establish the observed UPC/EAN encoding: barcode displays use
+GTIN and preserve canonical digits unless encoding evidence is available. Validated
+book identities may display ISBN-13. Primary and secondary barcode displays share
+shared kind/source/role metadata across web and native; explicit stored URLs remain
+links. Committed identifier audit effects retain every changed value and primary
+role without truncation.
+Audit timeline details render as wrapped literal text; only explicit event links
+provide record navigation.
+Historical read effects compare URL storage policy directly, without input
+normalization or identity repair. Missing committed sides
+produce diagnostics rather than an invented empty baseline. Provider lookup links
+belong to the applicable lookup workflow.
+Product create/update accepts one write-only `barcode` shortcut for barcode or
+ISBN input; `primaryGtin` remains a derived read of `externalIds`. Omission
+leaves identity alone; null retires only the current primary barcode and the
+oldest remaining barcode is promoted. Setting the shortcut selects the primary
+without removing other identifiers. Collection replacement stays explicit.
+The shortcut builds a collection add/promotion or targeted remove; it shares
+the collection writer's collision checks and primary repair.
+Find-or-create recovers both database and domain identity conflicts by rereading
+the exact requested GTIN after rollback; explicit create/update still refuses
+collisions. Provider lookups compact Unicode whitespace and hyphens, matching
+the writer while retaining the supplied
+barcode width, and translate validated book identity to ISBN-13. The native
+specialized barcode control retains ordinary text entry.
+Books inference comes from validated ISBN identity in the collection, with
+Food evidence taking precedence. Create exposes the barcode shortcut in every
+category; ordinary update exposes the identifier collection without a second
+barcode draft.
 
 ## Classification field policies
 

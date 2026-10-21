@@ -1,5 +1,5 @@
+import mealDefinition from "./entity-definitions/06-meal.entity";
 import { z } from "zod";
-import { listLabel } from "./entity-definitions/label-field";
 import { mealBaseFilterFields } from "./generated/meal.gen";
 
 export {
@@ -21,7 +21,6 @@ import {
   subRecipeBlockReason,
 } from "./availability";
 import { amount } from "./codec";
-import { displayImagesField } from "./display-images";
 import { money } from "./money";
 import {
   ledgerPartyShortcode,
@@ -39,7 +38,6 @@ import {
 } from "./nutrition";
 import { createPaginatedResponseSchema } from "./pagination";
 import { mealRecipeOut, mealTotals } from "./meal-fields";
-import { generatedMealFieldSchemas } from "./generated/entity-field-schemas.meal.gen";
 export {
   mealRecipeInput,
   type MealRecipeInput,
@@ -326,17 +324,13 @@ export type SaveMealRecipePreparationOut = z.infer<
   typeof saveMealRecipePreparationOut
 >;
 
-const mealOutFields = generatedMealFieldSchemas.read;
+const mealOutFields = mealDefinition.readSchemas.output.shape;
 
-export const mealOut = z.object(mealOutFields);
+export const mealOut = mealDefinition.readSchemas.output;
 export type MealOut = z.infer<typeof mealOut>;
 
 /** List-row projection: `mealOut` plus the server-resolved gallery cover(s). */
-export const mealListItemOut = mealOut.extend({
-  displayImages: displayImagesField,
-  // Server-composed text for the Cost column.
-  costTotalLabel: listLabel,
-});
+export const mealListItemOut = mealDefinition.readSchemas.list;
 export type MealListItemOut = z.infer<typeof mealListItemOut>;
 
 /** Generic MCP entity result; MealRecipe rows have no public shortcode. */

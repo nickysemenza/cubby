@@ -1,9 +1,4 @@
 import { createPostgresPool } from "./postgres-pool";
-import {
-  readTesterArmySummary,
-  testerArmyRawOutput,
-} from "./tester-army/report";
-import { testerArmyReplayCommand } from "./tester-army/model";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
@@ -22,7 +17,6 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { request } from "@playwright/test";
 import { type Pool } from "pg";
@@ -65,8 +59,6 @@ Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --headless                 Swift CubbyKit CLI against the Worker, no simulator
     --photo [--purchase]     synthetic photo-inventory (+ wardrobe purchase) run
     --statement-csv          Swift CSV statement preview/import
-    --watch                  stay up; press Enter to rerun
-  --watch                    simulator app against real API data; Enter replays
   --extended-journey         full native edit, view-switch and filter journey
   --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
@@ -78,15 +70,12 @@ Modes (one per run; no mode = search/detail smoke in the iOS simulator):
                              seeded synthetic household QA pass; --hold keeps it
                              up; --journey replays only the named scripts
   --qa-photo-completion     stopped photo Run final approval updates hero and reports
-  --tester-army [--journey a,b] [--replay] [--wrong]
-                             live-model agent journeys (billed; see docs/tester-army.md)
 
 Environment:
   CUBBY_SIM_DEVICE           simulator name or UDID to prefer
   CUBBY_E2E_AGENT_DEVICE     JSON {command,targetArgs} returned by T3 device_open
   CUBBY_SIM_DB_EXTERNAL=1    skip starting PostgreSQL (already running)
   CUBBY_E2E_PREBUILT_WEB=1   trust the existing web build
-  TESTER_ARMY_*              Tester Army model/journey settings
   R2_*, BETTER_AUTH_SECRET and DATABASE_URL are set to local simulation values.
 
 Artifacts: artifacts/<lane>/<cubby_sim_hex>/ (run-manifest.json, logs, video).
@@ -94,12 +83,11 @@ Workflow guide: apps/apple/ITERATION.md; acceptance map: docs/agents/core-journe
   process.exit(0);
 }
 const journeyFlag = rawFlags.indexOf("--journey");
-/** `--journey a,b`: Tester Army journey ids, or `--qa` script names without extension. */
+/** `--journey a,b`: `--qa` script names without extension. */
 const selectedJourneys: readonly string[] = (() => {
   if (journeyFlag < 0) return [];
   const value = rawFlags[journeyFlag + 1];
   if (!value) throw new Error("--journey needs a comma-separated id list");
-  process.env.TESTER_ARMY_JOURNEYS = value;
   return value.split(",");
 })();
 const flags = rawFlags.filter(
@@ -114,17 +102,11 @@ const inputJourney = flags.includes("--input-journey");
 const photoOnly = flags.includes("--photo-only");
 if (photoOnly && !inputJourney)
   throw new Error("--photo-only requires --input-journey");
-const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
 const extendedJourney = flags.includes("--extended-journey");
 const productClarity = flags.includes("--product-clarity");
 const emojiReview = flags.includes("--emoji-review");
-const testerArmy = flags.includes("--tester-army");
-if (process.env.CUBBY_E2E_AGENT_DEVICE && (testerArmy || watch))
-  throw new Error(
-    "Shared device launcher supports finite simulator journeys; watch and AI lanes own their driver lifecycle",
-  );
 if (process.env.CUBBY_E2E_AGENT_DEVICE) {
   const driver = sharedDeviceCommand("pnpm", [
     "exec",
@@ -137,21 +119,12 @@ if (process.env.CUBBY_E2E_AGENT_DEVICE) {
     throw new Error("Shared driver targets a different device");
   process.env.CUBBY_SIM_DEVICE = udid;
 }
-const testerArmyReplay = flags.includes("--replay");
-const wrongName = flags.includes("--wrong") || flags.includes("--wrong-name");
 const qaPhotoCompletion = flags.includes("--qa-photo-completion");
 const qa = flags.includes("--qa") || qaPhotoCompletion;
 const qaHold = flags.includes("--hold");
 if (
   extendedJourney &&
-  (headless ||
-    layout ||
-    productClarity ||
-    emojiReview ||
-    testerArmy ||
-    inputJourney ||
-    watch ||
-    qa)
+  (headless || layout || productClarity || emojiReview || inputJourney || qa)
 )
   throw new Error(
     "--extended-journey is a standalone simulator mode; it may add --video",
@@ -169,33 +142,18 @@ if (
   (emojiReview &&
     flags.some((flag) => flag !== "--emoji-review" && flag !== "--video")) ||
   (inputJourney &&
-    (testerArmy ||
-      headless ||
+    (headless ||
       photo ||
       purchase ||
       statementCsv ||
-      watch ||
       layout ||
       productClarity)) ||
-  (testerArmy &&
-    (inputJourney ||
-      headless ||
-      photo ||
-      purchase ||
-      statementCsv ||
-      watch ||
-      video ||
-      layout ||
-      productClarity)) ||
-  ((testerArmyReplay || wrongName) && !testerArmy) ||
-  (watch && video) ||
   (video && headless) ||
-  (layout && (headless || photo || purchase || watch || productClarity)) ||
-  (productClarity &&
-    (headless || photo || purchase || watch || statementCsv)) ||
-  (photo && (!headless || watch)) ||
+  (layout && (headless || photo || purchase || productClarity)) ||
+  (productClarity && (headless || photo || purchase || statementCsv)) ||
+  (photo && !headless) ||
   (purchase && !photo) ||
-  (statementCsv && (!headless || photo || purchase || watch)) ||
+  (statementCsv && (!headless || photo || purchase)) ||
   flags.some(
     (argument) =>
       ![
@@ -204,25 +162,20 @@ if (
         "--input-journey",
         "--photo-only",
         "--headless",
-        "--watch",
         "--video",
         "--photo",
         "--purchase",
         "--layout",
         "--product-clarity",
         "--statement-csv",
-        "--tester-army",
-        "--replay",
-        "--wrong-name",
         "--qa",
         "--qa-photo-completion",
         "--hold",
-        "--wrong",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -230,23 +183,19 @@ const lane = qa
     ? "sim-emoji-review-e2e"
     : inputJourney
       ? "sim-input-journey-e2e"
-      : testerArmy
-        ? "sim-tester-army-e2e"
-        : productClarity
-          ? "sim-product-clarity-e2e"
-          : statementCsv
-            ? "headless-statement-csv-e2e"
-            : layout
-              ? "sim-layout-e2e"
-              : purchase
-                ? "headless-wardrobe-e2e"
-                : photo
-                  ? "headless-photo-e2e"
-                  : headless
-                    ? "headless-e2e"
-                    : watch
-                      ? "sim-dev"
-                      : "sim-e2e";
+      : productClarity
+        ? "sim-product-clarity-e2e"
+        : statementCsv
+          ? "headless-statement-csv-e2e"
+          : layout
+            ? "sim-layout-e2e"
+            : purchase
+              ? "headless-wardrobe-e2e"
+              : photo
+                ? "headless-photo-e2e"
+                : headless
+                  ? "headless-e2e"
+                  : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -274,8 +223,6 @@ mkdirSync(artifacts, { recursive: true });
 const runStartedAt = performance.now();
 const phases: Array<{ name: string; durationMs: number }> = [];
 let phase = "setup";
-/** The driver model the preflight resolved; recorded in the run bundle. */
-let testerArmyDriverModel: string | undefined;
 let nativeBuildBinary: string | undefined;
 let nativeBuildSourceVersion: string | undefined;
 /** Whether the run installed a certified bundle instead of compiling one. */
@@ -287,44 +234,11 @@ let simulatorName: string | undefined;
 let simulatorRuntime: string | undefined;
 let interrupted: NodeJS.Signals | undefined;
 let activeChild: ReturnType<typeof spawn> | undefined;
-let stopWatch: (() => void) | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     interrupted = signal;
     activeChild?.kill("SIGTERM");
-    stopWatch?.();
   });
-}
-
-function swiftSourceVersion(): string {
-  const sourceRoot = path.join(kitRoot, "Sources");
-  const files = walkFiles(sourceRoot).filter((entry) =>
-    entry.endsWith(".swift"),
-  );
-  files.push(path.join(kitRoot, "Package.swift"));
-  return files
-    .sort()
-    .map((file) => {
-      const stat = statSync(file);
-      return `${file}:${stat.mtimeMs}:${stat.size}`;
-    })
-    .join("|");
-}
-
-function appleSourceVersion(): string {
-  const appRoot = path.join(appleRoot, "App");
-  const files = walkFiles(appRoot).filter((entry) => entry.endsWith(".swift"));
-  files.push(
-    path.join(appleRoot, "project.yml"),
-    path.join(appleRoot, "packages.yml"),
-  );
-  return [
-    swiftSourceVersion(),
-    ...files.sort().map((file) => {
-      const stat = statSync(file);
-      return `${file}:${stat.mtimeMs}:${stat.size}`;
-    }),
-  ].join("|");
 }
 
 function nativeSourceFingerprint(includeApp: boolean): string {
@@ -746,139 +660,6 @@ async function recordSimulatorVideo(
   };
 }
 
-async function runWarmSimulator(options: {
-  deviceID: string;
-  common: string[];
-  session: string;
-  productId: string;
-  userId: string;
-  install: () => Promise<void>;
-  launch: () => Promise<void>;
-}): Promise<void> {
-  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
-    await import("./scenarios/simulator-product-fixture");
-  const { seedSimulatorScenario } = await import("./scenarios/simulator");
-  const { deviceID, common, session, productId, userId, install, launch } =
-    options;
-  const stateDir = path.join(artifacts, "agent-device-state");
-  const sessionArgs = [
-    ...common,
-    "--session",
-    session,
-    "--state-dir",
-    stateDir,
-  ];
-  let builtVersion = appleSourceVersion();
-  let sessionActive = false;
-  const input = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  input.on("SIGINT", () => {
-    interrupted = "SIGINT";
-    activeChild?.kill("SIGTERM");
-    input.close();
-  });
-  stopWatch = () => input.close();
-  const replay = async (
-    id: string,
-    originalName: string,
-    updatedName: string,
-  ) => {
-    const started = performance.now();
-    try {
-      if (appleSourceVersion() !== builtVersion) {
-        await run("pnpm", [
-          "exec",
-          "agent-device",
-          "close",
-          ...sessionArgs,
-        ]).catch(() => {});
-        sessionActive = false;
-        await install();
-        builtVersion = appleSourceVersion();
-        await launch();
-      }
-      console.log(`[${lane}] Product ${id}; cubby://entity/${id}`);
-      sessionActive = true;
-      await run("pnpm", [
-        "exec",
-        "agent-device",
-        "replay",
-        "apps/apple/e2e/product-edit-warm.ad",
-        ...sessionArgs,
-        "--timeout",
-        "120000",
-        "-e",
-        `PRODUCT_ID=${id}`,
-        "-e",
-        `PRODUCT_NAME=${originalName}`,
-        "-e",
-        `UPDATED_NAME=${updatedName}`,
-      ]);
-      await assertNativeEdit(id, updatedName);
-      console.log(
-        `[${lane}] Simulator replay ${(performance.now() - started).toFixed(0)}ms`,
-      );
-    } catch (error) {
-      if (interrupted) throw error;
-      await run("pnpm", [
-        "exec",
-        "agent-device",
-        "screenshot",
-        ...sessionArgs,
-        "--out",
-        path.join(artifacts, "failure.png"),
-      ]).catch(() => {});
-      await run(
-        "pnpm",
-        ["exec", "agent-device", "snapshot", "-i", ...sessionArgs],
-        repoRoot,
-        path.join(artifacts, "failure-ui-tree.txt"),
-      ).catch(() => {});
-      console.error(
-        `[${lane}] Replay failed: ${String(error)}; inspect ${artifacts}`,
-      );
-    }
-  };
-  console.log(
-    `[${lane}] Simulator ${deviceID}; agent-device session ${session}; state ${stateDir}`,
-  );
-  try {
-    await replay(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
-    let iteration = 0;
-    console.log(
-      `[${lane}] Press Enter to seed and replay; Ctrl-C drops ${simName}`,
-    );
-    for await (const _ of input) {
-      if (interrupted) break;
-      iteration += 1;
-      const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
-      const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-      const nextPool = createPostgresPool({ connectionString: databaseURL });
-      let nextID: string;
-      try {
-        nextID = await seedSimulatorScenario(nextPool, userId, originalName);
-      } finally {
-        await nextPool.end();
-      }
-      await replay(nextID, originalName, updatedName);
-      console.log(`[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`);
-    }
-  } finally {
-    stopWatch = undefined;
-    input.close();
-    if (sessionActive)
-      await run(
-        "pnpm",
-        ["exec", "agent-device", "close", ...sessionArgs],
-        repoRoot,
-        undefined,
-        true,
-      ).catch(console.error);
-  }
-}
-
 function startDatabaseWatchdog(): void {
   const watchdog = spawn(
     process.execPath,
@@ -888,11 +669,6 @@ function startDatabaseWatchdog(): void {
       simName,
       String(process.pid),
       path.join(artifacts, "watchdog.log"),
-      // The watchdog accepts a session to close only for the simulator watch
-      // lane (artifacts/sim-dev); every other run gets database-only cleanup.
-      ...(headless || !watch
-        ? []
-        : [`cubby-sim-${simName}`, path.join(artifacts, "agent-device-state")]),
     ],
     { cwd: webRoot, detached: true, stdio: "ignore" },
   );
@@ -1090,84 +866,30 @@ async function runHeadlessPhotoScenario(
 async function runHeadlessProductScenario(
   url: URL,
   productId: string,
-  userId: string,
 ): Promise<void> {
   const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
     await import("./scenarios/simulator-product-fixture");
-  let builtVersion: string | undefined;
-  const runNative = async (
-    id: string,
-    originalName: string,
-    updatedName: string,
-  ) => {
-    const started = performance.now();
-    const args = [
-      "headless-product-edit",
-      "--base-url",
-      url.origin,
-      "--product-id",
-      id,
-      "--original-name",
-      originalName,
-      "--updated-name",
-      updatedName,
-    ];
-    const sourceVersion = swiftSourceVersion();
-    const sourceFingerprint = nativeSourceFingerprint(false);
-    if (sourceVersion === builtVersion) {
-      await run(path.join(kitRoot, ".build/debug/cubby"), args);
-    } else {
-      await run("pnpm", ["apple", "cli", ...args]);
-      builtVersion = sourceVersion;
-    }
-    nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
-    nativeBuildSourceVersion = sourceFingerprint;
-    currentNativeSourceVersion = () => nativeSourceFingerprint(false);
-    nativeBuildReady = true;
-    await assertNativeEdit(id, updatedName);
-    console.log(
-      `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
-    );
-  };
-  await runNative(productId, SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME);
-  if (watch) {
-    const input = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    input.on("SIGINT", () => {
-      interrupted = "SIGINT";
-      activeChild?.kill("SIGTERM");
-      input.close();
-    });
-    stopWatch = () => input.close();
-    let iteration = 0;
-    console.log(
-      `[${lane}] Press Enter to seed a fresh product and rerun; Ctrl-C drops ${simName}`,
-    );
-    try {
-      for await (const _ of input) {
-        if (interrupted) break;
-        iteration += 1;
-        const originalName = `${SIM_PRODUCT_NAME} ${iteration}`;
-        const updatedName = `${SIM_PRODUCT_UPDATED_NAME} ${iteration}`;
-        const nextPool = createPostgresPool({ connectionString: databaseURL });
-        let nextID: string;
-        try {
-          const { seedSimulatorScenario } =
-            await import("./scenarios/simulator");
-          nextID = await seedSimulatorScenario(nextPool, userId, originalName);
-        } finally {
-          await nextPool.end();
-        }
-        await runNative(nextID, originalName, updatedName);
-        console.log(`[${lane}] Press Enter to rerun; Ctrl-C drops ${simName}`);
-      }
-    } finally {
-      stopWatch = undefined;
-      input.close();
-    }
-  }
+  const started = performance.now();
+  const args = [
+    "headless-product-edit",
+    "--base-url",
+    url.origin,
+    "--product-id",
+    productId,
+    "--original-name",
+    SIM_PRODUCT_NAME,
+    "--updated-name",
+    SIM_PRODUCT_UPDATED_NAME,
+  ];
+  nativeBuildSourceVersion = nativeSourceFingerprint(false);
+  await run("pnpm", ["apple", "cli", ...args]);
+  nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
+  currentNativeSourceVersion = () => nativeSourceFingerprint(false);
+  nativeBuildReady = true;
+  await assertNativeEdit(productId, SIM_PRODUCT_UPDATED_NAME);
+  console.log(
+    `[${lane}] Native scenario ${(performance.now() - started).toFixed(0)}ms`,
+  );
 }
 
 async function runHeadlessStatementCsvScenario(url: URL, userId: string) {
@@ -1303,27 +1025,12 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
 }
 
 function finishE2ERun(failure: Error | undefined): Error | undefined {
-  if (watch) return failure;
   try {
     const { build, runtime } = nativeBuildMetadata();
     const status = failure === undefined ? "passed" : "failed";
     const durationMs = Math.round(performance.now() - runStartedAt);
     const resultsPath = path.join(artifacts, "run-results.json");
     scenarioEvidence.push(...retainRunDiagnostics(failure));
-    if (testerArmy) {
-      const summary = path.join(
-        testerArmyRawOutput(artifacts),
-        "agent-summary.json",
-      );
-      if (existsSync(summary)) {
-        const evidence = path.join(artifacts, "agent-summary.json");
-        writeFileSync(
-          evidence,
-          `${JSON.stringify(readTesterArmySummary(path.dirname(summary)), null, 2)}\n`,
-        );
-        scenarioEvidence.push(evidence);
-      }
-    }
     writeFileSync(
       resultsPath,
       `${JSON.stringify({ schemaVersion: 1, status, scenario: lane, durationMs }, null, 2)}\n`,
@@ -1334,10 +1041,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       evidence: [resultsPath, ...scenarioEvidence],
       kind: "native",
       status,
-      command:
-        testerArmy && testerArmyDriverModel
-          ? testerArmyReplayCommand(["pnpm", "test:e2e:sim", "--", ...rawFlags])
-          : ["pnpm", "test:e2e:sim", "--", ...rawFlags],
+      command: ["pnpm", "test:e2e:sim", "--", ...rawFlags],
       cases: [{ name: lane, status, durationMs }],
       profile: "worker",
       scenario: lane,
@@ -1353,14 +1057,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       fixtureVersion: 1,
       phase,
       phases,
-      runtime: testerArmy
-        ? {
-            ...runtime,
-            testerArmy: "0.19.0",
-            ...(testerArmyDriverModel && { model: testerArmyDriverModel }),
-            effort: "medium",
-          }
-        : runtime,
+      runtime,
       build,
     });
     console.log(`[${lane}] E2E artifact: ${manifest}`);
@@ -1379,7 +1076,6 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
 
 let qaIds: Record<string, string> = {};
 let qaUserId = "";
-let journeyIdsFile = "";
 
 async function seedNativeScenario(
   userId: string,
@@ -1412,16 +1108,6 @@ async function seedNativeScenario(
       qaUserId = userId;
       return { productId: qaIds.PRODUCT_ID ?? "" };
     }
-    if (testerArmy) {
-      const { seedJourneyWorld } =
-        await import("./scenarios/tester-army-journeys");
-      journeyIdsFile = path.join(artifacts, "journey-ids.json");
-      writeFileSync(
-        journeyIdsFile,
-        JSON.stringify(await seedJourneyWorld(seedPool, userId)),
-      );
-      return { productId: "" };
-    }
     if (productClarity)
       return await seedSimulatorProductClarity(seedPool, userId);
     if (emojiReview)
@@ -1446,6 +1132,23 @@ async function assertQaOutcomes(): Promise<void> {
   const rows = async <T extends object>(text: string, values: unknown[] = []) =>
     (await checkPool.query<T>(text, values)).rows;
   try {
+    const identifiers = await rows<{ externalId: string; isPrimary: boolean }>(
+      `SELECT e."externalId", e."isPrimary" FROM "EntityExternalId" e
+       JOIN "Product" p ON p.id = e."entityId"
+       WHERE p.shortcode = $1 AND e.source = 'gtin' AND e.kind = 'gtin_14'
+       ORDER BY e."externalId"`,
+      [qaIds.PRODUCT_ID],
+    );
+    if (
+      JSON.stringify(identifiers) !==
+      JSON.stringify([
+        { externalId: "00012345678905", isPrimary: true },
+        { externalId: "00088888888880", isPrimary: false },
+      ])
+    )
+      throw new Error(
+        `Native identifier promotion must preserve both barcodes: ${JSON.stringify(identifiers)}`,
+      );
     const stock = await rows<{ code: string; amount: number }>(
       `SELECT e.shortcode AS code, e."amountValue" AS amount
        FROM "InventoryEntry" e WHERE e.shortcode = ANY($1)`,
@@ -1705,43 +1408,6 @@ async function runQaJourneys(
   else await assertQaOutcomes();
 }
 
-async function runTesterArmyNativeJourney(deviceID: string): Promise<void> {
-  const output = testerArmyRawOutput(artifacts);
-  await run(
-    "pnpm",
-    [
-      "--dir",
-      webRoot,
-      "exec",
-      "e2e",
-      "run",
-      "--output",
-      output,
-      ...(process.env.TESTER_ARMY_DEBUG === "1" ? ["--debug"] : []),
-      ...(process.env.TESTER_ARMY_SHARD
-        ? ["--shard", process.env.TESTER_ARMY_SHARD]
-        : []),
-    ],
-    repoRoot,
-    undefined,
-    false,
-    {
-      ...process.env,
-      E2E_TELEMETRY_DISABLED: "1",
-      TESTER_ARMY_TARGET: "ios",
-      TESTER_ARMY_ORIGIN: process.env.TESTER_ARMY_ORIGIN,
-      TESTER_ARMY_IDS_FILE: journeyIdsFile,
-      TESTER_ARMY_DEVICE_ID: deviceID,
-      TESTER_ARMY_SESSION: `tester-army-${simName}`,
-      ...(testerArmyReplay && { TESTER_ARMY_REPLAY: "1" }),
-      ...(wrongName && { TESTER_ARMY_WRONG: "1" }),
-    },
-  );
-  const summary = readTesterArmySummary(output);
-  if (summary.status !== "passed")
-    throw new Error("Tester Army iOS journey did not pass");
-}
-
 async function runNativeJourney(
   deviceID: string,
   common: string[],
@@ -1749,7 +1415,6 @@ async function runNativeJourney(
   layoutRunID?: string,
   purchaseId?: string,
 ): Promise<void> {
-  if (testerArmy) return runTesterArmyNativeJourney(deviceID);
   // CLI replay owns a separate daemon. Release the prepare daemon so it
   // cannot retain the runner lease; this hosted daemon belongs to this job.
   if (process.env.GITHUB_ACTIONS === "true")
@@ -1884,14 +1549,6 @@ async function main(): Promise<void> {
     return errors;
   };
   try {
-    if (testerArmy) {
-      phase = "model-preflight";
-      const { testerArmyDriverIdentity, preflightTesterArmyModel } =
-        await import("./tester-army/model");
-      testerArmyDriverModel = testerArmyDriverIdentity();
-      process.env.E2E_TELEMETRY_DISABLED = "1";
-      await preflightTesterArmyModel();
-    }
     phase = "web-build";
     const buildStarted = performance.now();
     const buildAction = await ensureWebBuild(
@@ -1966,7 +1623,6 @@ async function main(): Promise<void> {
     const objectStorageUrl = runtime.objectStorageUrl;
     if (!objectStorageUrl)
       throw new Error("Native runtime is missing object storage");
-    if (testerArmy) process.env.TESTER_ARMY_ORIGIN = url.origin;
     const context = await request.newContext({
       baseURL: url.origin,
       extraHTTPHeaders: { Origin: url.origin },
@@ -2028,7 +1684,7 @@ async function main(): Promise<void> {
             `[${lane}] Purchase and Product convergence ${(performance.now() - convergenceStarted).toFixed(0)}ms`,
           );
         }
-      } else await runHeadlessProductScenario(url, productId, userId);
+      } else await runHeadlessProductScenario(url, productId);
     } else {
       // Every worktree drives the same simulators; build and Worker startup
       // above still run concurrently.
@@ -2256,16 +1912,6 @@ async function main(): Promise<void> {
           } finally {
             await journeyPool.end();
           }
-        } else if (watch) {
-          await runWarmSimulator({
-            deviceID: device.udid,
-            common,
-            session,
-            productId,
-            userId,
-            install,
-            launch,
-          });
         } else if (qa) {
           await runQaJourneys(common, launch);
         } else {

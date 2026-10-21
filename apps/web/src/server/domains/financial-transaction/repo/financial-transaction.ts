@@ -29,8 +29,8 @@ import type { SpendingCategorySummary } from "@cubby/schemas/spending-classifica
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
+import { z } from "zod";
 
-import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -107,8 +107,7 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listGroupFields,
-  loadListGroup,
-  wantsListGroup,
+  type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import {
@@ -292,83 +291,129 @@ const selectTransactionsRead = (
     })
     .from(financialTransaction);
 };
-const hydrateTransactionsRead = async (
+// Partial bindings retain field validators; full reads retain settlement refinements.
+const transactionFields = z.object(financialTransactionOut.shape);
+const transactionRead = (
   db: Database,
-  rows: Awaited<ReturnType<typeof selectTransactionsRead>>,
-  projection: ListProjection,
-) => {
-  const ids = rows.map((row) => row.id);
-  const [qualities, refs, categorySummaries] = await Promise.all([
-    loadListGroup(projection, "quality", () =>
-      loadDataQualities(db, "financialTransaction", ids),
-    ),
-    loadListGroup(projection, "relations", () => settlementRefsFor(db, ids)),
-    loadListGroup(projection, "derived", () =>
-      loadTransactionSpendingCategorySummaries(db, ids),
-    ),
-  ]);
-  const values = rows.map((row) => {
-    const allocations = (row.allocations ?? []).map((value) => ({
-      purchaseId: parseShortcodeFor("purchase", value.purchaseId),
-      amount: Number(value.amount),
-    }));
-    return {
-      ...row,
-      fieldResolutions: row.fieldResolutions,
-      ...listGroupFields(projection, "derived", () => ({
-        spendingCategorySummary:
-          categorySummaries?.get(row.id) ?? emptySpendingCategorySummary(),
+): ListReadOptions<
+  Awaited<ReturnType<typeof selectTransactionsRead>>[number]
+> => ({
+  bindings: (bind) => {
+    const refs = bind.batch(({ rows }) =>
+      settlementRefsFor(
+        db,
+        rows.map((row) => row.id),
+      ),
+    );
+    const categories = bind.batch(({ rows }) =>
+      loadTransactionSpendingCategorySummaries(
+        db,
+        rows.map((row) => row.id),
+      ),
+    );
+    const inferences = bind.batch(async ({ rows }) => {
+      const enriched = await enrichFinancialTransactionVendorRead(
+        db,
+        rows.map((row) => ({
+          id: parseShortcodeFor("financialTransaction", row.shortcode),
+          kind: financialTransactionKind.parse(row.kind),
+          status: financialTransactionOut.shape.status.parse(row.status),
+          amount: row.amount,
+          merchant: row.merchant,
+          allocations: row.allocations ?? [],
+          ledgerTransferId: row.ledgerTransferShortcode ?? null,
+        })),
+      );
+      return new Map(
+        rows.map((row, index) => [row.id, enriched[index]?.vendorInference]),
+      );
+    });
+    return [
+      bind(transactionFields.pick({ displayName: true }), (row) => ({
+        displayName:
+          row.merchant?.trim() ||
+          row.rawDescription?.trim() ||
+          capitalize(row.kind.replaceAll("_", " ")),
       })),
-      bookingCoverage: row.coverage.booking,
-      documentCoverage: row.coverage.document,
-      itemizationCoverage: row.coverage.itemization,
-      productsCoverage: row.coverage.products,
-      spendingCategoryId: row.spendingCategoryShortcode
-        ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
-        : null,
-      id: parseShortcodeFor("financialTransaction", row.shortcode),
-      displayName:
-        row.merchant?.trim() ||
-        row.rawDescription?.trim() ||
-        capitalize(row.kind.replaceAll("_", " ")),
-      ...listGroupFields(projection, "relations", () => ({
-        accountId: parseShortcodeFor("financialAccount", row.accountShortcode!),
-        sourceRefs: refs?.get(row.id) ?? [],
-      })),
-      ...listGroupFields(projection, ["relations", "derived"], () => ({
-        allocations,
-        purchaseId:
-          allocations.length === 1 ? allocations[0]!.purchaseId : null,
-        ledgerTransferId: row.ledgerTransferShortcode
-          ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
+      bind(
+        transactionFields.pick({
+          bookingCoverage: true,
+          documentCoverage: true,
+          itemizationCoverage: true,
+          productsCoverage: true,
+        }),
+        (row) => ({
+          bookingCoverage: row.coverage.booking,
+          documentCoverage: row.coverage.document,
+          itemizationCoverage: row.coverage.itemization,
+          productsCoverage: row.coverage.products,
+        }),
+      ),
+      bind(transactionFields.pick({ spendingCategoryId: true }), (row) => ({
+        spendingCategoryId: row.spendingCategoryShortcode
+          ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
           : null,
       })),
-      ...listGroupFields(projection, "quality", () => ({
-        dataQuality: qualities!.get(row.id)!,
-      })),
-    };
-  });
-  if (wantsListGroup(projection, "derived")) {
-    const inferences = await enrichFinancialTransactionVendorRead(
-      db,
-      rows.map((row) => ({
-        id: parseShortcodeFor("financialTransaction", row.shortcode),
-        kind: financialTransactionKind.parse(row.kind),
-        status: financialTransactionOut.shape.status.parse(row.status),
-        amount: row.amount,
-        merchant: row.merchant,
-        allocations: row.allocations ?? [],
-        ledgerTransferId: row.ledgerTransferShortcode ?? null,
-      })),
-    );
-    values.forEach((value, index) =>
-      Object.assign(value, {
-        vendorInference: inferences[index]!.vendorInference,
+      bind(transactionFields.pick({ accountId: true }), (row) => {
+        if (!row.accountShortcode)
+          throw new Error("Financial transaction account was not loaded");
+        return {
+          accountId: parseShortcodeFor(
+            "financialAccount",
+            row.accountShortcode,
+          ),
+        };
       }),
-    );
-  }
-  return projectListRows("financialTransaction", values, projection);
-};
+      refs.fields(
+        transactionFields.pick({ sourceRefs: true }),
+        (row, loaded) => ({ sourceRefs: loaded.get(row.id) ?? [] }),
+      ),
+      bind(
+        transactionFields.pick({
+          allocations: true,
+          purchaseId: true,
+          ledgerTransferId: true,
+        }),
+        (row) => {
+          if (!row.allocations)
+            throw new Error(
+              "Financial transaction allocations were not loaded",
+            );
+          const allocations = row.allocations.map((value) => ({
+            purchaseId: parseShortcodeFor("purchase", value.purchaseId),
+            amount: Number(value.amount),
+          }));
+          return {
+            allocations,
+            purchaseId:
+              allocations.length === 1 ? allocations[0]!.purchaseId : null,
+            ledgerTransferId: row.ledgerTransferShortcode
+              ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
+              : null,
+          };
+        },
+      ),
+      categories.fields(
+        transactionFields.pick({ spendingCategorySummary: true }),
+        (row, loaded) => ({
+          spendingCategorySummary:
+            loaded.get(row.id) ?? emptySpendingCategorySummary(),
+        }),
+      ),
+      inferences.fields(
+        transactionFields.pick({ vendorInference: true }),
+        (row, loaded) => {
+          const vendorInference = loaded.get(row.id);
+          if (vendorInference === undefined)
+            throw new Error(
+              "Financial transaction vendor inference was not loaded",
+            );
+          return { vendorInference };
+        },
+      ),
+    ];
+  },
+});
 
 // Mirrors `parseBankDescriptor`: the same POSIX patterns, first match wins.
 const descriptorProcessorSql = sql`CASE ${sql.join(
@@ -417,7 +462,7 @@ export const listFinancialTransactionsRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) =>
-  financialTransactionScaffold.list(
+  financialTransactionScaffold.read(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -427,7 +472,7 @@ export const listFinancialTransactionsRead = async (
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows) => hydrateTransactionsRead(db, rows, projection),
+      read: transactionRead(db),
     },
   );
 

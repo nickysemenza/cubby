@@ -4,11 +4,8 @@ import { resolve } from "node:path";
 import { parseSync, type Expression, type ObjectExpression } from "oxc-parser";
 import { z } from "zod";
 import { generatedHeader } from "../artifacts.ts";
-import {
-  EntityDeclarationError,
-  SPEC_DIRECTORY,
-  type EntityArtifacts,
-} from "./declarations.ts";
+import { EntityDeclarationError, SPEC_DIRECTORY } from "./source.ts";
+import type { EntityArtifacts } from "../artifacts.ts";
 import { renderRecord } from "./render/record.ts";
 
 const property = (object: ObjectExpression, name: string) =>

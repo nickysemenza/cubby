@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 import {
   ledgerPartyShortcode,
   vendorAccountShortcode,
@@ -73,7 +72,7 @@ export default defineEntity({
             { entity: "ledgerParty", relation: "ledger-party" },
           ],
         },
-        display: { list: true, detail: true },
+        display: {},
         validation: { read: z.string(), create: null, update: null },
       },
       {
@@ -81,11 +80,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "subtitle", priority: 10 },
-        },
+        display: { mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: vendorShortcode,
           create: vendorShortcode,
@@ -97,10 +92,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-        },
+        display: {},
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -111,7 +103,7 @@ export default defineEntity({
         key: "inventoryOwnerDefaultEnabled",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -119,6 +111,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "cursor",
         kind: "json",
         validation: {
@@ -135,7 +128,7 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Latest Run start for this account" }],
         },
-        display: { list: true, detail: true, format: "timestamp" },
+        display: { format: "timestamp" },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -150,12 +143,7 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Latest completed Run end for this account" }],
         },
-        display: {
-          columnLabel: "Last success",
-          list: true,
-          detail: true,
-          format: "timestamp",
-        },
+        display: { columnLabel: "Last success", format: "timestamp" },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -165,7 +153,7 @@ export default defineEntity({
       {
         key: "purchaseCount",
         kind: "number",
-        display: { list: true, detail: true, width: "sm" },
+        display: { width: "sm" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "purchase", relation: "purchases" }],
@@ -183,16 +171,19 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "vendorName",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -204,13 +195,13 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: { read: z.date(), create: null, update: null },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: { read: z.date(), create: null, update: null },
       },
       { key: "shortcode", kind: "text" },

@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 import {
   ACTIVITY_KIND_LABEL,
   imageProcessingJobKind,
@@ -114,11 +113,13 @@ export default defineEntity({
   model: {
     fields: [
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: readOnly(shortcodeSchema("imageJob")),
       },
       {
+        display: { detail: false, list: false },
         key: "displayName",
         kind: "text",
         provenance: {
@@ -136,8 +137,6 @@ export default defineEntity({
         kind: "enum",
         control: { kind: "select", options: kindOptions },
         display: {
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
@@ -149,8 +148,6 @@ export default defineEntity({
         kind: "enum",
         control: { kind: "select", options: stateOptions },
         display: {
-          list: true,
-          detail: true,
           width: "sm",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -161,7 +158,7 @@ export default defineEntity({
         key: "imageId",
         kind: "identifier",
         reference: { entity: "image" },
-        display: { list: true, detail: true },
+        display: {},
         validation: readOnly(imageShortcode),
       },
       {
@@ -170,13 +167,13 @@ export default defineEntity({
         nullable: true,
         // Background maintenance schedules jobs without a requesting Run.
         reference: { entity: "run" },
-        display: { list: true, detail: true },
+        display: {},
         validation: readOnly(runShortcode.nullable()),
       },
       {
         key: "attempts",
         kind: "number",
-        display: { list: true, detail: true },
+        display: {},
         validation: readOnly(z.int().nonnegative()),
       },
       {
@@ -184,6 +181,7 @@ export default defineEntity({
         // this, never the lifetime `attempts`. Declared in the model only
         // because storage.columns has no number kind; it has no display.
         key: "failuresSinceRetry",
+        display: { detail: false, list: false },
         kind: "number",
         validation: readOnly(z.int().nonnegative()),
       },
@@ -191,7 +189,7 @@ export default defineEntity({
         key: "lastExecutor",
         kind: "text",
         nullable: true,
-        display: { columnLabel: "Executor", list: true, detail: true },
+        display: { columnLabel: "Executor" },
         provenance: {
           kind: "derived",
           sources: [{ label: "Latest attempt" }],
@@ -207,14 +205,14 @@ export default defineEntity({
         key: "lastError",
         kind: "text",
         nullable: true,
-        display: { columnLabel: "Last error", list: true, detail: true },
+        display: { columnLabel: "Last error" },
         validation: readOnly(z.string().nullable()),
       },
       {
         key: "durationMs",
         kind: "number",
         nullable: true,
-        display: { columnLabel: "Duration (ms)", detail: true },
+        display: { list: false, columnLabel: "Duration (ms)" },
         provenance: {
           kind: "derived",
           sources: [{ label: "Dispatch and completion times" }],
@@ -228,12 +226,7 @@ export default defineEntity({
       {
         key: "chargedCost",
         kind: "number",
-        display: {
-          columnLabel: "Charged",
-          list: true,
-          detail: true,
-          format: "currency",
-        },
+        display: { columnLabel: "Charged", format: "currency" },
         provenance: {
           kind: "derived",
           sources: [{ label: "AI usage of this job's attempts" }],
@@ -248,7 +241,7 @@ export default defineEntity({
       {
         key: "standardCost",
         kind: "number",
-        display: { columnLabel: "Standard", detail: true, format: "currency" },
+        display: { list: false, columnLabel: "Standard", format: "currency" },
         provenance: {
           kind: "derived",
           sources: [{ label: "AI usage of this job's attempts" }],
@@ -262,33 +255,33 @@ export default defineEntity({
       {
         key: "processorRevision",
         kind: "number",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.int()),
       },
       {
         key: "dispatchedAt",
         kind: "timestamp",
         nullable: true,
-        display: { detail: true, format: "timestamp" },
+        display: { list: false, format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
         key: "completedAt",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true, format: "timestamp" },
+        display: { format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { list: true, detail: true, format: "timestamp" },
+        display: { format: "timestamp" },
         validation: readOnly(z.date()),
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.date()),
       },
       {
@@ -329,6 +322,7 @@ export default defineEntity({
       "imageId",
       "runId",
       "attempts",
+      "failuresSinceRetry",
       "lastExecutor",
       "lastError",
       "durationMs",

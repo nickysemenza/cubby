@@ -58,11 +58,7 @@ import {
 } from "~/server/generic/entity-links/repo/entity-links";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listGroupFields,
-  hydrateListRead,
-  loadListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveLiveShortcodes,
@@ -203,34 +199,36 @@ const hydrateWishes = async (
   );
 };
 
-const hydrateWishesRead = (
-  db: Database,
-  rows: WishRow[],
-  projection: ListProjection,
-) =>
-  hydrateListRead(db, "wish", rows, projection, {
-    media: true,
-    load: () =>
-      loadListGroup(projection, ["relations", "derived"], () =>
-        candidateRowsForWishes(
-          db,
-          rows.map((row) => row.id),
-        ),
+const wishRead = {
+  media: true,
+  bindings: (bind) => {
+    const candidates = bind.batch(({ db, rows }) =>
+      candidateRowsForWishes(
+        db,
+        rows.map((row) => row.id),
       ),
-    mapRow: (row, { loaded: candidates }) => {
-      const alternatives = publicWishCandidates(candidates?.get(row.id) ?? []);
-      return {
-        ...row,
-        id: parseShortcodeFor("wish", row.shortcode),
-        ...listGroupFields(projection, ["relations", "derived"], () => ({
-          candidates: alternatives,
-          candidateItems: wishCandidateItems(alternatives),
-          candidateCount: alternatives.length,
-          priceRange: wishPriceRange(alternatives),
-        })),
-      };
-    },
-  });
+    );
+    return [
+      candidates.fields(
+        wishListItemOut.pick({
+          candidates: true,
+          candidateItems: true,
+          candidateCount: true,
+          priceRange: true,
+        }),
+        (row, loaded) => {
+          const alternatives = publicWishCandidates(loaded.get(row.id) ?? []);
+          return {
+            candidates: alternatives,
+            candidateItems: wishCandidateItems(alternatives),
+            candidateCount: alternatives.length,
+            priceRange: wishPriceRange(alternatives),
+          };
+        },
+      ),
+    ];
+  },
+} satisfies ListReadOptions<WishRow>;
 
 /**
  * Low / high effective price across a wish's live candidate alternatives.
@@ -278,11 +276,11 @@ export const wishListRead = async (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) => {
-  return wishScaffold.list(
+  return wishScaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
-      hydrate: (rows) => hydrateWishesRead(db, rows, projection),
+      read: wishRead,
     },
   );
 };

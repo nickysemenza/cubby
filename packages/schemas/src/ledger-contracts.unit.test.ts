@@ -4,6 +4,7 @@ import { projectContributionOut } from "./household-contribution";
 import { ledgerAttributions } from "./ledger-party";
 import {
   ledgerSourceClaimOut,
+  ledgerSourceClaimInput,
   ledgerSourceClaims,
   ledgerTransferCreateInput,
   ledgerTransferUpdateData,
@@ -160,4 +161,14 @@ describe("ledger contracts", () => {
       }).success,
     ).toBe(false);
   });
+});
+
+it("refuses a claim that names both a provider id and a key", () => {
+  expect(
+    ledgerSourceClaimInput.safeParse({
+      ...claim,
+      sourceKey: "v1:abc",
+      providerId: "synthetic-row-1",
+    }).success,
+  ).toBe(false);
 });

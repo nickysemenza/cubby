@@ -219,8 +219,7 @@ export async function quickCreateProductWorkflow(
     {
       name: input.name,
       manufacturer: input.manufacturer ?? UNSPECIFIED_MANUFACTURER,
-      upc: input.upc ?? null,
-      isbn: input.isbn ?? null,
+      barcode: input.barcode,
       expectedQuantity: input.expectedQuantity ?? null,
       model: input.model ?? null,
       price: input.price ?? null,

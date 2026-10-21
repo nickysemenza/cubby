@@ -101,16 +101,11 @@ interface UseInfiniteTableListReturn<
   };
 }
 
-/**
- * Hook for managing infinite-scrolling table list queries.
- *
- * Uses useInfiniteQuery to accumulate pages client-side.
- * This is the sole server-backed entity-list data path.
- */
-export function useInfiniteTableList<
+/** Read-free plan shared by a scoped provider and its infinite list. */
+function useInfiniteTableListPlan<
   TFilters,
   TData extends IdentifiedListRow,
-  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+  TPage extends ListQueryResponse<TData>,
 >({
   queryOptions,
   buildFilters,
@@ -118,12 +113,7 @@ export function useInfiniteTableList<
   groupBy,
   groupLevel,
   nesting,
-  visibleFields,
-}: UseInfiniteTableListOptions<
-  TFilters,
-  TData,
-  TPage
->): UseInfiniteTableListReturn<TData, TPage> {
+}: UseInfiniteTableListOptions<TFilters, TData, TPage>) {
   const { filters, sortParams, pagination, queryParams } =
     usePaginatedTableCore<TFilters, TData, TPage>({
       queryOptions,
@@ -185,6 +175,57 @@ export function useInfiniteTableList<
     [firstPageOptions, pageInputFor, queryOptions],
   );
 
+  return {
+    firstPageOptions,
+    pageOptions,
+    scopedPlan,
+    infiniteQueryKey,
+    scope: JSON.stringify(infiniteQueryKey),
+  };
+}
+
+/** A provider can share the exact list identity without subscribing to its read. */
+export function useInfiniteTableListScope<
+  TFilters,
+  TData extends IdentifiedListRow,
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+>(options: UseInfiniteTableListOptions<TFilters, TData, TPage>): string {
+  return useInfiniteTableListPlan(options).scope;
+}
+
+/**
+ * Hook for managing infinite-scrolling table list queries.
+ *
+ * Uses useInfiniteQuery to accumulate pages client-side.
+ * This is the sole server-backed entity-list data path.
+ */
+export function useInfiniteTableList<
+  TFilters,
+  TData extends IdentifiedListRow,
+  TPage extends ListQueryResponse<TData> = ListQueryResponse<TData>,
+>({
+  queryOptions,
+  buildFilters,
+  tableState,
+  groupBy,
+  groupLevel,
+  nesting,
+  visibleFields,
+}: UseInfiniteTableListOptions<
+  TFilters,
+  TData,
+  TPage
+>): UseInfiniteTableListReturn<TData, TPage> {
+  const { firstPageOptions, pageOptions, scopedPlan, infiniteQueryKey, scope } =
+    useInfiniteTableListPlan({
+      queryOptions,
+      buildFilters,
+      tableState,
+      groupBy,
+      groupLevel,
+      nesting,
+    });
+
   // SAFETY: this adapter narrows TanStack's observer result to the exact
   // page/result members consumed below; queryFn and getNextPageParam carry the
   // same ListQueryResponse<TData> contract.
@@ -236,7 +277,7 @@ export function useInfiniteTableList<
   const groups = infiniteData?.pages[0]?.meta?.groups;
   const progressive = useProgressiveList({
     pages: infiniteData?.pages,
-    scope: JSON.stringify(infiniteQueryKey),
+    scope,
     queryKey: infiniteQueryKey,
     plan: firstPageOptions,
     paused: isPlaceholderData,
@@ -247,7 +288,7 @@ export function useInfiniteTableList<
 
   type FetchResult = Awaited<ReturnType<typeof fetchNextPage>>;
   const nextPageInFlightRef = useRef<Promise<FetchResult> | null>(null);
-  const queryScope = JSON.stringify(infiniteQueryKey);
+  const queryScope = scope;
   const activeQueryScopeRef = useRef(queryScope);
   if (activeQueryScopeRef.current !== queryScope) {
     activeQueryScopeRef.current = queryScope;

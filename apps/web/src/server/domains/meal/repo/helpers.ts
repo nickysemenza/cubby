@@ -24,9 +24,7 @@ import {
   scaleTotals,
 } from "~/lib/nutrition-estimates";
 import { mapImages, type MappableImageRecord } from "~/server/db/helpers";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { mealCostLabel } from "~/server/generic/list/repo/list-display-labels";
-import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 
 const scaledRecipeTotals = (
   totals: StoredRecipeTotals | null,
@@ -106,16 +104,10 @@ type MealRow = {
   images: Array<{ image: MappableImageRecord; deletedAt: Date | null }>;
 };
 
-export const dbMealListReadProjection = (
-  row: MealRow,
-  projection: ListProjection,
-): Partial<MealOut> & Pick<MealOut, "id"> => {
-  const recipes: MealRecipeOut[] = livePlannedRecipes(
-    wantsListGroup(projection, "relations") ||
-      wantsListGroup(projection, "derived")
-      ? row.recipes
-      : [],
-  )
+export const mealRecipeFields = (
+  row: Pick<MealRow, "shortcode" | "recipes">,
+) => {
+  const recipes: MealRecipeOut[] = livePlannedRecipes(row.recipes)
     // `relations.meal.full.recipes` already filters soft-deleted occurrences
     // (`where: notDeleted(mealRecipe)`); the to-one `recipe` join can't be
     // filtered in `with`, so `mr.recipe.deletedAt` is the backstop here.
@@ -143,39 +135,38 @@ export const dbMealListReadProjection = (
       updatedAt: mr.updatedAt,
     }));
 
-  const totals = wantsListGroup(projection, "derived")
-    ? aggregateTotals(recipes.map((recipe) => recipe.scaledTotals))
-    : undefined;
-  const result: Partial<MealOut> & Pick<MealOut, "id"> = {
+  return { recipes, recipeNames: recipes.map((recipe) => recipe.recipe.name) };
+};
+
+export const mealTotalsFields = (recipes: readonly MealRecipeOut[]) => {
+  const totals = aggregateTotals(recipes.map((recipe) => recipe.scaledTotals));
+  const preview = totalsPreview(totals);
+  return {
+    totals,
+    cost: preview.cost,
+    calories: preview.calories,
+    costTotalLabel: mealCostLabel(totals.cost),
+  };
+};
+
+export const dbMealToAPI = (
+  row: MealRow,
+  dataQuality: DataQuality,
+): MealOut => {
+  const recipes = mealRecipeFields(row);
+  return mealOut.parse({
     id: parseShortcodeFor("meal", row.shortcode),
     date: row.date,
     name: row.name,
     sortOrder: row.sortOrder,
     mealType: row.mealType,
     mealKind: row.mealKind,
-    // An unnamed meal's identity is its date, as in the full projection.
     displayName: row.name?.trim() || row.date,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-  };
-  if (wantsListGroup(projection, "relations"))
-    Object.assign(result, {
-      recipes,
-      recipeNames: recipes.map((recipe) => recipe.recipe.name),
-    });
-  if (totals)
-    Object.assign(result, {
-      totals,
-      ...totalsPreview(totals),
-      costTotalLabel: mealCostLabel(totals.cost),
-    });
-  if (wantsListGroup(projection, "media"))
-    result.images = mapImages(row.images);
-  return result;
-};
-
-export const dbMealToAPI = (row: MealRow, dataQuality: DataQuality): MealOut =>
-  mealOut.parse({
-    ...dbMealListReadProjection(row, { kind: "full" }),
+    ...recipes,
+    ...mealTotalsFields(recipes.recipes),
+    images: mapImages(row.images),
     dataQuality,
   });
+};

@@ -348,6 +348,8 @@
         "packages/schemas/src/garden-guides.ts",
         "packages/schemas/src/garden-practice.ts",
         "packages/schemas/src/image-summary.ts",
+        "packages/schemas/src/display-images.ts",
+        "packages/schemas/src/image-processing.ts",
         "packages/schemas/src/image-identification.ts",
         "packages/schemas/src/inventory-ownership.ts",
         "packages/schemas/src/meal-classification.ts",

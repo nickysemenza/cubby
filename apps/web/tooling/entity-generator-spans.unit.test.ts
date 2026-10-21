@@ -24,7 +24,7 @@ const date = (key: string) =>
     kind: "date",
     nullable: true,
     control: { kind: "date" },
-    display: { list: true, detail: true, format: "plainDate" },
+    display: { format: "plainDate" },
     validation: {
       read: z.string().nullable(),
       create: z.string().nullable().default(null),

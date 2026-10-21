@@ -38,7 +38,7 @@ export const valueSchemaForField = (
 ): ValueSchemaJSON | null => {
   if (!drawsFromValueSchema(entity, field)) return null;
   // A collection field's update input also accepts patch items; the editor
-  // always sends the full value, which its create input describes.
+  // draws rows from the full create value and translates declared row intent to patches on update.
   const input =
     field.collection && field.validation.create
       ? field.validation.create

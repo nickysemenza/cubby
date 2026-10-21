@@ -75,7 +75,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
   (`server/entity-kernel/repo/repository.ts`), `declaredFilterPredicates` /
-  `listScaffold` (`server/generic/list/repo/list.ts`; a list read goes through its `list`,
+  `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
+  explicit repository-only selections through `raw`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined
   `count` instead of calling
   `executeListQueryWithCount`), `insertAndReturn`,
@@ -91,6 +92,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   selection/count budget.
   `load(where, projection)` enriches selected IDs only; never pass list predicates
   or pagination into a relational query. The scaffold restores selected order.
+  Complete and progressive reads share one assembly path. Product's
+  `listProductsRead` owns it; `productList` validates complete rows against the
+  canonical schema rather than assembling another copy. Kit component rows
+  reuse that complete reader and add only their parent identity and quantity.
 - Derived refresh: writers capture changed roots and known old/new endpoints through
   `server/generic/derived-refresh/capture.boundary.ts`; authoritative audit writes
   register roots automatically. `repo/dependencies.ts` declares direct keyset
@@ -144,6 +149,11 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`@cubby/shared/base64`); `capitalize`, `pascalCase`, `humanize`,
   `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
   `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
+- Run lifecycle scope and member-controller snapshots:
+  `server/domains/run/repo/control-scope.ts`. Generic control and stale expiry
+  must not require a purchase-agent session. Import business-write transactions
+  lock the Run before operation locks and recheck live authority before writes;
+  completed operation replay stays valid after cancellation.
 - Run operation replay: every `RunOperation` read by key and every write goes
   through `server/domains/run/repo/run-operation.ts` (`readOperation`, `insertOperation`
   (one row or a batch; `ifAbsent` is `ON CONFLICT DO NOTHING`),

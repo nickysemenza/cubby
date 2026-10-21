@@ -229,7 +229,7 @@ const dateColumns = createCubbyColumnCollection<{ id: string; date: string }>(
   },
 );
 
-function DateFitFixture({ inherited = false }: { inherited?: boolean }) {
+function DateFitFixture() {
   const normalized = useTableColumnLayout({ columns: dateColumns });
   const table = useCubbyTable({
     data: [{ id: "synthetic", date: householdDaysFromNow(26) }],
@@ -245,11 +245,11 @@ function DateFitFixture({ inherited = false }: { inherited?: boolean }) {
   return (
     <div
       ref={ref}
-      style={
-        inherited
-          ? { fontFamily: "monospace", fontWeight: 600, letterSpacing: "0.5px" }
-          : undefined
-      }
+      style={{
+        fontFamily: "monospace",
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+      }}
     >
       <Table
         className="table-fixed border-separate border-spacing-0 text-sm tabular-nums"
@@ -301,44 +301,36 @@ function DateFitFixture({ inherited = false }: { inherited?: boolean }) {
 const width = (element: Element) => element.getBoundingClientRect().width;
 
 describe("rendered column fit", () => {
-  it.each([false, true])(
-    "keeps a future editable calendar label unclipped with inherited typography %s",
-    async (inherited) => {
-      await page.viewport(1440, 900);
-      const view = render(<DateFitFixture inherited={inherited} />);
-      await waitFor(() =>
-        expect(view.getByTestId("date-fit").textContent).not.toBe("pending"),
-      );
-      await document.fonts.ready;
-      await waitFor(() => {
-        const label = view.getByTestId("date").querySelector("[title]");
-        if (!label) throw new Error("missing future calendar label");
-        const range = document.createRange();
-        range.selectNodeContents(label);
-        const text = range.getBoundingClientRect();
-        const clippingBounds: Array<{ left: number; right: number }> = [];
-        for (
-          let node: Element | null = label;
-          node;
-          node = node.parentElement
-        ) {
-          const overflow = getComputedStyle(node).overflowX;
-          if (overflow === "hidden" || overflow === "clip") {
-            const clip = node.getBoundingClientRect();
-            const left = clip.left + node.clientLeft;
-            clippingBounds.push({ left, right: left + node.clientWidth });
-          }
-          if (node.hasAttribute("data-column-id")) break;
+  it("keeps a future editable calendar label unclipped with inherited typography", async () => {
+    await page.viewport(1440, 900);
+    const view = render(<DateFitFixture />);
+    await waitFor(() =>
+      expect(view.getByTestId("date-fit").textContent).not.toBe("pending"),
+    );
+    await document.fonts.ready;
+    await waitFor(() => {
+      const label = view.getByTestId("date").querySelector("[title]");
+      if (!label) throw new Error("missing future calendar label");
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const text = range.getBoundingClientRect();
+      const clippingBounds: Array<{ left: number; right: number }> = [];
+      for (let node: Element | null = label; node; node = node.parentElement) {
+        const overflow = getComputedStyle(node).overflowX;
+        if (overflow === "hidden" || overflow === "clip") {
+          const clip = node.getBoundingClientRect();
+          const left = clip.left + node.clientLeft;
+          clippingBounds.push({ left, right: left + node.clientWidth });
         }
-        expect(
-          clippingBounds.every(
-            (clip) =>
-              text.left >= clip.left - 1 && text.right <= clip.right + 1,
-          ),
-        ).toBe(true);
-      });
-    },
-  );
+        if (node.hasAttribute("data-column-id")) break;
+      }
+      expect(
+        clippingBounds.every(
+          (clip) => text.left >= clip.left - 1 && text.right <= clip.right + 1,
+        ),
+      ).toBe(true);
+    });
+  });
 
   it("counts visible icons within editable values", async () => {
     await page.viewport(1440, 900);
@@ -348,9 +340,17 @@ describe("rendered column fit", () => {
     );
     const value = view.getByTestId("location").querySelector("button");
     if (!value) throw new Error("missing editable value");
-    expect(width(view.getByTestId("location"))).toBeGreaterThanOrEqual(
-      value.scrollWidth + 8,
-    );
+    // Font readiness can schedule another fit after the first shrink.
+    await waitFor(() => {
+      const cell = view.getByTestId("location");
+      const bounds = cell.getBoundingClientRect();
+      const style = getComputedStyle(cell);
+      const range = document.createRange();
+      range.selectNodeContents(value);
+      expect(range.getBoundingClientRect().right).toBeLessThanOrEqual(
+        bounds.right - Number.parseFloat(style.paddingRight) + 1,
+      );
+    });
   });
 
   // Headers are one line: a long label sets its column's width, capped, rather

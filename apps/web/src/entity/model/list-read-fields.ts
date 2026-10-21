@@ -89,6 +89,7 @@ export function compileListReadSchema(
     ]),
   );
   return {
+    schema,
     schemas,
     fields: { ...fields, dependencies },
     /**

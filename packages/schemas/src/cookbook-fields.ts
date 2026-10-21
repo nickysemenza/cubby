@@ -6,3 +6,12 @@ import { productSummaryWithCover } from "./product-fields";
  * carry its price and inventory joins.
  */
 export const cookbookProductSummary = productSummaryWithCover;
+
+import { z } from "zod";
+import { displayImagesField } from "./display-images";
+export function cookbookReadSchemas<S extends z.ZodRawShape>(
+  base: z.ZodObject<S>,
+) {
+  const output = base.extend({ displayImages: displayImagesField });
+  return { output, list: output, detail: output };
+}

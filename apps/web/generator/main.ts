@@ -1,7 +1,6 @@
 import { modulesChildren } from "../../../packages/schemas/src/child-tables/modules.ts";
 import { retainedTableExports } from "../../../packages/schemas/src/child-tables/retained.ts";
 import { readFile, writeFile } from "node:fs/promises";
-import { validateRetainedTableBoundary } from "./entities/child-table-boundary.ts";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -9,35 +8,17 @@ import {
   connectedViews,
   derivedConnectedRelationship,
 } from "../../../packages/schemas/src/connected-view-definitions.ts";
-import type { CompiledEntity } from "./entities/declarations.ts";
+import type {
+  CompiledEntity,
+  EntityArtifacts,
+} from "./entities/declarations.ts";
 import {
   ARTIFACT_MANIFEST,
   removeExtraArtifacts,
   writeArtifacts,
 } from "./artifacts.ts";
-import {
-  EntityDeclarationError,
-  loadEntityDeclarationBundle,
-} from "./entities/declarations.ts";
-import { renderOverrideComparisonArtifact } from "./entities/override-comparisons.ts";
-import { renderAgentPromptArtifact } from "./agent-prompts.ts";
-import { renderPlaybookArtifact } from "./playbooks.ts";
-import type { EntityArtifacts } from "./entities/declarations.ts";
-import { renderBrowserRouteArtifacts } from "./entities/render/browser-routes.ts";
-import { renderFilterArtifacts } from "./entities/render/filters.ts";
-import {
-  entityOutputsFor,
-  kernelHttpActionsFor,
-  renderEntityArtifacts,
-} from "./entities/render/index.ts";
-import { renderKernelBindingsArtifacts } from "./entities/render/kernel-bindings.ts";
-import { renderRelationArtifacts } from "./entities/render/relations.ts";
-import { missingBrowserRouteFiles } from "./entities/render/routes.ts";
-import { writeRouteTree } from "./route-tree.ts";
+import { EntityDeclarationError } from "./entities/source.ts";
 import { renderShortcodeRegistryArtifacts } from "./entities/shortcode-registry.ts";
-import { renderSearchArtifacts } from "./entities/render/search.ts";
-import { renderTimelineArtifacts } from "./entities/render/entity-timelines.ts";
-import { validateEntityDeclarationImportBoundary } from "./entities/import-boundary.ts";
 
 // `relationshipProvenanceSchema`'s local-path member; the schema module itself
 // imports generated files, which do not exist yet when this validation runs.
@@ -115,12 +96,40 @@ const main = async () => {
     written.push(...artifacts);
   };
 
+  // Raw schema constructors consume shortcode schemas. Bootstrap their registry
+  // before loading any compiler or renderer that can reach those constructors.
+  await settle(await renderShortcodeRegistryArtifacts());
+  const { validateEntityDeclarationImportBoundary } =
+    await import("./entities/import-boundary.ts");
+  const { validateRetainedTableBoundary } =
+    await import("./entities/child-table-boundary.ts");
+  const { loadEntityDeclarationBundle } =
+    await import("./entities/declarations.ts");
+  const { renderOverrideComparisonArtifact } =
+    await import("./entities/override-comparisons.ts");
+  const { renderAgentPromptArtifact } = await import("./agent-prompts.ts");
+  const { renderPlaybookArtifact } = await import("./playbooks.ts");
+  const { renderBrowserRouteArtifacts } =
+    await import("./entities/render/browser-routes.ts");
+  const { renderFilterArtifacts } =
+    await import("./entities/render/filters.ts");
+  const { entityOutputsFor, kernelHttpActionsFor, renderEntityArtifacts } =
+    await import("./entities/render/index.ts");
+  const { renderKernelBindingsArtifacts } =
+    await import("./entities/render/kernel-bindings.ts");
+  const { renderRelationArtifacts } =
+    await import("./entities/render/relations.ts");
+  const { missingBrowserRouteFiles } =
+    await import("./entities/render/routes.ts");
+  const { writeRouteTree } = await import("./route-tree.ts");
+  const { renderSearchArtifacts } = await import("./entities/render/search.ts");
+  const { renderTimelineArtifacts } =
+    await import("./entities/render/entity-timelines.ts");
   validateEntityDeclarationImportBoundary();
   validateRetainedTableBoundary(
     await readFile(resolve(ROOT, "apps/web/src/server/db/schema.ts"), "utf8"),
     new Set(retainedTableExports),
   );
-  await settle(await renderShortcodeRegistryArtifacts());
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
   await settle([

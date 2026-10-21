@@ -595,15 +595,15 @@ function referentialTargetBadge(v: ReferentialLivenessViolation): ReactNode {
   );
 }
 
-const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
-  { type: "overdue_task", title: "Overdue tasks" },
-  { type: "blocked_work", title: "Blocked with no next action" },
-  { type: "stalled_project", title: "Stalled projects" },
-  { type: "past_due_planned_expense", title: "Planned expenses past due" },
-  { type: "missing_budget", title: "Missing a cost estimate" },
-  { type: "spend_below_estimate", title: "Spend below estimate" },
-  { type: "unclassified_expense", title: "Unclassified expenses" },
-  { type: "date_window_drift", title: "Date window drift" },
+const TRACKER_GROUPS: ProjectAttentionType[] = [
+  "overdue_task",
+  "blocked_work",
+  "stalled_project",
+  "past_due_planned_expense",
+  "missing_budget",
+  "spend_below_estimate",
+  "unclassified_expense",
+  "date_window_drift",
 ];
 
 const TRACKER_GROUP_TITLE = {
@@ -1611,13 +1611,13 @@ const DECLARED_SECTIONS = [
   section({
     id: "tracker",
     label: "Tracker",
-    // Merge the seven household-tracker attention rules (the same items
+    // Merge the household-tracker attention rules (the same items
     // /projects?view=overview shows) into one section with a subsection per
     // rule; the per-rule counts stay separate in the schema/badge.
     select: (p) =>
-      TRACKER_GROUPS.flatMap((g) => p[TRACKER_PROBLEM_KEY_BY_TYPE[g.type]]),
+      TRACKER_GROUPS.flatMap((type) => p[TRACKER_PROBLEM_KEY_BY_TYPE[type]]),
     problemKeys: TRACKER_GROUPS.map(
-      (group) => TRACKER_PROBLEM_KEY_BY_TYPE[group.type],
+      (type) => TRACKER_PROBLEM_KEY_BY_TYPE[type],
     ),
     icon: WarningIcon,
     title: "Projects, tasks & expenses needing attention",

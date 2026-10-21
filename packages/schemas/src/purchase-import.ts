@@ -1,3 +1,4 @@
+import type { RunTargetState } from "./activity-fields";
 import {
   DISTINCT_FROM_QUOTE_MAX,
   DISTINCT_FROM_URL_MAX,
@@ -67,16 +68,7 @@ export { runPurpose, runStatus, runTrigger } from "./run-fields";
 export type RunTrigger = z.infer<typeof runTrigger>;
 export type RunPurpose = z.infer<typeof runPurpose>;
 
-export const runTargetState = z.enum([
-  "pending",
-  "prepared",
-  "completed",
-  "skipped",
-  "unresolved",
-  "needs_evidence",
-  "unavailable",
-]);
-export type RunTargetState = z.infer<typeof runTargetState>;
+export { runTargetState, type RunTargetState } from "./activity-fields";
 
 /**
  * How every client counts a run's targets: done, skipped (the member need not

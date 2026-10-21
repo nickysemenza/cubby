@@ -66,7 +66,7 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listGroupFields,
-  hydrateListRead,
+  type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -234,29 +234,27 @@ const selectAccountsRead = (
     })
     .from(financialAccount);
 };
-const hydrateAccountsRead = async (
-  db: Database,
-  rows: Awaited<ReturnType<typeof selectAccountsRead>>,
-  projection: ListProjection,
-) =>
-  hydrateListRead(db, "financialAccount", rows, projection, {
-    load: async () => undefined,
-    mapRow: (row) => ({
-      ...row,
-      id: parseShortcodeFor("financialAccount", row.shortcode),
+const accountRead = {
+  bindings: (bind) => [
+    bind(financialAccountOut.pick({ primaryCardholderId: true }), (row) => ({
       primaryCardholderId: row.primaryCardholderShortcode
         ? parseShortcodeFor("ledgerParty", row.primaryCardholderShortcode)
         : null,
-      ...listGroupFields(projection, "relations", () => ({
-        ledgerPartyId: row.ledgerPartyShortcode
-          ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
-          : null,
-        providerVendorId: row.providerVendorShortcode
-          ? parseShortcodeFor("vendor", row.providerVendorShortcode)
-          : null,
-      })),
-    }),
-  });
+    })),
+    bind(financialAccountOut.pick({ ledgerPartyId: true }), (row) => ({
+      ledgerPartyId: row.ledgerPartyShortcode
+        ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
+        : null,
+    })),
+    bind(financialAccountOut.pick({ providerVendorId: true }), (row) => ({
+      providerVendorId: row.providerVendorShortcode
+        ? parseShortcodeFor("vendor", row.providerVendorShortcode)
+        : null,
+    })),
+  ],
+} satisfies ListReadOptions<
+  Awaited<ReturnType<typeof selectAccountsRead>>[number]
+>;
 
 const financialAccountScaffold = listScaffold(
   "financialAccount",
@@ -289,7 +287,7 @@ export const listFinancialAccountsRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  financialAccountScaffold.list(
+  financialAccountScaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
@@ -299,7 +297,7 @@ export const listFinancialAccountsRead = (
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows) => hydrateAccountsRead(db, rows, projection),
+      read: accountRead,
     },
   );
 

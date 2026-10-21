@@ -21,6 +21,10 @@ import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import {
+  dispatchClipboardEvent,
+  makeClipboardData,
+} from "~/ui/data-table/cell-clipboard-test-helpers";
+import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnDef,
@@ -932,6 +936,51 @@ describe("generic enum fields", () => {
     expect(onSaveField).toHaveBeenCalledWith(record, "future", true);
   });
 
+  it("pastes enum labels through the rendered cell and range descriptor with the same stored value", async () => {
+    const record = { id: "TSK-4K7M", status: "not_started" };
+    const save = vi.fn(async () => {});
+    const columns = createEntityDisplayColumns(
+      "task",
+      createCubbyColumnHelper<typeof record>(),
+      undefined,
+      {
+        only: ["status"],
+        onSaveField: save,
+      },
+    );
+    const harness = createBrowserTestHarness();
+    const [cell] = columns.visit((column) =>
+      renderRowCell(column.cell, record),
+    );
+    const [data] = columns.visit((column) => column.meta?.cellData);
+    if (!data?.applyPaste) throw new Error("Status needs range paste");
+    const view = render(<>{cell}</>, { wrapper: harness.wrapper });
+    screen.getByRole("button").focus();
+    const pasted = dispatchClipboardEvent(
+      "paste",
+      makeClipboardData({
+        getData: vi.fn((mime: string) => (mime === "text/plain" ? "Done" : "")),
+      }),
+    );
+    expect(pasted.defaultPrevented).toBe(true);
+    await waitFor(() =>
+      expect(save).toHaveBeenLastCalledWith(record, "status", "done"),
+    );
+    expect(screen.getByRole("button")).toHaveTextContent("Done");
+    save.mockClear();
+    await expect(data.applyPaste(record, { text: "Done" })).resolves.toBe(
+      "done",
+    );
+    expect(save).toHaveBeenCalledWith(record, "status", "done");
+    save.mockClear();
+    await expect(
+      data.applyPaste(record, { text: "unknown status" }),
+    ).rejects.toThrow("is not a valid option here");
+    expect(save).not.toHaveBeenCalled();
+    view.unmount();
+    harness.dispose();
+  });
+
   it("saves an editable pick through onSaveField, and clears only a nullable enum", async () => {
     const record = { id: "task-1", status: "not_started", trade: "plumbing" };
     const helper = createCubbyColumnHelper<typeof record>();
@@ -979,6 +1028,65 @@ describe("generic enum fields", () => {
     expect(suggestionTargets[0]).toContain('"basisMode":"provided"');
     harness.dispose();
   });
+});
+
+it("opens an inherited scalar from stored intent and clears its explicit override", async () => {
+  const harness = createBrowserTestHarness();
+  const record = {
+    id: "TSK-4K7M",
+    trade: null,
+    fieldResolutions: {
+      trade: {
+        mode: "inherit",
+        storedValue: null,
+        value: "plumbing",
+        fallbackValue: "plumbing",
+        source: "project",
+        sourceEntity: null,
+        matchesFallback: true,
+        canReset: false,
+      },
+    },
+  };
+  const save = vi.fn(async () => {});
+  const explicit = {
+    ...record,
+    fieldResolutions: {
+      trade: {
+        ...record.fieldResolutions.trade,
+        mode: "explicit",
+        storedValue: "plumbing",
+        canReset: true,
+      },
+    },
+  };
+  const cellFor = (row: typeof record | typeof explicit) =>
+    createEntityDisplayColumns(
+      "task",
+      createCubbyColumnHelper<typeof record | typeof explicit>(),
+      undefined,
+      {
+        only: ["trade"],
+        onSaveField: save,
+      },
+    ).visit((column) => renderRowCell(column.cell, row))[0];
+  const view = render(<>{cellFor(record)}</>, { wrapper: harness.wrapper });
+  expect(screen.getByRole("button")).toHaveTextContent("Plumbing");
+  fireEvent.click(screen.getByRole("button"));
+  fireEvent.click(await screen.findByRole("option", { name: "Plumbing" }));
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(record, "trade", "plumbing"),
+  );
+  view.rerender(<>{cellFor(explicit)}</>);
+  fireEvent.click(screen.getByRole("button"));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /^Clear/i, hidden: true }),
+  );
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith(explicit, "trade", null),
+  );
+  view.unmount();
+  harness.dispose();
 });
 
 // An inherited nullable checkbox displays the resolved value without writing

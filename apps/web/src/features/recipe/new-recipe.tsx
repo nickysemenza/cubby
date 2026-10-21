@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 import { useEntityCreateController } from "~/entity/editing/use-entity-create-controller";
 
-import { RecipeForm } from "./recipe-form";
+import { RecipeForm } from "./recipe-form/index";
 
 interface NewRecipeFormProps {
   /** Prefill the scrape URL (e.g. from a shared link via the PWA share target). */

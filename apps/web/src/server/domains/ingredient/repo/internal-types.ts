@@ -7,12 +7,10 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
  * search/list modules, so they live here rather than being duplicated. None of
  * these are re-exported from the package barrel.
  */
-import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
-import type { RecipeRef } from "@cubby/schemas/recipe";
 import { inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -140,29 +138,6 @@ export const dbIngredientToTopLevel = <Q extends DataQuality | undefined>(
     updatedAt: ingredientData.updatedAt,
     dataQuality,
   };
-};
-
-type IngredientListDB = IngredientSelect & {
-  product: Array<Qualified<IngredientDeepDB["product"][number]>>;
-  appearsInRecipes: RecipeRef[] | null;
-  // `count()` comes back as a string over the wire — coerced below.
-  ownRecipeCount: number | string;
-};
-
-export const dbIngredientToListValues = <Q extends DataQuality | undefined>(
-  ingredientData: IngredientListDB,
-  displayImages: DisplayImageSummary[],
-  dataQuality: Q,
-) => {
-  const result = {
-    ...dbIngredientToTopLevel(ingredientData, dataQuality),
-    displayImages,
-    product: mapIngredientProducts(ingredientData.product),
-    appearsInRecipes: ingredientData.appearsInRecipes ?? [],
-    ownRecipeCount: Number(ingredientData.ownRecipeCount),
-  };
-
-  return result;
 };
 
 /**

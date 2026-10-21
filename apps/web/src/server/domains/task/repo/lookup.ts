@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   taskCompletionSchema,
@@ -7,24 +8,23 @@ import {
 import type { TaskFilters } from "@cubby/schemas/project";
 import { isNull, sql } from "drizzle-orm";
 
-import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import { getDb, type ListReadIntent, relations } from "~/server/db/helpers";
+import {
+  getDb,
+  type ListReadIntent,
+  relations,
+  mapImages,
+  brandJoinShortcode,
+  resolveLiveJoinShortcode,
+  resolveLiveJoinName,
+} from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
-import {
-  dbTaskToAPI,
-  effectiveTaskDueDateSql,
-} from "~/server/domains/task/repo/helpers";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  loadListGroup,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
@@ -64,7 +64,7 @@ export const taskListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  return taskScaffold.list(
+  return taskScaffold.read(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -85,56 +85,110 @@ export const taskListRead = async (
           },
         });
       },
-      hydrate: async (rows) => {
-        if (projection.kind === "base")
-          return projectListRows(
-            "task",
-            rows.map((row) => ({ ...row, id: row.shortcode })),
-            projection,
+      read: {
+        media: true,
+        bindings: (bind) => {
+          const inherited = bind.batch(
+            async ({ rows }) =>
+              new Map(
+                (await hydrateTaskInheritanceRows(db, rows)).map((row) => [
+                  row.id,
+                  row,
+                ]),
+              ),
           );
-        const ids = rows.map((r) => r.id);
-        const [deps, subtaskCounts, dataQualities, hydratedRows] =
-          await Promise.all([
-            loadListGroup(projection, "relations", () =>
-              taskDependencyIds(db, ids),
+          const dependencies = bind.batch(({ rows }) =>
+            taskDependencyIds(
+              db,
+              rows.map((row) => row.id),
             ),
-            loadListGroup(projection, "derived", () =>
-              taskSubtaskCounts(db, ids),
+          );
+          const subtasks = bind.batch(({ rows }) =>
+            taskSubtaskCounts(
+              db,
+              rows.map((row) => row.id),
             ),
-            loadListGroup(projection, "quality", () =>
-              loadDataQualities(db, "task", ids),
+          );
+          return [
+            inherited.fields(
+              taskListItemOut.pick({
+                assigneeId: true,
+                assigneeName: true,
+                projectId: true,
+                projectName: true,
+                subjectProductId: true,
+                subjectProductName: true,
+                parentTaskId: true,
+                parentTaskName: true,
+              }),
+              (row, loaded) => {
+                const value = loaded.get(row.id);
+                if (!value) throw new Error("Task inheritance was not loaded");
+                return {
+                  assigneeId: brandJoinShortcode(
+                    "ledgerParty",
+                    resolveLiveJoinShortcode(value.assignee ?? null),
+                  ),
+                  assigneeName: resolveLiveJoinName(value.assignee ?? null),
+                  projectId: brandJoinShortcode(
+                    "project",
+                    resolveLiveJoinShortcode(value.project ?? null),
+                  ),
+                  projectName: resolveLiveJoinName(value.project ?? null),
+                  subjectProductId: brandJoinShortcode(
+                    "product",
+                    resolveLiveJoinShortcode(value.subjectProduct ?? null),
+                  ),
+                  subjectProductName: resolveLiveJoinName(
+                    value.subjectProduct ?? null,
+                  ),
+                  parentTaskId: value.parentTask
+                    ? parseShortcodeFor("task", value.parentTask.shortcode)
+                    : null,
+                  parentTaskName: resolveLiveJoinName(value.parentTask ?? null),
+                };
+              },
             ),
-            loadListGroup(projection, ["relations", "derived"], () =>
-              hydrateTaskInheritanceRows(db, rows),
+            inherited.fields(
+              taskListItemOut.pick({ trade: true, fieldResolutions: true }),
+              (row, loaded) => {
+                const value = loaded.get(row.id);
+                if (!value)
+                  throw new Error("Task field resolution was not loaded");
+                return {
+                  trade: value.trade,
+                  fieldResolutions: value.fieldResolutions,
+                };
+              },
             ),
-          ]);
-        const mapRow = (row: (typeof rows)[number]) => {
-          const counts = subtaskCounts?.get(row.id);
-          return dbTaskToAPI(
-            {
-              ...row,
-              project: row.project ?? null,
-              subjectProduct: row.subjectProduct ?? null,
-              images:
-                row.images?.map((image) => {
-                  if (!("image" in image))
+            dependencies.fields(
+              taskListItemOut.pick({ blockedByIds: true, blockingIds: true }),
+              (row, loaded) => ({
+                blockedByIds: loaded.blockedBy.get(row.id) ?? [],
+                blockingIds: loaded.blocking.get(row.id) ?? [],
+              }),
+            ),
+            subtasks.fields(
+              taskListItemOut.pick({
+                subtaskCount: true,
+                doneSubtaskCount: true,
+              }),
+              (row, loaded) => ({
+                subtaskCount: loaded.get(row.id)?.count ?? 0,
+                doneSubtaskCount: loaded.get(row.id)?.doneCount ?? 0,
+              }),
+            ),
+            bind(taskListItemOut.pick({ images: true }), (row) => ({
+              images: mapImages(
+                (row.images ?? []).map((entry) => {
+                  if (!("image" in entry))
                     throw new Error("Task media relation was not loaded");
-                  return image;
-                }) ?? [],
-            },
-            deps?.blockedBy.get(row.id) ?? [],
-            deps?.blocking.get(row.id) ?? [],
-            counts?.count ?? 0,
-            counts?.doneCount ?? 0,
-            // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-            dataQualities?.get(row.id),
-          );
-        };
-        const selectedRows = hydratedRows ?? rows;
-        const mapped = wantsListGroup(projection, "media")
-          ? await withDisplayImages(db, "task", selectedRows, mapRow)
-          : selectedRows.map(mapRow);
-        return projectListRows("task", mapped, projection);
+                  return entry;
+                }),
+              ),
+            })),
+          ];
+        },
       },
     },
   );

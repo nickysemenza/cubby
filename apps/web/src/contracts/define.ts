@@ -246,7 +246,8 @@ export function operationCommandRequest<
   return workflowCommandRequest.parse({
     kind: "operation",
     operation: `${contract.domain}.${member}`,
-    body,
+    // Match the operation's JSON transport: omit absent optional fields, preserving nulls.
+    body: JSON.parse(JSON.stringify(body)),
     bindings,
   });
 }

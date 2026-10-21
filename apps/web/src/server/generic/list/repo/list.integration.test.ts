@@ -50,8 +50,8 @@ describe("list selection and relation loading", () => {
           .where(eq(parentTable.id, task.parentTaskId)),
       ),
     );
-    const read = (readIntent: "page" | "count", pageIndex = 0) =>
-      scaffold.list(
+    const read = async (readIntent: "page" | "count", pageIndex = 0) => {
+      const page = await scaffold.raw(
         ctx.db,
         {
           filters: {},
@@ -72,13 +72,16 @@ describe("list selection and relation loading", () => {
                 with: { parentTask: true },
               })
             ).reverse(),
-          hydrate: (rows) =>
-            rows.map((row) => ({
-              name: row.name,
-              parent: row.parentTask?.name,
-            })),
         },
       );
+      return {
+        ...page,
+        data: page.data.map((row) => ({
+          name: row.name,
+          parent: row.parentTask?.name,
+        })),
+      };
+    };
     const page = await countTestDbQueries(() => read("page"));
     expect(page.result).toEqual({
       count: 2,
@@ -95,7 +98,7 @@ describe("list selection and relation loading", () => {
     expect(empty.result).toEqual({ count: 2, data: [] });
     expect(empty.queryCount).toBe(2);
     const noMatches = await countTestDbQueries(() =>
-      scaffold.list(
+      scaffold.raw(
         ctx.db,
         { filters: {}, sorts: [], pagination: { pageIndex: 0, pageSize: 2 } },
         {
@@ -103,7 +106,6 @@ describe("list selection and relation loading", () => {
           load: async () => {
             throw new Error("An empty list must not load a graph");
           },
-          hydrate: (rows) => rows,
         },
       ),
     );
@@ -122,10 +124,10 @@ describe("list selection and relation loading", () => {
         topLevel: sql`true`,
       },
       scopes: { projectScope: () => projectScaffold },
-    }).list(
+    }).raw(
       ctx.db,
       { filters: {}, sorts: [], pagination: { pageIndex: 0, pageSize: 2 } },
-      { where: notDeleted(table), hydrate: (rows) => rows },
+      { where: notDeleted(table) },
     );
     expect(page.count).toBe(1);
     expect(page.data.map((row) => row.name)).toEqual(["Test Aliased Task"]);
@@ -164,14 +166,17 @@ describe("list selection and relation loading", () => {
         sorts: [{ orderBy: "dataQuality", direction: "asc" as const }],
         pagination: { pageIndex, pageSize: 2 },
       };
-      const expected = await reader.list(ctx.db, request, {
-        hydrate: (rows) => rows.map((row) => row.shortcode),
-      });
-      const actual = await reader.list(ctx.db, request, {
+      const expected = await reader.raw(ctx.db, request, {});
+      const actual = await reader.raw(ctx.db, request, {
         load: (where) => getDb(ctx.db).select().from(email).where(where),
-        hydrate: (rows) => rows.map((row) => row.shortcode),
       });
-      expect(actual).toEqual(expected);
+      expect({
+        ...actual,
+        data: actual.data.map((row) => row.shortcode),
+      }).toEqual({
+        ...expected,
+        data: expected.data.map((row) => row.shortcode),
+      });
       expect(actual.count).toBe(3);
     }
   });

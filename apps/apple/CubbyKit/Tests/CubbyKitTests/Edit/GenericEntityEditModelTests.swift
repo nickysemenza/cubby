@@ -22,6 +22,73 @@ private final class EditStub: URLProtocol, @unchecked Sendable {
 @Suite("GenericEntityEditModel", .serialized)
 @MainActor
 struct GenericEntityEditModelTests {
+    @Test func invalidCollectionDraftCanExposeItsSaveErrorWithoutLosingInput() async throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),
+            original: ["id": "PRD-2345", "externalIds": []])
+        var edit = try #require(CollectionEdit.decode(model.draft["externalIds"]))
+        edit.rows.append(
+            CollectionEdit.Row(
+                baseline: nil,
+                value: [
+                    "source": "gtin", "kind": "gtin_14", "externalId": "00012345678906", "url": .null,
+                ]))
+        model.draft["externalIds"] = edit.json
+        #expect(model.canSave)
+        #expect(!(await model.save()))
+        #expect(model.bannerError != nil)
+        #expect(model.draft["externalIds"] == edit.json)
+        #expect(model.savedID == nil)
+    }
+
+    @Test func collectionPromotionSendsKeyedIntentWithStoredExpectations() async throws {
+        let seen = capture { _ in (200, Self.productUpdated) }
+        let original: JSONValue = [
+            "id": "PRD-2345", "name": "Sample",
+            "externalIds": [
+                [
+                    "source": "amazon", "kind": "asin", "externalId": "B0EXAMP001",
+                    "url": "https://www.amazon.com/dp/B0EXAMP001", "isPrimary": false,
+                ]
+            ],
+        ]
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),
+            original: original)
+        var edit = try #require(CollectionEdit.decode(model.draft["externalIds"]))
+        #expect(try model.patch().values["externalIds"] == nil)
+        edit.rows[0].primaryIntent = true
+        model.draft["externalIds"] = edit.json
+        #expect(await model.save())
+        #expect(
+            seen.requests.first?.body["data"]?["externalIds"] == [
+                [
+                    "op": "replace", "key": ["source": "amazon", "kind": "asin", "externalId": "B0EXAMP001"],
+                    "value": ["isPrimary": true], "expect": ["url": .null, "isPrimary": false],
+                ]
+            ])
+    }
+
+    @Test func equivalentBarcodeDraftDoesNotRetireTheSavedIdentity() throws {
+        let original: JSONValue = [
+            "id": "PRD-2345",
+            "externalIds": [
+                [
+                    "source": "gtin", "kind": "gtin_14", "externalId": "00012345678905", "url": .null,
+                    "isPrimary": true,
+                ]
+            ],
+        ]
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),
+            original: original)
+        var edit = try #require(CollectionEdit.decode(model.draft["externalIds"]))
+        edit.rows[0].value?["externalId"] = "012345678905"
+        model.draft["externalIds"] = edit.json
+        #expect(try model.patch().values["externalIds"] == nil)
+        #expect(!model.visibleFields.contains { $0.key == "barcode" })
+    }
+
     private struct Seen: Sendable {
         let method: String?
         let path: String

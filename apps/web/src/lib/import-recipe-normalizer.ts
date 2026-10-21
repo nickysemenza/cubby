@@ -1,5 +1,6 @@
 import type { WIngredient } from "@cubby/recipebridge";
 import { amount, sanitizeSectionName } from "@cubby/schemas/codec";
+import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import {
   composeNotesMarkdown,
   type ImportRecipe,
@@ -54,8 +55,17 @@ const normalizeImportMeta = (
   };
 };
 
+/** The notes markdown for a cookbook recipe: headnote, then labelled notes. */
+export const cookbookRecipeNotes = (item: CookbookRecipe): string | null =>
+  composeNotesMarkdown(
+    item.meta.description.join("\n\n"),
+    item.notes.map((note) =>
+      note.label ? `**${note.label}** ${note.text}` : note.text,
+    ),
+  );
+
 export const normalizeImportTimes = (
-  times: ImportRecipe["meta"]["times"],
+  times: ImportRecipe["meta"]["times"] | CookbookRecipe["meta"]["times"],
 ): NonNullable<RecipeCreateInput["meta"]>["times"] => ({
   active: times?.active ?? null,
   total: times?.total ?? null,

@@ -67,7 +67,11 @@ describe("scanAtLocation", () => {
   };
 
   const makeProduct = async (name: string, upc: string) => {
-    const out = await quickCreateProduct(ctx.db, { name, upc }, TEST_ACTOR);
+    const out = await quickCreateProduct(
+      ctx.db,
+      { name, barcode: upc },
+      TEST_ACTOR,
+    );
     return {
       shortcode: out.id,
       entityId: parseEntityId("product", await requireId(out.id, "product")),
@@ -146,7 +150,7 @@ describe("resolveScanStrays", () => {
     const target = await makeLocation("New shelf");
     const product = await quickCreateProduct(
       ctx.db,
-      { name: "Stray book", upc: "012345678912" },
+      { name: "Stray book", barcode: "012345678912" },
       TEST_ACTOR,
     );
     const productId = parseEntityId(

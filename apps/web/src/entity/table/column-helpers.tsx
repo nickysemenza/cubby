@@ -98,11 +98,8 @@ import {
   buildProductComboboxItem,
   buildRecordComboboxItem,
 } from "../picker/combobox-builders";
-import {
-  useEntityListSource,
-  type EntitySearchEntity,
-  type SearchProviderProps,
-} from "../picker/with-search-hook";
+import { referenceEntitySearch } from "../picker/reference-entity-search";
+import type { SearchProviderProps } from "../picker/with-search-hook";
 import {
   EditableAmountCell,
   EditableCell,
@@ -811,40 +808,28 @@ export function createActionsColumnBase<T extends RowData>(
   });
 }
 
-/**
- * Shared plumbing for ordinary accessor columns. Factories keep ownership of
- * their value conversion and editor configuration, while this helper keeps the
- * table contract in one place: the accessor is also the clipboard value,
- * metadata always receives the same cell data, and an editable column uses the
- * very same descriptor for its single-cell clipboard target.
- *
- * Specialized columns deliberately stay outside this helper. Currency has a
- * footer, amounts have their own editor, and relationship columns have a
- * separate optimistic entity state machine.
+/** Scalar adapters own projection and presentation; this assembly shares their
+ * row descriptor between range operations and the rendered editor. Accessor
+ * reads stay lazy so generated cells can intentionally re-read the original row.
  */
-function createEditableAccessorColumn<
+export function createEditableAccessorColumn<
   T extends RowData,
   TValue,
   TSaved extends CellJsonValue | null | void,
 >(
   columnHelper: ColumnHelper<T>,
   valueFor: (row: T) => TValue,
-  options: {
+  options: Pick<
+    CubbyColumnDef<T, TValue>,
+    "id" | "header" | "enableSorting" | "footer"
+  > & {
     id: string;
-    header?: string;
-    className?: string;
-    mobile?: MobileColumnMeta;
-    filterConfig?: FilterConfig;
-    cellData: ColumnCellData<T, TSaved>;
-    enableSorting?: boolean;
-    mono?: boolean;
-    /** A code or identifier column: see `CubbyColumnMeta.code`. */
-    code?: boolean;
-    numeric?: boolean;
-    renderValue: (value: TValue, row: T) => ReactNode;
+    meta?: Omit<NonNullable<CubbyColumnDef<T, TValue>["meta"]>, "cellData">;
+    cellData: ColumnCellData<T, TSaved> | undefined;
+    renderValue: (row: T, value: () => TValue) => ReactNode;
     renderEditable?: (
-      value: TValue,
       row: T,
+      value: () => TValue,
       clipboard: CellClipboardSpec<TSaved>,
     ) => ReactNode;
   },
@@ -853,25 +838,21 @@ function createEditableAccessorColumn<
     id: options.id,
     header: options.header,
     enableSorting: options.enableSorting,
+    footer: options.footer,
     meta: attachCubbyColumnMeta({
-      className: options.className,
-      mobile: options.mobile,
-      filterConfig: options.filterConfig,
-      mono: options.mono,
-      code: options.code,
-      numeric: options.numeric,
+      ...options.meta,
       cellData: options.cellData,
     }),
     cell: (info: CellContext<T, TValue>) => {
       const row = info.row.original;
-      const value = info.getValue();
-      return options.renderEditable
+      const value = () => info.getValue();
+      return options.renderEditable && options.cellData
         ? options.renderEditable(
-            value,
             row,
+            value,
             specFromCellData(options.cellData, row),
           )
-        : options.renderValue(value, row);
+        : options.renderValue(row, value);
     },
   });
 }
@@ -923,16 +904,18 @@ export function createTextColumn<
   const definition = createEditableAccessorColumn(columnHelper, textValue, {
     id: String(accessor),
     header: options?.header,
-    className: options?.className,
-    code: options?.code,
-    mobile: options?.mobile,
-    filterConfig: options?.filterConfig,
+    meta: {
+      className: options?.className,
+      code: options?.code,
+      mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
+    },
     cellData,
-    renderValue: renderRow,
+    renderValue: (row, value) => renderRow(value(), row),
     renderEditable: editable
-      ? (value, row, clipboard) => (
+      ? (row, value, clipboard) => (
           <EditableCell
-            value={value}
+            value={value()}
             onSave={(newValue) => editable.onSave(newValue, row)}
             clipboard={clipboard}
             config={{ type: "text", placeholder: options?.placeholder }}
@@ -981,15 +964,17 @@ export function createSelectColumn<
   const definition = createEditableAccessorColumn(columnHelper, selectValue, {
     id: String(accessor),
     header: options.header,
-    className: options.className,
-    mobile: options.mobile,
-    filterConfig: options.filterConfig,
+    meta: {
+      className: options.className,
+      mobile: options.mobile,
+      filterConfig: options.filterConfig,
+    },
     cellData,
-    renderValue: (value) => renderOptionCell(value, roster),
+    renderValue: (_row, value) => renderOptionCell(value(), roster),
     renderEditable: editable
-      ? (value, row, clipboard) => (
+      ? (row, value, clipboard) => (
           <EditableCell
-            value={value}
+            value={value()}
             onSave={(newValue) => editable.onSave(newValue, row)}
             clipboard={clipboard}
             config={{ type: "select", options: roster }}
@@ -1085,48 +1070,47 @@ export function createCurrencyColumn<
         interactive={!editable}
       />
     );
-  return columnHelper.accessor((row: T) => row[accessor] ?? null, {
-    id: String(accessor),
-    header: options?.header,
-    meta: attachCubbyColumnMeta({
-      numeric: true,
-      valueKind: "money",
-      className: cn(options?.className ?? defaultClassName, "truncate"),
-      mobile: options?.mobile,
+  return createEditableAccessorColumn(
+    columnHelper,
+    (row: T) => row[accessor] ?? null,
+    {
+      id: String(accessor),
+      header: options?.header,
+      meta: {
+        numeric: true,
+        valueKind: "money",
+        className: cn(options?.className ?? defaultClassName, "truncate"),
+        mobile: options?.mobile,
+      },
       cellData,
-    }),
-    footer: (info) => {
-      // Only a server aggregate can represent the full filtered set.
-      const total =
-        info.table.options.meta?.serverTotals?.sums?.[info.column.id];
-      if (total === undefined) return null;
-      // Honor signedTone: a net-positive total (spend) stays neutral, a
-      // negative total (net credit) greens — matching the cell values above so
-      // the footer never reads as the wrong sign.
-      return (
-        <span className={cn("tabular-nums", toneClass(total))}>
-          <CurrencyValue value={total} decimals={decimals} />
-        </span>
-      );
-    },
-    cell: (info) => {
-      const val = info.getValue() ?? null;
-
-      if (editable) {
+      footer: (info) => {
+        // Only a server aggregate can represent the full filtered set.
+        const total =
+          info.table.options.meta?.serverTotals?.sums?.[info.column.id];
+        if (total === undefined) return null;
+        // Honor signedTone: a net-positive total (spend) stays neutral, a
+        // negative total (net credit) greens — matching the cell values above so
+        // the footer never reads as the wrong sign.
         return (
-          <EditableCell
-            value={val}
-            onSave={(newVal) => editable.onSave(newVal, info.row.original)}
-            clipboard={specFromCellData(cellData, info.row.original)}
-            config={{ type: "currency" }}
-            renderValue={renderValue}
-          />
+          <span className={cn("tabular-nums", toneClass(total))}>
+            <CurrencyValue value={total} decimals={decimals} />
+          </span>
         );
-      }
-
-      return renderValue(val);
+      },
+      renderValue: (_row, value) => renderValue(value()),
+      renderEditable: editable
+        ? (row, value, clipboard) => (
+            <EditableCell
+              value={value()}
+              onSave={(newValue) => editable.onSave(newValue, row)}
+              clipboard={clipboard}
+              config={{ type: "currency" }}
+              renderValue={renderValue}
+            />
+          )
+        : undefined,
     },
-  });
+  );
 }
 
 type SingleEntityColumnData =
@@ -1255,28 +1239,6 @@ function defineSingleEntityAdapter<TData>(
 }
 
 /**
- * One entity's `SearchProvider`: a `useEntityListSource(entity, ...)` call
- * wrapped in the render-prop shape `SingleEntityAdapter.SearchProvider`
- * expects, so each adapter below can name its own target without repeating
- * the dialog/children plumbing.
- */
-function inlineSearchProvider<E extends EntitySearchEntity>(
-  entity: E,
-): (props: SearchProviderProps<string>) => ReactNode {
-  return function InlineSearchProvider(props) {
-    const { dialog, ...search } = useEntityListSource(entity, {
-      scope: props.scope,
-    });
-    return (
-      <>
-        {dialog}
-        {props.children(search)}
-      </>
-    );
-  };
-}
-
-/**
  * The complete relation-picker roster. Each entry owns the schema for its
  * projected value, the item converter used by editable cells, its real inline
  * link, and (when this relation can be edited) the deferred search provider.
@@ -1300,7 +1262,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("ingredient"),
+    SearchProvider: referenceEntitySearch("ingredient"),
   }),
   product: defineSingleEntityAdapter(productInlineSchema, {
     buildItem: (data) =>
@@ -1322,7 +1284,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("product"),
+    SearchProvider: referenceEntitySearch("product"),
   }),
   recipe: defineSingleEntityAdapter(recipeInlineSchema, {
     buildItem: (data) => buildRecordComboboxItem("recipe", data),
@@ -1340,7 +1302,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("recipe"),
+    SearchProvider: referenceEntitySearch("recipe"),
   }),
   location: defineSingleEntityAdapter(locationInlineSchema, {
     buildItem: (data) =>
@@ -1362,7 +1324,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("location"),
+    SearchProvider: referenceEntitySearch("location"),
   }),
   "usda-food": defineSingleEntityAdapter(usdaFoodInlineSchema, {
     renderLink: (data) => (
@@ -1688,13 +1650,15 @@ export function createBooleanColumn<
       id: String(accessor),
       header: options.header,
       enableSorting: false,
-      className: options.className,
-      mobile: options.mobile,
-      filterConfig,
+      meta: {
+        className: options.className,
+        mobile: options.mobile,
+        filterConfig,
+      },
       cellData,
-      renderValue: (value) => renderOptionCell(value, selectOptions),
+      renderValue: (_row, value) => renderOptionCell(value(), selectOptions),
       renderEditable: editable
-        ? (value, row, clipboard) => (
+        ? (row, value, clipboard) => (
             <EditableCell
               value={encode(stored(row))}
               onSave={(nextValue) => editable.onSave(decode(nextValue), row)}
@@ -1710,7 +1674,7 @@ export function createBooleanColumn<
               }}
               renderValue={(nextValue) =>
                 renderOptionCell(
-                  nextValue === encode(stored(row)) ? value : nextValue,
+                  nextValue === encode(stored(row)) ? value() : nextValue,
                   selectOptions,
                 )
               }
@@ -1758,61 +1722,47 @@ export function createExternalLinkColumn<
     editable ? (row, value) => editable.onSave(value, row) : undefined,
   );
 
-  return columnHelper.accessor((row: T) => row[accessor], {
+  const renderValue = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined) return <NoneValue />;
+    const shown = display(String(value));
+    return (
+      <EntityRefLink
+        variant="table"
+        to={linkTo}
+        params={{ id: shown }}
+        tone={variant}
+      >
+        {shown}
+      </EntityRefLink>
+    );
+  };
+  return createEditableAccessorColumn(columnHelper, (row: T) => row[accessor], {
     id: String(accessor),
     header: options?.header,
-    meta: attachCubbyColumnMeta({
+    meta: {
       className: options?.className,
       mono: variant === "mono",
       code: variant === "mono",
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
-      cellData,
-    }),
-    cell: (info) => {
-      const value = info.getValue();
-
-      if (editable) {
-        return (
-          <EditableCell
-            value={value !== null && value !== undefined ? String(value) : null}
-            onSave={(newValue) => editable.onSave(newValue, info.row.original)}
-            clipboard={specFromCellData(cellData, info.row.original)}
-            config={{ type: "text" }}
-            trigger="pencil"
-            renderValue={(v) => {
-              if (v === null || v === undefined || v === "") {
-                return <NoneValue />;
-              }
-              const shown = display(String(v));
-              return (
-                <EntityRefLink
-                  variant="table"
-                  to={linkTo}
-                  params={{ id: shown }}
-                  tone={variant}
-                >
-                  {shown}
-                </EntityRefLink>
-              );
-            }}
-          />
-        );
-      }
-
-      if (value === null || value === undefined) return <NoneValue />;
-      const shown = display(String(value));
-      return (
-        <EntityRefLink
-          variant="table"
-          to={linkTo}
-          params={{ id: shown }}
-          tone={variant}
-        >
-          {shown}
-        </EntityRefLink>
-      );
     },
+    cellData,
+    renderValue: (_row, value) => renderValue(value()),
+    renderEditable: editable
+      ? (row, value, clipboard) => {
+          const raw = value();
+          return (
+            <EditableCell
+              value={raw !== null && raw !== undefined ? String(raw) : null}
+              onSave={(newValue) => editable.onSave(newValue, row)}
+              clipboard={clipboard}
+              config={{ type: "text" }}
+              trigger="pencil"
+              renderValue={(v) => (v === "" ? <NoneValue /> : renderValue(v))}
+            />
+          );
+        }
+      : undefined,
   });
 }
 
@@ -1946,20 +1896,22 @@ export function createPlainDateColumn<
   return createEditableAccessorColumn(columnHelper, valueFor, {
     id: String(accessor),
     header: options?.header,
-    className: options?.className,
-    mobile: options?.mobile,
-    filterConfig: options?.filterConfig,
+    meta: {
+      className: options?.className,
+      mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
+    },
     cellData,
-    renderValue: (value, row) => {
+    renderValue: (row, value) => {
       const display = options?.displayValue?.(row);
-      return renderValue(display?.value ?? value, row, display?.muted);
+      return renderValue(display?.value ?? value(), row, display?.muted);
     },
     renderEditable: editable
-      ? (value, row, clipboard) => {
+      ? (row, value, clipboard) => {
           const display = options?.displayValue?.(row);
           const editableValue = options?.editValue
             ? options.editValue(row)
-            : value;
+            : value();
           return (
             <EditableCell
               value={editableValue}

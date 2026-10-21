@@ -1,16 +1,19 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { runFindingProblemSchema } from "@cubby/schemas/problems";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { runFinding } from "~/server/db/schema";
+import { getDb, withTransaction } from "~/server/db/helpers";
+import { runFinding, run as runTable } from "~/server/db/schema";
 import {
   expireStaleRuns,
   reconcileSettledRun,
 } from "~/server/domains/purchase-import/operations/run-review";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
+import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 
@@ -20,6 +23,7 @@ import { admitMailImport } from "./mail-import-run";
 import {
   controlRun,
   loadRunDetail,
+  loadRunScope,
   resumeAuthorizedRuns,
   updateAgentProgress,
 } from "./run-service";
@@ -109,6 +113,135 @@ describe("purchase import run admission", () => {
       }),
     ).toMatchObject({ status: "failed" });
   });
+
+  const startFileRun = async () => {
+    await createMember();
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "file_import",
+      trigger: "manual",
+      status: "running",
+    });
+    const [row] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, id));
+    if (!row) throw new Error("Synthetic file Run missing");
+    return row;
+  };
+
+  it("lets the owning member cancel a file import without an agent session", async () => {
+    const subject = await startFileRun();
+    expect(subject.agentSessionId).toBeNull();
+    await expect(loadRunScope(ctx.db, subject.id)).rejects.toThrow(
+      "Import run ownership is unavailable",
+    );
+    expect(
+      await controlRun(ctx.db, ctx.actor, {
+        runPublicId: subject.shortcode,
+        action: "cancel",
+      }),
+    ).toMatchObject({ status: "failed" });
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, subject.id));
+    expect(stored).toMatchObject({
+      status: "failed",
+      failureCode: "user_cancelled",
+    });
+  });
+
+  it("expires abandoned file imports and preserves sleeping Workflow Runs", async () => {
+    const subject = await startFileRun();
+    const workflowId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_refresh",
+      trigger: "manual",
+      status: "running",
+    });
+    const now = new Date(Date.now() + 3 * 60 * 60_000);
+    expect(await expireStaleRuns(ctx.db, now)).toEqual({
+      expired: 1,
+      failures: [],
+    });
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, subject.id));
+    expect(stored).toMatchObject({
+      status: "failed",
+      failureCode: "agent_failed",
+    });
+    const [workflow] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, workflowId));
+    expect(workflow?.status).toBe("running");
+  });
+
+  it.each(["status", "generation", "row", "heartbeat", "operation"] as const)(
+    "rechecks %s activity after stale selection while waiting for the Run lock",
+    async (changed) => {
+      const subject = await startFileRun();
+      const now = new Date();
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ updatedAt: new Date(now.getTime() - 3 * 60 * 60_000) })
+        .where(eq(runTable.id, subject.id));
+      let pending: ReturnType<typeof expireStaleRuns> | undefined;
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select({ id: runTable.id })
+          .from(runTable)
+          .where(eq(runTable.id, subject.id))
+          .for("no key update");
+        pending = expireStaleRuns(ctx.db, now);
+        pending.catch(() => undefined);
+        await expect
+          .poll(
+            async () => {
+              const waiting = await getDb(ctx.db).execute<{
+                count: number;
+              }>(sql`
+                SELECT count(*)::int AS count FROM pg_stat_activity
+                WHERE datname = current_database() AND wait_event_type = 'Lock'`);
+              return waiting.rows[0]?.count;
+            },
+            { timeout: 10_000 },
+          )
+          .toBe(1);
+        if (changed === "operation") {
+          await insertOperation(tx, {
+            runId: subject.id,
+            operationId: "synthetic-live-operation",
+            kind: "prepare_purchase_import",
+            inputFingerprint: "a".repeat(64),
+          });
+        } else {
+          await tx
+            .update(runTable)
+            .set(
+              changed === "status"
+                ? { status: "failed", failureCode: "user_cancelled" }
+                : changed === "generation"
+                  ? { dispatchEventId: crypto.randomUUID() }
+                  : changed === "row"
+                    ? { updatedAt: now }
+                    : { heartbeatAt: now },
+            )
+            .where(eq(runTable.id, subject.id));
+        }
+      });
+      await expect(pending).resolves.toEqual({ expired: 0, failures: [] });
+      const [stored] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.id, subject.id));
+      expect(stored?.status).toBe(changed === "status" ? "failed" : "running");
+      expect(stored?.failureCode).toBe(
+        changed === "status" ? "user_cancelled" : null,
+      );
+    },
+  );
 
   it("discloses retained mail restart scope without exposing private source identities", async () => {
     const party = await createMember();

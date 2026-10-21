@@ -4,7 +4,7 @@ Cubby's open-source deployment can connect an eligible ChatGPT account to power
 its Workers OpenAI Responses calls. Settings lists the account's displayable
 model catalog from `GET https://api.openai.com/v1/models`, preserving OpenAI's
 ordering and `visibility: "list"` rule. It has no model selectors: structured
-tasks retain their declared models. Pi coordinators and Tester Army use the
+tasks retain their declared models. Pi coordinators use the
 explicit funding order in [Infrastructure](../infrastructure.md#claude-subscriber-credits):
 Claude subscriber credits, ChatGPT subscription, then paid Unified Billing.
 Other calls retain their existing fail-closed subscription behavior.

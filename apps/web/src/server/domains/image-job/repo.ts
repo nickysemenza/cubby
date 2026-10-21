@@ -2,7 +2,6 @@ import {
   ACTIVITY_KIND_LABEL,
   imageProcessingJobKind,
 } from "@cubby/schemas/activity";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   type ImageJobFilters,
   type ImageJobOut,
@@ -11,7 +10,6 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { imageProcessingJob } from "~/server/db/schema";
@@ -22,7 +20,10 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
+import {
+  listReadPlan,
+  type ListReadOptions,
+} from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -120,43 +121,39 @@ const issueText = (row: ImageJobRow, deviceRan: boolean) => {
   }
 };
 
-const hydrateRead = (
-  db: Database | DrizzleTransaction,
-  rows: ImageJobRow[],
-  projection: ListProjection,
-): Promise<ListReadRow[]> =>
-  hydrateListRead(db, "imageJob", rows, projection, {
-    media: true,
-    load: () =>
-      Promise.all([
-        lookupEntityReferences(
-          db,
-          "image",
-          rows.map((row) => row.imageId),
-          { includeDeleted: true },
-        ),
-        lookupEntityReferences(
-          db,
-          "run",
-          rows.map((row) => row.runId),
-          { includeDeleted: true },
-        ),
-        loadFacts(
-          db,
-          rows.map((row) => row.id),
-        ),
-      ]),
-    mapRow: (row, { loaded: [images, runs, facts], displayImages }) => {
-      const image = images.get(row.imageId);
-      if (!image) throw new Error("Image job's Image reference is missing");
-      const fact = facts.get(row.id);
-      const kind = imageProcessingJobKind.parse(row.kind);
-      return {
-        ...row,
-        id: parseShortcodeFor("imageJob", row.shortcode),
-        displayName: `${ACTIVITY_KIND_LABEL[kind]} · ${image.name ?? image.id}`,
-        imageId: image.id,
-        runId: row.runId === null ? null : (runs.get(row.runId)?.id ?? null),
+const imageJobRead = {
+  media: true,
+  references: {
+    runId: { kind: "lookup", missing: "null", includeDeleted: true },
+  },
+  bindings: (bind) => {
+    const images = bind.batch(({ db, rows }) =>
+      lookupEntityReferences(
+        db,
+        "image",
+        rows.map((row) => row.imageId),
+        { includeDeleted: true },
+      ),
+    );
+    const facts = bind.batch(({ db, rows }) =>
+      loadFacts(
+        db,
+        rows.map((row) => row.id),
+      ),
+    );
+    return [
+      images.fields(
+        imageJobOut.pick({ imageId: true, displayName: true }),
+        (row, loaded) => {
+          const image = loaded.get(row.imageId);
+          if (!image) throw new Error("Image job's Image reference is missing");
+          return {
+            imageId: image.id,
+            displayName: `${ACTIVITY_KIND_LABEL[imageProcessingJobKind.parse(row.kind)]} · ${image.name ?? image.id}`,
+          };
+        },
+      ),
+      bind(imageJobOut.pick({ durationMs: true }), (row) => ({
         durationMs:
           row.completedAt && row.dispatchedAt
             ? Math.max(
@@ -164,14 +161,37 @@ const hydrateRead = (
                 row.completedAt.getTime() - row.dispatchedAt.getTime(),
               )
             : null,
-        chargedCost: fact?.chargedCost ?? 0,
-        standardCost: fact?.standardCost ?? 0,
-        lastExecutor: fact?.lastExecutor ?? null,
-        lastError: issueText(row, fact?.deviceRan ?? false),
-        displayImages,
-      };
-    },
-  });
+      })),
+      facts.fields(
+        imageJobOut.pick({
+          chargedCost: true,
+          standardCost: true,
+          lastExecutor: true,
+          lastError: true,
+        }),
+        (row, loaded) => {
+          const fact = loaded.get(row.id);
+          return {
+            chargedCost: fact?.chargedCost ?? 0,
+            standardCost: fact?.standardCost ?? 0,
+            lastExecutor: fact?.lastExecutor ?? null,
+            lastError: issueText(row, fact?.deviceRan ?? false),
+          };
+        },
+      ),
+    ];
+  },
+} satisfies ListReadOptions<ImageJobRow>;
+const hydrateRead = (
+  db: Database | DrizzleTransaction,
+  rows: ImageJobRow[],
+  projection: ListProjection,
+) =>
+  listReadPlan<ImageJobRow>("imageJob", imageJobRead).read(
+    db,
+    rows,
+    projection,
+  );
 
 export const listImageJobsRead = (
   db: Database,
@@ -180,11 +200,11 @@ export const listImageJobsRead = (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
-      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+      read: imageJobRead,
     },
   );
 

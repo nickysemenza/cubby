@@ -29,6 +29,7 @@ import { productVariantComparison } from "./product-variant-comparison";
 import {
   productListInventoryEntryOut,
   productQuantitySummaryOut,
+  productWithFoodOut,
 } from "./product";
 
 export const runTargetDeviceWorkState = z.enum([
@@ -625,6 +626,10 @@ export const photoProductEvidence = photoProductCandidate
     manufacturer: z.string().nullable(),
     model: z.string().nullable(),
     identifiers: z.array(z.string()),
+    notes: productWithFoodOut.shape.notes,
+    tags: productWithFoodOut.shape.tags,
+    category: productWithFoodOut.shape.category,
+    externalIds: productWithFoodOut.shape.externalIds,
   });
 export type PhotoProductEvidence = z.infer<typeof photoProductEvidence>;
 export const photoRejectedCandidate = z.object({

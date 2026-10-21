@@ -56,6 +56,7 @@ export const imageProcessingContract = defineContract("imageProcessing", {
     cache: { tags: [["image"]] },
   }),
   retry: mutation({
+    command: { label: "Retry failed image processing", confirmation: null },
     mcp: {
       omit: "operator_maintenance",
       note: "Agents re-run processing through image.schedule_processing",

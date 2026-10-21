@@ -122,8 +122,9 @@ CI retries a failed Vitest or Playwright test once; locally nothing retries.
 A test that passes only on retry is reported as flaky, not failed. The second
 time a test is reported flaky, fix it or delete it, recording the named
 failure and the deleting commit in a GitHub issue so it can be
-restored once fixed. Do not skip it in place: the test-run contract fails a
-lane that reports skipped or pending tests. Never raise the retry count.
+restored once fixed. Do not skip it in place. Read the standard runner report
+and confirm that the intended cases executed: skipped, pending, and empty
+selections are not validation evidence. Never raise the retry count.
 
 Scope artificial CPU throttling to the interaction whose race it guards;
 restore normal speed for unrelated setup and read-back. A shared detail
@@ -184,7 +185,8 @@ A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
 browser, database, and Worker harness; only `workerdProfile` may split
-workers (`tooling/e2e-worker-pool.unit.test.ts`). Each split costs a shard a
+workers. Review fixture options directly rather than policing source spelling
+with a test. Each split costs a shard a
 worker restart, so a signed-out spec uses the test-scoped
 `test.use({ signedIn: false })`, and Gmail specs are named `gmail.*.spec.ts`
 so the one-worker `Gmail profile tests` project runs them together at the start

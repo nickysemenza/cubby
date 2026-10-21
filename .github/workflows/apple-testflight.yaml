@@ -161,7 +161,7 @@ jobs:
           sentry-cli: "true"
 
       - name: Generate the Xcode project
-        run: apps/apple/scripts/prepare-project.sh
+        run: xcodegen generate --spec apps/apple/project.yml --use-cache
 
       # The pre-upload guard in testflight.sh is a Node builtins-only script.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

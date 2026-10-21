@@ -112,10 +112,10 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
       "Original order-line bindings follow the surviving Product while their retained extraction and checksum remain unchanged.",
   },
   "EntityExternalId.entityId": {
-    code: "repoint-or-discard-conflicting-slot",
+    code: "repoint-product-identifiers",
     effect: "move-dedupe",
     description:
-      "A merged product's external ids move onto the survivor; one that would collide on a (source, kind) slot the survivor already fills is discarded and named in the audit trail.",
+      "Identifiers move onto the survivor. A conflicting source/kind primary survives as a secondary and is named in the response and audit trail.",
   },
   "ProductUnitMapping.productId": {
     code: "repoint-or-discard-conflicting-conversion",

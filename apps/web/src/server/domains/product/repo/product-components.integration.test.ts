@@ -32,6 +32,7 @@ import { deleteProducts, updateProduct } from "./crud";
 import {
   attachProductComponents,
   detachProductComponents,
+  listKitComponentRows,
   listKitMembership,
   listProductComponents,
 } from "./product-components";
@@ -130,6 +131,23 @@ describe("product ⟷ product component links (kit composition)", () => {
     ]);
     expect(components[0]?.coverImageUrl).toBe(drillCover.url);
     expect(components[1]?.coverImageUrl).toBeNull();
+
+    const childRows = await listKitComponentRows(ctx.db, [kit.entityId]);
+    expect(
+      childRows.map(({ parentProductId, quantity, product: child }) => ({
+        parentProductId,
+        quantity,
+        id: child.id,
+      })),
+    ).toEqual([
+      { parentProductId: kit.id, quantity: 1, id: drill.id },
+      { parentProductId: kit.id, quantity: 2, id: battery.id },
+    ]);
+    expect(childRows[0]?.product.displayImages).toContainEqual(
+      expect.objectContaining({
+        id: parseShortcodeFor("image", drillCover.shortcode),
+      }),
+    );
 
     const kits = await listKitMembership(ctx.db, battery.entityId);
     expect(kits).toHaveLength(1);

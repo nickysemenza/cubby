@@ -1,5 +1,0 @@
-#!/usr/bin/env sh
-set -e
-[ "${HUSKY-}" = "0" ] && exit 0
-
-node scripts/check-outward-text.ts "$1"

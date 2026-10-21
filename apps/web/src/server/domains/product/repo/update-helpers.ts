@@ -211,7 +211,7 @@ export async function ensureSlotPrimaries(
  * handles the amazon/asin derived-url special case so the comparison matches
  * what would actually be persisted.
  */
-export function externalIdSlotUnchanged(
+function externalIdSlotUnchanged(
   existing: Pick<
     typeof entityExternalId.$inferSelect,
     "source" | "kind" | "externalId" | "url" | "isPrimary"
@@ -256,44 +256,11 @@ export function requireCanonicalGtin(value: string): string {
   return normalized;
 }
 
-function requireCanonicalIsbn(value: string): string {
-  const normalized =
-    wasm.isbn_from_gtin(value.trim()) ?? wasm.normalize_isbn(value);
-  if (normalized == null) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `“${value}” is not a valid ISBN-10 or ISBN-13.`,
-    );
-  }
-  return normalized.gtin14;
-}
-
-/**
- * Collapse the compatibility barcode input and the explicit ISBN input onto
- * the one primary GTIN slot they both address.
- *
- * `undefined` leaves the slot alone; `null` retires its primary. When both
- * carry values they must name the same printed identity, otherwise accepting
- * one would silently discard the other.
- */
-export function resolvePrimaryProductCodeInput(input: {
-  upc?: string | null;
-  isbn?: string | null;
-}): string | null | undefined {
-  const gtin =
-    input.upc == null ? input.upc : requireCanonicalGtin(input.upc.trim());
-  const bookGtin =
-    input.isbn == null ? input.isbn : requireCanonicalIsbn(input.isbn);
-
-  if (gtin != null && bookGtin != null && gtin !== bookGtin) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "UPC/barcode and ISBN identify different printed products. Keep only the correct one, or make them agree.",
-    );
-  }
-  if (bookGtin != null) return bookGtin;
-  if (gtin != null) return gtin;
-  return input.isbn === null || input.upc === null ? null : undefined;
+/** Omission leaves identity unchanged; null retires only the primary barcode. */
+export function resolvePrimaryProductCodeInput(
+  input: string | null | undefined,
+): string | null | undefined {
+  return input == null ? input : requireCanonicalGtin(input);
 }
 
 export function externalIdsContainIsbn(
@@ -309,79 +276,6 @@ export function externalIdsContainIsbn(
       entry.source.trim().toLowerCase() === GTIN_SOURCE &&
       wasm.isbn_from_gtin(entry.externalId) != null,
   );
-}
-
-/**
- * Set (or clear) the barcode that stands for a product, without disturbing its
- * other identifiers.
- *
- * This is what the `upc` write input on create/update lands on.
- * `syncProductExternalIds` below cannot serve it: that REPLACES the whole set,
- * so a caller passing only a barcode would wipe every ASIN and retailer SKU.
- *
- * `null` retires the PRIMARY barcode, not every barcode — a product can hold
- * several, and `ensureSlotPrimaries` then promotes the oldest survivor. That is
- * the same rule an `externalIds` remove patch follows for a primary;
- * to clear the whole set, pass an explicit `externalIds` payload.
- */
-export async function syncPrimaryGtin(
-  tx: DrizzleTransaction,
-  productId: ProductId,
-  raw: string | null,
-): Promise<void> {
-  await lockExternalIdentifierParents(tx, [
-    { entityId: productId, entityKind: "product" },
-  ]);
-  const value = raw === null ? null : requireCanonicalGtin(raw);
-  const live = await tx.query.entityExternalId.findMany({
-    where: and(
-      eq(entityExternalId.entityId, productId),
-      eq(entityExternalId.source, GTIN_SOURCE),
-      notDeleted(entityExternalId),
-    ),
-    orderBy: [asc(entityExternalId.createdAt), asc(entityExternalId.id)],
-  });
-  const currentPrimary = live.find((row) => row.isPrimary);
-
-  if (value === null) {
-    if (currentPrimary) {
-      await tx
-        .update(entityExternalId)
-        .set({ deletedAt: new Date() })
-        .where(eq(entityExternalId.id, currentPrimary.id));
-    }
-  } else if (currentPrimary?.externalId !== value) {
-    // Demote BEFORE promoting or inserting: the partial unique is a plain
-    // non-deferrable index, so two primaries exist momentarily otherwise and
-    // the write aborts. Same ordering `syncProductExternalIds` relies on.
-    if (currentPrimary) {
-      await tx
-        .update(entityExternalId)
-        .set({ isPrimary: false })
-        .where(eq(entityExternalId.id, currentPrimary.id));
-    }
-    const existing = live.find((row) => row.externalId === value);
-    if (existing) {
-      await tx
-        .update(entityExternalId)
-        .set({ isPrimary: true })
-        .where(eq(entityExternalId.id, existing.id));
-    } else {
-      await ensureExternalSources(tx, [GTIN_SOURCE]);
-      await tx.insert(entityExternalId).values({
-        entityId: productId,
-        entityKind: "product" as const,
-        source: GTIN_SOURCE,
-        kind: GTIN_KIND,
-        externalId: value,
-        isPrimary: true,
-      });
-    }
-  }
-
-  await ensureSlotPrimaries(tx, productId, [
-    { source: GTIN_SOURCE, kind: GTIN_KIND },
-  ]);
 }
 
 export function foldGtinIntoExternalIds(

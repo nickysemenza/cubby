@@ -26,16 +26,13 @@ Mac (63 hits and 50 rebuilds that day) and never matched the Linux probe's key
 - `Plan` path-filters only the Rust runner and the Apple lanes, with inline
   `dorny/paths-filter` groups against the PR base or the push's `before`
   commit. Nightly and manual runs start both. The Apple filter names native
-  sources and direct Apple task inputs, not the generator's web inputs; the
-  Linux probe keeps a cached pass of a started lane off macOS.
-- Apple passes key a declared toolchain (`.xcode-version`, the Xcode major
-  `setup-apple` selects) and plain `env` inputs, never a command observed on a
-  Mac, so Linux and macOS compute the same key. Minor Xcode updates reuse
-  passes.
+  sources and direct Apple task inputs, not the generator's web inputs.
+- Selected Apple checks execute on macOS and reuse compiler/artifact caches.
+  The simplification cutover retires portable result passes and Linux/macOS
+  probes, accepting runner startup to remove their ownership and digest graph.
 - Journeys move to `journeys.yaml`, triggered by a label or a dispatch, outside
   the merge gate.
-- One required check, `CI passed`, accepts a skip only for an unselected lane
-  or an Apple job whose probe verified a cached pass.
+- One required check, `CI passed`, accepts a skip only for an unselected lane.
 
 ## Considered options
 
@@ -55,5 +52,4 @@ Mac (63 hits and 50 rebuilds that day) and never matched the Linux probe's key
   catch that.
 - A contract or schema change that only alters the generated Swift client
   skips the Apple lanes; the nightly run catches a native break it causes.
-- An Xcode minor update or Rust stable release does not invalidate Apple passes;
-  only a `fresh` dispatch or a changed input builds against it.
+- Selected Apple checks run against the runner's current toolchain.

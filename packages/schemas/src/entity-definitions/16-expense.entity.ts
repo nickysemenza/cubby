@@ -313,6 +313,7 @@ export default defineEntity({
   model: {
     fields: [
       {
+        display: { detail: false, list: false },
         key: "bookingTransactionCode",
         kind: "text",
         nullable: true,
@@ -336,8 +337,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Category",
-          list: true,
-          detail: true,
           renderer: { detail: "expense-spending-category" },
           mobile: { slot: "meta", priority: 19 },
         },
@@ -376,6 +375,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
@@ -399,8 +399,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Role",
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Storefront", sfSymbol: "storefront" },
@@ -412,6 +410,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "fieldResolutions",
         kind: "json",
         validation: {
@@ -421,6 +420,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "spendingCategoryAllocations",
         kind: "json",
         validation: {
@@ -430,6 +430,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "projectAllocations",
         kind: "json",
         validation: {
@@ -442,11 +443,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "What did you buy?" },
-        display: {
-          list: true,
-          detail: true,
-          standard: "name",
-        },
+        display: { standard: "name" },
         validation: {
           read: z.string().min(1),
           create: z.string().min(1),
@@ -462,8 +459,6 @@ export default defineEntity({
           renderer: "money",
         },
         display: {
-          list: true,
-          detail: true,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
         },
@@ -485,8 +480,6 @@ export default defineEntity({
           required: false,
         },
         display: {
-          list: true,
-          detail: true,
           format: "plainDate",
           mobile: { slot: "subtitle", priority: 15 },
         },
@@ -510,12 +503,7 @@ export default defineEntity({
             rules: [EXPENSE_LINE_ROLE_RULES],
           },
         },
-        display: {
-          list: true,
-          detail: true,
-          width: "md",
-          mobile: { slot: "meta", priority: 18 },
-        },
+        display: { width: "md", mobile: { slot: "meta", priority: 18 } },
         validation: {
           read: expenseLineKindSchema.describe(
             "Receipt role. Principal lines are purchased items or services; unclassified means the evidence has not established a role.",
@@ -531,12 +519,7 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.expenseLineBasis,
         },
-        display: {
-          list: true,
-          detail: true,
-          listHidden: true,
-          width: "md",
-        },
+        display: { listHidden: true, width: "md" },
         validation: {
           read: expenseLineBasisSchema.describe(
             "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
@@ -563,11 +546,7 @@ Rules:
             ],
           },
         },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "meta", priority: 20 },
-        },
+        display: { mobile: { slot: "meta", priority: 20 } },
         explanation: {
           ruleId: "expense.effective-cost-type",
           description:
@@ -602,12 +581,7 @@ Rules:
             rules: [TRADE_SUGGEST_RULE],
           },
         },
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          mobile: { slot: "meta", priority: 60 },
-        },
+        display: { width: "sm", mobile: { slot: "meta", priority: 60 } },
         resolution: {
           reset: { trade: null },
           redundancy: "eligible",
@@ -644,7 +618,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "text", renderer: "url" },
-        display: { list: true, detail: true, width: "xs" },
+        display: { width: "xs" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -656,7 +630,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -667,11 +641,7 @@ Rules:
         key: "future",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "meta", priority: 50 },
-        },
+        display: { mobile: { slot: "meta", priority: 50 } },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -689,8 +659,6 @@ Rules:
           suggest: { basis: ["name", "vendor", "productId", "date"] },
         },
         display: {
-          list: true,
-          detail: true,
           renderer: { detail: "expense-project" },
           width: "md",
           mobile: { slot: "meta", priority: 40, interactive: true },
@@ -740,8 +708,6 @@ Rules:
           suggest: { basis: ["name", "vendor"] },
         },
         display: {
-          list: true,
-          detail: true,
           width: "md",
           mobile: { slot: "meta", priority: 45, interactive: true },
         },
@@ -762,8 +728,6 @@ Rules:
         control: { kind: "number" },
         display: {
           columnLabel: "Quantity",
-          list: true,
-          detail: true,
           width: "sm",
           mobile: { slot: "meta", priority: 47, interactive: true },
         },
@@ -797,7 +761,7 @@ Rules:
             ],
           },
         },
-        display: { detail: true },
+        display: { list: false },
         provenance: { kind: "relation", sources: [{ entity: "vendor" }] },
         explanation: {
           ruleId: "expense.vendor",
@@ -820,11 +784,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: {
-          list: true,
-          detail: true,
-          listHidden: true,
-        },
+        display: { listHidden: true },
         provenance: {
           kind: "relation",
           sources: [{ entity: "purchase", relation: "purchase" }],
@@ -850,11 +810,7 @@ Rules:
         nullable: true,
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          labelPath: "purchaseDisplayLabel",
-        },
+        display: { labelPath: "purchaseDisplayLabel" },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),
@@ -862,6 +818,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "beneficiaries",
         collection: { key: ["partyId"] },
         kind: "json",
@@ -887,6 +844,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "funders",
         collection: { key: ["partyId"] },
         kind: "json",
@@ -912,6 +870,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "sourceClaims",
         semanticRole: "externalIdentifier",
         kind: "json",
@@ -936,6 +895,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -945,6 +905,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "purchaseDate",
         kind: "date",
         nullable: true,
@@ -955,6 +916,7 @@ Rules:
         },
       },
       {
+        display: {},
         key: "purchaseDisplayLabel",
         kind: "text",
         nullable: true,
@@ -965,6 +927,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "vendorId",
         kind: "identifier",
         nullable: true,
@@ -976,6 +939,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "vendorLogo",
         kind: "json",
         nullable: true,
@@ -986,6 +950,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "orderUrl",
         kind: "text",
         nullable: true,
@@ -996,6 +961,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "projectName",
         kind: "text",
         nullable: true,
@@ -1006,6 +972,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "productName",
         kind: "text",
         nullable: true,
@@ -1016,6 +983,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: {
@@ -1025,6 +993,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "updatedAt",
         kind: "timestamp",
         validation: {
@@ -1036,7 +1005,7 @@ Rules:
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image" },
+        display: { standard: "image" },
         provenance: {
           kind: "derived",
           sources: [

@@ -26,6 +26,7 @@ import {
   recipeStreams,
   imageUpload,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import {
   addWithDependencies,
   flattenRecipes,
@@ -53,7 +54,6 @@ import {
 import { Description } from "~/ui/primitives/description";
 
 import { BookGroupCard } from "./book-group-card";
-import { runTwoAtATime } from "./bundle";
 import type { CookbookBundleWorker } from "./bundle-worker";
 import { CookbookDropzone } from "./cookbook-dropzone";
 import { loadCookbookWasm, type LoadCookbookWasm } from "./cookbook-wasm";
@@ -946,7 +946,8 @@ export function CookbookImport({
           photoProgress: { done, total: ids.length },
         }));
       };
-      if (book.bundleManifest) await runTwoAtATime(ids, process);
+      // Bound read/decompress/PUT/attach together, not only network requests.
+      if (book.bundleManifest) await forEachConcurrently(ids, 2, process);
       else for (const id of ids) await process(id);
       updateBook(book.source, (current) => ({
         ...current,

@@ -45,6 +45,9 @@ export async function seedNativeQa(
   const ingredient = await createEntity(context, "ingredient", {
     name: "Synthetic Flour",
   });
+  const keyboardProduct = await createEntity(context, "product", {
+    name: "Synthetic Identifier Keyboard Sample",
+  });
   const product = await createEntity(context, "product", {
     name: "Synthetic Flour Bag",
     manufacturer: "Synthetic Mill",
@@ -181,6 +184,7 @@ export async function seedNativeQa(
     SHELF_ID: shelf.id,
     INGREDIENT_ID: ingredient.id,
     PRODUCT_ID: product.id,
+    KEYBOARD_PRODUCT_ID: keyboardProduct.id,
     PRODUCT_RESEARCH_RUN_ID: research.shortcode,
     INVENTORY_ID: inventory.id,
     SHELF_INVENTORY_ID: shelfInventory.id,

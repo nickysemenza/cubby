@@ -26,7 +26,7 @@ function foodProductPrefill(food: FoodSummaryWithLinkedProducts) {
       food.brandedFoodInfo?.brand_owner ??
       food.brandedFoodInfo?.brand_name ??
       undefined,
-    upc: food.brandedFoodInfo?.gtin_upc ?? null,
+    barcode: food.brandedFoodInfo?.gtin_upc ?? null,
     fdcId: food.fdc_id,
   };
 }

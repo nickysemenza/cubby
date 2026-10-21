@@ -111,3 +111,59 @@ export const recipeLineAsInput = (
     ingredientId: line[LINE_TARGET.ingredientId]?.id ?? null,
     recipeId: line[LINE_TARGET.recipeId]?.id ?? null,
   });
+
+export const recipeUsageOut = z.object({
+  id: z.uuid(),
+  recipe: recipeTopLevel,
+  sectionName: z.string().nullish(),
+  amounts: z.array(amount),
+  rawLine: z.string().nullish(),
+  modifier: z.string().nullish(),
+});
+export type RecipeUsage = z.infer<typeof recipeUsageOut>;
+
+/** Public entity-tool projection; the usage row has no public shortcode. */
+export const recipeUsageMcpEntityOut = recipeUsageOut.omit({ id: true });
+
+import { listLabel } from "./entity-definitions/label-field";
+import { displayImagesField } from "./display-images";
+import { recipeTopLevelFields, recipeTotals } from "./recipe-shared";
+
+export function recipeReadSchemas<
+  S extends z.ZodRawShape & {
+    dataQuality: z.ZodType;
+    cost: z.ZodType;
+    calories: z.ZodType;
+    protein: z.ZodType;
+    carbs: z.ZodType;
+    fat: z.ZodType;
+  },
+>(base: z.ZodObject<S>) {
+  const output = base.extend({ sections: recipeSectionsOut });
+  const field = <K extends keyof S>(key: K): S[K] => base.shape[key];
+  const list = z.object({
+    ...recipeTopLevelFields,
+    dataQuality: field("dataQuality"),
+    cost: field("cost"),
+    calories: field("calories"),
+    protein: field("protein"),
+    carbs: field("carbs"),
+    fat: field("fat"),
+    totals: recipeTotals.nullish(),
+    // Server-composed text for the computed Cost, Calories and Time columns.
+    costTotalLabel: listLabel,
+    caloriesTotalLabel: listLabel,
+    totalMinutesLabel: listLabel,
+    // Live MealRecipe rows under a live Meal — a soft-deleted Meal's plan
+    // doesn't count. Backs the list's "Meals" column.
+    meals: z.number().int(),
+    /** Live sections. Cheap correlated scalar — the section GRAPH is not on the
+     *  list path (dropping it was the ~4.7s over-fetch fix). */
+    sectionCount: z.number().int(),
+    // The list only ever renders a thumbnail, so the section graph AND the full
+    // image projection stay off this path (loading every image was the same
+    // over-fetch the `totals` comment above dropped `.sections` for).
+    displayImages: displayImagesField,
+  });
+  return { output, list, detail: output };
+}

@@ -19,6 +19,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
+  mapImages,
   getDb,
   imageJoinBindings,
   insertAndReturn,
@@ -42,10 +43,7 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  hydrateListRead,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
@@ -57,8 +55,9 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import {
   dbMealToAPI,
-  dbMealListReadProjection,
   rollupMealTotals,
+  mealRecipeFields,
+  mealTotalsFields,
 } from "./helpers";
 
 type MealMutationResult = { output: MealOut; entityId: MealId };
@@ -232,7 +231,7 @@ export const mealListRead = async (
   readIntent: ListReadIntent = "page",
   projection: ListProjection = { kind: "full" },
 ) => {
-  return mealScaffold.list(
+  return mealScaffold.read(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -255,26 +254,59 @@ export const mealListRead = async (
               : undefined,
           },
         }),
-      hydrate: (rows, selected) =>
-        hydrateListRead(db, "meal", rows, selected, {
-          media: true,
-          load: async () => undefined,
-          mapRow: (row) => {
-            const result = dbMealListReadProjection(
-              {
-                ...row,
-                recipes: (row.recipes ?? []).flatMap((entry) =>
-                  "recipe" in entry ? [entry] : [],
-                ),
-                images: (row.images ?? []).flatMap((entry) =>
+      read: {
+        media: true,
+        bindings: (bind) => {
+          const recipes = bind.batch(
+            async ({ rows }) =>
+              new Map(
+                rows.map((row) => [
+                  row.id,
+                  mealRecipeFields({
+                    shortcode: row.shortcode,
+                    recipes: (row.recipes ?? []).flatMap((entry) =>
+                      "recipe" in entry ? [entry] : [],
+                    ),
+                  }),
+                ]),
+              ),
+          );
+          return [
+            bind(mealListItemOut.pick({ displayName: true }), (row) => ({
+              displayName: row.name?.trim() || row.date,
+            })),
+            recipes.fields(
+              mealListItemOut.pick({ recipes: true, recipeNames: true }),
+              (row, loaded) => {
+                const values = loaded.get(row.id);
+                if (!values) throw new Error("Meal recipes were not loaded");
+                return values;
+              },
+            ),
+            recipes.fields(
+              mealListItemOut.pick({
+                totals: true,
+                cost: true,
+                calories: true,
+                costTotalLabel: true,
+              }),
+              (row, loaded) => {
+                const values = loaded.get(row.id);
+                if (!values)
+                  throw new Error("Meal totals require loaded recipes");
+                return mealTotalsFields(values.recipes);
+              },
+            ),
+            bind(mealListItemOut.pick({ images: true }), (row) => ({
+              images: mapImages(
+                (row.images ?? []).flatMap((entry) =>
                   "image" in entry ? [entry] : [],
                 ),
-              },
-              selected,
-            );
-            return result;
-          },
-        }),
+              ),
+            })),
+          ];
+        },
+      },
     },
   );
 };

@@ -1,20 +1,18 @@
+import inventoryDefinition from "./entity-definitions/05-inventory.entity";
+import {
+  productInventoryEmbedOut,
+  inventoryDetailProductOut,
+} from "./inventory-fields";
 import { tradeSchema } from "./task-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
-import { fdcId } from "@cubby/usda";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { inventoryRelatedFilterFields } from "./related-view";
-import {
-  auditDateFilterFields,
-  plainDate,
-  timestampedFields,
-} from "./base-entity";
+import { auditDateFilterFields, plainDate } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { positiveAmount } from "./codec";
 import { productMatchSide, productMatchSource } from "./recommendations";
-import { externalIdOut, gtin } from "./external-id";
-import { moneyNullable } from "./money";
-import { imageOut } from "./image";
+import { externalIdOut } from "./external-id";
 import {
   expenseShortcode,
   inventoryShortcode,
@@ -22,8 +20,6 @@ import {
   productShortcode,
 } from "./identifiers";
 import { locationOut } from "./location";
-import { locationListRefOut } from "./location-fields";
-import { productCategory } from "./product-fields";
 import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
@@ -35,7 +31,6 @@ import {
   generatedInventoryItemFieldSchemas,
   generatedInventoryItemFilterFields,
 } from "./generated/entity-field-schemas.inventory.gen";
-import { displayImagesField } from "./display-images";
 import { inventoryOwnershipSelection } from "./inventory-ownership";
 
 export { positiveAmount } from "./codec";
@@ -84,11 +79,10 @@ export const inventoryFiltersSchema = z.object(inventoryFilterFields);
 // the house rule.
 export type InventorySortField = GeneratedEntitySortField<"inventory">;
 
-export const inventoryEntryFields = {
-  ...generatedInventoryItemFieldSchemas.read,
-};
+export const inventoryEntryFields =
+  inventoryDefinition.readSchemas.output.shape;
 
-export const inventoryEntryOut = z.object(inventoryEntryFields);
+export const inventoryEntryOut = inventoryDefinition.readSchemas.output;
 
 /**
  * `"<product name> · <location name>"`, or just the product name when the
@@ -105,24 +99,10 @@ export const inventoryDisplayName = ({
   locationName?: string | null;
 }): string => (locationName ? `${productName} · ${locationName}` : productName);
 
-const productInventoryEmbedFields = {
-  id: productShortcode,
-  name: z.string(),
-  primaryGtin: gtin.nullable(),
-  fdc_id: fdcId.nullable(),
-  manufacturer: z.string(),
-  model: z.string().nullable(),
-  notes: z.string().nullable(),
-  expectedQuantity: z.number().int().positive().nullable(),
-  category: productCategory.nullable(),
-  price: moneyNullable,
-  usdaUnavailable: z.boolean().nullable(),
-  ...timestampedFields,
-};
-
-export const productInventoryEmbedOut = z.object(productInventoryEmbedFields);
-export type ProductInventoryEmbedOut = z.infer<typeof productInventoryEmbedOut>;
-
+export {
+  productInventoryEmbedOut,
+  type ProductInventoryEmbedOut,
+} from "./inventory-fields";
 export const inventoryWithProductOut = z.object({
   ...inventoryEntryFields,
   product: productInventoryEmbedOut,
@@ -133,51 +113,21 @@ export const inventoryWithLocationOut = z.object({
   location: locationOut,
 });
 
-export const inventoryListProductOut = z.object({
-  id: productShortcode,
-  name: z.string(),
-  manufacturer: z.string(),
-  primaryGtin: gtin.nullable(),
-  fdc_id: fdcId.nullable(),
-  category: productCategory.nullable(),
-  expectedQuantity: z.number().int().positive().nullable(),
-  model: z.string().nullable(),
-  price: moneyNullable,
-  usdaUnavailable: z.boolean().nullable(),
-});
-export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
-
-export const inventoryListLocationOut = locationListRefOut;
-export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
-
-const inventoryListItemFields = {
-  ...inventoryEntryFields,
-  displayImages: displayImagesField,
-  product: inventoryListProductOut,
-  location: inventoryListLocationOut,
-  displayName: z.string(),
-};
-
-export const inventoryListItemOut = z.object(inventoryListItemFields);
+export {
+  inventoryListProductOut,
+  inventoryListLocationOut,
+  type InventoryListProductOut,
+  type InventoryListLocationOut,
+  inventoryDetailProductOut,
+} from "./inventory-fields";
+export const inventoryListItemOut = inventoryDefinition.readSchemas.list;
+const inventoryListItemFields = inventoryListItemOut.shape;
 export type InventoryListItemOut = z.infer<typeof inventoryListItemOut>;
 
-export const inventoryDetailProductOut = z.object({
-  ...productInventoryEmbedFields,
-  images: z.array(imageOut),
-  externalIds: z.array(externalIdOut),
-  unitMappings: z.array(unitMappingOut),
-});
-
-const inventoryWithLocationAndProductFields = {
-  ...inventoryEntryFields,
-  product: inventoryDetailProductOut,
-  location: locationOut,
-  displayName: z.string(),
-};
-
-export const inventoryWithLocationAndProductOut = z.object(
-  inventoryWithLocationAndProductFields,
-);
+export const inventoryWithLocationAndProductOut =
+  inventoryDefinition.readSchemas.detail;
+const inventoryWithLocationAndProductFields =
+  inventoryWithLocationAndProductOut.shape;
 export type InventoryWithLocationAndProductOut = z.infer<
   typeof inventoryWithLocationAndProductOut
 >;
@@ -538,7 +488,8 @@ export const reconcileSessionPayload = z.object({
 
 export const inventoryLocationSnapshotInput = z.object({
   locationId: locationShortcode,
-  placement: generatedInventoryItemFieldSchemas.read.placement.default("stock"),
+  placement:
+    inventoryDefinition.readSchemas.output.shape.placement.default("stock"),
 });
 
 export const inventoryLocationSnapshotOut = z.object({

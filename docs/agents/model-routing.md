@@ -97,6 +97,12 @@ only what the main agent has not already read; an independent reviewer reads
 whatever it needs, but reuses the implementer's validation results instead of
 rerunning them.
 
+Subagents report allowlist additions, dependency setup and implementation
+blockers to the parent in their progress or handoff; they do not open a user
+question for these engineering decisions. The parent resolves them within the
+approved scope and keeps file ownership disjoint. Only a material change to the
+user's approved outcome or constraints goes back to the user.
+
 ## Compact context
 
 During multi-stage work, retain the goal, owned files/symbols, decisions,

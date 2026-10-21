@@ -20,7 +20,7 @@ test("product bulk workflow streams validated progress and its final committed r
       manufacturer: "Fixture manufacturer",
       aliases: [],
       tags: [],
-      upc: null,
+      barcode: null,
       fdc_id: null,
       expectedQuantity: null,
       ingredientId: null,

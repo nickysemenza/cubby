@@ -1,5 +1,8 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+
 import type { EntityEditValueBag } from "~/entity/editing/value-schema";
 
+import { collectionDraft, collectionEditSchema } from "./collection-edit";
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
@@ -71,9 +74,29 @@ export function resolveEntityEdit<E extends EditableEntity>(
     };
   }
 
-  const requestedFields = request.fieldScope
+  const scopedFields = request.fieldScope
     ? intentDefinition.fields.filter((field) => field === request.fieldScope)
     : intentDefinition.fields;
+  const hasCollectionControl = scopedFields.some(
+    (key) =>
+      definition.fields.some((field) => field.id === key) &&
+      entityFieldModels[request.entity]?.fields.some(
+        (field) =>
+          field.key === key &&
+          "collection" in field &&
+          "primary" in field.collection &&
+          field.collection.primary,
+      ),
+  );
+  const requestedFields =
+    request.operation === "update" && hasCollectionControl
+      ? scopedFields.filter(
+          (key) =>
+            entityFieldModels[request.entity]?.fields.find(
+              (field) => field.key === key,
+            )?.control?.renderer !== "upc-lookup",
+        )
+      : scopedFields;
   if (request.fieldScope && requestedFields.length === 0) {
     return {
       issues: [
@@ -185,7 +208,37 @@ export function buildEntityEdit<E extends EditableEntity>(
       issues.push({ ...denied(fieldAccess), field: field.id });
       continue;
     }
-    normalized[field.id] = field.normalize(parsedValues[field.id]);
+    try {
+      let value = parsedValues[field.id];
+      const model = entityFieldModels[request.entity]?.fields.find(
+        (model) => model.key === field.id,
+      );
+      const collection =
+        model && "collection" in model ? model.collection : undefined;
+      if (collection && "primary" in collection && collection.primary) {
+        const local = collectionEditSchema.safeParse(value);
+        if (
+          local.success &&
+          local.data.collectionEdit.creating !==
+            (request.operation === "create")
+        )
+          throw new Error("Collection draft mode does not match this edit.");
+        if (!local.success && Array.isArray(value)) {
+          if (request.operation === "update")
+            throw new Error(
+              "Use explicit collection row actions to update identifiers.",
+            );
+          value = collectionDraft(value, true);
+        }
+      }
+      normalized[field.id] = field.normalize(value);
+    } catch (error) {
+      issues.push({
+        field: field.id,
+        message: error instanceof Error ? error.message : String(error),
+        source: "client",
+      });
+    }
   }
 
   for (const field of resolved.fields) {

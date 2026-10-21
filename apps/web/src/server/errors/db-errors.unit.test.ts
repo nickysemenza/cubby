@@ -77,7 +77,7 @@ describe("runWithConflictRecovery", () => {
           throw uniqueViolation("Product_name_manufacturer_key");
         },
         async () => "recovered",
-        "Product_upc_key",
+        (error) => isUniqueViolation(error, "Product_upc_key"),
       ),
     ).rejects.toMatchObject({
       cause: { constraint: "Product_name_manufacturer_key" },

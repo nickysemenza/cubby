@@ -1,3 +1,5 @@
+import { imageAssociationStorage } from "./image-associations";
+import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
@@ -16,940 +18,942 @@ import { mealDate } from "@cubby/schemas/meal-shared";
 import { imageOut } from "./field-primitives.js";
 import { labelField } from "./label-field.js";
 import { z } from "zod";
-export default defineEntity({
-  key: "meal",
-  names: { singular: "Meal", plural: "Meals" },
-  route: {
-    listColumns: {
-      module: "~/features/meal/list-columns",
-      export: "mealListOverride",
-    },
-    basePath: "meals",
-  },
-  table: "Meal",
-  children: mealChildren,
-  identifiers: { brand: "MealId", shortcode: "MEL-" },
-  presentation: {
-    titleField: "displayName",
-    domain: "plan",
-    description: "Dated meal plans and preparation records.",
-    emptyState: {
-      title: "No meals planned",
-      description:
-        "Plan recipes onto your calendar to see costs add up and build a shopping list.",
-      actionLabel: "Plan a Meal",
-    },
-    icons: {
-      phosphor: "CalendarDots",
-      sfSymbol: "fork.knife.circle",
-      emoji: "🍽️",
-    },
-    detail: {
-      activityRelations: [{ relation: "images", dateField: "capturedAt" }],
-      omitRelations: {
-        eaters: "The composition slot renders each eater's portions.",
-        "food-ingredients":
-          "The composition slot renders food entries with their amounts.",
-        "food-products":
-          "The composition slot renders food entries with their amounts.",
-        recipes:
-          "The composition slot renders served recipes with their portions.",
+export default defineEntity(
+  {
+    key: "meal",
+    names: { singular: "Meal", plural: "Meals" },
+    route: {
+      listColumns: {
+        module: "~/features/meal/list-columns",
+        export: "mealListOverride",
       },
-      hero: { stats: ["calories"], when: { field: "date", label: "Eaten" } },
-      additionalSections: [
-        {
-          kind: "slot",
-          id: "composition",
-          title: "Recipes",
-          explanationField: "recipes",
-        },
-        {
-          kind: "slot",
-          id: "nutrition",
-          title: "Nutrition",
-          explanationField: "totals",
-        },
-      ],
+      basePath: "meals",
     },
-    list: {
-      savedViews: [
+    table: "Meal",
+    children: mealChildren,
+    identifiers: { brand: "MealId", shortcode: "MEL-" },
+    presentation: {
+      titleField: "displayName",
+      domain: "plan",
+      description: "Dated meal plans and preparation records.",
+      emptyState: {
+        title: "No meals planned",
+        description:
+          "Plan recipes onto your calendar to see costs add up and build a shopping list.",
+        actionLabel: "Plan a Meal",
+      },
+      icons: {
+        phosphor: "CalendarDots",
+        sfSymbol: "fork.knife.circle",
+        emoji: "🍽️",
+      },
+      detail: {
+        activityRelations: [{ relation: "images", dateField: "capturedAt" }],
+        omitRelations: {
+          eaters: "The composition slot renders each eater's portions.",
+          "food-ingredients":
+            "The composition slot renders food entries with their amounts.",
+          "food-products":
+            "The composition slot renders food entries with their amounts.",
+          recipes:
+            "The composition slot renders served recipes with their portions.",
+        },
+        hero: { stats: ["calories"], when: { field: "date", label: "Eaten" } },
+        additionalSections: [
+          {
+            kind: "slot",
+            id: "composition",
+            title: "Recipes",
+            explanationField: "recipes",
+          },
+          {
+            kind: "slot",
+            id: "nutrition",
+            title: "Nutrition",
+            explanationField: "totals",
+          },
+        ],
+      },
+      list: {
+        savedViews: [
+          {
+            id: "empty-cooked",
+            label: "No linked recipes",
+            description: "Cooked meals with no recipe recorded",
+            filters: [
+              { id: "mealKind", value: ["cooked"] },
+              { id: "related:meal.recipes", value: "none" },
+            ],
+            sort: [{ id: "date", desc: false }],
+            // The Recipes column is defaultVisible:false, so reveal the signal this
+            // view selects on.
+            layout: {
+              columnVisibility: { "related:meal.recipes": true },
+            },
+          },
+        ],
+        read: {
+          relations: ["recipes", "recipeNames"],
+          derived: ["totals", "costTotalLabel", "cost", "calories"],
+          media: ["images", "displayImages"],
+          quality: ["dataQuality"],
+          dependencies: { derived: ["relations"] },
+        },
+        views: [
+          {
+            kind: "slot",
+            id: "calendar",
+            label: "Calendar",
+            searchKeys: ["period", "week", "date"],
+          },
+          {
+            kind: "slot",
+            id: "nutrition",
+            label: "Nutrition",
+            searchKeys: ["date"],
+          },
+          "table",
+        ],
+        links: [{ label: "Shopping list", path: "/meals/shopping-list" }],
+      },
+    },
+    model: {
+      fields: [
         {
-          id: "empty-cooked",
-          label: "No linked recipes",
-          description: "Cooked meals with no recipe recorded",
-          filters: [
-            { id: "mealKind", value: ["cooked"] },
-            { id: "related:meal.recipes", value: "none" },
-          ],
-          sort: [{ id: "date", desc: false }],
-          // The Recipes column is defaultVisible:false, so reveal the signal this
-          // view selects on.
-          layout: {
-            columnVisibility: { "related:meal.recipes": true },
+          key: "date",
+          kind: "date",
+          control: {
+            kind: "date",
+            initial: "today",
+          },
+          display: {
+            format: "plainDate",
+            mobile: { slot: "subtitle", priority: 10 },
+          },
+          validation: {
+            read: mealDate,
+            create: mealDate,
+            update: mealDate.optional(),
           },
         },
-      ],
-      read: {
-        relations: ["recipes", "recipeNames"],
-        derived: ["totals", "costTotalLabel", "cost", "calories"],
-        media: ["images", "displayImages"],
-        quality: ["dataQuality"],
-        dependencies: { derived: ["relations"] },
-      },
-      views: [
         {
-          kind: "slot",
-          id: "calendar",
-          label: "Calendar",
-          searchKeys: ["period", "week", "date"],
+          key: "name",
+          kind: "text",
+          nullable: true,
+          control: { kind: "text", placeholder: "Meal name (optional)" },
+          display: {},
+          validation: {
+            read: z.string().nullable(),
+            create: z.string().nullable().optional(),
+            update: z.string().nullable().optional(),
+          },
         },
         {
-          kind: "slot",
-          id: "nutrition",
-          label: "Nutrition",
-          searchKeys: ["date"],
+          key: "sortOrder",
+          kind: "number",
+          nullable: true,
+          control: { kind: "number" },
+          display: {},
+          validation: {
+            read: z.number().int().nullable(),
+            create: z.number().int().nullable().optional(),
+            update: z.number().int().nullable().optional(),
+          },
         },
-        "table",
-      ],
-      links: [{ label: "Shopping list", path: "/meals/shopping-list" }],
-    },
-  },
-  model: {
-    fields: [
-      {
-        key: "date",
-        kind: "date",
-        control: {
-          kind: "date",
-          initial: "today",
-        },
-        display: {
-          list: true,
-          detail: true,
-          format: "plainDate",
-          mobile: { slot: "subtitle", priority: 10 },
-        },
-        validation: {
-          read: mealDate,
-          create: mealDate,
-          update: mealDate.optional(),
-        },
-      },
-      {
-        key: "name",
-        kind: "text",
-        nullable: true,
-        control: { kind: "text", placeholder: "Meal name (optional)" },
-        display: { list: true, detail: true },
-        validation: {
-          read: z.string().nullable(),
-          create: z.string().nullable().optional(),
-          update: z.string().nullable().optional(),
-        },
-      },
-      {
-        key: "sortOrder",
-        kind: "number",
-        nullable: true,
-        control: { kind: "number" },
-        display: { list: true, detail: true },
-        validation: {
-          read: z.number().int().nullable(),
-          create: z.number().int().nullable().optional(),
-          update: z.number().int().nullable().optional(),
-        },
-      },
-      {
-        key: "mealType",
-        kind: "enum",
-        nullable: true,
-        control: {
-          kind: "select",
-          placeholder: "Which meal of the day?",
-          options: selectControlOptions.mealType,
-          suggest: {
-            basis: ["name"],
-            rules: [
-              `You are a meal-planning classification assistant. Given a meal name, determine which eating occasion of the day it is.
+        {
+          key: "mealType",
+          kind: "enum",
+          nullable: true,
+          control: {
+            kind: "select",
+            placeholder: "Which meal of the day?",
+            options: selectControlOptions.mealType,
+            suggest: {
+              basis: ["name"],
+              rules: [
+                `You are a meal-planning classification assistant. Given a meal name, determine which eating occasion of the day it is.
 
 Rules:
 1. Use the name's timing and dish cues (e.g., "pancakes" suggests breakfast, "birthday cake" suggests dessert).
 2. Salads, sandwiches, and wraps suggest "lunch" when there is no stronger timing or dish cue.
 3. When the name gives no timing or dish cue, prefer "dinner" — the most common unslotted meal.`,
-            ],
+              ],
+            },
+          },
+          display: { mobile: { slot: "meta", priority: 30 } },
+          validation: {
+            read: mealTypeSchema.nullable(),
+            create: mealTypeSchema
+              .describe(
+                "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
+              )
+              .nullable()
+              .optional(),
+            update: mealTypeSchema
+              .describe(
+                "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
+              )
+              .nullable()
+              .optional(),
           },
         },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "meta", priority: 30 },
-        },
-        validation: {
-          read: mealTypeSchema.nullable(),
-          create: mealTypeSchema
-            .describe(
-              "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
-            )
-            .nullable()
-            .optional(),
-          update: mealTypeSchema
-            .describe(
-              "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
-            )
-            .nullable()
-            .optional(),
-        },
-      },
-      {
-        key: "mealKind",
-        kind: "enum",
-        control: {
-          kind: "select",
-          options: selectControlOptions.mealKind,
-          suggest: {
-            basis: ["name"],
-            rules: [
-              `You are a meal-planning classification assistant. Given a meal name, determine how the meal is eaten.
+        {
+          key: "mealKind",
+          kind: "enum",
+          control: {
+            kind: "select",
+            options: selectControlOptions.mealKind,
+            suggest: {
+              basis: ["name"],
+              rules: [
+                `You are a meal-planning classification assistant. Given a meal name, determine how the meal is eaten.
 
 Rules:
 1. A named dish with no restaurant/delivery cue is "cooked".
 2. "leftovers" only when the name says so explicitly.
 3. Restaurant or delivery-service names indicate "eating_out" or "takeout" respectively.`,
+              ],
+            },
+            // The storage default is a DB literal, so the create schema stays
+            // optional with no Zod default to read.
+            initial: { value: "cooked" },
+          },
+          display: { width: "sm", mobile: { slot: "meta", priority: 40 } },
+          validation: {
+            read: mealKindSchema,
+            create: mealKindSchema
+              .describe(
+                "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
+              )
+              .optional(),
+            update: mealKindSchema
+              .describe(
+                "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
+              )
+              .optional(),
+          },
+        },
+        {
+          key: "recipes",
+          kind: "json",
+          control: { kind: "specialized", renderer: "structured-field" },
+          display: {
+            detail: false,
+            labelPath: "recipes[].recipe.name",
+            renderer: { list: "recipe-links" },
+          },
+          provenance: {
+            kind: "relation",
+            sources: [{ entity: "recipe", relation: "recipes" }],
+          },
+          explanation: {
+            ruleId: "meal.recipe-composition",
+            description:
+              "Meal composition is the current ordered set of recipe servings recorded for this meal.",
+            readPath: "recipes",
+            sourceDependencies: [{ path: "recipes", label: "Recipe servings" }],
+          },
+          // Rendered by the `composition` detail slot.
+          validation: {
+            read: z.array(mealRecipeOut),
+            create: z.array(mealRecipeInput).optional(),
+            update: null,
+          },
+        },
+        {
+          key: "pendingImageIds",
+          kind: "identifier",
+          reference: { entity: "image", multiple: true },
+          validation: {
+            read: null,
+            create: z.array(imageShortcode).optional(),
+            update: z.array(imageShortcode).optional(),
+          },
+        },
+        {
+          key: "removeImageIds",
+          kind: "identifier",
+          reference: { entity: "image", multiple: true },
+          validation: {
+            read: null,
+            create: null,
+            update: z.array(imageShortcode).optional(),
+          },
+        },
+        {
+          key: "imageOrder",
+          semanticRole: "attachment",
+          kind: "text",
+          validation: {
+            read: null,
+            create: null,
+            update: z.array(imageShortcode).optional(),
+          },
+        },
+        {
+          key: "images",
+          kind: "json",
+          display: { detail: false, standard: "image" },
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "image", relation: "images" }],
+          },
+          explanation: {
+            ruleId: "meal.images",
+            description:
+              "Meal images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
+            projections: {
+              list: "displayImages",
+              detail: "images",
+              summary: "displayImages",
+            },
+            sourceDependencies: [
+              { path: "displayImages", label: "Selected meal images" },
             ],
           },
-          // The storage default is a DB literal, so the create schema stays
-          // optional with no Zod default to read.
-          initial: { value: "cooked" },
+          validation: { read: z.array(imageOut), create: null, update: null },
         },
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          mobile: { slot: "meta", priority: 40 },
+        {
+          // `name?.trim() || date` — `name` is nullable, so this is the
+          // canonical non-null title.
+          key: "displayName",
+          kind: "text",
+          display: { detail: false, list: false, width: "lg" },
+          validation: { read: z.string(), create: null, update: null },
         },
-        validation: {
-          read: mealKindSchema,
-          create: mealKindSchema
-            .describe(
-              "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
-            )
-            .optional(),
-          update: mealKindSchema
-            .describe(
-              "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
-            )
-            .optional(),
+        {
+          display: { detail: false, list: false },
+          key: "id",
+          kind: "identifier",
+          validation: {
+            read: mealShortcode,
+            create: null,
+            update: null,
+          },
         },
+        {
+          display: { detail: false, list: false },
+          key: "totals",
+          kind: "json",
+          // Rendered by the `nutrition` detail slot.
+          explanation: {
+            ruleId: "meal.totals",
+            description:
+              "Meal totals combine the current recipe servings and their available cost and nutrition totals.",
+            readPath: "totals",
+            sourceDependencies: [{ path: "recipes", label: "Recipe servings" }],
+          },
+          validation: {
+            read: mealTotals,
+            create: null,
+            update: null,
+          },
+        },
+        // Flat preview projections of `totals` (`totalsPreview`): a partial
+        // estimate shows what is known, anything else reads as absent.
+        {
+          key: "cost",
+          kind: "number",
+          nullable: true,
+          display: {
+            detail: false,
+            list: false,
+            preview: true,
+            format: "currency",
+          },
+          validation: {
+            read: z
+              .number()
+              .nullable()
+              .default(null)
+              .describe("Known cost of the totals, in dollars"),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "calories",
+          kind: "number",
+          nullable: true,
+          display: { detail: false, list: false, preview: true },
+          validation: {
+            read: z
+              .number()
+              .nullable()
+              .default(null)
+              .describe("Known kilocalories of the totals"),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "costTotal",
+          kind: "json",
+          nullable: true,
+          labelOverride: "Cost",
+          // Not sortable: a read-time rollup of `recipe.totals x scale` through
+          // the estimate engine, which a SQL ORDER BY cannot reproduce for
+          // partial/pending/unavailable results. The server composes the text.
+          display: {
+            columnIdOverride: "cost",
+            labelPath: "costTotalLabel",
+            width: "xs",
+            mobile: { slot: "trailing", priority: 10 },
+          },
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "recipe", relation: "recipes" }],
+          },
+          explanation: {
+            ruleId: "meal.cost-total",
+            description:
+              "Meal cost combines the current serving count with each recipe's available computed cost range.",
+            resolver: "recipeTotals",
+            projections: {
+              list: "totals.cost",
+              summary: "totals.cost",
+            },
+            sourceDependencies: [
+              { path: "recipes", label: "Recipe servings" },
+              { path: "totals.cost", label: "Computed meal cost" },
+            ],
+          },
+        },
+        labelField("costTotalLabel", "Meal cost total"),
+        {
+          // The names of `recipes[].recipe`, so a generic row or facts list can
+          // show what the meal is without decoding the composition.
+          key: "recipeNames",
+          kind: "text-array",
+          display: { list: false },
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "recipe", relation: "recipes" }],
+          },
+          explanation: {
+            ruleId: "meal.recipe-names",
+            description:
+              "Recipe names are projected from the meal's current recipe composition.",
+            readPath: "recipeNames",
+            sourceDependencies: [
+              { path: "recipes", label: "Recipe composition" },
+            ],
+          },
+          validation: { read: z.array(z.string()), create: null, update: null },
+        },
+        {
+          key: "createdAt",
+          kind: "timestamp",
+          display: { list: false },
+          validation: {
+            read: z.date(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "updatedAt",
+          kind: "timestamp",
+          display: { list: false },
+          validation: {
+            read: z.date(),
+            create: null,
+            update: null,
+          },
+        },
+        { key: "shortcode", kind: "text" },
+        {
+          key: "deletedAt",
+          kind: "timestamp",
+          nullable: true,
+        },
+      ],
+      storage: [
+        {
+          key: "id",
+          specialized: "primary-key:MealId",
+        },
+        { key: "shortcode", specialized: "shortcode" },
+        "date",
+        "name",
+        "sortOrder",
+        { key: "mealType", specialized: "enum:mealType" },
+        {
+          key: "mealKind",
+          defaultValue: "'cooked'",
+          specialized: "enum:mealKind",
+        },
+        { key: "createdAt" },
+        { key: "updatedAt", specialized: "updated-at" },
+        "deletedAt",
+      ],
+      create: [
+        "date",
+        "name",
+        "sortOrder",
+        "mealType",
+        "mealKind",
+        "recipes",
+        "pendingImageIds",
+      ],
+      update: [
+        "date",
+        "name",
+        "sortOrder",
+        "mealType",
+        "mealKind",
+        "pendingImageIds",
+        "removeImageIds",
+        "imageOrder",
+      ],
+      audit: [],
+      // Slot order (`mealTypeValues` is clock order), not slug order.
+      derived: {
+        mealType: { type: "enum", options: [...mealTypeValues] },
+        // A live recipe whose priced ingredients are incomplete.
+        recipeCostCoverage: { type: "boolean" },
       },
+      sort: {
+        fields: ["date", "name", "mealType", "createdAt", "updatedAt"],
+      },
+      intents: {
+        fields: {
+          // `recipes` is create-only (an existing meal's recipes change through the composition
+          // workflow), so it joins the create-only `capture` intent, not `full`.
+          capture: [
+            "date",
+            "name",
+            "mealType",
+            "mealKind",
+            "recipes",
+            "pendingImageIds",
+          ],
+          full: [
+            "date",
+            "name",
+            "mealType",
+            "mealKind",
+            "sortOrder",
+            "pendingImageIds",
+            "removeImageIds",
+            "imageOrder",
+          ],
+          calendar: ["date", "name", "mealType", "mealKind"],
+        },
+        create: ["capture", "full"],
+        update: ["full", "calendar"],
+      },
+      output: [
+        "id",
+        "date",
+        "name",
+        "sortOrder",
+        "mealType",
+        "mealKind",
+        "recipes",
+        "totals",
+        "cost",
+        "calories",
+        "images",
+        "displayName",
+        "recipeNames",
+        "createdAt",
+        "updatedAt",
+      ],
+    },
+    fields: {
+      create: { module: "@cubby/schemas/meal", export: "mealCreateInput" },
+      update: { module: "@cubby/schemas/meal", export: "mealUpdateData" },
+      output: { module: "@cubby/schemas/meal", export: "mealOut" },
+      list: { module: "@cubby/schemas/meal", export: "mealListItemOut" },
+      mcpOutput: {
+        module: "@cubby/schemas/meal",
+        export: "mealMcpEntityOut",
+      },
+      mcpList: {
+        module: "@cubby/schemas/meal",
+        export: "mealMcpEntityOut",
+      },
+      mcpDetail: {
+        module: "@cubby/schemas/meal",
+        export: "mealMcpEntityOut",
+      },
+    },
+    storage: {
+      indexes: [
+        {
+          name: "Meal_date_active_idx",
+          on: ["date"],
+          where: "{deletedAt} IS NULL",
+        },
+      ],
+      relations: {
+        recipes: { many: "mealRecipe" },
+        recipePortions: { many: "mealRecipePortion" },
+        foodEntries: { many: "mealFoodEntry" },
+        images: { many: "entityAttachment" },
+      },
+    },
+    filters: {
+      audit: true,
+      schema: { module: "@cubby/schemas/meal", export: "mealFilterFields" },
+      descriptors: [
+        {
+          columnId: "date",
+          urlKey: "mealDate",
+          kind: "range",
+          wire: { kind: "range", from: "from", to: "to" },
+          deriveSchema: true,
+          stored: true,
+          placeholder: "Filter by meal date...",
+        },
+        {
+          columnId: "mealType",
+          kind: "multiselect",
+          placeholder: "Filter by meal type...",
+          deriveSchema: true,
+          stored: true,
+          schemaRef: {
+            module: "@cubby/schemas/meal-classification",
+            export: "mealTypeSchema",
+          },
+          options: [
+            { value: "breakfast", label: "Breakfast" },
+            { value: "brunch", label: "Brunch" },
+            { value: "lunch", label: "Lunch" },
+            { value: "snack", label: "Snack" },
+            { value: "dinner", label: "Dinner" },
+            { value: "dessert", label: "Dessert" },
+          ],
+        },
+        {
+          columnId: "mealKind",
+          kind: "multiselect",
+          placeholder: "Filter by kind...",
+          deriveSchema: true,
+          stored: true,
+          schemaRef: {
+            module: "@cubby/schemas/meal-classification",
+            export: "mealKindSchema",
+          },
+          options: [
+            { value: "cooked", label: "Cooked", color: "var(--slate)" },
+            { value: "leftovers", label: "Leftovers", color: "var(--slate)" },
+            {
+              value: "eating_out",
+              label: "Eating out",
+              color: "var(--primary)",
+            },
+            {
+              value: "takeout",
+              label: "Takeout / delivery",
+              color: "var(--primary)",
+            },
+            { value: "other", label: "Other", color: "var(--slate)" },
+          ],
+        },
+        {
+          columnId: "recipeCostCoverage",
+          field: "recipeCostCoverage",
+          kind: "boolean",
+          derived: true,
+          placeholder: "Filter recipe cost coverage...",
+          options: [{ value: "true", label: "Understated" }],
+        },
+        {
+          columnId: "related:meal.recipes",
+          field: "recipePresenceFilter",
+          urlKey: "related-recipe",
+          kind: "presence",
+          placeholder: "Filter recipes...",
+          options: [
+            { value: "has", label: "Has recipes", meta: true },
+            { value: "none", label: "(none)", meta: true },
+          ],
+        },
+        {
+          columnId: "recipeId",
+          kind: "idMulti",
+          placeholder: "Filter by related recipe id...",
+          brandRef: { entity: "recipe" },
+        },
+        {
+          columnId: "related:meal.foodProducts",
+          field: "foodProductSearch",
+          urlKey: "related-foodProduct",
+          kind: "text",
+          placeholder: "Search related food products...",
+        },
+        {
+          columnId: "foodProductId",
+          kind: "idMulti",
+          placeholder: "Filter by related food products id...",
+          brandRef: { entity: "product" },
+        },
+        {
+          columnId: "foodProductPresenceFilter",
+          kind: "presence",
+          placeholder: "Filter related food products presence...",
+        },
+        {
+          columnId: "related:meal.foodIngredients",
+          field: "foodIngredientSearch",
+          urlKey: "related-foodIngredient",
+          kind: "text",
+          placeholder: "Search related food ingredients...",
+        },
+        {
+          columnId: "foodIngredientId",
+          kind: "idMulti",
+          placeholder: "Filter by related food ingredients id...",
+          brandRef: { entity: "ingredient" },
+        },
+        {
+          columnId: "foodIngredientPresenceFilter",
+          kind: "presence",
+          placeholder: "Filter related food ingredients presence...",
+        },
+        {
+          columnId: "related:meal.eaters",
+          field: "eaterSearch",
+          urlKey: "related-eater",
+          kind: "text",
+          placeholder: "Search related eaters...",
+        },
+        {
+          columnId: "eaterId",
+          kind: "idMulti",
+          placeholder: "Filter by related eaters id...",
+          brandRef: { entity: "ledgerParty" },
+          currentMember: true,
+        },
+        {
+          columnId: "eaterPresenceFilter",
+          kind: "presence",
+          placeholder: "Filter related eaters presence...",
+        },
+      ],
+    },
+    relations: [
       {
         key: "recipes",
-        kind: "json",
-        control: { kind: "specialized", renderer: "structured-field" },
-        display: {
-          list: true,
-          labelPath: "recipes[].recipe.name",
-          renderer: { list: "recipe-links" },
-        },
+        label: "Recipes",
+        target: "recipe",
+        cardinality: "many",
         provenance: {
-          kind: "relation",
-          sources: [{ entity: "recipe", relation: "recipes" }],
+          kind: "local-path",
+          steps: [
+            { edge: "MealRecipe.mealId", direction: "incoming" },
+            { edge: "MealRecipe.recipeId", direction: "outgoing" },
+          ],
         },
-        explanation: {
-          ruleId: "meal.recipe-composition",
-          description:
-            "Meal composition is the current ordered set of recipe servings recorded for this meal.",
-          readPath: "recipes",
-          sourceDependencies: [{ path: "recipes", label: "Recipe servings" }],
+        inverse: {
+          steps: [
+            { edge: "MealRecipe.recipeId", direction: "incoming" },
+            { edge: "MealRecipe.mealId", direction: "outgoing" },
+          ],
         },
-        // Rendered by the `composition` detail slot.
-        validation: {
-          read: z.array(mealRecipeOut),
-          create: z.array(mealRecipeInput).optional(),
-          update: null,
+        sources: [
+          {
+            key: "served-portions",
+            label: "Served portions",
+            provenance: {
+              kind: "local-path",
+              steps: [
+                { edge: "MealRecipePortion.mealId", direction: "incoming" },
+                {
+                  edge: "MealRecipePortion.mealRecipeId",
+                  direction: "outgoing",
+                },
+                { edge: "MealRecipe.recipeId", direction: "outgoing" },
+              ],
+            },
+            inverse: {
+              steps: [
+                { edge: "MealRecipe.recipeId", direction: "incoming" },
+                {
+                  edge: "MealRecipePortion.mealRecipeId",
+                  direction: "incoming",
+                },
+                { edge: "MealRecipePortion.mealId", direction: "outgoing" },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        key: "food-products",
+        label: "Food products",
+        target: "product",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            { edge: "MealFoodEntry.mealId", direction: "incoming" },
+            { edge: "MealFoodEntry.productId", direction: "outgoing" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "MealFoodEntry.productId", direction: "incoming" },
+            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+          ],
         },
       },
       {
-        key: "pendingImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        validation: {
-          read: null,
-          create: z.array(imageShortcode).optional(),
-          update: z.array(imageShortcode).optional(),
+        key: "food-ingredients",
+        label: "Food ingredients",
+        target: "ingredient",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            { edge: "MealFoodEntry.mealId", direction: "incoming" },
+            { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
+            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+          ],
         },
       },
       {
-        key: "removeImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        validation: {
-          read: null,
-          create: null,
-          update: z.array(imageShortcode).optional(),
+        key: "eaters",
+        label: "Eaters",
+        target: "ledgerParty",
+        cardinality: "many",
+        sourceKey: "food-entries",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            { edge: "MealFoodEntry.mealId", direction: "incoming" },
+            { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+          ],
         },
-      },
-      {
-        key: "imageOrder",
-        semanticRole: "attachment",
-        kind: "text",
-        validation: {
-          read: null,
-          create: null,
-          update: z.array(imageShortcode).optional(),
+        inverse: {
+          steps: [
+            { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
+            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+          ],
         },
+        sources: [
+          {
+            key: "portions",
+            label: "Served portions",
+            provenance: {
+              kind: "local-path",
+              steps: [
+                { edge: "MealRecipePortion.mealId", direction: "incoming" },
+                {
+                  edge: "MealRecipePortion.ledgerPartyId",
+                  direction: "outgoing",
+                },
+              ],
+            },
+            inverse: {
+              steps: [
+                {
+                  edge: "MealRecipePortion.ledgerPartyId",
+                  direction: "incoming",
+                },
+                { edge: "MealRecipePortion.mealId", direction: "outgoing" },
+              ],
+            },
+          },
+        ],
       },
       {
         key: "images",
-        kind: "json",
-        display: { list: true, standard: "image" },
+        label: "Images",
+        target: "image",
+        cardinality: "many",
         provenance: {
-          kind: "derived",
-          sources: [{ entity: "image", relation: "images" }],
-        },
-        explanation: {
-          ruleId: "meal.images",
-          description:
-            "Meal images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
-          projections: {
-            list: "displayImages",
-            detail: "images",
-            summary: "displayImages",
-          },
-          sourceDependencies: [
-            { path: "displayImages", label: "Selected meal images" },
+          kind: "local-path",
+          steps: [
+            { edge: "EntityAttachment.entityId", direction: "incoming" },
+            { edge: "EntityAttachment.imageId", direction: "outgoing" },
           ],
         },
-        validation: { read: z.array(imageOut), create: null, update: null },
-      },
-      {
-        // `name?.trim() || date` — `name` is nullable, so this is the
-        // canonical non-null title.
-        key: "displayName",
-        kind: "text",
-        display: { width: "lg" },
-        validation: { read: z.string(), create: null, update: null },
-      },
-      {
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: mealShortcode,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "totals",
-        kind: "json",
-        // Rendered by the `nutrition` detail slot.
-        explanation: {
-          ruleId: "meal.totals",
-          description:
-            "Meal totals combine the current recipe servings and their available cost and nutrition totals.",
-          readPath: "totals",
-          sourceDependencies: [{ path: "recipes", label: "Recipe servings" }],
-        },
-        validation: {
-          read: mealTotals,
-          create: null,
-          update: null,
-        },
-      },
-      // Flat preview projections of `totals` (`totalsPreview`): a partial
-      // estimate shows what is known, anything else reads as absent.
-      {
-        key: "cost",
-        kind: "number",
-        nullable: true,
-        display: { preview: true, format: "currency" },
-        validation: {
-          read: z
-            .number()
-            .nullable()
-            .default(null)
-            .describe("Known cost of the totals, in dollars"),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "calories",
-        kind: "number",
-        nullable: true,
-        display: { preview: true },
-        validation: {
-          read: z
-            .number()
-            .nullable()
-            .default(null)
-            .describe("Known kilocalories of the totals"),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "costTotal",
-        kind: "json",
-        nullable: true,
-        labelOverride: "Cost",
-        // Not sortable: a read-time rollup of `recipe.totals x scale` through
-        // the estimate engine, which a SQL ORDER BY cannot reproduce for
-        // partial/pending/unavailable results. The server composes the text.
-        display: {
-          list: true,
-          columnIdOverride: "cost",
-          labelPath: "costTotalLabel",
-          width: "xs",
-          mobile: { slot: "trailing", priority: 10 },
-        },
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "recipe", relation: "recipes" }],
-        },
-        explanation: {
-          ruleId: "meal.cost-total",
-          description:
-            "Meal cost combines the current serving count with each recipe's available computed cost range.",
-          resolver: "recipeTotals",
-          projections: {
-            list: "totals.cost",
-            summary: "totals.cost",
-          },
-          sourceDependencies: [
-            { path: "recipes", label: "Recipe servings" },
-            { path: "totals.cost", label: "Computed meal cost" },
+        inverse: {
+          steps: [
+            { edge: "EntityAttachment.imageId", direction: "incoming" },
+            { edge: "EntityAttachment.entityId", direction: "outgoing" },
           ],
         },
       },
-      labelField("costTotalLabel", "Meal cost total"),
-      {
-        // The names of `recipes[].recipe`, so a generic row or facts list can
-        // show what the meal is without decoding the composition.
-        key: "recipeNames",
-        kind: "text-array",
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "recipe", relation: "recipes" }],
-        },
-        explanation: {
-          ruleId: "meal.recipe-names",
-          description:
-            "Recipe names are projected from the meal's current recipe composition.",
-          readPath: "recipeNames",
-          sourceDependencies: [
-            { path: "recipes", label: "Recipe composition" },
-          ],
-        },
-        validation: { read: z.array(z.string()), create: null, update: null },
-      },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { detail: true },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { detail: true },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
     ],
-    storage: [
-      {
-        key: "id",
-        specialized: "primary-key:MealId",
-      },
-      { key: "shortcode", specialized: "shortcode" },
-      "date",
-      "name",
-      "sortOrder",
-      { key: "mealType", specialized: "enum:mealType" },
-      {
-        key: "mealKind",
-        defaultValue: "'cooked'",
-        specialized: "enum:mealKind",
-      },
-      { key: "createdAt" },
-      { key: "updatedAt", specialized: "updated-at" },
-      "deletedAt",
-    ],
-    create: [
-      "date",
-      "name",
-      "sortOrder",
-      "mealType",
-      "mealKind",
-      "recipes",
-      "pendingImageIds",
-    ],
-    update: [
-      "date",
-      "name",
-      "sortOrder",
-      "mealType",
-      "mealKind",
-      "pendingImageIds",
-      "removeImageIds",
-      "imageOrder",
-    ],
-    audit: [],
-    // Slot order (`mealTypeValues` is clock order), not slug order.
-    derived: {
-      mealType: { type: "enum", options: [...mealTypeValues] },
-      // A live recipe whose priced ingredients are incomplete.
-      recipeCostCoverage: { type: "boolean" },
-    },
-    sort: {
-      fields: ["date", "name", "mealType", "createdAt", "updatedAt"],
-    },
-    intents: {
-      fields: {
-        // `recipes` is create-only (an existing meal's recipes change through the composition
-        // workflow), so it joins the create-only `capture` intent, not `full`.
-        capture: [
-          "date",
-          "name",
-          "mealType",
-          "mealKind",
-          "recipes",
-          "pendingImageIds",
-        ],
-        full: [
-          "date",
-          "name",
-          "mealType",
-          "mealKind",
-          "sortOrder",
-          "pendingImageIds",
-          "removeImageIds",
-          "imageOrder",
-        ],
-        calendar: ["date", "name", "mealType", "mealKind"],
-      },
-      create: ["capture", "full"],
-      update: ["full", "calendar"],
-    },
-    output: [
-      "id",
-      "date",
-      "name",
-      "sortOrder",
-      "mealType",
-      "mealKind",
-      "recipes",
-      "totals",
-      "cost",
-      "calories",
-      "images",
-      "displayName",
-      "recipeNames",
-      "createdAt",
-      "updatedAt",
-    ],
-  },
-  fields: {
-    create: { module: "@cubby/schemas/meal", export: "mealCreateInput" },
-    update: { module: "@cubby/schemas/meal", export: "mealUpdateData" },
-    output: { module: "@cubby/schemas/meal", export: "mealOut" },
-    list: { module: "@cubby/schemas/meal", export: "mealListItemOut" },
-    mcpOutput: {
-      module: "@cubby/schemas/meal",
-      export: "mealMcpEntityOut",
-    },
-    mcpList: {
-      module: "@cubby/schemas/meal",
-      export: "mealMcpEntityOut",
-    },
-    mcpDetail: {
-      module: "@cubby/schemas/meal",
-      export: "mealMcpEntityOut",
-    },
-  },
-  storage: {
-    indexes: [
-      {
-        name: "Meal_date_active_idx",
-        on: ["date"],
-        where: "{deletedAt} IS NULL",
-      },
-    ],
-    relations: {
-      recipes: { many: "mealRecipe" },
-      recipePortions: { many: "mealRecipePortion" },
-      foodEntries: { many: "mealFoodEntry" },
-      images: { many: "entityAttachment" },
-    },
-  },
-  filters: {
-    audit: true,
-    schema: { module: "@cubby/schemas/meal", export: "mealFilterFields" },
-    descriptors: [
-      {
-        columnId: "date",
-        urlKey: "mealDate",
-        kind: "range",
-        wire: { kind: "range", from: "from", to: "to" },
-        deriveSchema: true,
-        stored: true,
-        placeholder: "Filter by meal date...",
-      },
-      {
-        columnId: "mealType",
-        kind: "multiselect",
-        placeholder: "Filter by meal type...",
-        deriveSchema: true,
-        stored: true,
-        schemaRef: {
-          module: "@cubby/schemas/meal-classification",
-          export: "mealTypeSchema",
-        },
-        options: [
-          { value: "breakfast", label: "Breakfast" },
-          { value: "brunch", label: "Brunch" },
-          { value: "lunch", label: "Lunch" },
-          { value: "snack", label: "Snack" },
-          { value: "dinner", label: "Dinner" },
-          { value: "dessert", label: "Dessert" },
-        ],
-      },
-      {
-        columnId: "mealKind",
-        kind: "multiselect",
-        placeholder: "Filter by kind...",
-        deriveSchema: true,
-        stored: true,
-        schemaRef: {
-          module: "@cubby/schemas/meal-classification",
-          export: "mealKindSchema",
-        },
-        options: [
-          { value: "cooked", label: "Cooked", color: "var(--slate)" },
-          { value: "leftovers", label: "Leftovers", color: "var(--slate)" },
-          { value: "eating_out", label: "Eating out", color: "var(--primary)" },
+    search: "semantic",
+    capabilities: {
+      images: {
+        storage: imageAssociationStorage.shape.meal.value,
+        displaySources: [
           {
-            value: "takeout",
-            label: "Takeout / delivery",
-            color: "var(--primary)",
+            relationPath: ["recipes"],
+            priority: 1,
+            ordering: "declared",
+            identityEvidence: false,
           },
-          { value: "other", label: "Other", color: "var(--slate)" },
         ],
-      },
-      {
-        columnId: "recipeCostCoverage",
-        field: "recipeCostCoverage",
-        kind: "boolean",
-        derived: true,
-        placeholder: "Filter recipe cost coverage...",
-        options: [{ value: "true", label: "Understated" }],
-      },
-      {
-        columnId: "related:meal.recipes",
-        field: "recipePresenceFilter",
-        urlKey: "related-recipe",
-        kind: "presence",
-        placeholder: "Filter recipes...",
-        options: [
-          { value: "has", label: "Has recipes", meta: true },
-          { value: "none", label: "(none)", meta: true },
-        ],
-      },
-      {
-        columnId: "recipeId",
-        kind: "idMulti",
-        placeholder: "Filter by related recipe id...",
-        brandRef: { entity: "recipe" },
-      },
-      {
-        columnId: "related:meal.foodProducts",
-        field: "foodProductSearch",
-        urlKey: "related-foodProduct",
-        kind: "text",
-        placeholder: "Search related food products...",
-      },
-      {
-        columnId: "foodProductId",
-        kind: "idMulti",
-        placeholder: "Filter by related food products id...",
-        brandRef: { entity: "product" },
-      },
-      {
-        columnId: "foodProductPresenceFilter",
-        kind: "presence",
-        placeholder: "Filter related food products presence...",
-      },
-      {
-        columnId: "related:meal.foodIngredients",
-        field: "foodIngredientSearch",
-        urlKey: "related-foodIngredient",
-        kind: "text",
-        placeholder: "Search related food ingredients...",
-      },
-      {
-        columnId: "foodIngredientId",
-        kind: "idMulti",
-        placeholder: "Filter by related food ingredients id...",
-        brandRef: { entity: "ingredient" },
-      },
-      {
-        columnId: "foodIngredientPresenceFilter",
-        kind: "presence",
-        placeholder: "Filter related food ingredients presence...",
-      },
-      {
-        columnId: "related:meal.eaters",
-        field: "eaterSearch",
-        urlKey: "related-eater",
-        kind: "text",
-        placeholder: "Search related eaters...",
-      },
-      {
-        columnId: "eaterId",
-        kind: "idMulti",
-        placeholder: "Filter by related eaters id...",
-        brandRef: { entity: "ledgerParty" },
-        currentMember: true,
-      },
-      {
-        columnId: "eaterPresenceFilter",
-        kind: "presence",
-        placeholder: "Filter related eaters presence...",
-      },
-    ],
-  },
-  relations: [
-    {
-      key: "recipes",
-      label: "Recipes",
-      target: "recipe",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "MealRecipe.mealId", direction: "incoming" },
-          { edge: "MealRecipe.recipeId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "MealRecipe.recipeId", direction: "incoming" },
-          { edge: "MealRecipe.mealId", direction: "outgoing" },
-        ],
-      },
-      sources: [
-        {
-          key: "served-portions",
-          label: "Served portions",
-          provenance: {
-            kind: "local-path",
-            steps: [
-              { edge: "MealRecipePortion.mealId", direction: "incoming" },
-              {
-                edge: "MealRecipePortion.mealRecipeId",
-                direction: "outgoing",
-              },
-              { edge: "MealRecipe.recipeId", direction: "outgoing" },
-            ],
+        ingress: [
+          { kind: "self", routeId: "meal-self" },
+          {
+            kind: "createSelf",
+            routeId: "meal-new",
+            enabled: true,
+            bindings: [{ field: "date", from: "capture-date" }],
           },
-          inverse: {
-            steps: [
-              { edge: "MealRecipe.recipeId", direction: "incoming" },
-              {
-                edge: "MealRecipePortion.mealRecipeId",
-                direction: "incoming",
-              },
-              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
-            ],
+        ],
+        routing: {
+          category: "food",
+          candidateFields: ["name"],
+          temporalFields: ["date"],
+          lifecycleFilters: [],
+          signals: { ocrFields: ["name"], classifierLabels: ["food"] },
+          abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
+        },
+      },
+      delete: { mode: "soft", bulk: true },
+      merge: false,
+      dataQuality: {
+        checks: [
+          {
+            id: "meal_recipe_cost_incomplete",
+            satisfiedLabel: "Recipe costs complete",
+            placement: { section: "composition" },
+            facet: "integrity",
+            kind: "defect",
+            weight: 1,
+            scoring: "unscored",
+            exceptions: "forbidden",
+            label: "Incomplete recipe cost",
+            message:
+              "A live linked recipe has incomplete priced ingredient coverage.",
           },
-        },
-      ],
-    },
-    {
-      key: "food-products",
-      label: "Food products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "MealFoodEntry.mealId", direction: "incoming" },
-          { edge: "MealFoodEntry.productId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "MealFoodEntry.productId", direction: "incoming" },
-          { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "food-ingredients",
-      label: "Food ingredients",
-      target: "ingredient",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "MealFoodEntry.mealId", direction: "incoming" },
-          { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
-          { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-        ],
-      },
-    },
-    {
-      key: "eaters",
-      label: "Eaters",
-      target: "ledgerParty",
-      cardinality: "many",
-      sourceKey: "food-entries",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "MealFoodEntry.mealId", direction: "incoming" },
-          { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
-          { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-        ],
-      },
-      sources: [
-        {
-          key: "portions",
-          label: "Served portions",
-          provenance: {
-            kind: "local-path",
-            steps: [
-              { edge: "MealRecipePortion.mealId", direction: "incoming" },
-              {
-                edge: "MealRecipePortion.ledgerPartyId",
-                direction: "outgoing",
-              },
-            ],
+          {
+            id: "meal_contents",
+            satisfiedLabel: "Contents recorded",
+            placement: { section: "composition" },
+            facet: "content",
+            weight: 3,
+            scoreCap: 69,
+            label: "Contents",
+            message:
+              "No live recipes or food entries are recorded for this cooked meal.",
           },
-          inverse: {
-            steps: [
-              {
-                edge: "MealRecipePortion.ledgerPartyId",
-                direction: "incoming",
-              },
-              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
-            ],
-          },
-        },
-      ],
-    },
-    {
-      key: "images",
-      label: "Images",
-      target: "image",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "EntityAttachment.entityId", direction: "incoming" },
-          { edge: "EntityAttachment.imageId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "EntityAttachment.imageId", direction: "incoming" },
-          { edge: "EntityAttachment.entityId", direction: "outgoing" },
         ],
       },
     },
-  ],
-  search: "semantic",
-  capabilities: {
-    images: {
-      storage: "gallery",
-      displaySources: [
-        {
-          relationPath: ["recipes"],
-          priority: 1,
-          ordering: "declared",
-          identityEvidence: false,
+    extensions: {
+      ports: {
+        repository: {
+          module: "~/server/domains/meal/repo/repository",
+          export: "mealRepository",
         },
-      ],
-      ingress: [
-        { kind: "self", routeId: "meal-self" },
-        {
-          kind: "createSelf",
-          routeId: "meal-new",
-          enabled: true,
-          bindings: [{ field: "date", from: "capture-date" }],
-        },
-      ],
-      routing: {
-        category: "food",
-        candidateFields: ["name"],
-        temporalFields: ["date"],
-        lifecycleFilters: [],
-        signals: { ocrFields: ["name"], classifierLabels: ["food"] },
-        abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
+        search: "document",
       },
-    },
-    delete: { mode: "soft", bulk: true },
-    merge: false,
-    dataQuality: {
-      checks: [
-        {
-          id: "meal_recipe_cost_incomplete",
-          satisfiedLabel: "Recipe costs complete",
-          placement: { section: "composition" },
-          facet: "integrity",
-          kind: "defect",
-          weight: 1,
-          scoring: "unscored",
-          exceptions: "forbidden",
-          label: "Incomplete recipe cost",
-          message:
-            "A live linked recipe has incomplete priced ingredient coverage.",
-        },
-        {
-          id: "meal_contents",
-          satisfiedLabel: "Contents recorded",
-          placement: { section: "composition" },
-          facet: "content",
-          weight: 3,
-          scoreCap: 69,
-          label: "Contents",
-          message:
-            "No live recipes or food entries are recorded for this cooked meal.",
-        },
-      ],
     },
   },
-  extensions: {
-    ports: {
-      repository: {
-        module: "~/server/domains/meal/repo/repository",
-        export: "mealRepository",
-      },
-      search: "document",
-    },
-  },
-});
+  mealReadSchemas,
+);

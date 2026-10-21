@@ -22,10 +22,11 @@ import {
 import { z } from "zod";
 
 import { useDeferredEntityRosters } from "~/entity/hooks/use-deferred-reference-filter-options";
-import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
+import { useInfiniteTableListScope } from "~/entity/hooks/use-infinite-table-list";
 import { Page, usePageCount } from "~/entity/page/page";
 import { FindSuggestionsDialog } from "~/entity/suggestions/find-suggestions-dialog";
-import RTable from "~/entity/table/table";
+import { ListWorkbench } from "~/entity/table/list-workbench";
+import { useChildListWorkbench } from "~/entity/table/use-child-list-workbench";
 import {
   useTableState,
   type TableStateReturn,
@@ -37,13 +38,9 @@ import { formatCount, formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
-import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
-import type { CubbyRow } from "~/ui/data-table/table-features";
+import type { CubbyTable, CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
-import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
-import { useTableConfig } from "~/ui/data-table/use-table-config";
-import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Panel } from "~/ui/layout/panel";
 import { Alert } from "~/ui/primitives/alert";
@@ -400,7 +397,7 @@ function QuickFilters({
   tableState,
   hints,
 }: {
-  table: ReturnType<typeof useTableConfig<Row>>;
+  table: CubbyTable<Row>;
   view: SuggestionView;
   tableState: TableStateReturn;
   hints: Record<string, Record<string, string>>;
@@ -482,21 +479,22 @@ function SuggestionsTable({
     }),
     [scope, view, grouped],
   );
-  const list = useInfiniteTableList({
+  const reviewScope = useInfiniteTableListScope({
     queryOptions: queryPlan,
     buildFilters,
     tableState,
   });
-  usePageCount(list.isLoading ? undefined : list.totalCount);
-  const filters = buildFilters(tableState);
-  const reviewScope = JSON.stringify([filters, tableState.sorting]);
+  const filters = useMemo(
+    () => buildFilters(tableState),
+    [buildFilters, tableState],
+  );
   return (
     <SuggestionReviewProvider scope={reviewScope}>
       <SuggestionsTableBody
         view={view}
         grouped={grouped}
         onSearch={onSearch}
-        list={list}
+        filters={filters}
         tableState={tableState}
         cleanFilters={{
           ...filters.scope,
@@ -511,43 +509,24 @@ function SuggestionsTableBody({
   view,
   grouped,
   onSearch,
-  list,
+  filters,
   tableState,
   cleanFilters,
 }: {
   view: SuggestionView;
   grouped: boolean;
   onSearch: (patch: Partial<SuggestionsSearch>, replace?: boolean) => void;
-  list: ReturnType<
-    typeof useInfiniteTableList<QueryFilters, Row, SuggestionListOut>
-  >;
+  filters: QueryFilters;
   tableState: TableStateReturn;
   cleanFilters: NonNullable<CleanTarget["filters"]>;
 }) {
   const review = useSuggestionReview();
-  const rowsById = useMemo(
-    () => new Map(list.data.map((row) => [row.id, row.record])),
-    [list.data],
-  );
-  const accept = useAcceptClean((id) => rowsById.get(id));
   const rosters = useDeferredEntityRosters(REFERENCE_ROSTERS);
-  const firstPage = list.pages?.[0];
   const providerCategoryLabel = "Provider category";
   const columns = useMemo(
     () => viewColumns(view, rosters, providerCategoryLabel),
     [view, rosters, providerCategoryLabel],
   );
-  const hints = useMemo(() => {
-    const out: Record<string, Record<string, string>> = {};
-    for (const [column, counts] of Object.entries(firstPage?.facets ?? {}))
-      out[column] = Object.fromEntries(
-        counts.map(({ value, count }) => [String(value), formatCount(count)]),
-      );
-    return out;
-  }, [firstPage?.facets]);
-  const cleanCount =
-    firstPage?.facets.clean?.find((facet) => facet.value === true)?.count ?? 0;
-
   const bulk: BulkActionsConfig<Row> = {
     actions: [
       {
@@ -585,15 +564,13 @@ function SuggestionsTableBody({
       },
     ],
   };
-  const selection = useBulkActions({ config: bulk });
-  const table = useTableConfig({
-    data: list.data,
+  const list = useChildListWorkbench({
+    read: queryPlan,
+    filters,
     columns,
     tableState,
-    totalCount: list.data.length,
-    getRowId: (row) => row.id,
-    rowSelection: selection.rowSelection,
-    onRowSelectionChange: selection.onRowSelectionChange,
+    navigation: { kind: "none" },
+    selection: bulk,
     initialColumnVisibility: viewSetting<Record<string, false>>(
       VIEW_HIDDEN_COLUMNS,
       view,
@@ -601,6 +578,24 @@ function SuggestionsTableBody({
     scrollRestorationId: `suggestions-${view}`,
     rowContentVersion: review,
   });
+  const table = list.model.table;
+  usePageCount(list.isLoading ? undefined : list.totalCount);
+  const rowsById = useMemo(
+    () => new Map(list.data.map((row) => [row.id, row.record])),
+    [list.data],
+  );
+  const accept = useAcceptClean((id) => rowsById.get(id));
+  const firstPage = list.pages?.[0];
+  const hints = useMemo(() => {
+    const out: Record<string, Record<string, string>> = {};
+    for (const [column, counts] of Object.entries(firstPage?.facets ?? {}))
+      out[column] = Object.fromEntries(
+        counts.map(({ value, count }) => [String(value), formatCount(count)]),
+      );
+    return out;
+  }, [firstPage?.facets]);
+  const cleanCount =
+    firstPage?.facets.clean?.find((facet) => facet.value === true)?.count ?? 0;
 
   const groups = firstPage?.meta.groups ?? NO_GROUPS;
   const groupConfig = useMemo<GroupConfig | undefined>(
@@ -638,7 +633,11 @@ function SuggestionsTableBody({
                   <Button
                     size="xs"
                     variant="outline"
-                    disabled={group.clean === 0 || accept.running}
+                    disabled={
+                      group.clean === 0 ||
+                      accept.running ||
+                      list.infiniteScroll.isTransitioning
+                    }
                     onClick={() =>
                       accept.confirm({
                         label: `${monthLabel(group.month)} account group`,
@@ -662,7 +661,13 @@ function SuggestionsTableBody({
             },
           }
         : undefined,
-    [grouped, groups, accept, cleanFilters],
+    [
+      grouped,
+      groups,
+      accept,
+      cleanFilters,
+      list.infiniteScroll.isTransitioning,
+    ],
   );
 
   // Keyboard review: ↑/↓ move, → open evidence, ← close, A accept, D dismiss.
@@ -672,7 +677,8 @@ function SuggestionsTableBody({
       event.metaKey ||
       event.ctrlKey ||
       event.altKey ||
-      ownsKeys(event.target)
+      ownsKeys(event.target) ||
+      list.infiniteScroll.isTransitioning
     )
       return;
     const rows = list.data;
@@ -739,8 +745,6 @@ function SuggestionsTableBody({
       : tableState.sorting.length === 1 && tableState.sorting[0]?.id === "ready"
         ? "ready"
         : null;
-  const isLoading = useHydratedLoading(list.isLoading);
-  const selectedRows = table.getFilteredSelectedRowModel().rows;
   const renderDetail = useCallback(
     (row: CubbyRow<Row>) => <SuggestionEvidence row={row.original} />,
     [],
@@ -808,7 +812,7 @@ function SuggestionsTableBody({
             <span className="ml-auto flex gap-1">
               <Button
                 size="xs"
-                disabled={accept.running}
+                disabled={accept.running || list.infiniteScroll.isTransitioning}
                 onClick={() =>
                   accept.confirm({
                     label: "Every clean suggestion in this view",
@@ -864,37 +868,18 @@ function SuggestionsTableBody({
           </Alert>
         ) : null}
       </div>
-      <RTable
-        table={table}
+      <ListWorkbench
+        model={{ ...list.model, groupConfig }}
         ariaLabel="Suggestions"
-        isLoading={isLoading}
-        error={list.error}
-        infiniteScroll={list.infiniteScroll}
-        refreshControls={list.refreshControls}
-        groupConfig={groupConfig}
         rowDetail={{ openIds: review.openIds, render: renderDetail }}
         filterOptionHints={hints}
         currentRowId={current}
         onRowClick={(row) => setCurrent(row.id)}
-        getMobileDetailsHref={() => undefined}
-        disableMobileDetailsHref
         renderMobileRowFooter={(row) => (
           <MobileEvidenceDisclosure row={row}>
             <SuggestionEvidence row={row} />
           </MobileEvidenceDisclosure>
         )}
-        bulkActionBar={
-          <BulkActionBar
-            selectedCount={selection.selectedCount}
-            selectedRows={selectedRows}
-            actions={selection.getAvailableActions(selectedRows)}
-            onExecute={selection.executeAction}
-            onClearSelection={selection.clearSelection}
-            isExecuting={selection.isExecuting}
-            currentAction={selection.currentAction}
-            disabled={list.infiniteScroll.isTransitioning}
-          />
-        }
         showColumnMenu
         emptyState={
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">

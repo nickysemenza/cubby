@@ -127,10 +127,9 @@ export function isStatementTimeout(error: UnparsedDatabaseError): boolean {
  * can't reach it) — e.g. `createRecipe`, which inserts a recipe plus sections in
  * its OWN transaction.
  *
- * If `create` throws a unique-violation (optionally scoped to `constraint`), a
- * concurrent request created the same row between the caller's SELECT and this
- * INSERT. `recover` then runs fresh statements to load and return/update the
- * committed winner.
+ * `matchesConflict` defaults to SQL uniqueness; a caller can narrow its index
+ * or include a domain collision. `recover` rechecks the requested identity
+ * after rollback and returns the committed winner only when it exists.
  *
  * IMPORTANT: `recover` must run on a clean connection, so this is safe only when
  * a failed `create` leaves no poisoned, still-open transaction behind. That
@@ -140,17 +139,19 @@ export function isStatementTimeout(error: UnparsedDatabaseError): boolean {
  * (a single failed INSERT commits nothing). Do NOT use it for a `create` that
  * runs inside the caller's *open* transaction — the violation poisons that txn
  * and `recover`'s queries would error. Re-throws anything that isn't a matching
- * unique violation.
+ * conflict. Callers can narrow SQL constraints or include domain conflicts.
  */
 export async function runWithConflictRecovery<T>(
   create: () => Promise<T>,
   recover: (error: UnparsedDatabaseError) => Promise<T>,
-  constraint?: string,
+  matchesConflict: (
+    error: UnparsedDatabaseError,
+  ) => boolean = isUniqueViolation,
 ): Promise<T> {
   try {
     return await create();
   } catch (error) {
-    if (!isUniqueViolation(error, constraint)) throw error;
+    if (!matchesConflict(error)) throw error;
     return await recover(error);
   }
 }

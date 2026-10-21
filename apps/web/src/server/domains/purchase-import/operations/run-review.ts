@@ -8,6 +8,7 @@ import {
   parseEntityId,
   purchaseId,
   runEntityId,
+  type RunId,
 } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/purchase-import";
 import {
@@ -32,8 +33,12 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { getDb, withTransaction } from "~/server/db/helpers";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import {
+  getDb,
+  withTransaction,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import {
   auditLog,
   photoGroupProposal,
@@ -46,6 +51,7 @@ import {
   readMailRunSources,
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
@@ -89,6 +95,8 @@ async function reconcileSettledRunOnce(
     runId: string;
     operationId: string;
     generation: string | null;
+    /** The activity window observed by stale recovery, rechecked at its terminal write. */
+    staleBefore?: Date;
     sequence?: number;
     detail?: string;
     /**
@@ -135,10 +143,15 @@ async function reconcileSettledRunOnce(
         .select({ run: runTable })
         .from(runTable)
         .where(eq(runTable.id, scope.public.runId))
-        .for("update");
+        .for("no key update");
       if (
         locked?.run.status !== "running" ||
-        locked.run.dispatchEventId !== input.generation
+        locked.run.dispatchEventId !== input.generation ||
+        !(await staleRunStillEligible(
+          tx,
+          scope.public.runId,
+          input.staleBefore,
+        ))
       )
         return false;
       const [proposal] = await tx
@@ -204,10 +217,15 @@ async function reconcileSettledRunOnce(
         })
         .from(runTable)
         .where(eq(runTable.id, scope.public.runId))
-        .for("update");
+        .for("no key update");
       if (
         locked?.status !== "running" ||
-        locked.generation !== input.generation
+        locked.generation !== input.generation ||
+        !(await staleRunStillEligible(
+          tx,
+          scope.public.runId,
+          input.staleBefore,
+        ))
       )
         return false;
       const sources = await readMailRunSources(tx, scope.public.runId);
@@ -252,6 +270,7 @@ async function reconcileSettledRunOnce(
         kind: "unresolved_targets",
         dispatchEventId: input.generation,
         summary: unresolvedTargetsSummary(settled.unresolved, settled.reasons),
+        staleBefore: input.staleBefore,
       });
       const status = (await loadRunScope(db, input.runId)).public.status;
       return { reconciled: status === "needs_review", status };
@@ -263,6 +282,7 @@ async function reconcileSettledRunOnce(
     kind: "other",
     dispatchEventId: input.generation,
     summary: input.detail ?? "Coordinator ended without finishing the run",
+    staleBefore: input.staleBefore,
   });
   const settledStatus = (await loadRunScope(db, input.runId)).public.status;
   return {
@@ -271,49 +291,94 @@ async function reconcileSettledRunOnce(
   };
 }
 
+/** The existing two-hour backstop excludes Workflow sleeps and undispatched native uploads. */
+function staleRunWhere(cutoff: Date) {
+  return and(
+    eq(runTable.status, "running"),
+    lt(runTable.updatedAt, cutoff),
+    notInArray(runTable.purpose, [...WORKFLOW_RUN_PURPOSES]),
+    or(
+      ne(runTable.purpose, runPurpose.enum.photo_inventory),
+      isNotNull(runTable.coordinatorStartedAt),
+    ),
+    // Raw Date parameters use the host offset; stored timestamps are UTC wall time.
+    sql`NOT EXISTS (SELECT 1 FROM ${runOperation} WHERE ${runOperation.runId} = ${runTable.id} AND ${runOperation.startedAt} >= ${cutoff.toISOString()}::timestamp)`,
+    or(isNull(runTable.heartbeatAt), lt(runTable.heartbeatAt, cutoff)),
+  );
+}
+
+/** A fresh statement after the Run lock sees activity committed while that lock waited. */
+async function staleRunStillEligible(
+  tx: DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+  cutoff?: Date,
+) {
+  if (!cutoff) return true;
+  const [current] = await tx
+    .select({ id: runTable.id })
+    .from(runTable)
+    .where(and(eq(runTable.id, runId), staleRunWhere(cutoff)));
+  return Boolean(current);
+}
+
 /**
- * Cron backstop for the reconcile above: a settled event can be lost, and a
- * coordinator can stall inside a submission. Activity is the newest of the
- * run row, its operations and its progress reports so a slow but live agent
- * is not cut off.
+ * Activity is the newest of the Run row, its operations and progress reports.
+ * Agent settlement retains its Mail/photo review behavior; other abandoned
+ * Runs fail without requiring an agent session or removing committed writes.
  */
 export async function expireStaleRuns(db: Database, now = new Date()) {
   const cutoff = new Date(now.getTime() - STALE_RUN_MS);
   const stale = await getDb(db)
-    .select({ id: runTable.id, generation: runTable.dispatchEventId })
+    .select({
+      id: runTable.id,
+      generation: runTable.dispatchEventId,
+      agentSessionId: runTable.agentSessionId,
+    })
     .from(runTable)
-    .where(
-      and(
-        eq(runTable.status, "running"),
-        lt(runTable.updatedAt, cutoff),
-        // A Workflow owns these Runs, and one may sleep through a rate limit;
-        // `reconcileWorkflowRuns` checks their instance instead.
-        notInArray(runTable.purpose, [...WORKFLOW_RUN_PURPOSES]),
-        // Unstarted photo runs may sit between native upload sessions. Once
-        // dispatched, they get the same stalled-coordinator backstop; review
-        // proposals are preserved by reconcileSettledRun.
-        or(
-          ne(runTable.purpose, runPurpose.enum.photo_inventory),
-          isNotNull(runTable.coordinatorStartedAt),
-        ),
-        sql`NOT EXISTS (SELECT 1 FROM ${runOperation} WHERE ${runOperation.runId} = ${runTable.id} AND ${runOperation.startedAt} >= ${cutoff})`,
-        or(isNull(runTable.heartbeatAt), lt(runTable.heartbeatAt, cutoff)),
-      ),
-    );
+    .where(staleRunWhere(cutoff));
   let expired = 0;
   const failures: Array<{ runId: string; error: string }> = [];
   for (const run of stale) {
-    // One run's review path can fail on a provider call (the required audit
-    // pass); that must not abort the tick for every other run or the offline
-    // expiry that shares it. The next tick retries.
     try {
-      const outcome = await reconcileSettledRun(db, {
-        runId: run.id,
-        operationId: `stale-run:${now.toISOString()}`,
-        generation: run.generation,
-        detail: "No coordinator activity for two hours",
-      });
-      if (outcome.reconciled) expired += 1;
+      const reconciled = run.agentSessionId
+        ? (
+            await reconcileSettledRun(db, {
+              runId: run.id,
+              operationId: `stale-run:${now.toISOString()}`,
+              generation: run.generation,
+              staleBefore: cutoff,
+              detail: "No coordinator activity for two hours",
+            })
+          ).reconciled
+        : await withTransactionDatabase(db, async (transactionDb) => {
+            const database = getDb(transactionDb);
+            const [locked] = await database
+              .select({ generation: runTable.dispatchEventId })
+              .from(runTable)
+              .where(eq(runTable.id, run.id))
+              .for("no key update");
+            if (!locked || locked.generation !== run.generation) return false;
+            const eligible = await staleRunStillEligible(
+              database,
+              run.id,
+              cutoff,
+            );
+            if (!eligible) return false;
+            const { failed } = await markRunFailed(transactionDb, {
+              runId: run.id,
+              failureCode: "agent_failed",
+              dispatchEventId: run.generation,
+              detail: "No Run activity for two hours",
+            });
+            if (failed)
+              await failOperationsForRun(
+                database,
+                run.id,
+                "No Run activity for two hours",
+              );
+            return failed;
+          });
+      if (reconciled) expired += 1;
     } catch (error) {
       failures.push({
         runId: run.id,
@@ -539,6 +604,7 @@ async function stopRunForReviewOnce(
     kind: string;
     summary: string;
     dispatchEventId?: string | null;
+    staleBefore?: Date;
   },
 ) {
   const scope = await loadRunScope(db, input.runId);
@@ -572,13 +638,17 @@ async function stopRunForReviewOnce(
   const auditedAt = new Date();
   return withTransaction(db, async (tx) => {
     const [current] = await tx
-      .select({ generation: runTable.dispatchEventId })
+      .select({ generation: runTable.dispatchEventId, status: runTable.status })
       .from(runTable)
       .where(eq(runTable.id, runId))
       .for("no key update");
     if (
-      input.dispatchEventId !== undefined &&
-      current?.generation !== input.dispatchEventId
+      !current ||
+      (current.status !== "needs_review" &&
+        !ACTIVE_RUN_STATUSES.some((status) => status === current.status)) ||
+      (input.dispatchEventId !== undefined &&
+        current.generation !== input.dispatchEventId) ||
+      !(await staleRunStillEligible(tx, runId, input.staleBefore))
     )
       return { findingId: null };
     const [finding] = await tx

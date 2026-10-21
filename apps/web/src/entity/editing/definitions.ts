@@ -11,7 +11,10 @@ import {
   EXPENSE_DATE_REQUIRED_MESSAGE,
   EXPENSE_DISPOSITION_COST_TYPE,
 } from "@cubby/schemas/expense-fields";
-import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
+import {
+  externalIdInput,
+  storedExternalIdUrl,
+} from "@cubby/schemas/external-id";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
@@ -36,6 +39,12 @@ import {
 import { wasm } from "~/lib/wasm";
 
 import { readReferenceField } from "../entity-references";
+import {
+  collectionDraft,
+  collectionEditSchema,
+  collectionWireValue,
+  type CollectionRow,
+} from "./collection-edit";
 import {
   parseEntityEditCreateInput,
   parseEntityEditUpdateInput,
@@ -78,7 +87,7 @@ const valueFor = (record: EntityEditRecord | undefined, id: string) => {
  * means the record carries no such key. For a write-only field (`readKey:
  * null`) that is the normal state, and a `null` form value against it is
  * *unchanged* — otherwise every untouched write-only field would emit
- * `{ field: null }` on save (product's `upc: null` retires the primary GTIN
+ * `{ field: null }` on save (product's `barcode: null` retires the primary GTIN
  * through `syncPrimaryGtin`). A nullable *read* field absent from a partial
  * record still emits `null`: there the absence is an incomplete projection,
  * not "nothing stored", and an explicit clear must reach the server.
@@ -365,7 +374,8 @@ const builderFor = <E extends EditableEntity>(
   // the input schema, hidden keys such as a claim's `sourceKey` kept), so an unedited field is
   // never in the patch and an edited claim keeps its identity.
   const structuredSchemaOf = (id: string) =>
-    fieldModelByKey.get(id)?.control?.renderer === "structured-field"
+    fieldModelByKey.get(id)?.control?.renderer === "structured-field" ||
+    fieldModelByKey.get(id)?.collection?.primary
       ? structuredSchemaFor(entity, id)
       : undefined;
   const recordValueFor = (id: string, record: EntityEditRecord | undefined) => {
@@ -382,6 +392,13 @@ const builderFor = <E extends EditableEntity>(
     id,
     access: options?.access ?? (() => editable),
     initial: (input) => {
+      const collection = fieldModelByKey.get(id)?.collection;
+      if (collection?.primary && collection.key !== "value") {
+        const saved = recordValueFor(id, input.record);
+        return input.operation === "update" && !Array.isArray(saved)
+          ? null
+          : collectionDraft(saved, input.operation === "create");
+      }
       if (options?.initial) return options.initial(input);
       const { operation, record, context } = input;
       if (IMAGE_LIST_FIELDS.has(id)) return [];
@@ -418,6 +435,52 @@ const builderFor = <E extends EditableEntity>(
     normalize:
       options?.normalize ??
       ((value) => {
+        const collection = fieldModelByKey.get(id)?.collection;
+        const local = collectionEditSchema.safeParse(value);
+        if (
+          collection?.primary &&
+          collection.key !== "value" &&
+          local.success
+        ) {
+          const schema = structuredSchemaOf(id);
+          if (
+            !schema ||
+            !("array" in schema.node) ||
+            !("object" in schema.node.array.item.node)
+          )
+            throw new Error(`Collection ${id} needs a record row schema.`);
+          const item = schema.node.array.item;
+          const attributes = schema.node.array.item.node.object.fields
+            .map((field) => field.key)
+            .filter((key) => key !== "id" && !collection.key.includes(key));
+          return collectionWireValue(local.data, {
+            descriptor: { key: collection.key, primary: collection.primary },
+            attributes,
+            normalize: (row: CollectionRow) => {
+              const projected = z
+                .record(z.string(), z.json())
+                .parse(wireValue(project(row, item), item));
+              if (fieldModelByKey.get(id)?.control?.renderer !== "external-ids")
+                return projected;
+              const parsed = externalIdInput.parse(projected);
+              const normalized =
+                parsed.kind === "gtin_14"
+                  ? wasm.scan_code_gtin14(parsed.externalId)
+                  : parsed.externalId;
+              if (!normalized)
+                throw new Error(
+                  "Invalid barcode: enter a valid UPC, EAN, GTIN or ISBN.",
+                );
+              const identifier = {
+                ...parsed,
+                externalId: normalized,
+              };
+              return z
+                .record(z.string(), z.json())
+                .parse({ ...identifier, url: storedExternalIdUrl(identifier) });
+            },
+          });
+        }
         const structured = structuredSchemaOf(id);
         const json = z.json().safeParse(value);
         return structured !== undefined && json.success
@@ -439,6 +502,15 @@ const builderFor = <E extends EditableEntity>(
     },
     toPatch: (input) => {
       const { value, record } = input;
+      if (fieldModelByKey.get(id)?.collection?.primary) {
+        if (value === null) return undefined;
+        // Update normalization has already emitted explicit patches; [] means no local intent.
+        return input.operation === "update" &&
+          Array.isArray(value) &&
+          value.length === 0
+          ? undefined
+          : { [id]: value };
+      }
       if (IMAGE_LIST_FIELDS.has(id)) {
         const ids = imageIdList(value);
         return ids && ids.length > 0 ? { [id]: ids } : undefined;
@@ -880,35 +952,19 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  * detail page's `detail-field-renderers/product.tsx` already loads the same
  * module client-side ahead of any edit dialog mounting.
  */
-const productPrimaryGtinIsbn = (
-  record: EntityEditRecord | undefined,
-): ReturnType<typeof wasm.isbn_from_gtin> | undefined => {
+/** The shortcut reads the collection's primary; unknown GTIN encodings stay canonical. */
+const productBarcodeInitial: FieldOptions<"product">["initial"] = ({
+  record,
+}) => {
   const primaryGtin = z
     .string()
     .nullable()
     .catch(null)
     .parse(record?.primaryGtin);
-  return primaryGtin == null ? undefined : wasm.isbn_from_gtin(primaryGtin);
+  return primaryGtin == null
+    ? null
+    : (wasm.isbn_from_gtin(primaryGtin)?.isbn13 ?? primaryGtin);
 };
-
-/**
- * `upc`/`isbn` are write-only inputs (`readKey: null`); a product's one
- * stored barcode reads back as `primaryGtin`, split by which display field
- * it looks like — mirrors the retired `editProductFormDefaults`
- * (`product-form.tsx`). On create there is no record, so both stay `null`.
- */
-const productUpcInitial: FieldOptions<"product">["initial"] = ({ record }) => {
-  const primaryGtin = z
-    .string()
-    .nullable()
-    .catch(null)
-    .parse(record?.primaryGtin);
-  return primaryGtin && !productPrimaryGtinIsbn(record)
-    ? displayGtin(primaryGtin)
-    : null;
-};
-const productIsbnInitial: FieldOptions<"product">["initial"] = ({ record }) =>
-  productPrimaryGtinIsbn(record)?.isbn13 ?? null;
 
 /**
  * `unitMappings`/`externalIds` read back as full rows (audit stamps, unit-
@@ -922,9 +978,6 @@ const productIsbnInitial: FieldOptions<"product">["initial"] = ({ record }) =>
 const productUnitMappingsInitial: FieldOptions<"product">["initial"] = ({
   record,
 }) => z.array(unitMappingInput).catch([]).parse(record?.unitMappings);
-const productExternalIdsInitial: FieldOptions<"product">["initial"] = ({
-  record,
-}) => z.array(externalIdInput).catch([]).parse(record?.externalIds);
 
 /**
  * The `labelNutrition` mid-edit draft: looser than the stored
@@ -1028,16 +1081,14 @@ type EditHooksMap = { [E in EditableEntity]?: EntityEditHooks<E> };
  * declaration cannot say. Every other entity's editor is generated from its
  * `model.intents`, controls and canonical schemas alone.
  */
-export const editHooks: EditHooksMap = {
+const editHooks: EditHooksMap = {
   product: {
     fields: {
-      upc: { initial: productUpcInitial },
-      isbn: { initial: productIsbnInitial },
+      barcode: { initial: productBarcodeInitial },
       unitMappings: {
         initial: productUnitMappingsInitial,
         validate: productUnitMappingsValidate,
       },
-      externalIds: { initial: productExternalIdsInitial },
       labelNutrition: {
         initial: ({ record }) =>
           productLabelNutritionFromDraft(record?.labelNutrition),

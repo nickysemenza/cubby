@@ -5,22 +5,23 @@ observe. Use an isolated test for a specific plausible failure that E2E cannot
 reasonably catch, such as a database constraint, native wire contract, or
 concurrency boundary. Use real implementations; mocks are for external seams
 that cannot run locally. Write failure modes and any isolated test before the
-implementation it guards.
+implementation it guards. Negative fixtures must satisfy earlier admission
+contracts so the observed failure reaches the intended guard.
 
 ## Signal and speed
 
-Choose the cheapest boundary that can expose the failure. Headless HTTP/native
+Choose the cheapest boundary that can expose the failure. Classify individual
+cases in mixed service-backed suites: SQL elsewhere in a file does not make
+every assertion an integration check. Before moving a case, read its destination
+owner and preserve the existing cases. Headless HTTP/native
 service checks establish stored values, totals, provenance, ownership and error
-contracts; a small browser or Tester Army journey establishes navigation,
-editing and supported visible outcomes. AI chooses a path through the real UI;
-deterministic read-back establishes whether the action worked. Required native-browser previews own shared presentation and interaction
+contracts; a small browser journey establishes navigation, editing and
+supported visible outcomes. Deterministic read-back establishes whether the
+action worked. Required native-browser previews own shared presentation and interaction
 capabilities once, using production renderers and injected read responses. Keep
 route composition, navigation and persisted outcomes in real E2E/HTTP journeys;
 previews cannot prove server filtering or writes. See the
-[coverage ownership rules](validation-tests.md#required-component-browser-tests). Live model journeys always use Jev decisions through Cloudflare AI Gateway;
-explicit PR labels and manual dispatch control
-when they run (see [Tester Army](../tester-army.md)). They do not replace the
-deterministic content-hash merge gate.
+[coverage ownership rules](validation-tests.md#required-component-browser-tests).
 
 Keep an isolated test only when its named failure cannot reasonably be observed
 by the retained flow or an existing compiler/generator guard. Remove tests of
@@ -39,7 +40,7 @@ two outputs of the same generator. Hold a hand-written registry to declarations
 with types, not a key-set test: `satisfies Record<GeneratedUnion, …>` in
 TypeScript, an exhaustive `switch` over a generated per-status enum in Swift
 (`native-coverage.ts` emits `Implemented…ID`). Pinning a documented deliberate
-exception stays.
+exception stays. Removing a registry test also removes exports that existed only to expose its internals to that test.
 Prioritize ordinary household workflows. Expensive cold-start, legacy-recovery,
 and test-harness failure permutations may be deleted without equivalent
 replacement when their rare failure is not worth the CI and maintenance cost.
@@ -69,7 +70,9 @@ explicit performance measurement that needs that scale.
 Report setup separately from scenario time. A failed provenance/startup check
 is not a scenario result. Before declaring shared schema inputs ready, run the
 read-only `loadEntityDeclarationBundle` strict probe; do not infer readiness from
-field spelling. Root owns generation and migration readiness during parallel work. Measure CI's natural job timings before changing
+field spelling. Root owns generation and migration readiness during parallel work. In one
+checkout, finish checks that publish generated/declaration inputs before a
+runtime collects modules from those inputs. Measure CI's natural job timings before changing
 shards; keep test-lane cache keys broad.
 Playwright worker options split browser/database/storage/Worker harnesses. Keep
 spec-specific seeding in an intentional project or lane; do not add a worker
@@ -79,13 +82,17 @@ option for one spec. `workerdProfile` owns intentional peer/queue differences.
 
 Rebase onto freshly fetched `origin/main` before running any typecheck,
 generator, or test, and again before pushing: results from a stale base miss
-migrations, generated artifacts, and ratchets (layout counts, schema budgets)
+migrations, generated artifacts, and ratchets (schema budgets)
 that main has since changed, so they are not evidence for the merge.
 
 Construct synthetic domain fixtures through the supported `createRepoEntity`
 writer roster. For other entities, use the owning `create…Fixture` and
-`make…Input` helpers so required defaults survive. Create Runs with `ensureRun`
-and an actor. For member-scoped import purposes, create a member LedgerParty
+`make…Input` helpers so required defaults survive.
+Do not substitute `insertWithShortcode` for those fixture writers: it omits
+required schema/writer defaults such as Product manufacturer and Purchase vendor.
+Create a valid record first, then update storage only when the tested historical
+or invalid state cannot be expressed through its supported writer.
+Create Runs with `ensureRun` and an actor. For member-scoped import purposes, create a member LedgerParty
 and link its storage-only `userId` first; `ensureRun` derives scope and actor
 metadata from that link. `ensureRun` creates running/completed Runs, so seed paused or
 failed fixture states by updating the created row. Build fixture progress with
@@ -109,11 +116,11 @@ local native `sim-e2e` artifacts; no custom bundle is required for every E2E
 journey or runtime acquisition.
 
 Run one affected E2E scenario when it exposes the behavior. While iterating on
-web code, run `pnpm test:changed` for the fast-tier tests affected by changes
-since `origin/main`; `pnpm test:file src/...` runs named test files. Do not use
-Vitest's own `related` or `run --changed`: selecting and running in one
-process fails `ui` tests falsely. Run them from
-the repository root; paths are relative to `apps/web`. For PostgreSQL
+web code, choose the named affected files with `pnpm test:file src/...`.
+Automatic changed-test selection is retired. Do not use Vitest's own `related`
+or `run --changed`: selecting and running in one process has caused false
+`ui` failures. Run named-file commands from the repository root; paths are
+relative to `apps/web`. For PostgreSQL
 contracts use `pnpm test:postgres src/...`. Read failed tests from
 `apps/web/.vitest-results.json` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
@@ -157,10 +164,10 @@ Choose local evidence by the changed behavior:
 
 `pnpm apple check host`, `app`, or `lint` selects one native check;
 `pnpm apple check` runs all three when full native diagnosis is needed. Each
-native pass is probed before FFI setup, and local misses run sequentially.
+selected native build/test runs after artifact preparation, sequentially.
 For hand-written Swift edits, run `pnpm apple check lint` before opening a PR;
 the staged Oxfmt hook does not format Swift, and successful compilation does
-not verify Swift formatting or state rules.
+not verify Swift formatting.
 The server client-version gate test is relevant when changing compatibility
 behavior, not merely because generated Swift changed.
 
@@ -235,8 +242,8 @@ hook. Fix formatting through a normal commit so that hook owns the edits.
 The merge gate below applies to every included PR. Merge the ready group with
 `gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic stack
 merge instead of issuing individual-PR merge requests. Stack registration does
-not replace final-head CI or independent review. Run `pnpm check:stack <stack-number>` for read-only native membership,
-ancestry, current-head normal PR CI and mergeability diagnostics. Before reporting a stack ready,
+not replace final-head CI or independent review. Read membership and final-head checks
+from GitHub directly. Before reporting a stack ready,
 fetch the trunk and verify it is an ancestor of the bottom branch, then verify
 each lower head is an ancestor of the layer above it. Rebase the full stack when
 the trunk has advanced and push bottom to top. Register layers before their
@@ -256,7 +263,7 @@ When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
 commit, push, or rebase continuation in the same call.
 
-Commits run only staged-file Oxlint/Oxfmt and the commit-message check below.
+Commits run only staged-file Oxlint/Oxfmt.
 The pre-commit entrypoint invokes installed lint-staged directly; `pnpm
 check:staged` runs the same entrypoint. Partial staging is preserved. Target
 1–2 seconds for ordinary commits; large staged changes can take longer. Hooks
@@ -270,10 +277,8 @@ Confirm staged-check output; a successful commit alone is not validation evidenc
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
-The `commit-msg` hook and the `CI passed` job run the
-[outward-text check](../../scripts/check-outward-text.ts) on commit messages
-and PR text respectively. They reject live entity codes; `4K7M` is the one
-allowed example body. Use synthetic examples when correcting a rejection.
+Authors and reviewers enforce synthetic-only outward content under `AGENTS.md`.
+There is no custom commit-message or PR-text identifier scanner.
 
 Checkout and merge hooks run no builds: build, test and dev entry points ensure
 the artifacts they consume. After a branch switch, use `pnpm apple gen` before
@@ -291,7 +296,8 @@ shared Nx remote cache for the same input hash satisfies a started lane's
 check only when the execution environment also matches; CI replays it in seconds
 ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
 [CI](../ci.md#cache-keys-and-the-remote-cache)). A check that reads a new
-file belongs in its Nx target's inputs. Local native results replay for the same declared Xcode major;
+file belongs in its Nx target's inputs. Native result and artifact reuse follows
+[the CI cache policy](../ci.md#cache-keys-and-the-remote-cache);
 local Mac web tests do not replace Linux validation. A green earlier
 commit with different content is not evidence. `main` runs CI after deployment
 starts, so post-merge CI does not replace this gate. A PR that adds a

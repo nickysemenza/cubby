@@ -1,3 +1,4 @@
+import { financialTransactionReadSchemas } from "../financial-transaction-fields";
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { financialTransactionCoverage } from "../purchase-evidence-policy";
@@ -27,1892 +28,1882 @@ export const generatedFinancialTransactionKindValues =
   financialTransactionKind.options;
 export const generatedFinancialTransactionStatusValues =
   financialTransactionStatus.options;
-export default defineEntity({
-  key: "financialTransaction",
-  names: { singular: "Financial Transaction", plural: "Transactions" },
-  route: {
-    listColumns: {
-      module: "~/features/finance/list-columns",
-      export: "financialTransactionListOverride",
+export default defineEntity(
+  {
+    key: "financialTransaction",
+    names: { singular: "Financial Transaction", plural: "Transactions" },
+    route: {
+      listColumns: {
+        module: "~/features/finance/list-columns",
+        export: "financialTransactionListOverride",
+      },
+      basePath: "financial-transactions",
     },
-    basePath: "financial-transactions",
-  },
-  table: "FinancialTransaction",
-  children: financialTransactionChildren,
-  identifiers: {
-    brand: "FinancialTransactionId",
-    shortcode: "FTX-",
-  },
-  // Financial transactions have no name field and `merchant` is nullable;
-  // `displayName` falls back through `rawDescription` and `kind` for a
-  // human-identifying label that is never blank.
-  presentation: {
-    edit: {
-      sections: [
-        {
-          id: "schedule",
-          title: "Schedule",
-          fields: ["transactionDate", "postedDate"],
-        },
-        {
-          id: "identity",
-          title: "Identity",
-          fields: ["merchant"],
-        },
-        {
-          id: "details",
-          title: "Details",
-          fields: ["rawDescription", "sourceCategory"],
-        },
-        {
-          id: "notes",
-          title: "Notes",
-          fields: ["notes"],
-        },
-      ],
+    table: "FinancialTransaction",
+    children: financialTransactionChildren,
+    identifiers: {
+      brand: "FinancialTransactionId",
+      shortcode: "FTX-",
     },
-    list: {
-      savedViews: [
-        {
-          id: "outstanding",
-          label: "Outstanding",
-          description: "Expected or pending — money that hasn't moved yet",
-          // The owed-money list: an expected refund a vendor never issued, or a
-          // credit still in flight. `postedDate` is null on these by construction
-          // (posted entries require one), so the sort is really "most recently
-          // recorded first".
-          filters: [{ id: "status", value: ["expected", "pending"] }],
-          sort: [{ id: "createdAt", desc: true }],
-        },
-        {
-          id: "unlinked",
-          label: "Not linked to a purchase",
-          description: "Settlement evidence with no order attached",
-          filters: [{ id: "purchasePresence", value: "none" }],
-          sort: [{ id: "postedDate", desc: true }],
-        },
-      ],
-      read: {
-        relations: [
-          "accountId",
-          "purchaseId",
-          "ledgerTransferId",
-          "accountName",
-          "spendingCategoryName",
-          "allocations",
-          "sourceRefs",
-        ],
-        derived: [
-          "bookingCoverage",
-          "documentCoverage",
-          "itemizationCoverage",
-          "productsCoverage",
-          "coverage",
-          "spendingCategorySummary",
-          "fieldResolutions",
-          "itemization",
-          "vendorInference",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
-    },
-    titleField: "displayName",
-    domain: "finance",
-    description: "Imported and matched settlement activity.",
-    emptyState: {
-      title: "No financial transactions yet",
-      description:
-        "Record settlement evidence without changing the expense ledger.",
-      actionLabel: "New Transaction",
-    },
-    icons: {
-      phosphor: "CreditCard",
-      sfSymbol: "arrow.left.arrow.right",
-      emoji: "💳",
-    },
-    detail: {
-      activityRelations: [
-        { relation: "purchase", dateField: "date" },
-        { relation: "expenses", dateField: "date" },
-      ],
-      omitRelations: {
-        products:
-          "Reached through the Purchases table on this page; the product path is three joins deep.",
-      },
-      hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-        stats: ["amount"],
-      },
-    },
-  },
-  model: {
-    fields: [
-      { key: "bookingDecisionFingerprint", kind: "text", nullable: true },
-      { key: "bookingExpenseFingerprint", kind: "text", nullable: true },
-      { key: "bookingCorrectionReceipt", kind: "json", nullable: true },
-      {
-        key: "bookingCoverage",
-        kind: "enum",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Source evidence and booked expenses" }],
-        },
-        control: {
-          kind: "select",
-          options: [
-            {
-              value: "missing",
-              label: "Missing",
-              color: "destructive",
-            },
-            {
-              value: "partial",
-              label: "Partial",
-              color: "warning",
-            },
-            {
-              value: "recorded",
-              label: "Recorded",
-              color: "positive",
-            },
-            {
-              value: "not_applicable",
-              label: "Not applicable",
-              color: "neutral-status",
-            },
-            {
-              value: "unclassified",
-              label: "Unclassified",
-              color: "neutral-status",
-              glyph: {
-                phosphor: "Question",
-                sfSymbol: "questionmark.circle",
-              },
-            },
-          ],
-        },
-        display: {
-          columnLabel: "Booked",
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        validation: {
-          read: financialTransactionCoverage.shape.booking,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "documentCoverage",
-        kind: "enum",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Source evidence and booked expenses" }],
-        },
-        control: {
-          kind: "select",
-          options: [
-            {
-              value: "missing",
-              label: "Missing",
-              color: "destructive",
-            },
-            {
-              value: "partial",
-              label: "Partial",
-              color: "warning",
-            },
-            {
-              value: "present",
-              label: "Present",
-              color: "positive",
-            },
-            {
-              value: "not_expected",
-              label: "Not expected",
-              color: "neutral-status",
-            },
-            {
-              value: "unknown",
-              label: "Unclassified",
-              color: "neutral-status",
-              glyph: {
-                phosphor: "Question",
-                sfSymbol: "questionmark.circle",
-              },
-            },
-          ],
-        },
-        display: {
-          columnLabel: "Documented",
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        validation: {
-          read: financialTransactionCoverage.shape.document,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "itemizationCoverage",
-        kind: "enum",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Source evidence and booked expenses" }],
-        },
-        control: {
-          kind: "select",
-          options: [
-            {
-              value: "missing",
-              label: "Missing",
-              color: "destructive",
-            },
-            {
-              value: "partial",
-              label: "Partial",
-              color: "warning",
-            },
-            {
-              value: "present",
-              label: "Present",
-              color: "positive",
-            },
-            {
-              value: "not_expected",
-              label: "Not expected",
-              color: "neutral-status",
-            },
-            {
-              value: "unknown",
-              label: "Unclassified",
-              color: "neutral-status",
-              glyph: {
-                phosphor: "Question",
-                sfSymbol: "questionmark.circle",
-              },
-            },
-          ],
-        },
-        display: {
-          columnLabel: "Itemized",
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        validation: {
-          read: financialTransactionCoverage.shape.itemization,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "productsCoverage",
-        kind: "enum",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Source evidence and booked expenses" }],
-        },
-        control: {
-          kind: "select",
-          options: [
-            {
-              value: "missing",
-              label: "Missing",
-              color: "destructive",
-            },
-            {
-              value: "partial",
-              label: "Partial",
-              color: "warning",
-            },
-            {
-              value: "present",
-              label: "Present",
-              color: "positive",
-            },
-            {
-              value: "not_expected",
-              label: "Not expected",
-              color: "neutral-status",
-            },
-            {
-              value: "unknown",
-              label: "Unclassified",
-              color: "neutral-status",
-              glyph: {
-                phosphor: "Question",
-                sfSymbol: "questionmark.circle",
-              },
-            },
-          ],
-        },
-        display: {
-          columnLabel: "Products",
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        validation: {
-          read: financialTransactionCoverage.shape.products,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "coverage",
-        kind: "json",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Source evidence and booked expenses" }],
-        },
-        explanation: {
-          ruleId: "financialTransaction.coverage",
-          description:
-            "Booking, itemization, and Product coverage are evaluated independently against household expectations; documents are optional.",
-        },
-        validation: {
-          read: financialTransactionCoverage,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "spendingCategorySummary",
-        kind: "json",
-        labelOverride: "Expense categories",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Live Expense category allocations" }],
-        },
-        display: {
-          columnLabel: "Categories",
-          list: true,
-          detail: true,
-          renderer: {
-            detail: "spending-category-summary",
-            list: "spending-category-summary",
+    // Financial transactions have no name field and `merchant` is nullable;
+    // `displayName` falls back through `rawDescription` and `kind` for a
+    // human-identifying label that is never blank.
+    presentation: {
+      edit: {
+        sections: [
+          {
+            id: "schedule",
+            title: "Schedule",
+            fields: ["transactionDate", "postedDate"],
           },
-        },
-        explanation: {
-          ruleId: "financialTransaction.expense-category-summary",
-          description:
-            "Category context comes from linked live Expense lines. Settlement allocations identify Purchases; they do not attribute this transaction amount to individual categories.",
-        },
-        validation: {
-          read: spendingCategorySummarySchema,
-          create: null,
-          update: null,
+          {
+            id: "identity",
+            title: "Identity",
+            fields: ["merchant"],
+          },
+          {
+            id: "details",
+            title: "Details",
+            fields: ["rawDescription", "sourceCategory"],
+          },
+          {
+            id: "notes",
+            title: "Notes",
+            fields: ["notes"],
+          },
+        ],
+      },
+      list: {
+        savedViews: [
+          {
+            id: "outstanding",
+            label: "Outstanding",
+            description: "Expected or pending — money that hasn't moved yet",
+            // The owed-money list: an expected refund a vendor never issued, or a
+            // credit still in flight. `postedDate` is null on these by construction
+            // (posted entries require one), so the sort is really "most recently
+            // recorded first".
+            filters: [{ id: "status", value: ["expected", "pending"] }],
+            sort: [{ id: "createdAt", desc: true }],
+          },
+          {
+            id: "unlinked",
+            label: "Not linked to a purchase",
+            description: "Settlement evidence with no order attached",
+            filters: [{ id: "purchasePresence", value: "none" }],
+            sort: [{ id: "postedDate", desc: true }],
+          },
+        ],
+        read: {
+          relations: [
+            "accountId",
+            "purchaseId",
+            "ledgerTransferId",
+            "accountName",
+            "spendingCategoryName",
+            "allocations",
+            "sourceRefs",
+          ],
+          derived: [
+            "bookingCoverage",
+            "documentCoverage",
+            "itemizationCoverage",
+            "productsCoverage",
+            "coverage",
+            "spendingCategorySummary",
+            "fieldResolutions",
+            "itemization",
+            "vendorInference",
+          ],
+          media: ["displayImages"],
+          quality: ["dataQuality"],
         },
       },
-      {
-        key: "spendingCategoryId",
-        kind: "identifier",
-        nullable: true,
-        reference: { entity: "spendingCategory" },
-        display: { list: false, detail: false },
-        validation: {
-          read: spendingCategoryShortcode.nullable().default(null),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "itemizationExpectation",
+      titleField: "displayName",
+      domain: "finance",
+      description: "Imported and matched settlement activity.",
+      emptyState: {
+        title: "No financial transactions yet",
         description:
-          "Leave blank to use the effective policy from linked records and the spending category.",
-        kind: "enum",
-        nullable: true,
-        control: {
-          kind: "select",
-          suggest: {
-            basis: [
-              "purchaseId",
-              "spendingCategoryId",
-              "merchant",
-              "rawDescription",
-              "sourceCategory",
-              "kind",
-              "notes",
-            ],
-            rules: [
-              `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
-            ],
-          },
-          options: [
-            {
-              value: "unknown",
-              label: "Unclassified",
-              description:
-                "Insufficient or mixed evidence; leave itemization expectation unclassified",
-              color: "neutral-status",
-              glyph: {
-                phosphor: "Question",
-                sfSymbol: "questionmark.circle",
-              },
-            },
-            {
-              value: "required",
-              label: "Expected",
-              description:
-                "Household expects the order's item lines with their Products",
-              color: "info",
-            },
-            {
-              value: "not_expected",
-              label: "Not expected",
-              description:
-                "Household does not expect item lines; one amount is enough",
-              color: "neutral-status",
-            },
-          ],
-        },
-        display: {
-          columnLabel: "Evidence",
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        resolution: {
-          reset: { itemizationExpectation: null },
-          redundancy: "eligible",
-        },
-        explanation: {
-          ruleId: "financialTransaction.effective-evidence-expectation",
-          description:
-            "Reviewed reimbursement expects no itemization. Otherwise an explicit transaction policy wins, followed by linked purchase policies and the transaction spending category.",
-          projections: {
-            list: "fieldResolutions.itemizationExpectation.value",
-            detail: "fieldResolutions.itemizationExpectation.value",
-            summary: "fieldResolutions.itemizationExpectation.value",
-          },
-          sourceDependencies: [
-            {
-              path: "fieldResolutions.itemizationExpectation.sourceEntity",
-              label: "Source",
-            },
-            {
-              path: "fieldResolutions.itemizationExpectation.storedValue",
-              label: "Stored override",
-            },
-            {
-              path: "fieldResolutions.itemizationExpectation.fallbackValue",
-              label: "Inherited value",
-            },
-          ],
-        },
-        validation: {
-          read: z
-            .enum(["unknown", "required", "not_expected"])
-            .nullable()
-            .default(null),
-          create: z
-            .enum(["unknown", "required", "not_expected"])
-            .nullable()
-            .default(null),
-          update: z
-            .enum(["unknown", "required", "not_expected"])
-            .nullable()
-            .optional(),
-        },
+          "Record settlement evidence without changing the expense ledger.",
+        actionLabel: "New Transaction",
       },
-      {
-        key: "accountId",
-        kind: "identifier",
-        reference: { entity: "financialAccount" },
-        control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          width: "md",
-          mobile: { slot: "subtitle", priority: 10, interactive: true },
-        },
-        validation: {
-          read: financialAccountShortcode,
-          create: financialAccountShortcode,
-          update: financialAccountShortcode.optional(),
-        },
+      icons: {
+        phosphor: "CreditCard",
+        sfSymbol: "arrow.left.arrow.right",
+        emoji: "💳",
       },
-      {
-        key: "purchaseId",
-        kind: "identifier",
-        nullable: true,
-        reference: { entity: "purchase" },
-        control: { kind: "specialized", renderer: "entity-select" },
-        // Detail shows `allocations` instead: this mirror is NULL exactly
-        // when a charge settles more than one purchase.
-        display: { list: true, detail: false, width: "sm" },
-        validation: {
-          read: purchaseShortcode.nullable(),
-          create: purchaseShortcode.nullable().default(null),
-          update: purchaseShortcode.nullable().optional(),
-        },
-      },
-      {
-        // Hosts the purchase-presence header filter: whether the charge is
-        // linked to a purchase, read from the mirror column above.
-        key: "purchasePresence",
-        kind: "boolean",
-        labelOverride: "Linked",
-        display: {
-          list: true,
-          listHidden: true,
-          width: "xs",
-          readPath: "purchaseId",
-          format: "presence",
-          valueOptions: [
-            {
-              value: "yes",
-              label: "Has purchase",
-              color: "neutral-status",
-            },
-            {
-              value: "no",
-              label: "No purchase",
-              color: "neutral-status",
-            },
-          ],
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "purchase", relation: "purchase" }],
-        },
-      },
-      {
-        key: "kind",
-        kind: "enum",
-        control: {
-          kind: "select",
-          initial: { value: "purchase" },
-          options: [
-            {
-              value: "purchase",
-              label: "Purchase",
-              color: "info",
-            },
-            {
-              value: "refund",
-              label: "Refund",
-              color: "positive",
-            },
-            {
-              value: "account_transfer",
-              label: "Account transfer",
-              color: "neutral-status",
-            },
-            {
-              value: "credit_card_payment",
-              label: "Card payment",
-              color: "neutral-status",
-            },
-            {
-              value: "fee",
-              label: "Fee",
-              color: "warning",
-            },
-            {
-              value: "interest",
-              label: "Interest",
-              color: "warning",
-            },
-            {
-              value: "income",
-              label: "Income",
-              color: "positive",
-            },
-            {
-              value: "adjustment",
-              label: "Adjustment",
-              color: "neutral-status",
-            },
-            {
-              value: "other",
-              label: "Other",
-              color: "neutral-status",
-            },
-          ],
-        },
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          optionRole: "category",
-          optionColor: "domain-finance",
-          optionGlyph: {
-            phosphor: "ArrowsLeftRight",
-            sfSymbol: "arrow.left.arrow.right",
-          },
-        },
-        validation: {
-          read: financialTransactionKind,
-          create: financialTransactionKind,
-          update: financialTransactionKind.optional(),
-        },
-      },
-      {
-        key: "status",
-        kind: "enum",
-        control: {
-          kind: "select",
-          initial: { value: "pending" },
-          options: [
-            {
-              value: "expected",
-              label: "Expected",
-              color: "neutral-status",
-            },
-            {
-              value: "pending",
-              label: "Pending",
-              color: "neutral-status",
-            },
-            {
-              value: "posted",
-              label: "Posted",
-              color: "positive",
-            },
-            {
-              value: "void",
-              label: "Void",
-              color: "destructive",
-            },
-          ],
-        },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "meta", priority: 20 },
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        validation: {
-          read: financialTransactionStatus,
-          create: financialTransactionStatus,
-          update: financialTransactionStatus.optional(),
-        },
-      },
-      {
-        key: "amount",
-        kind: "number",
-        // The canonical non-zero refinement reports a blank or zero amount
-        // with its own message, so the generic required check steps aside.
-        control: {
-          kind: "number",
-          renderer: "money",
-          initial: { value: 0 },
-          required: false,
-        },
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          format: "currency",
-          mobile: { slot: "trailing", priority: 1 },
-        },
-        validation: {
-          read: financialTransactionNonZeroAmount,
-          create: financialTransactionNonZeroAmount,
-          update: financialTransactionNonZeroAmount.optional(),
-        },
-      },
-      {
-        key: "transactionDate",
-        kind: "date",
-        nullable: true,
-        control: { kind: "date" },
-        display: {
-          columnLabel: "Date",
-          list: true,
-          format: "plainDate",
-          mobile: { slot: "meta", priority: 25 },
-        },
-        validation: {
-          read: plainDate.nullable(),
-          create: plainDate.nullable().default(null),
-          update: plainDate.nullable().optional(),
-        },
-      },
-      {
-        key: "postedDate",
-        kind: "date",
-        nullable: true,
-        control: { kind: "date" },
-        display: {
-          list: true,
-          detail: true,
-          format: "plainDate",
-          mobile: { slot: "meta", priority: 30 },
-        },
-        validation: {
-          read: plainDate.nullable(),
-          create: plainDate.nullable().default(null),
-          update: plainDate.nullable().optional(),
-        },
-      },
-      {
-        key: "merchant",
-        kind: "text",
-        nullable: true,
-        control: { kind: "text" },
-        display: {
-          list: true,
-          detail: true,
-          width: "md",
-          listHidden: true,
-        },
-        validation: {
-          read: z.string().nullable(),
-          create: z.string().nullable().default(null),
-          update: z.string().nullable().optional(),
-        },
-      },
-      {
-        key: "rawDescription",
-        kind: "text",
-        nullable: true,
-        control: { kind: "textarea" },
-        display: { list: true, listHidden: true },
-        validation: {
-          read: z.string().nullable(),
-          create: z.string().nullable().default(null),
-          update: z.string().nullable().optional(),
-        },
-      },
-      {
-        key: "sourceCategory",
-        kind: "text",
-        nullable: true,
-        control: { kind: "text" },
-        display: { list: true, listHidden: true },
-        validation: {
-          read: z.string().nullable(),
-          create: z.string().nullable().default(null),
-          update: z.string().nullable().optional(),
-        },
-      },
-      {
-        key: "sourceRefs",
-        semanticRole: "externalIdentifier",
-        kind: "json",
-        // Stored as `settlement_ref` EntityExternalId rows.
-        provenance: {
-          kind: "relation",
-          sources: [{ label: "Settlement references" }],
-        },
-        // "Source" reproduces the list column's existing header text (its
-        // `display.columnId` alias below). One label serves both surfaces,
-        // so the detail page's overview heading for this field (which has
-        // no override `label` of its own in financial-transaction-detail.tsx)
-        // changes from "References" to "Source" as an accepted consequence
-        // — same as accountId's "Account ID" -> "Account" ripple.
-        control: { kind: "specialized", renderer: "source-refs" },
-        display: {
-          list: true,
-          detail: true,
-          detailLabelPath: "sourceRefsLabel",
-          listHidden: true,
-          readPath: "sourceRefs[].source",
-          format: "join",
-        },
-        validation: {
-          read: financialTransactionSourceRefs,
-          create: financialTransactionSourceRefs.default([]),
-          update: financialTransactionSourceRefs.optional(),
-        },
-      },
-      {
-        key: "notes",
-        kind: "text",
-        nullable: true,
-        control: { kind: "textarea" },
-        display: { list: true, listHidden: true },
-        validation: {
-          read: z.string().nullable(),
-          create: z.string().nullable().default(null),
-          update: z.string().nullable().optional(),
-        },
-      },
-      {
-        key: "allocations",
-        kind: "text-array",
-        collection: { key: ["purchaseId"] },
-        control: { kind: "specialized", renderer: "structured-field" },
-        display: {
-          detail: true,
-          renderer: { detail: "financial-transaction-allocations" },
-          itemsPath: "allocationItems",
-        },
-        provenance: {
-          kind: "relation",
-          sources: [{ label: "Financial allocations" }],
-        },
-        explanation: {
-          ruleId: "financial-transaction.allocations",
-          description:
-            "Allocations are the current confirmed links that assign this transaction to purchases or expenses.",
-          readPath: "allocations",
-          sourceDependencies: [
-            { path: "allocations", label: "Confirmed allocations" },
-          ],
-        },
-        validation: {
-          read: financialTransactionAllocations,
-          create: financialTransactionAllocations.default([]),
-          update: financialTransactionAllocations.optional(),
-        },
-      },
-      {
-        key: "itemization",
-        kind: "enum",
-        display: {
-          list: true,
-          width: "sm",
-          valueOptions: [
-            {
-              value: "bare",
-              label: "No purchase",
-              color: "neutral-status",
-            },
-            {
-              value: "lump",
-              label: "Lump order",
-              color: "warning",
-            },
-            {
-              value: "itemized_match",
-              label: "Itemized, matches",
-              color: "positive",
-            },
-            {
-              value: "itemized_mismatch",
-              label: "Itemized, differs",
-              color: "destructive",
-            },
-            {
-              value: "shared",
-              label: "Shared charge",
-              color: "info",
-            },
-          ],
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "purchase", relation: "purchase" }],
-        },
-        explanation: {
-          ruleId: "financial-transaction.itemization",
-          description:
-            "Itemization compares the purchase this charge settles with its product-linked expense lines. A charge that shares its purchase with other live charges is reported as shared rather than compared.",
-          readPath: "itemization",
-          sourceDependencies: [
-            { path: "allocations", label: "Confirmed allocations" },
-          ],
-        },
-        validation: {
-          read: financialTransactionItemization,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: financialTransactionShortcode,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "ledgerTransferId",
-        kind: "identifier",
-        nullable: true,
-        reference: { entity: "ledgerTransfer" },
-        validation: {
-          read: ledgerTransferShortcode.nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "spendingCategoryName",
-        kind: "text",
-        nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "accountName",
-        kind: "text",
-        nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "vendorInference",
-        kind: "json",
-        nullable: true,
-        display: {
-          list: true,
-          detail: true,
-          labelPath: "vendorInference.candidates[].vendorName",
-          // Only a suggested or ambiguous inference is worth showing on the detail screen.
-          detailLabelPath: "possibleVendorLabel",
-          renderer: {
-            list: "possible-vendor",
-            detail: "financial-transaction-vendor-inference",
-          },
-          listHidden: true,
-        },
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "vendor", relation: "vendor" }],
-        },
-        explanation: {
-          ruleId: "financial-transaction.vendor-inference",
-          description:
-            "Possible vendors come from prior settled transactions with the same normalized merchant label; confirmed allocations, transfers, and void transactions suppress the suggestion.",
-          resolver: "merchantVendorInference",
-          readPath: "vendorInference",
-          sourceDependencies: [
-            { path: "merchant", label: "Merchant label" },
-            { path: "status", label: "Transaction status" },
-            { path: "allocations", label: "Confirmed allocations" },
-            { path: "ledgerTransferId", label: "Transfer link" },
-            { path: "vendorInference", label: "Matching settled transactions" },
-          ],
-        },
-        validation: {
-          read: merchantVendorInference
-            .nullable()
-            .default(null)
-            .describe(
-              "Advisory Vendor evidence from prior settled transactions with the same Merchant label. Null when suppressed. It neither matches nor links anything; Allocations remain the only confirmed relationship.",
-            ),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        // `merchant?.trim() || rawDescription?.trim() || capitalize(kind)` —
-        // the canonical non-null title for a row whose name-shaped fields are
-        // all nullable.
-        key: "displayName",
-        kind: "text",
-        validation: { read: z.string(), create: null, update: null },
-      },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
-      // Server-composed text for the structured detail field above (`display.detailLabelPath`).
-      labelField("sourceRefsLabel", "Settlement references"),
-      displayItemsField("allocationItems", "Confirmed allocation display rows"),
-      labelField("possibleVendorLabel", "Merchant vendor inference"),
-    ],
-    storage: [
-      "bookingDecisionFingerprint",
-      "bookingExpenseFingerprint",
-      "bookingCorrectionReceipt",
-      { key: "spendingCategoryId", reference: "spendingCategory" },
-      {
-        key: "itemizationExpectation",
-        specialized: "enum:itemizationExpectation",
-      },
-      {
-        key: "id",
-        specialized: "primary-key:FinancialTransactionId",
-      },
-      { key: "shortcode", specialized: "shortcode" },
-      { key: "accountId", reference: "financialAccount" },
-      { key: "ledgerTransferId", reference: "ledgerTransfer" },
-      { key: "kind", specialized: "enum:kind" },
-      { key: "status", specialized: "enum:status" },
-      { key: "amount", specialized: "double-precision" },
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "notes",
-      { key: "createdAt" },
-      { key: "updatedAt", specialized: "updated-at" },
-      "deletedAt",
-    ],
-    create: [
-      "itemizationExpectation",
-      "accountId",
-      "purchaseId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "notes",
-      "allocations",
-    ],
-    update: [
-      "itemizationExpectation",
-      "accountId",
-      "purchaseId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "notes",
-      "allocations",
-    ],
-    audit: [
-      "itemizationExpectation",
-      "accountId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "notes",
-    ],
-    rows: {
-      settlementRefs: {
-        label: "Settlement references",
-        path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
-        where: { kind: "settlement_ref" },
-      },
-    },
-    derived: {
-      merchant: { type: "text" },
-      // Allocated to a live Purchase (not the mirror column, which is NULL
-      // for a transaction split across two purchases).
-      purchase: { via: "purchase" },
-      itemization: {
-        type: "enum",
-        options: [
-          "bare",
-          "lump",
-          "itemized_match",
-          "itemized_mismatch",
-          "shared",
+      detail: {
+        activityRelations: [
+          { relation: "purchase", dateField: "date" },
+          { relation: "expenses", dateField: "date" },
         ],
+        omitRelations: {
+          products:
+            "Reached through the Purchases table on this page; the product path is three joins deep.",
+        },
+        hero: {
+          chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
+          stats: ["amount"],
+        },
       },
-      // The allocation-integrity data-quality gap.
-      allocationIntegrity: { type: "enum", options: ["defect"] },
-      // The payment processor named by the raw descriptor's prefix, derived
-      // on read (`descriptorProcessors`).
-      descriptorProcessor: {
-        type: "enum",
-        options: descriptorProcessors.map((processor) => processor.value),
-      },
-      // Both match on the same live settlement reference.
-      sourceRefs: { via: "settlementRefs.source" },
-      externalId: { via: "settlementRefs.externalId" },
     },
-    sort: {
+    model: {
       fields: [
+        { key: "bookingDecisionFingerprint", kind: "text", nullable: true },
+        { key: "bookingExpenseFingerprint", kind: "text", nullable: true },
+        { key: "bookingCorrectionReceipt", kind: "json", nullable: true },
+        {
+          key: "bookingCoverage",
+          kind: "enum",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Source evidence and booked expenses" }],
+          },
+          control: {
+            kind: "select",
+            options: [
+              {
+                value: "missing",
+                label: "Missing",
+                color: "destructive",
+              },
+              {
+                value: "partial",
+                label: "Partial",
+                color: "warning",
+              },
+              {
+                value: "recorded",
+                label: "Recorded",
+                color: "positive",
+              },
+              {
+                value: "not_applicable",
+                label: "Not applicable",
+                color: "neutral-status",
+              },
+              {
+                value: "unclassified",
+                label: "Unclassified",
+                color: "neutral-status",
+                glyph: {
+                  phosphor: "Question",
+                  sfSymbol: "questionmark.circle",
+                },
+              },
+            ],
+          },
+          display: {
+            columnLabel: "Booked",
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          validation: {
+            read: financialTransactionCoverage.shape.booking,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "documentCoverage",
+          kind: "enum",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Source evidence and booked expenses" }],
+          },
+          control: {
+            kind: "select",
+            options: [
+              {
+                value: "missing",
+                label: "Missing",
+                color: "destructive",
+              },
+              {
+                value: "partial",
+                label: "Partial",
+                color: "warning",
+              },
+              {
+                value: "present",
+                label: "Present",
+                color: "positive",
+              },
+              {
+                value: "not_expected",
+                label: "Not expected",
+                color: "neutral-status",
+              },
+              {
+                value: "unknown",
+                label: "Unclassified",
+                color: "neutral-status",
+                glyph: {
+                  phosphor: "Question",
+                  sfSymbol: "questionmark.circle",
+                },
+              },
+            ],
+          },
+          display: {
+            columnLabel: "Documented",
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          validation: {
+            read: financialTransactionCoverage.shape.document,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "itemizationCoverage",
+          kind: "enum",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Source evidence and booked expenses" }],
+          },
+          control: {
+            kind: "select",
+            options: [
+              {
+                value: "missing",
+                label: "Missing",
+                color: "destructive",
+              },
+              {
+                value: "partial",
+                label: "Partial",
+                color: "warning",
+              },
+              {
+                value: "present",
+                label: "Present",
+                color: "positive",
+              },
+              {
+                value: "not_expected",
+                label: "Not expected",
+                color: "neutral-status",
+              },
+              {
+                value: "unknown",
+                label: "Unclassified",
+                color: "neutral-status",
+                glyph: {
+                  phosphor: "Question",
+                  sfSymbol: "questionmark.circle",
+                },
+              },
+            ],
+          },
+          display: {
+            columnLabel: "Itemized",
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          validation: {
+            read: financialTransactionCoverage.shape.itemization,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "productsCoverage",
+          kind: "enum",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Source evidence and booked expenses" }],
+          },
+          control: {
+            kind: "select",
+            options: [
+              {
+                value: "missing",
+                label: "Missing",
+                color: "destructive",
+              },
+              {
+                value: "partial",
+                label: "Partial",
+                color: "warning",
+              },
+              {
+                value: "present",
+                label: "Present",
+                color: "positive",
+              },
+              {
+                value: "not_expected",
+                label: "Not expected",
+                color: "neutral-status",
+              },
+              {
+                value: "unknown",
+                label: "Unclassified",
+                color: "neutral-status",
+                glyph: {
+                  phosphor: "Question",
+                  sfSymbol: "questionmark.circle",
+                },
+              },
+            ],
+          },
+          display: {
+            columnLabel: "Products",
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          validation: {
+            read: financialTransactionCoverage.shape.products,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "coverage",
+          kind: "json",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Source evidence and booked expenses" }],
+          },
+          explanation: {
+            ruleId: "financialTransaction.coverage",
+            description:
+              "Booking, itemization, and Product coverage are evaluated independently against household expectations; documents are optional.",
+          },
+          validation: {
+            read: financialTransactionCoverage,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "spendingCategorySummary",
+          kind: "json",
+          labelOverride: "Expense categories",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Live Expense category allocations" }],
+          },
+          display: {
+            columnLabel: "Categories",
+            renderer: {
+              detail: "spending-category-summary",
+              list: "spending-category-summary",
+            },
+          },
+          explanation: {
+            ruleId: "financialTransaction.expense-category-summary",
+            description:
+              "Category context comes from linked live Expense lines. Settlement allocations identify Purchases; they do not attribute this transaction amount to individual categories.",
+          },
+          validation: {
+            read: spendingCategorySummarySchema,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "spendingCategoryId",
+          kind: "identifier",
+          nullable: true,
+          reference: { entity: "spendingCategory" },
+          display: { detail: false, list: false },
+          validation: {
+            read: spendingCategoryShortcode.nullable().default(null),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "fieldResolutions",
+          kind: "json",
+          validation: {
+            read: optionalFieldResolutionsSchema,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "itemizationExpectation",
+          description:
+            "Leave blank to use the effective policy from linked records and the spending category.",
+          kind: "enum",
+          nullable: true,
+          control: {
+            kind: "select",
+            suggest: {
+              basis: [
+                "purchaseId",
+                "spendingCategoryId",
+                "merchant",
+                "rawDescription",
+                "sourceCategory",
+                "kind",
+                "notes",
+              ],
+              rules: [
+                `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
+              ],
+            },
+            options: [
+              {
+                value: "unknown",
+                label: "Unclassified",
+                description:
+                  "Insufficient or mixed evidence; leave itemization expectation unclassified",
+                color: "neutral-status",
+                glyph: {
+                  phosphor: "Question",
+                  sfSymbol: "questionmark.circle",
+                },
+              },
+              {
+                value: "required",
+                label: "Expected",
+                description:
+                  "Household expects the order's item lines with their Products",
+                color: "info",
+              },
+              {
+                value: "not_expected",
+                label: "Not expected",
+                description:
+                  "Household does not expect item lines; one amount is enough",
+                color: "neutral-status",
+              },
+            ],
+          },
+          display: {
+            columnLabel: "Evidence",
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          resolution: {
+            reset: { itemizationExpectation: null },
+            redundancy: "eligible",
+          },
+          explanation: {
+            ruleId: "financialTransaction.effective-evidence-expectation",
+            description:
+              "Reviewed reimbursement expects no itemization. Otherwise an explicit transaction policy wins, followed by linked purchase policies and the transaction spending category.",
+            projections: {
+              list: "fieldResolutions.itemizationExpectation.value",
+              detail: "fieldResolutions.itemizationExpectation.value",
+              summary: "fieldResolutions.itemizationExpectation.value",
+            },
+            sourceDependencies: [
+              {
+                path: "fieldResolutions.itemizationExpectation.sourceEntity",
+                label: "Source",
+              },
+              {
+                path: "fieldResolutions.itemizationExpectation.storedValue",
+                label: "Stored override",
+              },
+              {
+                path: "fieldResolutions.itemizationExpectation.fallbackValue",
+                label: "Inherited value",
+              },
+            ],
+          },
+          validation: {
+            read: z
+              .enum(["unknown", "required", "not_expected"])
+              .nullable()
+              .default(null),
+            create: z
+              .enum(["unknown", "required", "not_expected"])
+              .nullable()
+              .default(null),
+            update: z
+              .enum(["unknown", "required", "not_expected"])
+              .nullable()
+              .optional(),
+          },
+        },
+        {
+          key: "accountId",
+          kind: "identifier",
+          reference: { entity: "financialAccount" },
+          control: { kind: "specialized", renderer: "entity-select" },
+          display: {
+            width: "md",
+            mobile: { slot: "subtitle", priority: 10, interactive: true },
+          },
+          validation: {
+            read: financialAccountShortcode,
+            create: financialAccountShortcode,
+            update: financialAccountShortcode.optional(),
+          },
+        },
+        {
+          key: "purchaseId",
+          kind: "identifier",
+          nullable: true,
+          reference: { entity: "purchase" },
+          control: { kind: "specialized", renderer: "entity-select" },
+          // Detail shows `allocations` instead: this mirror is NULL exactly
+          // when a charge settles more than one purchase.
+          display: { detail: false, width: "sm" },
+          validation: {
+            read: purchaseShortcode.nullable(),
+            create: purchaseShortcode.nullable().default(null),
+            update: purchaseShortcode.nullable().optional(),
+          },
+        },
+        {
+          // Hosts the purchase-presence header filter: whether the charge is
+          // linked to a purchase, read from the mirror column above.
+          key: "purchasePresence",
+          kind: "boolean",
+          labelOverride: "Linked",
+          display: {
+            detail: false,
+            listHidden: true,
+            width: "xs",
+            readPath: "purchaseId",
+            format: "presence",
+            valueOptions: [
+              {
+                value: "yes",
+                label: "Has purchase",
+                color: "neutral-status",
+              },
+              {
+                value: "no",
+                label: "No purchase",
+                color: "neutral-status",
+              },
+            ],
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "purchase", relation: "purchase" }],
+          },
+        },
+        {
+          key: "kind",
+          kind: "enum",
+          control: {
+            kind: "select",
+            initial: { value: "purchase" },
+            options: [
+              {
+                value: "purchase",
+                label: "Purchase",
+                color: "info",
+              },
+              {
+                value: "refund",
+                label: "Refund",
+                color: "positive",
+              },
+              {
+                value: "account_transfer",
+                label: "Account transfer",
+                color: "neutral-status",
+              },
+              {
+                value: "credit_card_payment",
+                label: "Card payment",
+                color: "neutral-status",
+              },
+              {
+                value: "fee",
+                label: "Fee",
+                color: "warning",
+              },
+              {
+                value: "interest",
+                label: "Interest",
+                color: "warning",
+              },
+              {
+                value: "income",
+                label: "Income",
+                color: "positive",
+              },
+              {
+                value: "adjustment",
+                label: "Adjustment",
+                color: "neutral-status",
+              },
+              {
+                value: "other",
+                label: "Other",
+                color: "neutral-status",
+              },
+            ],
+          },
+          display: {
+            width: "sm",
+            optionRole: "category",
+            optionColor: "domain-finance",
+            optionGlyph: {
+              phosphor: "ArrowsLeftRight",
+              sfSymbol: "arrow.left.arrow.right",
+            },
+          },
+          validation: {
+            read: financialTransactionKind,
+            create: financialTransactionKind,
+            update: financialTransactionKind.optional(),
+          },
+        },
+        {
+          key: "status",
+          kind: "enum",
+          control: {
+            kind: "select",
+            initial: { value: "pending" },
+            options: [
+              {
+                value: "expected",
+                label: "Expected",
+                color: "neutral-status",
+              },
+              {
+                value: "pending",
+                label: "Pending",
+                color: "neutral-status",
+              },
+              {
+                value: "posted",
+                label: "Posted",
+                color: "positive",
+              },
+              {
+                value: "void",
+                label: "Void",
+                color: "destructive",
+              },
+            ],
+          },
+          display: {
+            mobile: { slot: "meta", priority: 20 },
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          validation: {
+            read: financialTransactionStatus,
+            create: financialTransactionStatus,
+            update: financialTransactionStatus.optional(),
+          },
+        },
+        {
+          key: "amount",
+          kind: "number",
+          // The canonical non-zero refinement reports a blank or zero amount
+          // with its own message, so the generic required check steps aside.
+          control: {
+            kind: "number",
+            renderer: "money",
+            initial: { value: 0 },
+            required: false,
+          },
+          display: {
+            width: "sm",
+            format: "currency",
+            mobile: { slot: "trailing", priority: 1 },
+          },
+          validation: {
+            read: financialTransactionNonZeroAmount,
+            create: financialTransactionNonZeroAmount,
+            update: financialTransactionNonZeroAmount.optional(),
+          },
+        },
+        {
+          key: "transactionDate",
+          kind: "date",
+          nullable: true,
+          control: { kind: "date" },
+          display: {
+            detail: false,
+            columnLabel: "Date",
+            format: "plainDate",
+            mobile: { slot: "meta", priority: 25 },
+          },
+          validation: {
+            read: plainDate.nullable(),
+            create: plainDate.nullable().default(null),
+            update: plainDate.nullable().optional(),
+          },
+        },
+        {
+          key: "postedDate",
+          kind: "date",
+          nullable: true,
+          control: { kind: "date" },
+          display: {
+            format: "plainDate",
+            mobile: { slot: "meta", priority: 30 },
+          },
+          validation: {
+            read: plainDate.nullable(),
+            create: plainDate.nullable().default(null),
+            update: plainDate.nullable().optional(),
+          },
+        },
+        {
+          key: "merchant",
+          kind: "text",
+          nullable: true,
+          control: { kind: "text" },
+          display: { width: "md", listHidden: true },
+          validation: {
+            read: z.string().nullable(),
+            create: z.string().nullable().default(null),
+            update: z.string().nullable().optional(),
+          },
+        },
+        {
+          key: "rawDescription",
+          kind: "text",
+          nullable: true,
+          control: { kind: "textarea" },
+          display: { detail: false, listHidden: true },
+          validation: {
+            read: z.string().nullable(),
+            create: z.string().nullable().default(null),
+            update: z.string().nullable().optional(),
+          },
+        },
+        {
+          key: "sourceCategory",
+          kind: "text",
+          nullable: true,
+          control: { kind: "text" },
+          display: { detail: false, listHidden: true },
+          validation: {
+            read: z.string().nullable(),
+            create: z.string().nullable().default(null),
+            update: z.string().nullable().optional(),
+          },
+        },
+        {
+          key: "sourceRefs",
+          semanticRole: "externalIdentifier",
+          kind: "json",
+          // Stored as `settlement_ref` EntityExternalId rows.
+          provenance: {
+            kind: "relation",
+            sources: [{ label: "Settlement references" }],
+          },
+          // "Source" reproduces the list column's existing header text (its
+          // `display.columnId` alias below). One label serves both surfaces,
+          // so the detail page's overview heading for this field (which has
+          // no override `label` of its own in financial-transaction-detail.tsx)
+          // changes from "References" to "Source" as an accepted consequence
+          // — same as accountId's "Account ID" -> "Account" ripple.
+          control: { kind: "specialized", renderer: "source-refs" },
+          display: {
+            detailLabelPath: "sourceRefsLabel",
+            listHidden: true,
+            readPath: "sourceRefs[].source",
+            format: "join",
+          },
+          validation: {
+            read: financialTransactionSourceRefs,
+            create: financialTransactionSourceRefs.default([]),
+            update: financialTransactionSourceRefs.optional(),
+          },
+        },
+        {
+          key: "notes",
+          kind: "text",
+          nullable: true,
+          control: { kind: "textarea" },
+          display: { detail: false, listHidden: true },
+          validation: {
+            read: z.string().nullable(),
+            create: z.string().nullable().default(null),
+            update: z.string().nullable().optional(),
+          },
+        },
+        {
+          key: "allocations",
+          kind: "text-array",
+          collection: { key: ["purchaseId"] },
+          control: { kind: "specialized", renderer: "structured-field" },
+          display: {
+            list: false,
+            renderer: { detail: "financial-transaction-allocations" },
+            itemsPath: "allocationItems",
+          },
+          provenance: {
+            kind: "relation",
+            sources: [{ label: "Financial allocations" }],
+          },
+          explanation: {
+            ruleId: "financial-transaction.allocations",
+            description:
+              "Allocations are the current confirmed links that assign this transaction to purchases or expenses.",
+            readPath: "allocations",
+            sourceDependencies: [
+              { path: "allocations", label: "Confirmed allocations" },
+            ],
+          },
+          validation: {
+            read: financialTransactionAllocations,
+            create: financialTransactionAllocations.default([]),
+            update: financialTransactionAllocations.optional(),
+          },
+        },
+        {
+          key: "itemization",
+          kind: "enum",
+          display: {
+            detail: false,
+            width: "sm",
+            valueOptions: [
+              {
+                value: "bare",
+                label: "No purchase",
+                color: "neutral-status",
+              },
+              {
+                value: "lump",
+                label: "Lump order",
+                color: "warning",
+              },
+              {
+                value: "itemized_match",
+                label: "Itemized, matches",
+                color: "positive",
+              },
+              {
+                value: "itemized_mismatch",
+                label: "Itemized, differs",
+                color: "destructive",
+              },
+              {
+                value: "shared",
+                label: "Shared charge",
+                color: "info",
+              },
+            ],
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "purchase", relation: "purchase" }],
+          },
+          explanation: {
+            ruleId: "financial-transaction.itemization",
+            description:
+              "Itemization compares the purchase this charge settles with its product-linked expense lines. A charge that shares its purchase with other live charges is reported as shared rather than compared.",
+            readPath: "itemization",
+            sourceDependencies: [
+              { path: "allocations", label: "Confirmed allocations" },
+            ],
+          },
+          validation: {
+            read: financialTransactionItemization,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "id",
+          kind: "identifier",
+          validation: {
+            read: financialTransactionShortcode,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "ledgerTransferId",
+          kind: "identifier",
+          nullable: true,
+          reference: { entity: "ledgerTransfer" },
+          validation: {
+            read: ledgerTransferShortcode.nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "spendingCategoryName",
+          kind: "text",
+          nullable: true,
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "accountName",
+          kind: "text",
+          nullable: true,
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "vendorInference",
+          kind: "json",
+          nullable: true,
+          display: {
+            labelPath: "vendorInference.candidates[].vendorName",
+            detailLabelPath: "possibleVendorLabel",
+            renderer: {
+              list: "possible-vendor",
+              detail: "financial-transaction-vendor-inference",
+            },
+            listHidden: true,
+          },
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "vendor", relation: "vendor" }],
+          },
+          explanation: {
+            ruleId: "financial-transaction.vendor-inference",
+            description:
+              "Possible vendors come from prior settled transactions with the same normalized merchant label; confirmed allocations, transfers, and void transactions suppress the suggestion.",
+            resolver: "merchantVendorInference",
+            readPath: "vendorInference",
+            sourceDependencies: [
+              { path: "merchant", label: "Merchant label" },
+              { path: "status", label: "Transaction status" },
+              { path: "allocations", label: "Confirmed allocations" },
+              { path: "ledgerTransferId", label: "Transfer link" },
+              {
+                path: "vendorInference",
+                label: "Matching settled transactions",
+              },
+            ],
+          },
+          validation: {
+            read: merchantVendorInference
+              .nullable()
+              .default(null)
+              .describe(
+                "Advisory Vendor evidence from prior settled transactions with the same Merchant label. Null when suppressed. It neither matches nor links anything; Allocations remain the only confirmed relationship.",
+              ),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          // `merchant?.trim() || rawDescription?.trim() || capitalize(kind)` —
+          // the canonical non-null title for a row whose name-shaped fields are
+          // all nullable.
+          key: "displayName",
+          kind: "text",
+          validation: { read: z.string(), create: null, update: null },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "createdAt",
+          kind: "timestamp",
+          validation: {
+            read: z.date(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "updatedAt",
+          kind: "timestamp",
+          validation: {
+            read: z.date(),
+            create: null,
+            update: null,
+          },
+        },
+        { key: "shortcode", kind: "text" },
+        {
+          key: "deletedAt",
+          kind: "timestamp",
+          nullable: true,
+        },
+        // Server-composed text for the structured detail field above (`display.detailLabelPath`).
+        labelField("sourceRefsLabel", "Settlement references"),
+        displayItemsField(
+          "allocationItems",
+          "Confirmed allocation display rows",
+        ),
+        labelField("possibleVendorLabel", "Merchant vendor inference"),
+      ],
+      storage: [
+        "bookingDecisionFingerprint",
+        "bookingExpenseFingerprint",
+        "bookingCorrectionReceipt",
+        { key: "spendingCategoryId", reference: "spendingCategory" },
+        {
+          key: "itemizationExpectation",
+          specialized: "enum:itemizationExpectation",
+        },
+        {
+          key: "id",
+          specialized: "primary-key:FinancialTransactionId",
+        },
+        { key: "shortcode", specialized: "shortcode" },
+        { key: "accountId", reference: "financialAccount" },
+        { key: "ledgerTransferId", reference: "ledgerTransfer" },
+        { key: "kind", specialized: "enum:kind" },
+        { key: "status", specialized: "enum:status" },
+        { key: "amount", specialized: "double-precision" },
         "transactionDate",
         "postedDate",
-        "amount",
         "merchant",
+        "rawDescription",
+        "sourceCategory",
+        "notes",
+        { key: "createdAt" },
+        { key: "updatedAt", specialized: "updated-at" },
+        "deletedAt",
+      ],
+      create: [
+        "itemizationExpectation",
+        "accountId",
+        "purchaseId",
         "kind",
         "status",
+        "amount",
+        "transactionDate",
+        "postedDate",
+        "merchant",
+        "rawDescription",
+        "sourceCategory",
+        "sourceRefs",
+        "notes",
+        "allocations",
+      ],
+      update: [
+        "itemizationExpectation",
+        "accountId",
+        "purchaseId",
+        "kind",
+        "status",
+        "amount",
+        "transactionDate",
+        "postedDate",
+        "merchant",
+        "rawDescription",
+        "sourceCategory",
+        "sourceRefs",
+        "notes",
+        "allocations",
+      ],
+      audit: [
+        "itemizationExpectation",
+        "accountId",
+        "kind",
+        "status",
+        "amount",
+        "transactionDate",
+        "postedDate",
+        "merchant",
+        "rawDescription",
+        "sourceCategory",
+        "sourceRefs",
+        "notes",
+      ],
+      rows: {
+        settlementRefs: {
+          label: "Settlement references",
+          path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
+          where: { kind: "settlement_ref" },
+        },
+      },
+      derived: {
+        merchant: { type: "text" },
+        // Allocated to a live Purchase (not the mirror column, which is NULL
+        // for a transaction split across two purchases).
+        purchase: { via: "purchase" },
+        itemization: {
+          type: "enum",
+          options: [
+            "bare",
+            "lump",
+            "itemized_match",
+            "itemized_mismatch",
+            "shared",
+          ],
+        },
+        // The allocation-integrity data-quality gap.
+        allocationIntegrity: { type: "enum", options: ["defect"] },
+        // The payment processor named by the raw descriptor's prefix, derived
+        // on read (`descriptorProcessors`).
+        descriptorProcessor: {
+          type: "enum",
+          options: descriptorProcessors.map((processor) => processor.value),
+        },
+        // Both match on the same live settlement reference.
+        sourceRefs: { via: "settlementRefs.source" },
+        externalId: { via: "settlementRefs.externalId" },
+      },
+      sort: {
+        fields: [
+          "transactionDate",
+          "postedDate",
+          "amount",
+          "merchant",
+          "kind",
+          "status",
+          "createdAt",
+          "updatedAt",
+        ],
+      },
+      intents: {
+        fields: {
+          capture: [
+            "accountId",
+            "purchaseId",
+            "kind",
+            "status",
+            "amount",
+            "transactionDate",
+            "postedDate",
+            "merchant",
+            "rawDescription",
+            "sourceCategory",
+            "sourceRefs",
+            "notes",
+          ],
+          full: [
+            "itemizationExpectation",
+            "accountId",
+            "purchaseId",
+            "kind",
+            "status",
+            "amount",
+            "transactionDate",
+            "postedDate",
+            "merchant",
+            "rawDescription",
+            "sourceCategory",
+            "sourceRefs",
+            "notes",
+          ],
+          settlement: [
+            "accountId",
+            "purchaseId",
+            "kind",
+            "status",
+            "amount",
+            "transactionDate",
+            "postedDate",
+          ],
+        },
+        create: ["capture", "full"],
+        update: ["full", "settlement"],
+      },
+      output: [
+        "bookingCoverage",
+        "documentCoverage",
+        "itemizationCoverage",
+        "productsCoverage",
+        "coverage",
+        "spendingCategorySummary",
+        "spendingCategoryId",
+        "spendingCategoryName",
+        "fieldResolutions",
+        "itemizationExpectation",
+        "id",
+        "accountId",
+        "purchaseId",
+        "kind",
+        "status",
+        "amount",
+        "transactionDate",
+        "postedDate",
+        "merchant",
+        "rawDescription",
+        "sourceCategory",
+        "sourceRefs",
+        "sourceRefsLabel",
+        "allocationItems",
+        "possibleVendorLabel",
+        "notes",
+        "allocations",
+        "ledgerTransferId",
+        "accountName",
+        "itemization",
+        "vendorInference",
+        "displayName",
         "createdAt",
         "updatedAt",
       ],
     },
-    intents: {
-      fields: {
-        capture: [
-          "accountId",
-          "purchaseId",
-          "kind",
-          "status",
-          "amount",
-          "transactionDate",
-          "postedDate",
-          "merchant",
-          "rawDescription",
-          "sourceCategory",
-          "sourceRefs",
-          "notes",
-        ],
-        full: [
-          "itemizationExpectation",
-          "accountId",
-          "purchaseId",
-          "kind",
-          "status",
-          "amount",
-          "transactionDate",
-          "postedDate",
-          "merchant",
-          "rawDescription",
-          "sourceCategory",
-          "sourceRefs",
-          "notes",
-        ],
-        settlement: [
-          "accountId",
-          "purchaseId",
-          "kind",
-          "status",
-          "amount",
-          "transactionDate",
-          "postedDate",
-        ],
+    fields: {
+      create: {
+        module: "@cubby/schemas/financial-transaction",
+        export: "financialTransactionCreateInput",
       },
-      create: ["capture", "full"],
-      update: ["full", "settlement"],
-    },
-    output: [
-      "bookingCoverage",
-      "documentCoverage",
-      "itemizationCoverage",
-      "productsCoverage",
-      "coverage",
-      "spendingCategorySummary",
-      "spendingCategoryId",
-      "spendingCategoryName",
-      "fieldResolutions",
-      "itemizationExpectation",
-      "id",
-      "accountId",
-      "purchaseId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "sourceRefsLabel",
-      "allocationItems",
-      "possibleVendorLabel",
-      "notes",
-      "allocations",
-      "ledgerTransferId",
-      "accountName",
-      "itemization",
-      "vendorInference",
-      "displayName",
-      "createdAt",
-      "updatedAt",
-    ],
-  },
-  fields: {
-    create: {
-      module: "@cubby/schemas/financial-transaction",
-      export: "financialTransactionCreateInput",
-    },
-    update: {
-      module: "@cubby/schemas/financial-transaction",
-      export: "financialTransactionUpdateData",
-    },
-    output: {
-      module: "@cubby/schemas/financial-transaction",
-      export: "financialTransactionOut",
-    },
-  },
-  // A settlement-side event. Amounts are evidence only: they never participate
-  // in spend/project/calendar rollups, which remain derived from Expense.cost.
-  storage: {
-    indexes: [
-      {
-        name: "FinancialTransaction_ledgerTransferId_positive_evidence_key",
-        on: ["ledgerTransferId"],
-        unique: true,
-        where:
-          "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} > 0",
+      update: {
+        module: "@cubby/schemas/financial-transaction",
+        export: "financialTransactionUpdateData",
       },
-      {
-        name: "FinancialTransaction_ledgerTransferId_negative_evidence_key",
-        on: ["ledgerTransferId"],
-        unique: true,
-        where:
-          "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} < 0",
-      },
-      { on: ["kind"] },
-      { on: ["status"] },
-      { on: ["transactionDate"] },
-      { on: ["postedDate"] },
-    ],
-    checks: [
-      {
-        name: "FinancialTransaction_amount_whole_cent_check",
-        sql: "{amount} <> 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
-      },
-      {
-        name: "FinancialTransaction_posted_date_check",
-        sql: "{status} <> 'posted' OR {postedDate} IS NOT NULL",
-      },
-    ],
-    relations: {
-      account: "accountId",
-      allocations: { many: "financialTransactionAllocation" },
-      ledgerTransfer: "ledgerTransferId",
-    },
-  },
-  filters: {
-    audit: true,
-    schema: {
-      module: "@cubby/schemas/financial-transaction",
-      export: "financialTransactionFilterFields",
-    },
-    descriptors: [
-      {
-        columnId: "allocationIntegrity",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter allocation integrity...",
-      },
-      {
-        columnId: "descriptorProcessor",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter payment processor...",
-      },
-      {
-        columnId: "transaction",
-        field: "search",
-        urlKey: "q",
-        kind: "text",
-        placeholder: "Search transactions...",
-        deriveSchema: true,
-        schemaDescription: "Substring match on merchant or raw description",
-        anyOf: ["merchant", "rawDescription"],
-      },
-      {
-        columnId: "kind",
-        kind: "multiselect",
-        placeholder: "Filter by kind...",
-        deriveSchema: true,
-        stored: true,
-        schemaFromRead: true,
-        options: [
-          { value: "purchase", label: "Purchase" },
-          { value: "refund", label: "Refund" },
-          { value: "account_transfer", label: "Account transfer" },
-          { value: "credit_card_payment", label: "Credit card payment" },
-          { value: "fee", label: "Fee" },
-          { value: "interest", label: "Interest" },
-          { value: "income", label: "Income" },
-          { value: "adjustment", label: "Adjustment" },
-          { value: "other", label: "Other" },
-        ],
-      },
-      {
-        columnId: "status",
-        kind: "multiselect",
-        placeholder: "Filter by status...",
-        deriveSchema: true,
-        stored: true,
-        schemaFromRead: true,
-        options: [
-          { value: "expected", label: "Expected" },
-          { value: "pending", label: "Pending" },
-          { value: "posted", label: "Posted" },
-          { value: "void", label: "Void" },
-        ],
-      },
-      {
-        columnId: "postedDate",
-        kind: "range",
-        placeholder: "Filter by posted date...",
-        deriveSchema: true,
-        stored: true,
-        options: [
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
-        ],
-        expandRef: {
-          module: "~/entity/filter-behavior",
-          export: "resolvePostedDate",
-        },
-      },
-      {
-        columnId: "accountId",
-        kind: "idMulti",
-        placeholder: "Filter by account...",
-        optionsKey: "account",
-        brandRef: { entity: "financialAccount" },
-        deriveSchema: true,
-        stored: true,
-      },
-      {
-        columnId: "purchaseId",
-        kind: "idMulti",
-        placeholder: "Filter by purchase...",
-        brandRef: { entity: "purchase" },
-        derived: "purchase",
-      },
-      {
-        columnId: "purchasePresence",
-        field: "purchasePresenceFilter",
-        kind: "presence",
-        derived: "purchase",
-        placeholder: "Filter purchase links...",
-        options: [
-          { value: "has", label: "Has purchase", meta: true },
-          { value: "none", label: "(none)", meta: true },
-        ],
-      },
-      {
-        columnId: "itemization",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter itemization...",
-        options: [
-          { value: "bare", label: "No purchase" },
-          { value: "lump", label: "Lump order" },
-          { value: "itemized_match", label: "Itemized, matches" },
-          { value: "itemized_mismatch", label: "Itemized, differs" },
-          { value: "shared", label: "Shared charge" },
-        ],
-      },
-      {
-        columnId: "sourceRefs",
-        field: "source",
-        urlKey: "source",
-        wire: { kind: "param", name: "source" },
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter by source...",
-        optionsKey: "source",
-      },
-      {
-        columnId: "externalId",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter by external id...",
-      },
-      {
-        columnId: "merchant",
-        kind: "text",
-        placeholder: "Filter by merchant...",
-        deriveSchema: true,
-        anyOf: ["merchant"],
-      },
-      {
-        columnId: "transactionDate",
-        kind: "range",
-        placeholder: "Filter by transaction date...",
-        deriveSchema: true,
-        stored: true,
-      },
-      {
-        columnId: "amount",
-        kind: "range",
-        placeholder: "Filter by amount...",
-        deriveSchema: true,
-        stored: true,
-        range: { finite: true },
-        options: [
-          {
-            value: "gte1000",
-            label: "$1,000 and up",
-            expand: { amountMin: 1000 },
-          },
-          { value: "gte250", label: "$250 and up", expand: { amountMin: 250 } },
-          { value: "gte50", label: "$50 and up", expand: { amountMin: 50 } },
-          {
-            value: "credits",
-            label: "Credits (≤ $0)",
-            expand: { amountMax: 0 },
-          },
-        ],
-      },
-      {
-        columnId: "amountMin",
-        kind: "text",
-        placeholder: "Minimum amount...",
-      },
-      {
-        columnId: "amountMax",
-        kind: "text",
-        placeholder: "Maximum amount...",
-      },
-      {
-        columnId: "transactionDateFrom",
-        kind: "text",
-        placeholder: "Transaction date from...",
-      },
-      {
-        columnId: "transactionDateTo",
-        kind: "text",
-        placeholder: "Transaction date to...",
-      },
-      {
-        columnId: "postedDateFrom",
-        kind: "text",
-        placeholder: "Posted date from...",
-      },
-      {
-        columnId: "postedDateTo",
-        kind: "text",
-        placeholder: "Posted date to...",
-      },
-      {
-        columnId: "related:financialTransaction.vendor",
-        field: "vendorSearch",
-        urlKey: "related-vendor",
-        kind: "text",
-        placeholder: "Search related vendor...",
-      },
-      {
-        columnId: "vendorId",
-        kind: "idMulti",
-        placeholder: "Filter by related vendor id...",
-        brandRef: { entity: "vendor" },
-      },
-      {
-        columnId: "vendorPresenceFilter",
-        kind: "presence",
-        placeholder: "Filter related vendor presence...",
-      },
-      {
-        columnId: "related:financialTransaction.expenses",
-        field: "expenseSearch",
-        urlKey: "related-expense",
-        kind: "text",
-        placeholder: "Search related expenses...",
-      },
-      {
-        columnId: "expenseId",
-        kind: "idMulti",
-        placeholder: "Filter by related expenses id...",
-        brandRef: { entity: "expense" },
-      },
-      {
-        columnId: "expensePresenceFilter",
-        kind: "presence",
-        placeholder: "Filter related expenses presence...",
-      },
-      {
-        columnId: "related:financialTransaction.products",
-        field: "productSearch",
-        urlKey: "related-product",
-        kind: "text",
-        placeholder: "Search related products...",
-      },
-      {
-        columnId: "productId",
-        kind: "idMulti",
-        placeholder: "Filter by related products id...",
-        brandRef: { entity: "product" },
-      },
-      {
-        columnId: "productPresenceFilter",
-        kind: "presence",
-        placeholder: "Filter related products presence...",
-      },
-    ],
-  },
-  relations: [
-    {
-      key: "spendingCategory",
-      label: "Spending category",
-      target: "spendingCategory",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransaction.spendingCategoryId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransaction.spendingCategoryId",
-            direction: "incoming",
-          },
-        ],
+      output: {
+        module: "@cubby/schemas/financial-transaction",
+        export: "financialTransactionOut",
       },
     },
-    {
-      key: "account",
-      label: "Financial account",
-      target: "financialAccount",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          { edge: "FinancialTransaction.accountId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "FinancialTransaction.accountId", direction: "incoming" },
-        ],
-      },
-    },
-    {
-      key: "ledger-transfer",
-      label: "Ledger transfer",
-      target: "ledgerTransfer",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransaction.ledgerTransferId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransaction.ledgerTransferId",
-            direction: "incoming",
-          },
-        ],
-      },
-    },
-    {
-      key: "purchase",
-      label: "Purchase",
-      target: "purchase",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-        ],
-      },
-      inverse: {
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-    {
-      key: "vendor",
-      label: "Vendor",
-      target: "vendor",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-          { edge: "Purchase.vendorId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Purchase.vendorId", direction: "incoming" },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-    {
-      key: "expenses",
-      label: "Expenses",
-      target: "expense",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-          { edge: "Expense.purchaseId", direction: "incoming" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-    {
-      key: "products",
-      label: "Products",
-      target: "product",
-      cardinality: "many",
-      provenance: {
-        kind: "local-path",
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-          { edge: "Expense.purchaseId", direction: "incoming" },
-          { edge: "Expense.productId", direction: "outgoing" },
-        ],
-      },
-      inverse: {
-        steps: [
-          { edge: "Expense.productId", direction: "incoming" },
-          { edge: "Expense.purchaseId", direction: "outgoing" },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    },
-  ],
-  search: "lexical",
-  capabilities: {
-    images: {
-      storage: false,
-      displaySourceOverrides: [
+    // A settlement-side event. Amounts are evidence only: they never participate
+    // in spend/project/calendar rollups, which remain derived from Expense.cost.
+    storage: {
+      indexes: [
         {
-          relationPath: ["purchase"],
-          priority: 1,
-          ordering: "newest",
-          identityEvidence: false,
+          name: "FinancialTransaction_ledgerTransferId_positive_evidence_key",
+          on: ["ledgerTransferId"],
+          unique: true,
+          where:
+            "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} > 0",
         },
         {
-          relationPath: ["products"],
-          priority: 2,
-          ordering: "declared",
-          identityEvidence: false,
+          name: "FinancialTransaction_ledgerTransferId_negative_evidence_key",
+          on: ["ledgerTransferId"],
+          unique: true,
+          where:
+            "{deletedAt} IS NULL AND {ledgerTransferId} IS NOT NULL AND {amount} < 0",
         },
-        {
-          relationPath: ["vendor"],
-          priority: 3,
-          ordering: "declared",
-          identityEvidence: false,
-        },
+        { on: ["kind"] },
+        { on: ["status"] },
+        { on: ["transactionDate"] },
+        { on: ["postedDate"] },
       ],
-      ingress: [
-        {
-          kind: "existingRelated",
-          routeId: "financial-transaction-confirmed-purchase",
-          relationPath: ["purchase"],
-          choice: "primary",
-        },
-        {
-          kind: "createSelf",
-          routeId: "financial-transaction-new",
-          enabled: false,
-          disabledReason:
-            "Financial transactions have no image storage of their own; attach photos via the linked purchase instead",
-        },
-      ],
-      routing: {
-        category: "documents",
-        candidateFields: ["merchant", "description"],
-        temporalFields: ["transactionDate"],
-        lifecycleFilters: [{ field: "status", equals: "posted" }],
-        signals: {
-          ocrFields: ["merchant", "description"],
-          classifierLabels: ["receipt", "credit_card"],
-        },
-        abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
-      },
-    },
-    delete: { mode: "soft", bulk: true },
-    merge: false,
-    dataQuality: {
-      exceptions: true,
       checks: [
         {
-          id: "financial_transaction_allocation_integrity",
-          satisfiedLabel: "Allocations consistent",
-          placement: { field: "allocations" },
-          facet: "integrity",
-          kind: "defect",
-          weight: 3,
-          scoreCap: 49,
-          exceptions: "forbidden",
-          label: "Allocation integrity",
-          message: "Allocated totals or signs conflict with this settlement.",
+          name: "FinancialTransaction_amount_whole_cent_check",
+          sql: "{amount} <> 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
         },
         {
-          id: "financial_transaction_classification",
-          satisfiedLabel: "Transaction classified",
-          placement: { field: "kind" },
-          facet: "identity",
-          exceptions: "forbidden",
-          weight: 1,
-          label: "Transaction classification",
-          message:
-            "Review whether this transaction is spending, income, or a transfer.",
+          name: "FinancialTransaction_posted_date_check",
+          sql: "{status} <> 'posted' OR {postedDate} IS NOT NULL",
+        },
+      ],
+      relations: {
+        account: "accountId",
+        allocations: { many: "financialTransactionAllocation" },
+        ledgerTransfer: "ledgerTransferId",
+      },
+    },
+    filters: {
+      audit: true,
+      schema: {
+        module: "@cubby/schemas/financial-transaction",
+        export: "financialTransactionFilterFields",
+      },
+      descriptors: [
+        {
+          columnId: "allocationIntegrity",
+          kind: "multiselect",
+          derived: true,
+          placeholder: "Filter allocation integrity...",
         },
         {
-          id: "financial_transaction_allocation",
-          satisfiedLabel: "Allocation recorded",
-          placement: { field: "allocations" },
-          facet: "ledger",
-          weight: 2,
-          label: "Allocation",
-          message: "No purchase allocation is recorded for this settlement.",
+          columnId: "descriptorProcessor",
+          kind: "multiselect",
+          derived: true,
+          placeholder: "Filter payment processor...",
         },
         {
-          id: "financial_transaction_merchant",
-          satisfiedLabel: "Merchant recorded",
-          placement: { field: "merchant" },
-          facet: "identity",
-          weight: 1,
-          label: "Merchant",
-          message: "No merchant is recorded for this transaction.",
+          columnId: "transaction",
+          field: "search",
+          urlKey: "q",
+          kind: "text",
+          placeholder: "Search transactions...",
+          deriveSchema: true,
+          schemaDescription: "Substring match on merchant or raw description",
+          anyOf: ["merchant", "rawDescription"],
         },
         {
-          id: "financial_transaction_itemization_expectation",
-          satisfiedLabel: "Itemization expectation classified",
-          placement: { field: "itemizationExpectation" },
-          facet: "paperwork",
-          exceptions: "forbidden",
-          weight: 1,
-          label: "Itemization expectation",
-          message:
-            "Whether this transaction's purchases should be itemized is unclassified.",
+          columnId: "kind",
+          kind: "multiselect",
+          placeholder: "Filter by kind...",
+          deriveSchema: true,
+          stored: true,
+          schemaFromRead: true,
+          options: [
+            { value: "purchase", label: "Purchase" },
+            { value: "refund", label: "Refund" },
+            { value: "account_transfer", label: "Account transfer" },
+            { value: "credit_card_payment", label: "Credit card payment" },
+            { value: "fee", label: "Fee" },
+            { value: "interest", label: "Interest" },
+            { value: "income", label: "Income" },
+            { value: "adjustment", label: "Adjustment" },
+            { value: "other", label: "Other" },
+          ],
         },
         {
-          id: "financial_transaction_booking",
-          satisfiedLabel: "Expenses booked",
-          placement: { field: "bookingCoverage" },
-          facet: "ledger",
-          weight: 2,
-          label: "Expense booking",
-          message:
-            "This spending transaction has missing or unpriced Expense booking.",
+          columnId: "status",
+          kind: "multiselect",
+          placeholder: "Filter by status...",
+          deriveSchema: true,
+          stored: true,
+          schemaFromRead: true,
+          options: [
+            { value: "expected", label: "Expected" },
+            { value: "pending", label: "Pending" },
+            { value: "posted", label: "Posted" },
+            { value: "void", label: "Void" },
+          ],
         },
         {
-          id: "financial_transaction_itemization",
-          satisfiedLabel: "Itemized",
-          placement: { field: "itemizationCoverage" },
-          facet: "ledger",
-          label: "Itemization",
-          message:
-            "A linked Purchase is not yet broken into item lines with their Products.",
+          columnId: "postedDate",
+          kind: "range",
+          placeholder: "Filter by posted date...",
+          deriveSchema: true,
+          stored: true,
+          options: [
+            { value: "30d", label: "Last 30 days" },
+            { value: "90d", label: "Last 90 days" },
+            { value: "ytd", label: "Year to date" },
+            { value: "1y", label: "Last 12 months" },
+          ],
+          expandRef: {
+            module: "~/entity/filter-behavior",
+            export: "resolvePostedDate",
+          },
         },
         {
-          id: "financial_transaction_products",
-          satisfiedLabel: "Goods identified",
-          placement: { field: "productsCoverage" },
-          facet: "identity",
-          label: "Goods identity",
-          message: "Purchased goods have unresolved Product identities.",
+          columnId: "accountId",
+          kind: "idMulti",
+          placeholder: "Filter by account...",
+          optionsKey: "account",
+          brandRef: { entity: "financialAccount" },
+          deriveSchema: true,
+          stored: true,
+        },
+        {
+          columnId: "purchaseId",
+          kind: "idMulti",
+          placeholder: "Filter by purchase...",
+          brandRef: { entity: "purchase" },
+          derived: "purchase",
+        },
+        {
+          columnId: "purchasePresence",
+          field: "purchasePresenceFilter",
+          kind: "presence",
+          derived: "purchase",
+          placeholder: "Filter purchase links...",
+          options: [
+            { value: "has", label: "Has purchase", meta: true },
+            { value: "none", label: "(none)", meta: true },
+          ],
+        },
+        {
+          columnId: "itemization",
+          kind: "multiselect",
+          derived: true,
+          placeholder: "Filter itemization...",
+          options: [
+            { value: "bare", label: "No purchase" },
+            { value: "lump", label: "Lump order" },
+            { value: "itemized_match", label: "Itemized, matches" },
+            { value: "itemized_mismatch", label: "Itemized, differs" },
+            { value: "shared", label: "Shared charge" },
+          ],
+        },
+        {
+          columnId: "sourceRefs",
+          field: "source",
+          urlKey: "source",
+          wire: { kind: "param", name: "source" },
+          kind: "multiselect",
+          derived: true,
+          placeholder: "Filter by source...",
+          optionsKey: "source",
+        },
+        {
+          columnId: "externalId",
+          kind: "multiselect",
+          derived: true,
+          placeholder: "Filter by external id...",
+        },
+        {
+          columnId: "merchant",
+          kind: "text",
+          placeholder: "Filter by merchant...",
+          deriveSchema: true,
+          anyOf: ["merchant"],
+        },
+        {
+          columnId: "transactionDate",
+          kind: "range",
+          placeholder: "Filter by transaction date...",
+          deriveSchema: true,
+          stored: true,
+        },
+        {
+          columnId: "amount",
+          kind: "range",
+          placeholder: "Filter by amount...",
+          deriveSchema: true,
+          stored: true,
+          range: { finite: true },
+          options: [
+            {
+              value: "gte1000",
+              label: "$1,000 and up",
+              expand: { amountMin: 1000 },
+            },
+            {
+              value: "gte250",
+              label: "$250 and up",
+              expand: { amountMin: 250 },
+            },
+            { value: "gte50", label: "$50 and up", expand: { amountMin: 50 } },
+            {
+              value: "credits",
+              label: "Credits (≤ $0)",
+              expand: { amountMax: 0 },
+            },
+          ],
+        },
+        {
+          columnId: "amountMin",
+          kind: "text",
+          placeholder: "Minimum amount...",
+        },
+        {
+          columnId: "amountMax",
+          kind: "text",
+          placeholder: "Maximum amount...",
+        },
+        {
+          columnId: "transactionDateFrom",
+          kind: "text",
+          placeholder: "Transaction date from...",
+        },
+        {
+          columnId: "transactionDateTo",
+          kind: "text",
+          placeholder: "Transaction date to...",
+        },
+        {
+          columnId: "postedDateFrom",
+          kind: "text",
+          placeholder: "Posted date from...",
+        },
+        {
+          columnId: "postedDateTo",
+          kind: "text",
+          placeholder: "Posted date to...",
+        },
+        {
+          columnId: "related:financialTransaction.vendor",
+          field: "vendorSearch",
+          urlKey: "related-vendor",
+          kind: "text",
+          placeholder: "Search related vendor...",
+        },
+        {
+          columnId: "vendorId",
+          kind: "idMulti",
+          placeholder: "Filter by related vendor id...",
+          brandRef: { entity: "vendor" },
+        },
+        {
+          columnId: "vendorPresenceFilter",
+          kind: "presence",
+          placeholder: "Filter related vendor presence...",
+        },
+        {
+          columnId: "related:financialTransaction.expenses",
+          field: "expenseSearch",
+          urlKey: "related-expense",
+          kind: "text",
+          placeholder: "Search related expenses...",
+        },
+        {
+          columnId: "expenseId",
+          kind: "idMulti",
+          placeholder: "Filter by related expenses id...",
+          brandRef: { entity: "expense" },
+        },
+        {
+          columnId: "expensePresenceFilter",
+          kind: "presence",
+          placeholder: "Filter related expenses presence...",
+        },
+        {
+          columnId: "related:financialTransaction.products",
+          field: "productSearch",
+          urlKey: "related-product",
+          kind: "text",
+          placeholder: "Search related products...",
+        },
+        {
+          columnId: "productId",
+          kind: "idMulti",
+          placeholder: "Filter by related products id...",
+          brandRef: { entity: "product" },
+        },
+        {
+          columnId: "productPresenceFilter",
+          kind: "presence",
+          placeholder: "Filter related products presence...",
         },
       ],
     },
-  },
-  extensions: {
-    ports: {
-      repository: {
-        module:
-          "~/server/domains/financial-transaction/repo/financial-transaction",
-        export: "financialTransactionRepository",
+    relations: [
+      {
+        key: "spendingCategory",
+        label: "Spending category",
+        target: "spendingCategory",
+        cardinality: "one",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            {
+              edge: "FinancialTransaction.spendingCategoryId",
+              direction: "outgoing",
+            },
+          ],
+        },
+        inverse: {
+          steps: [
+            {
+              edge: "FinancialTransaction.spendingCategoryId",
+              direction: "incoming",
+            },
+          ],
+        },
       },
-      search: "document",
+      {
+        key: "account",
+        label: "Financial account",
+        target: "financialAccount",
+        cardinality: "one",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            { edge: "FinancialTransaction.accountId", direction: "outgoing" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "FinancialTransaction.accountId", direction: "incoming" },
+          ],
+        },
+      },
+      {
+        key: "ledger-transfer",
+        label: "Ledger transfer",
+        target: "ledgerTransfer",
+        cardinality: "one",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            {
+              edge: "FinancialTransaction.ledgerTransferId",
+              direction: "outgoing",
+            },
+          ],
+        },
+        inverse: {
+          steps: [
+            {
+              edge: "FinancialTransaction.ledgerTransferId",
+              direction: "incoming",
+            },
+          ],
+        },
+      },
+      {
+        key: "purchase",
+        label: "Purchase",
+        target: "purchase",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+          ],
+        },
+        inverse: {
+          steps: [
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "outgoing",
+            },
+          ],
+        },
+      },
+      {
+        key: "vendor",
+        label: "Vendor",
+        target: "vendor",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+            { edge: "Purchase.vendorId", direction: "outgoing" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "Purchase.vendorId", direction: "incoming" },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "outgoing",
+            },
+          ],
+        },
+      },
+      {
+        key: "expenses",
+        label: "Expenses",
+        target: "expense",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+            { edge: "Expense.purchaseId", direction: "incoming" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "Expense.purchaseId", direction: "outgoing" },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "outgoing",
+            },
+          ],
+        },
+      },
+      {
+        key: "products",
+        label: "Products",
+        target: "product",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+            { edge: "Expense.purchaseId", direction: "incoming" },
+            { edge: "Expense.productId", direction: "outgoing" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "Expense.productId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "outgoing" },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "outgoing",
+            },
+          ],
+        },
+      },
+    ],
+    search: "lexical",
+    capabilities: {
+      images: {
+        storage: false,
+        displaySourceOverrides: [
+          {
+            relationPath: ["purchase"],
+            priority: 1,
+            ordering: "newest",
+            identityEvidence: false,
+          },
+          {
+            relationPath: ["products"],
+            priority: 2,
+            ordering: "declared",
+            identityEvidence: false,
+          },
+          {
+            relationPath: ["vendor"],
+            priority: 3,
+            ordering: "declared",
+            identityEvidence: false,
+          },
+        ],
+        ingress: [
+          {
+            kind: "existingRelated",
+            routeId: "financial-transaction-confirmed-purchase",
+            relationPath: ["purchase"],
+            choice: "primary",
+          },
+          {
+            kind: "createSelf",
+            routeId: "financial-transaction-new",
+            enabled: false,
+            disabledReason:
+              "Financial transactions have no image storage of their own; attach photos via the linked purchase instead",
+          },
+        ],
+        routing: {
+          category: "documents",
+          candidateFields: ["merchant", "rawDescription"],
+          temporalFields: ["transactionDate"],
+          lifecycleFilters: [{ field: "status", equals: "posted" }],
+          signals: {
+            ocrFields: ["merchant", "rawDescription"],
+            classifierLabels: ["receipt", "credit_card"],
+          },
+          abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
+        },
+      },
+      delete: { mode: "soft", bulk: true },
+      merge: false,
+      dataQuality: {
+        exceptions: true,
+        checks: [
+          {
+            id: "financial_transaction_allocation_integrity",
+            satisfiedLabel: "Allocations consistent",
+            placement: { field: "allocations" },
+            facet: "integrity",
+            kind: "defect",
+            weight: 3,
+            scoreCap: 49,
+            exceptions: "forbidden",
+            label: "Allocation integrity",
+            message: "Allocated totals or signs conflict with this settlement.",
+          },
+          {
+            id: "financial_transaction_classification",
+            satisfiedLabel: "Transaction classified",
+            placement: { field: "kind" },
+            facet: "identity",
+            exceptions: "forbidden",
+            weight: 1,
+            label: "Transaction classification",
+            message:
+              "Review whether this transaction is spending, income, or a transfer.",
+          },
+          {
+            id: "financial_transaction_allocation",
+            satisfiedLabel: "Allocation recorded",
+            placement: { field: "allocations" },
+            facet: "ledger",
+            weight: 2,
+            label: "Allocation",
+            message: "No purchase allocation is recorded for this settlement.",
+          },
+          {
+            id: "financial_transaction_merchant",
+            satisfiedLabel: "Merchant recorded",
+            placement: { field: "merchant" },
+            facet: "identity",
+            weight: 1,
+            label: "Merchant",
+            message: "No merchant is recorded for this transaction.",
+          },
+          {
+            id: "financial_transaction_itemization_expectation",
+            satisfiedLabel: "Itemization expectation classified",
+            placement: { field: "itemizationExpectation" },
+            facet: "paperwork",
+            exceptions: "forbidden",
+            weight: 1,
+            label: "Itemization expectation",
+            message:
+              "Whether this transaction's purchases should be itemized is unclassified.",
+          },
+          {
+            id: "financial_transaction_booking",
+            satisfiedLabel: "Expenses booked",
+            placement: { field: "bookingCoverage" },
+            facet: "ledger",
+            weight: 2,
+            label: "Expense booking",
+            message:
+              "This spending transaction has missing or unpriced Expense booking.",
+          },
+          {
+            id: "financial_transaction_itemization",
+            satisfiedLabel: "Itemized",
+            placement: { field: "itemizationCoverage" },
+            facet: "ledger",
+            label: "Itemization",
+            message:
+              "A linked Purchase is not yet broken into item lines with their Products.",
+          },
+          {
+            id: "financial_transaction_products",
+            satisfiedLabel: "Goods identified",
+            placement: { field: "productsCoverage" },
+            facet: "identity",
+            label: "Goods identity",
+            message: "Purchased goods have unresolved Product identities.",
+          },
+        ],
+      },
+    },
+    extensions: {
+      ports: {
+        repository: {
+          module:
+            "~/server/domains/financial-transaction/repo/financial-transaction",
+          export: "financialTransactionRepository",
+        },
+        search: "document",
+      },
     },
   },
-});
+  financialTransactionReadSchemas,
+);

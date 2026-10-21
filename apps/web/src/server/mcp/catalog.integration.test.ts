@@ -9,16 +9,12 @@ import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
-import {
-  aiAnalysis,
-  photoRunImage,
-  assessmentState as suggestion,
-  runFinding,
-} from "~/server/db/schema";
+import { aiAnalysis, photoRunImage, runFinding } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { syntheticMailImportRun } from "~/server/domains/purchase-import/service/gmail/execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
@@ -282,7 +278,7 @@ describe("MCP catalog", () => {
 
     const productId = await createdId("product", {
       name: "Catalog widget",
-      upc: "012345678905",
+      barcode: "012345678905",
     });
     // Detector rows carry Date timestamps; the action publishes their JSON.
     expect(
@@ -695,18 +691,22 @@ describe("MCP catalog", () => {
       trigger: "manual",
       status: "completed",
     });
-    await getDb(ctx.db).insert(suggestion).values({
-      runId,
-      entity: "product",
-      recordId: product.id,
-      field: "model",
-      currentValue: null,
-      suggestedValue: "Synthetic model",
-      confidence: 0.9,
-      model: "typesafe/jev",
-      kind: "addition",
-      status: "pending",
-    });
+    await publishFieldAssessment(
+      ctx.db,
+      {
+        runId,
+        entity: "product",
+        recordId: product.id,
+        field: "model",
+        currentValue: null,
+        suggestedValue: "Synthetic model",
+        confidence: 0.9,
+        model: "typesafe/jev",
+        kind: "addition",
+        status: "pending",
+      },
+      true,
+    );
     const queue = await call({ action: "suggestion_queue", entity: "product" });
     expect(queue.isError).not.toBe(true);
     expect(queue.structuredContent).toMatchObject({

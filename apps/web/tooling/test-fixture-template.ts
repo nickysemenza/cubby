@@ -17,8 +17,7 @@ import {
   templateConnectionUrl,
 } from "./schema-template";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
-import { initializeRecoverableTemplate } from "./template-recovery";
-import { templateMarkerDirectory } from "./dev-services/template-markers.ts";
+import { fixtureRunRecordDirectory } from "./dev-services/fixture-run-records.ts";
 import { testServiceConfig } from "./test-service-config";
 
 /**
@@ -44,17 +43,13 @@ declare module "vitest" {
 }
 
 /**
- * Run records live beside the template initializer markers, which are keyed
- * by IntegreSQL service and incarnation: a sweep only ever discards hashes
+ * Run records are keyed by IntegreSQL service and incarnation: cleanup discards hashes
  * against the service that created them.
  */
 const runRoot = () =>
-  join(
-    templateMarkerDirectory(
-      testServiceConfig().url,
-      process.env.CUBBY_TEMPLATE_SERVICE_ID,
-    ),
-    "fixture-runs",
+  fixtureRunRecordDirectory(
+    testServiceConfig().url,
+    process.env.CUBBY_TEMPLATE_SERVICE_ID,
   );
 
 function runDirectory(run: string): string {
@@ -151,10 +146,12 @@ export function prepareFixtureTemplate(
       .update(key)
       .digest("hex");
     writeFileSync(join(runDirectory(run), hash), key);
-    ready = initializeRecoverableTemplate(hash, async (config) => {
-      await cloneSchemaTemplate(config.database);
-      await seed(templateConnectionUrl(config));
-    });
+    ready = templateClient()
+      .initializeTemplate(hash, async (config) => {
+        await cloneSchemaTemplate(config.database);
+        await seed(templateConnectionUrl(config));
+      })
+      .then(() => hash);
     // A failed seed must not poison later callers with the same rejection.
     ready.catch(() => prepared.delete(key));
     prepared.set(key, ready);

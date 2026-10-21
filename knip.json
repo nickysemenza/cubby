@@ -8,15 +8,9 @@
       "entry": [
         "neon.ts!",
         "apps/apple/tooling/apple.ts!",
-        "apps/apple/tooling/apple-inputs.ts!",
         "apps/apple/tooling/apple-release.ts!",
         "scripts/ensure.ts!",
-        "scripts/design-tokens.ts!",
-        // Reached from hooks, CI, or package scripts rather than an import
-        // (production mode does not read those): .husky/commit-msg,
-        // ci.yaml, and the Nx targets.
-        "scripts/check-outward-text.ts!",
-        "scripts/stack-preflight.ts!"
+        "scripts/design-tokens.ts!"
       ],
       "project": [
         "neon.ts!",
@@ -59,7 +53,6 @@
         "src/cf-server.ts!",
         "vite.config.ts!",
         "cloudflare.config.ts!",
-        "e2e.config.ts!",
         "src/styles.css!",
         "src/lib/recipebridge-cf.ts!",
         "src/lib/sentry-cf-shim.ts!",
@@ -167,6 +160,7 @@
   // but import hand-written code, so knip must read them. These are the
   // gitignored trees that are not source.
   "ignore": [
+    "artifacts/**",
     "apps/web/src/server/.lint-fixture-*/**",
     ".claude/**",
     "**/dist/**",

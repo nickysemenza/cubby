@@ -29,7 +29,7 @@ describe("product identity constraints", () => {
       makeProductInput({
         name: "USDA identity linked product",
         fdc_id: 880001,
-        upc: "012345678905",
+        barcode: "012345678905",
       }),
       ctx.actor,
     );
@@ -92,7 +92,7 @@ describe("product identity constraints", () => {
         name: "Identity Drill",
         manufacturer: "Acme",
         model: "ID-100",
-        upc: "077089850017",
+        barcode: "077089850017",
         externalIds: [
           {
             source: "amazon",
@@ -115,7 +115,7 @@ describe("product identity constraints", () => {
           name: "Identity Drill",
           manufacturer: "Acme",
           model: "ID-200",
-          upc: "123456789012",
+          barcode: "123456789012",
         }),
         ctx.actor,
       ),
@@ -127,7 +127,7 @@ describe("product identity constraints", () => {
         makeProductInput({
           name: "Encoded Identity Drill",
           manufacturer: "Other",
-          upc: "0077089850017",
+          barcode: "0077089850017",
         }),
         ctx.actor,
       ),

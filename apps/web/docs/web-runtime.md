@@ -10,7 +10,7 @@ invalidation/inline-error/multi-mutation cases.
 Pass the displayed selection as mutation variables at the action boundary.
 Queries stay passive on remount. When a write closes an editor, await
 `invalidateOperationTags` with `removeInactive` so navigation cannot reuse that
-editor's stale detail cache.
+editor's stale detail cache. `useEntityCommands` opts into the root mutation cache's `invalidationCompletion` policy once for every ordinary editor; do not duplicate invalidation in each dialog.
 Create-from-picker dialogs resolve the pending choice synchronously from the
 saved receipt's identity/title before closing. They must not require a full
 detail schema from a mutation response; later picker queries own expanded rows.
@@ -86,6 +86,11 @@ The generated route component imports only its own override and passes it to
 Shared cells live with their generic feature (for example, the unit-mappings
 column lives in `features/units`), so generic hooks do not import a specialist
 list module merely to reuse one renderer.
+Scalar columns share `createEditableAccessorColumn`. One row-parametrized
+clipboard descriptor supplies both range operations and the rendered editor;
+declared-control bindings preserve its value type. Generated cells reread the
+row, while ordinary factories request the cached accessor value lazily. Keep
+inheritance intent and domain formatting in their existing adapters.
 Full record timelines join the continuous detail page. Timeline renderers remain lazy imports; section navigation never unmounts an editor or timeline.
 Ordinary browser surfaces never import `entityInspectorMetadata`: it carries the
 compiler's filter descriptors, port refs, and a duplicate of the summary, and
@@ -140,6 +145,43 @@ preparation, then individually cached decision waves and existing assessment
 publication. Ordinary `entity.listEnrichment` reads remain provider-free.
 Queued batches discard cancelled members after shared admission; started work
 retains normal publication and freshness checks.
+
+Canonical repository lists use `listScaffold.read` with schema-picked output
+bindings in `list-projection.ts`. The assembler selects and validates present
+canonical scalars, converts root identity, excludes private foreign keys, and
+owns quality/media completion. Reference instructions distinguish stored UUID
+lookups from already projected public IDs. Domain bindings retain their typed
+computations and page-batch inputs; their output schema determines admission
+from the canonical partition. Shared batches memoize once for the selected page,
+including explicit dependencies between domain computations. Unknown demand or
+conflicting writers fail before selection; count and empty pages never load
+bindings. A skipped field remains absent, and a required field missing from a
+selected source or binding fails before schema defaults run.
+Any requested output admits its entire binding. Split outputs whose inputs have
+different readiness: a core identity must not share a binding that requires a
+deferred relation column. Selected-field regressions should omit that relation
+and verify both the public patch and the work it avoids.
+
+Narrow pickers and internal target readers use `listScaffold.raw` and keep their
+own output contract. Both methods share authoritative filtering, sorting,
+pagination, exact counts, prepared context and selected-ID order restoration.
+There is no public full-row hydration callback.
+Reference lookup targets come from declared read fields as well as storage
+fields: table-only lineage columns can still expose declared public references.
+Photo receipt recovery captures the requested current revision even when a
+completed Run blocks new approvals; the server validates the existing receipt.
+An unsaved-field refusal restores focus after approval's pending state clears,
+so the field is enabled when focus lands.
+
+Review outcomes and completion callbacks belong to the submitting view visit.
+Capture its identity before dispatch and compare it on completion; a query key
+alone cannot distinguish leaving a view and returning to it. Cache invalidation
+still completes for authorized writes. Ordinary workflow commands execute through
+the generated operation catalog with its mutation metadata and optional scope.
+When a command patches a saved snapshot, its awaited `onResult` runs before
+catalog invalidation. Opt into `invalidationCompletion` when the caller's
+serialized mutation must include active refresh and inactive-cache removal;
+keep the serialization scope on that outer mutation only.
 
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;

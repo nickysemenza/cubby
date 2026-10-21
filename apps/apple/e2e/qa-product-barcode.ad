@@ -1,0 +1,50 @@
+context platform=ios timeout=240000
+
+# Add preserves the saved primary; explicit promotion keeps the former primary
+# searchable through the native sweep and never creates another Product.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${PRODUCT_ID}"
+wait "id=detail.product.edit" 90000
+click "id=detail.product.edit"
+wait text "Edit Product" 90000
+scroll down 0.4 --until "id=editor.product.externalIds.add"
+click "id=editor.product.externalIds.add"
+fill "id=editor.product.externalIds.collectionEdit.rows.0.value.source" "gtin"
+click "role=Button label=Done"
+click "id=editor.product.externalIds.collectionEdit.rows.0.value.kind"
+click "role=Button label=GTIN"
+fill "id=editor.product.externalIds.collectionEdit.rows.0.value.externalId" "0-88888-88888-0"
+click "role=Button label=Done"
+click "role=Button label=Save"
+wait "id=detail.product.edit" 90000
+click "id=detail.product.edit"
+wait text "Edit Product" 90000
+scroll down 0.4 --until "id=editor.product.externalIds.add"
+wait text "Saved: gtin · GTIN: 00088888888880 · Primary" 90000
+click "id=editor.product.externalIds.add"
+fill "id=editor.product.externalIds.collectionEdit.rows.1.value.source" "gtin"
+click "role=Button label=Done"
+click "id=editor.product.externalIds.collectionEdit.rows.1.value.kind"
+click "role=Button label=GTIN"
+fill "id=editor.product.externalIds.collectionEdit.rows.1.value.externalId" "012345678905"
+click "role=Button label=Done"
+click "role=Button label=Save"
+wait "id=detail.product.edit" 90000
+click "id=detail.product.edit"
+wait text "Edit Product" 90000
+scroll down 0.4 --until "id=editor.product.externalIds.1.primary"
+wait text "Saved: gtin · GTIN: 00088888888880 · Primary" 90000
+wait text "Saved: gtin · GTIN: 00012345678905 · Secondary" 90000
+click "id=editor.product.externalIds.1.primary"
+click "role=Button label=Save"
+wait "id=detail.product.edit" 90000
+click "role=Button label=Capture"
+click "role=Button label=\"Choose a location\""
+fill "role=SearchField" "Synthetic Kitchen"
+click "role=Button label=\"Synthetic Kitchen, Home, ${LOCATION_ID}\""
+fill "role=TextField" "088888888880"
+click "role=Button label=Scan"
+wait text "Synthetic Flour Bag" 90000
+wait text "0 added" 90000
+wait text "1 confirmed" 90000

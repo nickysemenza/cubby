@@ -87,8 +87,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     pendingImageIds: "writes MealImage rows",
   },
   product: {
-    upc: "barcode write slot; lands in EntityExternalId, not on Product",
-    isbn: "book identifier; lands in EntityExternalId, not on Product",
+    barcode: "barcode write slot; lands in EntityExternalId, not on Product",
     externalIds: "writes product EntityExternalId rows",
     unitMappings: "writes ProductUnitMapping rows",
     pendingImageIds: "writes ProductImage rows",

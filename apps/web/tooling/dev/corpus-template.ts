@@ -22,7 +22,6 @@ import {
   templateClient,
   templateConnectionUrl,
 } from "../schema-template";
-import { initializeRecoverableTemplate } from "../template-recovery";
 import { hashSchemaTemplateInputs } from "../schema-template-inputs";
 import { seedUpcLookupFixture } from "./upc-fixture";
 import { createPostgresPool } from "../postgres-pool";
@@ -144,99 +143,96 @@ export async function prepareDevDatabase(
     );
     if (!present.rowCount) {
       const client = templateClient();
-      const hash = await initializeRecoverableTemplate(
-        corpusTemplateHash(process.cwd(), generation),
-        async (config) => {
-          await cloneSchemaTemplate(config.database);
-          const pool = createPostgresPool({
-            connectionString: templateConnectionUrl(config),
-          });
-          // The corpus uploads its three PNGs through the normal storage seam.
-          // Clones restore those bundled bytes into their own R2 binding;
-          // `cubby_dev_fixture_upload` records what the seed actually stored.
-          const uploads: [path: string, bytes: number][] = [];
-          const storage = createServer(async (request, response) => {
-            let bytes = 0;
-            for await (const chunk of request)
-              bytes += Buffer.from(chunk).length;
-            if (request.method === "PUT")
-              uploads.push([request.url ?? "", bytes]);
-            response.end();
-          });
-          storage.listen(0, "127.0.0.1");
-          await once(storage, "listening");
-          try {
-            const address = storage.address();
-            if (!address || typeof address === "string")
-              throw new Error("Fixture storage did not listen");
-            const userStart = performance.now();
-            const userId = randomUUID();
-            await pool.query(
-              'INSERT INTO "user" (id,name,email) VALUES ($1,$2,$3)',
-              [userId, DEV_USER_NAME, DEV_USER_EMAIL],
-            );
-            await pool.query(
-              "INSERT INTO account (id,account_id,provider_id,user_id,password,updated_at) VALUES ($1,$2,'credential',$2,$3,now())",
-              [randomUUID(), userId, await hashPassword(DEV_USER_PASSWORD)],
-            );
-            console.log(
-              `[dev-template] user: ${Math.round(performance.now() - userStart)} ms`,
-            );
-            const importStart = performance.now();
-            const { seedCorpus } = await import("../scenarios/corpus");
-            console.log(
-              `[dev-template] import: ${Math.round(performance.now() - importStart)} ms`,
-            );
-            const corpusStart = performance.now();
-            await pool.query(
-              "CREATE TABLE cubby_dev_background_task (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, body jsonb NOT NULL)",
-            );
-            setCfEnv(
-              fromPartial<Env>({
-                BACKGROUND_QUEUE: {
-                  sendBatch: async (messages: Iterable<{ body: unknown }>) => {
-                    for (const { body } of messages)
-                      await pool.query(
-                        "INSERT INTO cubby_dev_background_task (body) VALUES ($1)",
-                        [JSON.stringify(body)],
-                      );
-                  },
+      const hash = corpusTemplateHash(process.cwd(), generation);
+      await client.initializeTemplate(hash, async (config) => {
+        await cloneSchemaTemplate(config.database);
+        const pool = createPostgresPool({
+          connectionString: templateConnectionUrl(config),
+        });
+        // The corpus uploads its three PNGs through the normal storage seam.
+        // Clones restore those bundled bytes into their own R2 binding;
+        // `cubby_dev_fixture_upload` records what the seed actually stored.
+        const uploads: [path: string, bytes: number][] = [];
+        const storage = createServer(async (request, response) => {
+          let bytes = 0;
+          for await (const chunk of request) bytes += Buffer.from(chunk).length;
+          if (request.method === "PUT")
+            uploads.push([request.url ?? "", bytes]);
+          response.end();
+        });
+        storage.listen(0, "127.0.0.1");
+        await once(storage, "listening");
+        try {
+          const address = storage.address();
+          if (!address || typeof address === "string")
+            throw new Error("Fixture storage did not listen");
+          const userStart = performance.now();
+          const userId = randomUUID();
+          await pool.query(
+            'INSERT INTO "user" (id,name,email) VALUES ($1,$2,$3)',
+            [userId, DEV_USER_NAME, DEV_USER_EMAIL],
+          );
+          await pool.query(
+            "INSERT INTO account (id,account_id,provider_id,user_id,password,updated_at) VALUES ($1,$2,'credential',$2,$3,now())",
+            [randomUUID(), userId, await hashPassword(DEV_USER_PASSWORD)],
+          );
+          console.log(
+            `[dev-template] user: ${Math.round(performance.now() - userStart)} ms`,
+          );
+          const importStart = performance.now();
+          const { seedCorpus } = await import("../scenarios/corpus");
+          console.log(
+            `[dev-template] import: ${Math.round(performance.now() - importStart)} ms`,
+          );
+          const corpusStart = performance.now();
+          await pool.query(
+            "CREATE TABLE cubby_dev_background_task (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, body jsonb NOT NULL)",
+          );
+          setCfEnv(
+            fromPartial<Env>({
+              BACKGROUND_QUEUE: {
+                sendBatch: async (messages: Iterable<{ body: unknown }>) => {
+                  for (const { body } of messages)
+                    await pool.query(
+                      "INSERT INTO cubby_dev_background_task (body) VALUES ($1)",
+                      [JSON.stringify(body)],
+                    );
                 },
-              }),
-            );
-            await seedCorpus(pool, userId, {
-              storageOrigin: `http://127.0.0.1:${address.port}`,
-              bucket: "cubby-local",
-              keyPrefix: "cubby-local",
-            });
-            console.log(
-              `[dev-template] corpus (including three local image uploads): ${Math.round(performance.now() - corpusStart)} ms`,
-            );
+              },
+            }),
+          );
+          await seedCorpus(pool, userId, {
+            storageOrigin: `http://127.0.0.1:${address.port}`,
+            bucket: "cubby-local",
+            keyPrefix: "cubby-local",
+          });
+          console.log(
+            `[dev-template] corpus (including three local image uploads): ${Math.round(performance.now() - corpusStart)} ms`,
+          );
+          await pool.query(
+            "CREATE TABLE cubby_dev_fixture_upload (path text PRIMARY KEY, bytes integer NOT NULL)",
+          );
+          for (const [path, bytes] of uploads)
             await pool.query(
-              "CREATE TABLE cubby_dev_fixture_upload (path text PRIMARY KEY, bytes integer NOT NULL)",
+              "INSERT INTO cubby_dev_fixture_upload VALUES ($1, $2)",
+              [path, bytes],
             );
-            for (const [path, bytes] of uploads)
-              await pool.query(
-                "INSERT INTO cubby_dev_fixture_upload VALUES ($1, $2)",
-                [path, bytes],
-              );
-            await seedUpcLookupFixture(pool);
-            await pool.query(
-              `CREATE TABLE cubby_dev_fixture (pack text PRIMARY KEY, version integer NOT NULL, state text NOT NULL)`,
-            );
-            await pool.query(
-              "INSERT INTO cubby_dev_fixture VALUES ('core',$1,'complete')",
-              [LOCAL_FIXTURE_VERSION],
-            );
-          } finally {
-            setCfEnv(undefined);
-            await pool.end();
-            await new Promise<void>((resolve, reject) =>
-              storage.close((error) => (error ? reject(error) : resolve())),
-            );
-          }
-        },
-      );
+          await seedUpcLookupFixture(pool);
+          await pool.query(
+            `CREATE TABLE cubby_dev_fixture (pack text PRIMARY KEY, version integer NOT NULL, state text NOT NULL)`,
+          );
+          await pool.query(
+            "INSERT INTO cubby_dev_fixture VALUES ('core',$1,'complete')",
+            [LOCAL_FIXTURE_VERSION],
+          );
+        } finally {
+          setCfEnv(undefined);
+          await pool.end();
+          await new Promise<void>((resolve, reject) =>
+            storage.close((error) => (error ? reject(error) : resolve())),
+          );
+        }
+      });
       const lease = await client.api.getTestDatabase(hash);
       const cloneStart = performance.now();
       try {

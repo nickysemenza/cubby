@@ -33,10 +33,8 @@
  * operation that cares still owns its own `IncomingEdgePolicy<E, ...>` (or a
  * stable role map keyed by it, e.g. `PRODUCT_EDGE_ROLES` in
  * `repo/product/edge-roles.ts`), so a new edge here is a compile error at
- * every operation until it has been given a disposition there. The runtime
- * key-set guard for those operation policies lives in
- * `repo/entity-edge-operation-policies.unit.test.ts`; the corresponding
- * repository integration tests backstop the actual SQL behavior.
+ * every operation until it has been given a disposition there. The
+ * corresponding repository integration tests backstop the actual SQL behavior.
  *
  * By contrast, `role` / `label` / `description` / `liveness` ARE stable
  * per-edge facts, not per-operation choices — that's `EdgeSemantics`

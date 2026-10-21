@@ -1,3 +1,4 @@
+import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -56,7 +57,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: locationShortcode,
           create: locationShortcode,
@@ -64,6 +65,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "plantingIds",
         kind: "identifier",
         reference: {
@@ -106,8 +108,6 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-house",
           optionGlyph: {
@@ -125,11 +125,7 @@ export default defineEntity({
         key: "observedOn",
         kind: "date",
         control: { kind: "date", initial: "today" },
-        display: {
-          list: true,
-          detail: true,
-          format: "plainDate",
-        },
+        display: { format: "plainDate" },
         validation: {
           read: plainDate,
           create: plainDate,
@@ -143,7 +139,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -155,11 +151,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: {
-          columnLabel: "Harvest",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Harvest" },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -199,7 +191,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image" },
+        display: { detail: false, standard: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -220,6 +212,7 @@ export default defineEntity({
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "locationName",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
@@ -228,7 +221,7 @@ export default defineEntity({
         key: "plantings",
         kind: "identifier",
         reference: { entity: "planting", multiple: true },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.array(z.object({ id: plantingShortcode, name: z.string() })),
           create: null,
@@ -236,6 +229,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         // `"<Kind> · <YYYY-MM-DD> · <location name>"` — gardenEntry has no
         // name column and `notes` is nullable, so this is the canonical
         // non-null title.
@@ -244,16 +238,19 @@ export default defineEntity({
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: { read: gardenEntryShortcode, create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "updatedAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
@@ -508,7 +505,7 @@ export default defineEntity({
   capabilities: {
     timeline: "default",
     images: {
-      storage: "gallery",
+      storage: imageAssociationStorage.shape.gardenEntry.value,
       ingress: [
         { kind: "self", routeId: "garden-entry-self" },
         {

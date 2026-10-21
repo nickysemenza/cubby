@@ -3,6 +3,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InventoryId,
   LocationId,
@@ -21,14 +22,25 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
+import {
+  and,
+  asc,
+  getTableColumns,
+  count,
+  desc,
+  eq,
+  inArray,
+  not,
+  sql,
+  sum,
+} from "drizzle-orm";
 import { z } from "zod";
 
-import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   amountFromColumns,
+  parseInventoryAmount,
   amountToColumns,
   buildOrderBy,
   buildPartialUpdateValues,
@@ -40,6 +52,11 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
+import { parseLocationType } from "~/server/domains/location/repo/parse-type";
+import {
+  mapDbProductToInventoryList,
+  primaryGtinOf,
+} from "~/server/domains/product/repo/mappers";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -65,19 +82,11 @@ import {
 } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  loadListGroup,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import { lexicalRelevance } from "~/server/generic/search/repo/search-lexical";
 
-import {
-  inventoryEntryBaseFields,
-  inventoryEntryOwnershipFields,
-  dbInventoryEntryListValues,
-} from "./mappers";
+import { inventoryEntryOwnershipFields } from "./mappers";
 
 // InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
 // so a newly introduced reference must be classified before kernel deletion
@@ -326,7 +335,7 @@ export const inventoryentryListRead = async (
       withSums,
     ));
 
-  const page = await inventoryScaffold.list(db, request, {
+  const page = await inventoryScaffold.read(db, request, {
     context,
     where: whereCondition,
     orderBy:
@@ -338,7 +347,7 @@ export const inventoryentryListRead = async (
     select: (clauses) =>
       getDb(db)
         .select({
-          inventoryEntry,
+          ...getTableColumns(inventoryEntry),
           productName: product.name,
           locationName: location.name,
         })
@@ -366,8 +375,83 @@ export const inventoryentryListRead = async (
           location,
           and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
         ),
-    hydrate: (results) =>
-      hydrateInventoryListRows(db, results, valuations, projection),
+    read: {
+      media: true,
+      bindings: (bind) => {
+        const ownership = bind.batch(({ rows }) =>
+          loadInventoryOwnershipTraces(db, rows),
+        );
+        const references = bind.batch(async ({ rows }) => {
+          const related = await getDb(db).query.inventoryEntry.findMany({
+            where: inArray(
+              inventoryEntry.id,
+              rows.map((row) => row.id),
+            ),
+            ...relations.inventory.list,
+          });
+          const pricing = await loadProductPricing(
+            db,
+            related.map((entry) => entry.product),
+          );
+          return {
+            byId: new Map(related.map((row) => [row.id, row])),
+            pricing,
+          };
+        });
+        return [
+          bind(inventoryListItemOut.pick({ amount: true }), (row) => ({
+            amount: parseInventoryAmount(row),
+          })),
+          bind(inventoryListItemOut.pick({ displayName: true }), (row) => ({
+            displayName: inventoryDisplayName({
+              productName: row.productName,
+              locationName: row.locationName,
+            }),
+          })),
+          bind(inventoryListItemOut.pick({ valuation: true }), (row) => ({
+            valuation: valuations?.get(row.id) ?? null,
+          })),
+          ownership.fields(
+            inventoryListItemOut.pick({
+              ownerLedgerPartyId: true,
+              effectiveOwnership: true,
+              fieldResolutions: true,
+            }),
+            (row, loaded) => {
+              const trace = loaded.get(row.id);
+              if (!trace)
+                throw new Error("Inventory ownership trace was not loaded");
+              return inventoryEntryOwnershipFields(trace);
+            },
+          ),
+          references.fields(
+            inventoryListItemOut.pick({ product: true, location: true }),
+            (row, loaded) => {
+              const entry = loaded.byId.get(row.id);
+              if (!entry)
+                throw new Error(
+                  "Inventory product/location references were not loaded",
+                );
+              return {
+                location: {
+                  id: parseShortcodeFor("location", entry.location.shortcode),
+                  name: entry.location.name,
+                  type: parseLocationType(entry.location.type),
+                },
+                product: mapDbProductToInventoryList({
+                  ...entry.product,
+                  pricing: requireLoadedProductPricing(
+                    loaded.pricing,
+                    entry.product.id,
+                  ),
+                  primaryGtin: primaryGtinOf(entry.product.externalIds),
+                }),
+              };
+            },
+          ),
+        ];
+      },
+    },
   });
   const valuationSum = withSums
     ? Number((await readAggregate()).valuationSum ?? 0)
@@ -378,98 +462,6 @@ export const inventoryentryListRead = async (
       ? { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum }
       : undefined,
   };
-};
-
-const hydrateInventoryListRows = async (
-  db: Database,
-  results: Array<{
-    inventoryEntry: typeof inventoryEntry.$inferSelect;
-    productName: string;
-    locationName: string;
-  }>,
-  valuations: InventoryValuations | undefined,
-  projection: ListProjection,
-) => {
-  const entries = results.map((row) => row.inventoryEntry);
-  const [ownership, dataQualities] = await Promise.all([
-    loadListGroup(
-      projection,
-      ["relations", "derived"],
-      () => loadInventoryOwnershipTraces(db, entries),
-      [
-        "ownerLedgerPartyId",
-        "effectiveOwnership",
-        "fieldResolutions",
-      ] satisfies readonly (keyof z.output<typeof inventoryListItemOut>)[],
-    ),
-    loadListGroup(projection, "quality", () =>
-      loadDataQualities(
-        db,
-        "inventory",
-        entries.map((row) => row.id),
-      ),
-    ),
-  ]);
-  const titleById = new Map(
-    results.map((row) => [
-      row.inventoryEntry.id,
-      inventoryDisplayName({
-        productName: row.productName,
-        locationName: row.locationName,
-      }),
-    ]),
-  );
-  const coreRow = (row: (typeof entries)[number]) => {
-    const trace = ownership?.get(row.id);
-    return {
-      ...inventoryEntryBaseFields(
-        row,
-        valuations?.get(row.id) ?? null,
-        dataQualities?.get(row.id),
-      ),
-      ...(trace ? inventoryEntryOwnershipFields(trace) : {}),
-      displayName: titleById.get(row.id),
-    };
-  };
-  let candidates = entries.map(coreRow);
-  if (wantsListGroup(projection, "relations")) {
-    const rows = entries.length
-      ? await getDb(db).query.inventoryEntry.findMany({
-          where: inArray(
-            inventoryEntry.id,
-            entries.map((row) => row.id),
-          ),
-          ...relations.inventory.list,
-        })
-      : [];
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    const ordered = entries.flatMap((row) => {
-      const found = byId.get(row.id);
-      return found ? [found] : [];
-    });
-    const pricing = await loadProductPricing(
-      db,
-      ordered.map((entry) => entry.product),
-    );
-    candidates = ordered.map((row) =>
-      dbInventoryEntryListValues(
-        row,
-        valuations?.get(row.id) ?? null,
-        requireLoadedProductPricing(pricing, row.product.id),
-        dataQualities?.get(row.id),
-        ownership?.get(row.id),
-      ),
-    );
-  }
-  const candidatesByCode = new Map(candidates.map((row) => [row.id, row]));
-  const mapped = wantsListGroup(projection, "media")
-    ? await withDisplayImages(db, "inventory", entries, (row) =>
-        candidatesByCode.get(
-          inventoryEntryBaseFields(row, null, undefined).id,
-        )!,
-      )
-    : candidates;
-  return projectListRows("inventory", mapped, projection);
 };
 
 const inventoryListAggregate = async (
@@ -954,5 +946,3 @@ export const deleteInventoryEntries = (
     ids,
     actor,
   });
-
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";

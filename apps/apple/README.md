@@ -31,9 +31,9 @@ Xcode project in dependency order. Outputs are gitignored. The
 Direct `build-rust.sh --targets sim` is useful for a one-slice FFI iteration;
 restore all slices before a Mac/CLI build. The first GUI build asks to trust
 OpenAPIGenerator; command-line builds skip package-plugin validation.
-After adding or removing app/test Swift files, use the full preparation command
-(`apps/apple/scripts/prepare-project.sh`) before a direct Xcode build. Its
-`--sources` mode is for SwiftPM only and leaves Xcode project references unchanged.
+After adding or removing app/test Swift files, run `pnpm apple gen` before a
+direct Xcode build. Low-level Nx build targets expect artifacts prepared by
+`pnpm apple check` locally or the shared setup action in CI.
 The OpenAPI typed-record keep-list retains schemas decoded from generic kernel
 rows. Its reachability check allows those roots alongside HTTP paths, replacing
 Redocly's path-only unused-component rule.
@@ -177,10 +177,9 @@ launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop
 
 ## Verification
 
-- `pnpm apple check` runs native formatting, probes cached CubbyKit host tests
-  and iOS simulator compilation, then prepares FFI and runs only misses.
-  Use `pnpm apple check host`, `app`, or `lint` for one scope. A pass is cached
-  for its input hash, and CI replays it on a PR with the same declared input hash.
+- `pnpm apple check` runs native formatting, prepares FFI, then runs CubbyKit
+  host tests and iOS simulator compilation sequentially. Use `host`, `app`, or
+  `lint` for one scope. [CI](../../docs/ci.md) owns cache behavior.
 - `pnpm apple test` runs package tests only. It does **not** run the hosted app tests.
 - Hosted CI runs formatting separately as `Apple lint` without FFI setup,
   and native compilation as parallel macOS jobs: `Apple host tests`

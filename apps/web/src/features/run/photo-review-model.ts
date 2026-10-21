@@ -205,3 +205,80 @@ export function reviewOutcomeToasts(
   }
   return toasts;
 }
+
+/** Unsaved inputs and selection only; saved proposals and receipts live in the query. */
+type PhotoReviewDraftState = {
+  selected: Set<string>;
+  drafts: Map<string, { groupKey: string; value: string }>;
+  saves: Set<Promise<void>>;
+  approving: readonly string[] | null;
+};
+export class PhotoReviewDraftSession {
+  private snapshot: PhotoReviewDraftState = {
+    selected: new Set<string>(),
+    drafts: new Map<string, { groupKey: string; value: string }>(),
+    saves: new Set<Promise<void>>(),
+    approving: null,
+  };
+  private listeners = new Set<() => void>();
+  getSnapshot = () => this.snapshot;
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+  private publish(update: Partial<typeof this.snapshot>) {
+    this.snapshot = { ...this.snapshot, ...update };
+    for (const listener of this.listeners) listener();
+  }
+  select(groupKeys: Iterable<string>) {
+    this.publish({ selected: new Set(groupKeys) });
+  }
+  settleSelection(submitted: readonly string[], failed: readonly string[]) {
+    this.select([
+      ...[...this.snapshot.selected].filter((key) => !submitted.includes(key)),
+      ...failed,
+    ]);
+  }
+  edit(fieldId: string, groupKey: string, value: string, saved: string) {
+    const drafts = new Map(this.snapshot.drafts);
+    if (value.trim() === saved.trim()) drafts.delete(fieldId);
+    else drafts.set(fieldId, { groupKey, value });
+    this.publish({ drafts });
+  }
+  acknowledge(fieldId: string, submitted: string) {
+    if (this.snapshot.drafts.get(fieldId)?.value.trim() !== submitted.trim())
+      return;
+    this.forget(fieldId);
+  }
+  forget(fieldId: string) {
+    if (!this.snapshot.drafts.has(fieldId)) return;
+    const drafts = new Map(this.snapshot.drafts);
+    drafts.delete(fieldId);
+    this.publish({ drafts });
+  }
+  async save(work: () => Promise<void>) {
+    const pending = Promise.resolve().then(work);
+    this.publish({ saves: new Set([...this.snapshot.saves, pending]) });
+    try {
+      await pending;
+    } finally {
+      const saves = new Set(this.snapshot.saves);
+      saves.delete(pending);
+      this.publish({ saves });
+    }
+  }
+  async flushSaves() {
+    while (this.snapshot.saves.size) await Promise.all(this.snapshot.saves);
+  }
+  async approve(groupKeys: readonly string[], work: () => Promise<void>) {
+    if (this.snapshot.approving) return;
+    this.publish({ approving: groupKeys });
+    try {
+      await work();
+    } finally {
+      this.publish({ approving: null });
+    }
+  }
+}

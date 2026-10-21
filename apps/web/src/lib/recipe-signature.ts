@@ -9,13 +9,11 @@
 
 import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
-import {
-  composeNotesMarkdown,
-  type ImportRecipe,
-} from "@cubby/schemas/import-recipe";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 
 import {
+  cookbookRecipeNotes,
   normalizedImportSignatureContent,
   normalizeImportYield,
 } from "~/lib/import-recipe-normalizer";
@@ -94,12 +92,7 @@ export function cookbookRecipeSignature(
     yield: parsedYield.yield,
     servings: parsedYield.servingsFromYield,
     tags: chapter ? [chapter] : [],
-    notes: composeNotesMarkdown(
-      item.meta.description.join("\n\n"),
-      item.notes.map((note) =>
-        note.label ? `**${note.label}** ${note.text}` : note.text,
-      ),
-    ),
+    notes: cookbookRecipeNotes(item),
     sections: item.sections.map((section) => ({
       name: sanitizeSectionName(section.name),
       ingredients: section.ingredients.map((line) => line.raw),

@@ -37,12 +37,7 @@ import { uniq, uniqBy } from "es-toolkit";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  relations,
-  withTransaction,
-} from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
   expense,
@@ -50,17 +45,11 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
-import { enrichProductRowsWithInventoryValuations } from "~/server/domains/inventory/repo/valuation";
 import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
-import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import {
-  enrichProductListItems,
-  prefetchProductFoods,
-} from "~/server/domains/product/repo/list-enrichment";
-import {
-  dbProductToListAPI,
-  primaryGtinOf,
-} from "~/server/domains/product/repo/mappers";
+  getProductCoverImageUrlsByProductIds,
+  productList,
+} from "~/server/domains/product/repo/crud";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
 // itself" — reused here rather than reimplemented. Called with `loserIds: []`
@@ -68,19 +57,12 @@ import {
 // "does keepId reach itself over this edge set", which is exactly the attach
 // question: no node identification happens on attach, only new edges.
 import { findMergeComponentCycle } from "~/server/domains/product/repo/merge";
-import {
-  enrichProductRowsWithPricing,
-  loadEffectiveProductPricesById,
-} from "~/server/domains/product/repo/pricing";
-import {
-  enrichProductRowsWithQuantityLedger,
-  loadProductPickerQuantities,
-} from "~/server/domains/product/repo/quantity-ledger";
+import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
+import { loadProductPickerQuantities } from "~/server/domains/product/repo/quantity-ledger";
 // A kit's most recent acquisition remains narrower than identity relations,
 // which also include exits and planned Expenses.
 import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
@@ -90,42 +72,19 @@ import {
   throwRelationRefusal,
 } from "~/server/entity-kernel/repo/relation-preflight";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   linkQuantity,
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
+import { listAll } from "~/server/generic/list/repo/list-all";
 
 export interface ProductComponentEntry {
   productId: ProductId;
   quantity: number;
 }
 
-/**
- * Components of several kits at once, each shaped as a full PRODUCT LIST ROW.
- *
- * `listProductComponents` below answers "what is in this kit" for the detail
- * page, and its seven fields are all that page needs. This answers a different
- * question: the Products list renders a kit's components as ordinary rows of
- * its own table, so a component has to fill the same ~30 columns its parent
- * does — quantity ledger, expense totals, data quality, tags, the lot.
- *
- * So it deliberately reuses `productList`'s own assembly (`relations.product.list`
- * → data qualities → pricing → quantity ledger → `dbProductToListAPI`) rather
- * than widening `productComponentOut` field by field. A child row is then the
- * same shape as a parent BY CONSTRUCTION; the alternative drifts the moment
- * anyone adds a column.
- *
- * Batched over parents because the caller fetches every kit on the page at
- * once. That is not an optimization — fetching per expanded row would deliver
- * children after render, and `DesktopDataRow`'s memo compares `row.original`,
- * so the new rows would silently never paint without a `rowContentVersion`
- * bump. Having the data before rows are built avoids that class of bug.
- *
- * One product can be a component of several kits (10 are, on live data), so a
- * component appears once per parent and the caller keys child rows by the pair.
- */
+/** Full canonical Product rows, batched once across parents and repeated per live edge. */
 export async function listKitComponentRows(
   db: Database,
   parentProductIds: ProductId[],
@@ -144,9 +103,8 @@ export async function listKitComponentRows(
   const linkRows = await dbc
     .select({
       parentProductId: parentProduct.shortcode,
-      componentProductId: entityLink.toEntityId,
+      componentProductCode: product.shortcode,
       quantity: entityLink.quantity,
-      componentName: product.name,
     })
     .from(entityLink)
     .innerJoin(
@@ -169,57 +127,30 @@ export async function listKitComponentRows(
     .orderBy(asc(product.name));
   const edges = linkRows.map((edge) => ({
     ...edge,
-    componentProductId: parseEntityId("product", edge.componentProductId),
+    componentProductCode: parseShortcodeFor(
+      "product",
+      edge.componentProductCode,
+    ),
     quantity: linkQuantity(edge.quantity),
   }));
 
   if (edges.length === 0) return [];
 
-  const componentIds = uniq(edges.map((edge) => edge.componentProductId));
-  const rows = await dbc.query.product.findMany({
-    where: and(inArray(product.id, componentIds), notDeleted(product)),
-    ...relations.product.list,
-  });
-
-  prefetchProductFoods(
-    rows.map((row) => ({
-      primaryGtin: primaryGtinOf(row.externalIds),
-      fdc_id: row.fdc_id,
-    })),
-    usdaClient,
-  );
-  // Each loader reads only the base row, so they run concurrently.
-  const [qualities, valued, priced, ledgered] = await Promise.all([
-    loadDataQualities(
+  const componentCodes = uniq(edges.map((edge) => edge.componentProductCode));
+  const { data: items } = await listAll((pagination) =>
+    productList(
       db,
-      "product",
-      rows.map((row) => row.id),
+      { ids: componentCodes },
+      [{ orderBy: "name", direction: "asc" }],
+      pagination,
+      "sample",
+      usdaClient,
     ),
-    enrichProductRowsWithInventoryValuations(db, rows),
-    enrichProductRowsWithPricing(db, rows),
-    enrichProductRowsWithQuantityLedger(db, rows),
-  ]);
-  const enriched = valued.map((row, index) => ({
-    ...row,
-    pricing: priced[index]!.pricing,
-    quantityLedger: ledgered[index]!.quantityLedger,
-  }));
-  const projectedItems = await withDisplayImages(
-    db,
-    "product",
-    enriched,
-    (row, displayImages) =>
-      dbProductToListAPI(
-        { ...row, dataQuality: qualities.get(row.id)! },
-        displayImages,
-      ),
   );
-  const items = await enrichProductListItems(projectedItems, usdaClient);
-  // Keyed by the private uuid the edges carry, not the item's public shortcode.
-  const byId = new Map(enriched.map((row, index) => [row.id, items[index]!]));
+  const byId = new Map(items.map((item) => [item.id, item]));
 
   return edges.flatMap((edge) => {
-    const item = byId.get(edge.componentProductId);
+    const item = byId.get(edge.componentProductCode);
     if (!item) return [];
     return [
       {

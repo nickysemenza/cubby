@@ -26,7 +26,10 @@ import {
   compileEntityDeclarations,
   validatePhotoCategoryLabels,
 } from "../generator/entities/compile";
-import { loadEntityDeclarations } from "../generator/entities/declarations";
+import {
+  loadEntityDeclarations,
+  type DeclarationObject,
+} from "../generator/entities/declarations";
 import { hasGenericListOperation } from "../generator/entities/list-capabilities";
 import { deriveImageDisplaySources } from "../generator/entities/derive";
 import { renderImagePolicyArtifacts } from "../generator/entities/render/image-policy";
@@ -132,6 +135,157 @@ const model = {
   audit: ["name"],
 };
 
+describe("surface schema compilation", () => {
+  const compile = (
+    fields: readonly DeclarationObject[],
+    schemas: { output: z.ZodType; list: z.ZodType; detail: z.ZodType },
+  ) =>
+    compileEntityDeclarations([
+      {
+        ...base,
+        model: { ...model, fields: [...model.fields, ...fields] },
+        readSchemas: schemas,
+      },
+    ]);
+  const output = z.object({ name: z.string() });
+  it("rejects a displayed reference absent from its surface or carrying a numeric identity", () => {
+    for (const list of [
+      output,
+      output.extend({ parent: z.object({ id: z.number() }) }),
+    ])
+      expect(() =>
+        compile(
+          [
+            {
+              key: "parentId",
+              kind: "identifier",
+              reference: { entity: "alpha" },
+              display: { list: true },
+            },
+          ],
+          { output, list, detail: output },
+        ),
+      ).toThrow(/parentId.*list.*unavailable/u);
+  });
+
+  it("checks every union branch and array step in a displayed path", () => {
+    const list = output.extend({
+      rows: z
+        .array(
+          z.union([
+            z.object({ label: z.string() }),
+            z.object({ other: z.string() }),
+          ]),
+        )
+        .optional(),
+    });
+    expect(() =>
+      compile(
+        [
+          {
+            key: "caption",
+            kind: "text",
+            display: { list: true, readPath: "rows[].label" },
+          },
+        ],
+        { output, list, detail: output },
+      ),
+    ).toThrow(/caption.*list.*rows\[\]\.label/u);
+  });
+  it("rejects unknown renderers during shared compilation", () => {
+    expect(() =>
+      compile(
+        [
+          {
+            key: "caption",
+            kind: "text",
+            validation: { read: z.string(), create: null, update: null },
+            display: { renderer: { list: "synthetic-unknown" } },
+          },
+        ],
+        {
+          output,
+          list: output.extend({ caption: z.string() }),
+          detail: output,
+        },
+      ),
+    ).toThrow(/synthetic-unknown/u);
+  });
+  it("rejects named renderer inputs missing from or mistyped in the real projection", () => {
+    const renderer = {
+      key: "caption",
+      kind: "text",
+      display: { renderer: { list: "usda-food-link" } },
+    };
+    for (const list of [output, output.extend({ food: z.string().nullable() })])
+      expect(() =>
+        compile([renderer], { output, list, detail: output }),
+      ).toThrow(/caption.*list.*food/u);
+  });
+  it("rejects an object projected as a generic numeric field", () => {
+    expect(() =>
+      compile([{ key: "total", kind: "number", display: { list: true } }], {
+        output,
+        list: output.extend({ total: z.object({ amount: z.number() }) }),
+        detail: output,
+      }),
+    ).toThrow(/total.*list.*unavailable/u);
+  });
+  it("walks finite recursive paths through optional array references", () => {
+    type Node = { id: string; parent?: Node; children?: Node[] };
+    const node: z.ZodType<Node> = z.object({
+      id: z.string(),
+      parent: z.lazy(() => node).optional(),
+      children: z.array(z.lazy(() => node)).optional(),
+    });
+    const list = output.extend({ tree: node.optional() });
+    expect(() =>
+      compile(
+        [
+          {
+            key: "parentId",
+            kind: "identifier",
+            reference: { entity: "alpha" },
+            display: { readPath: "tree.children[0].parent.id" },
+          },
+        ],
+        { output, list, detail: output },
+      ),
+    ).not.toThrow();
+  });
+  it("derives availability defaults and preserves deliberate omissions", () => {
+    const detail = output.extend({ caption: z.string() });
+    const [entity] = compile(
+      [
+        {
+          key: "caption",
+          kind: "text",
+          validation: { read: z.string(), create: null, update: null },
+          display: { detail: false },
+        },
+      ],
+      { output, list: output, detail },
+    );
+    expect(
+      entity?.fieldModel.fields.find((field) => field.key === "caption")
+        ?.display,
+    ).toMatchObject({ list: false, detail: false });
+    expect(() =>
+      compile(
+        [
+          {
+            key: "caption",
+            kind: "text",
+            validation: { read: z.string(), create: null, update: null },
+            display: { detail: true },
+          },
+        ],
+        { output, list: output, detail },
+      ),
+    ).toThrow(/caption.*detail.*redundant/u);
+  });
+});
+
 describe("typed entity compiler", () => {
   it("requires a declared label path for custom reference label projections", () => {
     const compile = (labelPath: string | null) =>
@@ -146,11 +300,15 @@ describe("typed entity compiler", () => {
                 key: "accountId",
                 kind: "identifier",
                 reference: { entity: "alpha" },
-                display: { list: true, labelPath },
+                display: { detail: false, labelPath },
                 validation: { read: z.string(), create: null, update: null },
               },
               {
                 key: "accountLabel",
+                provenance: {
+                  kind: "derived",
+                  sources: [{ label: "Synthetic account label" }],
+                },
                 kind: "text",
                 validation: { read: z.string(), create: null, update: null },
               },
@@ -160,7 +318,7 @@ describe("typed entity compiler", () => {
         },
       ]);
     expect(() => compile(null)).toThrow("display.labelPath");
-    expect(() => compile("missingLabel")).toThrow("read projection");
+    expect(() => compile("missingLabel")).toThrow("actual list schema");
     expect(() => compile("accountLabel")).not.toThrow();
   });
   it("rejects image policies whose routes, evidence, or candidate fields escape the manifest", () => {
@@ -695,8 +853,8 @@ describe("typed entity compiler", () => {
       nullable: false,
       control: null,
       display: {
-        list: false,
-        detail: false,
+        list: undefined,
+        detail: undefined,
       },
       validation: { create: null, read, update: null },
     });
@@ -712,7 +870,7 @@ describe("typed entity compiler", () => {
       readKey: "name",
       nullable: false,
       control: null,
-      display: { list: false, detail: false },
+      display: { list: true, detail: true },
     });
     expect(field.validation.create).toBe(model.fields[0]!.validation.create);
     expect(field.validation.create!.parse(undefined)).toBe("Example");
@@ -761,10 +919,10 @@ describe("typed entity compiler", () => {
               key: "name",
               kind: "text",
               labelOverride: "Title",
-              readKeyOverride: null,
               nullable: true,
             },
           ],
+          output: [],
           storage: [
             {
               key: "name",
@@ -1103,7 +1261,7 @@ describe("typed entity compiler", () => {
       ...base,
       model: {
         ...model,
-        fields: [{ ...model.fields[0]!, display: { detail: true } }],
+        fields: [{ ...model.fields[0]!, display: {} }],
       },
     };
     expect(
@@ -1159,24 +1317,26 @@ describe("typed entity compiler", () => {
   it.each([
     [
       "list",
-      { list: "alpha-list" },
+      { list: "tag-links" },
       "display.renderer.list requires display.list",
     ],
     [
       "detail",
-      { detail: "alpha-detail" },
+      { detail: "product-tags" },
       "display.renderer.detail requires display.detail",
     ],
   ])(
     "rejects a %s renderer on an inactive display surface",
-    (_, renderer, message) => {
+    (surface, renderer, message) => {
       expect(() =>
         compileEntityDeclarations([
           {
             ...base,
             model: {
               ...model,
-              fields: [{ ...model.fields[0], display: { renderer } }],
+              fields: [
+                { ...model.fields[0], display: { [surface]: false, renderer } },
+              ],
             },
           },
         ]),
@@ -1195,9 +1355,8 @@ describe("typed entity compiler", () => {
               {
                 ...model.fields[0],
                 display: {
-                  list: true,
                   listHidden: true,
-                  renderer: { list: "alpha-list" },
+                  renderer: { list: "tag-links" },
                 },
               },
             ],
@@ -1232,7 +1391,7 @@ describe("typed entity compiler", () => {
       /titleField "book" for entity "alpha" must be a read-projection key/,
     );
     expect(() => compileWithReadKey("name")).toThrow(
-      /titleField "book" for entity "alpha" must be a read-projection key/,
+      "readKeyOverride is redundant",
     );
   });
 
@@ -1394,7 +1553,8 @@ describe("typed entity compiler", () => {
               {
                 key: "name",
                 kind: "text",
-                display: { list: true, listOrderOverride: listOrder },
+                display: { listOrderOverride: listOrder },
+                validation: model.fields[0]!.validation,
               },
             ],
           },
@@ -1408,7 +1568,7 @@ describe("typed entity compiler", () => {
 
   it("validates stored and anyOf filter shapes against the storage model", () => {
     const fields = [
-      { key: "name", kind: "text" },
+      { ...model.fields[0] },
       { key: "tags", kind: "text-array", nullable: true },
       { key: "flag", kind: "boolean" },
       { key: "at", kind: "timestamp", nullable: true },
@@ -1416,7 +1576,6 @@ describe("typed entity compiler", () => {
       {
         key: "parentId",
         kind: "identifier",
-        labelOverride: "Parent",
         reference: { entity: "alpha" },
       },
     ];
@@ -1621,7 +1780,7 @@ describe("typed entity compiler", () => {
       model: {
         ...model,
         fields: [
-          ...model.fields,
+          { ...model.fields[0]!, display: { detail: false } },
           {
             key: "status",
             kind: "enum",
@@ -1634,7 +1793,6 @@ describe("typed entity compiler", () => {
               sources: [{ label: "Workflow state" }],
             },
             display: {
-              detail: true,
               optionRole: "category",
               optionColor: "neutral-status",
               optionGlyph: { phosphor: "Shapes", sfSymbol: "square.on.circle" },
@@ -1648,7 +1806,7 @@ describe("typed entity compiler", () => {
               kind: "derived",
               sources: [{ label: "Scheduling rules" }],
             },
-            display: { detail: true },
+            display: {},
             validation: { read: z.string(), create: null, update: null },
           },
         ],
@@ -1820,7 +1978,6 @@ describe("typed entity compiler", () => {
               {
                 key: "pendingImageIds",
                 kind: "text",
-                readKeyOverride: null,
                 control: { kind: "text" },
                 provenance: {
                   kind: "relation",
@@ -1912,6 +2069,10 @@ describe("typed entity compiler", () => {
           fields: [
             ...model.fields,
             {
+              provenance: {
+                kind: "derived",
+                sources: [{ label: "Synthetic category" }],
+              },
               key: "kind",
               kind: "text" as const,
               display: { mobile: { slot: "subtitle", priority: 10 } },

@@ -217,6 +217,21 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       vendorAccountId: accountId,
       trigger: "manual",
     });
+    await readProduct();
+    const admittedState = async () => ({
+      purchases: await database.select().from(schema.purchase),
+      expenses: await database.select().from(schema.expense),
+      products: await database.select().from(schema.product),
+      payments: await database.select().from(schema.purchasePaymentEvidence),
+      allocations: await database
+        .select()
+        .from(schema.financialTransactionAllocation),
+      orders: await database.select().from(schema.importSourceOrder),
+      bindings: await database.select().from(schema.importSourceProduct),
+      attachments: await database.select().from(schema.entityAttachment),
+      stock: await database.select().from(schema.inventoryEntry),
+    });
+    const before = bookedPurchaseCode ? await admittedState() : null;
     const committed = await importBrowserOrder(db, {
       runId: run.id,
       actor,
@@ -231,6 +246,7 @@ async function createConvergenceHarness(ctx: TestDbContext) {
     if (bookedPurchaseCode) {
       // A later itemization is observed until its money and identity are reviewed.
       expect(committed.items[0]?.outcome).toBe("conflict");
+      expect(await admittedState()).toEqual(before);
       const detail = await loadRunDetail(db, run.publicId);
       const findings = detail.findings.filter(
         (finding) =>

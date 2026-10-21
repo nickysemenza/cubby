@@ -76,7 +76,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text" },
-        display: { list: true, detail: true, standard: "name" },
+        display: { standard: "name" },
         validation: {
           read: z.string().trim().min(1).max(200),
           create: z.string().trim().min(1).max(200),
@@ -88,7 +88,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -122,6 +122,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -135,9 +136,6 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
         display: {
-          list: true,
-          detail: true,
-          // The Status column reads `acquiredAt` as a state, not a date.
           valueOptions: [
             {
               value: "acquired",
@@ -163,10 +161,9 @@ export default defineEntity({
         key: "candidates",
         kind: "json",
         display: {
-          detail: true,
+          list: false,
           itemsPath: "candidateItems",
           renderer: { detail: "wish-candidates" },
-          // Roster for a candidate row's `inventoried` flag in the list.
           valueOptions: [
             {
               value: "yes",
@@ -202,6 +199,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "candidateCount",
         kind: "number",
         provenance: {
@@ -224,6 +222,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "priceRange",
         kind: "json",
         nullable: true,
@@ -252,7 +251,7 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,
@@ -262,7 +261,7 @@ export default defineEntity({
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,

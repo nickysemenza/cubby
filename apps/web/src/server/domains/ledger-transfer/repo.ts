@@ -58,7 +58,7 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listGroupFields,
-  hydrateListRead,
+  type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
@@ -220,40 +220,50 @@ const selectTransfersRead = (
     })
     .from(ledgerTransfer);
 };
-const hydrateTransfersRead = async (
-  db: Database,
-  rows: Awaited<ReturnType<typeof selectTransfersRead>>,
-  projection: ListProjection,
-) =>
-  hydrateListRead(db, "ledgerTransfer", rows, projection, {
-    load: async () => undefined,
-    mapRow: (row) => ({
-      ...row,
-      id: parseShortcodeFor("ledgerTransfer", row.shortcode),
-      ...listGroupFields(projection, "relations", () => ({
+const transferRead = {
+  bindings: (bind) => [
+    bind(
+      ledgerTransferOut.pick({ fromPartyId: true, toPartyId: true }),
+      (row) => ({
         fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode!),
         toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode!),
-        sourceClaims: row.sourceClaims?.map((claim) => ({
+      }),
+    ),
+    bind(ledgerTransferOut.pick({ sourceClaims: true }), (row) => {
+      if (row.sourceClaims === undefined)
+        throw new Error("Ledger transfer source claims were not loaded");
+      return {
+        sourceClaims: row.sourceClaims.map((claim) => ({
           ...claim,
           createdAt: new Date(claim.createdAt),
           updatedAt: new Date(claim.updatedAt),
         })),
-        evidenceTransactionIds: row.evidenceTransactionIds?.map((id) =>
+      };
+    }),
+    bind(ledgerTransferOut.pick({ evidenceTransactionIds: true }), (row) => {
+      if (row.evidenceTransactionIds === undefined)
+        throw new Error("Ledger transfer evidence was not loaded");
+      return {
+        evidenceTransactionIds: row.evidenceTransactionIds.map((id) =>
           parseShortcodeFor("financialTransaction", id),
         ),
-      })),
-      ...listGroupFields(projection, "derived", () => ({
-        classification:
-          row.fromPartyId === row.toPartyId
-            ? "internal_move"
-            : row.toPartyKind === "household"
-              ? "contribution"
-              : row.fromPartyKind === "household"
-                ? "household_distribution"
-                : "reimbursement",
-      })),
+      };
     }),
-  });
+    bind(ledgerTransferOut.pick({ classification: true }), (row) => ({
+      classification: ledgerTransferOut.shape.classification.parse(
+        row.fromPartyId === row.toPartyId
+          ? "internal_move"
+          : row.toPartyKind === "household"
+            ? "contribution"
+            : row.fromPartyKind === "household"
+              ? "household_distribution"
+              : "reimbursement",
+      ),
+    })),
+  ],
+} satisfies ListReadOptions<
+  Awaited<ReturnType<typeof selectTransfersRead>>[number]
+>;
 
 const getById = async (
   db: Database | DrizzleTransaction,
@@ -636,7 +646,7 @@ export const listLedgerTransfersRead = async (
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
 ) =>
-  ledgerTransferScaffold.list(
+  ledgerTransferScaffold.read(
     db,
     { filters, sorts, pagination, projection },
     {
@@ -647,7 +657,7 @@ export const listLedgerTransfersRead = async (
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows) => hydrateTransfersRead(db, rows, projection),
+      read: transferRead,
     },
   );
 

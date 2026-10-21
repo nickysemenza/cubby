@@ -56,6 +56,11 @@ import type { PgSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
+import {
+  ENTITY_LIST_READ_SCHEMAS,
+  type ListEntity,
+} from "~/entity/generated/entity-lists.gen";
+import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   effectiveFieldInSql,
@@ -132,7 +137,12 @@ import {
   type RowsSqlArg,
   shortcodeIdsSql,
 } from "./field-compiler";
-import { wantsListGroup } from "./list-projection";
+import {
+  wantsListGroup,
+  listReadPlan,
+  selectedListProjection,
+  type ListReadOptions,
+} from "./list-projection";
 
 const suggestionKinds = z
   .union([
@@ -1396,28 +1406,27 @@ interface ListHydration<Row, Out> {
   joins?: (query: PgSelect) => PgSelect;
 }
 
-type ListSpec<Row, Out> = ListHydration<Row, Out> &
-  (
-    | {
-        /**
-         * A plain-select projection with the same root FROM as count. Omit for
-         * stored columns. Relational queries belong in `load`, never here.
-         */
-        select?: (page: ListPage, projection: ListProjection) => Promise<Row[]>;
-        load?: never;
-      }
-    | {
-        select?: never;
-        /**
-         * Enrich only the selected IDs. The scaffold owns filtering, sorting and
-         * pagination in a plain FROM context, and restores page order afterward.
-         */
-        load: (
-          where: SQL,
-          projection: ListProjection,
-        ) => Promise<Array<Row & { id: string }>>;
-      }
-  );
+type ListSpec<Row, Out> = ListHydration<Row, Out> & ListSelection<Row>;
+type ListSelection<Row> =
+  | {
+      /**
+       * A plain-select projection with the same root FROM as count. Omit for
+       * stored columns. Relational queries belong in `load`, never here.
+       */
+      select?: (page: ListPage, projection: ListProjection) => Promise<Row[]>;
+      load?: never;
+    }
+  | {
+      select?: never;
+      /**
+       * Enrich only the selected IDs. The scaffold owns filtering, sorting and
+       * pagination in a plain FROM context, and restores page order afterward.
+       */
+      load: (
+        where: SQL,
+        projection: ListProjection,
+      ) => Promise<Array<Row & { id: string }>>;
+    };
 
 const searchableEntityNames = new Set<string>(searchableEntities);
 const isSearchableEntity = (entity: string): entity is SearchableEntity =>
@@ -2087,6 +2096,42 @@ export function listScaffold<
       };
     },
 
+    /** Canonical assembly validates static bindings and demand before selecting even an empty page. */
+    async read<Filters extends object, Row = InferSelectModel<T>>(
+      db: Database | DrizzleTransaction,
+      request: ListRequest<Filters>,
+      spec: Omit<ListHydration<Row, ListReadRow>, "hydrate"> &
+        ListSelection<Row> & { read?: ListReadOptions<Row> },
+    ) {
+      const listEntity = Object.keys(ENTITY_LIST_READ_SCHEMAS).find(
+        (key): key is ListEntity =>
+          key === entity && Object.hasOwn(ENTITY_LIST_READ_SCHEMAS, key),
+      );
+      if (!listEntity) throw new Error(`No canonical list schema: ${entity}`);
+      const plan = listReadPlan<Row>(listEntity, spec.read);
+      plan.validate(request.projection ?? { kind: "full" });
+      return scaffold.list(db, request, {
+        ...spec,
+        hydrate: (rows, projection, context) =>
+          plan.read(db, rows, projection, context),
+      });
+    },
+    /** Narrow/internal consumers retain the selected raw shape and own their explicit computation. */
+    async raw<Filters extends object, Row = InferSelectModel<T>>(
+      db: Database | DrizzleTransaction,
+      request: ListRequest<Filters>,
+      spec: Omit<ListHydration<Row, Row>, "hydrate"> & ListSelection<Row>,
+    ) {
+      if (request.projection?.kind === "selected") {
+        const listEntity = Object.keys(ENTITY_LIST_READ_SCHEMAS).find(
+          (key): key is ListEntity =>
+            key === entity && Object.hasOwn(ENTITY_LIST_READ_SCHEMAS, key),
+        );
+        if (!listEntity) throw new Error(`No canonical list schema: ${entity}`);
+        selectedListProjection(listEntity, request.projection.fields);
+      }
+      return scaffold.list(db, request, { ...spec, hydrate: (rows) => rows });
+    },
     /**
      * One list read: where → order → page → rows + count → hydrate. A
      * `count` read never runs the row query or hydration.
@@ -2290,8 +2335,9 @@ export function listScaffold<
       );
     },
   };
-  if (!facetCounters.has(entity)) facetCounters.set(entity, scaffold);
-  return scaffold;
+  const { list: _executeList, ...publicScaffold } = scaffold;
+  if (!facetCounters.has(entity)) facetCounters.set(entity, publicScaffold);
+  return publicScaffold;
 }
 
 /**

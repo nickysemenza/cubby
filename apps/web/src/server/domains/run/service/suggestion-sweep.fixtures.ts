@@ -30,6 +30,7 @@ import {
 } from "~/server/db/schema";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   lookupShortcodes,
@@ -168,9 +169,9 @@ export async function seedPending(
     trigger: "manual",
     status: "completed",
   });
-  const [saved] = await getDb(ctx.db)
-    .insert(suggestionTable)
-    .values({
+  const saved = await publishFieldAssessment(
+    ctx.db,
+    {
       runId,
       confidence: 0.8,
       model: PRIMARY_MODEL,
@@ -184,9 +185,9 @@ export async function seedPending(
           row.field,
         ),
       },
-    })
-    .returning({ id: suggestionTable.id });
-  if (!saved) throw new Error("Synthetic Suggestion was not persisted");
+    },
+    true,
+  );
   return { runId, id: saved.id };
 }
 

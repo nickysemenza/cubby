@@ -1,6 +1,6 @@
 import { imageRepresentations } from "./image-summary";
 import { z } from "zod";
-import { imageShortcode } from "./identifiers";
+import { imageShortcode } from "./identifier-fields";
 
 // Its own module rather than a neighbour of `imageUrlSummary`: entity
 // declarations import `image-summary.ts`, and this one needs `identifiers.ts`

@@ -85,7 +85,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().min(1),
           create: z.string().min(1),
@@ -98,13 +98,9 @@ export default defineEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         display: {
-          list: true,
-          detail: true,
           readPath: "identity.kind",
           renderer: { detail: "financial-account-identity" },
           mobile: { slot: "subtitle", priority: 10 },
-          // Labels for `identity.kind`; a bare `replaceAll("_", " ")` would
-          // read `stored_value` as "stored value".
           valueOptions: [
             {
               value: "credit_card",
@@ -161,11 +157,7 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "meta", priority: 20 },
-        },
+        display: { mobile: { slot: "meta", priority: 20 } },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -224,8 +216,6 @@ export default defineEntity({
           },
         },
         display: {
-          list: true,
-          detail: true,
           mobile: { slot: "trailing", priority: 10 },
           optionRole: "category",
           optionColor: "domain-finance",
@@ -243,7 +233,7 @@ export default defineEntity({
         description:
           "Imported or unconfirmed account identity. Clear only after a household member confirms this account's identity.",
         control: { kind: "checkbox" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -257,8 +247,6 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "source-aliases" },
         display: {
           columnLabel: "Aliases",
-          list: true,
-          detail: true,
           width: "xs",
           readPath: "sourceAliases",
           format: "arrayCount",
@@ -277,7 +265,7 @@ export default defineEntity({
         description:
           "Every last four this account has presented, dated: the primary card the statement labels it with (a reissue is an older primary with validTo), wallet device numbers, sibling cards, or gift-card instances.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, detailLabelPath: "cardNumbersLabel" },
+        display: { list: false, detailLabelPath: "cardNumbersLabel" },
         validation: {
           read: financialAccountCardNumbers,
           create: financialAccountCardNumbers.default([]),
@@ -292,11 +280,7 @@ export default defineEntity({
           "The vendor that owes a gift card or store-credit balance. Stored-value accounts only; one live account per provider and owner.",
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          columnLabel: "Provider",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Provider" },
         validation: {
           read: vendorShortcode.nullable(),
           create: vendorShortcode.nullable().default(null),
@@ -325,7 +309,7 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().default(null),
@@ -339,7 +323,7 @@ export default defineEntity({
         description:
           "Members authorized to use this credit card, with inclusive membership dates.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, itemsPath: "authorizedUserItems" },
+        display: { list: false, itemsPath: "authorizedUserItems" },
         validation: {
           read: financialAccountAuthorizedUsers,
           create: financialAccountAuthorizedUsers.default([]),
@@ -353,7 +337,7 @@ export default defineEntity({
         description:
           "Dated funding parties. Empty uses the account Ledger Party; gaps in a nonempty history are unknown. Does not change inventory ownership.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, itemsPath: "fundingPeriodItems" },
+        display: { list: false, itemsPath: "fundingPeriodItems" },
         validation: {
           read: financialAccountFundingPeriods,
           create: financialAccountFundingPeriods.default([]),
@@ -366,11 +350,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          width: "md",
-        },
+        display: { width: "md" },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().default(null),
@@ -381,7 +361,7 @@ export default defineEntity({
         key: "inventoryOwnerDefaultEnabled",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -393,7 +373,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -401,6 +381,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -410,6 +391,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         nullable: true,
@@ -420,6 +402,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "providerVendorName",
         kind: "text",
         nullable: true,
@@ -432,7 +415,7 @@ export default defineEntity({
       {
         key: "transactionCount",
         kind: "number",
-        display: { list: true, detail: true },
+        display: {},
         provenance: {
           kind: "derived",
           sources: [
@@ -454,7 +437,7 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,
@@ -464,7 +447,7 @@ export default defineEntity({
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,

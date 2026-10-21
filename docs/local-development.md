@@ -44,17 +44,16 @@ runtime identity, while `/__dev/ready` checks database connectivity, committed
 migrations, the completed core fixture marker, and that the synthetic USDA
 release has loaded (`usdaReady`).
 
-Dev sessions and template recovery share one process-liveness contract: `alive`
-means equal verified birth identities; `dead` means an absent PID or a verified
-different birth in the same identity format; everything unreadable or in another
-format is `unknown`. Unknown ownership never authorizes termination, replacement,
-reset, or template discard. Unprefixed legacy identities are unknown because their
-original timezone/locale was not recorded. For local birth uncertainty, the
-diagnostic names the PID: stop that local process with `kill <pid>`, then run
-`pnpm dev down` before retrying. Foreign-host or missing-service-incarnation
-uncertainty requires shared-service recovery instead; see
-[template recovery](development.md#worktrees-and-test-services). Session and
-persistent data stay intact until ownership is resolved.
+Dev sessions and seeded fixture cleanup share one process-liveness contract:
+`alive` means equal verified birth identities; `dead` means an absent PID or a
+verified different birth in the same identity format; everything unreadable or
+in another format is `unknown`. Unknown ownership never authorizes termination,
+replacement, reset, or fixture cleanup. Unprefixed legacy identities are unknown
+because their original timezone/locale was not recorded. For local birth
+uncertainty, stop the reported local process before running `pnpm dev down`.
+Session and persistent data stay intact until ownership is resolved.
+IntegreSQL owns template initialization; interrupted initialization requires
+coordinated [test-service restart](development.md#worktrees-and-test-services).
 `/__dev/login` signs in the synthetic local
 account through real Better Auth on loopback.
 Debug Swift apps launched with `--cubby-dev-server <origin>` use
@@ -140,12 +139,12 @@ Unset inherited application
 database and storage overrides before starting; the supervisor rejects values
 that target another database or origin. Local startup ignores production `.env`
 and `.dev.vars` files and supplies its own auth/storage values. Worktrees get no
-`.env` copy; an opt-in billed tool (live evals, Tester Army) reads its one
+`.env` copy; an opt-in billed tool (live evals) reads its one
 credential through `localSecret` (`apps/web/tooling/local-secret.ts`): shell,
 then this checkout's `apps/web/.env`, then the primary checkout's. Use it
 instead of grepping another checkout's `.env`.
 
-The only local credential needed for Tester Army and live AI evals is
+The only local credential needed for live AI evals is
 `AI_GATEWAY_API_KEY`. Copy `apps/web/.env.example` to the gitignored
 `apps/web/.env` and replace its synthetic value when using those tools.
 Normal development and deterministic E2E tests need no env file; their
@@ -383,8 +382,7 @@ every driver command, and leaves the shared session and daemon running.
 Single-file `.ad` journeys use `replay` in that session; `test` would fork an
 attempt session and conflict with an already-open panel. Replay diagnostics and
 root scenario results remain in the sanitized harness bundle.
-Watch and Tester Army modes keep their owned driver lifecycle and
-reject this override.
+Watch mode keeps its owned driver lifecycle and rejects this override.
 
 ## Fixture previews and warm HMR validation
 
@@ -456,11 +454,11 @@ manifest and lockfile own install settings and pins.
 
 Generated/WASM/native preparation is owned by `scripts/ensure.ts` and the
 commands that consume its outputs. Missing output must be restored even when
-inputs are unchanged; a cheap marker that overlooks incomplete packages is
-unsafe. Outside Nx, `wasm` and `generate` skip starting Nx only when their
-marker matches the stat of every declared input and the bytes of every output,
-recorded after an Nx run during which neither changed. Shared Cargo target output uses content fingerprints and the tracked
-workspace lockfile. Check a local Cargo path patch before diagnosing an upstream
+inputs are unchanged. `wasm` and `generate` enter Nx directly; Nx owns input
+hashing, cached results and output restoration. Generation also removes retired
+outputs using its artifact manifest. Apple FFI retains its separate content
+fingerprint to avoid rewriting current generated shims. Shared Cargo target
+output uses content fingerprints and the tracked workspace lockfile. Check a local Cargo path patch before diagnosing an upstream
 API mismatch as an installer problem.
 
 Keep Xcode DerivedData and SwiftPM build products isolated by checkout:

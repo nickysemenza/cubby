@@ -1,9 +1,8 @@
+import imageDefinition from "./entity-definitions/18-image.entity";
+import { imageProcessingIssue } from "./image-processing";
 import { IMAGE_FIELD_KEYS } from "./image-field-keys";
 import { productImagePurpose } from "./image-summary";
-import {
-  imageOut,
-  imageAnalysisSummarySchema,
-} from "./entity-definitions/field-primitives";
+import { imageOut } from "./entity-definitions/field-primitives";
 import { z } from "zod";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -22,9 +21,7 @@ import {
   coverEntities,
   galleryEntities,
   logoEntities,
-  type CoverEntity,
   type GalleryEntity,
-  type LogoEntity,
   type ShortcodeEntity,
 } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
@@ -61,7 +58,7 @@ export type ImageRenderStatus = z.infer<typeof ImageRenderStatus>;
 export type ImageStorageStatus = z.infer<typeof ImageStorageStatus>;
 
 /** Durable current-image processing findings exposed to list and Problems. */
-export const imageProcessingIssue = z.enum(["failed", "review_needed"]);
+export { imageProcessingIssue } from "./image-processing";
 export type ImageProcessingIssue = z.infer<typeof imageProcessingIssue>;
 export const imageProcessingIssueFilter = oneOrMany(imageProcessingIssue)
   .optional()
@@ -563,22 +560,12 @@ export type SetPerceptualHashesOutput = z.infer<
 // Every direct-image entity, derived from the manifest for the same reason
 // `attachableImageEntity` is. Gallery, cover, and logo storage modes are all
 // authoritative association targets.
-export const imageAssociationEntity = z.enum(
-  nonEmptyTuple<GalleryEntity | CoverEntity | LogoEntity>([
-    ...galleryEntities,
-    ...coverEntities,
-    ...logoEntities,
-  ]),
-);
-export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
-export const imageAssociationSchema = z.object({
-  entityKind: imageAssociationEntity,
-  entityId: z.string().min(1),
-  entityName: z.string().min(1),
-  role: imageAssociationRole,
-});
-export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
-
+export {
+  imageAssociationEntity,
+  imageAssociationRole,
+  imageAssociationSchema,
+  type ImageAssociation,
+} from "./image-processing";
 export const initiateUploadWithoutEntityResponseSchema = z.object({
   uploadUrl: z.url(),
   // The public `IMG-` code: `Image` mints a shortcode at insert time
@@ -591,26 +578,11 @@ export const initiateUploadWithoutEntityResponseSchema = z.object({
 });
 
 /** An Image's current row in a photo-inventory (or other) import run's picker. */
-export const importTargetSummarySchema = z.object({
-  runId: runShortcode,
-  state: runTargetState,
-  position: z.number().int().nullable(),
-});
-export type ImportTargetSummary = z.infer<typeof importTargetSummarySchema>;
-
-export const imageWithEntitySchema = z
-  .object(generatedImageFieldSchemas.read)
-  .extend({
-    // Optional like `processingIssue`/`importTarget`/`analysisSummary` below:
-    // `imageWithRelationsToAPI` builds the base shape and every real producer
-    // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
-    // batch-loaded score.
-    dataQuality: generatedImageFieldSchemas.read.dataQuality.optional(),
-    associations: z.array(imageAssociationSchema),
-    processingIssue: imageProcessingIssue.nullable().optional(),
-    importTarget: importTargetSummarySchema.nullable().optional(),
-    analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
-  });
+export {
+  importTargetSummarySchema,
+  type ImportTargetSummary,
+} from "./image-processing";
+export const imageWithEntitySchema = imageDefinition.readSchemas.detail;
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
 

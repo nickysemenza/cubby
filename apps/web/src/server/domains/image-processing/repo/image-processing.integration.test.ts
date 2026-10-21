@@ -6,7 +6,7 @@ import {
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
 import { providerFor } from "@cubby/shared/ai/models";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -554,6 +554,7 @@ describe("durable image representations", () => {
           promptVersion: String(IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION),
           resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
           inputFingerprint: `evaluation-${index}`,
+          createdAt: new Date(Date.now() + (index + 1) * 1000),
           result: { ...analysis.result, description: `Evaluation ${index}` },
         })),
       );
@@ -562,6 +563,22 @@ describe("durable image representations", () => {
     expect(
       bounded.analyses.find((entry) => entry.preferred)?.result.description,
     ).toBe(analysis.result.description);
+    // Invalid rows consume raw history slots; older evaluation rows must not
+    // refill them, while the preferred current-source result stays visible.
+    await getDb(ctx.db)
+      .update(aiAnalysis)
+      .set({ result: {} })
+      .where(inArray(aiAnalysis.model, ["evaluation-20", "evaluation-21"]));
+    const malformed = await getImageProcessingReadProjection(ctx.db, imageId);
+    expect(malformed.analyses).toHaveLength(19);
+    expect(
+      malformed.analyses.find((entry) => entry.preferred)?.result.description,
+    ).toBe(analysis.result.description);
+    const descriptions = malformed.analyses.map(
+      (entry) => entry.result.description,
+    );
+    expect(descriptions).not.toContain("Evaluation 0");
+    expect(descriptions).not.toContain("Evaluation 1");
   });
 
   it("retires image search and removes its description from an attached owner on delete", async () => {

@@ -75,9 +75,7 @@ final class LibraryMetadataSync {
     /// True only while a `BGProcessingTask` owns the process (`runInBackground()`): the scene is
     /// inactive then, so the scene gate is bypassed. Every other gate still applies.
     @ObservationIgnored private var isBackgroundExecution = false
-    // `nonisolated(unsafe)`: same justification as `PhotoClassificationSweep` — `deinit` is not
-    // main-actor-isolated, and these tokens are only ever unregistered there.
-    @ObservationIgnored nonisolated(unsafe) private var systemConditionObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var systemConditions: PhotoSystemConditionObservation?
 
     init(
         analysisStore: PhotoAnalysisStore,
@@ -105,25 +103,7 @@ final class LibraryMetadataSync {
         self.cloudIdentifierProvider = cloudIdentifierProvider
         self.deviceShortcodeProvider = deviceShortcodeProvider
         self.sendPage = sendPage
-        observeSystemConditions()
-    }
-
-    deinit {
-        for observer in systemConditionObservers { NotificationCenter.default.removeObserver(observer) }
-    }
-
-    private func observeSystemConditions() {
-        let thermalToken = NotificationCenter.default.addObserver(
-            forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.reconcile() }
-        }
-        let powerToken = NotificationCenter.default.addObserver(
-            forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.reconcile() }
-        }
-        systemConditionObservers = [thermalToken, powerToken]
+        systemConditions = PhotoSystemConditionObservation { [weak self] in self?.reconcile() }
     }
 
     /// `AppModel.restoreSession`/`finishSignIn`/`signOut` — a signed-out install has no session to

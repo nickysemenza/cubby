@@ -30,7 +30,6 @@ import {
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { listReadRowSchema } from "~/entity/model/list-read-fields";
-import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database } from "~/server/db";
 import {
   categoryStockTrackingSql,
@@ -66,22 +65,17 @@ import {
   liveRecipeCountForIngredientSql,
   ownRecipeCountForIngredientSql,
 } from "~/server/domains/recipe/repo/helpers";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   attachDataQuality,
   loadDataQualities,
 } from "~/server/generic/data-quality/repo/hydrate";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  loadListGroup,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
+import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
 
 import { buildIngredientWhere } from "./internal-types";
 import {
   dbIngredientToAPI,
-  dbIngredientToListValues,
   dbIngredientToTopLevel,
   mapIngredientProducts,
   mapIngredientProductsLean,
@@ -571,7 +565,7 @@ const ingredientListImpl = async (
     },
   } as const;
 
-  return ingredientScaffold.list(
+  return ingredientScaffold.read(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
@@ -593,76 +587,65 @@ const ingredientListImpl = async (
               : sql<number | null>`NULL::int`.as("ownRecipeCount"),
           },
         }),
-      hydrate: async (results) => {
-        if (projection.kind === "base")
-          return projectListRows(
-            "ingredient",
-            results.map((row) => ({ ...row, id: row.shortcode })),
-            projection,
-          );
-        const hydratedRows = results.map((row) => ({
-          ...row,
-          product: (row.product ?? []).flatMap((linkedProduct) =>
-            "unitMappings" in linkedProduct ? [linkedProduct] : [],
-          ),
-        }));
-        const linkedProducts = hydratedRows.flatMap((row) => row.product);
-        const [pricedProducts, qualifiedProducts, ingredientQualityById] =
-          await Promise.all([
-            loadListGroup(projection, "relations", () =>
-              enrichProductRowsWithPricing(db, linkedProducts),
-            ),
-            loadListGroup(projection, "relations", () =>
-              attachDataQuality(db, "product", linkedProducts),
-            ),
-            loadListGroup(projection, "quality", () =>
-              loadDataQualities(
-                db,
-                "ingredient",
-                results.map((row) => row.id),
+      read: {
+        media: true,
+        bindings: (bind) => {
+          const products = bind.batch(async ({ rows }) => {
+            const linked = rows.flatMap((row) =>
+              (row.product ?? []).flatMap((product) =>
+                "unitMappings" in product ? [product] : [],
               ),
+            );
+            const [priced, qualified] = await Promise.all([
+              enrichProductRowsWithPricing(db, linked),
+              attachDataQuality(db, "product", linked),
+            ]);
+            const pricing = new Map(priced.map((row) => [row.id, row.pricing]));
+            const quality = new Map(
+              qualified.map((row) => [row.id, row.dataQuality]),
+            );
+            return new Map(
+              rows.map((row) => [
+                row.id,
+                mapIngredientProducts(
+                  (row.product ?? []).flatMap((product) => {
+                    if (!("unitMappings" in product)) return [];
+                    const dataQuality = quality.get(product.id);
+                    if (!dataQuality)
+                      throw new Error(
+                        "Ingredient product quality was not loaded",
+                      );
+                    return [
+                      {
+                        ...product,
+                        pricing: pricing.get(product.id),
+                        dataQuality,
+                      },
+                    ];
+                  }),
+                ),
+              ]),
+            );
+          });
+          return [
+            products.fields(
+              ingredientListItemOut.pick({ product: true }),
+              (row, loaded) => ({ product: loaded.get(row.id) ?? [] }),
             ),
-          ]);
-        const pricingById = new Map(
-          pricedProducts?.map((row) => [row.id, row.pricing]),
-        );
-        const qualityById = new Map(
-          qualifiedProducts?.map((row) => [row.id, row.dataQuality]),
-        );
-        const mapRow = (
-          row: (typeof hydratedRows)[number],
-          displayImages: Parameters<typeof dbIngredientToListValues>[1] = [],
-        ) => {
-          if (!wantsListGroup(projection, "relations"))
-            return {
-              ...row,
-              id: row.shortcode,
-              ownRecipeCount:
-                row.ownRecipeCount === null
-                  ? undefined
-                  : Number(row.ownRecipeCount),
-              dataQuality: ingredientQualityById?.get(row.id),
-              displayImages,
-            };
-          return dbIngredientToListValues(
-            {
-              ...row,
-              product: (row.product ?? []).map((product) => ({
-                ...product,
-                pricing: pricingById.get(product.id),
-                dataQuality: qualityById.get(product.id)!,
-              })),
-              appearsInRecipes: row.appearsInRecipes ?? [],
-              ownRecipeCount: row.ownRecipeCount ?? 0,
-            },
-            displayImages,
-            ingredientQualityById?.get(row.id),
-          );
-        };
-        const mapped = wantsListGroup(projection, "media")
-          ? await withDisplayImages(db, "ingredient", hydratedRows, mapRow)
-          : hydratedRows.map((row) => mapRow(row));
-        return projectListRows("ingredient", mapped, projection);
+            bind(
+              ingredientListItemOut.pick({ appearsInRecipes: true }),
+              (row) => ({ appearsInRecipes: row.appearsInRecipes ?? [] }),
+            ),
+            bind(
+              ingredientListItemOut.pick({ ownRecipeCount: true }),
+              (row) => {
+                if (row.ownRecipeCount === null)
+                  throw new Error("Ingredient recipe count was not loaded");
+                return { ownRecipeCount: Number(row.ownRecipeCount) };
+              },
+            ),
+          ];
+        },
       },
     },
   );

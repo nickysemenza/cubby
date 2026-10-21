@@ -1,10 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { ledgerPartyId, userId, type RunId } from "@cubby/schemas/identifiers";
+import { userId, type RunId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { ledgerParty, run, runControlEvent, user } from "~/server/db/schema";
+import { getDb } from "~/server/db/helpers";
+import { run, runControlEvent } from "~/server/db/schema";
+
+import { loadRunController } from "./control-scope";
 
 /**
  * Records a member's "Run now, paid allowed" on a Run that has no agent scope
@@ -15,26 +17,7 @@ export async function recordPaidGrant(
   actor: ActorContext,
   input: { runId: RunId; paidOverBudgetUsd?: number },
 ) {
-  const [controller] = await getDb(db)
-    .select({
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      ledgerPartyId: ledgerParty.id,
-      ledgerPartyShortcode: ledgerParty.shortcode,
-      ledgerPartyName: ledgerParty.name,
-      ledgerPartyKind: ledgerParty.kind,
-    })
-    .from(ledgerParty)
-    .innerJoin(user, eq(user.id, ledgerParty.userId))
-    .where(
-      and(
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .limit(1);
+  const controller = await loadRunController(db, actor);
   if (!controller)
     throw new Error("Only a household member can allow paid AI for a Run.");
   await getDb(db)
@@ -45,7 +28,7 @@ export async function recordPaidGrant(
       controllerUserId: userId.parse(controller.userId),
       controllerName: controller.name,
       controllerEmail: controller.email,
-      controllerLedgerPartyId: ledgerPartyId.parse(controller.ledgerPartyId),
+      controllerLedgerPartyId: controller.ledgerPartyId,
       controllerLedgerPartyShortcode: controller.ledgerPartyShortcode,
       controllerLedgerPartyName: controller.ledgerPartyName,
       controllerLedgerPartyKind: controller.ledgerPartyKind,

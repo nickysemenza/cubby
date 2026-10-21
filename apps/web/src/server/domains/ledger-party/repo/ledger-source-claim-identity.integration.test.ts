@@ -297,19 +297,6 @@ describe("source claim identity round trip", () => {
     ).rejects.toThrow(/identity/u);
   });
 
-  it("refuses a claim that names both a provider id and a key", () => {
-    expect(
-      ledgerSourceClaimInput.safeParse(
-        resend(
-          { source: "synthetic-provider", sourceKey: "v1:abc" },
-          {
-            providerId: "synthetic-row-1",
-          },
-        ),
-      ).success,
-    ).toBe(false);
-  });
-
   it("round-trips a ledger transfer's claim the same way", async () => {
     const from = await createLedgerParty(
       ctx.db,

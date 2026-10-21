@@ -778,7 +778,7 @@ export function EnrichmentWorkbench({
         return {
           name: row.name,
           manufacturer: UNSPECIFIED_MANUFACTURER,
-          upc: null,
+          barcode: null,
           expectedQuantity: null,
           ingredientId: row.id,
           fdc_id: suggestions[row.id]!.food.fdc_id,

@@ -180,9 +180,12 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Show unchanged fields", exact: true })
     .click();
-  await group
-    .getByRole("checkbox", { name: "Change name", exact: true })
-    .check();
+  const changeName = group.getByRole("checkbox", {
+    name: "Change name",
+    exact: true,
+  });
+  await changeName.click();
+  await expect(changeName).toBeChecked();
   const editedName = group.getByRole("textbox", {
     name: "New name",
     exact: true,
@@ -190,9 +193,12 @@ test("resolves identity, validates counts, and applies selected fields without r
   await editedName.fill("x".repeat(501));
   await editedName.blur();
   await expect(page.getByText(/Changes were not saved:/)).toBeVisible();
-  await group
-    .getByRole("checkbox", { name: "Change notes", exact: true })
-    .check();
+  const changeNotes = group.getByRole("checkbox", {
+    name: "Change notes",
+    exact: true,
+  });
+  await changeNotes.click();
+  await expect(changeNotes).toBeChecked();
   await group
     .getByRole("textbox", { name: "New notes", exact: true })
     .fill("Label confirmed: medium");
@@ -1125,8 +1131,8 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   // Missing evidence is a photo-slot state, not a repeated field warning.
   await expect(attach.getByLabel("Label photo missing")).toBeVisible();
   await expect(
-    attach.getByText("amazon · ASIN: B0SYNTH123", { exact: true }),
-  ).toBeVisible();
+    attach.getByRole("link", { name: /B0SYNTH123/ }),
+  ).toHaveAttribute("href", "https://www.amazon.com/dp/B0SYNTH123");
   await expect(
     attach.getByText("No product details changed", { exact: true }),
   ).toBeVisible();

@@ -93,9 +93,13 @@ UPC lookup, manufacturer page, then exact retailer page. An Amazon ASIN can use
 and aggregators may find a primary page but cannot overwrite a populated fact.
 Never generate an image with AI.
 
-Record only published evidence: UPC/EAN/GTIN in `upc` with leading zeroes,
-maker MPN in `model`, Amazon ASIN as `externalIds` `amazon`/`asin`, and retailer
-SKUs in their typed slot. Use lowercase kebab-case source slugs. A source/kind/
+Record only published evidence: add UPC/EAN/ISBN/GTIN through the typed
+`externalIds` collection, preserving leading zeroes in source evidence. Add
+Amazon ASIN as `amazon`/`asin` and retailer SKUs in their typed slots. A proven
+exact-variant maker part uses `manufacturer_part` with its manufacturer issuer;
+a shared family/style code stays descriptive in `model`. An unclassified printed
+code stays in evidence until its meaning is established. Use lowercase kebab-case
+source slugs. A source/kind/
 external-ID tuple has one live owner; do not invent, relabel, or choose between
 variants. Preserve ambiguity as unresolved work with its competing candidates.
 

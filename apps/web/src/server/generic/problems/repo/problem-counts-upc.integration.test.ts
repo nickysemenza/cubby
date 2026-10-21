@@ -19,7 +19,10 @@ describe("problem counts and the UPC lane", () => {
   it("never calls the UPC provider for the count snapshot", async () => {
     await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "UPC count test good", upc: "036000291452" }),
+      makeProductInput({
+        name: "UPC count test good",
+        barcode: "036000291452",
+      }),
       ctx.actor,
     );
     const lookupBatch = vi.fn(async () => new Map());

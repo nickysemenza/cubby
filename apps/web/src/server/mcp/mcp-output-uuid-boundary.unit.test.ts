@@ -23,6 +23,9 @@ interface UuidFinding {
 /** Exact permanent UUID exceptions. A newly exposed UUID must be named here
  * deliberately; field-name heuristics are intentionally not accepted. */
 const DECLARED_UUID_OUTPUT_PATHS = new Set([
+  // Statement observations expose an opaque read-only row handle, not entity
+  // identity. Mutations still address source/externalId; no CRUD links use it.
+  "finance_read.data[].id",
   // Product unit-mapping rows keep their uuid: it is the only handle
   // `syncProductUnitMappings` accepts to update a row in place (a mapping
   // resent without it is deleted and reinserted). Declared on product get/list

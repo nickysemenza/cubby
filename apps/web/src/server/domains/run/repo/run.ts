@@ -27,11 +27,14 @@ import {
   createEntityReader,
   listReadOn,
 } from "~/server/entity-kernel/repo/repository";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { hydrateListRead } from "~/server/generic/list/repo/list-projection";
-import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  listReadPlan,
+  selectedListProjection,
+  type ListReadOptions,
+} from "~/server/generic/list/repo/list-projection";
+import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 
 import { listRunStepsForRuns } from "./run-step";
 import { readRunStepWorkProgress, usesStepWorkProgress } from "./work-progress";
@@ -41,171 +44,125 @@ import { readRunStepWorkProgress, usesStepWorkProgress } from "./work-progress";
  * `purchase-import/run-service.ts`; this file only projects the row.
  */
 type RunRow = typeof runTable.$inferSelect;
-const runProjection = runOut.omit({ dataQuality: true });
-
-// includes-deleted: a run is immutable history, so it keeps naming the
-// account, vendor and party it ran for after they are tombstoned.
-const hydrateProjection = async (
-  db: Database | DrizzleTransaction,
-  rows: RunRow[],
-): Promise<Omit<RunOut, "dataQuality">[]> => {
-  const refs = <E extends "vendorAccount" | "vendor" | "ledgerParty" | "run">(
-    entity: E,
-    ids: (string | null)[],
-  ) => lookupEntityReferences(db, entity, ids, { includeDeleted: true });
-  const [accounts, vendors, parties, predecessors, steps] = await Promise.all([
-    refs(
-      "vendorAccount",
-      rows.map((row) => row.vendorAccountId),
-    ),
-    refs(
-      "vendor",
-      rows.map((row) => row.vendorId),
-    ),
-    refs(
-      "ledgerParty",
-      rows.map((row) => row.ledgerPartyId),
-    ),
-    refs(
-      "run",
-      rows.flatMap((row) => [row.predecessorRunId, row.parentRunId]),
-    ),
-    listRunStepsForRuns(
-      db,
-      rows
-        .filter((row) => usesStepWorkProgress(runPurpose.parse(row.purpose)))
-        .map((row) => row.id),
-    ),
-  ]);
-  const stepsByRun = new Map<string, typeof steps>();
-  for (const step of steps) {
-    const group = stepsByRun.get(step.runId) ?? [];
-    group.push(step);
-    stepsByRun.set(step.runId, group);
-  }
-  const now = new Date();
-  const at = <V>(map: Map<string, V>, id: string | null) =>
-    id === null ? undefined : map.get(id);
-  const runLinks = (row: RunRow) => ({
-    predecessorRunId: at(predecessors, row.predecessorRunId)?.id ?? null,
-    parentRunId: at(predecessors, row.parentRunId)?.id ?? null,
-  });
-  return rows.map((row) => {
-    const account = at(accounts, row.vendorAccountId);
-    const vendor = at(vendors, row.vendorId);
-    const party = at(parties, row.ledgerPartyId);
-    const runSteps = stepsByRun.get(row.id) ?? [];
-    const samples = runWorkSamples.safeParse(row.liveProgress?.work).data;
-    const workProgress =
-      readRunStepWorkProgress(runSteps, row.status, row.startedAt, now) ??
-      (samples
-        ? {
-            current: readRunWorkPhase(samples.current, row.status, now),
-            completed: samples.completed.map((sample) =>
-              readRunWorkPhase(sample, "completed", now),
-            ),
-          }
-        : null);
-    const activity =
-      [
-        row.heartbeatAt?.toISOString(),
-        row.liveProgress?.createdAt,
-        ...runSteps.map((step) => step.updatedAt.toISOString()),
-      ]
-        .filter((value) => value !== undefined)
-        .sort((a, b) => Date.parse(a) - Date.parse(b))
-        .at(-1) ?? null;
-    const projected = {
-      ...row,
-      workProgress,
-      activityAt: activity,
-      purpose: runPurpose.parse(row.purpose),
-      id: parseShortcodeFor("run", row.shortcode),
-      displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,
-      wallTime: row.endedAt
-        ? formatDuration(
-            Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
-          )
-        : "In progress",
-      vendorAccountId: account?.id ?? null,
-      vendorAccountLabel: account?.name ?? null,
-      vendorId: vendor?.id ?? null,
-      vendorName: vendor?.name ?? null,
-      ledgerPartyId: party?.id ?? null,
-      ledgerPartyName: party?.name ?? null,
-      ...runLinks(row),
-    };
-    return runProjection.parse({
-      ...projected,
-      iconEntity: activityIconEntity({
-        kind: projected.purpose,
-        subjectId: projected.vendorId,
-        ledgerPartyId: projected.ledgerPartyId,
-      }),
+// includes-deleted: immutable Run history retains account, actor and lineage identities.
+const runRead = {
+  media: true,
+  references: {
+    vendorAccountId: {
+      kind: "lookup",
+      name: "vendorAccountLabel",
+      missing: "null",
+      includeDeleted: true,
+    },
+    vendorId: {
+      kind: "lookup",
+      name: "vendorName",
+      missing: "null",
+      includeDeleted: true,
+      consumers: ["displayName", "iconEntity"],
+    },
+    ledgerPartyId: {
+      kind: "lookup",
+      name: "ledgerPartyName",
+      missing: "null",
+      includeDeleted: true,
+      consumers: ["displayName", "iconEntity"],
+    },
+    predecessorRunId: { kind: "lookup", missing: "null", includeDeleted: true },
+    parentRunId: { kind: "lookup", missing: "null", includeDeleted: true },
+  },
+  bindings: (bind) => {
+    const steps = bind.batch(async ({ db, rows }) => {
+      const loaded = await listRunStepsForRuns(
+        db,
+        rows
+          .filter((row) => usesStepWorkProgress(runPurpose.parse(row.purpose)))
+          .map((row) => row.id),
+      );
+      const byRun = new Map<string, typeof loaded>();
+      for (const step of loaded) {
+        const group = byRun.get(step.runId) ?? [];
+        group.push(step);
+        byRun.set(step.runId, group);
+      }
+      return { byRun, now: new Date() };
     });
-  });
-};
-
+    return [
+      bind(
+        runOut.pick({ displayName: true, iconEntity: true }),
+        (row, { references }) => {
+          const vendor = references.get("vendorId");
+          const party = references.get("ledgerPartyId");
+          return {
+            displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,
+            iconEntity: activityIconEntity({
+              kind: runPurpose.parse(row.purpose),
+              subjectId: vendor?.id ?? null,
+              ledgerPartyId: party?.id ?? null,
+            }),
+          };
+        },
+      ),
+      bind(runOut.pick({ wallTime: true }), (row) => ({
+        wallTime: row.endedAt
+          ? formatDuration(
+              Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
+            )
+          : "In progress",
+      })),
+      steps.fields(
+        runOut.pick({ workProgress: true, activityAt: true }),
+        (row, { byRun, now }) => {
+          const runSteps = byRun.get(row.id) ?? [];
+          const samples = runWorkSamples.safeParse(row.liveProgress?.work).data;
+          const workProgress =
+            readRunStepWorkProgress(runSteps, row.status, row.startedAt, now) ??
+            (samples
+              ? {
+                  current: readRunWorkPhase(samples.current, row.status, now),
+                  completed: samples.completed.map((sample) =>
+                    readRunWorkPhase(sample, "completed", now),
+                  ),
+                }
+              : null);
+          const activityAt =
+            [
+              row.heartbeatAt?.toISOString(),
+              row.liveProgress?.createdAt,
+              ...runSteps.map((step) => step.updatedAt.toISOString()),
+            ]
+              .filter((value) => value !== undefined)
+              .sort((a, b) => Date.parse(a) - Date.parse(b))
+              .at(-1) ?? null;
+          return { workProgress, activityAt };
+        },
+      ),
+    ];
+  },
+} satisfies ListReadOptions<RunRow>;
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: RunRow[],
-): Promise<RunOut[]> => {
-  const [projected, qualities] = await Promise.all([
-    hydrateProjection(db, rows),
-    loadDataQualities(
-      db,
-      "run",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  return projected.map((row, index) =>
-    runOut.parse({ ...row, dataQuality: qualities.get(rows[index]!.id) }),
-  );
-};
+): Promise<RunOut[]> =>
+  (
+    await listReadPlan<RunRow>("run", runRead).read(db, rows, { kind: "full" })
+  ).map((row) => runOut.parse(row));
 
 const scaffold = listScaffold("run", runTable);
 
-export const listRuns = (
-  db: Database,
-  filters: RunFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) =>
-  scaffold.list(
-    db,
-    { filters, sorts, pagination },
-    { hydrate: (rows) => hydrate(db, rows) },
-  );
-
-/**
- * Core identity is shared with canonical reads; the generic loader owns
- * the manifest's deferred quality and media groups.
- */
 export const listRunsRead = (
   db: Database,
   filters: RunFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-  projection: ListProjection,
+  projection: ListProjection = { kind: "full" },
 ) =>
-  scaffold.list(
+  scaffold.read(
     db,
     { filters, sorts, pagination, projection },
-    {
-      hydrate: (rows, selected) =>
-        hydrateListRead(db, "run", rows, selected, {
-          media: true,
-          load: async () => {
-            const hydrated = await hydrateProjection(db, rows);
-            return new Map(rows.map((row, index) => [row.id, hydrated[index]]));
-          },
-          mapRow: (row, { loaded }) => ({
-            id: parseShortcodeFor("run", row.shortcode),
-            ...loaded.get(row.id),
-          }),
-        }),
-    },
+    { read: runRead },
   );
+export const listRuns = completeListReader(runOut, listRunsRead);
 
 const reader = createEntityReader<
   RunRow,
@@ -240,7 +197,17 @@ export async function getRunHeaderByShortcode(db: Database, shortcode: string) {
       ),
     )
     .limit(1);
-  return row ? (await hydrateProjection(db, [row]))[0] : undefined;
+  if (!row) return undefined;
+  const schema = runOut.omit({ dataQuality: true });
+  return schema.parse(
+    (
+      await listReadPlan<RunRow>("run", runRead).read(
+        db,
+        [row],
+        selectedListProjection("run", Object.keys(schema.shape)),
+      )
+    )[0],
+  );
 }
 
 /** Declared `lifecycle: "readOnly"`: the run service and importers own writes. */

@@ -13,9 +13,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
-import { z } from "zod";
 
-import { projectListRows } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
@@ -28,15 +26,9 @@ import { entityAttachment, image, project } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  loadListGroup,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 
 import {
@@ -51,7 +43,9 @@ import {
 import { dashboardProjectDateCondition } from "./dashboard-shared";
 import {
   EMPTY_PROJECT_DATE_WINDOW,
-  hydrateProjectRow,
+  projectSettingsFields,
+  EMPTY_PROJECT_OWN_ROLLUP,
+  EMPTY_PROJECT_SUBTREE_ROLLUP,
   type ProjectContentDates,
 } from "./helpers";
 import {
@@ -360,90 +354,183 @@ export const projectListRead = async (
     readIntent === "page" && projection.kind === "full"
       ? projectListSums(db, whereClause)
       : undefined;
-  const treeRead =
-    readIntent !== "count" &&
-    (wantsListGroup(projection, "relations") ||
-      wantsListGroup(projection, "derived"))
-      ? Promise.resolve(tree ?? loadProjectTree(db))
-      : undefined;
-
   const [page, sums] = await Promise.all([
-    projectScaffold.list(
+    projectScaffold.read(
       db,
       { filters, sorts, pagination, readIntent, projection },
       {
         where: whereClause,
         context,
         orderBy: orderByArray,
-        hydrate: async (rows) => {
-          if (projection.kind === "base")
-            return projectListRows(
-              "project",
-              rows.map((row) => ({ ...row, id: row.shortcode })),
-              projection,
+        read: {
+          media: true,
+          bindings: (bind) => {
+            const hierarchy = bind.batch(() =>
+              Promise.resolve(tree ?? loadProjectTree(db)),
             );
-          const loadedTree = await treeRead;
-          const ids = rows.map((r) => r.id);
-
-          const [projectContext, deps, dataQualities] = await Promise.all([
-            loadListGroup(projection, "derived", () =>
-              loadProjectSubtreeRollups(db, ids, loadedTree),
-            ),
-            loadListGroup(projection, "relations", () =>
-              projectDependencyIds(db, ids),
-            ),
-            loadListGroup(projection, "quality", () =>
-              loadDataQualities(db, "project", ids),
-            ),
-          ]);
-
-          const selectedRows = wantsListGroup(projection, "relations")
-            ? await withProjectExternalUrls(db, rows)
-            : rows;
-          const context =
-            projectContext ??
-            (loadedTree
-              ? {
-                  ...loadedTree,
-                  ownRollups: new Map(),
-                  subtreeRollups: new Map(),
-                  dateWindows: new Map(),
-                }
-              : undefined);
-          const mapRow = (row: (typeof selectedRows)[number]) =>
-            context
-              ? hydrateProjectRow(
-                  {
-                    ...row,
-                    googleDriveFolderUrl:
-                      "googleDriveFolderUrl" in row
-                        ? z.string().nullable().parse(row.googleDriveFolderUrl)
-                        : null,
-                    notionPageUrl:
-                      "notionPageUrl" in row
-                        ? z.string().nullable().parse(row.notionPageUrl)
-                        : null,
-                  },
-                  context,
-                  deps ?? { blockedBy: new Map(), blocking: new Map() },
-                  dataQualities?.get(row.id),
-                )
-              : {
-                  ...row,
-                  id: parseShortcodeFor("project", row.shortcode),
-                  dataQuality: dataQualities?.get(row.id),
-                };
-          const mapped = wantsListGroup(projection, "media")
-            ? await withDisplayImages(db, "project", selectedRows, mapRow)
-            : selectedRows.map(mapRow);
-          return projectListRows("project", mapped, projection);
+            const settings = bind.batch(async (page) => {
+              const loaded = await hierarchy.load(page);
+              return new Map(
+                page.rows.map((row) => [
+                  row.id,
+                  projectSettingsFields(
+                    row,
+                    loaded.rowsById,
+                    loaded.rowsByShortcode,
+                  ),
+                ]),
+              );
+            });
+            const rollups = bind.batch(async (page) =>
+              loadProjectSubtreeRollups(
+                db,
+                page.rows.map((row) => row.id),
+                await hierarchy.load(page),
+              ),
+            );
+            const dependencies = bind.batch(({ rows }) =>
+              projectDependencyIds(
+                db,
+                rows.map((row) => row.id),
+              ),
+            );
+            const urls = bind.batch(
+              async ({ rows }) =>
+                new Map(
+                  (await withProjectExternalUrls(db, rows)).map((row) => [
+                    row.id,
+                    row,
+                  ]),
+                ),
+            );
+            return [
+              settings.fields(
+                projectListItemOut.pick({ locations: true }),
+                (row, loaded) => {
+                  const value = loaded.get(row.id);
+                  if (!value)
+                    throw new Error("Project settings were not loaded");
+                  return { locations: value.locations };
+                },
+              ),
+              settings.fields(
+                projectListItemOut.pick({
+                  assigneeId: true,
+                  assigneeName: true,
+                  defaultTrade: true,
+                  fieldResolutions: true,
+                }),
+                (row, loaded) => {
+                  const value = loaded.get(row.id);
+                  if (!value)
+                    throw new Error("Project field resolution was not loaded");
+                  const { locations: _locations, ...derived } = value;
+                  return derived;
+                },
+              ),
+              hierarchy.fields(
+                projectListItemOut.pick({
+                  parentProjectId: true,
+                  parentProjectName: true,
+                  childProjectIds: true,
+                }),
+                (row, loaded) => ({
+                  parentProjectId:
+                    row.parentProjectId &&
+                    loaded.shortcodeById.has(row.parentProjectId)
+                      ? parseShortcodeFor(
+                          "project",
+                          loaded.shortcodeById.get(row.parentProjectId)!,
+                        )
+                      : null,
+                  parentProjectName: row.parentProjectId
+                    ? (loaded.nameById.get(row.parentProjectId) ?? null)
+                    : null,
+                  childProjectIds: (
+                    loaded.childrenByParent.get(row.id) ?? []
+                  ).map((id) =>
+                    parseShortcodeFor(
+                      "project",
+                      loaded.shortcodeById.get(id) ?? "",
+                    ),
+                  ),
+                }),
+              ),
+              bind
+                .batch(async (page) => ({
+                  dependencies: await dependencies.load(page),
+                  tree: await hierarchy.load(page),
+                }))
+                .fields(
+                  projectListItemOut.pick({
+                    blockedByIds: true,
+                    blockingIds: true,
+                  }),
+                  (row, loaded) => ({
+                    blockedByIds: (
+                      loaded.dependencies.blockedBy.get(row.id) ?? []
+                    ).map((id) =>
+                      parseShortcodeFor(
+                        "project",
+                        loaded.tree.shortcodeById.get(id) ?? "",
+                      ),
+                    ),
+                    blockingIds: (
+                      loaded.dependencies.blocking.get(row.id) ?? []
+                    ).map((id) =>
+                      parseShortcodeFor(
+                        "project",
+                        loaded.tree.shortcodeById.get(id) ?? "",
+                      ),
+                    ),
+                  }),
+                ),
+              urls.fields(
+                projectListItemOut.pick({
+                  googleDriveFolderUrl: true,
+                  notionPageUrl: true,
+                }),
+                (row, loaded) => {
+                  const value = loaded.get(row.id);
+                  if (!value)
+                    throw new Error("Project external links were not loaded");
+                  return {
+                    googleDriveFolderUrl: value.googleDriveFolderUrl,
+                    notionPageUrl: value.notionPageUrl,
+                  };
+                },
+              ),
+              rollups.fields(
+                projectListItemOut.pick({
+                  rollup: true,
+                  spent: true,
+                  taskProgress: true,
+                  dates: true,
+                }),
+                (row, loaded) => {
+                  const own =
+                    loaded.ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP;
+                  return {
+                    rollup: {
+                      ...own,
+                      subtree:
+                        loaded.subtreeRollups.get(row.id) ??
+                        EMPTY_PROJECT_SUBTREE_ROLLUP,
+                    },
+                    spent: own.spent,
+                    taskProgress: `${own.doneTaskCount}/${own.taskCount}`,
+                    dates:
+                      loaded.dateWindows.get(row.id) ??
+                      EMPTY_PROJECT_DATE_WINDOW,
+                  };
+                },
+              ),
+            ];
+          },
         },
       },
     ),
     sumsRead,
-    // Awaited here too, so a failed tree read never goes unhandled while the
-    // page query is still running.
-    treeRead,
   ]);
   return projection.kind === "base" || readIntent === "count"
     ? page

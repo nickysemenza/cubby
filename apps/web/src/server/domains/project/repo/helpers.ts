@@ -43,7 +43,7 @@ export type ProjectRow = {
  * for the value, `withoutOwn` for what it would inherit without its own.
  */
 const resolveInheritedProjectSettings = (
-  row: ProjectRow,
+  row: Pick<ProjectRow, "id">,
   byId: ReadonlyMap<ProjectId, ProjectParentRow>,
   which: "effective" | "withoutOwn",
 ) => {
@@ -135,38 +135,19 @@ export const EMPTY_PROJECT_SUBTREE_ROLLUP: ProjectSubtreeRollup = {
   costEstimate: null,
 };
 
-/**
- * Row + everything computed about it → `ProjectOut`. Takes a single options
- * object rather than a positional list: it already carried seven arguments,
- * three of which are same-typed id arrays, and the date window made eight.
- */
-const dbProjectToAPI = <Q extends DataQuality | undefined>({
-  row,
-  ownRollup,
-  subtreeRollup,
-  dates,
-  blockedByIds,
-  blockingIds,
-  parentProjectName,
-  parentProjectShortcode,
-  childProjectIds,
-  rowsById,
-  rowsByShortcode,
-  dataQuality,
-}: {
-  row: ProjectRow;
-  ownRollup: ProjectOwnRollup;
-  subtreeRollup: ProjectSubtreeRollup;
-  dates: ProjectDateWindow;
-  blockedByIds: string[];
-  blockingIds: string[];
-  parentProjectName: string | null;
-  parentProjectShortcode: string | null;
-  childProjectIds: string[];
-  rowsById: ReadonlyMap<ProjectId, ProjectParentRow>;
-  rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
-  dataQuality: Q;
-}): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
+export const projectSettingsFields = (
+  row: Pick<
+    ProjectRow,
+    | "id"
+    | "assigneeId"
+    | "assigneeMode"
+    | "locations"
+    | "locationsMode"
+    | "defaultTrade"
+  >,
+  rowsById: ReadonlyMap<ProjectId, ProjectParentRow>,
+  rowsByShortcode: ReadonlyMap<string, ProjectParentRow>,
+) => {
   const resolved = resolveInheritedProjectSettings(row, rowsById, "effective");
   const fallback = resolveInheritedProjectSettings(row, rowsById, "withoutOwn");
   const reference = (shortcode: string | null) =>
@@ -178,14 +159,10 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
         }
       : null;
   return {
-    id: parseShortcodeFor("project", row.shortcode),
     assigneeId: resolved.assignee?.assigneeShortcode
       ? parseShortcodeFor("ledgerParty", resolved.assignee.assigneeShortcode)
       : null,
     assigneeName: resolved.assignee?.assigneeName ?? null,
-    name: row.name,
-    status: row.status,
-    kind: row.kind,
     locations: resolved.locations,
     defaultTrade: resolved.defaultTrade,
     fieldResolutions: {
@@ -264,6 +241,42 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
         canReset: row.defaultTrade !== null,
       },
     } satisfies FieldResolutions,
+  };
+};
+
+const dbProjectToAPI = <Q extends DataQuality | undefined>({
+  row,
+  ownRollup,
+  subtreeRollup,
+  dates,
+  blockedByIds,
+  blockingIds,
+  parentProjectName,
+  parentProjectShortcode,
+  childProjectIds,
+  rowsById,
+  rowsByShortcode,
+  dataQuality,
+}: {
+  row: ProjectRow;
+  ownRollup: ProjectOwnRollup;
+  subtreeRollup: ProjectSubtreeRollup;
+  dates: ProjectDateWindow;
+  blockedByIds: string[];
+  blockingIds: string[];
+  parentProjectName: string | null;
+  parentProjectShortcode: string | null;
+  childProjectIds: string[];
+  rowsById: ReadonlyMap<ProjectId, ProjectParentRow>;
+  rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
+  dataQuality: Q;
+}): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
+  return {
+    id: parseShortcodeFor("project", row.shortcode),
+    name: row.name,
+    status: row.status,
+    kind: row.kind,
+    ...projectSettingsFields(row, rowsById, rowsByShortcode),
     costEstimate: row.costEstimate,
     parentProjectId: parentProjectShortcode
       ? parseShortcodeFor("project", parentProjectShortcode)

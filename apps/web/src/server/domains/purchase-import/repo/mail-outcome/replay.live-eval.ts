@@ -423,7 +423,7 @@ describe("isolated Mail coordinator replay", () => {
                 "AI_GATEWAY_API_KEY is required for real coordinator replay",
               );
             const peer = {
-              main: "tooling/tester-army/live-gateway.ts",
+              main: "tooling/ai/live-gateway.ts",
               vars: {
                 ACCOUNT_ID: CF_ACCOUNT_ID,
                 GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),

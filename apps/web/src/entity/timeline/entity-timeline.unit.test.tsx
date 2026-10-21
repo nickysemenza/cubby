@@ -101,6 +101,38 @@ const operationsFor = (out: EntityTimelineOut) => ({
  * unconfident interval is drawn differently from a proven one.
  */
 describe("EntityTimeline", () => {
+  it("keeps committed audit details literal and fully wrapped", async () => {
+    const detail = "Added sample catalog_number PRD-2345\nMade CODE-29 primary";
+    const out: EntityTimelineOut = {
+      ...events,
+      groups: [
+        {
+          key: "audit",
+          date: "2026-01-10",
+          events: [
+            {
+              id: "audit:update",
+              kind: "audit:update",
+              label: "Identifiers changed",
+              detail,
+            },
+          ],
+        },
+      ],
+    };
+    render(
+      <EntityTimeline entity="product" operations={operationsFor(out)} />,
+      { wrapper: harness.wrapper },
+    );
+    const text = await screen.findByText(/Added sample catalog_number/);
+    expect(text).toHaveTextContent("Made CODE-29 primary");
+    expect(text).toHaveClass("whitespace-pre-wrap", "break-words");
+    expect(
+      screen.queryByRole("link", { name: "PRD-2345" }),
+    ).not.toBeInTheDocument();
+    expect(text.parentElement).not.toHaveClass("@min-[32rem]/ledger:truncate");
+  });
+
   it("keeps unknown-date events after dated history in both views", async () => {
     const out: EntityTimelineOut = {
       ...withRows,

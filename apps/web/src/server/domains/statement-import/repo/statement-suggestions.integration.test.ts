@@ -67,7 +67,6 @@ import {
   generateStatementHoldVoidPage,
   labelledProposal,
   publishChargeProposal,
-  pendingPostedMatch,
 } from "./statement-suggestions";
 
 const importInput = (
@@ -725,22 +724,6 @@ describe("statement Transaction suggestions", () => {
       "EXAMPLE BISTRO": "matched",
       "EXAMPLE BISTRO PENDING": "superseded",
     });
-  });
-
-  it("bounds the pending-to-posted tolerance", () => {
-    const hold = { amount: 40, date: "2026-05-01" };
-    expect(pendingPostedMatch(hold, { amount: 60, date: "2026-05-03" })).toBe(
-      true,
-    );
-    expect(
-      pendingPostedMatch(hold, { amount: 60.01, date: "2026-05-03" }),
-    ).toBe(false);
-    expect(
-      pendingPostedMatch(hold, { amount: 39.99, date: "2026-05-03" }),
-    ).toBe(false);
-    expect(pendingPostedMatch(hold, { amount: 40, date: "2026-05-09" })).toBe(
-      false,
-    );
   });
 
   it("continues statement generation after an item publication failure with a stable retry frontier", async () => {

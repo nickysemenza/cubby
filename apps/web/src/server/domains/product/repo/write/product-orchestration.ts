@@ -33,6 +33,7 @@ import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 
+import { barcodeForLookup } from "~/lib/barcode";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { wasm } from "~/lib/wasm";
@@ -55,8 +56,11 @@ import {
 } from "~/server/domains/product/repo/write/scan-code";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
-import { createAppError } from "~/server/errors/app-error";
-import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import { AppError, createAppError } from "~/server/errors/app-error";
+import {
+  isUniqueViolation,
+  runWithConflictRecovery,
+} from "~/server/errors/db-errors";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type {
@@ -65,6 +69,10 @@ import type {
 } from "./product-writes";
 
 const log = createLogger("product-orchestration");
+
+const isProductCodeConflict = (error: unknown) =>
+  isUniqueViolation(error) ||
+  (error instanceof AppError && error.reason === "PRODUCT_ALREADY_EXISTS");
 
 interface ProductWriteServices<
   TOutput extends ProductMutationSnapshot = ProductWithFoodOut,
@@ -149,11 +157,11 @@ export async function createProductWithReadSideEffects<
     source: "product.create",
   });
 
-  const warnings = input.upc
+  const warnings = input.barcode
     ? await importCoverPhoto(
         services.db,
         services.upcLookupClient,
-        input.upc,
+        barcodeForLookup(input.barcode),
         entityId,
         "product.create",
       )
@@ -444,7 +452,7 @@ export async function findOrCreateByUPC(
             db,
             {
               ...usdaIdentity(food),
-              upc,
+              barcode: upc,
               expectedQuantity: null,
               model: null,
             },
@@ -460,7 +468,7 @@ export async function findOrCreateByUPC(
           db,
           {
             ...externalIdentity(upcLookup),
-            upc,
+            barcode: upc,
             expectedQuantity: null,
             model: null,
           },
@@ -487,7 +495,7 @@ export async function findOrCreateByUPC(
           {
             name: defaultName ?? `Product ${upc}`,
             manufacturer: UNSPECIFIED_MANUFACTURER,
-            upc,
+            barcode: upc,
             expectedQuantity: null,
             model: null,
           },
@@ -500,6 +508,7 @@ export async function findOrCreateByUPC(
       if (!winner) throw error;
       return matched(winner);
     },
+    isProductCodeConflict,
   );
 }
 
@@ -507,7 +516,7 @@ export async function findOrCreateByUPC(
  * Find or create the physical-book Product named by an ISBN.
  *
  * ISBNs are EAN barcodes, but they are not food identities: skip USDA and
- * create through `isbn` so the repository both stores the canonical GTIN and
+ * create through `barcode` so the repository both stores the canonical GTIN and
  * applies the `books` category invariant. The general UPC provider can still
  * supply the edition's title, publisher/manufacturer, price, and cover. When it
  * names a title that exactly matches one barcode-less book already on the
@@ -559,7 +568,7 @@ async function findOrCreateByISBN(
         const { product: attached } = await updateProduct(
           db,
           shelved,
-          { isbn: canonicalGtin },
+          { barcode: canonicalGtin },
           actor,
         );
         await runMutationSideEffects(db, {
@@ -578,7 +587,7 @@ async function findOrCreateByISBN(
                 name: `Book ISBN ${normalized.isbn13}`,
                 manufacturer: UNSPECIFIED_MANUFACTURER,
               }),
-          isbn: canonicalGtin,
+          barcode: canonicalGtin,
           expectedQuantity: null,
           model: null,
         },
@@ -602,6 +611,7 @@ async function findOrCreateByISBN(
       if (!winner) throw error;
       return matched(winner);
     },
+    isProductCodeConflict,
   );
 }
 

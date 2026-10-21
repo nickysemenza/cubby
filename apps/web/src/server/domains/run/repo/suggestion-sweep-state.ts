@@ -14,6 +14,7 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   type AuditSampler,
@@ -319,9 +320,9 @@ export async function saveSweepSuggestions(
               input.rules.auditSample,
             )
           : {};
-        const [row] = await getDb(tx)
-          .insert(suggestionTable)
-          .values({
+        const row = await publishFieldAssessment(
+          tx,
+          {
             runId,
             entity: input.entity,
             recordId: typedRecordId,
@@ -346,9 +347,10 @@ export async function saveSweepSuggestions(
               ...stamp,
             },
             status: "pending",
-          })
-          .returning();
-        if (row) created.push(row.id);
+          },
+          entry.served ?? entry.pairKey === null,
+        );
+        created.push(row.id);
       }
       // Proposals publish pending; a confident assignment then applies only
       // through its Automatic rule, as automatic Feedback naming the rule.

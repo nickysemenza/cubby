@@ -141,7 +141,7 @@ describe("findOrCreateByUPC", () => {
     const upc = "011111111110";
     const existing = await quickCreateProduct(
       ctx.db,
-      { name: "Existing Widget", upc },
+      { name: "Existing Widget", barcode: upc },
       ctx.actor,
     );
     const result = await findOrCreateByUPC(
@@ -241,31 +241,41 @@ describe("findOrCreateByUPC", () => {
 
   it("resolves a concurrent create race to one winner without throwing", async () => {
     const upc = "066666666660";
-    // Two truly-concurrent callers for a brand-new UPC: both pass the initial
-    // findProductByUPC check, then race on the create — runWithConflictRecovery
-    // must convert the loser's unique-violation into a re-SELECT of the
-    // winner instead of surfacing a 500.
-    const [a, b] = await Promise.all([
-      findOrCreateByUPC(
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    // Distinct names force the loser through identifier conflict handling,
+    // rather than accidentally recovering on Product's name index.
+    const contender = findOrCreateByUPC(
+      ctx.db,
+      usdaClient(async () => {
+        entered.resolve();
+        await release.promise;
+        return null;
+      }),
+      upcLookupClient(),
+      upc,
+      "Synthetic waiting product",
+      ctx.actor,
+    );
+    await entered.promise;
+    try {
+      const winner = await findOrCreateByUPC(
         ctx.db,
         usdaClient(),
         upcLookupClient(),
         upc,
-        "Race Product",
+        "Synthetic winning product",
         ctx.actor,
-      ),
-      findOrCreateByUPC(
-        ctx.db,
-        usdaClient(),
-        upcLookupClient(),
-        upc,
-        "Race Product",
-        ctx.actor,
-      ),
-    ]);
-
-    expect([a.created, b.created].sort()).toEqual([false, true]);
-    expect(a.product.id).toBe(b.product.id);
+      );
+      release.resolve();
+      const recovered = await contender;
+      expect(winner.created).toBe(true);
+      expect(recovered.created).toBe(false);
+      expect(recovered.product.id).toBe(winner.product.id);
+    } finally {
+      release.resolve();
+      await contender.catch(() => undefined);
+    }
   });
 });
 
@@ -307,13 +317,13 @@ describe("findOrCreateByCode", () => {
         { kind: "isbn", value: canonical },
         ctx.actor,
       );
-    const bookProduct = async (name: string, upc?: string) =>
+    const bookProduct = async (name: string, barcode?: string) =>
       quickCreateProduct(
         ctx.db,
         {
           name,
           categoryId: (await resolveProductCategory(ctx.db, null, "books"))!,
-          ...(upc && { upc }),
+          ...(barcode && { barcode }),
         },
         ctx.actor,
       );
@@ -356,7 +366,7 @@ describe("findOrCreateByCode", () => {
     const upc = "044444444440";
     const existing = await quickCreateProduct(
       ctx.db,
-      { name: "Labelled Widget", upc },
+      { name: "Labelled Widget", barcode: upc },
       ctx.actor,
     );
     const result = await findOrCreateByCode(
@@ -375,7 +385,7 @@ describe("findOrCreateByCode", () => {
     const upc = "055555555550";
     const existing = await quickCreateProduct(
       ctx.db,
-      { name: "Scanned Widget", upc },
+      { name: "Scanned Widget", barcode: upc },
       ctx.actor,
     );
     const result = await findOrCreateByCode(
@@ -415,7 +425,7 @@ describe("applyUpcDataWithSideEffects", () => {
     const upc = "076666666669";
     const product = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Unpriced widget", upc }),
+      makeProductInput({ name: "Unpriced widget", barcode: upc }),
       ctx.actor,
     );
     const result = await applyUpcDataWithSideEffects(
@@ -442,7 +452,7 @@ describe("applyUpcDataWithSideEffects", () => {
     const upc = "077777777770";
     const product = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Ledger-priced widget", upc }),
+      makeProductInput({ name: "Ledger-priced widget", barcode: upc }),
       ctx.actor,
     );
     await createRepoEntity(
@@ -492,6 +502,7 @@ describe("product create cover-photo warnings", () => {
 
   it("carries a failed cover import on the entity create result", async () => {
     const upc = "088888888880";
+    let lookupCode: string | undefined;
     const context = {
       ...requireActor(
         createTestRequestContext(ctx.db, {
@@ -499,20 +510,25 @@ describe("product create cover-photo warnings", () => {
         }),
       ),
       upcLookupClient: fromPartial<UpcLookupService>(
-        upcLookupClient(async () =>
-          upcResponse({ upc, imageUrl: "http://127.0.0.1/cover.jpg" }),
-        ),
+        upcLookupClient(async (code) => {
+          lookupCode = code;
+          return upcResponse({ upc, imageUrl: "http://127.0.0.1/cover.jpg" });
+        }),
       ),
     };
 
     const result = await executeEntity(context, {
       action: "create",
       entity: "product",
-      data: makeProductInput({ name: "Coverless widget", upc }),
+      data: makeProductInput({
+        name: "Coverless widget",
+        barcode: "0-88888\u0085-88888-0",
+      }),
     });
 
+    expect(lookupCode).toBe(upc);
     expect(result.sideEffects.warnings).toEqual([
-      `Cover photo import for ${upc.padStart(14, "0")} failed: External URL points to a private or local host`,
+      `Cover photo import for ${upc} failed: External URL points to a private or local host`,
     ]);
   });
 });

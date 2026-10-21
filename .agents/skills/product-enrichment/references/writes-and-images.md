@@ -37,12 +37,18 @@ does not prove the ordered variant. Cubby rechecks identifier ownership, gallery
 count and image integrity; inspect per-item refusals and propose a match when an
 identifier collides.
 
-For identifier-only work, `entity.update product` with `externalIds` patch items
-adds or replaces one precise source/kind slot (`isPrimary: false` adds a
-secondary) and removes only an explicitly obsolete value whose current ID you
-pass as `expect`; unrelated IDs survive and a changed live slot refuses the
-patch. A full `entity.update product` external-ID set is a deliberate complete
-replacement: preserve every intended ID and remove MCP-only timestamps first.
+For identifier-only work, read the current collection, then use
+`entity.update product` with explicit `externalIds` patch items. Add preserves
+other values and the current primary; an empty source/kind slot selects its
+first value. Make primary with an attribute replacement (`isPrimary: true`),
+which demotes without deleting the old primary. Remove targets the exact
+source/kind/externalId `key`; changing identity is an atomic remove-old/add-new
+patch. `expect` contains baseline attributes such as `isPrimary`, never the old
+identifier tuple. Include a URL expectation only when its stored value is known;
+an ASIN's canonical display link is derived. Follow the
+[identifier write contract](../../../../docs/entities.md#collection-changes)
+for normalization and preconditions. Full-array replacement is deliberate:
+preserve every intended ID and remove MCP-only timestamps first.
 
 For settled attachments, call `image.attach_files({items})`; every item supplies an
 `entityId`, one `url` or `uploadId`, its idempotency key, a `source` (`own`,

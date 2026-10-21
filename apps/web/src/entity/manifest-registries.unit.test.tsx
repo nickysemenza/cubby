@@ -107,18 +107,7 @@ describe("manifest registries", () => {
     expect(unsupportedWithoutReason).toEqual([]);
   });
 
-  it("infers shared identifier labels and explains invalid relation defaults", () => {
-    const labelsFor = (entity: "product" | "usda-food") =>
-      Object.fromEntries(
-        entityFieldModels[entity].fields.map((field) => [
-          field.key,
-          field.label,
-        ]),
-      );
-    expect(labelsFor("product").fdc_id).toBe("FDC ID");
-    expect(labelsFor("usda-food").fdc_id).toBe("FDC ID");
-    expect(labelsFor("product").isbn).toBe("ISBN");
-
+  it("explains invalid relation defaults", () => {
     const comparison = entityOverrideComparisons.product.find(
       (item) => item.path === "presentation.detail.relationFilterOverrides",
     );

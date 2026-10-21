@@ -54,6 +54,84 @@ describe("default entity timeline", () => {
       }),
     );
 
+  it("retains every committed identifier effect and primary change in native timeline detail", async () => {
+    const initial = ["OLD", "KEEP"].map((externalId, index) => ({
+      source: "sample",
+      kind: "catalog_number" as const,
+      externalId,
+      url: "https://example.com/catalog",
+      isPrimary: index === 0,
+    }));
+    const created = await executeEntity(context(), {
+      action: "create",
+      entity: "product",
+      data: buildEntity("product", {
+        name: "Synthetic catalog sample",
+        externalIds: initial,
+      }),
+    });
+    if (created.action !== "create")
+      throw new Error("Expected Product create receipt");
+    const id = parseShortcodeFor("product", created.item.id);
+    await executeEntity(context(), {
+      action: "update",
+      entity: "product",
+      id,
+      data: {
+        externalIds: [
+          {
+            op: "remove",
+            key: {
+              source: "sample",
+              kind: "catalog_number",
+              externalId: "OLD",
+            },
+            expect: { isPrimary: true, url: "https://example.com/catalog" },
+          },
+          {
+            op: "replace",
+            key: {
+              source: "sample",
+              kind: "catalog_number",
+              externalId: "KEEP",
+            },
+            value: { isPrimary: true },
+            expect: { isPrimary: false, url: "https://example.com/catalog" },
+          },
+          ...Array.from({ length: 30 }, (_, index) => ({
+            op: "add" as const,
+            key: {
+              source: "sample",
+              kind: "catalog_number" as const,
+              externalId: `CODE-${index}`,
+            },
+            value: { url: "https://example.com/catalog" },
+          })),
+        ],
+      },
+    });
+    const result = await defaultTimeline(
+      context(),
+      parseEntityTimelineInput("product", {
+        entity: "product",
+        filters: {},
+        window: { order: "desc" },
+        pagination: { pageIndex: 0, pageSize: 200 },
+      }),
+    );
+    const detail = result.groups
+      .flatMap((group) => group.events)
+      .find(
+        (event) => event.kind === "audit:update" && event.link?.id === id,
+      )?.detail;
+    expect(detail?.length).toBeGreaterThan(500);
+    expect(detail).toContain("Removed: sample · Catalog number: OLD");
+    expect(detail).toContain("Made primary: sample · Catalog number: KEEP");
+    expect(detail).toContain(
+      "Added: sample · Catalog number: CODE-29 · Secondary",
+    );
+  });
+
   it("emits audit and declared-date events for the scope, ordered and windowed as asked", async () => {
     const today = householdLocalDate();
     const first = await createdTask(context(), {

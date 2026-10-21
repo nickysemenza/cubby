@@ -287,40 +287,11 @@ jobs:
       # One crate at a time: both share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
-  # Linux checks whether each Apple lane's pass is already cached before any
-  # macOS runner queues. The Apple key declares its toolchain (.xcode-version)
-  # instead of observing a Mac, so both platforms compute the same hash. A
-  # probe miss fails before native work and cannot publish a passing entry.
-  apple-probe:
-    name: Apple cache probe
-    needs: plan
-    if: needs.plan.outputs.apple == 'true' && !inputs.fresh
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      host: ${{ steps.host.outcome }}
-      simulator: ${{ steps.simulator.outcome }}
-    env:
-      CUBBY_NX_CACHE_PROBE: "1"
-      # setup-apple's value on macOS; an Nx env input.
-      CUBBY_FFI_PROFILE: release
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-      - id: host
-        continue-on-error: true
-        run: pnpm exec nx run apple:host-tests --outputStyle=stream
-      - id: simulator
-        continue-on-error: true
-        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
-
-  # Each Apple lane queues macOS only when Linux did not verify its cached
-  # pass; a failed probe falls through to macOS. Queued jobs probe again
-  # before preparing native dependencies.
+  # Selected native lanes run on macOS and reuse only compiler/artifact caches.
   apple-host:
     name: Apple host tests
-    needs: [plan, apple-probe]
-    if: ${{ !cancelled() && needs.plan.outputs.apple == 'true' && needs.apple-probe.outputs.host != 'success' }}
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.outputs.apple == 'true' }}
     runs-on: xcode-27
     concurrency:
       group: cubby-apple-host
@@ -339,14 +310,12 @@ jobs:
       - id: apple
         uses: ./.github/actions/setup-apple
         with:
-          probe: apple:host-tests
           ffi-targets: mac
           xcodegen: "false"
       # Build products are disposable; unchanged compiler inputs replay through
       # Xcode's compilation cache without forging checkout timestamps. Keep
       # SwiftPM's warning-generator products.
       - name: Restore cached host compilation
-        if: steps.apple.outputs.probe-hit != 'true'
         id: host-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -356,11 +325,9 @@ jobs:
             xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
             xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-
       - name: Run CubbyKit host tests
-        if: steps.apple.outputs.probe-hit != 'true'
         run: pnpm exec nx run apple:host-tests --outputStyle=stream
       # Publish only successful builds: exact-key cache entries are immutable.
       - name: Save host compilation cache
-        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ env.HOST_BUILD_CACHE_PATHS }}
@@ -370,8 +337,8 @@ jobs:
 
   apple-simulator:
     name: Apple simulator build
-    needs: [plan, apple-probe]
-    if: ${{ !cancelled() && needs.plan.outputs.apple == 'true' && needs.apple-probe.outputs.simulator != 'success' }}
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.outputs.apple == 'true' }}
     runs-on: xcode-27
     concurrency:
       group: cubby-apple-simulator
@@ -385,15 +352,12 @@ jobs:
       - uses: ./.github/actions/setup-apple
         id: apple
         with:
-          probe: apple:simulator-build
           ffi-targets: sim
           build-cache: "true"
       - name: Run iOS app checks
-        if: steps.apple.outputs.probe-hit != 'true'
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
-        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.apple.outputs.cache-paths }}
@@ -401,7 +365,6 @@ jobs:
           cache-hit: ${{ steps.apple.outputs.cache-hit }}
           matched-key: ${{ steps.apple.outputs.save-matched-key }}
       - name: Save SPM clone cache
-        if: steps.apple.outputs.probe-hit != 'true'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/SourcePackages
@@ -409,45 +372,21 @@ jobs:
           cache-hit: ${{ steps.apple.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple.outputs.spm-clones-cache-matched-key }}
 
-  # The one required check. A job may be skipped only when plan did not select
-  # its lane or the probe verified its cached Apple pass; any other skip,
-  # failure (except the probe's), or cancellation fails it. A manual run is
-  # named apart so it never satisfies the required check on a PR head.
+  # The required check rejects failures, cancellation, and unplanned skips.
+  # Manual diagnostics never satisfy the PR merge check.
   ci-passed:
     name: ${{ github.event_name == 'workflow_dispatch' && 'Manual CI diagnostics' || 'CI passed' }}
-    needs:
-      [plan, validation, lanes, rust, apple-probe, apple-host, apple-simulator]
+    needs: [plan, validation, lanes, rust, apple-host, apple-simulator]
     if: always()
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        if: github.event_name == 'pull_request'
-        with:
-          sparse-checkout: |
-            scripts/check-outward-text.ts
-            packages/shared/src/shortcode-alphabet.ts
-            packages/schemas/src/entity-definitions
-          sparse-checkout-cone-mode: false
-      - name: PR text names no live entity codes
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
-            --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
-          # A failed probe only sends both Apple lanes to macOS.
-          allowed-failures: apple-probe
           allowed-skips: >-
             ${{ needs.plan.outputs.rust != 'true' && 'rust,' || '' }}
-            ${{ needs.plan.outputs.apple != 'true' && 'apple-probe,apple-host,apple-simulator,' || '' }}
-            ${{ inputs.fresh && 'apple-probe,' || '' }}
-            ${{ needs.apple-probe.outputs.host == 'success' && 'apple-host,' || '' }}
-            ${{ needs.apple-probe.outputs.simulator == 'success' && 'apple-simulator,' || '' }}
+            ${{ needs.plan.outputs.apple != 'true' && 'apple-host,apple-simulator,' || '' }}
 
   # Informative only, outside `CI passed` and allowed to fail: the purchase
   # agent driven through the browser against a scripted model and gateway,

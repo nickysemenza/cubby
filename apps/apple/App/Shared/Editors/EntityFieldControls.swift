@@ -281,9 +281,9 @@ struct EntityFieldControl: View {
         switch renderer {
         case .entitySelect: .entityReference
         case .money: .money
-        case .url: .text
+        case .url, .upcLookup: .text
         case .externalIds, .labelNutrition, .sourceAliases, .sourceRefs, .structuredField, .unitMappings,
-            .upcLookup, .usdaFood:
+            .usdaFood:
             nil
         }
     }
@@ -324,6 +324,7 @@ struct EntityFieldControl: View {
             TextField(label, text: stringBinding, prompt: Text(field.placeholder ?? "None"))
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
+                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
         }
     }
 

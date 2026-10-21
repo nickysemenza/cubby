@@ -121,7 +121,7 @@ export const expenseCaptureRequest = (input?: {
 export const productCreateRequest = (input?: {
   name?: string;
   manufacturer?: string;
-  upc?: string | null;
+  barcode?: string | null;
   fdcId?: number | null;
   ingredientId?: EntityEditDraft<"product">["ingredientId"];
 }): Omit<EntityEditRequest<"product", "create", "full">, "surface"> & {
@@ -130,7 +130,7 @@ export const productCreateRequest = (input?: {
   const seed: MutableDraft<"product"> = {};
   if (input?.name) seed.name = input.name;
   if (input?.manufacturer) seed.manufacturer = input.manufacturer;
-  if (input?.upc !== undefined) seed.upc = input.upc;
+  if (input?.barcode !== undefined) seed.barcode = input.barcode;
   if (input?.fdcId !== undefined) seed.fdc_id = input.fdcId;
   if (input?.ingredientId !== undefined) seed.ingredientId = input.ingredientId;
   return { entity: "product", operation: "create", intent: "full", seed };

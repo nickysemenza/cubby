@@ -100,3 +100,14 @@ export const ACTIVITY_KIND_LABEL = {
   describe_image: "Image description",
   identify_image: "Image identification",
 } as const satisfies Record<ActivityKind, string>;
+
+export const runTargetState = z.enum([
+  "pending",
+  "prepared",
+  "completed",
+  "skipped",
+  "unresolved",
+  "needs_evidence",
+  "unavailable",
+]);
+export type RunTargetState = z.infer<typeof runTargetState>;

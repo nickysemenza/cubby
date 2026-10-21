@@ -1,11 +1,11 @@
-import { dataTypeEnum, foodLookupParam, foodSummaryCompact } from "@cubby/usda";
+import usdaDefinition from "./entity-definitions/17-usda-food.entity";
+import { dataTypeEnum, foodLookupParam } from "@cubby/usda";
 import { z } from "zod";
 import {
   createPaginatedResponseSchema,
   createSortPaginationFields,
   oneOrMany,
 } from "./pagination";
-import { generatedUSDAFoodFieldSchemas } from "./generated/entity-field-schemas.usda-food.gen";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 
@@ -36,9 +36,7 @@ export const usdaFoodEnrichmentsInput = z.object({
 });
 
 // Enhanced food summary with unit mappings and linked products.
-export const foodSummaryWithLinkedProducts = z.object(
-  generatedUSDAFoodFieldSchemas.read,
-);
+export const foodSummaryWithLinkedProducts = usdaDefinition.readSchemas.output;
 
 export type FoodSummaryWithLinkedProducts = z.infer<
   typeof foodSummaryWithLinkedProducts
@@ -52,9 +50,7 @@ export const foodSummaryEnrichment = foodSummaryWithLinkedProducts.pick({
 export type FoodSummaryEnrichment = z.infer<typeof foodSummaryEnrichment>;
 
 /** A USDA list or search row: the food without its full nutrient table. */
-export const usdaFoodListRow = foodSummaryWithLinkedProducts.extend({
-  nutritionInfo: foodSummaryCompact.shape.nutritionInfo,
-});
+export const usdaFoodListRow = usdaDefinition.readSchemas.list;
 
 export type UsdaFoodListRow = z.infer<typeof usdaFoodListRow>;
 
