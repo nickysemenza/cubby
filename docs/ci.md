@@ -274,7 +274,8 @@ new source inputs still compile. Local `swift test` remains available and does
 not use this Xcode cache.
 
 Manual native E2E installation (`apps/web/tooling/sim-e2e.ts`) also runs
-`apple:simulator-build`, restoring unchanged apps from Nx. Check those callers
+`apple:simulator-build`. It executes the build using the compiler/artifact caches
+above rather than restoring an app from an Nx result pass. Check those callers
 when removing a shared build helper.
 
 The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:

@@ -290,7 +290,8 @@ shared Nx remote cache for the same input hash satisfies a started lane's
 check only when the execution environment also matches; CI replays it in seconds
 ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
 [CI](../ci.md#cache-keys-and-the-remote-cache)). A check that reads a new
-file belongs in its Nx target's inputs. Local native results replay for the same declared Xcode major;
+file belongs in its Nx target's inputs. Native result and artifact reuse follows
+[the CI cache policy](../ci.md#cache-keys-and-the-remote-cache);
 local Mac web tests do not replace Linux validation. A green earlier
 commit with different content is not evidence. `main` runs CI after deployment
 starts, so post-merge CI does not replace this gate. A PR that adds a
