@@ -16,7 +16,10 @@ import { eq, sql } from "drizzle-orm";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import {
+  recordStatementRows,
+  updateStatementRows,
+} from "~/server/domains/statement-import/repo/statement-row";
 import { z } from "zod";
 
 import { shiftPlainDate } from "~/lib/household-date";
@@ -724,11 +727,6 @@ test("Statement rows page observations with full totals and keep existing review
   const account = await createEntityFixture(page, "financialAccount", {
     name,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
-    sourceAliases: ["monarch", "mint"].map((source) => ({
-      source,
-      alias: name,
-      externalAccountId: null,
-    })),
   });
   const rows = Array.from({ length: 101 }, (_, index) => ({
     rowPosition: index + 1,
@@ -773,6 +771,17 @@ test("Statement rows page observations with full totals and keep existing review
         },
       ],
     }),
+    actor,
+  );
+  // Raw observations do not acquire a resolved account from an alias alone.
+  await updateStatementRows(
+    db,
+    {
+      selector: {
+        filter: { source: "mint", importFingerprint: `${name}-other` },
+      },
+      data: { accountId: account.id },
+    },
     actor,
   );
   const pages: number[] = [];
