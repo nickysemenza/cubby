@@ -155,7 +155,7 @@ export function SuggestionBody({
           type="button"
           size="xs"
           variant="ghost"
-          disabled={saving}
+          disabled={disabled || saving}
           onClick={onReject}
         >
           Reject
@@ -165,7 +165,7 @@ export function SuggestionBody({
             type="button"
             size="xs"
             variant="link"
-            disabled={saving}
+            disabled={disabled || saving}
             onClick={onUseDifferent}
           >
             Use a different value…

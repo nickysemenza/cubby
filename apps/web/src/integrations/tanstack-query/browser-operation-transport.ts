@@ -50,10 +50,10 @@ function isTransientDatabaseFailure(result: DispatchResult): boolean {
 
 /**
  * The batch could not answer this item (one queued alone, an HTTP failure, a
- * server without batch support during a deploy, a broken stream). The caller
- * resends it alone, so it gets exactly the single-operation result or error —
- * request id, status, diagnostics — it always had. Only queries batch, and
- * they are safe to resend.
+ * server without batch support during a deploy, a broken or truncated
+ * stream). The caller resends it alone, so it gets exactly the
+ * single-operation result or error — request id, status, diagnostics — it
+ * always had. Only queries batch, and they are safe to resend.
  */
 class BatchFallback extends Error {
   constructor() {
@@ -130,10 +130,17 @@ async function streamDispatch(
     throw new BatchFallback();
   }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  const answered = new Set<number>();
   let buffered = "";
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) return;
+    // A Worker stream can end cleanly before every item settles (observed: an
+    // empty HTTP 200 body). Answered siblings keep their results; the rest
+    // fall back to single requests instead of rejecting as omitted.
+    if (done) {
+      if (answered.size < batch.length) throw new BatchFallback();
+      return;
+    }
     buffered += value;
     for (
       let newline = buffered.indexOf("\n");
@@ -145,6 +152,7 @@ async function streamDispatch(
       if (!line) continue;
       const { i, r } = streamedLineSchema.parse(JSON.parse(line));
       deliver(i, streamedResultSchema.parse(superjson.deserialize(r)));
+      if (i < batch.length) answered.add(i);
     }
   }
 }

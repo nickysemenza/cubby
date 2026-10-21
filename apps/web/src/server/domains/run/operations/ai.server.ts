@@ -41,7 +41,9 @@ import {
   fieldQuestionKey,
   isSettledOutcome,
   readSettledQuestions,
+  rememberSavedAnswers,
   rememberSettledQuestions,
+  savedAnswerKey,
   settledSignature,
 } from "~/server/ai/field-suggest/settled-questions";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
@@ -491,6 +493,31 @@ export const inferFieldAssessments = async (
         rememberSettledQuestions(context.db, settled).catch((error) => {
           // SILENT: an unremembered decline is asked again on the next visit.
           suggestionLog.error("failed to remember settled questions", {
+            error,
+          });
+        }),
+      );
+  }
+  // A saved record's complete final answer becomes the preview its list row
+  // shows while the next live ask revalidates it. Withheld answers are stored
+  // too, so a review replaces the older preview rather than leaving it.
+  const savedEntityId = input.savedRecord === true ? input.entityId : undefined;
+  if (savedEntityId && !input.decisionModel) {
+    const previews = await Promise.all(
+      Object.entries(output.outcomes ?? {}).map(async ([field, outcome]) => ({
+        key: await savedAnswerKey(
+          { ...input, field, entityId: savedEntityId },
+          manifest,
+        ),
+        preview: { suggestion: output.suggestions[field] ?? null, outcome },
+      })),
+    );
+    if (previews.length)
+      await afterResponse(
+        rememberSavedAnswers(context.db, previews).catch((error) => {
+          // SILENT: an unremembered preview only means the next visit waits
+          // for its live ask.
+          suggestionLog.error("failed to remember saved answer previews", {
             error,
           });
         }),

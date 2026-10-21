@@ -394,6 +394,75 @@ describe("browser operation transport", () => {
     expect(sent.some((body) => body.batch)).toBe(false);
   });
 
+  // A Worker stream can end cleanly before answering every item (observed:
+  // HTTP 200 NDJSON with an empty body). Only unanswered reads resend alone;
+  // streamed values and real per-item errors are kept, never replayed.
+  const notFound = {
+    ok: false,
+    error: { message: "Record not found", code: "NOT_FOUND" },
+  };
+  it.each([
+    {
+      stream: "an empty stream",
+      answered: [],
+      results: [
+        { ok: true, data: "dashboard.counts" },
+        { ok: true, data: "entity.connectedRecords" },
+        { ok: true, data: "entity.connections" },
+      ],
+      resent: [
+        "dashboard.counts",
+        "entity.connectedRecords",
+        "entity.connections",
+      ],
+    },
+    {
+      stream: "a partial stream",
+      answered: [0, 1],
+      results: [
+        { ok: true, data: "streamed" },
+        notFound,
+        { ok: true, data: "entity.connections" },
+      ],
+      resent: ["entity.connections"],
+    },
+  ])(
+    "resends only reads $stream left unanswered",
+    async ({ answered, results, resent }) => {
+      const { sent } = stubDispatch((body) =>
+        body.batch
+          ? ndjson(
+              answered.map((i) => ({
+                i,
+                r: superjson.serialize({
+                  ok: true,
+                  value: i === 1 ? notFound : { ok: true, data: "streamed" },
+                }),
+              })),
+            )
+          : Response.json(
+              superjson.serialize({ ok: true, data: body.operation }),
+            ),
+      );
+      expect(
+        await Promise.all(
+          (
+            [
+              "dashboard.counts",
+              "entity.connectedRecords",
+              "entity.connections",
+            ] as const
+          ).map((operation) =>
+            dispatchBrowserOperation(operation, {}, transport()),
+          ),
+        ),
+      ).toEqual(results);
+      expect(sent.flatMap((body) => body.operation ?? []).sort()).toEqual(
+        resent,
+      );
+    },
+  );
+
   // Covers an HTTP failure and a server without batch support mid-deploy:
   // each query is resent alone and keeps its single-operation result.
   it("resends each query alone when the batch request fails", async () => {

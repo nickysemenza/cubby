@@ -2954,6 +2954,20 @@ kind outside those tags is rechecked on the next page read, not live on a
 mounted page.
 Questions with saved finance context (`entityId`), pinned-model replays and
 declines a member marked as a miss are always asked again.
+Every saved-record live answer (`savedRecord` with `entityId`, finance and
+vendor context included) is also remembered after review withholding as a
+complete preview — proposal, weak pick, decline or skipped state — keyed by
+entity, record, field, basis mode, basis and the field's decision-policy
+stamps. A `read: "preview"` settled read returns `preview` from one policy read
+and one memory lookup; it prepares no inputs, calls no model, schedules nothing
+and opens no Run. It omits previews whose assessment was rejected, superseded,
+rejected through the same served evidence, or marked a miss by a member. Pinned
+replays and form drafts never write previews. A list reads previews for every
+candidate question, so a row waiting on its verified settled read or its live
+ask shows the cached answer, including a below-threshold or declined outcome,
+while it checks. A preview is display-only: accept, reject, a different value
+and the suggestion count wait for the live answer, which replaces it. A live
+failure replaces it with the raw error.
 The page batches stored Suggestion reads and retains completed rows
 while an expanded roster loads; only newly seen rows wait. Pending state and read
 errors belong to the affected field, and background refreshes retain usable answers.

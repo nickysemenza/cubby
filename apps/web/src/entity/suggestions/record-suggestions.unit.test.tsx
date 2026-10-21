@@ -735,6 +735,213 @@ describe("record suggestions", () => {
     expect(calls).toHaveLength(3);
   });
 
+  // Failure modes: a saved list revisit shows only the pending glyph until the
+  // slow live check returns; a cached preview can be accepted, rejected or
+  // corrected before the live answer validates it; a live failure is masked by
+  // the cached answer instead of shown raw.
+  describe("saved-record previews", () => {
+    const pick = (probability: number) => ({
+      kind: "evaluated" as const,
+      answer: "pick" as const,
+      confidence: "high" as const,
+      probability,
+      assessmentId: food.assessmentId,
+      alternatives: [],
+    });
+    const previewing = (probability: number) =>
+      vi.fn<NonNullable<StoredSuggestionOperations["previews"]>>(
+        async ({ questions }) => ({
+          results: questions.map((question) => ({
+            ok: true as const,
+            value: {
+              outcome: null,
+              revision: null,
+              preview:
+                question.entityId === id
+                  ? {
+                      suggestion: {
+                        ...food,
+                        probability,
+                        reasoning: "Synthetic cached evidence",
+                      },
+                      outcome: pick(probability),
+                    }
+                  : null,
+            },
+          })),
+        }),
+      );
+    const deferredLive = () => {
+      let resolveLive = (_out: FieldSuggestionsOut) => {};
+      let rejectLive = (_error: Error) => {};
+      const answer = new Promise<FieldSuggestionsOut>((resolve, reject) => {
+        resolveLive = resolve;
+        rejectLive = reject;
+      });
+      const operations: EntitySuggestionsOperations = {
+        suggestFields: ai.suggestFields.withTransport(async () => answer),
+      };
+      return {
+        live: {
+          resolve: (out: FieldSuggestionsOut) => resolveLive(out),
+          reject: (error: Error) => rejectLive(error),
+        },
+        operations,
+      };
+    };
+    const Cell = ({
+      operations,
+      previews,
+      settled = emptyStoredSuggestionOperations.settled,
+      surface = "cell",
+    }: {
+      operations: EntitySuggestionsOperations;
+      previews: StoredSuggestionOperations["previews"];
+      settled?: StoredSuggestionOperations["settled"];
+      surface?: "cell" | "inline";
+    }) => {
+      const record = {
+        id,
+        name: "Synthetic cached gadget",
+        manufacturer: null,
+        categoryId: null,
+      };
+      return (
+        <RecordSuggestionsProvider
+          entity="product"
+          records={[record]}
+          fieldKeys={["categoryId"]}
+          operations={operations}
+          storedSuggestionOperations={{
+            ...emptyStoredSuggestionOperations,
+            settled,
+            previews,
+          }}
+        >
+          <RecordFieldSuggestion
+            record={record}
+            field="categoryId"
+            surface={surface}
+          >
+            <span>Empty category</span>
+          </RecordFieldSuggestion>
+        </RecordSuggestionsProvider>
+      );
+    };
+
+    it("shows a cached strong answer while the live check runs and blocks it until current", async () => {
+      const { live, operations } = deferredLive();
+      const previews = previewing(0.97);
+      render(<Cell operations={operations} previews={previews} />, {
+        wrapper: harness.wrapper,
+      });
+      const accept = await screen.findByRole("button", {
+        name: /^Accept suggested value/,
+      });
+      expect(accept).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Suggestion actions" }),
+      ).toBeDisabled();
+      expect(previews).toHaveBeenCalledOnce();
+
+      await act(async () =>
+        live.resolve({
+          suggestions: { categoryId: food },
+          outcomes: { categoryId: pick(0.97) },
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: /^Accept suggested value/ }),
+        ).toBeEnabled(),
+      );
+    });
+
+    // Regression: previews were read only for live asks, so a row whose
+    // verified settled read was still preparing showed only the pending glyph.
+    it("shows a cached answer while the verified settled read is held", async () => {
+      const { operations } = deferredLive();
+      const settled = vi.fn<StoredSuggestionOperations["settled"]>(
+        () => new Promise(() => {}),
+      );
+      render(
+        <Cell
+          operations={operations}
+          previews={previewing(0.97)}
+          settled={settled}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      expect(
+        await screen.findByRole("button", { name: /^Accept suggested value/ }),
+      ).toBeDisabled();
+      expect(settled).toHaveBeenCalledOnce();
+    });
+
+    it("keeps an inline cached review's actions disabled until current", async () => {
+      const { live, operations } = deferredLive();
+      render(
+        <Cell
+          operations={operations}
+          previews={previewing(0.97)}
+          surface="inline"
+        />,
+        { wrapper: harness.wrapper },
+      );
+      const accept = await screen.findByRole("button", { name: "Accept" });
+      expect(accept).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Review" }));
+      expect(
+        await screen.findByRole("button", { name: "Reject" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Use a different value…" }),
+      ).toBeDisabled();
+      await act(async () =>
+        live.resolve({
+          suggestions: { categoryId: food },
+          outcomes: { categoryId: pick(0.97) },
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Accept" })).toBeEnabled(),
+      );
+    });
+
+    it("shows a cached weak answer instead of the pending glyph and a live failure raw", async () => {
+      const { live, operations } = deferredLive();
+      render(<Cell operations={operations} previews={previewing(0.4)} />, {
+        wrapper: harness.wrapper,
+      });
+      const status = await screen.findByRole("button", {
+        name: /Leaning Food/,
+      });
+      expect(status).toHaveTextContent("Below threshold");
+      expect(
+        screen.queryByRole("button", { name: "Checking suggestion…" }),
+      ).toBeNull();
+      fireEvent.click(status);
+      expect(
+        await screen.findByText("Synthetic cached evidence"),
+      ).toBeVisible();
+      for (const name of ["Accept", "Reject", "Use a different value…"])
+        expect(
+          screen.queryByRole("button", { name })?.hasAttribute("disabled") ??
+            true,
+        ).toBe(true);
+
+      await act(async () =>
+        live.reject(new Error("Synthetic SQLSTATE 57014 live check failed")),
+      );
+      expect(
+        await screen.findByRole("button", {
+          name: "Suggestion unavailable: Synthetic SQLSTATE 57014 live check failed",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Leaning Food/ })).toBeNull();
+    });
+  });
+
   it("shows a confident live answer as a ghost pill and explains a weak empty-field answer", async () => {
     const answers = {
       "red apple": 0.97,

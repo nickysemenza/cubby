@@ -2,7 +2,10 @@ import {
   fieldSuggestionOutcomeSchema,
   type FieldSuggestionOutcome,
   type FieldSuggestionsInput,
+  settledSuggestionPreview,
+  suggestionStatus,
   type SettledSuggestionAnswer,
+  type SettledSuggestionPreview,
   type SettledSuggestionQuestion,
   type SettledSuggestionQuestionsInput,
 } from "@cubby/schemas/ai";
@@ -27,7 +30,7 @@ import {
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { aiAnalysis, feedback } from "~/server/db/schema";
+import { aiAnalysis, assessmentState, feedback } from "~/server/db/schema";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
@@ -45,6 +48,11 @@ import { settleBatch } from "~/server/workflows/settle-batch";
  * fingerprints). Any change to what the model would have read reopens the
  * question. AI refresh discovery never sees these drafts; this check is what
  * revisits them.
+ *
+ * A saved record's complete live answer (pick, weak pick, decline or skip)
+ * is also remembered under its record ID, as a display-only preview: a list
+ * revisit shows it while the live ask revalidates, and a preview read never
+ * prepares inputs, so it cannot stand in for that ask.
  */
 const SETTLED_QUESTION = {
   entityKind: "global",
@@ -62,6 +70,7 @@ const rememberedSchema = z.object({
   outcome: fieldSuggestionOutcomeSchema,
   signature: z.string(),
 });
+const rememberedPreviewSchema = z.object({ preview: settledSuggestionPreview });
 
 type FieldQuestion = Pick<FieldSuggestionsInput, "basisMode" | "basis"> & {
   entity: string;
@@ -74,6 +83,25 @@ export const fieldQuestionKey = (
 ) =>
   sha256Hex(
     canonicalJson({
+      entity: question.entity,
+      field: question.field,
+      basisMode: question.basisMode,
+      basis: question.basis,
+      dependencies: dependencyStamps(
+        manifest,
+        fieldDependencyKeys(question.entity, question.field),
+      ),
+    }),
+  );
+
+/** A saved record's preview key; distinct from every `fieldQuestionKey`. */
+export const savedAnswerKey = (
+  question: FieldQuestion & { entityId: string },
+  manifest: AiRefreshManifest,
+) =>
+  sha256Hex(
+    canonicalJson({
+      savedRecord: question.entityId,
       entity: question.entity,
       field: question.field,
       basisMode: question.basisMode,
@@ -120,18 +148,41 @@ export const settledSignature = (
  * transaction lock on the key: its upsert statement then sees any concurrent
  * first insert, and the key keeps one effective row.
  */
-export async function rememberSettledQuestions(
+export const rememberSettledQuestions = (
   db: Database,
   entries: readonly {
     key: string;
     outcome: FieldSuggestionOutcome;
     signature: string;
   }[],
+) =>
+  rememberRows(
+    db,
+    entries.map(({ key, outcome, signature }) => ({
+      key,
+      result: rememberedSchema.parse({ outcome, signature }),
+    })),
+  );
+
+/** Replaces each saved record's preview with its newest live answer. */
+export const rememberSavedAnswers = (
+  db: Database,
+  entries: readonly { key: string; preview: SettledSuggestionPreview }[],
+) =>
+  rememberRows(
+    db,
+    entries.map(({ key, preview }) => ({
+      key,
+      result: rememberedPreviewSchema.parse({ preview }),
+    })),
+  );
+
+async function rememberRows(
+  db: Database,
+  entries: readonly { key: string; result: unknown }[],
 ) {
-  for (const { key, outcome, signature } of entries) {
-    const result = JSON.stringify(
-      rememberedSchema.parse({ outcome, signature }),
-    );
+  for (const { key, result: value } of entries) {
+    const result = JSON.stringify(value);
     await withTransactionDatabase(db, async (transactionDb) => {
       await getDb(transactionDb).execute(
         sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${SETTLED_QUESTION.feature}:${key}`}, 0))`,
@@ -224,6 +275,7 @@ export async function readSettledQuestions(
   input: SettledSuggestionQuestionsInput,
   ports: SettledPorts = {},
 ) {
+  if (input.read === "preview") return readSavedAnswerPreviews(db, input);
   const manifest = await producingAiManifest(db);
   const keys = await Promise.all(
     input.questions.map((question) =>
@@ -309,6 +361,105 @@ export async function readSettledQuestions(
         entry.missId,
         ports,
       );
+    },
+    { concurrency: 1 },
+  );
+}
+
+/**
+ * One policy read and one memory lookup for a page batch, nothing else: no
+ * preparation, model call, scheduling or Run. A preview whose answer a review
+ * withheld — the answer's own rejection or supersession, a rejection of the
+ * same served evidence, or a member's miss — is not returned, so the live ask
+ * decides it again.
+ */
+async function readSavedAnswerPreviews(
+  db: Database,
+  input: SettledSuggestionQuestionsInput,
+) {
+  const manifest = await producingAiManifest(db);
+  const keys = await Promise.all(
+    input.questions.map(({ entityId, ...question }) =>
+      entityId
+        ? savedAnswerKey(
+            { ...question, entity: input.entity, entityId },
+            manifest,
+          )
+        : null,
+    ),
+  );
+  const lookups = [
+    ...new Set(keys.filter((key): key is string => key !== null)),
+  ];
+  const preview = sql`${aiAnalysis.result}->${"preview"}::text`;
+  const answerAssessment = sql`coalesce(
+    ${preview}->${"outcome"}::text->>${"assessmentId"}::text,
+    ${preview}->${"suggestion"}::text->>${"assessmentId"}::text
+  )`;
+  const { rejected, superseded } = suggestionStatus.enum;
+  const rows = lookups.length
+    ? await getDb(db)
+        .select({
+          key: aiAnalysis.inputFingerprint,
+          result: aiAnalysis.result,
+          withheld: sql<boolean>`(
+            EXISTS (
+              SELECT 1 FROM ${assessmentState} AS "answer"
+              WHERE "answer"."id"::text = ${answerAssessment}
+                AND (
+                  "answer"."status" IN (${rejected}, ${superseded})
+                  OR EXISTS (
+                    SELECT 1 FROM ${assessmentState} AS "sibling"
+                    WHERE "sibling"."family" = ${"field"}
+                      AND "sibling"."status" = ${rejected}
+                      AND "sibling"."data"->>${"reviewKey"}::text
+                        = "answer"."data"->>${"reviewKey"}::text
+                  )
+                )
+            )
+            OR EXISTS (
+              SELECT 1 FROM ${feedback}
+              WHERE ${feedback.assessmentId}::text = ${answerAssessment}
+                AND ${feedback.authority} = ${"member"}
+                AND ${feedback.verdict} = ${"wrong"}
+            )
+          )`,
+        })
+        .from(aiAnalysis)
+        .where(
+          and(
+            eq(aiAnalysis.entityKind, SETTLED_QUESTION.entityKind),
+            isNull(aiAnalysis.entityId),
+            eq(aiAnalysis.feature, SETTLED_QUESTION.feature),
+            eq(aiAnalysis.model, SETTLED_QUESTION.model),
+            eq(aiAnalysis.promptVersion, SETTLED_QUESTION.promptVersion),
+            inArray(aiAnalysis.inputFingerprint, lookups),
+            isNull(aiAnalysis.deletedAt),
+          ),
+        )
+        .orderBy(desc(aiAnalysis.updatedAt), desc(aiAnalysis.id))
+    : [];
+  const byKey = new Map<string, SettledSuggestionPreview | null>();
+  for (const row of rows) {
+    if (byKey.has(row.key)) continue;
+    const parsed = rememberedPreviewSchema.safeParse(row.result);
+    if (!parsed.success) continue;
+    byKey.set(
+      row.key,
+      row.withheld || parsed.data.preview.outcome.reviewStatus === "rejected"
+        ? null
+        : parsed.data.preview,
+    );
+  }
+  return settleBatch(
+    input.questions,
+    async (_question, index): Promise<SettledSuggestionAnswer> => {
+      const key = keys[index];
+      return {
+        outcome: null,
+        revision: null,
+        preview: key ? (byKey.get(key) ?? null) : null,
+      };
     },
     { concurrency: 1 },
   );
