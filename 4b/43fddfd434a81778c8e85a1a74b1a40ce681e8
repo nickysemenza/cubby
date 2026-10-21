@@ -1,0 +1,39 @@
+apps/apple/App/Shared/AppShell/DeveloperOverlays.swift
+  s_e76cd5771b33ea::t_3eddbec469e448 96-98,100-106,108,123-126
+apps/apple/App/Shared/DesignSystem/RecordListRow.swift
+  s_4045d1ea7ec5a2::t_2b829bd029ee54 11,19-26,51,69
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_e76cd5771b33ea::t_f79463492e520c 108-113,156-158,258,260,268,270-271,319-419,558-567,664-666,704-706,729-735,905-907,917-936,938-940,951-952,1010,1059-1065,1120,1136-1143,1154-1190,1192-1194,1197-1202,1205,1214-1216,1327,1341-1348,1350,1364,1367-1372,1379-1385,1390,1395,1397-1401,1403-1405,1408-1419,1421-1430,1432,1434-1435,1437-1438,1440-1441,1444-1457,1459-1466,1468-1472,1475-1483
+apps/apple/App/Shared/AppShell/RootView.swift
+  s_e76cd5771b33ea::t_a46c0df5f9a2b0 99-105,107
+apps/apple/App/Shared/Entity/List/EntityRowPresentation.swift
+  s_4045d1ea7ec5a2::t_ce9fca2f308a99 140-156,168
+apps/apple/App/Shared/Search/SearchView.swift
+  s_e76cd5771b33ea::t_5b7971a6df2dea 340-346,352
+apps/apple/App/Shared/Today/TodayView.swift
+  s_e76cd5771b33ea::t_0604fe4de028f1 154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4b43fddfd434a81778c8e85a1a74b1a40ce681e8",
+  "prompts": {},
+  "sessions": {
+    "s_4045d1ea7ec5a2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15f95-5f13-7c30-9aea-0f43d7a0bfae",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_e76cd5771b33ea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15f95-2744-7da3-add2-d479d4489989",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
