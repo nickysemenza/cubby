@@ -313,6 +313,9 @@ export async function scheduleSavedFieldQuestion(
   if (result.kind === "deferred")
     log.info("Saved field evaluation scheduling deferred", {
       reason: result.reason,
+      entity: target.entity,
+      recordId: target.recordId,
+      field: target.field,
     });
 }
 

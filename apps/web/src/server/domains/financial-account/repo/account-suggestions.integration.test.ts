@@ -8,7 +8,10 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { fieldSuggestSpecFor } from "~/server/ai/field-suggest/registry";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getDb } from "~/server/db/helpers";
-import { financialAccount } from "~/server/db/schema";
+import {
+  assessmentState as suggestionTable,
+  financialAccount,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   kernelCtx,
@@ -70,6 +73,11 @@ describe("Account scalar suggestion acceptance", () => {
       suggestedValue: "visa",
       kind: "addition",
     });
+    // Confident enough that the review-required declaration alone refuses it.
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({ confidence: 0.99 })
+      .where(eq(suggestionTable.id, pending.id));
     await expect(
       acceptSuggestion(
         ctx.db,
@@ -77,7 +85,9 @@ describe("Account scalar suggestion acceptance", () => {
         { id: pending.id },
         { mode: "automatic", confidence: 0.99 },
       ),
-    ).rejects.toThrow("requires member review");
+    ).rejects.toThrow(
+      "Field financialAccount.network is not eligible for automatic fill",
+    );
     expect(await suggestionStatus(ctx.db, pending.id)).toBe("pending");
     const [stored] = await getDb(ctx.db)
       .select({ identity: financialAccount.identity })

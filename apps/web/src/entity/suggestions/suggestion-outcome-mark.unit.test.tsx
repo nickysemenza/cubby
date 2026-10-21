@@ -200,6 +200,30 @@ describe("describeOutcome headline copy", () => {
 });
 
 describe("SuggestionOutcomeMark", () => {
+  it.each([false, true])(
+    "keeps grid navigation keys available for pending=%s",
+    (pending) => {
+      const onKeyDown = vi.fn();
+      document.addEventListener("keydown", onKeyDown);
+      try {
+        render(
+          <SuggestionOutcomeMark
+            surface="cell"
+            pending={pending}
+            outcome={pending ? null : { kind: "skipped", reason: "no_signal" }}
+          />,
+        );
+        const trigger = screen.getByRole("button");
+        fireEvent.keyDown(trigger, { key: "ArrowDown" });
+        expect(onKeyDown).toHaveBeenCalledTimes(1);
+        fireEvent.keyDown(trigger, { key: "Enter" });
+        fireEvent.keyDown(trigger, { key: " " });
+        expect(onKeyDown).toHaveBeenCalledTimes(1);
+      } finally {
+        document.removeEventListener("keydown", onKeyDown);
+      }
+    },
+  );
   it.each<FieldSuggestionOutcome>([
     pickOutcome({ answer: "none", reviewStatus: "rejected" }),
     { kind: "skipped", reason: "no_signal", reviewStatus: "rejected" },
