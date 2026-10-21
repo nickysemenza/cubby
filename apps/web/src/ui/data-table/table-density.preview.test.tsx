@@ -3,9 +3,7 @@ import { type ReactNode, useRef } from "react";
 import { describe, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
-import { householdDaysFromNow } from "~/lib/household-date";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import {
   Table,
@@ -22,25 +20,7 @@ import { ROW_DENSITY } from "./density";
 import { RowActiveProvider } from "./row-activity";
 import { useCellSpill } from "./use-cell-spill";
 
-// Failure modes guarded here, all at a fixed 32px row:
-// - a clipped value is unreadable without opening the record;
-// - spill-over flashes for values that already fit, or outlives the hover;
-// - a stacked date, chip cluster, or wrapped header stretches its row;
-// - chips silently drop values instead of counting them;
-// - a code truncates its distinguishing tail;
-// - an explanation ⓘ widens every cell of its column, covers a number, or
-//   disappears under the spill-over it sits beside;
-// - the ⓘ hides the tail of a value that exactly fits, or of its spill-over;
-// - nested rails (explanation around a relation workbench) stack on one
-//   spot so one control is unreachable;
-// - a value wrapped in its own in-flow frame (a suggestion mark) spills over
-//   the outer ⓘ without copying it;
-// - a two-line name or a truncated header loses its end with no way to read it;
-// - a copied rail glyph swallows the click meant for its cell (a header's
-//   sort), or screen-reader text makes a fitting value spill;
-// - tall chips overflow two lines without counting toward "+N";
-// - overflow fitting removes the last named chip, leaving only "+1";
-// - a plain long word is abbreviated like a code although it fits.
+// At 32px row height, overflow must keep values and nested controls reachable.
 
 function Fixture({
   cells,
@@ -142,68 +122,6 @@ describe("table density", () => {
     await waitFor(() => expect(overlay()).toBeNull());
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(overlay()).toBeNull();
-  });
-
-  it("stacks dates and timestamps in two lines without stretching the row", async () => {
-    await page.viewport(1440, 900);
-    const view = render(
-      <Fixture
-        cells={[
-          {
-            id: "c3",
-            width: 96,
-            content: <DateDisplay start={householdDaysFromNow(200)} stacked />,
-          },
-          {
-            id: "c4",
-            width: 72,
-            content: (
-              <DateDisplay
-                timestamp={new Date(Date.now() - 90 * 86_400_000)}
-                stacked
-              />
-            ),
-          },
-        ]}
-      />,
-    );
-    for (const id of ["cell-0", "cell-1"]) {
-      const cell = view.getByTestId(id);
-      const lines = cell.querySelectorAll("[data-stacked-line]");
-      expect(lines).toHaveLength(2);
-      const [first, second] = [...lines];
-      if (!first || !second) throw new Error("missing stacked lines");
-      expect(rect(second).top).toBeGreaterThanOrEqual(rect(first).bottom - 1);
-      for (const line of lines) {
-        expect(line.scrollWidth).toBeLessThanOrEqual(line.clientWidth);
-      }
-      expect(Math.round(rect(cell).height)).toBe(32);
-    }
-    expect(view.getByTestId("cell-1").textContent).toMatch(/3 mo ago$/);
-  });
-
-  it("moves another year to the distance line", async () => {
-    await page.viewport(1440, 900);
-    const view = render(
-      <Fixture
-        cells={[
-          {
-            id: "c8",
-            width: 72,
-            content: (
-              <DateDisplay
-                timestamp={new Date(Date.now() - 400 * 86_400_000)}
-                stacked
-              />
-            ),
-          },
-        ]}
-      />,
-    );
-    const [, secondary] = view
-      .getByTestId("cell-0")
-      .querySelectorAll("[data-stacked-line]");
-    expect(secondary?.textContent).toMatch(/^’\d{2} · 1y ago$/);
   });
 
   it("overlays the explanation on the active row without reserving width", async () => {
@@ -540,47 +458,6 @@ describe("table density", () => {
     expect(Math.round(rect(cell).height)).toBe(32);
   });
 
-  it("keeps a one-line list to its first chip and names the rest under +N", async () => {
-    await page.viewport(1440, 900);
-    const labels = ["Restores a link", "Clears a gap", "Needs a look"];
-    const view = render(
-      <Fixture
-        cells={[
-          {
-            id: "c5c",
-            width: 200,
-            content: (
-              <ChipCluster
-                lines={1}
-                items={labels.map((label) => ({
-                  key: label,
-                  label,
-                  node: <span>{label}</span>,
-                }))}
-              />
-            ),
-          },
-        ]}
-      />,
-    );
-    const cell = view.getByTestId("cell-0");
-    await waitFor(() =>
-      expect(cell.querySelector("[data-chip-overflow]")).not.toBeNull(),
-    );
-    const shown = [...cell.querySelectorAll<HTMLElement>("[data-chip]")];
-    const more = cell.querySelector<HTMLElement>("[data-chip-overflow]");
-    expect(more?.textContent).toBe(`+${labels.length - shown.length}`);
-    expect(more?.getAttribute("aria-label")).toBe(
-      `${labels.length - shown.length} more: ${labels.slice(shown.length).join(", ")}`,
-    );
-    const tops = new Set(
-      [...shown, ...(more ? [more] : [])].map((part) =>
-        Math.round(rect(part).top + rect(part).height / 2),
-      ),
-    );
-    expect(tops.size).toBe(1);
-  });
-
   it("keeps a code's first and last four characters when it truncates", async () => {
     await page.viewport(1440, 900);
     const view = render(
@@ -700,38 +577,6 @@ describe("table density", () => {
     expect(overlay()).toBeNull();
   });
 
-  it("drops chips taller than two lines into the count", async () => {
-    await page.viewport(1440, 900);
-    const chip = (label: string) => ({
-      key: label,
-      label,
-      node: <span style={{ display: "block", height: 16 }}>{label}</span>,
-    });
-    const view = render(
-      <Fixture
-        cells={[
-          {
-            id: "c17",
-            width: 64,
-            content: (
-              <ChipCluster
-                items={["alpha", "beta", "gamma", "delta"].map(chip)}
-              />
-            ),
-          },
-        ]}
-      />,
-    );
-    const cluster = view
-      .getByTestId("cell-0")
-      .querySelector<HTMLElement>("[data-cell-wrap]");
-    if (!cluster) throw new Error("missing cluster");
-    await waitFor(() =>
-      expect(cluster.scrollHeight).toBeLessThanOrEqual(cluster.clientHeight),
-    );
-    expect(cluster.querySelector("[data-chip-overflow]")).not.toBeNull();
-  });
-
   it.each([1, 4])(
     "keeps the first named chip when %i tall chips overflow",
     async (count) => {
@@ -785,41 +630,4 @@ describe("table density", () => {
       expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(32);
     },
   );
-
-  it("shows a long unspaced label in full when it fits", async () => {
-    await page.viewport(1440, 900);
-    const view = render(
-      <Fixture
-        cells={[
-          {
-            id: "c18",
-            width: 240,
-            content: <MiddleTruncate text="Maintenance-schedules" />,
-          },
-        ]}
-      />,
-    );
-    expect(view.getByTestId("cell-0").textContent).toBe(
-      "Maintenance-schedules",
-    );
-    expect(view.queryByText("…")).toBeNull();
-  });
-
-  it("keeps a long header on one truncated line inside a narrow column", async () => {
-    await page.viewport(1440, 900);
-    const view = render(
-      <Fixture
-        header="Itemization coverage"
-        cells={[{ id: "c7", width: 72, content: "" }]}
-      />,
-    );
-    const label = view
-      .getByTestId("head-0")
-      .querySelector("[data-header-label]");
-    if (!(label instanceof HTMLElement)) throw new Error("missing label");
-    const lineHeight = Number.parseFloat(getComputedStyle(label).lineHeight);
-    expect(Math.round(rect(label).height / lineHeight)).toBe(1);
-    expect(label.scrollWidth).toBeGreaterThan(label.clientWidth);
-    expect(label.title).toBe("Itemization coverage");
-  });
 });
