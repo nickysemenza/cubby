@@ -748,9 +748,16 @@ export const purchaseListRead = async (
                 date: row.date,
               }),
             })),
+            bind(purchaseOut.pick({ spendingCategoryId: true }), (row) => ({
+              spendingCategoryId: row.spendingCategoryShortcode
+                ? parseShortcodeFor(
+                    "spendingCategory",
+                    row.spendingCategoryShortcode,
+                  )
+                : null,
+            })),
             bind(
               purchaseOut.pick({
-                spendingCategoryId: true,
                 vendorId: true,
                 vendorAccountId: true,
                 defaultProjectId: true,
@@ -760,12 +767,6 @@ export const purchaseListRead = async (
                 if (!row.vendorShortcode)
                   throw new Error("Purchase vendor was not loaded");
                 return {
-                  spendingCategoryId: row.spendingCategoryShortcode
-                    ? parseShortcodeFor(
-                        "spendingCategory",
-                        row.spendingCategoryShortcode,
-                      )
-                    : null,
                   vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
                   vendorAccountId: row.vendorAccountShortcode
                     ? parseShortcodeFor(

@@ -16,7 +16,6 @@ import { mapLocationIdentityProduct } from "~/server/domains/location/repo/ident
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import {
   mapDbProductToInventoryEmbed,
-  mapDbProductToInventoryList,
   mapProductExternalIds,
   mapProductUnitMappings,
   primaryGtinOf,
@@ -160,35 +159,6 @@ export const dbInventoryEntryToAPI: (
         product.unitMappings,
       ),
     },
-    displayName: inventoryDisplayName({
-      productName: product.name,
-      locationName: location.name,
-    }),
-  };
-};
-
-export const dbInventoryEntryListValues = <Q extends DataQuality | undefined>(
-  inventoryentry: InventoryEntryListDB,
-  valuation: number | null,
-  pricing: ProductPricing,
-  dataQuality: Q,
-  ownership?: InventoryOwnershipTrace,
-) => {
-  const { product, location } = inventoryentry;
-
-  return {
-    ...inventoryEntryBaseFields(inventoryentry, valuation, dataQuality),
-    ...(ownership ? inventoryEntryOwnershipFields(ownership) : {}),
-    location: {
-      id: parseShortcodeFor("location", location.shortcode),
-      name: location.name,
-      type: parseLocationType(location.type),
-    },
-    product: mapDbProductToInventoryList({
-      ...product,
-      pricing,
-      primaryGtin: primaryGtinOf(product.externalIds),
-    }),
     displayName: inventoryDisplayName({
       productName: product.name,
       locationName: location.name,

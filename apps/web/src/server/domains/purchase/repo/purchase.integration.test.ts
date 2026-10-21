@@ -11,7 +11,7 @@ import { reconcilePurchase, splitExpenseInput } from "@cubby/schemas/purchase";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
-import { withTestDb } from "tooling/test-setup";
+import { withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -35,6 +35,7 @@ import {
   getVendorByID,
 } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
@@ -53,6 +54,7 @@ import {
   getPurchaseExpenses,
   mergePurchases,
   purchaseList,
+  purchaseListRead,
   splitExpense,
   updatePurchase,
 } from "./purchase";
@@ -61,6 +63,36 @@ import { purchaseProductsRelationAdapter } from "./purchase-products";
 // Full-filter totals must include unloaded purchases and credits, without summing stated totals.
 describe("purchase list totals", () => {
   const ctx = withTestDb();
+  // Core category identity must not admit a binding requiring deferred vendor columns.
+  it("reads only category identity without loading deferred vendor fields", async () => {
+    const vendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Base purchase vendor",
+    );
+    const { output: created } = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      date: "2026-01-15",
+      orderId: "BASE-001",
+    });
+    const page = await countTestDbQueries(() =>
+      purchaseListRead(
+        ctx.db,
+        { vendorId },
+        [],
+        { pageIndex: 0, pageSize: 10 },
+        "page",
+        selectedListProjection("purchase", ["spendingCategoryId"]),
+      ),
+    );
+    expect(page.result.data).toHaveLength(1);
+    expect(page.result.data[0]).toMatchObject({
+      id: created.id,
+      spendingCategoryId: null,
+    });
+    expect(page.result.data[0]).not.toHaveProperty("vendorId");
+    expect(page.result.data[0]).not.toHaveProperty("orderUrl");
+    expect(page.queryCount).toBe(2);
+  });
   it("sums live ledger rows across pages and respects the purchase filter", async () => {
     const vendorId = await vendorShortcodeByName(
       ctx.db,

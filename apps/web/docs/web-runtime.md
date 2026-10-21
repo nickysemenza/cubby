@@ -152,6 +152,10 @@ including explicit dependencies between domain computations. Unknown demand or
 conflicting writers fail before selection; count and empty pages never load
 bindings. A skipped field remains absent, and a required field missing from a
 selected source or binding fails before schema defaults run.
+Any requested output admits its entire binding. Split outputs whose inputs have
+different readiness: a core identity must not share a binding that requires a
+deferred relation column. Selected-field regressions should omit that relation
+and verify both the public patch and the work it avoids.
 
 Narrow pickers and internal target readers use `listScaffold.raw` and keep their
 own output contract. Both methods share authoritative filtering, sorting,

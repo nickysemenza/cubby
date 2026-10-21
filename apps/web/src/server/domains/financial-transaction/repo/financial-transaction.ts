@@ -29,6 +29,7 @@ import type { SpendingCategorySummary } from "@cubby/schemas/spending-classifica
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -290,6 +291,8 @@ const selectTransactionsRead = (
     })
     .from(financialTransaction);
 };
+// Partial bindings retain field validators; full reads retain settlement refinements.
+const transactionFields = z.object(financialTransactionOut.shape);
 const transactionRead = (
   db: Database,
 ): ListReadOptions<
@@ -326,14 +329,14 @@ const transactionRead = (
       );
     });
     return [
-      bind(financialTransactionOut.pick({ displayName: true }), (row) => ({
+      bind(transactionFields.pick({ displayName: true }), (row) => ({
         displayName:
           row.merchant?.trim() ||
           row.rawDescription?.trim() ||
           capitalize(row.kind.replaceAll("_", " ")),
       })),
       bind(
-        financialTransactionOut.pick({
+        transactionFields.pick({
           bookingCoverage: true,
           documentCoverage: true,
           itemizationCoverage: true,
@@ -346,18 +349,12 @@ const transactionRead = (
           productsCoverage: row.coverage.products,
         }),
       ),
-      bind(
-        financialTransactionOut.pick({ spendingCategoryId: true }),
-        (row) => ({
-          spendingCategoryId: row.spendingCategoryShortcode
-            ? parseShortcodeFor(
-                "spendingCategory",
-                row.spendingCategoryShortcode,
-              )
-            : null,
-        }),
-      ),
-      bind(financialTransactionOut.pick({ accountId: true }), (row) => {
+      bind(transactionFields.pick({ spendingCategoryId: true }), (row) => ({
+        spendingCategoryId: row.spendingCategoryShortcode
+          ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
+          : null,
+      })),
+      bind(transactionFields.pick({ accountId: true }), (row) => {
         if (!row.accountShortcode)
           throw new Error("Financial transaction account was not loaded");
         return {
@@ -368,11 +365,11 @@ const transactionRead = (
         };
       }),
       refs.fields(
-        financialTransactionOut.pick({ sourceRefs: true }),
+        transactionFields.pick({ sourceRefs: true }),
         (row, loaded) => ({ sourceRefs: loaded.get(row.id) ?? [] }),
       ),
       bind(
-        financialTransactionOut.pick({
+        transactionFields.pick({
           allocations: true,
           purchaseId: true,
           ledgerTransferId: true,
@@ -397,14 +394,14 @@ const transactionRead = (
         },
       ),
       categories.fields(
-        financialTransactionOut.pick({ spendingCategorySummary: true }),
+        transactionFields.pick({ spendingCategorySummary: true }),
         (row, loaded) => ({
           spendingCategorySummary:
             loaded.get(row.id) ?? emptySpendingCategorySummary(),
         }),
       ),
       inferences.fields(
-        financialTransactionOut.pick({ vendorInference: true }),
+        transactionFields.pick({ vendorInference: true }),
         (row, loaded) => {
           const vendorInference = loaded.get(row.id);
           if (vendorInference === undefined)
