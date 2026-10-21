@@ -51,6 +51,7 @@ type RecordNode = Node<{
   count?: number;
   toggle?: () => void;
   more?: () => void;
+  busy?: boolean;
 }>;
 const GraphRecord = memo(function GraphRecord({
   data,
@@ -74,6 +75,8 @@ const GraphRecord = memo(function GraphRecord({
         <>
           <button
             className="nodrag nopan graph-branch-button"
+            disabled={data.busy}
+            aria-busy={data.busy}
             aria-label={`${data.count ? "Collapse" : "Expand"} ${data.branch.label} (${data.branch.totalCount})`}
             aria-expanded={Boolean(data.count)}
             onClick={(event) => {
@@ -92,6 +95,7 @@ const GraphRecord = memo(function GraphRecord({
             <button
               className="nodrag nopan px-3 text-xs"
               aria-label={`Load more ${data.branch.label}`}
+              disabled={data.busy}
               onClick={(event) => {
                 event.stopPropagation();
                 data.more?.();
@@ -156,6 +160,9 @@ function edgeHandles(a?: GraphMapRect, b?: GraphMapRect) {
 }
 const DEFAULT_VIEWPORT = { x: 32, y: 32, zoom: 1 };
 const EMPTY_POSITIONS: Record<string, GraphMapRect> = {};
+const EMPTY_BRANCHES: EntityGraphBranch[] = [];
+const EMPTY_COUNTS: ReadonlyMap<string, number> = new Map();
+const EMPTY_BUSY: ReadonlySet<string> = new Set();
 export interface GraphMapCamera {
   positions: Record<string, GraphMapRect>;
   viewport: Viewport;
@@ -174,8 +181,9 @@ export function GraphMapCanvas({
   highlightedEdges,
   camera,
   toolbarTarget,
-  branches = [],
-  counts = new Map(),
+  branches = EMPTY_BRANCHES,
+  counts = EMPTY_COUNTS,
+  busy = EMPTY_BUSY,
   onToggleBranch,
   showSiblings = false,
   onToggleSiblings,
@@ -196,6 +204,7 @@ export function GraphMapCanvas({
   toolbarTarget?: HTMLElement | null;
   branches?: EntityGraphBranch[];
   counts?: ReadonlyMap<string, number>;
+  busy?: ReadonlySet<string>;
   onToggleBranch?: (branch: EntityGraphBranch) => void;
   showSiblings?: boolean;
   onToggleSiblings?: () => void;
@@ -392,6 +401,12 @@ export function GraphMapCanvas({
                   related: [],
                   depth: 0,
                   branch: group.branch,
+                  busy: busy.has(
+                    graphBranchKey(
+                      group.branch.root,
+                      group.branch.relationshipKey,
+                    ),
+                  ),
                   count: group.count,
                   toggle: () => onToggleBranch?.(group.branch),
                   more: () => onMoreBranch?.(group.branch),
@@ -401,7 +416,15 @@ export function GraphMapCanvas({
           : [];
       }),
     ],
-    [baseNodes, selected, groups, positions, onToggleBranch, onMoreBranch],
+    [
+      baseNodes,
+      selected,
+      groups,
+      positions,
+      onToggleBranch,
+      onMoreBranch,
+      busy,
+    ],
   );
   const flowEdges = useMemo(
     () => [

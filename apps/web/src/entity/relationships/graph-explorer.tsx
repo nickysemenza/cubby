@@ -382,6 +382,9 @@ export function GraphExplorer({
           </Button>
         )}
       </Row>
+      {model.errors.size > 0 ? (
+        <ErrorDisplay error={model.errors.values().next().value} />
+      ) : null}
       {model.atCapacity && (
         <output className="text-sm">
           Map capacity reached: 500 records or 1,000 connections. Start a new
@@ -413,6 +416,7 @@ export function GraphExplorer({
               anchors={model.map.anchors}
               branches={model.data.branches}
               counts={model.counts}
+              busy={model.busy}
               showSiblings={model.showSiblings}
               onToggleSiblings={() => model.setShowSiblings((value) => !value)}
               onCollapseAll={model.collapseAll}
