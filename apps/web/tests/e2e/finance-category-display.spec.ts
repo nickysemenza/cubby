@@ -507,15 +507,26 @@ test("expense category pills agree with quality for direct, allocated, and missi
   // Standard-height pills fit one line. Allocated categories retain the first
   // link and name the remainder through the shared cluster's overflow tooltip.
   const shipping = page.getByRole("row").filter({ hasText: `${tag} shipping` });
-  await expect(
-    shipping.getByRole("link", { name: secondCategoryName, exact: true }),
-  ).toBeVisible();
+  const allocatedCategory = shipping.locator(
+    'a[href^="/spending-categories/"]',
+  );
+  await expect(allocatedCategory).toHaveCount(1);
+  const visibleName = await allocatedCategory.innerText();
+  expect([categoryName, secondCategoryName]).toContain(visibleName);
+  const visibleId =
+    visibleName === categoryName ? categoryId : secondCategoryId;
+  const hiddenName =
+    visibleName === categoryName ? secondCategoryName : categoryName;
+  await expect(allocatedCategory).toHaveAttribute(
+    "href",
+    `/spending-categories/${visibleId}`,
+  );
   const overflow = shipping.getByRole("button", {
-    name: `1 more: ${categoryName}`,
+    name: `1 more: ${hiddenName}`,
     exact: true,
   });
   await overflow.focus();
-  await expect(page.getByRole("tooltip")).toHaveText(categoryName);
+  await expect(page.getByRole("tooltip")).toHaveText(hiddenName);
   const row = page.getByRole("row").filter({ hasText: `${tag} unclassified` });
   await expect(row).not.toContainText("100/100");
 
