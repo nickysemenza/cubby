@@ -9,13 +9,23 @@ const errorCauseSchema = z.object({
   status: z.number().optional(),
 });
 
-export const errorDiagnosticsSchema = z.object({
+const httpFailureSchema = z.object({
+  url: z.string(),
+  status: z.number().optional(),
+  statusText: z.string().optional(),
+  contentType: z.string().optional(),
+  body: z.string().optional(),
+  elapsedMs: z.number(),
+});
+
+const operationErrorDiagnosticsSchema = z.object({
   origin: z.literal("server"),
   operation: z.string(),
   entity: z.string().optional(),
   module: z.string().optional(),
-  stage: z.enum(["context", "input", "run", "output", "dispatch"]),
+  stage: z.enum(["context", "input", "run", "output", "dispatch", "http"]),
   causes: z.array(errorCauseSchema),
+  http: httpFailureSchema.optional(),
   truncated: z.boolean().optional(),
   batchIndex: z.number().int().nonnegative().optional(),
   sentryEventId: z.string().optional(),
@@ -27,6 +37,20 @@ export const errorDiagnosticsSchema = z.object({
   cloudflareUrl: z
     .literal(
       "https://dash.cloudflare.com/?to=/:account/workers-and-pages/observability",
+    )
+    .optional(),
+});
+
+export const errorDiagnosticsSchema = operationErrorDiagnosticsSchema.extend({
+  retries: z
+    .array(
+      z.object({
+        attempt: z.number().int().positive(),
+        message: z.string(),
+        code: z.string().optional(),
+        requestId: z.string().optional(),
+        diagnostics: operationErrorDiagnosticsSchema.optional(),
+      }),
     )
     .optional(),
 });
@@ -97,10 +121,15 @@ function readErrorNode<TError>(error: TError) {
   }
 }
 
-const childErrors = (node: z.infer<typeof errorNodeSchema>): unknown[] => [
+const childErrors = (
+  node: z.infer<typeof errorNodeSchema>,
+  aggregateLimit?: number,
+): unknown[] => [
   ...(node.cause === undefined ? [] : [node.cause]),
   ...(node.originalError === undefined ? [] : [node.originalError]),
-  ...(node.errors?.slice(0, 8) ?? []),
+  ...(aggregateLimit === undefined
+    ? (node.errors ?? [])
+    : (node.errors?.slice(0, aggregateLimit) ?? [])),
 ];
 
 /** Preserve typed control errors through provider wrappers and bounded aggregate causes. */
@@ -116,7 +145,7 @@ export function findErrorCause<TError, T>(
     seen.add(current);
     if (matches(current)) return current;
     const parsed = readErrorNode(current);
-    if (parsed.success) pending.push(...childErrors(parsed.data));
+    if (parsed.success) pending.push(...childErrors(parsed.data, 8));
   }
   return undefined;
 }
@@ -128,8 +157,8 @@ export function describeErrorCauses<TError>(
   const result: Pick<ErrorDiagnostics, "causes" | "truncated"> = { causes: [] };
   const seen = new Set<unknown>();
   const pending: unknown[] = [error];
-  while (pending.length && result.causes.length < 8 && seen.size < 24) {
-    const current = pending.shift();
+  for (let index = 0; index < pending.length; index++) {
+    const current = pending[index];
     if (seen.has(current)) {
       result.truncated = true;
       continue;
@@ -151,10 +180,7 @@ export function describeErrorCauses<TError>(
     const node = parsed.data;
     if (node.message || node.code)
       result.causes.push(errorCause(node, options.includeStacks ?? false));
-    if ((node.message?.length ?? 0) > 2000) result.truncated = true;
-    pending.push(...childErrors(node));
-    if ((node.errors?.length ?? 0) > 8) result.truncated = true;
+    for (const child of childErrors(node)) pending.push(child);
   }
-  if (pending.length) result.truncated = true;
   return result;
 }

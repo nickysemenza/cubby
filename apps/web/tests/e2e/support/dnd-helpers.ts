@@ -1,6 +1,6 @@
 import type { Page, Response } from "@playwright/test";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { isBrowserOperationPath } from "~/lib/browser-operation-path";
 import { dispatchesOperation } from "./dispatch-wire";
 
 const operationHeader = (response: Response, suffix = "") =>
@@ -24,7 +24,7 @@ export async function waitForDndMutation(
     if (
       !committed &&
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === BROWSER_OPERATION_PATH &&
+      isBrowserOperationPath(new URL(response.url()).pathname) &&
       operationHeader(response, "-kind") === "mutation" &&
       (mutationOperation
         ? operationHeader(response) === mutationOperation

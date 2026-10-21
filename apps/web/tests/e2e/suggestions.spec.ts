@@ -121,7 +121,7 @@ test("empty suggestion cells expose an abstention and keyboard-accessible detail
 }, testInfo) => {
   const name = uniqueName(testInfo, "Unclassified tool");
   await createEntityFixture(page, "product", { name, categoryId: null });
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
       return;
     if (
@@ -190,7 +190,7 @@ test("saved suggestion previews stay visible while current evidence is checked",
     reasoning: "Synthetic saved evidence",
     alternatives: [],
   };
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (
       await unbatchFor(route, [
         "ai.suggestFields",
@@ -812,7 +812,7 @@ test("list pills accept immediately without unloading another row's suggestion",
       ),
     );
   const acceptance = Promise.withResolvers<void>();
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (
       !dispatchesOperation(
         route.request(),
@@ -917,7 +917,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
     },
     { active: false, runId },
   );
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
       return;
     if (

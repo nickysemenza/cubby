@@ -58,7 +58,7 @@ export function scrubCredentialValues(message: string): string {
       // quoted values are assignments. SQL placeholders stay.
       .replace(
         new RegExp(
-          String.raw`(?<![\w-])((?:password|passwd|secret|api_?key|token|access_token|refresh_token|authorization|cookie|set-cookie)["']?\s*[:=]\s*)(?!\$\d+\b)(?:(["'])(?:(?!\2)[^\r\n])*\2|(?<==\s*)${VALUE}+|(?<=pass(?:word|wd)["']?\s*:\s*)${VALUE}+|(?=${VALUE}*[\d_.+/=-])${VALUE}{6,})`,
+          String.raw`(?<![\w-])((?:password|passwd|secret|api_?key|token|access_token|refresh_token|authorization|cookie|set-cookie)["']?\s*[:=]\s*)(?!\$\d+\b)(?:(["'])(?:\\[^\r\n]|(?!\2)[^\\\r\n])*\2|(?<==\s*)${VALUE}+|(?<=pass(?:word|wd)["']?\s*:\s*)${VALUE}+|(?=${VALUE}*[\d_.+/=-])${VALUE}{6,})`,
           "giu",
         ),
         (_match, label: string, quote = "") =>
@@ -67,7 +67,43 @@ export function scrubCredentialValues(message: string): string {
   );
 }
 
-/** User-facing error causes retain the existing 2000-character bound. */
+/** Preserve complete diagnostics while redacting credential-shaped values. */
 export function scrubErrorMessage(message: string): string {
-  return scrubCredentialValues(message).slice(0, 2000);
+  const scrubStrings = (text: string): string =>
+    text.replace(/"(?:[^"\\]|\\[\s\S])*"/gu, (encoded) => {
+      try {
+        const decoded: unknown = JSON.parse(encoded);
+        if (typeof decoded !== "string") return encoded;
+        const scrubbed = scrubErrorMessage(decoded);
+        return scrubbed === decoded ? encoded : JSON.stringify(scrubbed);
+      } catch {
+        // SILENT: diagnostic prose can contain invalid JSON strings; retain the literal scrubbed text.
+        return encoded;
+      }
+    });
+  // Decode property names too: an escaped credential label is still a label.
+  try {
+    const parsed: unknown = JSON.parse(message);
+    if (parsed !== null && typeof parsed === "object") {
+      const canonical = JSON.stringify(parsed);
+      const credentialProperties = JSON.stringify(
+        parsed,
+        (key, value: unknown) =>
+          typeof value === "string" &&
+          /^(?:password|passwd|secret|api_?key|token|access_token|refresh_token|authorization|cookie|set-cookie)$/iu.test(
+            key,
+          ) &&
+          !/^\$\d+$/u.test(value)
+            ? "[REDACTED]"
+            : value,
+      );
+      const scrubbed = scrubStrings(
+        scrubCredentialValues(credentialProperties),
+      );
+      if (scrubbed !== canonical) return scrubbed;
+    }
+  } catch {
+    // SILENT: most diagnostics are plain text; JSON decoding is optional.
+  }
+  return scrubStrings(scrubCredentialValues(message));
 }

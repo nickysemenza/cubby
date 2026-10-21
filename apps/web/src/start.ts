@@ -4,9 +4,7 @@
  */
 import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
 
-import { notifyNativeWorkspaceResponse } from "~/lib/native-workspace/bridge";
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
-import { labelStartRequest } from "~/lib/start-dispatch-url";
 import { nativeWorkspaceClientGate } from "~/server/operation-runtime/middleware/native-workspace";
 import { privateServerFunctionResponses } from "~/server/operation-runtime/middleware/private-server-functions";
 import { tracingMiddleware } from "~/server/operation-runtime/middleware/tracing";
@@ -21,11 +19,7 @@ const csrfMiddleware = createCsrfMiddleware({
 export const startInstance = createStart(() => ({
   serverFns: {
     fetch: (input, init) =>
-      fetchWithRequestDiagnostics(
-        globalThis.fetch,
-        labelStartRequest(input, init),
-        init,
-      ).then(notifyNativeWorkspaceResponse),
+      fetchWithRequestDiagnostics(globalThis.fetch, input, init),
   },
   // Request middleware runs on every server request (SSR, server routes, server functions)
   requestMiddleware: [

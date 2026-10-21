@@ -2,19 +2,29 @@
  * Request-correlation id, shared by both sides of the wire.
  *
  * Lives in `lib/` rather than `server/observability/tracing.ts` because the browser needs the
- * header name too, and importing anything under `~/server` from client code
- * would drag the server router into the client bundle
- * (see `assertNoServerCodeInClient` in tooling/checks/check-client-bundle.ts). Keep
- * this module free of every server import for that reason.
+ * header name too. Only client-safe wire contracts may cross this seam;
+ * server implementations must never enter this module's import graph.
  *
  * The server fills the header via `getRequestId()` in `~/server/observability/tracing`: an
  * Cloudflare `cf-ray` when available.
  */
 
+import superjson from "superjson";
+import { z } from "zod";
+
 import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
+import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
 
 /** Response header carrying the server's request id back to the client. */
-import { type ErrorDiagnostics, sentryEventUrl } from "./error-diagnostics";
+import {
+  CLOUDFLARE_OBSERVABILITY_URL,
+  describeErrorCauses,
+  type ErrorDiagnostics,
+  scrubErrorMessage,
+  sentryEventUrl,
+} from "./error-diagnostics";
+import { notifyNativeWorkspaceResponse } from "./native-workspace/bridge";
+import { superJsonResultSchema } from "./superjson-wire";
 
 export const REQUEST_ID_HEADER = "x-request-id";
 
@@ -37,17 +47,48 @@ export async function fetchWithRequestDiagnostics(
   fetchImpl: typeof fetch,
   input: RequestInfo | URL,
   init?: RequestInit,
+  context?: { operation: string },
 ): Promise<Response> {
   const requestHeaders = new Headers(
     init?.headers ?? (input instanceof Request ? input.headers : undefined),
   );
   const rawOperation = requestHeaders.get("x-cubby-operation");
   const operation =
-    rawOperation && Object.hasOwn(START_OPERATIONS, rawOperation)
+    context?.operation ??
+    (rawOperation && Object.hasOwn(START_OPERATIONS, rawOperation)
       ? rawOperation
-      : undefined;
-  const response = await fetchImpl(input, init);
-  const requestId = response.headers.get(REQUEST_ID_HEADER);
+      : undefined);
+  const started = performance.now();
+  const url = scrubErrorMessage(
+    input instanceof Request ? input.url : String(input),
+  );
+  let response: Response;
+  try {
+    response = await fetchImpl(input, init);
+  } catch (error) {
+    if (
+      !operation ||
+      init?.signal?.aborted ||
+      (input instanceof Request && input.signal.aborted)
+    )
+      throw error;
+    throw new ServerResponseError(
+      scrubErrorMessage(error instanceof Error ? error.message : String(error)),
+      {
+        code: "NETWORK_ERROR",
+        diagnostics: {
+          origin: "server",
+          operation,
+          stage: "http",
+          ...describeErrorCauses(error, { includeStacks: true }),
+          http: { url, elapsedMs: performance.now() - started },
+        },
+      },
+    );
+  }
+  notifyNativeWorkspaceResponse(response);
+  const requestId =
+    response.headers.get(REQUEST_ID_HEADER) ?? response.headers.get("cf-ray");
   if (requestId && globalThis.window !== undefined) {
     const diagnostic: BrowserRequestDiagnostic = {
       requestId,
@@ -60,21 +101,75 @@ export async function fetchWithRequestDiagnostics(
       requestDiagnostics.shift();
     }
   }
-  if (response.status >= 500 && operation) {
+  if (!response.ok && operation) {
     const eventId = response.headers.get("x-sentry-event-id") ?? undefined;
-    const message = `Server request failed (HTTP ${response.status})`;
+    let body: string | undefined;
+    let bodyFailure: Pick<ErrorDiagnostics, "causes" | "truncated"> = {
+      causes: [],
+    };
+    try {
+      body = scrubErrorMessage(await response.text());
+    } catch (error) {
+      if (
+        init?.signal?.aborted ||
+        (input instanceof Request && input.signal.aborted)
+      )
+        throw error;
+      bodyFailure = describeErrorCauses(error, { includeStacks: true });
+    }
+    let publicError:
+      | z.infer<typeof publicStartOperationErrorSchema>
+      | undefined;
+    try {
+      const json: unknown = JSON.parse(body ?? "");
+      const serialized = superJsonResultSchema.safeParse(json);
+      const envelope = z
+        .object({
+          ok: z.literal(false),
+          error: publicStartOperationErrorSchema,
+        })
+        .safeParse(
+          serialized.success ? superjson.deserialize(serialized.data) : json,
+        );
+      const direct = publicStartOperationErrorSchema.safeParse(json);
+      publicError = envelope.success
+        ? envelope.data.error
+        : direct.success
+          ? direct.data
+          : undefined;
+    } catch {
+      // SILENT: non-JSON bodies are expected here; the full raw body is surfaced below.
+    }
+    const message =
+      publicError?.message ??
+      `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}: ${body === undefined ? `response body could not be read: ${bodyFailure.causes.at(-1)?.message ?? "unknown read failure"}` : body || "empty response body"}`;
     const diagnostics: ErrorDiagnostics = {
       origin: "server",
       operation,
-      stage: "dispatch",
-      causes: [],
+      stage: "http",
+      ...bodyFailure,
+      ...publicError?.diagnostics,
+      http: {
+        status: response.status,
+        statusText: response.statusText,
+        url,
+        body,
+        elapsedMs: performance.now() - started,
+        contentType: response.headers.get("content-type") ?? undefined,
+      },
     };
+    const cfRayId = response.headers.get("cf-ray");
+    if (cfRayId) {
+      diagnostics.cfRayId = cfRayId;
+      diagnostics.cloudflareUrl = CLOUDFLARE_OBSERVABILITY_URL;
+    }
     if (eventId) {
       diagnostics.sentryEventId = eventId;
       diagnostics.sentryUrl = sentryEventUrl(eventId);
     }
     const data: ServerResponseError["data"] = {
-      code: "INTERNAL_SERVER_ERROR",
+      ...publicError,
+      code: publicError?.code ?? "HTTP_ERROR",
       diagnostics,
     };
     if (requestId) data.requestId = requestId;

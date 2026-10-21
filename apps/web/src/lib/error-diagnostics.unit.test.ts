@@ -67,7 +67,7 @@ describe("error diagnostics", () => {
     expect(message).toContain("SQLSTATE 42P01");
   });
 
-  it("bounds cycles, aggregate causes and non-Error throws", () => {
+  it("retains all aggregate causes and long stacks while terminating cycles", () => {
     const error = new Error("cycle");
     error.cause = error;
     expect(describeErrorCauses(error)).toMatchObject({
@@ -82,10 +82,20 @@ describe("error diagnostics", () => {
       "Many failures",
     );
     const chain = describeErrorCauses(many);
-    expect(chain.truncated).toBe(true);
-    expect(chain.causes.length).toBeLessThanOrEqual(8);
-    expect(chain.causes.every(({ message }) => message.length <= 2000)).toBe(
-      true,
+    expect(chain.truncated).toBeUndefined();
+    expect(chain.causes).toHaveLength(21);
+    expect(chain.causes.at(-1)?.message).toBe("x".repeat(3000));
+    const stack = `Error: sample\n${" at fixture\n".repeat(300)}password=synthetic-secret`;
+    const deep = Array.from({ length: 40 }).reduce<unknown>(
+      (cause) => ({ cause }),
+      { message: "deep diagnostic", stack },
     );
+    expect(describeErrorCauses(deep, { includeStacks: true }).causes).toEqual([
+      {
+        name: "Error",
+        message: "deep diagnostic",
+        stack: stack.replace("synthetic-secret", "[REDACTED]"),
+      },
+    ]);
   });
 });

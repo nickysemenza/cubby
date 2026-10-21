@@ -2,7 +2,7 @@ import { batchResultSchema } from "@cubby/schemas/batch";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import {
@@ -113,13 +113,21 @@ export async function measureOperationRead(
   try {
     const requestHeaders = new Headers(headers);
     requestHeaders.set("content-type", "application/json");
-    response = await fetch(new URL(BROWSER_OPERATION_PATH, origin), {
-      method: "POST",
-      headers: requestHeaders,
-      body: JSON.stringify(superjson.serialize(request)),
-      redirect: "error",
-      signal: AbortSignal.timeout(120_000),
-    });
+    response = await fetch(
+      new URL(
+        browserOperationPath(
+          batch ? items.map(({ operation }) => operation) : items[0]!.operation,
+        ),
+        origin,
+      ),
+      {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify(superjson.serialize(request)),
+        redirect: "error",
+        signal: AbortSignal.timeout(120_000),
+      },
+    );
     firstResponseMs = performance.now() - started;
     responseBodyBytes = 0;
     if (!response.ok) {

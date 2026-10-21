@@ -12,7 +12,7 @@ import {
   authorizePurchaseAgent,
   workerdDiagnostic,
 } from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 import { getDb } from "~/server/db/helpers";
 
 import {
@@ -392,18 +392,21 @@ test("admits several retained confirmations as separate tasks in the same Run", 
       ...finished("batch"),
     ],
   });
-  const response = await page.request.post(BROWSER_OPERATION_PATH, {
-    headers: { Origin: e2eRuntime.baseURL },
-    data: superjson.serialize({
-      operation: "purchaseImport.emailImport",
-      input: {
-        items: seed.events.map(({ emailId, checksum }) => ({
-          id: emailId,
-          expectedChecksum: checksum,
-        })),
-      },
-    }),
-  });
+  const response = await page.request.post(
+    browserOperationPath("purchaseImport.emailImport"),
+    {
+      headers: { Origin: e2eRuntime.baseURL },
+      data: superjson.serialize({
+        operation: "purchaseImport.emailImport",
+        input: {
+          items: seed.events.map(({ emailId, checksum }) => ({
+            id: emailId,
+            expectedChecksum: checksum,
+          })),
+        },
+      }),
+    },
+  );
   expect(response.status(), await response.text()).toBe(200);
   const { runIds } = z
     .object({ ok: z.literal(true), data: emailImportOut })

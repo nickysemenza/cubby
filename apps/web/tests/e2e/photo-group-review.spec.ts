@@ -1309,7 +1309,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   // Pending fields must never stand in for saved evidence during loading/failure.
   const releaseCurrent = Promise.withResolvers<void>();
   let failCurrent = true;
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (!failCurrent) return route.continue();
     if (
       await unbatchFor(route, ["entity.detail", "photoImport.productEvidence"])

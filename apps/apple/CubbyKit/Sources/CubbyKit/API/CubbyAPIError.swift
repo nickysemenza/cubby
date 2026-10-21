@@ -106,6 +106,7 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
         public struct Cause: Decodable, Sendable {
             public let name: String
             public let message: String
+            public let stack: String?
             public let code: String?
             public let status: Int?
         }

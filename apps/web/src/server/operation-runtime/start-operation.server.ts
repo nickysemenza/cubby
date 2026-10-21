@@ -235,7 +235,7 @@ export function normalizeStartOperationError<TError>(
   });
   const cfRayId = cloudflareRayId(context.headers);
   const chain = context.authenticated
-    ? describeErrorCauses(error)
+    ? describeErrorCauses(error, { includeStacks: true })
     : { causes: [] };
   publicError.message = scrubErrorMessage(publicError.message);
   if (!context.authenticated) {

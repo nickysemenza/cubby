@@ -990,6 +990,20 @@ values are redacted. Request-scoped reporting captures the original exception
 and supplies correlation/Sentry references; a capture ID is an attempt, not
 proof of ingestion, and MCP batch items retain separate references.
 
+Authenticated diagnostics retain complete messages, stacks, SQL and parameters,
+upstream response bodies, and all distinct causes, with cycle detection rather
+than arbitrary character or cause-count limits. Error classification can still
+bound its search; classification limits must not truncate the displayed evidence.
+Credential scrubbing also decodes JSON property names and embedded JSON strings,
+including escaped quotes, before preserving their diagnostic content.
+The browser distinguishes an HTTP failure from an application error: HTTP
+diagnostics retain status, URL, content type, body (including an explicitly empty
+body), elapsed time, and available request/Ray/Sentry references. An empty
+platform response cannot supply the underlying Worker exception; do not invent
+one or replace it with an application `INTERNAL_SERVER_ERROR`. Response bodies
+and stacks render as inert text, and Copy details carries the same complete
+evidence. Terminal query failures retain earlier retry/fallback evidence.
+
 Web error details include Copy details, the Sentry link, and Open Workers
 Observability with a copyable Ray ID when Cloudflare supplied one. The Cloudflare
 link opens the dashboard, not an individual trace: the custom-span API does not

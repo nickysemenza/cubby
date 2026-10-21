@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { z } from "zod";
 import { productWithFoodOut } from "@cubby/schemas/product";
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { entityAttachment, image, product } from "~/server/db/schema";
@@ -26,13 +26,16 @@ export async function seedDetectedLabelNutrition(
     .from(product)
     .where(eq(product.name, productName));
   if (!target) throw new Error("Synthetic label Product was not created");
-  const verified = await page.request.post(BROWSER_OPERATION_PATH, {
-    headers: { Origin: new URL(page.url()).origin },
-    data: superjson.serialize({
-      operation: "product.verifyImages",
-      input: { id: target.shortcode },
-    }),
-  });
+  const verified = await page.request.post(
+    browserOperationPath("product.verifyImages"),
+    {
+      headers: { Origin: new URL(page.url()).origin },
+      data: superjson.serialize({
+        operation: "product.verifyImages",
+        input: { id: target.shortcode },
+      }),
+    },
+  );
   if (!verified.ok()) throw new Error(await verified.text());
   z.object({ ok: z.literal(true), data: productWithFoodOut }).parse(
     superjson.deserialize(await verified.json()),

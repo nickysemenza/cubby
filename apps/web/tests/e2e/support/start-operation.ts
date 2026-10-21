@@ -2,7 +2,7 @@ import type { APIRequestContext } from "@playwright/test";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { BROWSER_OPERATION_PATH } from "../../../src/lib/browser-operation-path";
+import { browserOperationPath } from "../../../src/lib/browser-operation-path";
 import { superJsonResultSchema } from "../../../src/lib/superjson-wire";
 
 const requestOrigins = new WeakMap<APIRequestContext, Promise<string>>();
@@ -24,7 +24,7 @@ export async function startOperation(
       .then((response) => new URL(response.url()).origin);
     requestOrigins.set(request, origin);
   }
-  const response = await request.post(BROWSER_OPERATION_PATH, {
+  const response = await request.post(browserOperationPath(operation), {
     headers: { Origin: await origin, "Content-Type": "application/json" },
     data: JSON.stringify(superjson.serialize({ operation, input })),
   });

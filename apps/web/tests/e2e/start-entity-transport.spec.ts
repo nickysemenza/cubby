@@ -15,7 +15,10 @@ import { chooseListView } from "./support/e2e-helpers";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import {
+  BROWSER_OPERATION_PATH,
+  isBrowserOperationPath,
+} from "~/lib/browser-operation-path";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { createProduct } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
@@ -44,7 +47,7 @@ test("core entity list, detail, and mutation ride named browser operations", asy
   await page.setExtraHTTPHeaders({ "cf-ray": canaryRequestId });
   page.on("request", (request) => {
     const url = request.url();
-    if (new URL(url).pathname !== BROWSER_OPERATION_PATH) return;
+    if (!isBrowserOperationPath(new URL(url).pathname)) return;
     const body = request.postData() ?? "";
     const operations = dispatchOperations(request);
     // A batch carries only queries and names each one in its body; a single
@@ -73,7 +76,7 @@ test("core entity list, detail, and mutation ride named browser operations", asy
     });
   });
   page.on("response", (response) => {
-    if (new URL(response.url()).pathname !== BROWSER_OPERATION_PATH) return;
+    if (!isBrowserOperationPath(new URL(response.url()).pathname)) return;
     requestIdReads.push(
       response
         .allHeaders()
@@ -134,7 +137,7 @@ test("core entity list, detail, and mutation ride named browser operations", asy
   for (const request of detailRequests) {
     expect(request.method).toBe("POST");
     const detailUrl = new URL(request.url);
-    expect(detailUrl.pathname).toBe(BROWSER_OPERATION_PATH);
+    expect(detailUrl.pathname).toContain("entity.detail");
     expect(detailUrl.search).toBe("");
     expect(request.input).toEqual(
       expect.objectContaining({
@@ -144,10 +147,15 @@ test("core entity list, detail, and mutation ride named browser operations", asy
     );
   }
 
-  // Inputs stay in the POST body; operation labels share one dispatcher path.
-  expect(
-    new Set(starts.map((request) => new URL(request.url).pathname)).size,
-  ).toBe(1);
+  // Inputs stay in the POST body; each URL names the operations it carries.
+  for (const request of starts) {
+    const names = new URL(request.url).pathname
+      .split("/")
+      .at(-1)
+      ?.replace(/^batch~/u, "")
+      .split(",");
+    expect(names).toContain(request.operation);
+  }
 
   expect(starts).toEqual(
     expect.arrayContaining([
@@ -182,8 +190,11 @@ test("server error references remain usable on desktop", async ({
   context,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const responseBody = `Synthetic upstream refused\n${"diagnostic ".repeat(300)}\nSQLSTATE 53300 <script>synthetic-inert</script>`;
+  const stack = `Error: synthetic upstream\n${" at synthetic-frame\n".repeat(300)}stack tail`;
+  let structured = false;
   await page.goto("/");
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (await unbatchFor(route, ["entity.listBase"])) return;
     if (route.request().headers()["x-cubby-operation"] !== "entity.listBase") {
       await route.continue();
@@ -192,11 +203,27 @@ test("server error references remain usable on desktop", async ({
     await route.fulfill({
       status: 500,
       headers: {
-        "content-type": "text/plain",
+        "content-type": structured ? "application/json" : "text/plain",
         "x-request-id": "diagnostic-test-request",
         "x-sentry-event-id": "0123456789abcdef0123456789abcdef",
       },
-      body: "Internal Server Error",
+      body: structured
+        ? JSON.stringify(
+            superjson.serialize({
+              ok: false,
+              error: {
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Synthetic structured server refusal",
+                diagnostics: {
+                  origin: "server",
+                  operation: "entity.listBase",
+                  stage: "run",
+                  causes: [{ name: "Error", message: responseBody, stack }],
+                },
+              },
+            }),
+          )
+        : responseBody,
     });
   });
   await page
@@ -214,7 +241,7 @@ test("server error references remain usable on desktop", async ({
   await expect(search).toBeEnabled();
   await search.fill("Synthetic diagnostic filter");
   await expect(
-    page.getByText("Server request failed (HTTP 500)", { exact: true }).first(),
+    page.getByText(/HTTP 500.*Synthetic upstream refused/u).first(),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Details", exact: true })
@@ -222,7 +249,10 @@ test("server error references remain usable on desktop", async ({
     .click();
   const dialog = page.getByRole("dialog", { name: "Technical details" });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("entity.listBase / dispatch");
+  await expect(dialog).toContainText("entity.listBase / http");
+  await expect(dialog).toContainText(
+    "SQLSTATE 53300 <script>synthetic-inert</script>",
+  );
   await expect(
     dialog.getByRole("link", { name: "View in Sentry" }),
   ).toHaveAttribute(
@@ -236,10 +266,35 @@ test("server error references remain usable on desktop", async ({
     page.getByRole("button", { name: "Details", exact: true }),
   ).toHaveCount(0);
   await dialog.getByRole("button", { name: "Copy details" }).click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
-    "diagnostic-test-request",
+  const copied = JSON.parse(
+    await page.evaluate(() => navigator.clipboard.readText()),
   );
+  expect(copied.requestId).toBe("diagnostic-test-request");
+  expect(copied.diagnostics.http.body).toBe(responseBody);
   await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  structured = true;
+  await search.fill("Synthetic structured diagnostic filter");
+  await expect(
+    page
+      .getByText("Synthetic structured server refusal", { exact: true })
+      .first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Details", exact: true })
+    .first()
+    .click();
+  await expect(dialog).toContainText("stack tail");
+  await expect(dialog.locator("script")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Copy details" }).click();
+  const withStack = JSON.parse(
+    await page.evaluate(() => navigator.clipboard.readText()),
+  );
+  expect(withStack.diagnostics.causes[0]).toMatchObject({
+    message: responseBody,
+    stack,
+  });
 });
 
 // The real browser must remain usable while an independent field read hangs;
@@ -259,7 +314,7 @@ test("base list keeps row identity, selection and phone cards while enrichment f
   const started = new Promise<void>((resolve) => {
     requested = resolve;
   });
-  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
     if (await unbatchFor(route, ["entity.listEnrichment"])) return;
     if (
       route.request().headers()["x-cubby-operation"] !== "entity.listEnrichment"
