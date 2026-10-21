@@ -113,6 +113,42 @@ describe("settled suggestion questions", () => {
     });
   });
 
+  // Failure: first-read preparation errors become successful unknown answers.
+  it("reports raw first-read preparation failure while preserving sibling answers", async () => {
+    const spec = fakeRoster.registry["product.categoryId"];
+    const { results } = await readSettledQuestions(
+      ctx.db,
+      {
+        entity: "product",
+        questions: [
+          { ...gadget("Synthetic failing roster"), basisMode: "suggested" },
+          { ...gadget(""), basisMode: "suggested" },
+        ],
+      },
+      {
+        ...fakeRoster,
+        registry: {
+          "product.categoryId": {
+            ...spec,
+            roster: async () => {
+              throw new Error(
+                "Synthetic upstream SQLSTATE 23514 preparation failure",
+              );
+            },
+          },
+        },
+      },
+    );
+    expect(results[0]).toEqual({
+      ok: false,
+      message: "Synthetic upstream SQLSTATE 23514 preparation failure",
+    });
+    expect(results[1]).toMatchObject({
+      ok: true,
+      value: { outcome: { kind: "skipped", reason: "no_signal" } },
+    });
+  });
+
   it("remembers a decline until its basis changes or a member records a miss", async () => {
     const answer = await ask(
       gadget("Synthetic unplaceable gadget"),

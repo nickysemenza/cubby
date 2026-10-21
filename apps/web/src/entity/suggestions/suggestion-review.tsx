@@ -267,7 +267,7 @@ export function SuggestionReview({
     outcome?.reviewStatus !== "rejected" &&
     actionableSuggestion(suggestion, currentValue, alternative);
   if (!meetsBar || dismissed) {
-    if (quiet && currentValue?.trim()) return <>{children}</>;
+    if (quiet && surface !== "cell") return <>{children}</>;
     if (currentValue?.trim() && !pending && !error) return <>{children}</>;
     return (
       <MarkedValue

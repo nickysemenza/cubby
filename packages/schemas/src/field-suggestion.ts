@@ -3,6 +3,13 @@ import { z } from "zod";
 import { entityFieldModels } from "./entity-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 
+/** These questions read a dedicated saved finance/vendor context beyond their basis. */
+export function usesSavedFieldSuggestionContext(entity: string): boolean {
+  return ["financialTransaction", "purchase", "expense", "vendor"].includes(
+    entity,
+  );
+}
+
 /** Every automatic assignment path obeys the target's declared review policy. */
 export function requiresSuggestionReview(
   entity: ShortcodeEntity,

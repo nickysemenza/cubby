@@ -289,7 +289,7 @@ export async function readSettledQuestions(
               { ...ports, recordUsage: false },
             ),
           { providerFree: true },
-        ).catch(() => null);
+        );
         const outcome = prepared?.result.outcomes?.[question.field];
         return {
           outcome:

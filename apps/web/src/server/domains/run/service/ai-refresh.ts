@@ -253,6 +253,51 @@ async function prepareField(
   return { snapshot, provenance, lastWrite };
 }
 
+/** Live saved-record questions enqueue the same canonical work as discovery.
+ * Client draft basis and the inactive interactive prediction never authorize writes.
+ */
+export async function scheduleSavedFieldQuestion(
+  db: Database,
+  target: Extract<AiEvaluationTarget, { kind: "field" }>,
+  ports: AiRefreshPorts = {},
+) {
+  const activation = await readAiRefreshActivation(db);
+  if (!activation?.enabled) return;
+  const prepared = await prepareField(db, target, ports);
+  if (
+    !prepared ||
+    (prepared.snapshot.currentValue !== null &&
+      prepared.snapshot.currentValue !== "")
+  )
+    return;
+  const key = await sha256Hex(
+    JSON.stringify({
+      target: {
+        entity: target.entity,
+        recordId: target.recordId,
+        field: target.field,
+      },
+      provenance: prepared.provenance,
+    }),
+  );
+  const result = await scheduleEvaluationRun(
+    db,
+    systemActor(),
+    {
+      purpose: "ai_refresh",
+      trigger: "scheduled",
+      status: "running",
+      clientKey: `ai-refresh:field:${key}`,
+      input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+    },
+    [{ target, provenance: prepared.provenance, snapshot: prepared.snapshot }],
+  );
+  if (result.kind === "deferred")
+    throw new Error(
+      `Saved field evaluation scheduling deferred: ${result.reason}`,
+    );
+}
+
 async function scheduleProductIdentityDiscovery(
   db: Database,
   activation: z.infer<typeof aiRefreshActivation>,

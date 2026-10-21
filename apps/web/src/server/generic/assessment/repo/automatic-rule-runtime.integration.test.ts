@@ -18,6 +18,11 @@ import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { AiWorkDeferredError } from "~/server/ai/cooperative-work";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+} from "~/server/ai/policy/refresh-manifest";
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
   assessment,
@@ -30,6 +35,7 @@ import {
   categoryPorts,
   kernelCtx,
   productFixture,
+  seedPending,
   productCategoryId,
   startSuggestionSweep,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -52,10 +58,15 @@ import {
   applyAutomaticRules,
   listAutomaticRules,
   setAutomaticRule,
+  recheckAutomaticRules,
 } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import * as automaticRuleRuntime from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import {
+  canAutomaticallyFillField,
+  acceptSuggestion,
+} from "~/server/generic/assessment/repo/suggestion-review";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 type Ctx = ReturnType<typeof withTestDb>;
@@ -528,6 +539,33 @@ describe("Automatic rules", () => {
     expect(attach.eligible).toBe(true);
   });
 
+  // Failure: audited Wrongs accumulate without disabling the measured rule.
+  it("turns measured attach off when a member review drops precision below 98%", async () => {
+    const stamp = `${ruleBase(ATTACH)}@typesafe/jev`;
+    await seedReviews(ctx, {
+      family: "statement_transaction",
+      stamp,
+      verdicts: times(50, "correct"),
+      agedFrom: 10,
+    });
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
+    const ids = await seedReviews(ctx, {
+      family: "statement_transaction",
+      stamp,
+      verdicts: ["wrong", "wrong"],
+    });
+    await recheckAutomaticRules(ctx.db, ids[0]!);
+    expect(await ruleOf(ctx, ATTACH)).toMatchObject({
+      enabled: false,
+      n: 52,
+      hits: 50,
+      disabledReason: expect.stringMatching(/Turned itself off/),
+    });
+  });
+
   // Failure mode: a label page built up front publishes a charge with
   // evidence an automatic rule earlier in the page already changed, so its
   // suggestion fails as stale on accept.
@@ -941,6 +979,130 @@ describe("Automatic rules", () => {
 // Failure: automatic policy overwrites a populated member field.
 describe("automatic field assignments", () => {
   const ctx = withTestDb();
+  // Failure: stored NULL hides a populated effective value derived from order evidence.
+  it("preserves Vendor itemization inherited from online order evidence", async () => {
+    const merchant = (
+      await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic online merchant",
+        orderEvidence: "online_account",
+        itemizationExpectation: null,
+      })
+    ).output;
+    const [stored] = (
+      await getDb(ctx.db).execute<{
+        id: string;
+        itemizationExpectation: string | null;
+      }>(
+        sql`SELECT id, "itemizationExpectation" FROM "Vendor" WHERE shortcode = ${merchant.id}`,
+      )
+    ).rows;
+    expect(stored?.itemizationExpectation).toBeNull();
+    const effective = await executeEntity(kernelCtx(ctx), {
+      action: "get",
+      entity: "vendor",
+      id: merchant.id,
+      missing: "error",
+    });
+    expect(effective).toMatchObject({
+      item: {
+        fieldResolutions: { itemizationExpectation: { value: "required" } },
+      },
+    });
+    const pending = await seedPending(ctx, {
+      entity: "vendor",
+      recordId: stored!.id,
+      field: "itemizationExpectation",
+      currentValue: null,
+      suggestedValue: "not_expected",
+      kind: "addition",
+    });
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({
+        confidence: 0.97,
+        provenance: {
+          dependencies: dependencyStamps(
+            await producingAiManifest(ctx.db),
+            fieldDependencyKeys("vendor", "itemizationExpectation"),
+          ),
+          inputFingerprint: "synthetic",
+          optionFingerprint: "synthetic",
+          model: "typesafe/jev",
+        },
+      })
+      .where(eq(assessmentState.id, pending.id));
+    expect(
+      await canAutomaticallyFillField(ctx.db, kernelCtx(ctx), pending.id),
+    ).toBe(false);
+    await expect(
+      acceptSuggestion(
+        ctx.db,
+        kernelCtx(ctx),
+        { id: pending.id },
+        { mode: "automatic", confidence: 0.97 },
+      ),
+    ).rejects.toThrow(/populated effective values/);
+    expect((await stateOf(ctx, pending.id)).status).toBe("pending");
+    expect(await feedbackFor(ctx, pending.id)).toEqual([]);
+  });
+
+  // Failure: a mode-only explicit None looks empty and has no target-field audit.
+  it("preserves explicit None assignment intent with a null effective value", async () => {
+    const project = (
+      await createRepoEntity(ctx, "project", {
+        name: "Synthetic candidate project",
+      })
+    ).output;
+    const task = (
+      await createRepoEntity(ctx, "task", {
+        name: "Synthetic task",
+        trade: "electrical",
+        projectMode: "explicit",
+        projectId: null,
+      })
+    ).output;
+    const [stored] = (
+      await getDb(ctx.db).execute<{ id: string }>(
+        sql`SELECT id FROM "Task" WHERE shortcode = ${task.id}`,
+      )
+    ).rows;
+    const pending = await seedPending(ctx, {
+      entity: "task",
+      recordId: stored!.id,
+      field: "projectId",
+      currentValue: null,
+      suggestedValue: project.id,
+      kind: "addition",
+    });
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({
+        confidence: 0.97,
+        provenance: {
+          dependencies: dependencyStamps(
+            await producingAiManifest(ctx.db),
+            fieldDependencyKeys("task", "projectId"),
+          ),
+          inputFingerprint: "synthetic",
+          optionFingerprint: "synthetic",
+          model: "typesafe/jev",
+        },
+      })
+      .where(eq(assessmentState.id, pending.id));
+    expect(
+      await canAutomaticallyFillField(ctx.db, kernelCtx(ctx), pending.id),
+    ).toBe(false);
+    await expect(
+      acceptSuggestion(
+        ctx.db,
+        kernelCtx(ctx),
+        { id: pending.id },
+        { mode: "automatic", confidence: 0.97 },
+      ),
+    ).rejects.toThrow(/existing field decision/);
+    expect((await stateOf(ctx, pending.id)).status).toBe("pending");
+  });
+
   it("keeps populated member fields pending for explicit review", async () => {
     const item = await productFixture(
       ctx,

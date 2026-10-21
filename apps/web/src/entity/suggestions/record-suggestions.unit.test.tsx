@@ -421,6 +421,11 @@ describe("record suggestions", () => {
     await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
     expect(asked).toHaveBeenCalledTimes(1);
     expect(asked.mock.calls[0]?.[0]).toHaveProperty("runKey");
+    // Saved record questions must reach canonical automation for every entity.
+    expect(asked.mock.calls[0]?.[0]).toMatchObject({
+      entityId: id,
+      savedRecord: true,
+    });
   });
 
   it("skips a remembered decline until its basis changes", async () => {

@@ -16,13 +16,18 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+  compiledRefreshManifest,
+} from "~/server/ai/policy/refresh-manifest";
 import {
   claimAiEvaluation,
   guardAiEvaluation,
   publishAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
 import {
+  producingAiManifest,
   activateAiRefresh,
   saveAiDiscoveryCursor,
   readAiDiscoveryCursor,
@@ -39,11 +44,16 @@ import {
   feedback,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { writeRunningAttemptProgress } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import {
+  acceptSuggestion,
+  canAutomaticallyFillField,
+} from "~/server/generic/assessment/repo/suggestion-review";
 import { reconcileDerivedRefreshPage } from "~/server/generic/derived-refresh/repo/reconcile";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { settleDerivedRefreshForDiscovery } from "~/server/testing/background-queue";
@@ -132,13 +142,24 @@ describe("targeted prompt refresh", () => {
         suggestedValue: taxonomyShortcode("food"),
         kind: state === "populated" ? "correction" : "addition",
       });
-      await getDb(ctx.db)
-        .update(suggestion)
-        .set({ confidence: 0.97 })
-        .where(eq(suggestion.id, pending.id));
       await activateAiRefresh(ctx.db, "synthetic-backlog-policy", {
         enabled: true,
       });
+      await getDb(ctx.db)
+        .update(suggestion)
+        .set({
+          confidence: 0.97,
+          provenance: {
+            dependencies: dependencyStamps(
+              await producingAiManifest(ctx.db),
+              fieldDependencyKeys("product", "categoryId"),
+            ),
+            inputFingerprint: "synthetic",
+            optionFingerprint: "synthetic",
+            model: PRIMARY_MODEL,
+          },
+        })
+        .where(eq(suggestion.id, pending.id));
       const ports = {
         context: kernelCtx(ctx),
         suggestPorts: categoryPorts().suggestPorts,
@@ -163,6 +184,147 @@ describe("targeted prompt refresh", () => {
       );
     },
   );
+
+  // Failure: backlog applies stale advice before discovery checks AI policy provenance.
+  it.each(["missing", "incomplete", "stale"] as const)(
+    "reinfers %s provenance before automatic backlog acceptance",
+    async (state) => {
+      const item = await productFixture(ctx, "Synthetic stale backlog");
+      const [subject] = await getDb(ctx.db)
+        .select()
+        .from(product)
+        .where(eq(product.shortcode, item.id));
+      const pending = await seedPending(ctx, {
+        entity: "product",
+        recordId: subject!.id,
+        field: "categoryId",
+        currentValue: null,
+        suggestedValue: taxonomyShortcode("tools"),
+        kind: "addition",
+      });
+      const dependencies = dependencyStamps(
+        await producingAiManifest(ctx.db),
+        fieldDependencyKeys("product", "categoryId"),
+      );
+      await getDb(ctx.db)
+        .update(suggestion)
+        .set({
+          confidence: 0.97,
+          provenance:
+            state === "missing"
+              ? null
+              : {
+                  dependencies:
+                    state === "incomplete"
+                      ? dependencies.slice(0, 1)
+                      : dependencies.map((stamp) => ({
+                          ...stamp,
+                          policyFingerprint: "synthetic-stale-policy",
+                        })),
+                  inputFingerprint: "synthetic",
+                  optionFingerprint: "synthetic",
+                  model: PRIMARY_MODEL,
+                },
+        })
+        .where(eq(suggestion.id, pending.id));
+      expect(
+        await canAutomaticallyFillField(ctx.db, kernelCtx(ctx), pending.id),
+      ).toBe(false);
+      await expect(
+        acceptSuggestion(
+          ctx.db,
+          kernelCtx(ctx),
+          { id: pending.id },
+          { mode: "automatic", confidence: 0.97 },
+        ),
+      ).rejects.toThrow(/provenance/);
+      expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+      await activateAiRefresh(ctx.db, "synthetic-provenance-refresh", {
+        enabled: true,
+      });
+      const ports = {
+        context: kernelCtx(ctx),
+        suggestPorts: categoryPorts(0.97).suggestPorts,
+        auditSample: () => false,
+      };
+      await discoverAiRefresh(ctx.db, ports);
+      expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+      const [evaluation] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(fieldRefreshTarget);
+      await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+      expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+      const history = await getDb(ctx.db)
+        .select()
+        .from(suggestion)
+        .where(eq(suggestion.recordId, subject!.id));
+      expect(history.find((row) => row.id === pending.id)?.status).toBe(
+        "superseded",
+      );
+      expect(
+        history.find((row) => row.status === "applied")?.evaluationId,
+      ).toBe(evaluation!.id);
+    },
+  );
+
+  // Failure: saved-record list questions publish only inactive live predictions,
+  // or a client draft becomes the automatic write's authoritative snapshot.
+  it("schedules saved live questions from canonical data while drafts stay interactive", async () => {
+    const item = await productFixture(ctx, "Synthetic canonical groceries");
+    await activateAiRefresh(ctx.db, "synthetic-live-question", {
+      enabled: true,
+      startDiscovery: false,
+    });
+    const ports = {
+      context: kernelCtx(ctx),
+      suggestPorts: categoryPorts(0.97).suggestPorts,
+      auditSample: () => false,
+    };
+    const draft = {
+      entity: "product" as const,
+      basisMode: "suggested" as const,
+      targets: ["categoryId"],
+      basis: { name: "Synthetic client-only draft", categoryId: null },
+    };
+    await inferFieldAssessments(kernelCtx(ctx), draft, ports.suggestPorts);
+    await inferFieldAssessments(
+      kernelCtx(ctx),
+      { ...draft, entityId: item.id, basisMode: "provided", savedRecord: true },
+      ports.suggestPorts,
+    );
+    await inferFieldAssessments(
+      kernelCtx(ctx),
+      { ...draft, entityId: item.id },
+      ports.suggestPorts,
+    );
+    expect(
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
+    ).toEqual([]);
+    await inferFieldAssessments(
+      kernelCtx(ctx),
+      { ...draft, entityId: item.id, savedRecord: true },
+      ports.suggestPorts,
+    );
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(fieldRefreshTarget);
+    expect(evaluation?.snapshot).toMatchObject({
+      basis: { name: "Synthetic canonical groceries" },
+    });
+    expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+    await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+    expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+    await inferFieldAssessments(
+      kernelCtx(ctx),
+      { ...draft, entityId: item.id, savedRecord: true },
+      ports.suggestPorts,
+    );
+    expect(
+      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
+    ).toHaveLength(1);
+  });
 
   // A two-target inference cap cannot bound one Workflow/Run per catalog record.
   it("joins Product discovery targets to one active refresh Run across repeated passes", async () => {

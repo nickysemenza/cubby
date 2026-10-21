@@ -499,6 +499,8 @@ export type FinanceCategoryApplyInput = z.infer<
 
 export const fieldSuggestionsInput = z.object({
   entityId: z.string().min(1).optional(),
+  /** Record surfaces request canonical automatic work; form drafts remain interactive. */
+  savedRecord: z.boolean().optional(),
   basisMode: z.enum(["provided", "suggested"]),
   entity: z.enum(shortcodeEntities),
   targets: z.array(z.string().min(1)).min(1),

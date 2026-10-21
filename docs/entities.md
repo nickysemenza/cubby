@@ -951,8 +951,11 @@ reevaluated against current values when evidence or policy changes. Automatic
 field assignments fill only empty effective values on eligible declared fields
 at confidence >= 0.95, with supporting basis evidence and a winner at least
 0.10 ahead of any runner-up. Populated values, saved field decisions (including
-clears), rejected values, unserved trials and suppressed proposals never auto-apply.
+clears or any other audited update), rejected values, unserved trials and suppressed proposals never auto-apply.
 Current input fingerprints fence every write; inherited values count as populated.
+Automatic acceptance also requires complete dependency stamps matching the current
+executable AI policy. Missing, incomplete, or stale provenance requires a new
+canonical evaluation before application.
 Create previews use the same confidence threshold and preserve populated draft
 values. A field with declared resolution stays reviewable when its authoritative
 draft resolver has not established an empty effective value.
@@ -960,6 +963,10 @@ The scheduled AI refresh discovery pass attempts existing pending proposals befo
 preparing another evaluation, even when inference inputs have not changed and no
 client visits the record. Fresh eligible backlog applies through the same audited
 transaction as new proposals; stale backlog is reevaluated through normal refresh.
+Saved-record list and detail questions opt into canonical background evaluation
+with `savedRecord`; the server prepares evidence from the saved entity rather
+than trusting the client's displayed basis. Interactive form predictions remain
+inactive and never schedule automatic writes, even when editing a saved record.
 Applied and rejected rows cannot re-enter pending application, and unchanged
 settled inputs skip repeated inference. Below-threshold or ambiguous proposals
 remain available for review. This field policy needs no measured-rule switch,
@@ -972,8 +979,10 @@ Mandatory field review is limited to concrete consequential exceptions declared
 with `reviewRequired`: FinancialAccount issuer/network and sole purchaser establish
 financial identity and attribution; Expense line kind changes accounting role; Cookbook and Device Product links
 identify specific owned objects. Ordinary descriptive fields, including record
-emoji and Vendor spending category/profile/itemization, use the common empty-field
+emoji and Vendor spending category/itemization, use the common empty-field
 policy. Effective derived itemization values are populated and remain protected.
+Vendor spending profiles default to `unspecified`, a populated value that remains
+reviewable; removing its mandatory-review flag does not treat that sentinel as empty.
 The mutable AssessmentState projection retains the latest evaluation's input and
 policy alongside its application metadata whenever no replacement is published,
 including when an exact wrong review or retained value suppression filters every

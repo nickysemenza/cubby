@@ -17,6 +17,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   SUGGESTION_LIST_PAGE_MAX,
@@ -91,7 +92,7 @@ import {
   suggestionContextKeys,
   isBasisSufficient,
   basisValueOf,
-  financeSuggestionEntityId,
+  savedSuggestionEntityId,
   productionEntitySuggestionsOperations,
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
@@ -534,7 +535,8 @@ function suggestionRequestsForRecord(
         record,
         source: {
           entity,
-          entityId: financeSuggestionEntityId(entity, record),
+          entityId: savedSuggestionEntityId(entity, record),
+          savedRecord: true,
           basisMode: empty ? ("suggested" as const) : ("provided" as const),
           targets: [target.key],
           basis,
@@ -836,12 +838,18 @@ type StoredPageRead = {
 const firstStoredPageQuery = (results: UseQueryResult<StoredPageRead>[]) =>
   results[0];
 /** A single-field question the server can answer from remembered declines;
- * a question that reads saved record context (`entityId`) is always live. */
+ * dedicated saved finance/vendor context is always live. Other record IDs
+ * identify canonical automation without bypassing remembered declines. */
 function settledQuestionOf(
   source: FieldSuggestionSource,
 ): { id: string; question: SettledSuggestionQuestion } | null {
   const [field] = source.targets;
-  if (source.entityId || source.targets.length !== 1 || !field) return null;
+  if (
+    (source.entityId && usesSavedFieldSuggestionContext(source.entity)) ||
+    source.targets.length !== 1 ||
+    !field
+  )
+    return null;
   const question = { field, basisMode: source.basisMode, basis: source.basis };
   return { id: JSON.stringify(question), question };
 }

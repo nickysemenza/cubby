@@ -4,11 +4,13 @@ import {
   suggestionReviewListInput,
   suggestionStatus,
 } from "@cubby/schemas/ai";
+import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import {
   basisValueOf,
   requiresSuggestionReview,
@@ -19,6 +21,11 @@ import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
 import { type SQL, and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  dependenciesCurrent,
+  fieldDependencyKeys,
+} from "~/server/ai/policy/refresh-manifest";
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -451,6 +458,16 @@ async function automaticFieldFillRefusal(
     .from(suggestionTable)
     .where(and(eq(suggestionTable.id, row.id), reviewableSuggestionSql));
   if (!served) return "Only a served field suggestion can apply automatically";
+  const provenance = aiProvenance.safeParse(row.provenance);
+  const manifest = await producingAiManifest(db);
+  if (
+    !provenance.success ||
+    !fieldDependencyKeys(entity, row.field).every((feature) =>
+      provenance.data.dependencies.some((stamp) => stamp.feature === feature),
+    ) ||
+    !dependenciesCurrent(provenance.data, manifest)
+  )
+    return "Automatic fill requires current complete AI policy provenance";
   const table = SHORTCODE_TABLE[entity];
   const [record] = await getDb(db)
     .select({ shortcode: table.shortcode })
@@ -465,7 +482,12 @@ async function automaticFieldFillRefusal(
   });
   if (!result.item) return "Automatic fill subject no longer exists";
   const live = z.record(z.string(), z.unknown()).parse(result.item);
-  if (!empty(live[row.field]))
+  const resolutions = fieldResolutionsSchema.parse(live.fieldResolutions ?? {});
+  const resolution = resolutions[row.field];
+  if (resolution?.mode === "none" || resolution?.mode === "explicit")
+    return "Automatic fill preserves an existing field decision";
+  const effective = resolution ? resolution.value : live[row.field];
+  if (!empty(effective))
     return "Automatic fill preserves populated effective values";
   if (
     !policy.basis.some(
@@ -499,7 +521,7 @@ async function automaticFieldFillRefusal(
   return null;
 }
 
-/** Cheap read-only preflight; acceptance repeats all checks inside its write fence. */
+/** Read-only preflight; acceptance repeats all checks inside its write fence. */
 export async function canAutomaticallyFillField(
   db: Database,
   context: EntityKernelContext,

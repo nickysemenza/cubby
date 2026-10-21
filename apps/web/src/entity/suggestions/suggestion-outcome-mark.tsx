@@ -9,7 +9,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { ClassicV2 } from "loading-dev";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 
 import { cn } from "~/lib/utils";
 import { Stack } from "~/ui/layout";
@@ -35,7 +35,8 @@ const MIN_LISTED_ALTERNATIVE = 0.05;
 /** Beyond the top three the popover stops being a glance. */
 const MAX_LISTED_ALTERNATIVES = 3;
 
-function stopPropagation(event: MouseEvent) {
+// Disclosures own activation; a grid's Enter/Space handlers must not consume it.
+function stopPropagation(event: SyntheticEvent) {
   event.stopPropagation();
 }
 
@@ -324,6 +325,7 @@ function MarkGlyph({
       }
       onMouseDown={stopPropagation}
       onClick={stopPropagation}
+      onKeyDown={stopPropagation}
       className={cn(
         glyphTriggerClass(surface),
         compactLabel && "w-auto gap-1 px-1 text-xs text-muted-foreground",
@@ -382,6 +384,7 @@ function UnsettledMark({
         aria-label={text}
         onMouseDown={stopPropagation}
         onClick={stopPropagation}
+        onKeyDown={stopPropagation}
         className={cn(
           glyphTriggerClass(surface),
           empty && "w-auto gap-1 px-1 text-xs text-muted-foreground",
