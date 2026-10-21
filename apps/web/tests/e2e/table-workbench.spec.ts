@@ -1,7 +1,7 @@
 import { householdDaysFromNow } from "~/lib/household-date";
 
 import { createFixture } from "./fixtures/core";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { chooseListView, gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // Regressions: embedded relation tables never passed their grouping, sorted
@@ -43,7 +43,7 @@ test("Project Tasks group by status, latest due first, without a Project column"
   ).toHaveCount(0);
 });
 
-test("the list grouping control groups and ungroups real Tasks", async ({
+test("real Tasks group, ungroup, and compose in the board view", async ({
   page,
 }) => {
   const prefix = `Header menu ${Date.now()}`;
@@ -75,6 +75,14 @@ test("the list grouping control groups and ungroups real Tasks", async ({
     .getByRole("menuitem", { name: "Group by None", exact: true })
     .click();
   await expect(page).not.toHaveURL(/groupBy=/);
+  await chooseListView(page, "Board");
+  await expect(page).toHaveURL(/view=board/);
+  for (const name of [`${prefix} open`, `${prefix} closed`]) {
+    const card = page.getByRole("article").filter({
+      has: page.getByRole("link", { name, exact: true }),
+    });
+    await expect(card).toBeVisible();
+  }
 });
 
 // Regression: the Decisions table showed ten rows behind a pager and opened

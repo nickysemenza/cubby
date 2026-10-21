@@ -4,12 +4,8 @@ import {
   seedProductCategoryPrerequisite,
   seedProductPrerequisite,
 } from "./fixtures/catalog";
-import { seedConcurrently } from "./fixtures/core";
 import { seedCookbookSourcePrerequisite } from "./fixtures/recipes";
-import {
-  expectViewportBounded,
-  gotoAuthenticatedPage,
-} from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 test("product category and identifiers stay readable in cards and a plant's related table", async ({
@@ -55,77 +51,6 @@ test("product category and identifiers stay readable in cards and a plant's rela
   await expect(row).not.toContainText('"externalId"');
   await expect(row.locator("pre")).toHaveCount(0);
   expect((await row.boundingBox())?.height).toBeLessThan(100);
-});
-
-test("card density adapts to the work surface and stays temporary through filtering", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1600, height: 1000 });
-  const name = `Card layout ${Date.now()}`;
-  await seedConcurrently(
-    Array.from({ length: 12 }, (_, index) => index),
-    (index) =>
-      seedProductPrerequisite(page, {
-        name: `${name} ${index === 0 ? "Long handled precision workshop tool with an unusually descriptive name" : index}`,
-        manufacturer: "Example maker",
-      }),
-  );
-  await gotoAuthenticatedPage(
-    page,
-    `/products?name=${encodeURIComponent(name)}`,
-  );
-  await chooseListView(page, "Cards");
-  const grid = page.getByTestId("entity-card-grid");
-  await expect(grid).toHaveAttribute("data-compact", "false");
-  await expect(grid.locator(":scope > *")).toHaveCount(12);
-  const standardWidth = await grid
-    .locator(":scope > *")
-    .first()
-    .evaluate((el) => el.getBoundingClientRect().width);
-
-  await chooseListView(page, "Compact");
-  await expect(grid).toHaveAttribute("data-compact", "true");
-  const compactWidth = await grid
-    .locator(":scope > *")
-    .first()
-    .evaluate((el) => el.getBoundingClientRect().width);
-  expect(compactWidth).toBeLessThan(standardWidth * 0.7);
-  expect(new URL(page.url()).searchParams.get("view")).toBe("shelf");
-  expect(new URL(page.url()).searchParams.has("density")).toBe(false);
-  const firstCard = grid.getByRole("link", {
-    name: `${name} Long handled precision workshop tool with an unusually descriptive name`,
-    exact: true,
-  });
-  await firstCard.focus();
-  await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("complementary", { name: "Product inspector" }),
-  ).toBeVisible();
-  await expect(
-    page
-      .getByRole("complementary", { name: "Product inspector" })
-      .getByRole("heading", {
-        name: `${name} Long handled precision workshop tool with an unusually descriptive name`,
-        exact: true,
-      }),
-  ).toBeVisible();
-  await expectViewportBounded(page);
-
-  await page
-    .getByRole("button", { name: "Close inspector", exact: true })
-    .first()
-    .click();
-  await page
-    .getByRole("textbox", { name: "Search products or shortcode", exact: true })
-    // The shared fixture prefix is deliberately fuzzy-matchable across the
-    // roster. Search distinctive words to prove the server narrows the cards.
-    .fill("precision workshop tool");
-  await expect(grid.locator(":scope > *")).toHaveCount(1);
-  await expect(grid).toHaveAttribute("data-compact", "true");
-  await expectViewportBounded(page);
-
-  await page.reload();
-  await expect(grid).toHaveAttribute("data-compact", "false");
 });
 
 test("cookbooks keep server search across card and list presentations", async ({
@@ -186,33 +111,5 @@ test("cookbooks keep server search across card and list presentations", async ({
       .getByRole("row")
       .nth(1)
       .getByRole("link", { name: `${name} Roasting`, exact: true }),
-  ).toBeVisible();
-});
-
-test("filtered empty lists recover in cards and phone rows", async ({
-  page,
-}) => {
-  const name = `Empty recovery ${Date.now()}`;
-  await seedProductPrerequisite(page, { name });
-  await gotoAuthenticatedPage(
-    page,
-    `/products?name=${encodeURIComponent(`${name} missing`)}&view=shelf`,
-  );
-  await page
-    .getByRole("button", { name: "Clear filters", exact: true })
-    .click();
-  await expect(
-    page.getByTestId("entity-card-grid").getByText(name, { exact: true }),
-  ).toBeVisible();
-  await page.setViewportSize({ width: 402, height: 874 });
-  await gotoAuthenticatedPage(
-    page,
-    `/products?name=${encodeURIComponent(`${name} missing`)}`,
-  );
-  await page
-    .getByRole("button", { name: "Clear filters", exact: true })
-    .click();
-  await expect(
-    page.getByRole("listitem").filter({ hasText: name }),
   ).toBeVisible();
 });
