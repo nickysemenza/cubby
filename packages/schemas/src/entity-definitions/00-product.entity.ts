@@ -1154,7 +1154,10 @@ Rules:
         {
           key: "externalIds",
           semanticRole: "externalIdentifier",
-          collection: { key: ["source", "kind", "externalId"] },
+          collection: {
+            key: ["source", "kind", "externalId"],
+            primary: { key: "isPrimary", scope: ["source", "kind"] },
+          },
           // Stays `text-array`: the field kind only gates the pruning
           // (`control.suggest.mode: "prune"`) and section-coverage machinery,
           // neither of which cares that the array holds objects rather than

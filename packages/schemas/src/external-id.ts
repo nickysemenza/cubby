@@ -45,6 +45,105 @@ export const externalIdKind = z.enum([
 ]);
 export type ExternalIdKind = z.infer<typeof externalIdKind>;
 
+/** Shared semantic vocabulary; barcode encoding is never inferred from canonical padding. */
+export const identifierKindPresentation = {
+  asin: { label: "Amazon ASIN", format: "literal" },
+  retailer_sku: { label: "Retailer SKU", format: "literal" },
+  internet_number: { label: "Internet number", format: "literal" },
+  item_number: { label: "Item number", format: "literal" },
+  catalog_number: { label: "Catalog number", format: "literal" },
+  manufacturer_part: { label: "Manufacturer part", format: "literal" },
+  gtin_14: { label: "GTIN", format: "barcode" },
+} satisfies Record<
+  ExternalIdKind,
+  { label: string; format: "literal" | "barcode" }
+>;
+
+export type PresentedIdentifier = Pick<
+  ExternalIdInput,
+  "source" | "kind" | "externalId" | "url" | "isPrimary"
+>;
+
+export function presentIdentifier(
+  row: PresentedIdentifier,
+  isbn13: (gtin: string) => string | null,
+) {
+  const metadata = identifierKindPresentation[row.kind];
+  const isbn = metadata.format === "barcode" ? isbn13(row.externalId) : null;
+  const label = isbn === null ? metadata.label : "ISBN-13";
+  const value = isbn ?? row.externalId;
+  const role =
+    row.isPrimary === undefined
+      ? null
+      : row.isPrimary
+        ? "Primary"
+        : "Secondary";
+  return {
+    label,
+    value,
+    canonical: value === row.externalId ? null : row.externalId,
+    role,
+    url: canonicalExternalIdUrl(row),
+    text: `${row.source} · ${label}: ${value}${value === row.externalId ? "" : ` (GTIN: ${row.externalId})`}${role === null ? "" : ` · ${role}`}`,
+  };
+}
+
+/** Group slots in first-seen order, primary first within each slot, preserving secondary order. */
+export function groupIdentifiers<T extends PresentedIdentifier>(
+  rows: readonly T[],
+): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = JSON.stringify([row.source, row.kind]);
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) =>
+    group.toSorted(
+      (a, b) => Number(b.isPrimary === true) - Number(a.isPrimary === true),
+    ),
+  );
+}
+
+/** Committed before/after evidence only; malformed or absent projections are not proposed values. */
+export function identifierEffects(
+  before: unknown,
+  after: unknown,
+  isbn13: (gtin: string) => string | null,
+): string[] | null {
+  const previous = z.array(externalIdInput).nullish().safeParse(before);
+  const current = z.array(externalIdInput).nullish().safeParse(after);
+  if (!previous.success || !current.success) return null;
+  if (previous.data === undefined || current.data === undefined) return null;
+  const key = (row: PresentedIdentifier) =>
+    JSON.stringify([row.source, row.kind, row.externalId]);
+  const describe = (row: PresentedIdentifier) => {
+    const shown = presentIdentifier(row, isbn13);
+    return `${shown.text}${shown.url === null ? "" : ` · ${shown.url}`}`;
+  };
+  const changes: string[] = [];
+  for (const row of previous.data ?? []) {
+    if (!(current.data ?? []).some((other) => key(other) === key(row)))
+      changes.push(`Removed: ${describe(row)}`);
+  }
+  for (const row of current.data ?? []) {
+    const old = (previous.data ?? []).find((other) => key(other) === key(row));
+    if (!old) changes.push(`Added: ${describe(row)}`);
+    else {
+      if (old.isPrimary !== row.isPrimary)
+        changes.push(
+          `${row.isPrimary ? "Made primary" : "Made secondary"}: ${describe(row)}`,
+        );
+      if (storedExternalIdUrl(old) !== storedExternalIdUrl(row))
+        changes.push(
+          `Changed URL: ${describe(row)} · ${storedExternalIdUrl(old) ?? "(empty)"} → ${storedExternalIdUrl(row) ?? "(empty)"}`,
+        );
+    }
+  }
+  return changes;
+}
+
 /**
  * The `source` slug for a manufacturer-scoped identifier. Mirrors the vendor
  * slug rule (lowercase kebab) so one function names both sides of a comparison.

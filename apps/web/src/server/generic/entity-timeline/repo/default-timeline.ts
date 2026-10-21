@@ -8,6 +8,7 @@ import type {
   EntityTimelineOut,
   EntityTimelineRow,
 } from "@cubby/schemas/entity-timeline";
+import { identifierEffects } from "@cubby/schemas/external-id";
 import { z } from "zod";
 
 import type {
@@ -15,6 +16,7 @@ import type {
   TimelineEntity,
 } from "~/entity/generated/entity-timelines.gen";
 import { householdDateTime, householdLocalDate } from "~/lib/household-date";
+import { wasm } from "~/lib/wasm";
 import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
@@ -164,10 +166,23 @@ const auditEvents = (
     const record = entry.entityId ? recordById.get(entry.entityId) : undefined;
     if (!record) return [];
     const changed = Object.keys(entry.changes ?? {});
-    const detail =
+    const identifiers = entry.changes?.externalIds;
+    const effects = identifiers
+      ? identifierEffects(
+          identifiers.from,
+          identifiers.to,
+          (gtin) => wasm.isbn_from_gtin(gtin)?.isbn13 ?? null,
+        )
+      : null;
+    const summary =
       entry.action === "update" && changed.length > 0
         ? `${AUDIT_ACTION_LABEL.update} ${changed.map((key) => fieldLabel(entity, key)).join(", ")}`
         : AUDIT_ACTION_LABEL[entry.action];
+    const detail = effects?.length
+      ? `${summary}\n${effects.join("\n")}`
+      : identifiers && effects === null
+        ? `${summary}\nIdentifier changes: ${JSON.stringify(identifiers)}`
+        : summary;
     return [
       {
         date: householdLocalDate(entry.createdAt),

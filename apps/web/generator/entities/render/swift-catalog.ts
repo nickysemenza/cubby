@@ -377,6 +377,18 @@ const fieldJSON = (
     ...fieldControlJSON(field.control),
     ...fieldControlInputJSON(field.control),
     valueSchema: valueSchemaForField(context, field, where, entityForPrefix),
+    collection:
+      field.collection && field.collection.key !== "value"
+        ? {
+            key: [...field.collection.key],
+            primary: field.collection.primary
+              ? {
+                  key: field.collection.primary.key,
+                  scope: [...field.collection.primary.scope],
+                }
+              : null,
+          }
+        : null,
     inCreate: fieldModel.create.includes(field.key),
     // Required when the create schema rejects `undefined` (the same rule as
     // `requiredOnCreate` in `entity-field-model.gen.ts`).

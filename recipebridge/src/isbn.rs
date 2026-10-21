@@ -419,5 +419,21 @@ mod tests {
             let expected = vector["gtin14"].as_str().map(str::to_string);
             assert_eq!(scan_code_gtin14(input), expected, "input {input:?}");
         }
+        for vector in doc["presentation"]
+            .as_array()
+            .expect("presentation vectors")
+        {
+            let canonical = vector["canonical"].as_str().expect("canonical");
+            let expected = if vector["label"] == "ISBN-13" {
+                vector["value"].as_str().map(str::to_string)
+            } else {
+                None
+            };
+            assert_eq!(
+                isbn_from_gtin(canonical).map(|value| value.isbn13),
+                expected,
+                "canonical {canonical:?}"
+            );
+        }
     }
 }

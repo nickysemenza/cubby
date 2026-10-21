@@ -667,6 +667,12 @@ const buildMetadataSchemas = () => {
         .strictObject({
           key: z.union([z.literal("value"), z.array(nonEmptyString()).min(1)]),
           readPath: nonEmptyString().optional(),
+          primary: z
+            .strictObject({
+              key: nonEmptyString(),
+              scope: z.array(nonEmptyString()).min(1),
+            })
+            .optional(),
         })
         .nullable()
         .optional()

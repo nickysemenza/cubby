@@ -404,6 +404,19 @@ struct FieldsSectionView: View {
                 field: field, row: row, subject: EntityRef(entity: descriptor.key, id: row.id))
         } else if field.itemsPath != nil {
             DetailDisplayRows(label: field.label, rows: field.detailItems(in: row.raw))
+        } else if field.detailRenderer?.rawValue == "product-external-ids" {
+            let identifiers = IdentifierPresentation.grouped(
+                field.surfaceValue(in: row.raw, surface: "detail") ?? .null)
+            ForEach(Array(identifiers.enumerated()), id: \.offset) { _, identifier in
+                if let url = identifier.url {
+                    Link(identifier.text, destination: url)
+                        .font(.fieldGuideBody).fixedSize(horizontal: false, vertical: true)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
+                } else {
+                    Text(identifier.text).font(.fieldGuideBody).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         } else if field.detailRenderer == .spendingCategorySummary {
             if let value = row.raw[field.key],
                 let summary = try? value.decoded(SpendingCategorySummary.self)

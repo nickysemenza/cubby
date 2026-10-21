@@ -16,6 +16,7 @@ import {
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../../packages/shared/src/apple-client-version.ts";
 import { APPLE_APP_IDENTITIES } from "../../../../../packages/shared/src/apple-app-identity.ts";
 import { IMPORT_REPORT_RUN_PURPOSES } from "../../../../../packages/schemas/src/activity-fields.ts";
+import { identifierKindPresentation } from "../../../../../packages/schemas/src/external-id.ts";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
@@ -40,6 +41,35 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `        case .${domain}: ${swiftString(WAYFINDING_DOMAIN_PRESENTATION[domain][property])}`,
     ).join("\n");
   return [
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/IdentifierKinds.swift",
+      source:
+        generatedHeader +
+        `
+public enum IdentifierKind: String, Codable, Sendable, CaseIterable {
+${Object.entries(identifierKindPresentation)
+  .map(([kind]) => `    case ${kind}`)
+  .join("\n")}
+    public var label: String {
+        switch self {
+${Object.entries(identifierKindPresentation)
+  .map(([kind, value]) => `        case .${kind}: ${swiftString(value.label)}`)
+  .join("\n")}
+        }
+    }
+    public var isBarcode: Bool {
+        switch self {
+${Object.entries(identifierKindPresentation)
+  .map(
+    ([kind, value]) => `        case .${kind}: ${value.format === "barcode"}`,
+  )
+  .join("\n")}
+        }
+    }
+}
+`,
+    },
     {
       relativePath: "apps/apple/Generated/MacDebugAppIdentity.xcconfig",
       source:

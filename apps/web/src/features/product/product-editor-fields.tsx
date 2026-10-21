@@ -1,6 +1,6 @@
 import {
-  type ExternalIdInput,
-  type ExternalIdKind,
+  externalIdInput,
+  identifierKindPresentation,
   externalIdKind,
 } from "@cubby/schemas/external-id";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
@@ -21,9 +21,12 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
+import { ProductExternalIds } from "~/entity/components/product-external-ids";
+import { collectionEditSchema } from "~/entity/editing/collection-edit";
+import { structuredSchemaFor } from "~/entity/editing/structured-schema";
+import { StructuredValueField } from "~/entity/editing/structured-value-field";
 import { PendingDocumentUpload } from "~/entity/entity-media/pending-document-upload";
 import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
-import { PickerField } from "~/entity/forms/picker-field";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
 import { basisValueOf } from "~/entity/suggestions/field-suggestion";
@@ -176,107 +179,95 @@ export function ProductUnitMappingsField({
   );
 }
 
-/**
- * `product.externalIds`: the array-of-object grid (PR 2's `ArrayFieldManager
- * columns` mode) plus PR 1's the decision model kind suggestion under the Kind select. Row
- * controls keep associated labels visually hidden because the grid supplies
- * visible column headings. Placeholders are examples, never field names.
- */
-/** A freshly added row has no kind until the operator or the decision model picks one; the
- * form schema rejects the blank select on save. */
-type ExternalIdDraft = Omit<ExternalIdInput, "kind"> & {
-  kind: ExternalIdKind | "";
-};
-
+/** The identifier adapter supplies row vocabulary and the existing kind suggestion to the generic editor. */
 export function ProductExternalIdsField({
   form,
   field,
+  entity,
+  mode,
 }: SpecializedIntentRendererProps) {
   const [productName, manufacturer] = useWatch({
     control: form.control,
     name: ["name", "manufacturer"],
   });
+  const schema = structuredSchemaFor(entity, field.key);
+  const collection = field.collection;
+  if (!schema || !collection?.primary || collection.key === "value")
+    throw new Error("Identifier controls need declared collection metadata.");
+  const labeled =
+    "array" in schema.node && "object" in schema.node.array.item.node
+      ? {
+          ...schema,
+          node: {
+            array: {
+              ...schema.node.array,
+              item: {
+                ...schema.node.array.item,
+                node: {
+                  object: {
+                    ...schema.node.array.item.node.object,
+                    fields: schema.node.array.item.node.object.fields.map(
+                      (child) =>
+                        child.key === "kind" && "enum" in child.schema.node
+                          ? {
+                              ...child,
+                              schema: {
+                                ...child.schema,
+                                node: {
+                                  enum: {
+                                    options: child.schema.node.enum.options.map(
+                                      (option) => ({
+                                        ...option,
+                                        label:
+                                          identifierKindPresentation[
+                                            externalIdKind.parse(option.value)
+                                          ].label,
+                                      }),
+                                    ),
+                                  },
+                                },
+                              },
+                            }
+                          : child,
+                    ),
+                  },
+                },
+              },
+            },
+          },
+        }
+      : schema;
   return (
-    <ArrayFieldManager<ExternalIdDraft>
+    <StructuredValueField
       form={form}
       name={field.key}
-      title="External IDs"
-      addButtonText="Add external ID"
-      emptyValue={{
-        source: "",
-        kind: "",
-        externalId: "",
-        url: undefined,
-      }}
-      columns={[
-        { label: "Kind", className: "min-w-[8rem] flex-1" },
-        { label: "Source", className: "min-w-[8rem] flex-1" },
-        { label: "Identifier", className: "min-w-[8rem] flex-1" },
-        { label: "URL", className: "min-w-[10rem] flex-1" },
-      ]}
-    >
-      {(_, index) => {
-        const kindPath = `${field.key}.${index}.kind`;
-        const sourcePath = `${field.key}.${index}.source`;
-        const externalIdPath = `${field.key}.${index}.externalId`;
-        const urlPath = `${field.key}.${index}.url`;
-        return (
-          <>
-            <div className="min-w-[8rem] flex-1">
-              <PickerField
-                store="option"
-                form={form}
-                name={kindPath}
-                label="Kind"
-                hideLabel
-                placeholder="Select kind"
-                options={externalIdKind.options.map((kind) => ({
-                  value: kind,
-                  label: kind.replaceAll("_", " "),
-                }))}
-              />
-              <ExternalIdKindSuggestion
-                form={form}
-                kindPath={kindPath}
-                sourcePath={sourcePath}
-                externalIdPath={externalIdPath}
-                urlPath={urlPath}
-                productName={basisValueOf(productName)}
-                manufacturer={basisValueOf(manufacturer)}
-              />
-            </div>
-            <div className="min-w-[8rem] flex-1">
-              <UnifiedTextField
-                form={form}
-                name={sourcePath}
-                label="Source"
-                hideLabel
-                placeholder="e.g. amazon, mcmaster"
-              />
-            </div>
-            <div className="min-w-[8rem] flex-1">
-              <UnifiedTextField
-                form={form}
-                name={externalIdPath}
-                label="Identifier"
-                hideLabel
-                placeholder="e.g. B08N5WRWNW"
-              />
-            </div>
-            <div className="min-w-[10rem] flex-1">
-              <UnifiedTextField
-                form={form}
-                name={urlPath}
-                label="URL"
-                hideLabel
-                placeholder="https://..."
-                nullable
-              />
-            </div>
-          </>
+      label={field.label}
+      schema={labeled}
+      creating={mode === "create"}
+      collection={{ key: collection.key, primary: collection.primary }}
+      newRow={(row) => ({ ...row, kind: "" })}
+      rowSummary={(row) => {
+        const parsed = externalIdInput.safeParse(row);
+        return parsed.success ? (
+          <ProductExternalIds identifiers={[parsed.data]} />
+        ) : (
+          Object.values(row)
+            .filter((value) => typeof value === "string")
+            .join(" · ")
         );
       }}
-    </ArrayFieldManager>
+      rowHelper={(path) => (
+        <ExternalIdKindSuggestion
+          form={form}
+          kindPath={`${path}.kind`}
+          sourcePath={`${path}.source`}
+          externalIdPath={`${path}.externalId`}
+          urlPath={`${path}.url`}
+          productName={basisValueOf(productName)}
+          manufacturer={basisValueOf(manufacturer)}
+        />
+      )}
+    />
   );
 }
 
@@ -286,6 +277,7 @@ export function ProductExternalIdsField({
 export function ProductBarcodeField({
   form,
   field,
+  mode,
 }: SpecializedIntentRendererProps) {
   const [lookupImageUrl, setLookupImageUrl] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
@@ -294,6 +286,9 @@ export function ProductBarcodeField({
     .nullable()
     .catch(null)
     .parse(useWatch({ control: form.control, name: field.key }));
+  const collection = useWatch({ control: form.control, name: "externalIds" });
+  if (mode === "update" && collectionEditSchema.safeParse(collection).success)
+    return null;
 
   const handleLookup = async () => {
     if (!upcValue) return;

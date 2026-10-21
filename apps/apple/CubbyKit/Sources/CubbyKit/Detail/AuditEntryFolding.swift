@@ -67,6 +67,27 @@ public struct AuditFieldChange: Sendable, Hashable {
 }
 
 extension AuditLogEntryOut {
+    /// Full identifier effects have their own feed rendering; they never take the compact scalar path.
+    public var identifierEffects: [String] {
+        guard let change = changes?.additionalProperties["externalIds"] else { return [] }
+        let before = change.from.flatMap { try? JSONValue(encoding: $0) }
+        let after = change.to.flatMap { try? JSONValue(encoding: $0) }
+        let effects = IdentifierPresentation.effects(before: before, after: after)
+        if !effects.isEmpty { return effects }
+        if before == nil || after == nil {
+            return [
+                "Identifier changes: \(Self.text(change.from) ?? "(not recorded)") → \(Self.text(change.to) ?? "(not recorded)")"
+            ]
+        }
+        // Retain the actual diagnostic evidence when an audit row cannot be interpreted as identifiers.
+        if let before, let after, before != after {
+            return [
+                "Identifier changes: \(Self.text(change.from) ?? "(empty)") → \(Self.text(change.to) ?? "(empty)")"
+            ]
+        }
+        return []
+    }
+
     /// The entry's changed fields, sorted by name for a stable order.
     public var fieldChanges: [AuditFieldChange] { fieldChanges(prefix: .max) }
 

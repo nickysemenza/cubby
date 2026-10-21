@@ -162,13 +162,22 @@ struct AuditChangeLines: View {
 
     var body: some View {
         let count = entry.changedFieldCount
+        let effects = entry.identifierEffects
+        let changes = Array(
+            entry.fieldChanges(prefix: effects.isEmpty ? 2 : 3).filter {
+                effects.isEmpty || $0.field != "externalIds"
+            }.prefix(2))
+        let omitted = count - changes.count - (effects.isEmpty ? 0 : 1)
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(entry.fieldChanges(prefix: 2), id: \.field) { change in
+            ForEach(changes, id: \.field) { change in
                 Text("\(change.label): \(change.from ?? "(empty)") → \(change.to ?? "(empty)")")
                     .lineLimit(1)
             }
-            if count > 2 {
-                Text("\(count - 2) more \(count == 3 ? "field" : "fields")")
+            ForEach(effects, id: \.self) { effect in
+                Text(effect).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            if omitted > 0 {
+                Text("\(omitted) more \(omitted == 1 ? "field" : "fields")")
                     .foregroundStyle(.secondary)
             }
         }

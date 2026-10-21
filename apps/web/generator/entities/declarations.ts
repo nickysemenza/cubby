@@ -240,6 +240,7 @@ export type EntityField = Readonly<{
   collection?: Readonly<{
     key: "value" | readonly string[];
     readPath?: string;
+    primary?: Readonly<{ key: string; scope: readonly string[] }>;
   }>;
   explanation: Readonly<{
     ruleId: string;

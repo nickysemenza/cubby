@@ -96,6 +96,11 @@ export const manifestWire = {
     { conformances: codable },
   ),
   FieldResolutionLabels: record({ none: "string~", unresolved: "string~" }),
+  FieldCollectionPrimary: record({ key: "string", scope: "[string]" }),
+  FieldCollection: record({
+    key: "[string]",
+    primary: "FieldCollectionPrimary~",
+  }),
   FieldDescriptor: record(
     {
       key: "string",
@@ -119,6 +124,7 @@ export const manifestWire = {
       initialValue: "Json~",
       controlRequired: "boolean~",
       valueSchema: "ValueSchema~",
+      collection: "FieldCollection~",
       inCreate: "boolean",
       requiredOnCreate: "boolean",
       inUpdate: "boolean",

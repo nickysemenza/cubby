@@ -16,12 +16,121 @@ struct StructuredValueControl: View {
     @Binding var pickedTitles: [String: String]
 
     var body: some View {
-        StructuredSchemaView(
-            context: StructuredEditorContext(field: field, model: model, pickedTitles: $pickedTitles),
-            schema: schema,
-            title: model.isRequired(field) ? "\(field.label) *" : field.label,
-            path: []
-        )
+        if field.collection?.primary != nil {
+            CollectionValueControl(field: field, schema: schema, model: model, pickedTitles: $pickedTitles)
+        } else {
+            StructuredSchemaView(
+                context: StructuredEditorContext(field: field, model: model, pickedTitles: $pickedTitles),
+                schema: schema,
+                title: model.isRequired(field) ? "\(field.label) *" : field.label,
+                path: []
+            )
+        }
+    }
+}
+
+private struct CollectionValueControl: View {
+    let field: FieldDescriptor
+    let schema: ValueSchema
+    @Bindable var model: GenericEntityEditModel
+    @Binding var pickedTitles: [String: String]
+
+    private var context: StructuredEditorContext {
+        StructuredEditorContext(field: field, model: model, pickedTitles: $pickedTitles)
+    }
+
+    var body: some View {
+        if let collection = field.collection, let state = CollectionEdit.decode(model.draft[field.key]),
+            case .array(let item) = schema.node, case .object(let fields) = item.node
+        {
+            ForEach(state.rows.indices, id: \.self) { index in
+                let row = state.rows[index]
+                let path = ["collectionEdit", "rows", String(index), "value"]
+                let noun = "\(field.label) \(index + 1)"
+                if let baseline = row.baseline {
+                    Text(
+                        "\(row.value == nil ? "Remove" : row.replacing ? "Replace" : "Saved"): \(summary(baseline, collection: collection))"
+                    )
+                    .font(.caption).textSelection(.enabled)
+                }
+                if let value = row.value {
+                    if row.baseline == nil || row.replacing {
+                        ForEach(
+                            fields.filter { $0.schema.isEdited && $0.key != collection.primary?.key },
+                            id: \.key
+                        ) { child in
+                            StructuredSchemaView(
+                                context: context, schema: child.schema, title: child.label,
+                                path: path + [child.key])
+                        }
+                        if row.baseline != nil {
+                            Text("With: \(summary(value, collection: collection))").font(.caption)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    if row.baseline != nil && !row.replacing {
+                        Button("Replace \(noun)") { change(state) { $0.rows[index].replacing = true } }
+                            .accessibilityIdentifier(context.identifier([String(index), "replace"]))
+                    }
+                    if let primary = collection.primary {
+                        Text(
+                            row.primaryIntent
+                                ? "Make primary on Save"
+                                : row.baseline?[primary.key]?.boolValue == true
+                                    ? "Primary"
+                                    : row.baseline == nil ? "Add preserves the saved primary" : "Secondary"
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        Button("Make \(noun) primary") {
+                            change(state) { next in
+                                for otherIndex in next.rows.indices {
+                                    if let other = next.rows[otherIndex].value,
+                                        primary.scope.allSatisfy({ other[$0] == value[$0] })
+                                    {
+                                        next.rows[otherIndex].primaryIntent = otherIndex == index
+                                    }
+                                }
+                            }
+                        }
+                        .disabled(row.primaryIntent)
+                        .accessibilityIdentifier(context.identifier([String(index), "primary"]))
+                    }
+                    Button("Remove \(noun)", role: .destructive) {
+                        change(state) { $0.rows[index].value = nil }
+                    }
+                    .accessibilityIdentifier(context.identifier([String(index), "remove"]))
+                } else {
+                    Text(
+                        "Removal will be applied on Save. If this is primary, the saved result selects a survivor."
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Button("Add identifier", systemImage: "plus") {
+                var blank = StructuredValue.blank(item, populated: true).objectValue ?? [:]
+                if field.controlRenderer?.rawValue == "external-ids" { blank["kind"] = "" }
+                change(state) { $0.rows.append(CollectionEdit.Row(baseline: nil, value: blank)) }
+            }
+            .accessibilityIdentifier(context.identifier(["add"]))
+        } else {
+            Text("Load the saved collection before editing identifiers.").foregroundStyle(.secondary)
+        }
+    }
+
+    private func summary(_ row: [String: JSONValue], collection: FieldCollection) -> String {
+        if field.controlRenderer?.rawValue == "external-ids",
+            let presentation = IdentifierPresentation(.object(row))
+        {
+            return presentation.text
+        }
+        return collection.key.compactMap { row[$0]?.stringValue }.joined(separator: " · ")
+    }
+
+    private func change(_ state: CollectionEdit, _ update: (inout CollectionEdit) -> Void) {
+        var next = state
+        update(&next)
+        model.draft[field.key] = next.json
+        model.markEdited(field.key)
     }
 }
 
@@ -38,6 +147,7 @@ struct StructuredEditorContext {
     func set(_ path: [String], _ new: JSONValue) {
         model.draft[field.key] = StructuredValue.setting(
             new, at: path[...], in: model.draft[field.key] ?? .null)
+        model.markEdited(field.key)
     }
 
     func error(_ path: [String]) -> String? { model.nestedError(field.key, path: path) }
@@ -172,8 +282,15 @@ private struct StructuredSchemaView: View {
                 get: { value.stringValue ?? "" },
                 set: { context.set(path, $0.isEmpty ? .null : .string($0)) })
         ) {
-            if schema.nullable || value == .null { Text("None").tag("") }
-            ForEach(options, id: \.value) { Text($0.label).tag($0.value) }
+            if schema.nullable || value == .null || value.stringValue == "" {
+                Text("Choose \(title.lowercased())").tag("")
+            }
+            ForEach(options, id: \.value) { option in
+                Text(
+                    context.field.controlRenderer?.rawValue == "external-ids" && path.last == "kind"
+                        ? IdentifierKind(rawValue: option.value)?.label ?? option.label : option.label
+                ).tag(option.value)
+            }
         }
         .accessibilityIdentifier(context.identifier(path))
     }

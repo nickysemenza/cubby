@@ -48,6 +48,10 @@ public enum ScanCodes {
         CubbyFFI.scanCodeGtin14(raw: raw)
     }
 
+    public static func isbnFromGtin(_ canonical: String) -> String? {
+        CubbyFFI.isbnFromGtin(value: canonical)?.isbn13
+    }
+
     public static func normalizeISBN(_ raw: String) -> NormalizedIsbn? {
         CubbyFFI.normalizeIsbn(value: raw)
     }

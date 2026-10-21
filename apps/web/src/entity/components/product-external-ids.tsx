@@ -1,50 +1,75 @@
-import type { ExternalIdOut } from "@cubby/schemas/external-id";
+import {
+  groupIdentifiers,
+  presentIdentifier,
+  type PresentedIdentifier,
+} from "@cubby/schemas/external-id";
 
-import { ProductGtin, productGtinLabel } from "./product-gtin";
+import { wasm } from "~/lib/wasm";
 
 export function ProductExternalIds({
   identifiers,
 }: {
-  identifiers: readonly Pick<
-    ExternalIdOut,
-    "source" | "kind" | "externalId" | "url"
-  >[];
+  identifiers: readonly PresentedIdentifier[];
 }) {
   return (
-    <span className="inline-flex flex-wrap gap-x-2 gap-y-1 text-xs">
-      {identifiers.map((identifier) => {
-        const kind =
-          identifier.kind === "asin"
-            ? "Amazon ASIN"
-            : identifier.kind === "gtin_14"
-              ? productGtinLabel(identifier.externalId)
-              : identifier.kind.replaceAll("_", " ");
-        const label = `${identifier.source} · ${kind}: ${identifier.externalId}`;
-        if (identifier.kind === "gtin_14")
-          return (
-            <span
-              key={label}
-              className="inline-flex min-w-0 items-baseline gap-1"
-            >
-              {kind}: <ProductGtin gtin={identifier.externalId} />
-            </span>
-          );
-        return identifier.url ? (
-          <a
-            key={label}
-            href={identifier.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="break-all text-primary underline-offset-2 hover:underline"
-          >
-            {label}
-          </a>
-        ) : (
-          <span key={label} className="break-all">
-            {label}
-          </span>
-        );
-      })}
+    <span className="inline-flex flex-col gap-1 text-xs">
+      {groupIdentifiers(identifiers).map((group) => (
+        <span
+          key={JSON.stringify([group[0]?.source, group[0]?.kind])}
+          className="inline-flex flex-col gap-1"
+        >
+          {group.map((identifier) => {
+            const shown = presentIdentifier(
+              identifier,
+              (gtin) => wasm.isbn_from_gtin(gtin)?.isbn13 ?? null,
+            );
+            const content = (
+              <span className="break-all">
+                {identifier.source} · {shown.label}:{" "}
+                <span className="font-mono tabular-nums">{shown.value}</span>
+                {shown.canonical && (
+                  <span>
+                    {" "}
+                    (GTIN:{" "}
+                    <span className="font-mono tabular-nums">
+                      {shown.canonical}
+                    </span>
+                    )
+                  </span>
+                )}
+                {shown.role && (
+                  <span className="text-muted-foreground"> · {shown.role}</span>
+                )}
+              </span>
+            );
+            return shown.url ? (
+              <a
+                key={JSON.stringify([
+                  identifier.source,
+                  identifier.kind,
+                  identifier.externalId,
+                ])}
+                href={shown.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                {content}
+              </a>
+            ) : (
+              <span
+                key={JSON.stringify([
+                  identifier.source,
+                  identifier.kind,
+                  identifier.externalId,
+                ])}
+              >
+                {content}
+              </span>
+            );
+          })}
+        </span>
+      ))}
     </span>
   );
 }

@@ -1,5 +1,9 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
-import type { ExternalIdOut } from "@cubby/schemas/external-id";
+import {
+  groupIdentifiers,
+  presentIdentifier,
+  type PresentedIdentifier,
+} from "@cubby/schemas/external-id";
 import type {
   FinancialAccountCardNumber,
   FinancialAccountSourceAlias,
@@ -14,6 +18,7 @@ import type { WishCandidateOut } from "@cubby/schemas/wish";
 import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCurrency } from "~/lib/number-format";
+import { wasm } from "~/lib/wasm";
 import { estimateLabel } from "~/server/generic/list/repo/list-display-labels";
 
 /**
@@ -44,16 +49,21 @@ export const sourceAliasesLabel = (
     ", ",
   );
 
-/** Each id as web's product cell words it: `source (kind): id`. */
+/** Shared identifier meaning, including issuer and saved role. */
 export const externalIdsLabel = (
-  ids: readonly Pick<ExternalIdOut, "source" | "kind" | "externalId">[],
+  ids: readonly PresentedIdentifier[],
 ): string | null =>
   joined(
-    ids.map(
-      (id) =>
-        `${id.source} (${id.kind.replaceAll("_", " ")}): ${id.externalId}`,
+    groupIdentifiers(ids).flatMap((group) =>
+      group.map(
+        (id) =>
+          presentIdentifier(
+            id,
+            (gtin) => wasm.isbn_from_gtin(gtin)?.isbn13 ?? null,
+          ).text,
+      ),
     ),
-    ", ",
+    "\n",
   );
 
 export const sourceRefsLabel = (

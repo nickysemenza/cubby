@@ -392,8 +392,8 @@ describe("entity edit definitions", () => {
   // rejects: opening the editor threw. `unitMappings`' `FieldOptions.initial`
   // (`productUnitMappingsInitial`) projects each row to its input shape
   // (`{id,a,b,source}`) before the Date ever reaches the form, and an
-  // untouched edit stays a no-op — in particular the write-only `barcode`
-  // (`readKey: null`, seeded `null`) must not reach the wire as `barcode: null`,
+  // untouched edit stays a no-op — in particular the create/provider `barcode`
+  // shortcut has no independent ordinary-update draft and must not reach the wire as `barcode: null`,
   // which the collection writer would read as "retire the primary GTIN".
   it.each([
     {
@@ -448,7 +448,7 @@ describe("entity edit definitions", () => {
           source: "manual",
         },
       ]);
-      expect(values.barcode).toBeNull();
+      expect(values.barcode).toBeUndefined();
       const untouched = buildEntityEdit(resolved, request, values);
       expect(untouched).toMatchObject({ ok: true, changed: false });
       if (!untouched.ok || untouched.command.operation !== "update")

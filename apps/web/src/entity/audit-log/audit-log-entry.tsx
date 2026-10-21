@@ -1,4 +1,5 @@
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
+import { identifierEffects } from "@cubby/schemas/external-id";
 import { parseShortcode } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
@@ -9,6 +10,7 @@ import { categoryReference } from "~/entity/presentation/category-reference";
 import { formatCount } from "~/lib/number-format";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 import { DateDisplay } from "~/ui/common/date-display";
 import type { Fact } from "~/ui/common/facts";
 import {
@@ -62,7 +64,6 @@ function formatChangeValue(value: AuditJsonValue | undefined): string {
  */
 const LOW_SIGNAL_CHANGE_FIELDS = new Set([
   "embedding",
-  "externalIds",
   "sortOrder",
   "sourceRefs",
   "totals",
@@ -265,8 +266,20 @@ function ChangesList({ changes }: { changes: AuditChanges }) {
       {Object.entries(changes).map(([field, { from, to }]) => (
         <Row key={field} align="start" gap="xs" className="min-w-0 text-xs">
           <span className="font-medium text-muted-foreground">{field}:</span>
-          {(typeof from === "string" || from == null) &&
-          (typeof to === "string" || to == null) ? (
+          {field === "externalIds" ? (
+            <div className="min-w-0 break-all whitespace-pre-wrap">
+              {(
+                identifierEffects(
+                  from,
+                  to,
+                  (gtin) => wasm.isbn_from_gtin(gtin)?.isbn13 ?? null,
+                ) ?? [JSON.stringify({ from, to })]
+              ).map((effect) => (
+                <div key={effect}>{effect}</div>
+              ))}
+            </div>
+          ) : (typeof from === "string" || from == null) &&
+            (typeof to === "string" || to == null) ? (
             <InlineTextDiff
               before={from ?? ""}
               after={to ?? ""}

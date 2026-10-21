@@ -6,7 +6,7 @@ import type {
 } from "@cubby/schemas/structured-value-schema";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { createContext, useContext, useId } from "react";
+import { createContext, useContext, useId, type ReactNode } from "react";
 import {
   Controller,
   get,
@@ -32,6 +32,11 @@ import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 
+import {
+  collectionEditSchema,
+  type CollectionDescriptor,
+  type CollectionRow,
+} from "./collection-edit";
 import type { SearchProviderFor } from "./entity-primitive-fields";
 import { blank, blankCase, isDrawn } from "./structured-value";
 
@@ -75,6 +80,10 @@ export function StructuredValueField({
   creating = true,
   searchProviderFor = requireReferenceEntitySearch,
   arrayLabels,
+  collection,
+  rowHelper,
+  rowSummary,
+  newRow,
 }: {
   form: Form;
   name: string;
@@ -83,20 +92,219 @@ export function StructuredValueField({
   creating?: boolean;
   searchProviderFor?: SearchProviderFor;
   arrayLabels?: NodeProps["arrayLabels"];
+  collection?: CollectionDescriptor;
+  rowHelper?: (path: string) => ReactNode;
+  rowSummary?: (row: CollectionRow) => ReactNode;
+  newRow?: (row: CollectionRow) => CollectionRow;
 }) {
   return (
     <CreatingContext.Provider value={creating}>
       <ReferenceSearchContext.Provider value={searchProviderFor}>
-        <NodeEditor
-          form={form}
-          path={name}
-          label={label}
-          schema={schema}
-          required
-          arrayLabels={arrayLabels}
-        />
+        {collection ? (
+          <CollectionEditor
+            form={form}
+            path={name}
+            label={label}
+            schema={schema}
+            required
+            collection={collection}
+            rowHelper={rowHelper}
+            rowSummary={rowSummary}
+            newRow={newRow}
+          />
+        ) : (
+          <NodeEditor
+            form={form}
+            path={name}
+            label={label}
+            schema={schema}
+            required
+            arrayLabels={arrayLabels}
+          />
+        )}
       </ReferenceSearchContext.Provider>
     </CreatingContext.Provider>
+  );
+}
+
+function CollectionEditor({
+  collection,
+  rowHelper,
+  rowSummary,
+  newRow,
+  ...props
+}: NodeProps & {
+  collection: CollectionDescriptor;
+  rowHelper?: (path: string) => ReactNode;
+  rowSummary?: (row: CollectionRow) => ReactNode;
+  newRow?: (row: CollectionRow) => CollectionRow;
+}) {
+  const raw = useWatch({ control: props.form.control, name: props.path });
+  const { errors } = useFormState({
+    control: props.form.control,
+    name: props.path,
+  });
+  const error = z.string().safeParse(get(errors, props.path)?.message).data;
+  const parsed = collectionEditSchema.safeParse(raw);
+  if (!parsed.success)
+    return (
+      <p role="alert">Load the saved collection before editing identifiers.</p>
+    );
+  if (
+    !("array" in props.schema.node) ||
+    !("object" in props.schema.node.array.item.node)
+  )
+    throw new Error(`Collection ${props.path} needs record rows.`);
+  const item = props.schema.node.array.item;
+  const fields = props.schema.node.array.item.node.object.fields;
+  const state = parsed.data.collectionEdit;
+  const write = (suffix: string, value: unknown) =>
+    props.form.setValue(`${props.path}.collectionEdit.${suffix}`, value, {
+      shouldDirty: true,
+    });
+  const summary = (row: CollectionRow) =>
+    rowSummary?.(row) ??
+    collection.key.map((key) => String(row[key] ?? "")).join(" · ");
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-medium">{props.label}</p>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      {state.rows.map((row, index) => {
+        const rowPath = `${props.path}.collectionEdit.rows.${index}`;
+        const editing = row.baseline === null || row.replacing;
+        const noun = `${props.label} ${index + 1}`;
+        return (
+          <div key={row.localKey} className="space-y-2 border-b pb-3">
+            {row.baseline !== null && (
+              <div className="text-xs break-all">
+                {row.value === null
+                  ? "Remove: "
+                  : row.replacing
+                    ? "Replace: "
+                    : "Saved: "}
+                {summary(row.baseline)}
+              </div>
+            )}
+            {row.value === null ? (
+              <p className="text-xs text-muted-foreground">
+                Removal will be applied on Save. If this is primary, the saved
+                result selects a survivor.
+              </p>
+            ) : (
+              <>
+                {editing ? (
+                  <>
+                    {fields
+                      .filter((field) => field.key !== collection.primary?.key)
+                      .map((field) => (
+                        <NodeEditor
+                          key={field.key}
+                          {...props}
+                          path={`${rowPath}.value.${field.key}`}
+                          label={field.label}
+                          schema={field.schema}
+                          required={field.required}
+                        />
+                      ))}
+                    {rowHelper?.(`${rowPath}.value`)}
+                    {row.baseline !== null && (
+                      <div className="text-xs break-all">
+                        With: {summary(row.value)}
+                      </div>
+                    )}
+                  </>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  {row.baseline !== null && !row.replacing && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Replace ${noun}`}
+                      onClick={() => write(`rows.${index}.replacing`, true)}
+                    >
+                      Replace
+                    </Button>
+                  )}
+                  {collection.primary && (
+                    <>
+                      <span className="text-xs text-muted-foreground">
+                        {row.primaryIntent
+                          ? "Make primary on Save"
+                          : row.baseline?.[collection.primary.key] === true
+                            ? "Primary"
+                            : row.baseline === null
+                              ? "Add preserves the saved primary"
+                              : "Secondary"}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Make ${noun} primary`}
+                        disabled={row.primaryIntent}
+                        onClick={() => {
+                          const primary = collection.primary;
+                          if (!primary || !row.value) return;
+                          state.rows.forEach((other, otherIndex) => {
+                            if (
+                              other.value &&
+                              primary.scope.every(
+                                (key) =>
+                                  other.value?.[key] === row.value?.[key],
+                              )
+                            )
+                              write(
+                                `rows.${otherIndex}.primaryIntent`,
+                                otherIndex === index,
+                              );
+                          });
+                        }}
+                      >
+                        Make primary
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Remove ${noun}`}
+                    onClick={() => write(`rows.${index}.value`, null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          const value = z.record(z.string(), z.json()).parse(blank(item, true));
+          write("rows", [
+            ...state.rows,
+            {
+              localKey: crypto.randomUUID(),
+              baseline: null,
+              value: newRow?.(value) ?? value,
+              primaryIntent: false,
+              replacing: false,
+            },
+          ]);
+        }}
+      >
+        Add identifier
+      </Button>
+    </div>
   );
 }
 

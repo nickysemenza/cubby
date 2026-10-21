@@ -45,6 +45,18 @@ nonisolated enum EntityFieldValue {
     }
 
     static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
+        if field.detailRenderer?.rawValue == "product-external-ids",
+            let value = field.surfaceValue(in: raw, surface: surface)
+        {
+            let identifiers = IdentifierPresentation.grouped(value).map(\.text)
+            return identifiers.isEmpty ? nil : identifiers.joined(separator: "\n")
+        }
+        if field.detailRenderer?.rawValue == "product-primary-gtin",
+            let value = field.surfaceValue(in: raw, surface: surface)?.stringValue
+        {
+            let isbn = ScanCodes.isbnFromGtin(value)
+            return isbn.map { "ISBN-13: \($0) (GTIN: \(value))" } ?? "GTIN: \(value)"
+        }
         // A declared server-composed sentence is the whole detail answer: the structure behind it
         // is never re-worded here, and with no sentence the row is empty.
         if surface == "detail", field.detailLabelPath != nil { return field.detailLabel(in: raw) }
