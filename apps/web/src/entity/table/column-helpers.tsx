@@ -98,11 +98,8 @@ import {
   buildProductComboboxItem,
   buildRecordComboboxItem,
 } from "../picker/combobox-builders";
-import {
-  useEntityListSource,
-  type EntitySearchEntity,
-  type SearchProviderProps,
-} from "../picker/with-search-hook";
+import { referenceEntitySearch } from "../picker/reference-entity-search";
+import type { SearchProviderProps } from "../picker/with-search-hook";
 import {
   EditableAmountCell,
   EditableCell,
@@ -1255,28 +1252,6 @@ function defineSingleEntityAdapter<TData>(
 }
 
 /**
- * One entity's `SearchProvider`: a `useEntityListSource(entity, ...)` call
- * wrapped in the render-prop shape `SingleEntityAdapter.SearchProvider`
- * expects, so each adapter below can name its own target without repeating
- * the dialog/children plumbing.
- */
-function inlineSearchProvider<E extends EntitySearchEntity>(
-  entity: E,
-): (props: SearchProviderProps<string>) => ReactNode {
-  return function InlineSearchProvider(props) {
-    const { dialog, ...search } = useEntityListSource(entity, {
-      scope: props.scope,
-    });
-    return (
-      <>
-        {dialog}
-        {props.children(search)}
-      </>
-    );
-  };
-}
-
-/**
  * The complete relation-picker roster. Each entry owns the schema for its
  * projected value, the item converter used by editable cells, its real inline
  * link, and (when this relation can be edited) the deferred search provider.
@@ -1300,7 +1275,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("ingredient"),
+    SearchProvider: referenceEntitySearch("ingredient"),
   }),
   product: defineSingleEntityAdapter(productInlineSchema, {
     buildItem: (data) =>
@@ -1322,7 +1297,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("product"),
+    SearchProvider: referenceEntitySearch("product"),
   }),
   recipe: defineSingleEntityAdapter(recipeInlineSchema, {
     buildItem: (data) => buildRecordComboboxItem("recipe", data),
@@ -1340,7 +1315,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("recipe"),
+    SearchProvider: referenceEntitySearch("recipe"),
   }),
   location: defineSingleEntityAdapter(locationInlineSchema, {
     buildItem: (data) =>
@@ -1362,7 +1337,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: inlineSearchProvider("location"),
+    SearchProvider: referenceEntitySearch("location"),
   }),
   "usda-food": defineSingleEntityAdapter(usdaFoodInlineSchema, {
     renderLink: (data) => (
