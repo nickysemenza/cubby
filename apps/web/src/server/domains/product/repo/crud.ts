@@ -37,6 +37,7 @@ import type {
   ProductPickerItemOut,
 } from "@cubby/schemas/product";
 import {
+  productListItemOut,
   impliedProductFeature,
   type ProductCreateInput,
   type ProductTopLevelOut,
@@ -79,7 +80,6 @@ import { getProductClassificationEvidence } from "~/server/db/computed/product-c
 import {
   assertNoDependents,
   associatePendingImages,
-  countWhere,
   formatSearchTerm,
   getDb,
   imageJoinBindings,
@@ -203,7 +203,6 @@ import {
   mapProductListInventoryEntries,
   primaryGtinOf,
   mapDbProductIngredient,
-  dbProductToListAPI,
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
   productFieldResolutions,
@@ -854,95 +853,24 @@ export const productList = async (
   readIntent: ListReadIntent = "page",
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
 ) => {
-  const filtered = await productWhere(db, filters);
-  const whereClause = filtered.where;
-  if (readIntent === "count")
-    return {
-      data: [],
-      count: await countWhere(db, product, whereClause),
-      sums: undefined,
-      groups: undefined,
-    };
-  const [{ results, totalCount, groups }, sums] = await Promise.all([
-    readProductListPage(db, filtered, filters, sorts, pagination, readIntent, {
-      kind: "full",
-    }),
-    readIntent === "page" ? loadProductListSums(db, whereClause) : undefined,
-  ]);
-  const ids = results.map((row) => row.id);
-  const [listRelations, qualities, priced, ledgered, displayImages, owners] =
-    await Promise.all([
-      loadProductListRelations(
-        db,
-        ids,
-        undefined,
-        prefetchFoodsOnExternalIds(results, usdaClient),
-      ),
-      loadProductDataQualities(db, ids),
-      enrichProductRowsWithPricing(db, results),
-      enrichProductRowsWithQuantityLedger(db, results),
-      resolveEntityDisplayImageLists(
-        db,
-        ids.map((id) => ({ entityKind: "product", entityId: id })),
-      ),
-      loadProductOwners(db, ids),
-    ]);
-  const pricingById = new Map(priced.map((row) => [row.id, row.pricing]));
-  const ledgerById = new Map(
-    ledgered.map((row) => [row.id, row.quantityLedger]),
-  );
-  // SAFETY: the full page selects every ProductListDB extra and join; all
-  // required batched relations, quality, pricing and ledger values below
-  // are attached before the canonical mapper runs.
-  const products = await hydrateImageReadProjection(
+  const { data, ...metadata } = await listProductsRead(
     db,
-    results.map((row) =>
-      dbProductToListAPI(
-        {
-          ...row,
-          ...(listRelations.get(row.id) ?? emptyProductListRelations()),
-          pricing: pricingById.get(row.id)!,
-          quantityLedger: ledgerById.get(row.id)!,
-          dataQuality: qualities.get(row.id)!,
-          owners: owners.get(row.id) ?? [],
-        } as ProductListDB,
-        displayImages.get(entityRefKey("product", row.id)) ?? [],
-      ),
-    ),
-    new Map(
-      [...displayImages.values()].flatMap((images) =>
-        images.flatMap((image) =>
-          image.representations
-            ? [[image.id, image.representations] as const]
-            : [],
-        ),
-      ),
-    ),
-  );
-  const productsWithUnitPrices = await enrichProductListItems(
-    products,
+    filters,
+    sorts,
+    pagination,
+    readIntent,
     usdaClient,
   );
-
-  const result = {
-    data: productsWithUnitPrices.map((product) => ({
-      ...product,
-      ledgerExpectedQuantityLabel: expectedQuantityLabel(
-        product.quantityLedger,
-      ),
-      quantityVarianceLabel: quantityVarianceLabel(product.quantityVariance),
-      unitPriceLabel: unitPriceLabel(product.unitPrice),
-    })),
-    count: totalCount,
-    sums,
-    groups,
+  return {
+    ...metadata,
+    data: data.map((row) => productListItemOut.parse(row)),
   };
-  return result;
 };
 
 type ProductListReadResult = {
   data: ReturnType<typeof projectListRows>;
   count: number;
+  sums?: Awaited<ReturnType<typeof loadProductListSums>>;
   groups?: ListGroupSummary[];
 };
 
@@ -956,29 +884,21 @@ export const listProductsRead = async (
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
   projection: ListProjection = { kind: "full" },
 ): Promise<ProductListReadResult> => {
-  if (projection.kind === "full") {
-    const { data, count, groups } = await productList(
+  const filtered = await productWhere(db, filters);
+  const [{ results, totalCount, groups }, sums] = await Promise.all([
+    readProductListPage(
       db,
+      filtered,
       filters,
       sorts,
       pagination,
       readIntent,
-      usdaClient,
-    );
-    const result: ProductListReadResult = { data, count };
-    if (groups) result.groups = groups;
-    return result;
-  }
-  const filtered = await productWhere(db, filters);
-  const { results, totalCount, groups } = await readProductListPage(
-    db,
-    filtered,
-    filters,
-    sorts,
-    pagination,
-    readIntent,
-    projection,
-  );
+      projection,
+    ),
+    projection.kind === "full" && readIntent === "page"
+      ? loadProductListSums(db, filtered.where)
+      : undefined,
+  ]);
   const rows = results.map(
     ({
       categoryId: _categoryId,
@@ -992,8 +912,9 @@ export const listProductsRead = async (
       notesPresence: Boolean(row.notes),
     }),
   );
-  const metadata: Pick<ProductListReadResult, "count" | "groups"> = {
+  const metadata: Pick<ProductListReadResult, "count" | "groups" | "sums"> = {
     count: totalCount,
+    ...(sums ? { sums } : {}),
   };
   if (groups) metadata.groups = groups;
   if (projection.kind === "base" || results.length === 0)
@@ -1051,6 +972,7 @@ export const listProductsRead = async (
         Object.assign(patch, {
           ...imageGroups,
           images: itemImages,
+          coverImageUrl: null,
           displayImages:
             displayImages?.get(entityRefKey("product", row.id)) ?? [],
         });
