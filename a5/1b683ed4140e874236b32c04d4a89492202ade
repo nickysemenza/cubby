@@ -1,0 +1,73 @@
+apps/web/DESIGN.md
+  s_ccb4b815169f0b::t_fe8bf21ec5b474 300
+apps/web/src/entity/components/ref-link/leaf.tsx
+  s_ccb4b815169f0b::t_9a572004569bf7 6,210-219,225-229,232-233,242
+apps/web/src/entity/display/detail-field-renderers/wish.tsx
+  s_ccb4b815169f0b::t_4953f8547661d9 36-40
+apps/web/src/entity/entity-list/board/entity-board.tsx
+  s_ccb4b815169f0b::t_7c8726712ece80 569-573
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_ccb4b815169f0b::t_7fd68000589e57 215-216
+apps/web/src/entity/relationships/relationship-summary-table.tsx
+  s_ccb4b815169f0b::t_d2b9d6a4f41b67 23,384,386-389
+apps/web/src/entity/suggestions/queue/suggestion-views.tsx
+  s_ccb4b815169f0b::t_da333cec2164cc 19-22,250-251,268-275
+apps/web/src/entity/table/column-helpers.tsx
+  s_ccb4b815169f0b::t_49b2228e6d8716 3-7,494-497,549-554,580,586-591,594,605-617,621-641,1788-1789
+apps/web/src/entity/table/list-workbench.unit.test.tsx
+  s_ccb4b815169f0b::t_1b18f3a85a66b1 23,37
+apps/web/src/entity/table/relation-field-workbench.tsx
+  s_ccb4b815169f0b::t_3690cda738851c 100
+apps/web/src/entity/table/table-row-step.unit.test.tsx
+  s_ccb4b815169f0b::t_4285a465576b6d 49
+apps/web/src/entity/table/table.tsx
+  s_ccb4b815169f0b::t_e6ae1d596a94d0 166-171,761-770
+apps/web/src/features/ai/ai-usage-page.tsx
+  s_ccb4b815169f0b::t_33efa170cd4de3 452,605
+apps/web/src/features/ai/decisions-catalog.tsx
+  s_ccb4b815169f0b::t_155d3ae54a4a9c 707
+apps/web/src/features/design/sections/entity-links-section.tsx
+  s_ccb4b815169f0b::t_2e34bfd8e69121 42-43,47
+apps/web/src/features/developer/mcp-usage-dashboard.tsx
+  s_ccb4b815169f0b::t_4255a8416d7e07 458,642
+apps/web/src/features/expense/expense-aggregate-explorer.tsx
+  s_ccb4b815169f0b::t_279515195b6e7b 653
+apps/web/src/features/expense/expense-purchase-column.unit.test.tsx
+  s_ccb4b815169f0b::t_cda899115542b4 69-75
+apps/web/src/features/finance/financial-transaction-form.tsx
+  s_ccb4b815169f0b::t_010123fa78bcbd 163-167
+apps/web/src/features/finance/possible-vendor.tsx
+  s_ccb4b815169f0b::t_6533916d3078c7 31-35,60-64,82-86
+apps/web/src/features/home/house-card.tsx
+  s_ccb4b815169f0b::t_a041371963dd60 152
+apps/web/src/features/project/shared.tsx
+  s_ccb4b815169f0b::t_b95f3c73ad70bb 118-122
+apps/web/src/features/purchase/link-expenses-dialog.tsx
+  s_ccb4b815169f0b::t_5aabbb7a8866ed 25,213-217
+apps/web/src/features/recipe/recipeingredientlist.tsx
+  s_ccb4b815169f0b::t_c93c03087b1ed0 35-38,229-243
+apps/web/src/features/statement-import/statement-row-list.tsx
+  s_ccb4b815169f0b::t_e7217a21139be1 623
+apps/web/src/features/usda-food/nutrition.tsx
+  s_ccb4b815169f0b::t_352125a64e1735 80
+apps/web/src/features/usda-food/usdafoodlist.tsx
+  s_ccb4b815169f0b::t_413e1ebbce947a 157
+apps/web/src/features/wish/list-columns.tsx
+  s_ccb4b815169f0b::t_30d7abf99dbf8a 27,175,181,183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a51b683ed4140e874236b32c04d4a89492202ade",
+  "prompts": {},
+  "sessions": {
+    "s_ccb4b815169f0b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dbcd31ce-11f3-4079-ac11-3706d17309fc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
