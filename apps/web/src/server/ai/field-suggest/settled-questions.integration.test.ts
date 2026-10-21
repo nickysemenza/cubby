@@ -14,7 +14,10 @@ import { NONE_KEY } from "~/server/ai/policy/decision-choice";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiAnalysis, run } from "~/server/db/schema";
-import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
+import {
+  inferFieldAssessments,
+  inferFieldAssessmentsBatch,
+} from "~/server/domains/run/operations/ai.server";
 import {
   categoryPorts,
   kernelCtx,
@@ -108,6 +111,36 @@ describe("settled suggestion questions", () => {
     entity: "product",
     field: "categoryId",
     basis: { name, manufacturer: null },
+  });
+
+  // A deferred list decision must retain its own captured evidence so a
+  // singleton revisit reuses that publication, not another row's judgment.
+  it("preserves each batch item's assessment identity across a singleton revisit", async () => {
+    const items = ["Synthetic batch Alpha", "Synthetic batch Beta"].map(
+      (name) => ({
+        entity: "product" as const,
+        basisMode: "suggested" as const,
+        targets: ["categoryId"],
+        basis: { name, manufacturer: null },
+        runKey: crypto.randomUUID(),
+      }),
+    );
+    const batch = await inferFieldAssessmentsBatch(
+      kernelCtx(ctx),
+      { items },
+      fakeRoster,
+    );
+    const singles = await Promise.all(
+      items.map((item) =>
+        inferFieldAssessments(kernelCtx(ctx), item, fakeRoster),
+      ),
+    );
+    expect(
+      batch.results.map((result) => (result.ok ? result.value : null)),
+    ).toEqual(singles);
+    expect(singles[0]?.outcomes?.categoryId).not.toEqual(
+      singles[1]?.outcomes?.categoryId,
+    );
   });
 
   // Failure: a first read reports unknown despite an unusable source basis.

@@ -833,6 +833,12 @@ export const fieldSuggestionsOut = z.object({
 });
 export type FieldSuggestionsOut = z.infer<typeof fieldSuggestionsOut>;
 
+export const FIELD_SUGGESTIONS_BATCH_MAX = 25;
+export const fieldSuggestionsBatchInput = z.object({
+  items: z.array(fieldSuggestionsInput).min(1).max(FIELD_SUGGESTIONS_BATCH_MAX),
+});
+export const fieldSuggestionsBatchOut = batchOutSchema(fieldSuggestionsOut);
+
 /** Swift keeps nullable object properties, but drops nullable dictionary values. */
 export const fieldSuggestionsReviewOut = fieldSuggestionsOut
   .omit({ suggestions: true })

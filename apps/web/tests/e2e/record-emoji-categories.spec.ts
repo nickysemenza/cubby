@@ -1,10 +1,10 @@
+import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { entityApi } from "./support/entity-api";
 import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
 import superjson from "superjson";
-import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 import {
   expectViewportBounded,
@@ -96,15 +96,19 @@ test("edits compound emoji, clears it, and browses inherited category membership
     { active: false },
   );
   await page.route("**/api/browser/dispatch", async (route) => {
-    if (await unbatchFor(route, ["ai.suggestFields"])) return;
-    if (!dispatchesOperation(route.request(), "ai.suggestFields"))
+    if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
+      return;
+    if (
+      !dispatchesOperation(route.request(), "ai.suggestFields") &&
+      !dispatchesOperation(route.request(), "ai.suggestFieldsBatch")
+    )
       return route.continue();
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(
         superjson.serialize({
           ok: true,
-          data: fieldSuggestionsOut.parse({
+          data: fieldSuggestionsReply(route.request(), {
             suggestions: {
               emoji: {
                 assessmentId: prediction.id,

@@ -118,6 +118,29 @@ factory result to a module-level constant referenced by a splittable property
 in the route's literal options object; loader-time helpers stay React-free in
 `detail-loader.ts`.
 
+## List loading and enrichment
+
+Extend the generic list enrichment pipeline for data shared across rows,
+including saved suggestion outcomes and review status. Batch server reads and
+share preparation across the bounded record set; HTTP batching alone still
+repeats work when each operation prepares and queries independently. Preserve
+per-record cache identity, errors, cancellation and progressive delivery.
+For automatic suggestion recomputation, prioritize visible rows plus a bounded
+prefetch buffer, reuse current saved answers, and batch only missing or
+invalidated decisions after checking their individual caches. Virtualized
+rendering alone does not bound the records passed to a data provider. Verify
+server operation and SQL counts as well as HTTP request counts when changing
+list loading; increasing concurrency is not a substitute for shared work.
+
+`RecordSuggestionsProvider` keeps stored review/bulk-action scope over loaded
+records while mounted `RecordSuggestionBoundary` rows admit automatic work
+from desktop and mobile virtualizers, including their overscan. Its AI
+enrichment stage uses `ai.suggestFieldsBatch`: shared policy, Run and roster
+preparation, then individually cached decision waves and existing assessment
+publication. Ordinary `entity.listEnrichment` reads remain provider-free.
+Queued batches discard cancelled members after shared admission; started work
+retains normal publication and freshness checks.
+
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;
 optional statistics such as a Product barcode cannot gate opening the dialog.

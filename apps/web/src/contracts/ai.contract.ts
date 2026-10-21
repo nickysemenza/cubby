@@ -18,6 +18,8 @@ import {
   financeCategoryApplyOut,
   fieldSuggestionsInput,
   fieldSuggestionsOut,
+  fieldSuggestionsBatchInput,
+  fieldSuggestionsBatchOut,
   fieldSuggestionsReviewOut,
   settledSuggestionQuestionsInput,
   settledSuggestionQuestionsOut,
@@ -141,6 +143,13 @@ export const aiContract = defineContract("ai", {
     output: fieldSuggestionsOut,
     cache: { profile: "stable" },
     queryKeyOmit: ["runKey"],
+  }),
+  suggestFieldsBatch: query({
+    readPolicy: "strong",
+    input: fieldSuggestionsBatchInput,
+    output: fieldSuggestionsBatchOut,
+    mcp: { omit: "client_view" },
+    cache: { profile: "stable" },
   }),
   suggestFieldsReview: query({
     mcp: {

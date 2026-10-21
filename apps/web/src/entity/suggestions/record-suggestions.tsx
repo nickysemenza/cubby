@@ -8,7 +8,10 @@ import type {
   SettledSuggestionQuestionsInput,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
-import { SETTLED_SUGGESTION_QUESTION_MAX } from "@cubby/schemas/ai";
+import {
+  FIELD_SUGGESTIONS_BATCH_MAX,
+  SETTLED_SUGGESTION_QUESTION_MAX,
+} from "@cubby/schemas/ai";
 import type {
   AssessmentReviewBatchOut,
   AssessmentReviewOut,
@@ -35,6 +38,7 @@ import {
 } from "@tanstack/react-query";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -122,6 +126,9 @@ import { useFinanceCategoryApply } from "./use-finance-category-apply";
 const SuggestionSchedulerContext = createContext<ReturnType<
   typeof createConcurrencyLimiter
 > | null>(null);
+const ActiveSuggestionRecordsContext = createContext<
+  ((id: string) => () => void) | null
+>(null);
 
 const recordSchema = z.looseObject({ id: z.string() });
 const mutationPatchSchema = z.record(z.string(), z.json());
@@ -637,6 +644,7 @@ function activeAcceptedSuggestions(
 export function RecordSuggestionsProvider({
   entity,
   records,
+  viewportOnly,
   fieldKeys,
   children,
   statusTarget,
@@ -647,6 +655,7 @@ export function RecordSuggestionsProvider({
 }: {
   entity: Entity | undefined;
   records: readonly unknown[];
+  viewportOnly?: boolean;
   fieldKeys: readonly string[];
   children: ReactNode;
   statusTarget?: HTMLElement | null;
@@ -668,6 +677,7 @@ export function RecordSuggestionsProvider({
         statusTarget={statusTarget}
         entity={crud}
         records={records}
+        viewportOnly={viewportOnly}
         fieldKeys={fieldKeys}
         operations={operations}
         mutationPort={mutationPort}
@@ -1121,6 +1131,7 @@ function SuggestionStatusPlacement({
 function BoundRecordSuggestions({
   entity,
   records: allRecords,
+  viewportOnly,
   fieldKeys,
   children,
   statusTarget,
@@ -1132,6 +1143,7 @@ function BoundRecordSuggestions({
 }: {
   entity: StandardEntity;
   records: readonly unknown[];
+  viewportOnly?: boolean;
   fieldKeys: readonly string[];
   children: ReactNode;
   statusTarget?: HTMLElement | null;
@@ -1144,6 +1156,24 @@ function BoundRecordSuggestions({
   storedSuggestionOperations?: StoredSuggestionOperations;
 }) {
   const visit = useSuggestionVisit();
+  const [activeRecordIds, setActiveRecordIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const activeCounts = useRef(new Map<string, number>());
+  const activateRecord = useCallback((id: string) => {
+    const counts = activeCounts.current;
+    const count = counts.get(id) ?? 0;
+    counts.set(id, count + 1);
+    if (count === 0) setActiveRecordIds(new Set(counts.keys()));
+    return () => {
+      const remaining = (counts.get(id) ?? 1) - 1;
+      if (remaining) counts.set(id, remaining);
+      else {
+        counts.delete(id);
+        setActiveRecordIds(new Set(counts.keys()));
+      }
+    };
+  }, []);
   const parentScheduler = useContext(SuggestionSchedulerContext);
   // A page keeps its limiter across input changes; obsolete work cannot open a
   // second pool. Each in-flight suggestion pins a Neon backend and an AI Gateway call:
@@ -1153,6 +1183,31 @@ function BoundRecordSuggestions({
   // and 16 in flight measurably starved the list's own page reads (3.4 s).
   const [ownScheduler] = useState(() => createConcurrencyLimiter(4));
   const scheduler = parentScheduler ?? ownScheduler;
+  const latestBatch = useRef({ operations, scheduler });
+  latestBatch.current = { operations, scheduler };
+  const [liveBatcher] = useState(() =>
+    createRequestBatcher<FieldSuggestionSource, FieldSuggestionsOut>(
+      async (items, signal) => {
+        const batch = latestBatch.current.operations.suggestFieldsBatch;
+        if (!batch) throw new Error("Suggestion batch transport unavailable");
+        return batch.call(
+          {
+            items: items.map((item) => ({
+              ...item,
+              targets: [...item.targets],
+            })),
+          },
+          { signal, batch: false },
+        );
+      },
+      {
+        max: FIELD_SUGGESTIONS_BATCH_MAX,
+        concurrency: 1,
+        admit: (work, signal) =>
+          latestBatch.current.scheduler.run(work, signal),
+      },
+    ),
+  );
   const financeApply = useFinanceCategoryApply(operations);
   const update = useEntityCommands(entity, { mutationPort });
   const [correctionRecord, setCorrectionRecord] =
@@ -1271,6 +1326,7 @@ function BoundRecordSuggestions({
   );
   const candidateRequests = pageRequests.filter(
     ({ record, source }) =>
+      (!viewportOnly || activeRecordIds.has(record.id)) &&
       recordReady(record.id) &&
       !source.targets.some((field) => {
         const key = storedSuggestionKey(record.id, field);
@@ -1302,10 +1358,12 @@ function BoundRecordSuggestions({
     queries: sources.map((source) => ({
       ...operations.suggestFields.queryOptions(source),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
-        scheduler.run(
-          () => operations.suggestFields.call(source, { signal }),
-          signal,
-        ),
+        operations.suggestFieldsBatch
+          ? liveBatcher.load(source, signal)
+          : scheduler.run(
+              () => operations.suggestFields.call(source, { signal }),
+              signal,
+            ),
       retry: false,
       meta: {
         ...operations.suggestFields.queryOptions(source).meta,
@@ -1625,31 +1683,35 @@ function BoundRecordSuggestions({
     </>
   );
   return (
-    <SuggestionSchedulerContext value={scheduler}>
-      <RecordSuggestionsContext value={context}>
-        <SuggestionStatusPlacement target={statusTarget}>
-          {status}
-        </SuggestionStatusPlacement>
-        {children}
-        {correctionRecord ? (
-          <EntityEditDialog<EditableEntity>
-            open
-            onOpenChange={(open) => {
-              if (!open) setCorrectionRecord(null);
-            }}
-            request={
-              // SAFETY: StandardEntity is the generated browser-editable
-              // roster, and correctionRecord is its freshly read projection.
-              detailEditRequest(
-                entity,
-                correctionRecord as never,
-              ) as EntityEditDialogRequest<EditableEntity>
-            }
-            mutationPort={mutationPort}
-          />
-        ) : null}
-      </RecordSuggestionsContext>
-    </SuggestionSchedulerContext>
+    <ActiveSuggestionRecordsContext
+      value={viewportOnly ? activateRecord : null}
+    >
+      <SuggestionSchedulerContext value={scheduler}>
+        <RecordSuggestionsContext value={context}>
+          <SuggestionStatusPlacement target={statusTarget}>
+            {status}
+          </SuggestionStatusPlacement>
+          {children}
+          {correctionRecord ? (
+            <EntityEditDialog<EditableEntity>
+              open
+              onOpenChange={(open) => {
+                if (!open) setCorrectionRecord(null);
+              }}
+              request={
+                // SAFETY: StandardEntity is the generated browser-editable
+                // roster, and correctionRecord is its freshly read projection.
+                detailEditRequest(
+                  entity,
+                  correctionRecord as never,
+                ) as EntityEditDialogRequest<EditableEntity>
+              }
+              mutationPort={mutationPort}
+            />
+          ) : null}
+        </RecordSuggestionsContext>
+      </SuggestionSchedulerContext>
+    </ActiveSuggestionRecordsContext>
   );
 }
 
@@ -1662,7 +1724,13 @@ export function RecordSuggestionBoundary({
   children: ReactNode;
 }) {
   const context = useContext(RecordSuggestionsContext);
+  const activate = useContext(ActiveSuggestionRecordsContext);
   const parsed = recordSchema.safeParse(record);
+  const id = parsed.success ? parsed.data.id : undefined;
+  useEffect(
+    () => (id === undefined ? undefined : activate?.(id)),
+    [activate, id],
+  );
   const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;
   return (
     <RecordSuggestionScope value={row ?? null}>

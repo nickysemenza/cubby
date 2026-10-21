@@ -15,6 +15,7 @@ import { ProposalCountProvider } from "~/entity/suggestions/proposal-counts";
 import {
   RecordSuggestionsBulkAction,
   RecordSuggestionsProvider,
+  RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
@@ -665,39 +666,41 @@ function VirtualSelectionRow<TItem extends RowData>({
   const selectionProjection = projectRowSelection(rows, row.id, rowIndex);
   const classes = cn(rowClassName?.(row));
   return (
-    <table.Subscribe
-      source={table.atoms.cellSelection!}
-      selector={selectionProjection}
-    >
-      {(selection) => (
-        <table.Subscribe
-          source={table.atoms.rowSelection!}
-          selector={(selected) => selected[row.id] === true}
-        >
-          {(isSelected) => (
-            <DataRow
-              row={row}
-              rowIndex={rowIndex}
-              isSelected={isSelected}
-              isCurrent={currentRowId === row.id}
-              isExpanded={row.getIsExpanded()}
-              isFocused={selection.focused}
-              isDebugEnabled={isDebugEnabled}
-              onRowClick={onRowClick}
-              onRowHover={onRowHover}
-              onRowHoverEnd={onRowHoverEnd}
-              suppressCellRowClick={suppressCellRowClick}
-              rowClassName={classes}
-              cellClassName={cellClassName}
-              columnsKey={columnsKey}
-              rowContentVersion={rowContentVersion}
-              selectionVersion={selection.version}
-              height={height}
-            />
-          )}
-        </table.Subscribe>
-      )}
-    </table.Subscribe>
+    <RecordSuggestionBoundary record={row.original}>
+      <table.Subscribe
+        source={table.atoms.cellSelection!}
+        selector={selectionProjection}
+      >
+        {(selection) => (
+          <table.Subscribe
+            source={table.atoms.rowSelection!}
+            selector={(selected) => selected[row.id] === true}
+          >
+            {(isSelected) => (
+              <DataRow
+                row={row}
+                rowIndex={rowIndex}
+                isSelected={isSelected}
+                isCurrent={currentRowId === row.id}
+                isExpanded={row.getIsExpanded()}
+                isFocused={selection.focused}
+                isDebugEnabled={isDebugEnabled}
+                onRowClick={onRowClick}
+                onRowHover={onRowHover}
+                onRowHoverEnd={onRowHoverEnd}
+                suppressCellRowClick={suppressCellRowClick}
+                rowClassName={classes}
+                cellClassName={cellClassName}
+                columnsKey={columnsKey}
+                rowContentVersion={rowContentVersion}
+                selectionVersion={selection.version}
+                height={height}
+              />
+            )}
+          </table.Subscribe>
+        )}
+      </table.Subscribe>
+    </RecordSuggestionBoundary>
   );
 }
 
@@ -1382,6 +1385,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       }
     >
       <RecordSuggestionsProvider
+        viewportOnly
         statusTarget={statusTarget}
         entity={entity}
         records={

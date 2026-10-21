@@ -1,6 +1,7 @@
 import type {
   FieldSuggestionsInput,
   enrichmentProposalPrecomputeInput,
+  fieldSuggestionsBatchInput,
 } from "@cubby/schemas/ai";
 import {
   fieldSuggestionSchema,
@@ -19,6 +20,7 @@ import { and, eq, exists, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
+import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import {
   suggestIngredientMerge,
   suggestIngredientMergeBatch,
@@ -46,7 +48,10 @@ import {
   savedAnswerKey,
   settledSignature,
 } from "~/server/ai/field-suggest/settled-questions";
-import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import {
+  suggestFields,
+  withFieldSuggestionBatch,
+} from "~/server/ai/field-suggest/suggest-fields";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -57,6 +62,7 @@ import {
   listRecentAiUsage,
   summarizeAiUsage,
 } from "~/server/ai/repo/ai-usage";
+import type { AiSelectionUsage } from "~/server/ai/selection";
 import { afterResponse } from "~/server/cf-env";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
@@ -247,11 +253,19 @@ export const inferFieldAssessments = async (
   context: Pick<AuthenticatedStartOperationContext, "db" | "actorContext">,
   input: FieldSuggestionsInput,
   ports?: Parameters<typeof suggestFields>[3],
+  prepared?: {
+    runId: RunId;
+    manifest: Awaited<ReturnType<typeof producingAiManifest>>;
+    recordId?: Awaited<ReturnType<typeof resolveOrThrow>>;
+  },
 ) => {
-  const runId = await actorAiRun(context, { runKey: input.runKey });
-  const manifest = await producingAiManifest(context.db);
+  const runId =
+    prepared?.runId ?? (await actorAiRun(context, { runKey: input.runKey }));
+  const manifest =
+    prepared?.manifest ?? (await producingAiManifest(context.db));
   const recordId = input.entityId
-    ? await resolveOrThrow(context.db, input.entity, input.entityId)
+    ? (prepared?.recordId ??
+      (await resolveOrThrow(context.db, input.entity, input.entityId)))
     : null;
   if (
     input.savedRecord === true &&
@@ -526,6 +540,83 @@ export const inferFieldAssessments = async (
   return output;
 };
 
+/** A list's finite enrichment set shares setup, vocabularies and decision waves. */
+export async function inferFieldAssessmentsBatch(
+  context: Parameters<typeof inferFieldAssessments>[0],
+  input: z.output<typeof fieldSuggestionsBatchInput>,
+  ports?: Parameters<typeof suggestFields>[3],
+) {
+  const manifest = await producingAiManifest(context.db);
+  const recordIds = new Map<
+    string,
+    Awaited<ReturnType<typeof resolveOrThrow>>
+  >();
+  for (const entity of new Set(input.items.map((item) => item.entity))) {
+    const codes = input.items.flatMap((item) =>
+      item.entity === entity && item.entityId ? [item.entityId] : [],
+    );
+    if (!codes.length) continue;
+    const resolved = await resolveLiveShortcodes(
+      context.db,
+      [...new Set(codes)],
+      entity,
+    );
+    for (const [code, id] of resolved) recordIds.set(code, id);
+  }
+  const runs = new Map<string | undefined, Promise<RunId>>();
+  const usages = new Map<string, AiSelectionUsage>();
+  const results = await withFieldSuggestionBatch(() =>
+    settleDecisionWorkItems(input.items, async (item) => {
+      let pendingRun = runs.get(item.runKey);
+      if (!pendingRun) {
+        pendingRun = actorAiRun(context, { runKey: item.runKey });
+        runs.set(item.runKey, pendingRun);
+      }
+      const runId = await pendingRun;
+      return inferFieldAssessments(
+        context,
+        item,
+        {
+          ...ports,
+          usageFor: (operation) => {
+            const key = JSON.stringify([runId, operation]);
+            let usage = usages.get(key);
+            if (!usage) {
+              usage = {
+                db: ports?.recordUsage === false ? undefined : context.db,
+                runId,
+                operation,
+                cacheStatus: "none",
+                force: ports?.force,
+              };
+              usages.set(key, usage);
+            }
+            return usage;
+          },
+        },
+        {
+          runId,
+          manifest,
+          recordId: item.entityId ? recordIds.get(item.entityId) : undefined,
+        },
+      );
+    }),
+  );
+  return {
+    results: results.map((result) =>
+      result.status === "fulfilled"
+        ? { ok: true as const, value: result.value }
+        : {
+            ok: false as const,
+            message:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          },
+    ),
+  };
+}
+
 export const aiHandlers = implementOperationDomain(aiContract, {
   describeLocation: async (context, input) => {
     const runId = await actorAiRun(context);
@@ -630,6 +721,8 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     latestSuggestionSweepStatus(context.db),
   // Both presentations share the page run grouping and authoritative inference.
   suggestFields: (context, input) => inferFieldAssessments(context, input),
+  suggestFieldsBatch: (context, input) =>
+    inferFieldAssessmentsBatch(context, input),
   suggestFieldsReview: async (context, input) => {
     const { suggestions, ...contextual } = await inferFieldAssessments(
       context,

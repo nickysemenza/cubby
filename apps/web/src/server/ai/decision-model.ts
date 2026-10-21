@@ -2,6 +2,8 @@
  * The decision-tier runner: closed-set questions placed with Jev or Clef
  * over Workers AI. The chat-tier counterpart is `run-feature.ts`.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { type Confidence, decisionConfidence } from "@cubby/schemas/ai";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
@@ -49,6 +51,7 @@ import {
   type DecisionQuestionsInput,
   type DecisionQuestionsResponse,
 } from "./decision-request-batch";
+import { settleDecisionWork } from "./decision-work-batch";
 import { captureAiInput, preparingAiInputs } from "./evaluation-inputs";
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
 
@@ -322,12 +325,48 @@ export function decisionChoiceFitsContext(args: DecisionChoicePrompt): boolean {
 export async function runDecisionChoice(
   args: DecisionChoiceArgs,
 ): Promise<DecisionChoiceResult> {
-  return runDecisionChoiceInternal(args);
+  const ask = decisionWork.getStore();
+  return ask && !preparingAiInputs()
+    ? ask(args)
+    : runDecisionChoiceInternal(args);
+}
+
+const decisionWork = new AsyncLocalStorage<
+  (args: DecisionChoiceArgs) => Promise<DecisionChoiceResult>
+>();
+
+/** Share decision/cache waves while bounding each item's preparation and publication. */
+export function settleDecisionWorkItems<T, V>(
+  items: readonly T[],
+  work: (item: T) => Promise<V>,
+) {
+  return settleDecisionWork<
+    T,
+    {
+      args: DecisionChoiceArgs;
+      run: ReturnType<typeof AsyncLocalStorage.snapshot>;
+    },
+    DecisionChoiceResult,
+    V
+  >(
+    items,
+    (item, ask) =>
+      decisionWork.run(
+        (args) => ask({ args, run: AsyncLocalStorage.snapshot() }),
+        () => work(item),
+      ),
+    (questions) =>
+      settleDecisionChoices(questions, (question) => question.args, {
+        runInContext: (question, execute) => question.run(execute),
+      }),
+  );
 }
 
 export async function runDecisionChoices(
   args: readonly DecisionChoiceArgs[],
 ): Promise<DecisionChoiceResult[]> {
+  if (decisionWork.getStore() && !preparingAiInputs())
+    return Promise.all(args.map(runDecisionChoice));
   const settled = await settleDecisionChoices(args, (question) => question);
   const failure = settled.find((result) => result.status === "rejected");
   if (failure) throw failure.reason;
@@ -340,7 +379,13 @@ export async function runDecisionChoices(
 export async function settleDecisionChoices<T>(
   items: readonly T[],
   questionFor: (item: T) => DecisionChoiceArgs,
-  options: { cooperative?: boolean } = {},
+  options: {
+    cooperative?: boolean;
+    runInContext?: (
+      item: T,
+      execute: () => Promise<DecisionChoiceResult>,
+    ) => Promise<DecisionChoiceResult>;
+  } = {},
 ): Promise<(PromiseSettledResult<DecisionChoiceResult> & { item: T })[]> {
   const args = items.map(questionFor);
   const batch = new DecisionRequestBatch(args.length);
@@ -350,15 +395,19 @@ export async function settleDecisionChoices<T>(
     Promise.allSettled(
       args.map((item, index) => {
         if (!usages.has(item.usage)) usages.set(item.usage, usages.size);
-        return runDecisionChoiceInternal(item, {
-          batch,
-          cache,
-          index,
-          usageGroup: usages.get(item.usage)!,
-        }).finally(() => {
-          cache.ready(index);
-          batch.ready(index);
-        });
+        const execute = () =>
+          runDecisionChoiceInternal(item, {
+            batch,
+            cache,
+            index,
+            usageGroup: usages.get(item.usage)!,
+          }).finally(() => {
+            cache.ready(index);
+            batch.ready(index);
+          });
+        return options.runInContext
+          ? options.runInContext(items[index]!, execute)
+          : execute();
       }),
     );
   const settled = await (options.cooperative
