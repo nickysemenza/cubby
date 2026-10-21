@@ -413,6 +413,12 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   ).toContainText("61.07");
   // A deferred pending candidate becomes bookable after applying status. Its
   // controls must retain focus across the next authoritative draft replan.
+  await expect(
+    page.getByText("Spending preview unavailable", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Updating spending preview…", { exact: true }),
+  ).toHaveCount(0);
   await page
     .getByRole("checkbox", { name: "Apply status", exact: true })
     .check();

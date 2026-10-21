@@ -3016,7 +3016,8 @@ Email link decisions remain ordinary history. Report incorrect records Wrong
 Feedback through the existing family path, without applying a correction or
 pausing automation. Applied effects remain; affected records link to their domain
 actions. Feedback participates in supported later reassessment without promising
-historical record repair. Wrong and corrected decisions remain in the audit. Legacy Email predictions without application receipts are included with
+historical record repair. Wrong and corrected decisions remain in the audit.
+Legacy Email predictions without application receipts are included with
 **Unverified application**, even if they disagree with the Email's current relevance.
 New ingestion records observation and application receipts atomically with routing;
 known unapplied predictions stay ordinary history. Observation receipts coexist

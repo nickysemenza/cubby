@@ -162,11 +162,13 @@ function SpendingEvidence({
   plan,
   amount,
   merchant,
+  previewState,
 }: {
   row: StatementRow;
   plan: FinancialSpendingPlan | null;
   amount: number;
   merchant: string | null;
+  previewState: "pending" | "error" | "ready";
 }) {
   const { draft, setDraft, outcome } = useSuggestionReview();
   const current = draft(row.id);
@@ -190,7 +192,11 @@ function SpendingEvidence({
     >
       <p className="font-medium">
         {!plan
-          ? "Updating spending preview…"
+          ? previewState === "pending"
+            ? "Updating spending preview…"
+            : previewState === "error"
+              ? "Spending preview unavailable"
+              : "No spending effect"
           : plan.status === "already_booked"
             ? "Spending already booked"
             : plan.status === "deferred"
@@ -767,6 +773,15 @@ function StatementEvidence({ row }: { row: StatementRow }) {
         ) : null}
         <SpendingEvidence
           row={row}
+          previewState={
+            settled
+              ? "ready"
+              : preview.isError
+                ? "error"
+                : preview.isFetching
+                  ? "pending"
+                  : "ready"
+          }
           plan={
             settled
               ? (charge.spending ?? null)
