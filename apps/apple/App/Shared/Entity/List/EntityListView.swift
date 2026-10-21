@@ -105,7 +105,12 @@ struct EntityListView: View {
     private var presentationChoices: [PresentationChoice] {
         let shared = renderableViews.filter { $0 == .shelf }
         let specialist = renderableViews.filter { $0 != .table && $0 != .shelf }
-        let browse = [BrowsePresentation.list, .table].map { presentation in
+        #if os(macOS)
+            let browsePresentations: [BrowsePresentation] = [.list, .table]
+        #else
+            let browsePresentations: [BrowsePresentation] = [.list]
+        #endif
+        let browse = browsePresentations.map { presentation in
             PresentationChoice(
                 id: presentation.rawValue,
                 label: presentation == .list ? "List" : "Table",
@@ -148,6 +153,9 @@ struct EntityListView: View {
         }
         .fieldGuideScreen()
         .navigationTitle(descriptor.plural)
+        #if os(macOS)
+            .navigationSubtitle(Text(toolbarSubtitle))
+        #endif
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -247,31 +255,9 @@ struct EntityListView: View {
                 }
             }
         #else
-            if let model, !descriptor.presentation.savedViews.isEmpty {
+            if let model {
                 ToolbarItem(placement: .primaryAction) {
-                    savedViewsMenu(model)
-                }
-            }
-            if let model, presentationChoices.count > 1 {
-                ToolbarItem(placement: .primaryAction) {
-                    presentationPicker(model)
-                }
-            }
-            if let model, !descriptor.grouping.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
-                    groupByMenu(model)
-                }
-            }
-            if !descriptor.filters.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingFilters = true
-                    } label: {
-                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                    .badge(model?.filters.activeCount ?? 0)
-                    .accessibilityLabel(filterAccessibilityLabel)
-                    .accessibilityIdentifier("browse.\(key.rawValue).filter")
+                    macViewMenu(model)
                 }
             }
             if key.nativeActions.contains(.create) {
@@ -279,8 +265,10 @@ struct EntityListView: View {
                     Button {
                         creating = true
                     } label: {
-                        Label("New \(descriptor.singular)", systemImage: "plus")
+                        Image(systemName: "plus")
                     }
+                    .help("New \(descriptor.singular)")
+                    .accessibilityLabel("New \(descriptor.singular)")
                     .accessibilityIdentifier("browse.\(key.rawValue).create")
                 }
             }
@@ -327,6 +315,107 @@ struct EntityListView: View {
             .accessibilityIdentifier("browse.\(key.rawValue).filter")
         }
     }
+
+    #if os(macOS)
+        private func macViewMenu(_ model: GenericEntityListModel) -> some View {
+            Menu("View", systemImage: "slider.horizontal.3") {
+                if presentationChoices.count > 1 {
+                    Section("Presentation") {
+                        ForEach(presentationChoices) { choice in
+                            Button {
+                                selectPresentation(choice.id, model: model)
+                            } label: {
+                                if currentPresentationID(model) == choice.id {
+                                    Label(choice.label, systemImage: "checkmark")
+                                } else {
+                                    Text(choice.label)
+                                }
+                            }
+                            .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
+                        }
+                    }
+                }
+                if !descriptor.sortFields.isEmpty {
+                    sortMenu(model)
+                }
+                if !descriptor.grouping.isEmpty {
+                    groupByMenu(model)
+                }
+                if !descriptor.presentation.savedViews.isEmpty {
+                    savedViewsMenu(model)
+                }
+                if !descriptor.filters.isEmpty {
+                    Button {
+                        showingFilters = true
+                    } label: {
+                        Label(filterAccessibilityLabel, systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                    .accessibilityIdentifier("browse.\(key.rawValue).filter")
+                }
+                if !allTableFields.isEmpty {
+                    columnsMenu
+                }
+            }
+            .accessibilityIdentifier("browse.\(key.rawValue).view-menu")
+        }
+
+        private func currentPresentationID(_ model: GenericEntityListModel) -> String {
+            switch model.view {
+            case .table: browsePresentation.rawValue
+            case .shelf: cardDensity.rawValue
+            case .timeline, .board, .slot: model.view.id
+            }
+        }
+
+        private func sortMenu(_ model: GenericEntityListModel) -> some View {
+            Menu("Sort", systemImage: "arrow.up.arrow.down") {
+                if model.sort != nil {
+                    Button("Clear sort") { Task { await model.apply(sort: nil) } }
+                }
+                ForEach(descriptor.sortFields, id: \.self) { fieldKey in
+                    let active = model.sort == fieldKey || model.sort == "-\(fieldKey)"
+                    let descending = model.sort == "-\(fieldKey)"
+                    let label = descriptor.field(fieldKey)?.label ?? fieldKey
+                    Button {
+                        let next = model.sort == fieldKey ? "-\(fieldKey)" : fieldKey
+                        Task { await model.apply(sort: next) }
+                    } label: {
+                        if active {
+                            Label(
+                                "\(label) · \(descending ? "Descending" : "Ascending")",
+                                systemImage: "checkmark")
+                        } else {
+                            Text(label)
+                        }
+                    }
+                    .accessibilityIdentifier("browse.\(key.rawValue).sort-menu.\(fieldKey)")
+                }
+            }
+            .accessibilityIdentifier("browse.\(key.rawValue).sort-menu")
+        }
+
+        private var columnsMenu: some View {
+            Menu("Columns", systemImage: "tablecells") {
+                ForEach(allTableFields, id: \.key) { field in
+                    Toggle(
+                        field.label,
+                        isOn: Binding(
+                            get: { !hiddenTableColumns.contains(field.key) },
+                            set: { visible in
+                                if visible {
+                                    hiddenTableColumns.remove(field.key)
+                                } else {
+                                    hiddenTableColumns.insert(field.key)
+                                }
+                            })
+                    )
+                    .accessibilityIdentifier("browse.\(key.rawValue).column.\(field.key)")
+                }
+            }
+            .accessibilityLabel("Show or hide table columns")
+            .accessibilityIdentifier("browse.\(key.rawValue).columns")
+        }
+    #endif
 
     /// Every declared Group by choice; one that cannot group stays listed, disabled, with its
     /// reason as the subtitle. While the list cannot group (Timeline, search), every choice
@@ -466,6 +555,16 @@ struct EntityListView: View {
         return count == 0 ? "Filter" : "Filter, \(count) active"
     }
 
+    private var toolbarSubtitle: String {
+        guard let model else { return "" }
+        let meta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
+        guard let meta else { return "" }
+        let totals = descriptor.presentation.listTotals.map { total in
+            meta.totalLabels?.additionalProperties[total.id] ?? "Unavailable"
+        }
+        return ([meta.totalCount.formatted()] + totals).joined(separator: " · ")
+    }
+
     private func refreshVisible(_ model: GenericEntityListModel) async {
         if model.isSearching {
             await model.searchModel?.refresh()
@@ -562,7 +661,9 @@ struct EntityListView: View {
             case .loaded:
                 VStack {
                     if hasBanner(model) { banner(model) }
-                    if let meta = model.summaryMeta { listSummary(meta: meta, shown: 0) }
+                    #if !os(macOS)
+                        if let meta = model.summaryMeta { listSummary(meta: meta, shown: 0) }
+                    #endif
                     ContentUnavailableView {
                         Label(
                             model.filters.isEmpty
@@ -600,7 +701,9 @@ struct EntityListView: View {
                 case .loaded:
                     VStack {
                         if hasBanner(model) { banner(model) }
-                        if let meta = search.summaryMeta { listSummary(meta: meta, shown: 0) }
+                        #if !os(macOS)
+                            if let meta = search.summaryMeta { listSummary(meta: meta, shown: 0) }
+                        #endif
                         ContentUnavailableView(
                             "No matching \(descriptor.plural)", systemImage: "magnifyingglass")
                     }
@@ -623,11 +726,13 @@ struct EntityListView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if hasBanner(model) { banner(model).padding(.horizontal) }
-                if let meta {
-                    listSummary(meta: meta, shown: rows.count)
-                        .padding(.horizontal, FieldGuideTokens.Space.md)
-                        .padding(.top, FieldGuideTokens.Space.sm)
-                }
+                #if !os(macOS)
+                    if let meta {
+                        listSummary(meta: meta, shown: rows.count)
+                            .padding(.horizontal, FieldGuideTokens.Space.md)
+                            .padding(.top, FieldGuideTokens.Space.sm)
+                    }
+                #endif
                 EntityShelfView(
                     descriptor: descriptor, rows: rows, density: cardDensity,
                     section: .browse,
@@ -797,31 +902,11 @@ struct EntityListView: View {
     }
 
     private func tableControls(_ model: GenericEntityListModel) -> some View {
-        HStack {
-            if hasBanner(model) { banner(model) }
-            Spacer()
-            Menu("Columns", systemImage: "tablecells") {
-                ForEach(allTableFields, id: \.key) { field in
-                    Toggle(
-                        field.label,
-                        isOn: Binding(
-                            get: { !hiddenTableColumns.contains(field.key) },
-                            set: { visible in
-                                if visible {
-                                    hiddenTableColumns.remove(field.key)
-                                } else {
-                                    hiddenTableColumns.insert(field.key)
-                                }
-                            })
-                    )
-                    .accessibilityIdentifier("browse.\(key.rawValue).column.\(field.key)")
-                }
+        Group {
+            if hasBanner(model) {
+                banner(model)
             }
-            .accessibilityLabel("Show or hide table columns")
-            .accessibilityIdentifier("browse.\(key.rawValue).columns")
         }
-        .padding(.horizontal, FieldGuideTokens.Space.md)
-        .padding(.vertical, FieldGuideTokens.Space.xs)
     }
 
     private var tableTitleLabel: String {
@@ -829,10 +914,30 @@ struct EntityListView: View {
     }
 
     private func tableTitle(_ row: EntityRow) -> some View {
-        Text(row.title)
-            .font(.body.weight(.semibold))
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+        HStack(spacing: FieldGuideTokens.Space.xs) {
+            Thumb(
+                url: row.imageURL, size: 18, symbol: descriptor.recordSymbol(in: row),
+                emoji: descriptor.recordEmoji(in: row))
+            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
+                Text(row.title)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                if descriptor.presentation.titleSubtitle,
+                    let subtitle = EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)?
+                        .value
+                        ?? row.subtitle
+                {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("browse.\(key.rawValue).table.row.\(row.id)")
+        }
+        .frame(minHeight: 24, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -843,8 +948,8 @@ struct EntityListView: View {
         let actions = sectionActions(model)
         let fields = tableFields
         #if os(macOS)
-            // Native table cells are rehosted when sorting replaces the rows. Capture the
-            // owning model before that boundary so explanation views keep their dependency.
+            // Native table cells are rehosted when sorting replaces the rows, so capture the
+            // owning model before that boundary for their reference actions.
             let cellAppModel = appModel
         #endif
         VStack(spacing: 0) {
@@ -902,6 +1007,7 @@ struct EntityListView: View {
                         ForEach(visibleRows) { TableRow($0) }
                     }
                 }
+                .tableStyle(.inset(alternatesRowBackgrounds: true))
                 .contextMenu(forSelectionType: String.self) { records in
                     if let id = records.first {
                         Button("Copy link", systemImage: "link") {
@@ -950,11 +1056,13 @@ struct EntityListView: View {
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
             #endif
             if let visibleMeta {
-                listSummary(meta: visibleMeta, shown: visibleRows.count)
-                    .padding(.horizontal, FieldGuideTokens.Space.md)
-                    .padding(.vertical, FieldGuideTokens.Space.xs)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("browse.\(key.rawValue).table.summary")
+                #if !os(macOS)
+                    listSummary(meta: visibleMeta, shown: visibleRows.count)
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
+                        .padding(.vertical, FieldGuideTokens.Space.xs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("browse.\(key.rawValue).table.summary")
+                #endif
             }
             if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
                 loadMore(model)
@@ -1009,7 +1117,7 @@ struct EntityListView: View {
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             .frame(
                 minWidth: FieldGuideTokens.touchTarget,
-                minHeight: FieldGuideTokens.touchTarget, alignment: .leading
+                minHeight: tableCellMinimumHeight, alignment: .leading
             )
             .contentShape(Rectangle())
         if usesBrowseSelection {
@@ -1025,6 +1133,14 @@ struct EntityListView: View {
         }
     }
 
+    private var tableCellMinimumHeight: CGFloat {
+        #if os(macOS)
+            24
+        #else
+            FieldGuideTokens.touchTarget
+        #endif
+    }
+
     #if os(macOS)
         private func tableFact(_ field: FieldDescriptor, row: EntityRow) -> EntityRowPresentation.Fact? {
             EntityRowPresentation.fact(field.key, descriptor: descriptor, row: row)
@@ -1035,48 +1151,58 @@ struct EntityListView: View {
     private func tableCell(
         _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact?
     ) -> some View {
-        if let fact {
-            HStack(spacing: FieldGuideTokens.Space.xs) {
-                if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
-                    tableReference(reference, value: fact.value)
-                        .buttonStyle(.borderless)
-                        .accessibilityIdentifier(
-                            "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
-                    if fact.inherited { InheritedMarker() }
-                } else if let option = EntityFieldValue.option(in: row.raw, field: field, surface: "list"),
-                    let chip = StatusChip(text: fact.value, option: option)
-                {
-                    chip
-                } else {
-                    Group {
-                        if let date = fact.dateValue {
-                            #if os(macOS)
-                                DateDisplay(date, compact: true)
-                            #else
-                                DateDisplay(date, compact: true, stacked: true)
-                            #endif
-                        } else {
-                            InheritedMarker.text(fact.segments)
-                                .accessibilityLabel(fact.spokenValue)
+        Group {
+            if let fact {
+                HStack(spacing: FieldGuideTokens.Space.xs) {
+                    if field.listRenderer == .dataQuality {
+                        if EntityRowPresentation.needsData(in: row) {
+                            HStack(spacing: FieldGuideTokens.Space.xs) {
+                                Circle().fill(.orange).frame(width: 6, height: 6)
+                                Text("Needs data")
+                            }
+                        } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
+                            Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
                         }
+                    } else if let reference = EntityFieldValue.reference(
+                        in: row.raw, field: field, surface: "list")
+                    {
+                        tableReference(reference, value: fact.value)
+                            .buttonStyle(.borderless)
+                            .accessibilityIdentifier(
+                                "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
+                        if fact.inherited { InheritedMarker() }
+                    } else if let option = EntityFieldValue.option(
+                        in: row.raw, field: field, surface: "list"),
+                        let chip = StatusChip(text: fact.value, option: option)
+                    {
+                        chip
+                    } else {
+                        Group {
+                            if let date = fact.dateValue {
+                                #if os(macOS)
+                                    DateDisplay(date, compact: true)
+                                #else
+                                    DateDisplay(date, compact: true, stacked: true)
+                                #endif
+                            } else {
+                                InheritedMarker.text(fact.segments)
+                                    .accessibilityLabel(fact.spokenValue)
+                            }
+                        }
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
-                if field.explanation != nil {
-                    FieldExplanationLabel(
-                        field: field, subject: EntityRef(entity: key, id: row.id),
-                        labelOverride: "About \(field.label)", surface: "list")
-                }
+            } else if row.pendingFields.contains(field.key) {
+                Text("Loading…").foregroundStyle(.secondary).lineLimit(1)
+            } else if row.failedFields.contains(field.key) {
+                Text("Unavailable").foregroundStyle(.secondary).lineLimit(1)
+            } else {
+                Text("—").foregroundStyle(.tertiary)
             }
-        } else if row.pendingFields.contains(field.key) {
-            Text("Loading…").foregroundStyle(.secondary).lineLimit(1)
-        } else if row.failedFields.contains(field.key) {
-            Text("Unavailable").foregroundStyle(.secondary).lineLimit(1)
-        } else {
-            Text("—").foregroundStyle(.tertiary)
         }
+        .frame(minHeight: tableCellMinimumHeight, alignment: .leading)
     }
 
     @ViewBuilder
@@ -1085,7 +1211,9 @@ struct EntityListView: View {
         let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         if let meta = visibleMeta {
-            listSummary(meta: meta, shown: visibleRows.count)
+            #if !os(macOS)
+                listSummary(meta: meta, shown: visibleRows.count)
+            #endif
         }
         if let sections = model.sections {
             let actions = sectionActions(model)
@@ -1196,7 +1324,7 @@ struct EntityListView: View {
         }
         .listRowInsets(
             EdgeInsets(
-                top: 2, leading: FieldGuideTokens.Space.md, bottom: 2, trailing: FieldGuideTokens.Space.md))
+                top: 0, leading: FieldGuideTokens.Space.md, bottom: 0, trailing: FieldGuideTokens.Space.md))
     }
 }
 
@@ -1210,17 +1338,16 @@ struct EntityQualityFact: View {
     let raw: JSONValue
 
     var body: some View {
-        let descriptor = EntityCatalog[key]
-        let row = EntityRow(id: id, title: "", subtitle: nil, imageURL: nil, raw: raw)
-        let quality = EntityRowPresentation.resolve(
-            descriptor: descriptor, row: row, columns: ["dataQuality"]
-        ).facts.first
-        if let quality, let field = descriptor.field("dataQuality") {
-            FieldExplanationLabel(
-                field: field, subject: EntityRef(entity: key, id: id), labelOverride: quality.value,
-                surface: "list"
-            )
+        if EntityCatalog[key].field("dataQuality") != nil,
+            EntityRowPresentation.needsData(
+                in: EntityRow(id: id, title: "", subtitle: nil, imageURL: nil, raw: raw))
+        {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                Circle().fill(.orange).frame(width: 6, height: 6)
+                Text("Needs data")
+            }
             .font(.caption.weight(.medium))
+            .accessibilityLabel("Needs data")
         }
     }
 }
@@ -1228,110 +1355,55 @@ struct EntityQualityFact: View {
 struct EntityRowView: View {
     let key: EntityKey
     let row: EntityRow
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var columns: [String]? = nil
     var photoMode = false
     /// Preview-only image injection keeps the production row on the shared URL-backed Thumb
     /// while allowing previews to exercise the real image geometry and clipping.
     var previewImage: Image? = nil
 
-    /// The row's resolved presentation and its rail, subtitle and supporting facts, derived
-    /// together once per body: each projection resolves every field's value and explanation.
+    /// One manifest projection feeds both visible lines and the complete spoken row label.
     private struct Layout {
         let presentation: EntityRowPresentation
-        let rail: [EntityRowPresentation.Fact]
-        let context: EntityRowPresentation.Fact?
-        let supporting: [EntityRowPresentation.Fact]
+        let trailingValue: EntityRowPresentation.Fact?
+        let date: EntityRowPresentation.Fact?
+        let subtitle: EntityRowPresentation.Fact?
+        let subtitleText: String?
+        let contextFacts: [EntityRowPresentation.Fact]
+        let needsData: Bool
     }
 
     private var layout: Layout {
         let descriptor = EntityCatalog[key]
         let presentation = EntityRowPresentation.resolve(
             descriptor: descriptor, row: row, columns: columns, photoMode: photoMode)
-        let dated = presentation.facts.first { $0.isDate }
-        let leading = presentation.facts.filter { !$0.isDate }.sorted { left, right in
+        let titleSubtitle = EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)
+        let mobileSubtitle = presentation.facts.first {
+            descriptor.field($0.id)?.mobileSlot == "subtitle"
+        }
+        let dated = presentation.facts.first { $0.isDate && $0.id != "dataQuality" }
+        let leading = presentation.facts.filter { !$0.isDate && $0.id != "dataQuality" }.sorted {
+            left, right in
             func priority(_ fact: EntityRowPresentation.Fact) -> Int {
                 guard let field = descriptor.field(fact.id) else { return .max }
                 if field.key == descriptor.presentation.heroChip { return -1 }
                 if field.mobileSlot == "trailing" { return field.mobilePriority ?? 0 }
-                return fact.id == "dataQuality" ? 1000 : .max
+                return .max
             }
             return priority(left) < priority(right)
         }.first { fact in
             let field = descriptor.field(fact.id)
-            return field?.key == descriptor.presentation.heroChip
-                || field?.mobileSlot == "trailing" || fact.id == "dataQuality"
+            return field?.key == descriptor.presentation.heroChip || field?.mobileSlot == "trailing"
         }
-        let rail = [leading, dated].compactMap { $0 }
-        let railIDs = Set(rail.map(\.id))
-        let context = presentation.facts.filter {
-            !railIDs.contains($0.id) && descriptor.field($0.id)?.mobileSlot == "subtitle"
-        }.min {
-            (descriptor.field($0.id)?.mobilePriority ?? .max)
-                < (descriptor.field($1.id)?.mobilePriority ?? .max)
-        }
-        let headerIDs = railIDs.union([context?.id].compactMap { $0 })
+        let subtitle = titleSubtitle ?? mobileSubtitle
+        let subtitleText = titleSubtitle?.value ?? row.subtitle ?? mobileSubtitle?.value
+        let omitted = Set(
+            ["dataQuality", leading?.id, dated?.id, subtitle?.id].compactMap { $0 })
+        let contextFacts = presentation.facts.filter { !omitted.contains($0.id) }
         return Layout(
-            presentation: presentation, rail: rail, context: context,
-            supporting: presentation.facts.filter { !headerIDs.contains($0.id) })
-    }
-
-    @ViewBuilder
-    private func factView(_ fact: EntityRowPresentation.Fact, isRail: Bool = false) -> some View {
-        let field = EntityCatalog[key].field(fact.id)
-        HStack(spacing: FieldGuideTokens.Space.xs) {
-            if fact.id == "dataQuality", let field {
-                FieldExplanationLabel(
-                    field: field, subject: EntityRef(entity: key, id: row.id),
-                    labelOverride: fact.value, surface: "list")
-            } else if let date = fact.dateValue {
-                VStack(alignment: isRail ? .trailing : .leading, spacing: 2) {
-                    Text("\(fact.label ?? field?.label ?? fact.id):")
-                    DateDisplay(date)
-                }
-                .accessibilityElement(children: .combine)
-            } else if isRail {
-                InheritedMarker.text(fact.segments)
-                    .monospacedDigit()
-                    .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.spokenValue)")
-            } else if let field,
-                let option = EntityFieldValue.option(in: row.raw, field: field, surface: "list"),
-                let chip = StatusChip(text: "\(fact.label ?? field.label): \(fact.value)", option: option)
-            {
-                chip
-            } else {
-                Text("\(fact.label ?? field?.label ?? fact.id): \(InheritedMarker.text(fact.segments))")
-                    .font(.caption)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                    .accessibilityLabel("\(fact.label ?? field?.label ?? fact.id): \(fact.spokenValue)")
-            }
-            if let field, field.explanation != nil, fact.id != "dataQuality" {
-                FieldExplanationLabel(
-                    field: field, subject: EntityRef(entity: key, id: row.id),
-                    labelOverride: fact.value, surface: "list", iconOnly: true)
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    @ViewBuilder
-    private func supportingBand(_ layout: Layout) -> some View {
-        if layout.supporting.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
-            EmptyView()
-        } else {
-            WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
-                ForEach(layout.supporting) { fact in factView(fact) }
-                if !row.pendingFields.isEmpty {
-                    Text("Loading details…").font(.caption).foregroundStyle(.secondary)
-                } else if !row.failedFields.isEmpty {
-                    Text("Some details unavailable").font(.caption).foregroundStyle(.secondary)
-                }
-                if photoMode {
-                    Text(layout.presentation.shortcode).font(.caption2.monospaced())
-                }
-            }
-            .font(.caption)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+            presentation: presentation, trailingValue: leading, date: dated,
+            subtitle: subtitle, subtitleText: subtitleText,
+            contextFacts: Array(contextFacts.prefix(3)), needsData: EntityRowPresentation.needsData(in: row))
     }
 
     var body: some View {
@@ -1342,19 +1414,75 @@ struct EntityRowView: View {
             symbol: EntityCatalog[key].recordSymbol(in: row), emoji: EntityCatalog[key].recordEmoji(in: row),
             previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
         ) {
-            if let context = layout.context { factView(context) }
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                if layout.needsData {
+                    Circle().fill(.orange).frame(width: 6, height: 6)
+                    Text("Needs data")
+                }
+                let facts = ([layout.subtitleText].compactMap { $0 } + layout.contextFacts.map(\.value))
+                if !facts.isEmpty {
+                    Text(facts.prefix(layout.needsData ? 2 : 3).joined(separator: " · "))
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         } rail: {
-            ForEach(layout.rail) { fact in factView(fact, isRail: true) }
+            if let value = layout.trailingValue {
+                InheritedMarker.text(value.segments)
+                    .monospacedDigit()
+                    .accessibilityLabel(value.spokenValue)
+            }
+            if let date = layout.date?.dateValue {
+                RelativeDateDisplay(value: date)
+            }
         } supplement: {
-            supportingBand(layout)
+            EmptyView()
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(
-            (photoMode
-                ? "\(presentation.accessibilityText), \(presentation.shortcode)"
-                : presentation.accessibilityText)
-                + (row.pendingFields.isEmpty ? "" : ", Loading details")
-                + (row.failedFields.isEmpty ? "" : ", Some details unavailable"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText(for: layout))
+    }
+
+    private func accessibilityText(for layout: Layout) -> String {
+        let descriptor = EntityCatalog[key]
+        var facts = [layout.presentation.title]
+        if let value = layout.trailingValue {
+            facts.append("\(descriptor.field(value.id)?.label ?? value.id): \(value.spokenValue)")
+        }
+        if layout.needsData { facts.append("Needs data") }
+        if let subtitle = layout.subtitle {
+            facts.append("\(descriptor.field(subtitle.id)?.label ?? subtitle.id): \(subtitle.spokenValue)")
+        } else if let subtitleText = layout.subtitleText {
+            facts.append(subtitleText)
+        }
+        facts += layout.contextFacts.map {
+            "\(descriptor.field($0.id)?.label ?? $0.id): \($0.spokenValue)"
+        }
+        if let date = layout.date {
+            let value = date.dateValue.flatMap { DatePresentation.value($0)?.text } ?? date.spokenValue
+            facts.append("\(descriptor.field(date.id)?.label ?? date.id): \(value)")
+        }
+        if photoMode { facts.append(layout.presentation.shortcode) }
+        if !row.pendingFields.isEmpty { facts.append("Loading details") }
+        if !row.failedFields.isEmpty { facts.append("Some details unavailable") }
+        return facts.joined(separator: ", ")
+    }
+}
+
+private struct RelativeDateDisplay: View {
+    let value: String
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            if let display = DatePresentation.value(value, now: context.date, compact: true, locale: locale) {
+                Text(display.relative)
+                    .monospacedDigit()
+                    .help(display.exact)
+                    .accessibilityLabel(display.text)
+            } else {
+                Text(value)
+            }
+        }
     }
 }
 

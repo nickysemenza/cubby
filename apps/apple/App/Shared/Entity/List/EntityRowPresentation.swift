@@ -137,6 +137,23 @@ struct EntityRowPresentation: Sendable, Hashable {
             imageURL: row.imageURL)
     }
 
+    /// The caption declared for the identity column. Fields with their own list column are
+    /// omitted so a title subtitle never repeats a value beside the title.
+    static func titleSubtitle(descriptor: EntityDescriptor, row: EntityRow) -> Fact? {
+        guard descriptor.presentation.titleSubtitle else { return nil }
+        for key in descriptor.presentation.shelfSubtitle {
+            guard let field = descriptor.field(key), !field.showInList,
+                let caption = fact(key, descriptor: descriptor, row: row)
+            else { continue }
+            return caption
+        }
+        return nil
+    }
+
+    static func needsData(in row: EntityRow) -> Bool {
+        row.raw["dataQuality"]?["status"]?.stringValue == "needs_data"
+    }
+
     /// One column's fact for `row`, the unit `resolve` assembles; a table cell asks for its own
     /// column alone rather than resolving the row's data-quality column with it.
     static func fact(_ columnID: String, descriptor: EntityDescriptor, row: EntityRow) -> Fact? {
@@ -148,15 +165,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             if field.readKey == nil {
                 text = "Not assessed"
             } else if let status = row.raw[key]?["status"]?.stringValue {
-                let label =
-                    field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
-                // A null score is a not-assessed record; the server caps any unresolved gap at
-                // 99 or below, so rounding never shows a gap as 100.
-                if let score = row.raw[key]?["score"]?.doubleValue {
-                    text = "\(Int(score.rounded()))/100 · \(label)"
-                } else {
-                    text = label
-                }
+                text = field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
             } else {
                 text = row.pendingFields.contains(key) ? "Loading…" : "Unavailable"
             }

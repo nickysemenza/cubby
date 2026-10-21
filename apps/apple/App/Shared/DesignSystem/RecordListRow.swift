@@ -8,13 +8,21 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
     var imageURL: URL? = nil
     var symbol: String = "square.dashed"
     var emoji: String? = nil
-    var thumbnailSize: CGFloat = 36
+    var thumbnailSize: CGFloat = Self.defaultThumbnailSize
     var previewImage: Image? = nil
     var titleIdentifier: String = ""
     @ViewBuilder var context: () -> Context
     @ViewBuilder var rail: () -> Rail
     @ViewBuilder var supplement: () -> Supplement
     @Environment(\.dynamicTypeSize) private var textSize
+
+    private static var defaultThumbnailSize: CGFloat {
+        #if os(iOS)
+            30
+        #else
+            32
+        #endif
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
@@ -40,7 +48,7 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                                 Text(title)
                             }
                         }
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline.weight(.medium))
                         .accessibilityIdentifier(titleIdentifier)
                         .fixedSize(horizontal: false, vertical: true)
                         context().font(.caption).foregroundStyle(.secondary)
@@ -58,7 +66,7 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, FieldGuideTokens.Space.xs)
+        .padding(.vertical, 5)
         .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
         .contentShape(Rectangle())
     }

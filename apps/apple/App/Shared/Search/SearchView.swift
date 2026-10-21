@@ -337,13 +337,19 @@ struct SearchContent: View {
 private struct SearchHitRow: View {
     let hit: SearchHit
 
+    private var context: String? {
+        let parts = [hit.subtitle, hit.key.map { EntityCatalog[$0].singular }]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     var body: some View {
         RecordListRow(
             title: hit.title, imageURL: hit.imageURL,
             symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square", emoji: hit.emoji
         ) {
-            if let subtitle = hit.subtitle, !subtitle.isEmpty { Text(subtitle) }
-            if let key = hit.key { Text(EntityCatalog[key].singular) }
+            if let context { Text(context) }
         } rail: {
             EmptyView()
         } supplement: {

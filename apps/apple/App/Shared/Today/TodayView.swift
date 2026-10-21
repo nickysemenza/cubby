@@ -151,9 +151,7 @@ struct AuditEntryRow: View {
             Text(group.foldSummary ?? entry.action.rawValue.capitalized)
             DateDisplay(date: entry.createdAt)
         } supplement: {
-            if !group.isFolded, entry.action == .update {
-                AuditChangeLines(entry: entry)
-            }
+            EmptyView()
         }
     }
 }
