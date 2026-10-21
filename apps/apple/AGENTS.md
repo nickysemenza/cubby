@@ -108,7 +108,7 @@ photo review, and routing remain native. The additive pilot does not bump native
 compatibility. Its browser-session POST is the explicit exception to generated
 entity operation routes; never send the bearer to WebKit or ambient cookies to
 bootstrap. Use a fresh nonpersistent store, exact-origin main-frame bridge checks,
-and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#run-evidence-pilot).
+and captured credential revisions across every await. See [DESIGN.md](DESIGN.md#hosted-workspaces).
 
 ## Language and style
 

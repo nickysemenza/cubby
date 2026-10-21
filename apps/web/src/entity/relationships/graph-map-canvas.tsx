@@ -329,88 +329,44 @@ export function GraphMapCanvas({
       needsInitialCenter.current = false;
     }
   }, [positions, selected]);
+  const toolbar = (
+    <Row gap="sm">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() =>
+          void flow.current?.fitView({ padding: 0.15, maxZoom: 1 })
+        }
+      >
+        Fit map
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+          Map options
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setCompact((value) => !value)}>
+            {compact ? "Detailed cards" : "Compact cards"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={center}>Center selection</DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              positionsRef.current = {};
+              setRevision((old) => old + 1);
+            }}
+          >
+            Reorganize
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {layingOut ? (
+        <output className="sr-only">Placing new records…</output>
+      ) : null}
+    </Row>
+  );
   return (
     <Stack gap="sm" className="h-full min-h-0">
-      {toolbarTarget ? (
-        createPortal(
-          <Row gap="sm">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void flow.current?.fitView({ padding: 0.15, maxZoom: 1 })
-              }
-            >
-              Fit map
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button variant="outline" size="sm" />}
-              >
-                Map options
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setCompact((value) => !value)}>
-                  {compact ? "Detailed cards" : "Compact cards"}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={center}>
-                  Center selection
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    positionsRef.current = {};
-                    setRevision((old) => old + 1);
-                  }}
-                >
-                  Reorganize
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {layingOut ? (
-              <output className="sr-only">Placing new records…</output>
-            ) : null}
-          </Row>,
-          toolbarTarget,
-        )
-      ) : (
-        <Row gap="sm">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              void flow.current?.fitView({ padding: 0.15, maxZoom: 1 })
-            }
-          >
-            Fit map
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" />}
-            >
-              Map options
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setCompact((value) => !value)}>
-                {compact ? "Detailed cards" : "Compact cards"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={center}>
-                Center selection
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  positionsRef.current = {};
-                  setRevision((old) => old + 1);
-                }}
-              >
-                Reorganize
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {layingOut ? (
-            <output className="sr-only">Placing new records…</output>
-          ) : null}
-        </Row>
-      )}
+      {toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar}
       <section
         className="graph-map min-h-0 flex-1"
         data-compact={compact}
