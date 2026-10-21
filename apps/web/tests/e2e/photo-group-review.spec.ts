@@ -1282,7 +1282,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   ).toBeVisible();
   const attachChecks = attach.locator('[aria-label="Field cross-checks"]');
   await expect(
-    attachChecks.getByText("Photo label", { exact: true }),
+    attachChecks.getByText("Photo label", { exact: true }).first(),
   ).toBeVisible();
   // Manufacturer and model are printed on the label; both agree.
   await expect(

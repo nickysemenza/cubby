@@ -953,7 +953,7 @@ function FieldCrossChecks({
               <span className="mb-0.5 block text-2xs text-muted-foreground sm:hidden">
                 Photo label
               </span>
-              {check.labelValue ?? "Not shown on label"}
+              <span>{check.labelValue ?? "Not shown on label"}</span>
               {check.field === "identifiers" &&
               check.labelValue &&
               check.mark !== "agree" ? (
@@ -966,9 +966,11 @@ function FieldCrossChecks({
               <span className="mb-0.5 block text-2xs text-muted-foreground sm:hidden">
                 Current product
               </span>
-              {stored(check) || (
-                <span className="text-muted-foreground">Not recorded</span>
-              )}
+              <span>
+                {stored(check) || (
+                  <span className="text-muted-foreground">Not recorded</span>
+                )}
+              </span>
               {check.field === "size" || check.field === "color" ? (
                 <span className="block text-muted-foreground">
                   From product name
