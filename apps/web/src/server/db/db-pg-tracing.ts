@@ -109,8 +109,10 @@ const isCallbackQuery = (
 const isStreamQuery = (args: QueryArguments): args is StreamQueryArguments =>
   args.length === 1 && isSubmittable(args[0]);
 
+// In-process observers inspect the complete template; tracing truncates its
+// own copy. Neither path reads bind values.
 const observableStatement = (head: QueryHead): string | undefined =>
-  isSubmittable(head) ? undefined : databaseStatementForTrace(head);
+  isSubmittable(head) ? undefined : typeof head === "string" ? head : head.text;
 
 const observedQuery = (
   run: QueryBridge,

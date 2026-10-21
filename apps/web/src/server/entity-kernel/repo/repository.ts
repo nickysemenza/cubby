@@ -40,17 +40,25 @@ import {
   type EntityId,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { AnyColumn, InferSelectModel } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  type AnyColumn,
+  type InferSelectModel,
+} from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  notDeleted,
   runAfterCommit,
   updateLiveAndReturn,
   withTransactionOn,
 } from "~/server/db/helpers";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import type {
   EntityKernelContext,
   EntityKernelDeleteResult,
@@ -190,12 +198,12 @@ interface EntityCrudConfig<
   table: TTable;
   entity: E;
   /** Column values to write; `before` is the live row, for derived values. */
-  toUpdate: (data: TUpdate, before: TRow) => PgUpdateSetSource<TTable>;
+  toUpdate: (
+    data: TUpdate,
+    before: InferSelectModel<TTable>,
+  ) => PgUpdateSetSource<TTable>;
   /** Fields recorded in the audit diff: columns, or keys of `relations`. */
-  auditUpdateFields: readonly (
-    | Extract<keyof TRow, keyof InferSelectModel<TTable>>
-    | TRelKey
-  )[];
+  auditUpdateFields: readonly (keyof InferSelectModel<TTable> | TRelKey)[];
   /**
    * Runs first in the update transaction, before the before-state is read:
    * take a row lock and refuse transitions that depend on the stored state.
@@ -303,7 +311,14 @@ export function createEntityCrud<
   ): Promise<TOut | TResult> {
     return withTransactionOn(db, async (tx) => {
       await config.prepare?.(tx, id, data);
-      const before = await config.fetchById(tx, id);
+      // SAFETY: every accepted concrete PgTable has a full column selection.
+      const rows = await repositoryQueries(tx)
+        .select(getTableColumns(config.table))
+        .from(config.table as PgTable)
+        .where(and(eq(config.table.id, id), notDeleted(config.table)))
+        .limit(1);
+      // SAFETY: the explicit full table projection returns its inferred row.
+      const [before] = rows as InferSelectModel<TTable>[];
       if (!before) {
         throw createAppError(
           ENTITY_NOT_FOUND_REASON[config.entity],
@@ -320,9 +335,9 @@ export function createEntityCrud<
       if (entityManifest[config.entity].auditable) {
         const relationsAfter: RelationSnapshot<TRelKey> =
           (await config.relations?.read(tx, id, data)) ?? {};
-        // The fetch may carry relations the UPDATE's returned row lacks;
-        // overlaying keeps the richer row and the exact post-write scalars.
-        const changes = computeChanges<TRow & RelationSnapshot<TRelKey>>(
+        const changes = computeChanges<
+          InferSelectModel<TTable> & RelationSnapshot<TRelKey>
+        >(
           { ...before, ...relationsBefore },
           { ...before, ...updated, ...relationsAfter },
           [...config.auditUpdateFields],

@@ -761,7 +761,10 @@ stored scalar columns use one set-based UPDATE when the normal writer's
 `updatePolicy.recordFields` dependencies permit it; reference resolution,
 collections, compound values, and opaque/domain writers use the normal
 single-record update for every row in the same transaction. This policy describes
-normal write work, not a second editable-field roster. Per-row audit, CalDAV
+normal write work, not a second editable-field roster. Shared CRUD updates read
+the live table row for scalar before-state and audit diffs; explicit relation
+hooks own collection snapshots. Full detail hydration runs only when the
+requested mutation output needs it. Per-row audit, CalDAV
 guards, assignment/dependency resolution, recipe costing, search projections,
 and suggestion supersession follow the normal mutation contract. A failure rolls
 back every row and pending publication; diagnostics retain the failing row or

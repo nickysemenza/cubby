@@ -50,6 +50,12 @@ available, retaining full kernel baselines and unmatched-identity checks.
 plan probes do not need unrelated media or quality hydration.
 Filter-oracle tests that compare only row identities likewise use core reads;
 retain their real PostgreSQL predicates and expected-ID assertions.
+Mutation fanout probes request identity receipts when measuring bounded write
+work; expanded response hydration may legitimately read related records and
+retains its read-contract owners.
+Query-scope probes inspect complete SQL templates before shortening report
+excerpts; telemetry truncation must not hide a forbidden join from the probe.
+Bind values remain outside observation.
 Reconcile derived inputs once after a mutation boundary before reading several
 fingerprints of that same state, rather than repeating a full reconciliation
 for each read.

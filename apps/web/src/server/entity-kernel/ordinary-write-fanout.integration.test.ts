@@ -1,7 +1,7 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { buildKernelContext } from "tooling/scenarios/context";
 import {
   countTestDbQueries,
@@ -11,9 +11,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { ingredient as ingredientTable } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createWish } from "~/server/domains/wish/repo";
 import { executeEntity } from "~/server/entity-kernel";
+import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -45,14 +47,25 @@ describe("ordinary scalar write fanout", () => {
       ctx.actor,
     );
     const measured = await countTestDbQueries(() =>
-      executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
-        action: "update",
-        entity: "ingredient",
-        id: parseShortcodeFor("ingredient", ingredient.shortcode),
-        data: { naKinds: [] },
-      }),
+      executeEntityMutationRead(
+        buildKernelContext(ctx.db, testUserId(TEST_USER_ID)),
+        {
+          action: "update",
+          entity: "ingredient",
+          id: parseShortcodeFor("ingredient", ingredient.shortcode),
+          data: { naKinds: ["volume"] },
+        },
+        ["id"],
+      ),
     );
     expect(measured.tables).not.toContain("Product");
+    expect(measured.result.item).toMatchObject({ id: ingredient.shortcode });
+    expect(
+      await getDb(ctx.db)
+        .select({ naKinds: ingredientTable.naKinds })
+        .from(ingredientTable)
+        .where(eq(ingredientTable.id, ingredient.id)),
+    ).toEqual([{ naKinds: ["volume"] }]);
   });
   it("does not load Recipe composition for an ordinary note edit", async () => {
     const recipe = await createRecipeFixture(
