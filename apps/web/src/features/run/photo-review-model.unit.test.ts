@@ -3,6 +3,7 @@ import type { PhotoGroupProposal } from "@cubby/schemas/photo-import-run";
 import { describe, expect, it } from "vitest";
 
 import {
+  PhotoReviewDraftSession,
   mergeGroups,
   moveImage,
   reviewOutcomeToasts,
@@ -163,5 +164,59 @@ describe("reviewOutcomeToasts", () => {
         description: "b: name matches an existing product\nc: boom",
       },
     ]);
+  });
+});
+
+// A blur save can finish after the reviewer types again; acknowledging its old
+// submission must neither erase the newer draft nor another group's draft.
+describe("photo review draft session", () => {
+  it("acknowledges only submitted text and rebases matching saved values", () => {
+    const session = new PhotoReviewDraftSession();
+    session.edit("name-a", "a", "First edit", "Saved");
+    session.edit("name-b", "b", "Other edit", "Other saved");
+    session.edit("name-a", "a", "Later edit", "Saved");
+    session.acknowledge("name-a", "First edit");
+    expect(session.getSnapshot().drafts.get("name-a")?.value).toBe(
+      "Later edit",
+    );
+    session.acknowledge("name-a", "Later edit");
+    expect([...session.getSnapshot().drafts.keys()]).toEqual(["name-b"]);
+    session.edit("name-b", "b", "Other saved", "Other saved");
+    expect(session.getSnapshot().drafts.size).toBe(0);
+  });
+
+  it("waits for blur saves and keeps one approval intent through completion", async () => {
+    const session = new PhotoReviewDraftSession();
+    let finishSave: () => void = () => {
+      throw new Error("save not started");
+    };
+    const save = session.save(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    const applied: string[] = [];
+    const approval = session.approve(["a"], async () => {
+      await session.flushSaves();
+      applied.push("a");
+    });
+    await session.approve(["b"], async () => {
+      applied.push("b");
+    });
+    expect(session.getSnapshot().approving).toEqual(["a"]);
+    expect(applied).toEqual([]);
+    finishSave();
+    await Promise.all([save, approval]);
+    expect(applied).toEqual(["a"]);
+    expect(session.getSnapshot().saves.size).toBe(0);
+    expect(session.getSnapshot().approving).toBeNull();
+  });
+
+  it("retains partial failures and a later selection after submitted successes", () => {
+    const session = new PhotoReviewDraftSession();
+    session.select(["a", "b", "later"]);
+    session.settleSelection(["a", "b"], ["b"]);
+    expect([...session.getSnapshot().selected]).toEqual(["later", "b"]);
   });
 });

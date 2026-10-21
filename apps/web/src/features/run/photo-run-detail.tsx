@@ -1,16 +1,21 @@
+import type { ImageShortcode } from "@cubby/schemas/identifiers";
 import type { PhotoRunReview } from "@cubby/schemas/photo-import-run";
+import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import pMap from "p-map";
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { operationCommandRequest } from "~/contracts/define";
+import { imageProcessingContract } from "~/contracts/image-processing.contract";
+import { photoImportContract } from "~/contracts/photo-import.contract";
 import type { RunDetail } from "~/contracts/run.contract";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
-import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import {
   run as runOperations,
   photoImport,
-  imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { AiCost } from "~/ui/common/ai-cost";
 import { Row, Section, Stack } from "~/ui/layout";
@@ -219,31 +224,30 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
     ),
   );
   const analyzing = descriptionsInFlight(review.data);
-  const exclude = useActionMutation({
-    mutationFn: photoImport.excludeFailed.mutationOptions,
-    success: "Failed photos skipped; originals retained",
-  });
-  const finishUploads = useActionMutation({
-    mutationFn: photoImport.sealBatch.mutationOptions,
-    success: "Upload batches closed; uploaded photos retained",
-  });
+  const exclude = useWorkflowCommand();
+  const finishUploads = useWorkflowCommand();
+  const { mutateAsync: retryImage } = useWorkflowCommand();
   const retry = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const outcomes = await Promise.allSettled(
-        ids.map((id) => imageProcessing.retry.call({ id })),
+    mutationFn: async (ids: ImageShortcode[]) => {
+      const outcomes = await pMap(
+        ids,
+        async (id) => {
+          try {
+            await retryImage(
+              operationCommandRequest(imageProcessingContract, "retry", { id }),
+            );
+            return null;
+          } catch (error) {
+            return `${id}: ${getErrorMessage(error)}`;
+          }
+        },
+        { concurrency: 4 },
       );
-      const errors = outcomes.flatMap((outcome, index) =>
-        outcome.status === "rejected"
-          ? [
-              `${ids[index]}: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`,
-            ]
-          : [],
-      );
+      const errors = outcomes.filter((error) => error !== null);
       if (errors.length) throw new Error(errors.join("\n"));
     },
-    onSettled: () => {
-      void review.refetch();
-    },
+    // Retry invalidates Image tags only; the Run snapshot owns visible per-image work.
+    onSettled: () => review.refetch(),
   });
   const failed = review.data?.lifecycle?.failedImageIds ?? [];
   return (
@@ -258,7 +262,13 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
             <Button
               variant="outline"
               disabled={finishUploads.isPending}
-              onClick={() => finishUploads.mutate({ runId: run.publicId })}
+              onClick={() =>
+                finishUploads.mutate(
+                  operationCommandRequest(photoImportContract, "sealBatch", {
+                    runId: run.publicId,
+                  }),
+                )
+              }
             >
               Finish with uploaded photos
             </Button>
@@ -311,7 +321,13 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
                 variant="outline"
                 disabled={retry.isPending || exclude.isPending}
                 onClick={() =>
-                  exclude.mutate({ runId: run.publicId, imageIds: failed })
+                  exclude.mutate(
+                    operationCommandRequest(
+                      photoImportContract,
+                      "excludeFailed",
+                      { runId: run.publicId, imageIds: failed },
+                    ),
+                  )
                 }
               >
                 Continue without failed photos
@@ -328,7 +344,7 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
           (!run.dispatch?.eventId && !hasProposals)) ? (
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
             <DetailAction>
-              <PhotoRunGroupingAction run={run} />
+              <PhotoRunGroupingControl run={run} review={review} />
             </DetailAction>
             <p className="text-sm text-muted-foreground">
               {groupingHint(
@@ -353,9 +369,9 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
         ) : null}
       </PhotoRunProgress>
       <PhotoGroupReview
+        key={run.publicId}
         runId={run.publicId}
-        runStatus={run.status}
-        hasAgent={runHasAgent(run)}
+        query={review}
       />
     </Stack>
   );
@@ -363,6 +379,16 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
 
 export function PhotoRunGroupingAction({ run }: { run: RunDetail }) {
   const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
+  return <PhotoRunGroupingControl run={run} review={review} />;
+}
+
+function PhotoRunGroupingControl({
+  run,
+  review,
+}: {
+  run: RunDetail;
+  review: ReturnType<typeof usePhotoRunReview>;
+}) {
   const autoStartAttempted = useRef(false);
   const start = useMutation(photoImport.startGrouping.mutationOptions());
   const copy = useMutation({

@@ -441,6 +441,7 @@ export const photoImportContract = defineContract("photoImport", {
     output: reviewPhotoGroupsOutput,
   }),
   approveGroups: mutation({
+    command: { label: "Approve photo groups", confirmation: null },
     native: "Approve reviewed photo groups in Apple apps",
     input: z.object({
       runId: runShortcode,
@@ -460,6 +461,7 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly", "product", "inventory"],
   }),
   discardGroup: mutation({
+    command: { label: "Discard photo group", confirmation: null },
     native: "Discard a proposed photo group in Apple apps",
     input: z.object({
       runId: runShortcode,
@@ -469,6 +471,7 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   saveGroups: mutation({
+    command: { label: "Save photo group edits", confirmation: null },
     native:
       "Save photo group review edits (ownership, inventory) in Apple apps",
     input: saveGroupsAction
@@ -503,6 +506,11 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   sealBatch: mutation({
+    command: {
+      label: "Finish with uploaded photos",
+      confirmation: null,
+      success: "Upload batches closed; uploaded photos retained",
+    },
     mcp: { omit: "device_protocol" },
     native: "Close a photo upload batch so grouping can start",
     input: photoImportSealBatchInput,
@@ -517,6 +525,11 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   excludeFailed: mutation({
+    command: {
+      label: "Continue without failed photos",
+      confirmation: null,
+      success: "Failed photos skipped; originals retained",
+    },
     mcp: { omit: "client_view" },
     native: "Continue a photo run without photos whose description failed",
     input: photoRunExcludeFailedInput,

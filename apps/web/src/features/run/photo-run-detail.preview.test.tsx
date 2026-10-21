@@ -1,3 +1,4 @@
+import { retryImageProcessingInput } from "@cubby/schemas/activity";
 import {
   imageShortcode,
   productShortcode,
@@ -6,6 +7,7 @@ import {
 import {
   photoProductCandidate,
   photoRunCandidatesResponse,
+  reviewPhotoGroupsOutput,
 } from "@cubby/schemas/photo-import-run";
 import type {
   PhotoGroupProposal,
@@ -16,6 +18,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
+import { photoImportContract } from "~/contracts/photo-import.contract";
 import type { RunDetail } from "~/contracts/run.contract";
 import { installFeatures } from "~/features/registry";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -788,4 +791,149 @@ it("shows exact-identifier evidence without hiding a conflicting size", async ()
     screen.getByText("Product: Synthetic work boots size 9"),
   ).toBeVisible();
   expect(screen.getByRole("button", { name: "Choose Product" })).toBeEnabled();
+});
+
+// Dirty input must survive a background saved snapshot; approval's blur barrier
+// must submit that input before reading the revision used for approval.
+it("keeps a dirty field through refresh and saves it before approval", async () => {
+  const proposal: PhotoGroupProposal = {
+    ...proposedSweater,
+    steps: [
+      {
+        key: "identity",
+        label: "Identity",
+        status: "needs_input",
+        summary: null,
+        action: "create",
+        blockedReason: null,
+      },
+    ],
+  };
+  presentProposal(proposal);
+  let savedName: string | undefined;
+  let submittedRevision: string | undefined;
+  const savedRevision = "2026-09-20T16:06:00.000Z";
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    if (operation === "photoImport.candidatesBatch")
+      return { ok: true, data: { groups: [] } };
+    if (operation === "product.manufacturerOptions")
+      return { ok: true, data: [] };
+    if (operation === "photoImport.saveGroups") {
+      const body = photoImportContract.ops.saveGroups.input.parse(input);
+      const group = body.groups[0];
+      if (group?.product.kind === "create")
+        savedName = group.product.create.name;
+      return {
+        ok: true,
+        data: reviewPhotoGroupsOutput.parse({
+          ...review.review,
+          proposals: [
+            {
+              ...proposal,
+              product: { kind: "create", create: { name: savedName } },
+              updatedAt: savedRevision,
+            },
+          ],
+          results: [],
+          frozenGroupKeys: [],
+        }),
+      };
+    }
+    if (operation === "photoImport.approveGroups") {
+      submittedRevision =
+        photoImportContract.ops.approveGroups.input.parse(input)
+          .expectedRevisions?.[0]?.updatedAt;
+      return {
+        ok: true,
+        data: reviewPhotoGroupsOutput.parse({
+          ...review.review,
+          proposals: [{ ...committedSweater, updatedAt: savedRevision }],
+          results: [{ groupKey: proposal.groupKey, outcome: "committed" }],
+          frozenGroupKeys: [],
+        }),
+      };
+    }
+    throw new Error(`Unexpected operation ${operation}`);
+  });
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  const name = await screen.findByRole("textbox", { name: "New product name" });
+  await userEvent.clear(name);
+  await userEvent.type(name, "Unsaved sweater name");
+  presentProposal({
+    ...proposal,
+    product: { kind: "create", create: { name: "Refreshed saved name" } },
+  });
+  await waitFor(() => expect(name).toHaveValue("Unsaved sweater name"));
+  await userEvent.click(screen.getByRole("button", { name: "Create product" }));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Products from this import")).toBeVisible(),
+  );
+  expect(savedName).toBe("Unsaved sweater name");
+  expect(submittedRevision).toBe(savedRevision);
+});
+
+it("retains per-image retry errors and refreshes successful siblings", async () => {
+  const failedIds = [
+    imageShortcode.parse("IMG-4K7M"),
+    imageShortcode.parse("IMG-4K7N"),
+  ];
+  const failedReview: PhotoRunReview = {
+    ...review,
+    lifecycle: {
+      ...review.lifecycle,
+      phase: "needs_attention",
+      failedImageIds: failedIds,
+    },
+    images: review.images
+      .filter((image) => failedIds.includes(image.id))
+      .map((image) => ({
+        ...image,
+        targetState: "pending",
+        describe: "failed",
+        describeReason: "Synthetic description failure",
+      })),
+  };
+  harness.queryClient.setQueryData(
+    photoImport.review.queryKey({ runId: RUN_ID }),
+    failedReview,
+  );
+  const retried: string[] = [];
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    if (operation === "imageProcessing.retry") {
+      const { id } = retryImageProcessingInput.parse(input);
+      retried.push(id);
+      if (id === failedIds[1]) throw new Error("Synthetic retry unavailable");
+      return { ok: true, data: { retried: 1, submissionId: null } };
+    }
+    if (operation === "photoImport.review")
+      return {
+        ok: true,
+        data: {
+          ...failedReview,
+          lifecycle: {
+            ...failedReview.lifecycle,
+            failedImageIds: [failedIds[1]],
+          },
+          images: failedReview.images.map((image) =>
+            image.id === failedIds[0]
+              ? { ...image, describe: "leased" }
+              : image,
+          ),
+        },
+      };
+    throw new Error(`Unexpected operation ${operation}`);
+  });
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Retry failed descriptions" }),
+  );
+  expect(
+    await screen.findByText(/IMG-4K7N: Synthetic retry unavailable/),
+  ).toBeVisible();
+  expect(
+    await screen.findByText(
+      "1 photos need a description retry. Successful photos are retained.",
+    ),
+  ).toBeVisible();
+  expect(retried).toEqual(failedIds);
 });
