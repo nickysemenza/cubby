@@ -93,7 +93,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   or pagination into a relational query. The scaffold restores selected order.
   Complete and progressive reads share one assembly path. Product's
   `listProductsRead` owns it; `productList` validates complete rows against the
-  canonical schema rather than assembling another copy.
+  canonical schema rather than assembling another copy. Kit component rows
+  reuse that complete reader and add only their parent identity and quantity.
 - Derived refresh: writers capture changed roots and known old/new endpoints through
   `server/generic/derived-refresh/capture.boundary.ts`; authoritative audit writes
   register roots automatically. `repo/dependencies.ts` declares direct keyset
