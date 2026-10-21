@@ -46,7 +46,8 @@ type RosterDefaults = {
 };
 
 /** Authoring token keys become the existing cross-client CSS-token wire form. */
-export const optionColorCss = (token: ColorToken) => `var(--brand-${token})`;
+export const optionColorCss = (token: ColorToken) =>
+  `var(--${STATUS_GLYPHS.has(token) ? token : `brand-${token}`})`;
 
 /**
  * Compile the declared presentation once. Missing choices fail at the owning

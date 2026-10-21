@@ -185,6 +185,7 @@ export function GapChip({
 }) {
   return (
     <EnumPill
+      optionRole="status"
       icon={<WarningIcon />}
       color={
         isDefectDataCheck(gap.check) ? "var(--destructive)" : "var(--warning)"

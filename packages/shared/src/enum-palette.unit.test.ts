@@ -43,7 +43,7 @@ describe("explicit enum presentation", () => {
     );
     expect(option).toMatchObject({
       role: "status",
-      color: "var(--brand-positive)",
+      color: "var(--positive)",
       glyph: { phosphor: "CheckCircle", sfSymbol: "checkmark.circle.fill" },
     });
   });
