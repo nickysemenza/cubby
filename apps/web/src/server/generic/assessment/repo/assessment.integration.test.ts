@@ -50,7 +50,12 @@ describe("shared Assessment history", () => {
       "utf8",
     );
     await getDb(ctx.db).execute(sql.raw(predecessor));
-    await getDb(ctx.db).execute(sql`CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"()`);
+    await getDb(ctx.db).execute(
+      sql`DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState"`,
+    );
+    await getDb(ctx.db).execute(
+      sql`CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"()`,
+    );
     const item = await productFixture(ctx, "Synthetic legacy serving");
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
     await getDb(ctx.db)
@@ -192,6 +197,9 @@ describe("shared Assessment history", () => {
       );
     await getDb(ctx.db).execute(
       sql.raw(migration("0001_explicit_served_decisions")),
+    );
+    await getDb(ctx.db).execute(
+      sql`DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState"`,
     );
     await getDb(ctx.db).execute(
       sql`CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"()`,
