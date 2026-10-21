@@ -459,6 +459,7 @@ describe("Suggestion review", () => {
           suggestedValue: taxonomyShortcode("household"),
           confidence,
           model: "synthetic/unserved-trial",
+          data: { served: false },
           kind: "correction" as const,
           status: "pending" as const,
           pairKey,
