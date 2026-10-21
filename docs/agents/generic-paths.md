@@ -144,6 +144,11 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`@cubby/shared/base64`); `capitalize`, `pascalCase`, `humanize`,
   `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
   `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
+- Run lifecycle scope and member-controller snapshots:
+  `server/domains/run/repo/control-scope.ts`. Generic control and stale expiry
+  must not require a purchase-agent session. Import business-write transactions
+  lock the Run before operation locks and recheck live authority before writes;
+  completed operation replay stays valid after cancellation.
 - Run operation replay: every `RunOperation` read by key and every write goes
   through `server/domains/run/repo/run-operation.ts` (`readOperation`, `insertOperation`
   (one row or a batch; `ifAbsent` is `ON CONFLICT DO NOTHING`),

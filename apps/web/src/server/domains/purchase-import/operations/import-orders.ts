@@ -550,6 +550,24 @@ function claimDistinctSourceOrder(
   seen.add(key);
 }
 
+/** Called under the Run lock, after completed-operation replay and before any business writes. */
+async function assertLiveImportScope(
+  db: Database,
+  actor: ActorContext,
+  expected: ImportScope,
+) {
+  const live = await loadImportScope(db, expected.runId, actor);
+  if (live.status !== "running")
+    throw new Error(`Purchase import run is fenced in ${live.status}`);
+  if (
+    live.ledgerPartyId !== expected.ledgerPartyId ||
+    live.vendorAccountId !== expected.vendorAccountId ||
+    live.vendorId !== expected.vendorId ||
+    live.purpose !== expected.purpose
+  )
+    throw new Error("Purchase import run scope changed during preparation");
+}
+
 export async function preparePurchaseImport(
   db: Database,
   rawInput: PreparePurchaseImportInput,
@@ -624,13 +642,18 @@ export async function preparePurchaseImport(
           : [];
       return withTransactionDatabase(db, async (transactionDb) => {
         const database = getDb(transactionDb);
+        // Lock the Run before the operation: cancellation uses the same order.
+        await database
+          .select({ id: runTable.id })
+          .from(runTable)
+          .where(eq(runTable.id, scope.runId))
+          .for("no key update");
         const replayed = await ledger.replay(
           database,
           preparePurchaseImportOut,
         );
         if (replayed) return replayed;
-        if (scope.status !== "running")
-          throw new Error(`Purchase import run is fenced in ${scope.status}`);
+        await assertLiveImportScope(transactionDb, actor, scope);
         // After replay: a completed prepare returns its recorded result even
         // once its Email is excluded or resolved.
         await applyMailSourceAdmissions(
@@ -1000,6 +1023,12 @@ export async function commitPurchaseImport(
       }
       return withTransactionDatabase(db, async (transactionDb) => {
         const database = getDb(transactionDb);
+        // Lock the Run before the operation: cancellation uses the same order.
+        await database
+          .select({ id: runTable.id })
+          .from(runTable)
+          .where(eq(runTable.id, scope.runId))
+          .for("no key update");
         const replayed = await ledger.replay(database, recordedCommit, {
           forUpdate: true,
         });
@@ -1007,8 +1036,7 @@ export async function commitPurchaseImport(
           const { requiresReview, ...result } = replayed;
           return { result, requiresReview };
         }
-        if (scope.status !== "running")
-          throw new Error(`Purchase import run is fenced in ${scope.status}`);
+        await assertLiveImportScope(transactionDb, actor, scope);
         const prepared = await loadPreparation(
           transactionDb,
           scope.runId,

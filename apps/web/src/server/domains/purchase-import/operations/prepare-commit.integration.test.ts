@@ -11,13 +11,17 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { getDb, withTransaction } from "~/server/db/helpers";
+import {
+  getDb,
+  withTransaction,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import {
   auditLog,
   entityAttachment,
@@ -25,6 +29,7 @@ import {
   expense,
   externalSource,
   financialTransactionAllocation,
+  importPreparedOrder,
   importSourceClaim,
   importSourceOrder,
   importSourceProduct,
@@ -45,6 +50,7 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
@@ -57,6 +63,7 @@ import {
 
 import { resolveRunFinding } from "../repo/findings";
 import { prepareSourceOrderReconciliation } from "../repo/reconciliation";
+import { controlRun } from "../repo/run-service";
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { resolveMail } from "./mail-tool";
@@ -67,6 +74,7 @@ import {
   prepareMemberImport,
   retainedMailFixture,
 } from "./order-import.fixtures";
+import { expireStaleRuns } from "./run-review";
 
 const mailboxId = "synthetic-mailbox";
 const checksum = (digit: string) => digit.repeat(64);
@@ -1448,6 +1456,210 @@ describe("caller-driven purchase import writes", () => {
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       1,
     );
+  });
+
+  it.each(["cancel", "expire"] as const)(
+    "fences a cached commit after %s during attachment preparation without changing committed money",
+    async (transition) => {
+      const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
+      const previous = await memberImport(ctx.db, ctx.actor, {
+        key: "retained-money",
+        orders: [
+          {
+            stableOrderId: "retained-money",
+            vendorId: vendor.shortcode,
+            source: source("retained-money", "b"),
+            extraction: {
+              status: "ready",
+              candidate: candidate("RETAINED-MONEY", [service(12)]),
+            },
+          },
+        ],
+        defaultTrade: "other",
+      });
+      const beforePurchases = await getDb(ctx.db).select().from(purchase);
+      const beforeExpenses = await getDb(ctx.db).select().from(expense);
+      const mail = await retainedOrderMail(party.id, `terminal-${transition}`);
+      const image = await insertWithShortcode(ctx.db, "image", {
+        key: `images/synthetic-${transition}.pdf`,
+        filename: `synthetic-${transition}.pdf`,
+        contentType: "application/pdf",
+        size: 100,
+        status: "UPLOADED",
+        sha256: "a".repeat(64),
+      });
+      await getDb(ctx.db)
+        .insert(orderMailAttachment)
+        .values({
+          orderMailId: mail.id,
+          providerAttachmentId: `synthetic-${transition}`,
+          filename: image.filename,
+          mimeType: "application/pdf",
+          checksum: image.sha256!,
+          imageId: image.id,
+        });
+      const { prepared, commitInput } = await prepareMemberImport(
+        ctx.db,
+        ctx.actor,
+        {
+          key: `terminal-${transition}`,
+          orders: [
+            {
+              stableOrderId: `terminal-${transition}`,
+              vendorId: vendor.shortcode,
+              source: mailSource(mail),
+              extraction: {
+                status: "ready",
+                candidate: candidate(`TERMINAL-${transition}`, [service()]),
+              },
+            },
+          ],
+          defaultTrade: "other",
+        },
+      );
+      let expiry: Awaited<ReturnType<typeof expireStaleRuns>> | null = null;
+      const port = vi.fn<DecisionPort>(async () => {
+        if (transition === "cancel") {
+          await controlRun(ctx.db, ctx.actor, {
+            runPublicId: prepared.runId,
+            action: "cancel",
+          });
+        } else {
+          expiry = await expireStaleRuns(
+            ctx.db,
+            new Date(Date.now() + 3 * 60 * 60_000),
+          );
+        }
+        return {
+          answers: {
+            selection: {
+              type: "choice",
+              choice: "c0",
+              confidence: 0.98,
+              probabilities: { c0: 0.98, c1: 0.01, c2: 0.01 },
+            },
+          },
+        };
+      });
+      await expect(
+        commitPurchaseImport(ctx.db, commitInput, ctx.actor, port),
+      ).rejects.toThrow(/fenced.*failed/);
+      expect(port).toHaveBeenCalledOnce();
+      expect(expiry).toEqual(
+        transition === "expire" ? { expired: 1, failures: [] } : null,
+      );
+      expect(await getDb(ctx.db).select().from(purchase)).toEqual(
+        beforePurchases,
+      );
+      expect(await getDb(ctx.db).select().from(expense)).toEqual(
+        beforeExpenses,
+      );
+      expect(await getDb(ctx.db).select().from(entityAttachment)).toEqual([]);
+      const [stored] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.shortcode, prepared.runId));
+      expect(stored).toMatchObject({
+        status: "failed",
+        failureCode:
+          transition === "cancel" ? "user_cancelled" : "agent_failed",
+      });
+      expect(stored?.endedAt).not.toBeNull();
+      await expect(previous.commit()).resolves.toEqual(previous.committed);
+    },
+  );
+
+  it("rechecks a cached prepare under the Run lock and still replays completed preparation after cancellation", async () => {
+    const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "file_import",
+      trigger: "manual",
+      status: "running",
+    });
+    const [subject] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, runId));
+    if (!subject) throw new Error("Synthetic file Run missing");
+    const input = {
+      _runExecution: { runId, operationId: "prepare:cancelled" },
+      orders: [
+        {
+          stableOrderId: "cancelled",
+          itemOperationId: "item:cancelled",
+          vendorId: vendor.shortcode,
+          source: source("cancelled", "c"),
+          evidenceChecksum: "c".repeat(64),
+          extractionRevision: "synthetic@1",
+          extraction: {
+            status: "ready" as const,
+            candidate: candidate("CANCELLED", [service()]),
+          },
+          lineIds: ["cancelled:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    } satisfies Parameters<typeof preparePurchaseImport>[1];
+    let pending: ReturnType<typeof preparePurchaseImport> | undefined;
+    await withTransactionDatabase(ctx.db, async (transactionDb) => {
+      const tx = getDb(transactionDb);
+      await tx
+        .select({ id: run.id })
+        .from(run)
+        .where(eq(run.id, runId))
+        .for("update");
+      pending = preparePurchaseImport(ctx.db, input, ctx.actor);
+      pending.catch(() => undefined);
+      await expect
+        .poll(
+          async () => {
+            const waiting = await getDb(ctx.db).execute<{ count: number }>(sql`
+              SELECT count(*)::int AS count FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'`);
+            return waiting.rows[0]?.count;
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(1);
+      await controlRun(transactionDb, ctx.actor, {
+        runPublicId: subject.shortcode,
+        action: "cancel",
+      });
+    });
+    await expect(pending).rejects.toThrow(/fenced.*failed/);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(importPreparedOrder)
+        .where(eq(importPreparedOrder.runId, runId)),
+    ).toEqual([]);
+
+    const completed = await preparePurchaseImport(
+      ctx.db,
+      {
+        ...input,
+        _runExecution: { operationId: "prepare:completed-before-cancel" },
+      },
+      ctx.actor,
+    );
+    await controlRun(ctx.db, ctx.actor, {
+      runPublicId: completed.runId,
+      action: "cancel",
+    });
+    await expect(
+      preparePurchaseImport(
+        ctx.db,
+        {
+          ...input,
+          _runExecution: {
+            run: completed.runId,
+            operationId: "prepare:completed-before-cancel",
+          },
+        },
+        ctx.actor,
+      ),
+    ).resolves.toEqual(completed);
   });
 
   it("refuses the retired browser_order source kind on a new preparation", async () => {

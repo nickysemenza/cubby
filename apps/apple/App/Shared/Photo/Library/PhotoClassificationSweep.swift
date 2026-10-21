@@ -144,10 +144,7 @@ final class PhotoClassificationSweep {
     @ObservationIgnored private var runGeneration = UUID()
     @ObservationIgnored private var pendingRecords: [(PhotoSweepScheduler.Candidate, Outcome)] = []
     @ObservationIgnored private var lastRecordFlush = Date.distantPast
-    // `nonisolated(unsafe)`: `deinit` is not main-actor-isolated, and `NotificationCenter`'s
-    // observer tokens are documented safe to pass to `removeObserver` from any thread, so reading
-    // this array there (only to unregister, never mutated concurrently) is sound.
-    @ObservationIgnored nonisolated(unsafe) private var systemConditionObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var systemConditions: PhotoSystemConditionObservation?
 
     init(
         analysisStore: PhotoAnalysisStore,
@@ -167,30 +164,7 @@ final class PhotoClassificationSweep {
         self.power = power
         self.candidateProvider = candidateProvider
         self.classify = classify
-        observeSystemConditions()
-    }
-
-    deinit {
-        for observer in systemConditionObservers { NotificationCenter.default.removeObserver(observer) }
-    }
-
-    /// Reacts to a thermal/power change mid-run rather than polling for one inside the task
-    /// group's child-task loop, which would need `shouldRunNow` (main-actor state) reachable from
-    /// a context the task group's body does not statically guarantee is main-actor-isolated.
-    /// `reconcile()` on the observer callback both stops an in-flight sweep the moment conditions
-    /// worsen and resumes it once they clear, without the sweep polling anything itself.
-    private func observeSystemConditions() {
-        let thermalToken = NotificationCenter.default.addObserver(
-            forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.reconcile() }
-        }
-        let powerToken = NotificationCenter.default.addObserver(
-            forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.reconcile() }
-        }
-        systemConditionObservers = [thermalToken, powerToken]
+        systemConditions = PhotoSystemConditionObservation { [weak self] in self?.reconcile() }
     }
 
     /// Called on Photos-tab appear/disappear (Q4c: runs only while the tab is visible).

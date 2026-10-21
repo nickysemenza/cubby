@@ -53,7 +53,10 @@ Anthropic refusal, paid budget and ChatGPT plan). These reads never
 load or resume a Workflow. Discovery has no coordinator conversation, so its owned
 `imports_read.run_transcript` returns `absent`; that is not evidence it never ran.
 `run.lifecycle` runs every Run control
-(cancel, retry, restart, approve, reject and the rest). Review and spending
+(cancel, retry, restart, approve, reject and the rest). File-import cancellation
+does not require an agent session and retains already committed imports.
+Abandoned non-agent imports fail under the existing inactivity policy; live
+activity prevents expiry and late writes cannot revive terminal Runs. Review and spending
 decisions are reachable on MCP too
 (`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
 `ai_funding.set_credit_budget`, `ai_funding.reset_credit_refusal`,
