@@ -1,6 +1,9 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
-import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
+import {
+  fieldResolutionSchema,
+  fieldResolutionSourceSchema,
+} from "@cubby/schemas/field-resolution";
 import type {
   ExpenseId,
   ProductId,
@@ -195,11 +198,11 @@ function expenseSpendingCategoryChoiceSql(
         ${principal} AS principal, ${unclassified} AS unclassified, ${productId} AS product_id,
         override_category.id AS override_id,override_category.shortcode AS override_code,
         p.id AS purchase_id,p.shortcode AS purchase_code,COALESCE(p."displayLabel",p."orderId") AS purchase_name,
-        purchase_category.id AS purchase_category_id,p."spendingCategoryOrigin" AS purchase_category_origin,
+        purchase_category.id AS purchase_category_id,purchase_category.shortcode AS purchase_category_code,p."spendingCategoryOrigin" AS purchase_category_origin,
         m."spendingCategoryMode" AS mapping_mode,m.shortcode AS mapping_code,m.name AS mapping_name,
         mapped_category.id AS mapped_id,
         v.id AS vendor_id,v.shortcode AS vendor_code,v.name AS vendor_name,${vendorProfile} AS profile,
-        vendor_category.id AS vendor_category_id,
+        vendor_category.id AS vendor_category_id,vendor_category.shortcode AS vendor_category_code,
         ${food} AS food
       FROM ${source ? sql`${source} ${sql.identifier(alias)}` : sql`(VALUES (1)) seed(n)`}
       LEFT JOIN "Product" g ON g.id=${productId} AND g."deletedAt" IS NULL
@@ -211,12 +214,18 @@ function expenseSpendingCategoryChoiceSql(
       LEFT JOIN ${categoryCatalog} purchase_category ON ${purchaseCategoryInputSql("p", "purchase_category", draft)}
       LEFT JOIN ${categoryCatalog} mapped_category ON mapped_category.id=m."spendingCategoryId" AND mapped_category."deletedAt" IS NULL
       LEFT JOIN ${categoryCatalog} vendor_category ON vendor_category.id=${vendorTarget} AND vendor_category."deletedAt" IS NULL
+    ), eligibility AS (
+      SELECT f.*,
+        f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND food AND COALESCE(profile IN ('restaurant','coffee_shop'),FALSE) AS context_eligible,
+        f.principal AND (COALESCE(mapping_mode=${sqlEnumConstant(spendingCategoryMappingMode, spendingCategoryMappingMode.enum.blocked)},FALSE) OR NOT food OR COALESCE(profile IN ('mixed_retail','food_retail'),FALSE)) AS mapping_eligible,
+        f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND f.product_id IS NULL AND COALESCE(profile IN ('food_retail','restaurant','coffee_shop'),FALSE) AS merchant_eligible
+      FROM facts f
     ), candidates AS (
       SELECT f.*,
-        CASE WHEN f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND food AND profile IN ('restaurant','coffee_shop') THEN vendor_category_id END AS context_id,
-        CASE WHEN f.principal AND mapping_mode='mapped' AND (NOT food OR profile IN ('mixed_retail','food_retail')) THEN mapped_id END AS product_mapping_id,
-        CASE WHEN f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND f.product_id IS NULL AND profile IN ('food_retail','restaurant','coffee_shop') THEN vendor_category_id END AS merchant_id
-      FROM facts f
+        CASE WHEN context_eligible THEN vendor_category_id END AS context_id,
+        CASE WHEN mapping_mode='mapped' AND mapping_eligible THEN mapped_id END AS product_mapping_id,
+        CASE WHEN merchant_eligible THEN vendor_category_id END AS merchant_id
+      FROM eligibility f
     ), chosen AS (
       SELECT f.*,
         CASE WHEN f.unclassified THEN NULL::uuid ELSE COALESCE(override_id,context_id,product_mapping_id,
@@ -226,6 +235,16 @@ function expenseSpendingCategoryChoiceSql(
       FROM candidates f
     )`;
 }
+
+/** Both the canonical resolution and its override-free evidence name the
+ * source selected by the choice relation, including a block with no value. */
+const expenseCategorySourceSql =
+  (): SQL => sql`CASE WHEN f.override_id IS NOT NULL THEN jsonb_build_object('entityKind','spendingCategory','entityId',c.shortcode,'name',c.name)
+  WHEN f.context_id IS NOT NULL THEN jsonb_build_object('entityKind','vendor','entityId',f.vendor_code,'name',f.vendor_name)
+  WHEN f.product_mapping_id IS NOT NULL THEN jsonb_build_object('entityKind','productCategory','entityId',f.mapping_code,'name',f.mapping_name)
+  WHEN f.purchase_category_id IS NOT NULL AND f.principal THEN jsonb_build_object('entityKind','purchase','entityId',f.purchase_code,'name',f.purchase_name)
+  WHEN f.merchant_id IS NOT NULL THEN jsonb_build_object('entityKind','vendor','entityId',f.vendor_code,'name',f.vendor_name)
+  WHEN f.mapping_mode='blocked' THEN jsonb_build_object('entityKind','productCategory','entityId',f.mapping_code,'name',f.mapping_name) ELSE NULL END`;
 
 export function expenseSpendingCategoryResolutionSql(
   alias: string,
@@ -245,16 +264,70 @@ export function expenseSpendingCategoryResolutionSql(
         WHEN f.purchase_category_id IS NOT NULL AND ${principal} THEN CASE WHEN f.purchase_category_origin='legacy' THEN 'legacy purchase default; provenance needs review' ELSE 'purchase default' END
         WHEN f.merchant_id IS NOT NULL THEN 'vendor default'
         WHEN f.mapping_mode='blocked' THEN 'product category blocked' ELSE 'none' END,
-      'sourceEntity',CASE WHEN f.override_id IS NOT NULL THEN jsonb_build_object('entityKind','spendingCategory','entityId',c.shortcode,'name',c.name)
-        WHEN f.context_id IS NOT NULL THEN jsonb_build_object('entityKind','vendor','entityId',f.vendor_code,'name',f.vendor_name)
-        WHEN f.product_mapping_id IS NOT NULL THEN jsonb_build_object('entityKind','productCategory','entityId',f.mapping_code,'name',f.mapping_name)
-        WHEN f.purchase_category_id IS NOT NULL AND ${principal} THEN jsonb_build_object('entityKind','purchase','entityId',f.purchase_code,'name',f.purchase_name)
-        WHEN f.merchant_id IS NOT NULL THEN jsonb_build_object('entityKind','vendor','entityId',f.vendor_code,'name',f.vendor_name)
-        WHEN f.mapping_mode='blocked' THEN jsonb_build_object('entityKind','productCategory','entityId',f.mapping_code,'name',f.mapping_name) ELSE NULL END,
+      'sourceEntity',${expenseCategorySourceSql()},
       'matchesFallback',c.id IS NOT DISTINCT FROM fallback.id,'canReset',f.override_id IS NOT NULL)
     FROM chosen f LEFT JOIN ${categoryCatalog} c ON c.id=f.category_id
       LEFT JOIN ${categoryCatalog} fallback ON fallback.id=f.fallback_id
   )`;
+}
+
+const categoryEvidenceKind = z.enum([
+  "context",
+  "mapping",
+  "purchase",
+  "merchant",
+]);
+
+const categoryEvidenceSchema = z.object({
+  steps: z.array(
+    z.object({
+      kind: categoryEvidenceKind,
+      ref: fieldResolutionSchema.shape.sourceEntity.unwrap(),
+      value: z.json(),
+      assigned: z.boolean(),
+      applicable: z.boolean(),
+    }),
+  ),
+  fallbackSource: fieldResolutionSchema.shape.sourceEntity,
+});
+
+/** Explanation-only projection: all alternatives use the choice relation's
+ * eligibility, while scalar and bulk reads never build this JSON or ladder.
+ * The supplied Database retains the explanation operation's read snapshot. */
+export async function loadExpenseSpendingCategoryEvidence(
+  db: Database,
+  shortcode: string,
+) {
+  const result = await unwrapDb(db).execute(sql`
+    SELECT (${expenseSpendingCategoryChoiceSql("e", undefined, true)}
+      SELECT jsonb_build_object(
+        'fallbackSource',${expenseCategorySourceSql()},
+        'steps',(SELECT COALESCE(jsonb_agg(jsonb_build_object(
+          ${"kind"}::text,step.kind,'ref',jsonb_build_object('entityKind',step.entity,'entityId',step.code,${"name"}::text,step.name),
+          'value',step.value,${"assigned"}::text,step.assigned,'applicable',step.applicable
+        ) ORDER BY step.position,step.depth),'[]'::jsonb) FROM (
+          SELECT 0 AS position,0 AS depth,${sqlEnumConstant(categoryEvidenceKind, categoryEvidenceKind.enum.context)} AS kind,${sqlEnumConstant(fieldResolutionSourceSchema.shape.entityKind, fieldResolutionSourceSchema.shape.entityKind.enum.vendor)} AS entity,f.vendor_code AS code,f.vendor_name AS name,
+            to_jsonb(f.vendor_category_code) AS value,f.vendor_category_id IS NOT NULL AS assigned,f.context_eligible AS applicable
+          WHERE f.vendor_id IS NOT NULL
+          UNION ALL
+          SELECT 1,a.depth,${sqlEnumConstant(categoryEvidenceKind, categoryEvidenceKind.enum.mapping)},${sqlEnumConstant(fieldResolutionSourceSchema.shape.entityKind, fieldResolutionSourceSchema.shape.entityKind.enum.productCategory)},a.shortcode,a.name,
+            jsonb_build_object('mode',a."spendingCategoryMode",'category',ac.shortcode),a."spendingCategoryMode"<>${sqlEnumConstant(spendingCategoryMappingMode, spendingCategoryMappingMode.enum.inherit)},f.mapping_eligible
+          FROM ancestors a LEFT JOIN "SpendingCategory" ac ON ac.id=a."spendingCategoryId" AND ac."deletedAt" IS NULL
+          UNION ALL
+          SELECT 2,0,${sqlEnumConstant(categoryEvidenceKind, categoryEvidenceKind.enum.purchase)},${sqlEnumConstant(fieldResolutionSourceSchema.shape.entityKind, fieldResolutionSourceSchema.shape.entityKind.enum.purchase)},f.purchase_code,f.purchase_name,
+            to_jsonb(f.purchase_category_code),f.purchase_category_id IS NOT NULL,f.principal
+          WHERE f.purchase_id IS NOT NULL
+          UNION ALL
+          SELECT 3,0,${sqlEnumConstant(categoryEvidenceKind, categoryEvidenceKind.enum.merchant)},${sqlEnumConstant(fieldResolutionSourceSchema.shape.entityKind, fieldResolutionSourceSchema.shape.entityKind.enum.vendor)},f.vendor_code,f.vendor_name,
+            to_jsonb(f.vendor_category_code),f.vendor_category_id IS NOT NULL,f.merchant_eligible
+          WHERE f.vendor_id IS NOT NULL
+        ) step)
+      ) FROM chosen f LEFT JOIN "SpendingCategory" c ON c.id=f.category_id
+    ) AS evidence
+    FROM "Expense" e WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL`);
+  return result.rows[0]
+    ? categoryEvidenceSchema.parse(result.rows[0].evidence)
+    : null;
 }
 
 export const effectiveExpenseSpendingCategorySql = (

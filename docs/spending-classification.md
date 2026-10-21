@@ -11,9 +11,14 @@ Product Category mapping stops automatic defaults; deliberate Expense and
 Purchase choices remain available. Product mappings update historical Expenses
 live, while explicit purposes such as Gifts stay in place.
 
-Scalar category reads and explanation reads share the same SQL choice policy.
+The Expense category resolver owns SQL eligibility, chosen categories, and
+ordered explanation evidence. Explanations retain assigned but inapplicable
+alternatives and the full ancestry hidden by an override, and read their
+fallback source from that same choice relation in the operation's transaction
+snapshot. Merchant eligibility uses the Expense's stored Product reference;
+a soft-deleted Product does not turn the line into a productless purchase.
 Allocation, filtering, and grouping select the chosen UUID directly; only
-explanation reads join labels and build fallback/source provenance JSON.
+explanation reads build the evidence ladder and fallback/source provenance JSON.
 Bulk allocations resolve their selected principal lines together, sharing one
 ancestry catalog and joining category policy once across the batch, including
 draft changes. The resolver uses the same depth and cycle guards and choice
@@ -27,7 +32,12 @@ Purchase categories are fallbacks, not summaries. Purchases and Financial
 Transactions expose derived single, mixed, partial, unclassified, or
 not-applicable summaries. Transaction allocations connect Purchases, not
 individual items; transaction summaries therefore show category context without
-inventing dollar allocations. Original statement categories remain source
+inventing dollar allocations. Transaction itemization explanations reuse the
+Purchase evidence policy owner's linked-policy aggregate and single-source rule
+over every live linked Purchase; the contributor display limit does not bound
+that policy. Reviewed reimbursement still shows linked Purchase alternatives
+even though its effective and fallback policy are not expected.
+Original statement categories remain source
 evidence. Legacy Purchase defaults retain their provenance review gap until an
 explicit save; API audit provenance alone cannot establish statement origin.
 

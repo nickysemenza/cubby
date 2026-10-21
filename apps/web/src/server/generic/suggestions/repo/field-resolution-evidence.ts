@@ -16,7 +16,6 @@ import {
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { purchaseOut } from "@cubby/schemas/purchase";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { and, eq, sql, type SQL } from "drizzle-orm";
@@ -38,7 +37,7 @@ import {
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
-import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { loadExpenseSpendingCategoryEvidence } from "~/server/domains/expense/repo/expense-category-resolution";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { expenseJointAllocationSql } from "~/server/domains/expense/repo/expense-project-allocation";
 import {
@@ -47,15 +46,15 @@ import {
   loadInventoryOwnershipTraces,
   inventoryOwnerResolution,
 } from "~/server/domains/inventory/repo/ownership";
-import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { kitAncestorCteSql } from "~/server/domains/product/repo/kit-projection";
 import {
+  linkedPurchaseItemizationExpectationSql,
+  linkedPurchaseItemizationSourceSql,
   purchaseEvidenceFieldResolutionsSql,
   vendorItemizationPolicySql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { shortcodeLabels } from "~/server/generic/shortcode/repo/shortcode-labels";
 
-const categoryOrigin = purchaseOut.shape.spendingCategoryOrigin.unwrap();
 type Evidence = NonNullable<FieldExplanationOutput["resolutionEvidence"]>;
 type Json = z.infer<ReturnType<typeof z.json>>;
 type Ref = Pick<
@@ -257,119 +256,28 @@ async function expenseCategorySteps(
   shortcode: string,
   resolution: FieldResolution,
 ): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
-  const entity = "expense";
-  const field = "spendingCategoryId";
-  const subject = { entity, id: shortcode } as const;
-
-  const nodes = await ancestors(
-    db,
-    "productCategory",
-    sql`(SELECT g."categoryId" FROM "Expense" e JOIN "Product" g ON g.id=e."productId" AND g."deletedAt" IS NULL WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL)`,
-    field,
-  );
-  const fallback = await unwrapDb(db).execute(
-    sql`SELECT ${expenseSpendingCategoryResolutionSql("e", undefined, true)} AS resolution FROM "Expense" e WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL`,
-  );
-  const facts = await unwrapDb(db).execute(sql`
-      SELECT e."lineKind",g.id IS NOT NULL AS "hasProduct",
-        COALESCE(${categoryFeatureSql(sql`g."categoryId"`, "food")},false) AS food,
-        v.shortcode AS "vendorCode",v.name AS "vendorName",v."spendingProfile" AS profile,
-        vc.shortcode AS "vendorCategory",p.shortcode AS "purchaseCode",
-        COALESCE(p."displayLabel",p."orderId") AS "purchaseName",pc.shortcode AS "purchaseCategory"
-      FROM "Expense" e
-      LEFT JOIN "Product" g ON g.id=e."productId" AND g."deletedAt" IS NULL
-      LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-      LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND v."deletedAt" IS NULL
-      LEFT JOIN "SpendingCategory" vc ON vc.id=v."defaultSpendingCategoryId" AND vc."deletedAt" IS NULL
-      LEFT JOIN "SpendingCategory" pc ON pc.id=p."spendingCategoryId" AND pc."deletedAt" IS NULL AND p."spendingCategoryOrigin"<>${sqlEnumConstant(categoryOrigin, categoryOrigin.enum.source)}
-      WHERE e.shortcode=${shortcode} AND e."deletedAt" IS NULL`);
-  const fact = z
-    .object({
-      lineKind: z.string(),
-      hasProduct: z.boolean(),
-      food: z.boolean(),
-      vendorCode: z.string().nullable(),
-      vendorName: z.string().nullable(),
-      profile: z.string().nullable(),
-      vendorCategory: z.string().nullable(),
-      purchaseCode: z.string().nullable(),
-      purchaseName: z.string().nullable(),
-      purchaseCategory: z.string().nullable(),
-    })
-    .optional()
-    .parse(facts.rows[0]);
-  const mapping = nodes.find((node) => node.assigned);
-  const blocked =
-    SPENDING_BINDING.safeParse(mapping?.value).data?.mode === "blocked";
-  const principal = fact?.lineKind === "principal";
-  const contextEligible =
-    principal &&
-    !blocked &&
-    fact?.food &&
-    ["restaurant", "coffee_shop"].includes(fact.profile ?? "");
-  const mappingEligible =
-    principal &&
-    (!fact?.food ||
-      ["mixed_retail", "food_retail"].includes(fact.profile ?? ""));
-  const merchantEligible =
-    principal &&
-    !blocked &&
-    !fact?.hasProduct &&
-    ["food_retail", "restaurant", "coffee_shop"].includes(fact?.profile ?? "");
-  const categorySteps = nodeSteps("productCategory", nodes, subject).map(
-    (step) => ({
-      ...step,
-      unavailableReason:
-        step.assigned && (!principal || !(blocked || mappingEligible))
-          ? "Not applicable to this line"
-          : undefined,
-    }),
-  );
-  const vendorStep = (title: string, eligible: boolean): Step[] =>
-    fact?.vendorCode
-      ? [
-          {
-            title,
-            ref: { entityKind: "vendor", entityId: fact.vendorCode },
-            value: fact.vendorCategory,
-            assigned: fact.vendorCategory !== null,
-            unavailableReason:
-              !eligible && fact.vendorCategory !== null
-                ? "Not applicable to this line"
-                : undefined,
-          },
-        ]
-      : [];
+  const evidence = await loadExpenseSpendingCategoryEvidence(db, shortcode);
+  const titles = {
+    context: "Vendor food context",
+    mapping: null,
+    purchase: "Purchase default",
+    merchant: "Vendor default without a Product",
+  } as const;
   return {
     steps: [
-      selfStep(entity, resolution),
-      ...vendorStep("Vendor food context", Boolean(contextEligible)),
-      ...categorySteps,
-      ...(fact?.purchaseCode
-        ? [
-            {
-              title: "Purchase default",
-              ref: {
-                entityKind: "purchase" as const,
-                entityId: fact.purchaseCode,
-              },
-              value: fact.purchaseCategory,
-              assigned: fact.purchaseCategory !== null,
-              unavailableReason:
-                !principal && fact.purchaseCategory !== null
-                  ? "Not applicable to this line"
-                  : undefined,
-            },
-          ]
-        : []),
-      ...vendorStep(
-        "Vendor default without a Product",
-        Boolean(merchantEligible),
-      ),
+      selfStep("expense", resolution),
+      ...(evidence?.steps.map((step) => ({
+        title: titles[step.kind] ?? step.ref.name ?? step.ref.entityId,
+        ref: step.ref,
+        value: step.value,
+        assigned: step.assigned,
+        unavailableReason:
+          step.assigned && !step.applicable
+            ? "Not applicable to this line"
+            : undefined,
+      })) ?? []),
     ],
-    fallbackSource: fallback.rows[0]
-      ? fieldResolutionSchema.parse(fallback.rows[0].resolution).sourceEntity
-      : null,
+    fallbackSource: evidence?.fallbackSource ?? null,
   };
 }
 
@@ -1335,9 +1243,7 @@ async function transactionPolicyEvidence(
       JOIN "FinancialTransactionAllocation" a ON a."transactionId"=t.id AND a."deletedAt" IS NULL
       JOIN "Purchase" p ON p.id=a."purchaseId" AND p."deletedAt" IS NULL
       WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL
-    ) SELECT shortcode,name,resolution,count(*) OVER()::int AS total,
-      bool_or(resolution->>'value'=${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}) OVER() AS required,
-      bool_or(resolution->>'value'=${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.unknown)}) OVER() AS unknown
+    ) SELECT shortcode,name,resolution,count(*) OVER()::int AS total
     FROM policies ORDER BY shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
   const rows = z
     .array(
@@ -1346,27 +1252,26 @@ async function transactionPolicyEvidence(
         name: z.string(),
         resolution: fieldResolutionSchema,
         total: z.number(),
-        required: z.boolean(),
-        unknown: z.boolean(),
       }),
     )
     .parse(result.rows);
   const categoryResult = await unwrapDb(db).execute(sql`
-    SELECT c.shortcode,c."itemizationExpectation" AS value FROM "FinancialTransaction" t
-    JOIN "SpendingCategory" c ON c.id=t."spendingCategoryId" AND c."deletedAt" IS NULL
+    SELECT c.shortcode,c."itemizationExpectation" AS value,
+      ${linkedPurchaseItemizationExpectationSql("t")} AS "linkedValue",
+      ${linkedPurchaseItemizationSourceSql("t")} AS "linkedSource"
+    FROM "FinancialTransaction" t
+    LEFT JOIN "SpendingCategory" c ON c.id=t."spendingCategoryId" AND c."deletedAt" IS NULL
     WHERE t.shortcode=${shortcode} AND t."deletedAt" IS NULL`);
   const category = z
-    .object({ shortcode: z.string(), value: z.string().nullable() })
+    .object({
+      shortcode: z.string().nullable(),
+      value: itemizationExpectation.nullable(),
+      linkedValue: itemizationExpectation.nullable(),
+      linkedSource: fieldResolutionSchema.shape.sourceEntity,
+    })
     .optional()
     .parse(categoryResult.rows[0]);
-  const first = rows[0];
-  const linkedValue = first
-    ? first.required
-      ? "required"
-      : first.unknown
-        ? "unknown"
-        : "not_expected"
-    : null;
+  const linkedValue = category?.linkedValue ?? null;
   const steps: Step[] = [
     ...(resolution.mode === "allocated"
       ? [
@@ -1381,14 +1286,11 @@ async function transactionPolicyEvidence(
     selfStep("financialTransaction", resolution),
     {
       title: "Linked Purchase policies",
-      ref:
-        rows.length === 1 && first
-          ? { entityKind: "purchase", entityId: first.shortcode }
-          : null,
+      ref: category?.linkedSource ?? null,
       value: linkedValue,
       assigned: linkedValue !== null,
     },
-    ...(category
+    ...(category?.shortcode
       ? [
           {
             title: "Spending category policy",
