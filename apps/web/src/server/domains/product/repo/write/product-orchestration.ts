@@ -507,7 +507,7 @@ export async function findOrCreateByUPC(
  * Find or create the physical-book Product named by an ISBN.
  *
  * ISBNs are EAN barcodes, but they are not food identities: skip USDA and
- * create through `isbn` so the repository both stores the canonical GTIN and
+ * create through `barcode` so the repository both stores the canonical GTIN and
  * applies the `books` category invariant. The general UPC provider can still
  * supply the edition's title, publisher/manufacturer, price, and cover. When it
  * names a title that exactly matches one barcode-less book already on the
