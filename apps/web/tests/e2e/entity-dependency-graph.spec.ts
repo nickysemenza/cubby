@@ -286,9 +286,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await connection.press("Escape");
   await expect(page.getByLabel("Connection evidence")).toHaveCount(0);
 
-  await page
-    .getByRole("button", { name: "Show record list", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
   const records = page.getByLabel("Map records", { exact: true });
   await records.getByRole("button", { name: /Inventory Item$/ }).click();
   await expect(nodes).toHaveCount(2);
