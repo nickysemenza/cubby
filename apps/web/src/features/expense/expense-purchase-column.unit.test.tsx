@@ -1,6 +1,6 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -89,6 +89,8 @@ describe("expenses Purchase column", () => {
     renderCell(LINKED);
 
     const link = await screen.findByRole("link", { name: "ORDER-42" });
+    expect(screen.queryByRole("button", { name: "Edit vendor" })).toBeNull();
+    fireEvent.pointerOver(link, { pointerType: "mouse" });
     const pencil = screen.getByRole("button", { name: "Edit vendor" });
     expect(link.getAttribute("href")).toBe("/purchases/PUR-4K7M");
     expect(link.contains(pencil)).toBe(false);
@@ -104,7 +106,8 @@ describe("expenses Purchase column", () => {
       orderId: null,
     });
 
-    expect(await screen.findByText("(none)")).toBeTruthy();
+    const empty = await screen.findByText("(none)");
+    fireEvent.pointerOver(empty, { pointerType: "mouse" });
     expect(screen.queryByRole("link")).toBeNull();
     expect(screen.getByRole("button", { name: "Edit vendor" })).toBeTruthy();
   });

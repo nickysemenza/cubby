@@ -108,7 +108,9 @@ controls (explanation, relation workbench, resolution marks) use `CellFrame
 overlay` and reserve no width; they mount only in the hovered or focused cell
 and stand aside (transparent, click-through) over clipped text, where the cell
 spill draws them after the full value. A derived value reads muted and
-suggestion marks stay in flow. One-line chip lists use `ChipCluster
+suggestion marks stay in flow. Rich reference cells put their edit pencil in
+that same `CellFrame overlay` rail so it cannot intercept a category link or
+`ChipCluster` overflow control. One-line chip lists use `ChipCluster
 lines={1}` (first chip, "+N" with a tooltip naming the rest). Table headers paint a field's `display.columnLabel`, count icon
 (`entity/column-header.ts`), or linked entity's icon (`meta.linksTo`). Two-line
 cell content uses `StackedValue`, `ChipCluster`, or a shared component's dense

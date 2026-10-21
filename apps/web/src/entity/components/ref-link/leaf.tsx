@@ -10,6 +10,7 @@ import { Suspense } from "react";
 
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
 import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/entity/components/entity-preview-content";
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import { RecordMarkByReference } from "~/entity/components/record-mark";
 import {
   entities,
@@ -28,6 +29,7 @@ import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
 import { PersonAvatar } from "~/ui/common/person-avatar";
 import { ExternalLinkIcon } from "~/ui/external-link";
+import { EnumPill } from "~/ui/primitives/enum-pill";
 import {
   PreviewCard,
   PreviewCardContent,
@@ -329,9 +331,15 @@ export function ChipRefLink({
     );
   }
   if (compact) {
-    const chip =
-      "inline-flex max-w-full min-w-0 rounded-sm bg-muted px-1 text-xs leading-3";
-    const text = <span className="min-w-0 truncate">{label}</span>;
+    const chip = "inline-flex max-w-full min-w-0";
+    const text = (
+      <EnumPill
+        optionRole="category"
+        icon={<RecordEmoji entity={entity} emoji={emoji} size={12} />}
+      >
+        {label}
+      </EnumPill>
+    );
     return isHoverPreviewEntity(entity) ? (
       <PreviewRefLink
         entity={entity}

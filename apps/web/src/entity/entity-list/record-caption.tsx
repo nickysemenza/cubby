@@ -21,14 +21,17 @@ export const captionRowSchema = z.looseObject({ id: z.string() });
 export function recordCaption(
   entity: BrowserRoutedEntity,
   row: z.infer<typeof captionRowSchema>,
-  enrichmentState?: (id: string, field: string) => ListGroupState | undefined,
+  options: {
+    enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
+    excludeListFields?: boolean;
+  } = {},
 ): ReactNode {
   const subtitle = entitySummary[entity].list.shelf?.subtitle ?? [];
   const fields = entityFieldModels[entity].fields;
   for (const key of subtitle) {
     const field = fields.find((candidate) => candidate.key === key);
-    if (!field) continue;
-    const state = enrichmentState?.(row.id, field.readKey ?? field.key);
+    if (!field || (options.excludeListFields && field.display.list)) continue;
+    const state = options.enrichmentState?.(row.id, field.readKey ?? field.key);
     if (state && state.state !== "ready")
       return (
         <span className="block h-4 leading-4">
@@ -44,7 +47,7 @@ export function recordCaption(
       continue;
     return renderCompactFieldValue(entity, row, field);
   }
-  return enrichmentState && subtitle.length > 0 ? (
+  return options.enrichmentState && subtitle.length > 0 ? (
     <span className="block h-4" />
   ) : undefined;
 }

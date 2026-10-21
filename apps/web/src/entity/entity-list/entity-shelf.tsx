@@ -141,7 +141,7 @@ export function EntityShelf<TRow extends { id: string }>({
             }
             extraCount={images.length - 1}
             title={shelfTitle(entity, row)}
-            subtitle={recordCaption(entity, row, enrichmentState)}
+            subtitle={recordCaption(entity, row, { enrichmentState })}
             entity={entity}
             compact={compact}
             onInspect={onInspect ? () => onInspect(record) : undefined}

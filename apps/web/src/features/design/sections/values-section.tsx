@@ -1,8 +1,11 @@
 import { type ComponentProps, useState } from "react";
 
 import { GapChipCluster } from "~/entity/work-queue/work-queue-display";
+import { ChipCluster } from "~/ui/common/chip-cluster";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { MiddleTruncate } from "~/ui/common/middle-truncate";
+import { StackedValue } from "~/ui/common/stacked-value";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import type { Filter, FilterBarField } from "~/ui/data-table/filter-bar-core";
 import { Row, Stack } from "~/ui/layout";
@@ -104,6 +107,39 @@ export function ValuesSection() {
                 </EnumPill>
               ))}
             </Row>
+          </Stack>
+        </Demo>
+        <Demo
+          name="<StackedValue />"
+          note="A primary value and muted context within one table row."
+        >
+          <StackedValue
+            primary="Sample oat milk"
+            secondary="Fridge door · 2 cartons"
+          />
+        </Demo>
+        <Demo
+          name="<ChipCluster />"
+          note="Bounded chip rows retain the first value and count overflow; hover +N to read the rest."
+        >
+          <div className="w-48 max-w-full">
+            <ChipCluster
+              lines={1}
+              items={demoCategoryOptions.slice(0, 4).map((option) => ({
+                key: option.value,
+                label: option.label,
+                node: <EnumPill icon={option.icon}>{option.label}</EnumPill>,
+              }))}
+            />
+          </div>
+        </Demo>
+        <Demo
+          name="<MiddleTruncate />"
+          note="Long paths keep their tail; codes retain their first and last four characters."
+        >
+          <Stack gap="sm" className="w-48 max-w-full">
+            <MiddleTruncate text="House / Kitchen / Pantry / Upper shelf" />
+            <MiddleTruncate text="DEMO1234567890123456" code />
           </Stack>
         </Demo>
         <Demo

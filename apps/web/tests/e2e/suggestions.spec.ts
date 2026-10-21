@@ -268,6 +268,7 @@ test("saved suggestion previews stay visible while current evidence is checked",
     // the model's cached label before this assertion runs.
     const saved = cell.getByRole("button", {
       name: `Accept suggested value: ${categoryName}`,
+      exact: true,
     });
     await expect(saved).toBeVisible();
     await expect(saved).toBeDisabled();
