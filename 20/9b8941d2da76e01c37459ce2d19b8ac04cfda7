@@ -1,0 +1,21 @@
+apps/web/src/features/run/photo-group-review.tsx
+  s_9b829d577c7e4c::t_43fd9dc0c2e145 956,969-973
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_9b829d577c7e4c::t_78794f8fd77819 1285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "209b8941d2da76e01c37459ce2d19b8ac04cfda7",
+  "prompts": {},
+  "sessions": {
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
