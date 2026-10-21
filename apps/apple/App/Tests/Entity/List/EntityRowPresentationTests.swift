@@ -6,6 +6,23 @@ import Testing
 
 @Suite("Entity row presentation")
 struct EntityRowPresentationTests {
+    // A self-label timestamp must still reach the shared date presentation, not print raw ISO text.
+    @Test func runActivitySelfLabelRetainsDatePresentation() throws {
+        let timestamp = "2026-09-12T10:00:00.000Z"
+        let row = EntityRow(
+            id: "RUN-4K7M", title: "Synthetic run", subtitle: nil, imageURL: nil,
+            raw: ["id": "RUN-4K7M", "activityAt": .string(timestamp)])
+        let field = try #require(EntityCatalog[.run].fields.first { $0.key == "activityAt" })
+        #expect(field.labelPath == "activityAt")
+        let fact = try #require(
+            EntityRowPresentation.resolve(descriptor: EntityCatalog[.run], row: row, columns: ["activityAt"])
+                .facts.first { $0.id == "activityAt" })
+        #expect(fact.isDate)
+        #expect(fact.dateValue == timestamp)
+        let formattedDate = try #require(DatePresentation.absolute(of: timestamp))
+        #expect(fact.spokenValue == formattedDate)
+    }
+
     // Today no longer decodes a second meal model; the manifest adapter must retain the
     // recipe context, meal type, navigation identity and display image that its old row showed.
     @Test func todayMealUsesManifestFactsAndDisplayImage() throws {

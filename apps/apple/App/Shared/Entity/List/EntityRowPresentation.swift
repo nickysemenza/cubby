@@ -176,7 +176,9 @@ struct EntityRowPresentation: Sendable, Hashable {
         }
         // A declared `labelPath` is the text the server composed (or the name of the record
         // a reference cell links to); nothing here re-derives the figure.
-        if let path = field.labelPath, let text = row.raw.pathText(path) {
+        // Date self-labels keep the shared formatter below for both visible and spoken text.
+        let isSelfLabeledDate = field.labelPath == key && (field.kind == .date || field.kind == .timestamp)
+        if !isSelfLabeledDate, let path = field.labelPath, let text = row.raw.pathText(path) {
             return Fact(id: key, label: field.label, value: text)
         }
         if let renderer = field.listRenderer,
