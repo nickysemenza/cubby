@@ -732,6 +732,7 @@ Rules:
         display: {
           preview: true,
           list: true,
+          labelPath: "taskProgress",
           renderer: { list: "task-progress" },
         },
         validation: {
