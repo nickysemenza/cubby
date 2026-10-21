@@ -46,7 +46,7 @@ source/kind/externalId `key`; changing identity is an atomic remove-old/add-new
 patch. `expect` contains baseline attributes such as `isPrimary`, never the old
 identifier tuple. Include a URL expectation only when its stored value is known;
 an ASIN's canonical display link is derived. Follow the
-[identifier write contract](../../../../../docs/entities.md#collection-changes)
+[identifier write contract](../../../../docs/entities.md#collection-changes)
 for normalization and preconditions. Full-array replacement is deliberate:
 preserve every intended ID and remove MCP-only timestamps first.
 
