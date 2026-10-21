@@ -2090,6 +2090,16 @@ declared dependency routes. Unrelated failed work never hides healthy totals
 or valid semantic candidates; suggestion application checks its authoritative
 field inputs directly.
 
+Frontier dependency packets query at most eight adjacent routes, stop at the
+first nonempty indexed page, and return at most 100 references. Empty routes
+share one publication transaction and cursor acknowledgement. If preparation
+fails after an empty prefix, that prefix checkpoints first; the failed route
+retries alone with the normal failure budget. A short final route completes the
+scope immediately. Assessment advances directly to dependencies (or completion
+when no traversal is needed); stored legacy `recipe` cursors still resume.
+Recipe computation and embedding publication remain separate from frontier
+packets.
+
 Each page has a single-use lease and acknowledges its exact Work version and
 owner token. Expensive preparation and provider calls happen outside the
 transaction. Short output transactions validate the captured input revision,

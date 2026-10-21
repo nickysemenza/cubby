@@ -41,7 +41,7 @@ import {
 } from "./assessment-retirement";
 import { foldDerivedRefreshCaptures } from "./capture";
 import {
-  readRefreshDependencyPage,
+  readRefreshDependencyPacket,
   refreshDependencyRoutes,
   refreshEndpointDependencyRoutes,
 } from "./dependencies";
@@ -154,18 +154,19 @@ async function prepareFrontierPage(
     scope?.phase === "assessment" && scope.version === version
       ? await prepareAssessmentRetirement(db, scope)
       : null;
-  const route =
-    scope?.phase === "dependencies" &&
-    scope.version === version &&
-    scope.traverse
-      ? (refreshEndpointDependencyRoutes(rootKind, scope.entityKind) ??
-          refreshDependencyRoutes(scope.entityKind))[scope.route]
-      : undefined;
-  const dependencyRefs =
-    route && scope
-      ? await readRefreshDependencyPage(db, route, scope.entityId, scope.after)
-      : [];
-  return { prepared, retirement, route, dependencyRefs };
+  const dependencyPacket =
+    scope?.phase === "dependencies" && scope.version === version
+      ? await readRefreshDependencyPacket(
+          db,
+          scope.traverse
+            ? (refreshEndpointDependencyRoutes(rootKind, scope.entityKind) ??
+                refreshDependencyRoutes(scope.entityKind))
+            : [],
+          scope.entityId,
+          scope,
+        )
+      : null;
+  return { prepared, retirement, dependencyPacket };
 }
 
 /** One bounded frontier/retirement/publication page, shared by queue and Run. */
@@ -308,7 +309,7 @@ export async function processDerivedRefreshPage(
           ]),
         ),
       };
-    const { prepared, retirement, route, dependencyRefs } =
+    const { prepared, retirement, dependencyPacket } =
       await prepareFrontierPage(db, scope, work.version, work.entityKind);
     if (!work.publishing)
       failureInput = {
@@ -331,7 +332,7 @@ export async function processDerivedRefreshPage(
                     after: retirement.after,
                   }
                 : phase === "dependencies"
-                  ? [scope?.route, scope?.after, dependencyRefs]
+                  ? [scope?.route, scope?.after, dependencyPacket]
                   : null),
           ]),
         ),
@@ -471,15 +472,25 @@ export async function processDerivedRefreshPage(
             ]);
           if (prepared)
             await publishPreparedSearchDocuments(tx, prepared, inputRevision);
-          updateScope({ projected: true });
-          await advance("assessment");
+          updateScope({ projected: true, phase: "assessment", after: null });
           return;
         }
         if (phase === "assessment") {
           if (!retirement)
             throw new Error("Missing prepared assessment retirement");
           await publishAssessmentRetirement(tx, retirement);
-          if (retirement.done) await advance("recipe");
+          if (retirement.done)
+            await advance(
+              scope.traverse &&
+                (
+                  refreshEndpointDependencyRoutes(
+                    work.entityKind,
+                    scope.entityKind,
+                  ) ?? refreshDependencyRoutes(scope.entityKind)
+                ).length
+                ? "dependencies"
+                : "completed",
+            );
           else updateScope({ after: retirement.after });
           return;
         }
@@ -488,11 +499,9 @@ export async function processDerivedRefreshPage(
           return;
         }
         if (phase === "dependencies") {
-          if (!route) {
-            await advance("completed");
-            return;
-          }
-          const refs = dependencyRefs;
+          if (!dependencyPacket)
+            throw new Error("Missing prepared dependency packet");
+          const refs = dependencyPacket.refs;
           if (refs.length > 0)
             metadata.push(async () => {
               await getDb(tx)
@@ -514,11 +523,10 @@ export async function processDerivedRefreshPage(
                   setWhere: sql`NOT ${derivedRefreshScope.traverse} AND excluded.traverse`,
                 });
             });
-          updateScope(
-            refs.length < DERIVED_REFRESH_PAGE
-              ? { route: scope.route + 1, after: null }
-              : { after: refs.at(-1)?.entityId },
-          );
+          updateScope({
+            ...dependencyPacket.cursor,
+            ...(dependencyPacket.cursor.done ? { phase: "completed" } : {}),
+          });
           return;
         }
         await advance("completed");
