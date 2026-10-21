@@ -437,6 +437,12 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const reviewedVendor = `${alias} Reviewed Hardware`;
   await result
     .getByRole("textbox", { name: "Reviewed new Vendor business name" })
+    .fill(" ");
+  await expect(
+    result.getByRole("textbox", { name: "Reviewed new Vendor business name" }),
+  ).toBeVisible();
+  await result
+    .getByRole("textbox", { name: "Reviewed new Vendor business name" })
     .fill(reviewedVendor);
   await expect(result).toContainText(`Create vendor “${reviewedVendor}”`);
   await expect(

@@ -344,7 +344,9 @@ function SpendingEvidence({
                     booking: {
                       ...booking,
                       vendorId: undefined,
-                      reviewedVendorName: event.target.value || undefined,
+                      reviewedVendorName: event.target.value.trim()
+                        ? event.target.value
+                        : undefined,
                     },
                   })
                 }
