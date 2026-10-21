@@ -15,12 +15,7 @@ export const enumIconSchema = z.strictObject({
 });
 export type EnumIcon = z.infer<typeof enumIconSchema>;
 
-const enumPresentationSchema = z.strictObject({
-  role: z.enum(enumRoles),
-  color: z.string().min(1),
-  glyph: enumIconSchema,
-});
-export type EnumPresentation = z.infer<typeof enumPresentationSchema>;
+type EnumPresentation = { role: EnumRole; color: string; glyph: EnumIcon };
 
 /** Tone defaults are explicit visual vocabulary, independent of stored words. */
 const STATUS_GLYPHS = new Map<string, EnumIcon>(
@@ -46,7 +41,7 @@ type RosterDefaults = {
 };
 
 /** Authoring token keys become the existing cross-client CSS-token wire form. */
-export const optionColorCss = (token: ColorToken) =>
+const optionColorCss = (token: ColorToken) =>
   `var(--${STATUS_GLYPHS.has(token) ? token : `brand-${token}`})`;
 
 /**

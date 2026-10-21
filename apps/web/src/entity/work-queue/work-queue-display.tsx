@@ -153,6 +153,7 @@ export function WaitingForPill({
     case "unresolved":
       return (
         <EnumPill
+          optionRole="status"
           icon={<QuestionIcon />}
           color="var(--warning)"
           description={waitingFor.reason}
