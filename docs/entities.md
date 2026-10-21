@@ -2987,6 +2987,8 @@ for explicit API callers. Ordinary web/native update editors submit keyed patche
 Their single local collection draft keeps an immutable saved baseline and explicit
 Add, Replace, Remove and Make primary intent; normalization removes this local
 wrapper before input validation and submission. Untouched collections are omitted.
+An invalid dirty native draft keeps Save reachable so the existing error handler
+shows its diagnostic above preserved input; a valid empty patch remains unsavable.
 Create materializes the initial full collection. Record collections declare
 `primary: { key: "isPrimary", scope: ["source", "kind"] }` when role controls apply.
 Attribute replacements carry the stored URL and primary role as expectations.
@@ -2999,8 +3001,11 @@ GTIN and preserve canonical digits unless encoding evidence is available. Valida
 book identities may display ISBN-13. Primary and secondary barcode displays share
 shared kind/source/role metadata across web and native; explicit stored URLs remain
 links. Committed identifier audit effects retain every changed value and primary
-role without truncation. Historical read effects compare URL storage policy
-directly, without input normalization or identity repair. Missing committed sides
+role without truncation.
+Audit timeline details render as wrapped literal text; only explicit event links
+provide record navigation.
+Historical read effects compare URL storage policy directly, without input
+normalization or identity repair. Missing committed sides
 produce diagnostics rather than an invented empty baseline. Provider lookup links
 belong to the applicable lookup workflow.
 Product create/update accepts one write-only `barcode` shortcut for barcode or

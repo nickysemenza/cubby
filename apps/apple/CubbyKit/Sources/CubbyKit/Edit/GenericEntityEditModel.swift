@@ -334,7 +334,12 @@ public final class GenericEntityEditModel {
             return missingRequiredKeys.isEmpty
         case .update:
             guard original != nil, loadError == nil else { return false }
-            return hasImageChanges || ((try? patch())?.isEmpty == false)
+            if hasImageChanges { return true }
+            do {
+                return try !patch().isEmpty
+            } catch {
+                return true
+            }
         }
     }
 

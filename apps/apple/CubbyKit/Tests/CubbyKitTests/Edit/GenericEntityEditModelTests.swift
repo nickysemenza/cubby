@@ -22,6 +22,22 @@ private final class EditStub: URLProtocol, @unchecked Sendable {
 @Suite("GenericEntityEditModel", .serialized)
 @MainActor
 struct GenericEntityEditModelTests {
+    @Test func invalidCollectionDraftCanExposeItsSaveErrorWithoutLosingInput() async throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),
+            original: ["id": "PRD-2345", "externalIds": []])
+        var edit = try #require(CollectionEdit.decode(model.draft["externalIds"]))
+        edit.rows.append(CollectionEdit.Row(baseline: nil, value: [
+            "source": "gtin", "kind": "gtin_14", "externalId": "00012345678906", "url": .null,
+        ]))
+        model.draft["externalIds"] = edit.json
+        #expect(model.canSave)
+        #expect(!(await model.save()))
+        #expect(model.bannerError != nil)
+        #expect(model.draft["externalIds"] == edit.json)
+        #expect(model.savedID == nil)
+    }
+
     @Test func collectionPromotionSendsKeyedIntentWithStoredExpectations() async throws {
         let seen = capture { _ in (200, Self.productUpdated) }
         let original: JSONValue = [
