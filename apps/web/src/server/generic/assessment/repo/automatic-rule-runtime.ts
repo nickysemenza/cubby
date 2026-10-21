@@ -54,8 +54,6 @@ const ruleStamps = z
   .object({
     matchedRules: z.array(z.string()).default([]),
     auditSample: z.boolean().default(false),
-    /** A field publication's Sweep model, which its rule compares against. */
-    pinnedModel: z.string().nullable().default(null),
   })
   .passthrough();
 
@@ -392,10 +390,7 @@ type Candidate = {
   judgment: unknown;
 };
 
-function currentMatches(
-  row: Candidate,
-  pinnedModel: string | null,
-): AutomaticRuleMatch[] {
+function currentMatches(row: Candidate): AutomaticRuleMatch[] {
   if (row.family === "field") {
     const entity = shortcodeEntity.safeParse(row.entity);
     return entity.success
@@ -405,7 +400,6 @@ function currentMatches(
           kind: row.kind,
           confidence: row.confidence,
           model: row.model,
-          pinnedModel,
         })
       : [];
   }
@@ -473,7 +467,7 @@ export async function applyAutomaticRules(
     if (!row.active || row.status !== "pending" || !row.served) continue;
     const stamp = ruleStamps.safeParse(row.data).data;
     if (row.family !== "field" && !stamp?.matchedRules.length) continue;
-    const current = currentMatches(row, stamp?.pinnedModel ?? null);
+    const current = currentMatches(row);
     if (
       current.some(
         (match) =>

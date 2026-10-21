@@ -842,9 +842,11 @@ before publication. USDA and ingredient-merge batches retain per-ingredient
 errors; UPC offer judgments share one request context inside each lookup, while
 the outer UPC loop retains quota and rate-limit stopping behavior.
 Paired field audits record `AssessmentState.data.served` explicitly. List
-filters and the immutable Assessment publication trigger use that flag, with
-the legacy Run/model comparison only for older rows that lack it; serving a
-primary answer never requires pinning the Run's model.
+filters and the immutable Assessment publication trigger use that flag;
+ordinary field answers are served by default. Paired publications without a
+boolean flag fail. The cutover migration materializes existing serving and
+checkpoint metadata before deleting retired automatic routing pins from Run
+inputs and evaluation snapshots. Immutable model attribution remains intact.
 Product identity grounding batches source-literal questions before eligible
 relation questions; usage is attributed to the literal or relation phase, while
 individual dimension prompts, source literals, and fingerprints stay in receipts.

@@ -16,7 +16,7 @@ import {
   DECISION_MODEL,
   supportedDecisionModelSchema,
 } from "@cubby/shared/ai/models";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -1380,6 +1380,18 @@ describe("statement Transaction suggestions", () => {
         evaluationId: null,
       },
     );
+    const [publishedCheckpoint] = await getDb(ctx.db)
+      .select({ data: assessmentState.data })
+      .from(assessmentState)
+      .where(
+        and(
+          eq(assessmentState.family, "statement_transaction"),
+          eq(assessmentState.active, true),
+        ),
+      );
+    expect(publishedCheckpoint?.data).toMatchObject({
+      labelCheckpoint: { models: ["synthetic-decision-model"] },
+    });
     await generate(ctx);
     const [rebuilt] = await suggestions(ctx);
     expect(rebuilt).toMatchObject({

@@ -15,15 +15,13 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { STATEMENT_CHARGE_IDENTITY_FEATURE } from "~/server/ai/policy/features";
 import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/statement-import/repo/statement-suggestions";
 
-/** What a field rule reads: the published proposal and its Sweep's pinned model. */
+/** What a field rule reads from the published proposal. */
 export type FieldRuleFacts = {
   entity: ShortcodeEntity;
   field: string;
   kind: string;
   confidence: number;
   model: string;
-  /** The Sweep Run's pinned decision model; null outside a Sweep. */
-  pinnedModel: string | null;
 };
 
 type FactsOf = {
