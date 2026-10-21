@@ -1,3 +1,10 @@
+import { displayItems } from "../../../../packages/schemas/src/entity-definitions/label-field.ts";
+import { z } from "zod";
+import {
+  requireNativeCoverage,
+  rendererReadInputs,
+} from "../../../../packages/schemas/src/native-coverage.ts";
+import type { RawReadSchemas } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { relationshipProvenanceSchema } from "./list-fields.ts";
 import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
 import { listViewId } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
@@ -28,17 +35,404 @@ type PresentationFacts = Readonly<{
   capabilities: EntityDeclarationMetadata["capabilities"];
   ports: CompiledEntity["ports"];
   hasUpdate: boolean;
+  readSchemas: RawReadSchemas;
 }>;
 
-/**
- * A FieldKey is a model field key that the read projection can render: it
- * reads out under its `readKey`, or it is a reference whose target the
- * projection nests under the key minus `Id` (location `parentId` → `parent`).
- */
-const readableFields = (fieldModel: EntityFieldModel) =>
+type Surface = "list" | "detail";
+const PATH =
+  /^[A-Za-z_]\w*(?:\[(?:\d*)\])*(?:\.[A-Za-z_]\w*(?:\[(?:\d*)\])*)*$/u;
+
+/** Resolve only the existing read-path grammar; never execute schemas to invent sample data. */
+export function schemaAtReadPath(
+  schema: z.ZodType,
+  path: string,
+): z.ZodType | null {
+  if (!PATH.test(path)) return null;
+  const steps = [...path.matchAll(/([A-Za-z_]\w*)|\[(\d*)\]/gu)].map(
+    (match) => match[1] ?? (match[2] === "" ? null : Number(match[2])),
+  );
+  const active = new WeakMap<z.ZodType, Set<number>>();
+  const walk = (current: z.ZodType, position: number): z.ZodType | null => {
+    const seen = active.get(current) ?? new Set<number>();
+    if (seen.has(position)) return null;
+    seen.add(position);
+    active.set(current, seen);
+    try {
+      if (
+        current instanceof z.ZodOptional ||
+        current instanceof z.ZodNullable ||
+        current instanceof z.ZodDefault ||
+        current instanceof z.ZodPrefault ||
+        current instanceof z.ZodCatch ||
+        current instanceof z.ZodReadonly ||
+        current instanceof z.ZodNonOptional
+      ) {
+        const inner = current.unwrap();
+        return inner instanceof z.ZodType ? walk(inner, position) : null;
+      }
+      if (current instanceof z.ZodLazy) {
+        const inner = current.unwrap();
+        return inner instanceof z.ZodType ? walk(inner, position) : null;
+      }
+      if (
+        current instanceof z.ZodPipe &&
+        current.out instanceof z.ZodType &&
+        !(current.out instanceof z.ZodTransform)
+      )
+        return walk(current.out, position);
+      if (current instanceof z.ZodUnion) {
+        const branches = current.options.filter(
+          (branch) =>
+            !(branch instanceof z.ZodNull) &&
+            !(branch instanceof z.ZodUndefined),
+        );
+        const leaves = branches.map((branch) =>
+          branch instanceof z.ZodType ? walk(branch, position) : null,
+        );
+        if (leaves.length === 0 || leaves.some((leaf) => leaf === null))
+          return null;
+        const inhabited = leaves.filter(
+          (leaf) => !(leaf instanceof z.ZodNever),
+        );
+        const first = inhabited[0];
+        if (!first) return null;
+        return inhabited.every(
+          (leaf) => leaf?._zod.def.type === first._zod.def.type,
+        )
+          ? first
+          : null;
+      }
+      if (position === steps.length) return current;
+      const step = steps[position];
+      if (step === null || typeof step === "number") {
+        if (
+          current instanceof z.ZodArray &&
+          current.element instanceof z.ZodType
+        )
+          return walk(current.element, position + 1);
+        if (current instanceof z.ZodTuple) {
+          const children =
+            typeof step === "number"
+              ? [current._zod.def.items[step] ?? current._zod.def.rest]
+              : [
+                  ...current._zod.def.items,
+                  ...(current._zod.def.rest ? [current._zod.def.rest] : []),
+                ];
+          if (children.length === 0) return z.never();
+          const leaves = children.map((child) =>
+            child instanceof z.ZodType ? walk(child, position + 1) : null,
+          );
+          const first = leaves[0];
+          return first &&
+            leaves.every((leaf) => leaf?._zod.def.type === first._zod.def.type)
+            ? first
+            : null;
+        }
+        return null;
+      }
+      if (step === undefined || !(current instanceof z.ZodObject)) return null;
+      const child: unknown = current.shape[step];
+      return child instanceof z.ZodType ? walk(child, position + 1) : null;
+    } finally {
+      seen.delete(position);
+    }
+  };
+  return walk(schema, 0);
+}
+
+const valuePath = (
+  field: EntityField,
+  schema: z.ZodType,
+  surface: Surface,
+): string | null => {
+  if (
+    surface === "list" &&
+    field.display.standard === "image" &&
+    schemaAtReadPath(schema, "displayImages")
+  )
+    return "displayImages";
+  const rendered =
+    surface === "list"
+      ? field.display.labelPath
+      : (field.display.itemsPath ?? field.display.detailLabelPath);
+  if (rendered && field.reference === null)
+    return schemaAtReadPath(schema, rendered) ? rendered : null;
+  const readable = (path: string) => {
+    const leaf = schemaAtReadPath(schema, path);
+    if (leaf === null) return false;
+    if (field.reference === null || field.kind === "number") return true;
+    if (
+      field.reference.multiple &&
+      !(leaf instanceof z.ZodArray || leaf instanceof z.ZodTuple) &&
+      !path.includes("[]")
+    )
+      return false;
+    const itemPath =
+      field.reference.multiple &&
+      (leaf instanceof z.ZodArray || leaf instanceof z.ZodTuple)
+        ? `${path}[]`
+        : path;
+    const item = schemaAtReadPath(schema, itemPath);
+    return (
+      item?._zod.def.type === "string" ||
+      schemaAtReadPath(schema, `${itemPath}.id`)?._zod.def.type === "string"
+    );
+  };
+  if (field.display.readPath !== null)
+    return readable(field.display.readPath) ? field.display.readPath : null;
+  if (field.readKey !== null && readable(field.readKey)) return field.readKey;
+  if (field.reference !== null) {
+    const nested = field.key.replace(/Ids?$/u, "");
+    if (
+      schemaAtReadPath(
+        schema,
+        `${nested}${field.reference.multiple ? "[]" : ""}.id`,
+      )?._zod.def.type === "string"
+    )
+      return nested;
+  }
+  return null;
+};
+
+const labelPathAvailable = (root: z.ZodType, path: string): boolean => {
+  const leaf = schemaAtReadPath(root, path);
+  return (
+    leaf?._zod.def.type === "string" ||
+    (leaf instanceof z.ZodArray &&
+      schemaAtReadPath(root, `${path}[]`)?._zod.def.type === "string")
+  );
+};
+
+/** A renderer's minimum input projection must exist with compatible output types on every branch. */
+function rendererInputAvailable(
+  root: z.ZodType,
+  path: string,
+  expected: z.ZodType,
+): boolean {
+  const actual = schemaAtReadPath(root, path);
+  const wanted = schemaAtReadPath(z.object({ value: expected }), "value");
+  if (actual === null || wanted === null) return false;
+  if (actual instanceof z.ZodNever || actual === wanted) return true;
+  if (wanted instanceof z.ZodObject)
+    return (
+      actual instanceof z.ZodObject &&
+      Object.entries(wanted.shape).every(
+        ([key, schema]) =>
+          schema instanceof z.ZodType &&
+          rendererInputAvailable(root, `${path}.${key}`, schema),
+      )
+    );
+  if (wanted instanceof z.ZodArray && wanted.element instanceof z.ZodType)
+    return (
+      (actual instanceof z.ZodArray || actual instanceof z.ZodTuple) &&
+      rendererInputAvailable(root, `${path}[]`, wanted.element)
+    );
+  if (wanted instanceof z.ZodString && actual instanceof z.ZodEnum)
+    return actual.options.every((value) => typeof value === "string");
+  return actual._zod.def.type === wanted._zod.def.type;
+}
+
+const genericValueAvailable = (
+  field: EntityField,
+  schema: z.ZodType,
+  path: string,
+  surface: Surface,
+): boolean => {
+  const leaf = schemaAtReadPath(schema, path);
+  if (leaf === null) return false;
+  const label =
+    surface === "list"
+      ? field.display.labelPath
+      : field.display.detailLabelPath;
+  if (label) return labelPathAvailable(schema, label);
+  if (surface === "detail" && field.display.itemsPath)
+    return rendererInputAvailable(
+      schema,
+      field.display.itemsPath,
+      displayItems,
+    );
+  if (field.reference !== null && field.kind !== "number") return true;
+  if (surface === "list" && field.display.standard === "image")
+    return leaf instanceof z.ZodArray;
+  const type = leaf._zod.def.type;
+  if (field.display.readPath !== null)
+    return [
+      "string",
+      "number",
+      "boolean",
+      "date",
+      "object",
+      "array",
+      "tuple",
+      "union",
+      "record",
+      "enum",
+      "literal",
+    ].includes(type);
+  switch (field.kind) {
+    case "number":
+      return type === "number";
+    case "boolean":
+      return type === "boolean";
+    case "date":
+    case "timestamp":
+      return type === "string" || type === "date";
+    case "identifier":
+      return type === "string" || type === "number";
+    case "text":
+    case "enum":
+      return (
+        type === "string" ||
+        type === "enum" ||
+        (leaf instanceof z.ZodLiteral &&
+          [...leaf.values].every((value) => typeof value === "string"))
+      );
+    case "text-array":
+      return leaf instanceof z.ZodArray;
+    case "json":
+      return [
+        "object",
+        "array",
+        "tuple",
+        "union",
+        "record",
+        "string",
+        "number",
+        "boolean",
+        "enum",
+        "literal",
+      ].includes(type);
+    default: {
+      const exhaustive: never = field.kind;
+      return exhaustive;
+    }
+  }
+};
+
+const coverage = (
+  surface: Surface | "control",
+  id: string,
+  context: string,
+) => {
+  try {
+    requireNativeCoverage(surface, id);
+  } catch (error) {
+    throw new EntityDeclarationError(
+      `${context}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+
+export function resolveFieldDisplay(
+  field: EntityField,
+  raw: { list?: boolean; detail?: boolean },
+  schemas: RawReadSchemas,
+  context: string,
+  companion = false,
+): EntityField {
+  if (field.control?.renderer)
+    coverage("control", field.control.renderer, context);
+  const resolve = (surface: Surface) => {
+    const schema = schemas[surface];
+    const renderer = field.display.renderer?.[surface];
+    if (renderer) coverage(surface, renderer, context);
+    const inputs = renderer ? rendererReadInputs(surface, renderer) : null;
+    const path = valuePath(field, schema, surface);
+    const labels =
+      surface === "detail"
+        ? field.display.itemsPath
+          ? null
+          : (field.display.detailLabelPath ??
+            (field.reference !== null ? field.display.labelPath : null))
+        : field.display.labelPath;
+    const items = surface === "detail" ? field.display.itemsPath : null;
+    const missingInput = inputs?.find(
+      (input) => !rendererInputAvailable(schema, input.path, input.schema),
+    )?.path;
+    const generic =
+      path !== null && genericValueAvailable(field, schema, path, surface);
+    const available = inputs ? missingInput === undefined : generic;
+    const explicit = raw[surface];
+    if (explicit !== false) {
+      for (const [name, target] of [
+        ["labelPath", labels],
+        ["itemsPath", items],
+      ] as const) {
+        if (
+          target &&
+          (name === "itemsPath"
+            ? !rendererInputAvailable(schema, target, displayItems)
+            : !labelPathAvailable(schema, target))
+        )
+          throw new EntityDeclarationError(
+            `${context}.${field.key}.${surface}.${name} ${JSON.stringify(target)} is unavailable in the actual ${surface} schema.`,
+          );
+      }
+    }
+
+    if ((explicit === true || (renderer && explicit !== false)) && !available)
+      throw new EntityDeclarationError(
+        `${context}.${field.key}.${surface} unavailable: path ${JSON.stringify(field.display.readPath ?? field.readKey ?? field.key)} or renderer input ${JSON.stringify(missingInput)} is absent or unsupported in the actual ${surface} schema.`,
+      );
+    const defaultEnabled = available && !companion;
+    if (explicit !== undefined && explicit === defaultEnabled)
+      throw new EntityDeclarationError(
+        `${context}.${field.key}.${surface} override is redundant with schema eligibility (${defaultEnabled}).`,
+      );
+    const enabled = explicit ?? defaultEnabled;
+    if (
+      enabled &&
+      field.reference !== null &&
+      !field.reference.multiple &&
+      !field.display.detailLabelPath &&
+      !items
+    ) {
+      const stem = field.key.replace(/Ids?$/u, "");
+      const alias = [`${stem}Label`, `${stem}DisplayLabel`].find((path) =>
+        labelPathAvailable(schema, path),
+      );
+      if (
+        alias &&
+        !labelPathAvailable(schema, `${stem}Name`) &&
+        !labelPathAvailable(schema, `${stem}.name`) &&
+        field.display.labelPath === null
+      )
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.${surface} must declare display.labelPath for custom reference label ${alias}.`,
+        );
+    }
+    return enabled;
+  };
+  return {
+    ...field,
+    display: {
+      ...field.display,
+      list: resolve("list"),
+      detail: resolve("detail"),
+    },
+  };
+}
+
+const readableFields = (
+  fieldModel: EntityFieldModel,
+  schema: z.ZodType,
+  surface: Surface,
+) =>
   new Map(
     fieldModel.fields
-      .filter((field) => field.readKey !== null || field.reference !== null)
+      .filter((field) => {
+        const inputs = rendererReadInputs(
+          surface,
+          field.display.renderer?.[surface] ?? "",
+        );
+        const path = valuePath(field, schema, surface);
+        return inputs
+          ? inputs.every((input) =>
+              rendererInputAvailable(schema, input.path, input.schema),
+            )
+          : path !== null &&
+              genericValueAvailable(field, schema, path, surface);
+      })
       .map((field) => [field.key, field]),
   );
 
@@ -58,8 +452,10 @@ type FieldLookup = Readonly<{
 const fieldLookup = (
   fieldModel: EntityFieldModel,
   context: string,
+  schema: z.ZodType,
+  surface: Surface = "detail",
 ): FieldLookup => {
-  const byKey = readableFields(fieldModel);
+  const byKey = readableFields(fieldModel, schema, surface);
   return {
     context,
     read: (key, where) => {
@@ -123,7 +519,7 @@ const checkSections = (
 ): boolean => {
   const { context } = lookup;
   const detailFieldKeys = new Set(
-    [...readableFields(fieldModel).values()]
+    fieldModel.fields
       .filter((field) => field.display.detail)
       .map((field) => field.key),
   );
@@ -435,7 +831,11 @@ function checkRecordEmoji(
   facts: PresentationFacts,
   context: string,
 ) {
-  const lookup = fieldLookup(facts.fieldModel, context);
+  const lookup = fieldLookup(
+    facts.fieldModel,
+    context,
+    facts.readSchemas.detail,
+  );
   const emojiField = presentation.recordEmojiField;
   if (emojiField) {
     const field = lookup.edit(emojiField, "recordEmojiField");
@@ -458,7 +858,13 @@ export const compilePresentation = (
   context: string,
 ): CompiledPresentation => {
   const { fieldModel, relations, capabilities, ports } = facts;
-  const lookup = fieldLookup(fieldModel, context);
+  const lookup = fieldLookup(fieldModel, context, facts.readSchemas.detail);
+  const listLookup = fieldLookup(
+    fieldModel,
+    context,
+    facts.readSchemas.list,
+    "list",
+  );
   const { detail, list, spans } = presentation;
   const emojiField = presentation.recordEmojiField;
   checkRecordEmoji(presentation, facts, context);
@@ -548,7 +954,11 @@ export const compilePresentation = (
         ]
       : declaredSections;
   checkHero(detail.hero, lookup);
-  const readable = readableFields(fieldModel);
+  const readable = readableFields(
+    fieldModel,
+    facts.readSchemas.detail,
+    "detail",
+  );
   const preview = fieldModel.fields
     .filter((field) => field.display.preview)
     .map((field) => {
@@ -565,7 +975,13 @@ export const compilePresentation = (
     relations,
     lookup,
   );
-  checkList(list, capabilities, timelineSection, lookup, fieldModel.hierarchy);
+  checkList(
+    list,
+    capabilities,
+    timelineSection,
+    listLookup,
+    fieldModel.hierarchy,
+  );
   if ((capabilities.timeline === "custom") !== (ports.timeline !== null))
     throw new EntityDeclarationError(
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,

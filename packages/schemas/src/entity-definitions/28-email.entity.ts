@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 import {
   EMAIL_LINK_STATE_LABEL,
   emailImportOutcome,
@@ -160,11 +159,13 @@ export default defineEntity({
   model: {
     fields: [
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: readOnly(shortcodeSchema("email")),
       },
       {
+        display: { detail: false, list: false },
         key: "displayName",
         kind: "text",
         validation: readOnly(z.string().min(1)),
@@ -173,14 +174,14 @@ export default defineEntity({
         key: "sender",
         kind: "text",
         nullable: true,
-        display: { list: true, detail: true },
+        display: {},
         validation: readOnly(z.string().nullable()),
       },
       {
         key: "subject",
         kind: "text",
         nullable: true,
-        display: { list: true, listHidden: true, detail: true },
+        display: { listHidden: true },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -188,7 +189,7 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
         labelOverride: "Received",
-        display: { list: true, detail: true, format: "timestamp" },
+        display: { format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
@@ -199,8 +200,6 @@ export default defineEntity({
         control: { kind: "select", options: relevanceOptions },
         // The list cell names the deciding stage, e.g. "Uncertain · Rule".
         display: {
-          list: true,
-          detail: true,
           labelPath: "relevanceLabel",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -216,9 +215,7 @@ export default defineEntity({
         labelOverride: "Relevance stage",
         control: { kind: "select", options: stageOptions },
         display: {
-          list: true,
           listHidden: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "ListChecks", sfSymbol: "checklist" },
@@ -230,7 +227,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         labelOverride: "Relevance reason",
-        display: { list: true, listHidden: true, detail: true },
+        display: { listHidden: true },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -241,8 +238,6 @@ export default defineEntity({
         control: { kind: "select", options: relevanceOptions },
         display: {
           columnLabel: "Relevance",
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Link", sfSymbol: "link" },
@@ -265,7 +260,7 @@ export default defineEntity({
             },
           ],
         },
-        display: { list: true, listHidden: true, detail: true },
+        display: { listHidden: true },
         validation: readOnly(z.boolean()),
       },
       {
@@ -273,7 +268,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         labelOverride: "Review reason",
-        display: { detail: true },
+        display: { list: false },
         provenance: {
           kind: "derived",
           sources: [{ label: "Independent review of this Email checksum" }],
@@ -285,8 +280,6 @@ export default defineEntity({
         kind: "enum",
         control: { kind: "select", options: statusOptions },
         display: {
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Envelope", sfSymbol: "envelope" },
@@ -297,7 +290,7 @@ export default defineEntity({
         key: "mailboxId",
         kind: "text",
         labelOverride: "Mailbox",
-        display: { list: true, listHidden: true, detail: true },
+        display: { listHidden: true },
         validation: readOnly(z.string()),
       },
       {
@@ -305,10 +298,11 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         labelOverride: "Owner",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(ledgerPartyShortcode),
       },
       {
+        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         nullable: true,
@@ -318,41 +312,41 @@ export default defineEntity({
       {
         key: "provider",
         kind: "text",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string()),
       },
       {
         key: "messageId",
         kind: "text",
         labelOverride: "Provider message ID",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string()),
       },
       {
         key: "threadId",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string().nullable()),
       },
       {
         key: "historyId",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string().nullable()),
       },
       {
         key: "checksum",
         kind: "text",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string()),
       },
       {
         key: "classificationVersion",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -361,7 +355,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "run" },
         labelOverride: "Processing Run",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(runShortcode.nullable()),
       },
       {
@@ -373,7 +367,7 @@ export default defineEntity({
             { label: "Accepted import sources and active lifecycle links" },
           ],
         },
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.boolean()),
       },
       {
@@ -391,7 +385,7 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
+          detail: false,
           listHidden: true,
           width: "sm",
           optionRole: "status",
@@ -414,15 +408,15 @@ export default defineEntity({
         },
         // The Email page's Purchase links ledger shows these with actions.
         display: {
-          list: true,
+          detail: false,
           listHidden: true,
-          // Native prints this text for the generic renderer; each pair keeps its own state.
           labelPath: "purchaseLinks[].label",
           renderer: { list: "purchase-links" },
         },
         validation: readOnly(z.array(emailPurchaseLink)),
       },
       {
+        display: { detail: false, list: false },
         key: "ownedByViewer",
         kind: "boolean",
         provenance: {
@@ -448,9 +442,7 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
           listHidden: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: {
@@ -463,13 +455,13 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.date()),
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.date()),
       },
       { key: "shortcode", kind: "text" },

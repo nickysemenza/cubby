@@ -81,12 +81,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          width: "md",
-          mobile: { slot: "title", priority: 0 },
-        },
+        display: { width: "md", mobile: { slot: "title", priority: 0 } },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -98,12 +93,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          width: "md",
-          mobile: { slot: "subtitle", priority: 10 },
-        },
+        display: { width: "md", mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -111,6 +101,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "fromPartyName",
         kind: "text",
         validation: {
@@ -120,6 +111,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "toPartyName",
         kind: "text",
         validation: {
@@ -133,8 +125,6 @@ export default defineEntity({
         kind: "number",
         control: { kind: "number", renderer: "money" },
         display: {
-          list: true,
-          detail: true,
           width: "sm",
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
@@ -150,8 +140,6 @@ export default defineEntity({
         kind: "date",
         control: { kind: "date" },
         display: {
-          list: true,
-          detail: true,
           format: "plainDate",
           mobile: { slot: "meta", priority: 20 },
         },
@@ -166,7 +154,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -174,6 +162,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "sourceClaims",
         semanticRole: "externalIdentifier",
         kind: "json",
@@ -198,8 +187,6 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: {
           columnLabel: "Evidence",
-          list: true,
-          detail: true,
           width: "sm",
           mobile: { slot: "hidden", priority: 0 },
         },
@@ -210,6 +197,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -222,7 +210,7 @@ export default defineEntity({
         key: "classification",
         kind: "json",
         display: {
-          detail: true,
+          list: false,
           renderer: { detail: "ledger-transfer-classification" },
           valueOptions: [
             {
@@ -273,7 +261,7 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,
@@ -283,7 +271,7 @@ export default defineEntity({
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,

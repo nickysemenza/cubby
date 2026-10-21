@@ -2,6 +2,7 @@ import { defineEntity } from "./definition.js";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import {
   brandedFoodInfo,
+  foodSummaryCompact,
   dataTypeEnum,
   dataTypeLabel,
   fdcId,
@@ -12,343 +13,349 @@ import {
 } from "@cubby/usda";
 import { z } from "zod";
 import { productTopLevelOut } from "../product-output-fields.js";
-export default defineEntity({
-  key: "usda-food",
-  names: { singular: "USDA Food", plural: "USDA Foods" },
-  route: {
-    basePath: "usda",
-    detailParamOverride: "id",
-    list: null,
-    detail: null,
-  },
-  table: null,
-  identifiers: { brand: null, shortcode: null },
-  presentation: {
-    titleField: "description",
-    domain: "pantry",
-    description: "USDA foods available for product nutrition links.",
-    emptyState: {
-      title: "Nothing found in the USDA database",
-      description: "Search for a food to pull in its nutrition details.",
+export default defineEntity(
+  {
+    key: "usda-food",
+    names: { singular: "USDA Food", plural: "USDA Foods" },
+    route: {
+      basePath: "usda",
+      detailParamOverride: "id",
+      list: null,
+      detail: null,
     },
-    icons: { phosphor: "BowlFood", sfSymbol: "leaf.fill", emoji: "🍎" },
-    detail: {},
-    list: {
-      primarySearch: {
-        key: "nameFilter",
-        placeholder: "Search USDA foods...",
+    table: null,
+    identifiers: { brand: null, shortcode: null },
+    presentation: {
+      titleField: "description",
+      domain: "pantry",
+      description: "USDA foods available for product nutrition links.",
+      emptyState: {
+        title: "Nothing found in the USDA database",
+        description: "Search for a food to pull in its nutrition details.",
+      },
+      icons: { phosphor: "BowlFood", sfSymbol: "leaf.fill", emoji: "🍎" },
+      detail: {},
+      list: {
+        primarySearch: {
+          key: "nameFilter",
+          placeholder: "Search USDA foods...",
+        },
       },
     },
-  },
-  model: {
-    fields: [
-      {
-        key: "fdc_id",
-        kind: "identifier",
-        display: { list: true, detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "USDA identifiers" }],
-        },
-        explanation: {
-          ruleId: "usda-food.fdc-id",
-          description:
-            "This identifier comes from the current USDA food record.",
-          readPath: "fdc_id",
-          sourceDependencies: [
-            { path: "fdc_id", label: "USDA food identifier" },
-          ],
-        },
-        validation: {
-          read: fdcId,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        // The food's name, lifted out of `foodInfo` when the web layer enriches
-        // a USDA row so a generic surface (native row titles, `titleField`, the
-        // `description` sort) can read it without knowing the JSON shape.
-        key: "description",
-        kind: "text",
-        validation: {
-          read: z.string(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "brandedFoodInfo",
-        kind: "json",
-        nullable: true,
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "USDA food record" }],
-        },
-        explanation: {
-          ruleId: "usda-food.branded-food-info",
-          description:
-            "Branded food information is normalized from the current USDA food record when the record is branded.",
-          readPath: "brandedFoodInfo",
-          sourceDependencies: [
-            {
-              path: "brandedFoodInfo",
-              label: "Current USDA branded food record",
-            },
-          ],
-        },
-        validation: {
-          read: brandedFoodInfo.nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "foodInfo",
-        kind: "json",
-        display: { list: true, detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "USDA food record" }],
-        },
-        explanation: {
-          ruleId: "usda-food.food-info",
-          description:
-            "Food information is normalized from the current USDA food record returned by the USDA reader.",
-          readPath: "foodInfo",
-          sourceDependencies: [
-            { path: "foodInfo", label: "Current USDA food record" },
-          ],
-        },
-        validation: {
-          read: foodInfo,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "legacyFoodInfo",
-        kind: "json",
-        nullable: true,
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "USDA food record" }],
-        },
-        explanation: {
-          ruleId: "usda-food.legacy-food-info",
-          description:
-            "Legacy food information is normalized from the current USDA food record when that legacy shape is present.",
-          readPath: "legacyFoodInfo",
-          sourceDependencies: [
-            {
-              path: "legacyFoodInfo",
-              label: "Current USDA legacy food record",
-            },
-          ],
-        },
-        validation: {
-          read: legacyFoodInfo.nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "nutritionInfo",
-        kind: "json",
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "USDA food record" }],
-        },
-        explanation: {
-          ruleId: "usda-food.nutrition",
-          description:
-            "Nutrition is normalized from the nutrient values in the current USDA food record.",
-          readPath: "nutritionInfo",
-          sourceDependencies: [
-            { path: "nutritionInfo", label: "Current USDA nutrient values" },
-          ],
-        },
-        validation: {
-          read: nutritionInfo,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "portionInfoRaw",
-        kind: "json",
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "USDA food record" }],
-        },
-        explanation: {
-          ruleId: "usda-food.portions",
-          description:
-            "Portions are the serving measures supplied by the current USDA food record.",
-          readPath: "portionInfoRaw",
-          sourceDependencies: [
-            { path: "portionInfoRaw", label: "Current USDA portions" },
-          ],
-        },
-        validation: {
-          read: z.array(foodPortion),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "inferredUnitMappings",
-        kind: "json",
-        display: { detail: true },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "USDA portion inference" }],
-        },
-        explanation: {
-          ruleId: "usda-food.inferred-unit-mappings",
-          description:
-            "Unit mappings are inferred from the portions in the current USDA food record.",
-          readPath: "inferredUnitMappings",
-          sourceDependencies: [
-            { path: "portionInfoRaw", label: "USDA portions" },
-          ],
-        },
-        validation: {
-          read: z.array(unitMappingWithMetadata),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "linkedProducts",
-        kind: "json",
-        reference: { entity: "product", multiple: true },
-        display: {
-          columnLabel: "Products",
-          list: true,
-          detail: true,
-        },
-        explanation: {
-          ruleId: "usda-food.linked-products",
-          description:
-            "Linked products are live Cubby products whose food identifier resolves to this USDA record.",
-          readPath: "linkedProducts",
-          sourceDependencies: [
-            { path: "linkedProducts", label: "Linked Cubby products" },
-          ],
-        },
-        validation: {
-          read: z.array(productTopLevelOut),
-          create: null,
-          update: null,
-        },
-      },
-    ],
-    storage: [],
-    create: [],
-    update: [],
-    audit: [],
-    // Declared exception: a USDA list reads the external USDA release, not a
-    // table, so the list field compiler builds no ORDER BY for it;
-    // `usda.service.ts` orders by these values. `data_type` lives inside the
-    // `foodInfo` blob, `relevance` is a search-only score, and
-    // `linkedProducts` orders by its count.
-    derived: {
-      data_type: { type: "text" },
-      relevance: { type: "number" },
-      linkedProducts: { type: "number" },
-    },
-    sort: {
+    model: {
       fields: [
+        {
+          key: "fdc_id",
+          kind: "identifier",
+          display: {},
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "USDA identifiers" }],
+          },
+          explanation: {
+            ruleId: "usda-food.fdc-id",
+            description:
+              "This identifier comes from the current USDA food record.",
+            readPath: "fdc_id",
+            sourceDependencies: [
+              { path: "fdc_id", label: "USDA food identifier" },
+            ],
+          },
+          validation: {
+            read: fdcId,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          // The food's name, lifted out of `foodInfo` when the web layer enriches
+          // a USDA row so a generic surface (native row titles, `titleField`, the
+          // `description` sort) can read it without knowing the JSON shape.
+          key: "description",
+          kind: "text",
+          validation: {
+            read: z.string(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "brandedFoodInfo",
+          kind: "json",
+          nullable: true,
+          display: { list: false },
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "USDA food record" }],
+          },
+          explanation: {
+            ruleId: "usda-food.branded-food-info",
+            description:
+              "Branded food information is normalized from the current USDA food record when the record is branded.",
+            readPath: "brandedFoodInfo",
+            sourceDependencies: [
+              {
+                path: "brandedFoodInfo",
+                label: "Current USDA branded food record",
+              },
+            ],
+          },
+          validation: {
+            read: brandedFoodInfo.nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "foodInfo",
+          kind: "json",
+          display: {},
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "USDA food record" }],
+          },
+          explanation: {
+            ruleId: "usda-food.food-info",
+            description:
+              "Food information is normalized from the current USDA food record returned by the USDA reader.",
+            readPath: "foodInfo",
+            sourceDependencies: [
+              { path: "foodInfo", label: "Current USDA food record" },
+            ],
+          },
+          validation: {
+            read: foodInfo,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "legacyFoodInfo",
+          kind: "json",
+          nullable: true,
+          display: { list: false },
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "USDA food record" }],
+          },
+          explanation: {
+            ruleId: "usda-food.legacy-food-info",
+            description:
+              "Legacy food information is normalized from the current USDA food record when that legacy shape is present.",
+            readPath: "legacyFoodInfo",
+            sourceDependencies: [
+              {
+                path: "legacyFoodInfo",
+                label: "Current USDA legacy food record",
+              },
+            ],
+          },
+          validation: {
+            read: legacyFoodInfo.nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "nutritionInfo",
+          kind: "json",
+          display: { list: false },
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "USDA food record" }],
+          },
+          explanation: {
+            ruleId: "usda-food.nutrition",
+            description:
+              "Nutrition is normalized from the nutrient values in the current USDA food record.",
+            readPath: "nutritionInfo",
+            sourceDependencies: [
+              { path: "nutritionInfo", label: "Current USDA nutrient values" },
+            ],
+          },
+          validation: {
+            read: nutritionInfo,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "portionInfoRaw",
+          kind: "json",
+          display: { list: false },
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "USDA food record" }],
+          },
+          explanation: {
+            ruleId: "usda-food.portions",
+            description:
+              "Portions are the serving measures supplied by the current USDA food record.",
+            readPath: "portionInfoRaw",
+            sourceDependencies: [
+              { path: "portionInfoRaw", label: "Current USDA portions" },
+            ],
+          },
+          validation: {
+            read: z.array(foodPortion),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "inferredUnitMappings",
+          kind: "json",
+          display: { list: false },
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "USDA portion inference" }],
+          },
+          explanation: {
+            ruleId: "usda-food.inferred-unit-mappings",
+            description:
+              "Unit mappings are inferred from the portions in the current USDA food record.",
+            readPath: "inferredUnitMappings",
+            sourceDependencies: [
+              { path: "portionInfoRaw", label: "USDA portions" },
+            ],
+          },
+          validation: {
+            read: z.array(unitMappingWithMetadata),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "linkedProducts",
+          kind: "json",
+          reference: { entity: "product", multiple: true },
+          display: { columnLabel: "Products" },
+          explanation: {
+            ruleId: "usda-food.linked-products",
+            description:
+              "Linked products are live Cubby products whose food identifier resolves to this USDA record.",
+            readPath: "linkedProducts",
+            sourceDependencies: [
+              { path: "linkedProducts", label: "Linked Cubby products" },
+            ],
+          },
+          validation: {
+            read: z.array(productTopLevelOut),
+            create: null,
+            update: null,
+          },
+        },
+      ],
+      storage: [],
+      create: [],
+      update: [],
+      audit: [],
+      // Declared exception: a USDA list reads the external USDA release, not a
+      // table, so the list field compiler builds no ORDER BY for it;
+      // `usda.service.ts` orders by these values. `data_type` lives inside the
+      // `foodInfo` blob, `relevance` is a search-only score, and
+      // `linkedProducts` orders by its count.
+      derived: {
+        data_type: { type: "text" },
+        relevance: { type: "number" },
+        linkedProducts: { type: "number" },
+      },
+      sort: {
+        fields: [
+          "fdc_id",
+          "description",
+          "data_type",
+          "relevance",
+          "linkedProducts",
+        ],
+      },
+      output: [
         "fdc_id",
         "description",
-        "data_type",
-        "relevance",
+        "brandedFoodInfo",
+        "foodInfo",
+        "legacyFoodInfo",
+        "nutritionInfo",
+        "portionInfoRaw",
+        "inferredUnitMappings",
         "linkedProducts",
       ],
     },
-    output: [
-      "fdc_id",
-      "description",
-      "brandedFoodInfo",
-      "foodInfo",
-      "legacyFoodInfo",
-      "nutritionInfo",
-      "portionInfoRaw",
-      "inferredUnitMappings",
-      "linkedProducts",
-    ],
-  },
-  fields: null,
-  filters: {
-    descriptors: [
-      {
-        columnId: "nameFilter",
-        field: "nameFilter",
-        kind: "text",
-        placeholder: "Search USDA foods...",
-        wire: { kind: "param", name: "nameFilter" },
-      },
-      {
-        columnId: "dataTypeFilter",
-        label: "Type",
-        field: "dataTypeFilter",
-        kind: "multiselect",
-        placeholder: "Filter by USDA data type...",
-        options: dataTypeEnum.options.map((value) => ({
-          value,
-          label: dataTypeLabel(value),
-        })),
-        // USDA's standalone read keeps dataTypeFilter scalar and uses dataTypes
-        // for plural values; the generic derived select schema is one-or-many.
-        wire: { kind: "param", name: "dataTypeFilter" },
-      },
-      {
-        columnId: "foodsOnly",
-        label: "Records",
-        kind: "boolean",
-        placeholder: "Filter to foods...",
-        options: [
-          { value: "true", label: "Foods only" },
-          { value: "false", label: "All records" },
-        ],
-        wire: { kind: "param", name: "foodsOnly" },
-      },
-      {
-        columnId: "linkedProductsOnly",
-        label: "Linked products",
-        kind: "boolean",
-        placeholder: "Filter by linked products...",
-        options: [
-          { value: "true", label: "Linked to products" },
-          { value: "false", label: "Any linkage" },
-        ],
-        wire: { kind: "param", name: "linkedProductsOnly" },
-      },
-    ],
-  },
-  relations: [],
-  search: false,
-  capabilities: {
-    auditable: false,
-    images: { storage: false },
-    countable: false,
-    softDelete: false,
-    delete: null,
-    merge: false,
-    mcp: ["get", "list"],
-  },
-  extensions: {
-    ports: {
-      repository: null,
-      references: {
-        label: { module: "~/entity/entities", export: "entityLabel" },
-        resolver: null,
+    fields: null,
+    filters: {
+      descriptors: [
+        {
+          columnId: "nameFilter",
+          field: "nameFilter",
+          kind: "text",
+          placeholder: "Search USDA foods...",
+          wire: { kind: "param", name: "nameFilter" },
+        },
+        {
+          columnId: "dataTypeFilter",
+          label: "Type",
+          field: "dataTypeFilter",
+          kind: "multiselect",
+          placeholder: "Filter by USDA data type...",
+          options: dataTypeEnum.options.map((value) => ({
+            value,
+            label: dataTypeLabel(value),
+          })),
+          // USDA's standalone read keeps dataTypeFilter scalar and uses dataTypes
+          // for plural values; the generic derived select schema is one-or-many.
+          wire: { kind: "param", name: "dataTypeFilter" },
+        },
+        {
+          columnId: "foodsOnly",
+          label: "Records",
+          kind: "boolean",
+          placeholder: "Filter to foods...",
+          options: [
+            { value: "true", label: "Foods only" },
+            { value: "false", label: "All records" },
+          ],
+          wire: { kind: "param", name: "foodsOnly" },
+        },
+        {
+          columnId: "linkedProductsOnly",
+          label: "Linked products",
+          kind: "boolean",
+          placeholder: "Filter by linked products...",
+          options: [
+            { value: "true", label: "Linked to products" },
+            { value: "false", label: "Any linkage" },
+          ],
+          wire: { kind: "param", name: "linkedProductsOnly" },
+        },
+      ],
+    },
+    relations: [],
+    search: false,
+    capabilities: {
+      auditable: false,
+      images: { storage: false },
+      countable: false,
+      softDelete: false,
+      delete: null,
+      merge: false,
+      mcp: ["get", "list"],
+    },
+    extensions: {
+      ports: {
+        repository: null,
+        references: {
+          label: { module: "~/entity/entities", export: "entityLabel" },
+          resolver: null,
+        },
       },
     },
   },
-});
+  (base) => ({
+    output: base,
+    list: base.extend({
+      nutritionInfo: foodSummaryCompact.shape.nutritionInfo,
+    }),
+    detail: base,
+  }),
+);

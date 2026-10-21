@@ -1,32 +1,50 @@
-import { resolvedListSchema } from "./field-resolution";
-import { displayItems, listLabel } from "./entity-definitions/label-field";
+import productDefinition from "./entity-definitions/00-product.entity";
+import {
+  productQuantityLedgerOut,
+  productCookbookRefOut,
+  productQuantityFields,
+  productListInventoryEntryOut,
+  productInventoryWithLocationOut,
+  productIngredientOut,
+  productLocationRefOut,
+} from "./product-read-fields";
+export {
+  productQuantityLedgerOut,
+  productCookbookRefOut,
+  productQuantityFields,
+  productListInventoryEntryOut,
+  productUnitPriceMappings,
+  productOwnershipEvidenceOut,
+  productNutritionDisplay,
+  type ProductQuantityLedgerOut,
+  type ProductCookbookRefOut,
+  type ProductListInventoryEntryOut,
+  type ProductOwnershipEvidenceOut,
+  type ProductNutritionDisplay,
+} from "./product-read-fields";
 import { tradeSchema } from "./task-fields";
 import { impliedClassification } from "./classification-field-policy";
 import {
   productCategoryFeature,
   type ProductCategoryFeature,
 } from "./product-category-fields";
-import { productTopLevelOut } from "./product-output-fields";
-import { inventoryPlacementValues } from "@cubby/shared";
+import {
+  productTopLevelOut,
+  productWithMappingsOut,
+  productWithMappingsAndFoodOut,
+} from "./product-output-fields";
 import { upc } from "@cubby/shared/upc";
 import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
 import { productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import {
-  dateBound,
-  dateRangeFields,
-  numericRangeFields,
-  timestampedFields,
-} from "./base-entity";
-import { productDataCheck } from "./data-quality";
+import { dateBound, dateRangeFields, numericRangeFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import { money, moneyNullable, positiveMoneyNullable } from "./money";
+import { moneyNullable, positiveMoneyNullable } from "./money";
 import { externalIdKind, externalIdOut, externalIdSource } from "./external-id";
 import {
-  cookbookShortcode,
   expenseShortcode,
   imageShortcode,
   ingredientShortcode,
@@ -39,21 +57,12 @@ import {
   imageAnalysisSummarySchema,
   productImagePurpose,
 } from "./image";
-import { displayImagesField } from "./display-images";
-import { imageUrlSummary } from "./image-summary";
-import {
-  locationAncestorFields,
-  locationAncestorOut,
-  locationListRefOut,
-  locationOutFields,
-  locationPathRefFields,
-} from "./location";
+import { locationAncestorOut } from "./location";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
-import { baseKind } from "./problems";
 import { plainDate, taskStatusSchema } from "./project";
 import { recipeUsageMcpEntityOut, recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -221,9 +230,9 @@ export type ProductResolveNamesInput = z.infer<typeof productResolveNamesInput>;
 
 export const productResolveCandidateOut = z.object({
   id: productShortcode,
-  name: generatedProductFieldSchemas.read.name,
-  manufacturer: generatedProductFieldSchemas.read.manufacturer,
-  category: generatedProductFieldSchemas.read.category,
+  name: productTopLevelOut.shape.name,
+  manufacturer: productTopLevelOut.shape.manufacturer,
+  category: productTopLevelOut.shape.category,
   // Same value-space narrowing as `productPickerItemOut.price` — the
   // candidates ARE picker rows.
   price: positiveMoneyNullable,
@@ -399,30 +408,6 @@ export type ProductSortField = GeneratedEntitySortField<"product">;
  * counts as an exit here (unlike `findSoldButStillStocked`'s stricter
  * disposal-Purchase predicate).
  */
-export const productQuantityLedgerOut = z.object({
-  acquiredUnits: z.number().nonnegative(),
-  exitedUnits: z.number().nonnegative(),
-  expectedQuantity: z.number(),
-  /**
-   * Lines that carry no quantity, so they contribute nothing to the totals
-   * above. Reported rather than guessed at: a receipt that proves the cost but
-   * not the count must not silently read as one unit.
-   */
-  unknownAcquisitionLines: z.number().int().nonnegative(),
-  unknownExitLines: z.number().int().nonnegative(),
-  /**
-   * Locations that ARE an instance of this product — a bin, tote or rack in
-   * service rather than stock on a shelf.
-   *
-   * Units in use as locations are still units you own, so on-hand counts add
-   * this to the inventory sum. Without it every container promoted to a
-   * Location would read as missing and light "Shelf disagrees" forever — the
-   * same false-variance trap `includes-installed` documents for fixtures.
-   */
-  locationCount: z.number().int().nonnegative(),
-});
-export type ProductQuantityLedgerOut = z.infer<typeof productQuantityLedgerOut>;
-
 /**
  * Record that units of a Product were thrown away, given away, or written off.
  *
@@ -567,7 +552,8 @@ export type ProductAddToInventoryPreviewOut = z.infer<
 
 export type ProductPricingOut = z.infer<typeof productPricingOut>;
 
-const productTopLevelFields = generatedProductFieldSchemas.read;
+const { coverImageUrl: _coverImageUrl, ...productTopLevelFields } =
+  productTopLevelOut.shape;
 
 export { productTopLevelOut };
 
@@ -620,76 +606,12 @@ export type ProductFindOrCreateByUPCOut = z.infer<
   typeof productFindOrCreateByUPCOut
 >;
 
-const productIngredientOut = z.object({
-  id: ingredientShortcode,
-  name: z.string().meta({ mock: "food.ingredient" }),
-  aliases: z.array(z.string()),
-  naKinds: z.array(baseKind),
-  ...timestampedFields,
-});
-
-const productInventoryFields = {
-  id: inventoryShortcode,
-  amount,
-  valuation: moneyNullable,
-  // Last deliberate recount (null = never). `updatedAt` moves on any write —
-  // including a price-driven valuation recompute — so it can't stand in for
-  // "when was this count last confirmed".
-  verifiedAt: z.date().nullable(),
-  // Included on purpose: "where does this product live" is an ownership
-  // question, so the dimmer wired into the kitchen wall belongs in this list.
-  // Carrying placement is what lets the row say "installed" instead of
-  // reporting a verification age a fixture can never have.
-  placement: z.enum(inventoryPlacementValues),
-  ...timestampedFields,
-};
-
-const productLocationAncestorOut = z.object({
-  ...locationAncestorFields,
-  displayImage: imageUrlSummary.nullable(),
-});
-
-export const productCookbookRefOut = z.object({
-  id: cookbookShortcode,
-  name: z.string(),
-  recipeCount: z.number().int().nonnegative(),
-});
-export type ProductCookbookRefOut = z.infer<typeof productCookbookRefOut>;
-
-const productLocationRefOut = z.object({
-  ...locationPathRefFields,
-  displayImage: imageUrlSummary.nullable(),
-  ancestors: z.array(productLocationAncestorOut),
-});
-
-// The embedded location is an identity reference for the movement timeline,
-// not a place to read the location's own completeness (its `valuation` is
-// null for the same reason), so the location's `dataQuality` stays off it.
-const { dataQuality: _locationDataQuality, ...locationEmbedFields } =
-  locationOutFields;
-const productInventoryWithLocationOut = z.object({
-  ...productInventoryFields,
-  location: z.object({
-    ...locationEmbedFields,
-    displayImage: imageUrlSummary.nullable(),
-    ancestors: z.array(productLocationAncestorOut),
-  }),
-});
-
-export const productWithMappingsOut = z.object({
-  ...productTopLevelFields,
-  // Derived cover, same rule as `productTopLevelOut` (the mapper always emits it).
-  coverImageUrl: z.url().nullable(),
-  unitMappings: z.array(unitMappingOut),
-});
+export {
+  productWithMappingsOut,
+  productWithMappingsAndFoodOut,
+} from "./product-output-fields";
 export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
 
-export const productWithMappingsAndFoodOut = z.object({
-  ...productTopLevelFields,
-  coverImageUrl: z.url().nullable(),
-  unitMappings: z.array(unitMappingOut),
-  food: foodSummary.nullable(),
-});
 export type ProductWithMappingsAndFoodOut = z.infer<
   typeof productWithMappingsAndFoodOut
 >;
@@ -746,14 +668,6 @@ export type ProductPickerOnHandOut = ProductPickerItemOut["onHand"];
  * two surfaces cannot describe the same numbers differently — the drift that
  * produced two bugs when the list owned its own copy.
  */
-export const productQuantityFields = {
-  stockStatus: z.string().nullish(),
-  stockStatusItems: displayItems,
-  quantityLedger: productQuantityLedgerOut,
-  onHandUnits: z.number().nullable(),
-  quantityVariance: z.number().nullable(),
-};
-
 export const productQuantitySummaryOut = z.object(productQuantityFields);
 export type ProductQuantitySummaryOut = z.infer<
   typeof productQuantitySummaryOut
@@ -772,7 +686,7 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productTopLevelFields,
   // Same derived cover rule as `productTopLevelOut`/the picker (see
   // `getProductCoverImageUrlsByProductIds`) — not a stored field.
-  coverImageUrl: z.url().nullable(),
+  coverImageUrl: productTopLevelOut.shape.coverImageUrl,
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
@@ -800,14 +714,6 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productQuantityFields,
 });
 
-export const productListInventoryEntryOut = z.object({
-  ...productInventoryFields,
-  location: locationListRefOut,
-});
-export type ProductListInventoryEntryOut = z.infer<
-  typeof productListInventoryEntryOut
->;
-
 /** Public product shortcode → its live stock entries and their locations. */
 export const productInventoryEntriesByIdOut = z.record(
   z.string(),
@@ -817,132 +723,21 @@ export type ProductInventoryEntriesByIdOut = z.infer<
   typeof productInventoryEntriesByIdOut
 >;
 
-export const productUnitPriceMappings = z
-  .array(unitMappingWithMetadata)
-  .default([]);
-export const productDataGaps = z.array(productDataCheck);
-
-export const productListItemOut = z.object({
-  ...productTopLevelFields,
-  displayImages: displayImagesField,
-  unitMappings: z.array(unitMappingOut),
-  unitPriceMappings: productUnitPriceMappings,
-  unitPrice: z
-    .object({
-      natural: z.object({ price: z.number(), unit: z.string() }).nullable(),
-      perGram: z.number().nullable(),
-    })
-    .nullable()
-    .default(null),
-  food: foodSummary.nullable().default(null),
-  modelPresence: z.boolean(),
-  upcPresence: z.boolean(),
-  notesPresence: z.boolean(),
-  dataGaps: productDataGaps,
-  ingredient: productIngredientOut.nullable(),
-  inventoryEntry: z.array(productListInventoryEntryOut),
-  expenseCount: z.number().int(),
-  // Live `productComponent` links where this product is the parent — non-zero
-  // means it's a kit or multi-pack. Counts distinct components, not units: a
-  // 4-pack stored as one edge with `quantity: 4` reads as 1.
-  componentCount: z.number().int().nonnegative(),
-  // Net basis: SUM(expense.cost) over this product's live expenses. Plain sum
-  // IS the net basis here — negative rows (refunds, disposals) are real in
-  // this ledger, so they telescope correctly. 0 for a product with no
-  // expenses, never null.
-  expenseTotal: money,
-  purchaseDate: plainDate.nullable(),
-  /** Owner rollup over live inventory (`loadProductOwners`). */
-  owners: resolvedListSchema,
-  ...productQuantityFields,
-  // Server-composed text for the Expected, Variance and Unit price columns.
-  ledgerExpectedQuantityLabel: listLabel,
-  quantityVarianceLabel: listLabel,
-  unitPriceLabel: listLabel,
-});
-export type ProductListItem = z.infer<typeof productListItemOut>;
-
 /** Generic MCP entity list row with storage-only child identifiers removed. */
+export const productListItemOut = productDefinition.readSchemas.list;
+export type ProductListItem = z.infer<typeof productListItemOut>;
+export const productDataGaps = productListItemOut.shape.dataGaps;
+
 export const productListItemMcpEntityOut = productListItemOut.extend({
   externalIds: z.array(productExternalIdMcpEntityOut),
   unitMappings: z.array(productUnitMappingMcpEntityOut),
   food: foodSummaryCompact.nullable(),
 });
 
-export const productOwnershipEvidenceOut = z.object({
-  state: z.enum(["owned", "exited", "uncertain"]),
-  acquiredAt: plainDate.nullable(),
-  exitedAt: plainDate.nullable(),
-  confidenceLostAt: plainDate.nullable(),
-});
-export type ProductOwnershipEvidenceOut = z.infer<
-  typeof productOwnershipEvidenceOut
->;
-
-/**
- * Which nutrition a Product shows and how to caption it, chosen once on the
- * server (package label > linked USDA food > none) so web and native render
- * the same source, basis, and rows. `title` is the heading ("From package
- * label", "From USDA") or, for `none`, the empty-state message.
- */
-export const productNutritionDisplay = z.object({
-  source: z.enum(["label", "usda", "none"]),
-  title: z.string(),
-  /** "Per serving · 44 g" or "Per 100 g"; empty for `none`. */
-  basis: z.string(),
-  /** The label's provenance note (e.g. a package name). */
-  sourceNote: z.string().nullable(),
-  /** Label evidence for any inferred-zero rows; null when there are none. */
-  inferenceEvidence: z.string().nullable(),
-  /**
-   * Numbers, not strings, so each client formats with its own locale;
-   * `inferred` marks a zero the label implies rather than states.
-   */
-  rows: z.array(
-    z.object({
-      key: z.string(),
-      label: z.string(),
-      amount: z.number(),
-      inferred: z.boolean(),
-    }),
-  ),
-});
-export type ProductNutritionDisplay = z.infer<typeof productNutritionDisplay>;
-
-export const productWithFoodOut = z.object({
-  ownershipEvidence: productOwnershipEvidenceOut,
-  /** Owner rollup over live inventory (`loadProductOwners`). */
-  owners: resolvedListSchema,
-  nutritionDisplay: productNutritionDisplay,
-  ...productTopLevelFields,
-  // Same derived cover rule as `productTopLevelOut`/the picker (see
-  // `getProductCoverImageUrlsByProductIds`) — not a stored field.
-  coverImageUrl: z.url().nullable(),
-  ingredient: productIngredientOut.nullable(),
-  unitMappings: z.array(unitMappingOut),
-  inventoryEntry: z.array(productInventoryWithLocationOut),
-  servingAsLocations: z.array(productLocationRefOut),
-  /**
-   * Live `productComponent` links where this product is the parent — non-zero
-   * means it is a kit or multi-pack. Counts distinct components, not units.
-   *
-   * Embedded here rather than read from `product.components` beside it, for the
-   * reason `servingAsLocations` gives above: the hero decides its presence
-   * stamp from this, and a stamp that flipped when a second query resolved
-   * would contradict the Kit Components table while it loaded.
-   */
-  componentCount: z.number().int().nonnegative(),
-  food: foodSummary.nullable(),
-  recipeUsages: z.array(recipeUsageOut),
-  /** Live cookbooks whose physical copies are this product. */
-  cookbooks: z.array(productCookbookRefOut),
-  // Server-composed text for the External IDs detail row (`display.detailLabelPath`).
-  externalIdsLabel: listLabel,
-  ...productQuantityFields,
-});
+/** Generic MCP entity detail with storage-only child identifiers removed. */
+export const productWithFoodOut = productDefinition.readSchemas.detail;
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
 
-/** Generic MCP entity detail with storage-only child identifiers removed. */
 export const productWithFoodMcpEntityOut = productWithFoodOut.extend({
   externalIds: z.array(productExternalIdMcpEntityOut),
   unitMappings: z.array(productUnitMappingMcpEntityOut),
@@ -961,7 +756,7 @@ export const productWithFoodAndSideEffectsOut = z.object({
   // `getProductCoverImageUrlsByProductIds`) — not a stored field. Required so
   // this shape stays assignable to `productTopLevelOut` for the generic
   // entity kernel's create/update output typing.
-  coverImageUrl: z.url().nullable(),
+  coverImageUrl: productTopLevelOut.shape.coverImageUrl,
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
@@ -1100,7 +895,7 @@ export type ProductQuickCreatePayload = z.infer<
 >;
 
 export const productMcpOut = z
-  .object(generatedProductFieldSchemas.read)
+  .object(productTopLevelFields)
   .pick({
     id: true,
     name: true,
@@ -1128,7 +923,7 @@ export const productMcpOut = z
       "Resolved valuation/costing price: the manual `price` override when set, else the Expense-derived price. Same number as `pricing.effectivePrice` — this is what values stock and costs recipes.",
     ),
     imageCount: z.number().int().nonnegative(),
-    coverImageUrl: z.url().nullable(),
+    coverImageUrl: productTopLevelOut.shape.coverImageUrl,
     externalIds: z.array(productExternalIdMcpEntityOut),
     // USDA FoodData Central id — declared exception, not a cubby shortcode.
     usdaFdcId: z.number().nullable(),

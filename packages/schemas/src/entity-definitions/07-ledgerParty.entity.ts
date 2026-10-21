@@ -46,7 +46,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string(),
           create: z.string().trim().min(1, "Ledger party name is required"),
@@ -64,11 +64,7 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.ledgerPartyKind,
         },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "subtitle", priority: 10 },
-        },
+        display: { mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: ledgerPartyKind,
           create: ledgerPartyKind,
@@ -80,7 +76,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -88,6 +84,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -99,7 +96,7 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,
@@ -109,7 +106,7 @@ export default defineEntity({
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,

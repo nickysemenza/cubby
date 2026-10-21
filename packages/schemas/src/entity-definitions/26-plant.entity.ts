@@ -17,7 +17,7 @@ const daysField = <const K extends string>(key: K, _label: string) =>
     nullable: true,
 
     control: { kind: "number" },
-    display: { detail: true },
+    display: { list: false },
     validation: {
       read: optionalDays,
       create: optionalDays.default(null),
@@ -33,7 +33,7 @@ const derivedText = <const K extends string>(
   kind: "text" as const,
   nullable: true as const,
 
-  display: { detail: true as const },
+  display: { list: false as const },
   provenance: {
     kind: "derived" as const,
     sources: [
@@ -94,7 +94,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string(),
           create: z.string().trim().min(1, "Plant name is required"),
@@ -114,8 +114,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Guide",
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-house",
           optionGlyph: { phosphor: "Plant", sfSymbol: "leaf" },
@@ -151,8 +149,6 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
-          detail: true,
           mobile: { slot: "trailing", priority: 10 },
           optionRole: "status",
           optionColor: "neutral-status",
@@ -169,7 +165,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "ingredient" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: ingredientShortcode.nullable(),
           create: ingredientShortcode.nullable().default(null),
@@ -181,7 +177,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { detail: true, mobile: { slot: "subtitle", priority: 10 } },
+        display: { list: false, mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -206,7 +202,7 @@ export default defineEntity({
           ],
         },
         display: {
-          detail: true,
+          list: false,
           optionRole: "category",
           optionColor: "domain-house",
           optionGlyph: { phosphor: "Flower", sfSymbol: "camera.macro" },
@@ -228,7 +224,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -236,6 +232,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "ingredientName",
         kind: "text",
         nullable: true,
@@ -257,6 +254,7 @@ export default defineEntity({
         "Each way the household starts this crop, read against this month's guide windows.",
       ),
       {
+        display: { detail: false, list: false },
         // `"<name> · <crop label>"`, or `name` alone without a crop or when the
         // name already is the crop label.
         key: "displayName",
@@ -264,16 +262,19 @@ export default defineEntity({
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: { read: plantShortcode, create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "updatedAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },

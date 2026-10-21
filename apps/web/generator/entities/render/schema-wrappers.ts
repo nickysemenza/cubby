@@ -1,3 +1,4 @@
+import { declarationModules } from "../declarations.ts";
 import { pascalCase } from "../../../../../packages/shared/src/text-case.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -131,13 +132,13 @@ const objectWrappers = (
       kind: "out",
       suffix: "Out",
       roster: fieldModel.output,
-      expression: `z.object(${fieldSchemas}.read)`,
+      expression: `definition.readSchemas.output`,
     },
     {
       kind: "listItem",
       suffix: "ListItemOut",
       roster: null,
-      expression: `${name}Out.extend({ displayImages: displayImagesField })`,
+      expression: `withEntityListMedia(definition.readSchemas.list)`,
       requires: "out",
     },
   ];
@@ -220,12 +221,15 @@ export const renderSchemaWrapperArtifacts = (
       ...(usesFilters ? [filterFields] : []),
     ];
     const imports =
+      (wanted.has("out")
+        ? `import definition from "${declarationModules.get(entity.key)?.path}";\n`
+        : "") +
       (code.includes("z.") ? 'import { z } from "zod";\n' : "") +
       (wanted.has("updateInput")
         ? `import { ${name}Shortcode } from "../identifier-fields";\n`
         : "") +
       (wanted.has("listItem")
-        ? 'import { displayImagesField } from "../display-images";\n'
+        ? 'import { withEntityListMedia } from "../entity-read-media";\n'
         : "") +
       (hasAudit
         ? 'import { auditDateFilterFields } from "../base-entity";\n'

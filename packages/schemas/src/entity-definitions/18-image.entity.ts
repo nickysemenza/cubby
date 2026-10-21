@@ -1,3 +1,4 @@
+import { imageReadSchemas } from "../image-processing";
 import { imageChildren } from "../child-tables/image.js";
 import {
   imageCaptureAttribution,
@@ -34,1074 +35,1067 @@ export const imageSourceValues = [
   "unknown",
   "screenshot",
 ] as const;
-export default defineEntity({
-  key: "image",
-  names: { singular: "Image", plural: "Images" },
-  route: {
-    listColumns: {
-      module: "~/features/image/list-columns",
-      export: "imageListOverride",
+export default defineEntity(
+  {
+    key: "image",
+    names: { singular: "Image", plural: "Images" },
+    route: {
+      listColumns: {
+        module: "~/features/image/list-columns",
+        export: "imageListOverride",
+      },
+      basePath: "images",
+      // The photo library's index stays hand-written over its own filters.
+      list: null,
     },
-    basePath: "images",
-    // The photo library's index stays hand-written over its own filters.
-    list: null,
-  },
-  table: "Image",
-  children: imageChildren,
-  identifiers: { brand: "ImageId", shortcode: "IMG-" },
-  presentation: {
-    titleField: "filename",
-    domain: null,
-    description: "Images attached to household records.",
-    emptyState: {
-      title: "No photos yet",
-      description:
-        "Add photos to attach them to recipes, products, and places.",
+    table: "Image",
+    children: imageChildren,
+    identifiers: { brand: "ImageId", shortcode: "IMG-" },
+    presentation: {
+      titleField: "filename",
+      domain: null,
+      description: "Images attached to household records.",
+      emptyState: {
+        title: "No photos yet",
+        description:
+          "Add photos to attach them to recipes, products, and places.",
+      },
+      icons: { phosphor: "Image", sfSymbol: "photo", emoji: "🖼️" },
+      detail: {
+        hero: {
+          stats: ["width", "height", "size"],
+          when: { field: "capturedAt", label: "Taken" },
+        },
+        additionalSections: [
+          { kind: "slot", id: "associations", title: "Used by" },
+        ],
+      },
+      // An uploaded image displays itself; it loads as list media.
+      list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
     },
-    icons: { phosphor: "Image", sfSymbol: "photo", emoji: "🖼️" },
-    detail: {
-      hero: {
-        stats: ["width", "height", "size"],
-        when: { field: "capturedAt", label: "Taken" },
-      },
-      additionalSections: [
-        { kind: "slot", id: "associations", title: "Used by" },
-      ],
-    },
-    // An uploaded image displays itself; it loads as list media.
-    list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
-  },
-  model: {
-    fields: [
-      {
-        key: "filename",
-        kind: "text",
-        control: { kind: "text" },
-        display: { list: true, detail: true },
-        validation: {
-          read: z.string(),
-          create: null,
-          update: z.string().trim().min(1).max(255),
+    model: {
+      fields: [
+        {
+          key: "filename",
+          kind: "text",
+          control: { kind: "text" },
+          display: {},
+          validation: {
+            read: z.string(),
+            create: null,
+            update: z.string().trim().min(1).max(255),
+          },
         },
-      },
-      {
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: imageShortcode,
-          create: null,
-          update: null,
+        {
+          display: { detail: false, list: false },
+          key: "id",
+          kind: "identifier",
+          validation: {
+            read: imageShortcode,
+            create: null,
+            update: null,
+          },
         },
-      },
-      {
-        key: "representations",
-        kind: "json",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Original and validated image derivatives" }],
-        },
-        explanation: {
-          ruleId: "image.representations",
-          description:
-            "The original is preserved. A validated transparent derivative of the current original is preferred unless Use original is selected.",
-          resolver: "imageRepresentation",
-          sourceDependencies: [
-            { path: "representations.original", label: "Original image" },
-            {
-              path: "representations.transparent",
-              label: "Validated transparent derivative",
-            },
-            {
-              path: "representations.preferredKind",
-              label: "Selected representation",
-            },
-            { path: "useOriginal", label: "Use original preference" },
-          ],
-        },
-        validation: {
-          read: optionalImageRepresentations,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "url",
-        kind: "text",
-        display: { list: true, detail: true, listHidden: true },
-        provenance: { kind: "derived", sources: [{ label: "Image storage" }] },
-        explanation: {
-          ruleId: "image.url",
-          description:
-            "The public image URL is generated from this Image record's current object-storage key.",
-          readPath: "url",
-          sourceDependencies: [{ path: "key", label: "Image storage key" }],
-        },
-        validation: {
-          read: z.url(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "key",
-        kind: "text",
-        display: { list: true, detail: true, listHidden: true },
-        validation: {
-          read: z.string(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "size",
-        kind: "number",
-        display: {
-          list: true,
-          detail: true,
-          width: "xs",
-          format: "bytes",
-          mobile: { slot: "trailing", priority: 5 },
-        },
-        validation: {
-          read: z.number().int().positive(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "contentType",
-        kind: "text",
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          mobile: { slot: "subtitle", priority: 10 },
-        },
-        validation: {
-          read: z.string(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "status",
-        kind: "enum",
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "meta", priority: 20 },
-          // Read-only, so no select control declares the roster.
-          valueOptions: [
-            {
-              value: "PENDING",
-              label: "Pending",
-              color: "neutral-status",
-            },
-            {
-              value: "UPLOADED",
-              label: "Uploaded",
-              color: "positive",
-            },
-            {
-              value: "FAILED",
-              label: "Failed",
-              color: "destructive",
-            },
-          ],
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
-        validation: {
-          read: z.enum(generatedImageStatusValues),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "width",
-        kind: "number",
-        nullable: true,
-        display: { list: true, detail: true, listHidden: true },
-        validation: {
-          read: z.number().int().positive().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "height",
-        kind: "number",
-        nullable: true,
-        display: { list: true, detail: true, listHidden: true },
-        validation: {
-          read: z.number().int().positive().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "perceptualHash",
-        kind: "text",
-        nullable: true,
-      },
-      {
-        key: "sourceFingerprint",
-        kind: "json",
-        nullable: true,
-      },
-      {
-        key: "detectedContentType",
-        kind: "text",
-        nullable: true,
-        // Hidden by default: it repeats Type except when sniffing disagrees
-        // with the stored content type, which the detail page shows.
-        display: { list: true, detail: true, listHidden: true },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "sha256",
-        kind: "text",
-        nullable: true,
-        display: { list: true, detail: true, listHidden: true },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "renderStatus",
-        kind: "enum",
-        nullable: true,
-        display: {
-          columnLabel: "Render",
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-          valueOptions: [
-            {
-              value: "unverified",
-              label: "Unverified",
-              color: "neutral-status",
-            },
-            { value: "verified", label: "Verified", color: "positive" },
-            { value: "failed", label: "Failed", color: "destructive" },
-          ],
-        },
-        validation: {
-          read: z.enum(generatedImageRenderStatusValues).nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "storageStatus",
-        kind: "enum",
-        nullable: true,
-        display: {
-          columnLabel: "Storage",
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-          valueOptions: [
-            {
-              value: "unverified",
-              label: "Unverified",
-              color: "neutral-status",
-            },
-            { value: "available", label: "Available", color: "positive" },
-            { value: "missing", label: "Missing", color: "destructive" },
-            {
-              value: "metadata_mismatch",
-              label: "Metadata mismatch",
-              color: "destructive",
-            },
-          ],
-        },
-        validation: {
-          read: z.enum(generatedImageStorageStatusValues).nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "source",
-        kind: "enum",
-        control: {
-          kind: "select",
-          options: [
-            {
-              value: "own",
-              label: "Own",
-            },
-            {
-              value: "catalog",
-              label: "Catalog",
-            },
-            {
-              value: "unknown",
-              label: "Unknown",
-              color: "neutral-status",
-              glyph: {
-                phosphor: "Question",
-                sfSymbol: "questionmark.circle",
+        {
+          display: { detail: false, list: false },
+          key: "representations",
+          kind: "json",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Original and validated image derivatives" }],
+          },
+          explanation: {
+            ruleId: "image.representations",
+            description:
+              "The original is preserved. A validated transparent derivative of the current original is preferred unless Use original is selected.",
+            resolver: "imageRepresentation",
+            sourceDependencies: [
+              { path: "representations.original", label: "Original image" },
+              {
+                path: "representations.transparent",
+                label: "Validated transparent derivative",
               },
+              {
+                path: "representations.preferredKind",
+                label: "Selected representation",
+              },
+              { path: "useOriginal", label: "Use original preference" },
+            ],
+          },
+          validation: {
+            read: optionalImageRepresentations,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "url",
+          kind: "text",
+          display: { listHidden: true },
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Image storage" }],
+          },
+          explanation: {
+            ruleId: "image.url",
+            description:
+              "The public image URL is generated from this Image record's current object-storage key.",
+            readPath: "url",
+            sourceDependencies: [{ path: "key", label: "Image storage key" }],
+          },
+          validation: {
+            read: z.url(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "key",
+          kind: "text",
+          display: { listHidden: true },
+          validation: {
+            read: z.string(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "size",
+          kind: "number",
+          display: {
+            width: "xs",
+            format: "bytes",
+            mobile: { slot: "trailing", priority: 5 },
+          },
+          validation: {
+            read: z.number().int().positive(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "contentType",
+          kind: "text",
+          display: { width: "sm", mobile: { slot: "subtitle", priority: 10 } },
+          validation: {
+            read: z.string(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "status",
+          kind: "enum",
+          display: {
+            mobile: { slot: "meta", priority: 20 },
+            valueOptions: [
+              {
+                value: "PENDING",
+                label: "Pending",
+                color: "neutral-status",
+              },
+              {
+                value: "UPLOADED",
+                label: "Uploaded",
+                color: "positive",
+              },
+              {
+                value: "FAILED",
+                label: "Failed",
+                color: "destructive",
+              },
+            ],
+            optionRole: "status",
+            optionColor: "neutral-status",
+          },
+          validation: {
+            read: z.enum(generatedImageStatusValues),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "width",
+          kind: "number",
+          nullable: true,
+          display: { listHidden: true },
+          validation: {
+            read: z.number().int().positive().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "height",
+          kind: "number",
+          nullable: true,
+          display: { listHidden: true },
+          validation: {
+            read: z.number().int().positive().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "perceptualHash",
+          kind: "text",
+          nullable: true,
+        },
+        {
+          key: "sourceFingerprint",
+          kind: "json",
+          nullable: true,
+        },
+        {
+          key: "detectedContentType",
+          kind: "text",
+          nullable: true,
+          // Hidden by default: it repeats Type except when sniffing disagrees
+          // with the stored content type, which the detail page shows.
+          display: { listHidden: true },
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "sha256",
+          kind: "text",
+          nullable: true,
+          display: { listHidden: true },
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "renderStatus",
+          kind: "enum",
+          nullable: true,
+          display: {
+            columnLabel: "Render",
+            optionRole: "status",
+            optionColor: "neutral-status",
+            valueOptions: [
+              {
+                value: "unverified",
+                label: "Unverified",
+                color: "neutral-status",
+              },
+              { value: "verified", label: "Verified", color: "positive" },
+              { value: "failed", label: "Failed", color: "destructive" },
+            ],
+          },
+          validation: {
+            read: z.enum(generatedImageRenderStatusValues).nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "storageStatus",
+          kind: "enum",
+          nullable: true,
+          display: {
+            columnLabel: "Storage",
+            optionRole: "status",
+            optionColor: "neutral-status",
+            valueOptions: [
+              {
+                value: "unverified",
+                label: "Unverified",
+                color: "neutral-status",
+              },
+              { value: "available", label: "Available", color: "positive" },
+              { value: "missing", label: "Missing", color: "destructive" },
+              {
+                value: "metadata_mismatch",
+                label: "Metadata mismatch",
+                color: "destructive",
+              },
+            ],
+          },
+          validation: {
+            read: z.enum(generatedImageStorageStatusValues).nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "source",
+          kind: "enum",
+          control: {
+            kind: "select",
+            options: [
+              {
+                value: "own",
+                label: "Own",
+              },
+              {
+                value: "catalog",
+                label: "Catalog",
+              },
+              {
+                value: "unknown",
+                label: "Unknown",
+                color: "neutral-status",
+                glyph: {
+                  phosphor: "Question",
+                  sfSymbol: "questionmark.circle",
+                },
+              },
+              {
+                value: "screenshot",
+                label: "Screenshot",
+              },
+            ],
+          },
+          display: {
+            optionRole: "category",
+            optionColor: "neutral-status",
+            optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
+          },
+          validation: {
+            read: z.enum(imageSourceValues),
+            create: null,
+            update: z.enum(imageSourceValues).optional(),
+          },
+        },
+        {
+          key: "sourcePageUrl",
+          control: { kind: "text" },
+          kind: "text",
+          nullable: true,
+          display: { list: false },
+          validation: {
+            read: z.url().nullable(),
+            create: null,
+            update: z.url().nullable().optional(),
+          },
+        },
+        {
+          key: "sourceAssetUrl",
+          control: { kind: "text" },
+          kind: "text",
+          nullable: true,
+          display: { list: false },
+          validation: {
+            read: z.url().nullable(),
+            create: null,
+            update: z.url().nullable().optional(),
+          },
+        },
+        {
+          key: "sourceName",
+          control: { kind: "text" },
+          kind: "text",
+          nullable: true,
+          display: { list: false },
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: z.string().trim().min(1).max(255).nullable().optional(),
+          },
+        },
+        {
+          key: "useOriginal",
+          control: { kind: "checkbox" },
+          kind: "boolean",
+          display: {},
+          validation: {
+            read: z.boolean(),
+            create: null,
+            update: z.boolean().optional(),
+          },
+        },
+        {
+          key: "verifiedAt",
+          kind: "timestamp",
+          nullable: true,
+          display: {},
+          validation: {
+            read: z.date().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "capturedAt",
+          control: { kind: "text", placeholder: "ISO date and time" },
+          kind: "timestamp",
+          nullable: true,
+          display: { format: "timestamp" },
+          validation: {
+            read: z.date().nullable(),
+            create: null,
+            update: z.coerce.date().nullable().optional(),
+          },
+        },
+        {
+          key: "capturedAtOffsetMinutes",
+          kind: "number",
+          nullable: true,
+          display: { list: false },
+          validation: {
+            read: z.number().int().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "captureLocation",
+          kind: "json",
+          nullable: true,
+          // Detail-only by design (no `list: true`) — GPS coordinates never
+          // belong in a list column.
+          display: {
+            list: false,
+            renderer: { detail: "image-capture-location" },
+          },
+          validation: {
+            read: imageCaptureLocation.nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "capturePlaceName",
+          kind: "text",
+          nullable: true,
+          display: { list: false },
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "captureDeviceLabel",
+          kind: "text",
+          nullable: true,
+          display: { list: false },
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "capturedByPartyId",
+          kind: "identifier",
+          nullable: true,
+          reference: { entity: "ledgerParty" },
+          control: { kind: "specialized", renderer: "entity-select" },
+          display: { columnLabel: "Captured by" },
+          explanation: {
+            ruleId: "image.capturedBy",
+            description:
+              "The capturing member is derived by scoring the image's photo-library sightings, falling back to embedded EXIF evidence when there are none, and can always be set manually.",
+            resolver: "imageCapture",
+            readPath: "capturedByPartyId",
+          },
+          validation: {
+            read: ledgerPartyShortcode.nullable(),
+            create: null,
+            update: ledgerPartyShortcode.nullable().optional(),
+          },
+        },
+        {
+          display: { detail: false, list: false },
+          key: "capturedByName",
+          kind: "text",
+          nullable: true,
+          provenance: {
+            kind: "derived",
+            sources: [
+              { label: "Photo library sightings" },
+              { label: "Embedded EXIF" },
+              { label: "Manual" },
+            ],
+          },
+          explanation: {
+            ruleId: "image.capturedByName",
+            description:
+              "The current name of the derived capturing member, if set.",
+          },
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "captureAttribution",
+          kind: "enum",
+          display: {
+            columnLabel: "Attribution",
+            optionRole: "status",
+            optionColor: "neutral-status",
+            valueOptions: [
+              { value: "none", label: "None", color: "neutral-status" },
+              { value: "derived", label: "Derived", color: "neutral-status" },
+              { value: "ambiguous", label: "Ambiguous", color: "warning" },
+              { value: "confirmed", label: "Confirmed", color: "positive" },
+            ],
+          },
+          validation: {
+            read: imageCaptureAttribution,
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "provenanceEvidence",
+          kind: "json",
+          nullable: true,
+          display: { list: false, detailLabelPath: "provenanceEvidenceLabel" },
+          validation: {
+            read: imageProvenanceEvidence.nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "sourceEvidence",
+          kind: "json",
+          nullable: true,
+          display: { list: false, detailLabelPath: "sourceEvidence.model" },
+          validation: {
+            read: imageSourceEvidence.nullable(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          // Detail-only: the live rows of the `ImageSighting` child table
+          // (not an entity), each naming its owner and reporting device.
+          key: "sightings",
+          kind: "json",
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Photo library sightings" }],
+          },
+          display: { list: false, renderer: { detail: "image-sightings" } },
+          validation: {
+            read: z.array(imageSightingOut).optional(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "metadataRevision",
+          kind: "number",
+          nullable: true,
+        },
+        {
+          key: "embeddedMetadata",
+          kind: "json",
+          nullable: true,
+        },
+        {
+          // Terminal EXIF/GPS outcome: a row that can never extract leaves the
+          // `metadataRevision` backlog with its raw error instead of pinning it.
+          key: "metadataOutcome",
+          kind: "enum",
+          nullable: true,
+        },
+        {
+          key: "metadataError",
+          kind: "text",
+          nullable: true,
+        },
+        {
+          key: "createdAt",
+          kind: "timestamp",
+          display: { list: false },
+          validation: {
+            read: z.date(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "updatedAt",
+          kind: "timestamp",
+          display: { list: false },
+          validation: {
+            read: z.date(),
+            create: null,
+            update: null,
+          },
+        },
+        {
+          key: "images",
+          kind: "json",
+          labelOverride: "Image",
+          // A row IS an image: the thumbnail renders once its file is uploaded.
+          display: {
+            standard: "image",
+            listOrderOverride: 0,
+            renderer: { list: "uploaded-image" },
+          },
+          provenance: {
+            kind: "derived",
+            sources: [{ label: "Image storage" }],
+          },
+          validation: {
+            read: z.array(z.unknown()),
+            create: null,
+            update: null,
+          },
+        },
+        { key: "shortcode", kind: "text" },
+        {
+          key: "deletedAt",
+          kind: "timestamp",
+          nullable: true,
+        },
+        // Server-composed text for the evidence above (`display.detailLabelPath`).
+        labelField("provenanceEvidenceLabel", "Image provenance evidence"),
+      ],
+      storage: [
+        {
+          key: "id",
+          specialized: "primary-key:ImageId",
+        },
+        { key: "shortcode", specialized: "shortcode" },
+        "key",
+        "filename",
+        "size",
+        "contentType",
+        {
+          key: "status",
+          defaultValue: "'PENDING'",
+          specialized: "enum:ImageStatus",
+        },
+        "width",
+        "height",
+        "perceptualHash",
+        "sourceFingerprint",
+        "detectedContentType",
+        "sha256",
+        { key: "renderStatus", specialized: "enum:ImageRenderStatus" },
+        { key: "storageStatus", specialized: "enum:ImageStorageStatus" },
+        {
+          key: "source",
+          specialized: "enum:source",
+          defaultValue: "unknown",
+        },
+        "sourcePageUrl",
+        "sourceAssetUrl",
+        "sourceName",
+        { key: "useOriginal", defaultValue: false },
+        "verifiedAt",
+        "capturedAt",
+        "capturedAtOffsetMinutes",
+        { key: "captureLocation", specialized: "json:captureLocation" },
+        "capturePlaceName",
+        "captureDeviceLabel",
+        { key: "capturedByPartyId", reference: "ledgerParty" },
+        {
+          key: "captureAttribution",
+          specialized: "enum:captureAttribution",
+          defaultValue: "none",
+        },
+        {
+          key: "provenanceEvidence",
+          specialized: "json:provenanceEvidence",
+        },
+        { key: "sourceEvidence", specialized: "json:sourceEvidence" },
+        "metadataRevision",
+        { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
+        { key: "metadataOutcome", specialized: "enum:ImageMetadataOutcome" },
+        "metadataError",
+        { key: "createdAt" },
+        { key: "updatedAt", specialized: "updated-at" },
+        "deletedAt",
+      ],
+      create: [],
+      update: [
+        "filename",
+        "source",
+        "sourcePageUrl",
+        "sourceAssetUrl",
+        "sourceName",
+        "useOriginal",
+        "capturedByPartyId",
+        "capturedAt",
+      ],
+      audit: [],
+      rows: {
+        importTargets: {
+          label: "Import targets",
+          path: [{ edge: "PhotoRunImage.imageId", direction: "incoming" }],
+        },
+      },
+      derived: {
+        // Referenced by a live owner (an attachment, an order document).
+        referenced: { type: "boolean" },
+        processingIssue: { type: "enum", options: ["failed", "review_needed"] },
+        uploadedAgeHours: { type: "number" },
+        // Both match on the same import-run target row.
+        runId: { via: "importTargets.run" },
+        targetState: { via: "importTargets.state" },
+      },
+      sort: {
+        fields: ["createdAt", "updatedAt", "filename", "size", "status"],
+      },
+      output: [
+        "representations",
+        "id",
+        "url",
+        "key",
+        "filename",
+        "size",
+        "contentType",
+        "status",
+        "width",
+        "height",
+        "detectedContentType",
+        "sha256",
+        "renderStatus",
+        "storageStatus",
+        "source",
+        "sourcePageUrl",
+        "sourceAssetUrl",
+        "sourceName",
+        "useOriginal",
+        "verifiedAt",
+        "capturedAt",
+        "capturedAtOffsetMinutes",
+        "captureLocation",
+        "capturePlaceName",
+        "captureDeviceLabel",
+        "capturedByPartyId",
+        "capturedByName",
+        "captureAttribution",
+        "provenanceEvidence",
+        "sourceEvidence",
+        "provenanceEvidenceLabel",
+        "sightings",
+        "createdAt",
+        "updatedAt",
+      ],
+    },
+    fields: {
+      create: null,
+      update: { module: "@cubby/schemas/image", export: "imageUpdateInput" },
+      output: { module: "@cubby/schemas/image", export: "imageOut" },
+      list: {
+        module: "@cubby/schemas/image",
+        export: "imageWithEntitySchema",
+      },
+      detail: {
+        module: "@cubby/schemas/image",
+        export: "imageWithEntitySchema",
+      },
+    },
+    storage: {
+      indexes: [
+        { on: ["key"], unique: true, where: "{deletedAt} IS NULL" },
+        { on: ["createdAt"] },
+        { on: ["status"] },
+      ],
+      checks: [
+        { column: "status" },
+        { column: "renderStatus" },
+        { column: "storageStatus" },
+        { column: "metadataOutcome", values: imageMetadataOutcome.options },
+        {
+          name: "Image_perceptualHash_format_check",
+          sql: "{perceptualHash} IS NULL OR {perceptualHash} ~ '^[0-9a-f]{16}$'",
+        },
+      ],
+      relations: { attachments: { many: "entityAttachment" } },
+    },
+    filters: {
+      schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
+      descriptors: [
+        {
+          columnId: "filename",
+          field: "nameFilter",
+          kind: "text",
+          placeholder: "Filter by filename...",
+          deriveSchema: true,
+          anyOf: ["filename"],
+          schemaDescription: "Filter by filename (substring)",
+        },
+        {
+          columnId: "status",
+          kind: "multiselect",
+          placeholder: "Filter by upload status...",
+          deriveSchema: true,
+          stored: true,
+          schemaFromRead: true,
+          schemaDescription: "Filter by upload status",
+          options: [
+            { value: "PENDING", label: "Pending", color: "var(--slate)" },
+            { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
+            { value: "FAILED", label: "Failed", color: "var(--destructive)" },
+          ],
+        },
+        {
+          columnId: "processingIssue",
+          field: "processingIssue",
+          kind: "multiselect",
+          derived: true,
+          placeholder: "Filter processing issues...",
+          options: [
+            { value: "failed", label: "Failed", color: "var(--destructive)" },
+            {
+              value: "review_needed",
+              label: "Needs review",
+              color: "var(--warning)",
+            },
+          ],
+        },
+        {
+          columnId: "entity",
+          field: "referencePresenceFilter",
+          kind: "presence",
+          derived: "referenced",
+          placeholder: "Filter references...",
+          options: [
+            { value: "has", label: "Has reference", meta: true },
+            { value: "none", label: "(none)", meta: true },
+          ],
+        },
+        {
+          columnId: "createdAt",
+          kind: "range",
+          placeholder: "Filter by created date...",
+          options: [
+            { value: "30d", label: "Last 30 days" },
+            { value: "90d", label: "Last 90 days" },
+            { value: "ytd", label: "Year to date" },
+            { value: "1y", label: "Last 12 months" },
+          ],
+          expandRef: {
+            module: "~/entity/filter-behavior",
+            export: "resolveCreatedDate",
+          },
+          wire: { kind: "range", from: "createdFrom", to: "createdTo" },
+        },
+        {
+          columnId: "updatedAt",
+          kind: "range",
+          placeholder: "Filter by updated date...",
+          options: [
+            { value: "30d", label: "Last 30 days" },
+            { value: "90d", label: "Last 90 days" },
+            { value: "ytd", label: "Year to date" },
+            { value: "1y", label: "Last 12 months" },
+          ],
+          expandRef: {
+            module: "~/entity/filter-behavior",
+            export: "resolveUpdatedDate",
+          },
+          wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
+        },
+        {
+          columnId: "runId",
+          kind: "idMulti",
+          derived: true,
+          placeholder: "Filter by import run...",
+          brandRef: { entity: "run" },
+        },
+        {
+          columnId: "targetState",
+          kind: "multiselect",
+          derived: true,
+          placeholder: "Filter by import-run target state...",
+          options: [
+            { value: "pending", label: "Pending", color: "var(--slate)" },
+            { value: "prepared", label: "Prepared", color: "var(--info)" },
+            {
+              value: "completed",
+              label: "Completed",
+              color: "var(--positive)",
+            },
+            { value: "skipped", label: "Skipped", color: "var(--slate)" },
+            {
+              value: "unresolved",
+              label: "Unresolved",
+              color: "var(--warning)",
             },
             {
-              value: "screenshot",
-              label: "Screenshot",
+              value: "needs_evidence",
+              label: "Needs evidence",
+              color: "var(--warning)",
+            },
+            {
+              value: "unavailable",
+              label: "Unavailable",
+              color: "var(--destructive)",
             },
           ],
         },
-        display: {
-          list: true,
-          detail: true,
-          optionRole: "category",
-          optionColor: "neutral-status",
-          optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
-        },
-        validation: {
-          read: z.enum(imageSourceValues),
-          create: null,
-          update: z.enum(imageSourceValues).optional(),
-        },
-      },
-      {
-        key: "sourcePageUrl",
-        control: { kind: "text" },
-        kind: "text",
-        nullable: true,
-        display: { detail: true },
-        validation: {
-          read: z.url().nullable(),
-          create: null,
-          update: z.url().nullable().optional(),
-        },
-      },
-      {
-        key: "sourceAssetUrl",
-        control: { kind: "text" },
-        kind: "text",
-        nullable: true,
-        display: { detail: true },
-        validation: {
-          read: z.url().nullable(),
-          create: null,
-          update: z.url().nullable().optional(),
-        },
-      },
-      {
-        key: "sourceName",
-        control: { kind: "text" },
-        kind: "text",
-        nullable: true,
-        display: { detail: true },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: z.string().trim().min(1).max(255).nullable().optional(),
-        },
-      },
-      {
-        key: "useOriginal",
-        control: { kind: "checkbox" },
-        kind: "boolean",
-        display: { list: true, detail: true },
-        validation: {
-          read: z.boolean(),
-          create: null,
-          update: z.boolean().optional(),
-        },
-      },
-      {
-        key: "verifiedAt",
-        kind: "timestamp",
-        nullable: true,
-        display: { list: true, detail: true },
-        validation: {
-          read: z.date().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "capturedAt",
-        control: { kind: "text", placeholder: "ISO date and time" },
-        kind: "timestamp",
-        nullable: true,
-        display: { list: true, detail: true, format: "timestamp" },
-        validation: {
-          read: z.date().nullable(),
-          create: null,
-          update: z.coerce.date().nullable().optional(),
-        },
-      },
-      {
-        key: "capturedAtOffsetMinutes",
-        kind: "number",
-        nullable: true,
-        display: { detail: true },
-        validation: {
-          read: z.number().int().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "captureLocation",
-        kind: "json",
-        nullable: true,
-        // Detail-only by design (no `list: true`) — GPS coordinates never
-        // belong in a list column.
-        display: {
-          detail: true,
-          renderer: { detail: "image-capture-location" },
-        },
-        validation: {
-          read: imageCaptureLocation.nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "capturePlaceName",
-        kind: "text",
-        nullable: true,
-        display: { detail: true },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "captureDeviceLabel",
-        kind: "text",
-        nullable: true,
-        display: { detail: true },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "capturedByPartyId",
-        kind: "identifier",
-        nullable: true,
-        reference: { entity: "ledgerParty" },
-        control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          columnLabel: "Captured by",
-          list: true,
-          detail: true,
-        },
-        explanation: {
-          ruleId: "image.capturedBy",
-          description:
-            "The capturing member is derived by scoring the image's photo-library sightings, falling back to embedded EXIF evidence when there are none, and can always be set manually.",
-          resolver: "imageCapture",
-          readPath: "capturedByPartyId",
-        },
-        validation: {
-          read: ledgerPartyShortcode.nullable(),
-          create: null,
-          update: ledgerPartyShortcode.nullable().optional(),
-        },
-      },
-      {
-        key: "capturedByName",
-        kind: "text",
-        nullable: true,
-        provenance: {
-          kind: "derived",
-          sources: [
-            { label: "Photo library sightings" },
-            { label: "Embedded EXIF" },
-            { label: "Manual" },
+        {
+          columnId: "source",
+          kind: "multiselect",
+          placeholder: "Filter by source...",
+          deriveSchema: true,
+          stored: true,
+          schemaFromRead: true,
+          options: [
+            { value: "own", label: "Own" },
+            { value: "catalog", label: "Catalog" },
+            { value: "unknown", label: "Unknown" },
+            { value: "screenshot", label: "Screenshot" },
           ],
         },
-        explanation: {
-          ruleId: "image.capturedByName",
-          description:
-            "The current name of the derived capturing member, if set.",
-        },
-        validation: { read: z.string().nullable(), create: null, update: null },
-      },
-      {
-        key: "captureAttribution",
-        kind: "enum",
-        display: {
-          columnLabel: "Attribution",
-          list: true,
-          detail: true,
-          // Every value is a state of the attribution, "derived" included.
-          optionRole: "status",
-          optionColor: "neutral-status",
-          valueOptions: [
-            { value: "none", label: "None", color: "neutral-status" },
-            { value: "derived", label: "Derived", color: "neutral-status" },
-            { value: "ambiguous", label: "Ambiguous", color: "warning" },
-            { value: "confirmed", label: "Confirmed", color: "positive" },
+        {
+          columnId: "captureAttribution",
+          kind: "multiselect",
+          placeholder: "Filter by capture attribution...",
+          deriveSchema: true,
+          stored: true,
+          schemaFromRead: true,
+          options: [
+            { value: "none", label: "None" },
+            { value: "derived", label: "Derived" },
+            { value: "ambiguous", label: "Ambiguous" },
+            { value: "confirmed", label: "Confirmed" },
           ],
         },
-        validation: {
-          read: imageCaptureAttribution,
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "provenanceEvidence",
-        kind: "json",
-        nullable: true,
-        display: { detail: true, detailLabelPath: "provenanceEvidenceLabel" },
-        validation: {
-          read: imageProvenanceEvidence.nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "sourceEvidence",
-        kind: "json",
-        nullable: true,
-        display: { detail: true, detailLabelPath: "sourceEvidence.model" },
-        validation: {
-          read: imageSourceEvidence.nullable(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        // Detail-only: the live rows of the `ImageSighting` child table
-        // (not an entity), each naming its owner and reporting device.
-        key: "sightings",
-        kind: "json",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Photo library sightings" }],
-        },
-        display: {
-          detail: true,
-          renderer: { detail: "image-sightings" },
-        },
-        validation: {
-          read: z.array(imageSightingOut).optional(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "metadataRevision",
-        kind: "number",
-        nullable: true,
-      },
-      {
-        key: "embeddedMetadata",
-        kind: "json",
-        nullable: true,
-      },
-      {
-        // Terminal EXIF/GPS outcome: a row that can never extract leaves the
-        // `metadataRevision` backlog with its raw error instead of pinning it.
-        key: "metadataOutcome",
-        kind: "enum",
-        nullable: true,
-      },
-      {
-        key: "metadataError",
-        kind: "text",
-        nullable: true,
-      },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        display: { detail: true },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        display: { detail: true },
-        validation: {
-          read: z.date(),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "images",
-        kind: "json",
-        labelOverride: "Image",
-        // A row IS an image: the thumbnail renders once its file is uploaded.
-        display: {
-          list: true,
-          standard: "image",
-          listOrderOverride: 0,
-          renderer: { list: "uploaded-image" },
-        },
-        provenance: { kind: "derived", sources: [{ label: "Image storage" }] },
-        validation: { read: z.array(z.unknown()), create: null, update: null },
-      },
-      { key: "shortcode", kind: "text" },
-      {
-        key: "deletedAt",
-        kind: "timestamp",
-        nullable: true,
-      },
-      // Server-composed text for the evidence above (`display.detailLabelPath`).
-      labelField("provenanceEvidenceLabel", "Image provenance evidence"),
-    ],
-    storage: [
-      {
-        key: "id",
-        specialized: "primary-key:ImageId",
-      },
-      { key: "shortcode", specialized: "shortcode" },
-      "key",
-      "filename",
-      "size",
-      "contentType",
-      {
-        key: "status",
-        defaultValue: "'PENDING'",
-        specialized: "enum:ImageStatus",
-      },
-      "width",
-      "height",
-      "perceptualHash",
-      "sourceFingerprint",
-      "detectedContentType",
-      "sha256",
-      { key: "renderStatus", specialized: "enum:ImageRenderStatus" },
-      { key: "storageStatus", specialized: "enum:ImageStorageStatus" },
-      {
-        key: "source",
-        specialized: "enum:source",
-        defaultValue: "unknown",
-      },
-      "sourcePageUrl",
-      "sourceAssetUrl",
-      "sourceName",
-      { key: "useOriginal", defaultValue: false },
-      "verifiedAt",
-      "capturedAt",
-      "capturedAtOffsetMinutes",
-      { key: "captureLocation", specialized: "json:captureLocation" },
-      "capturePlaceName",
-      "captureDeviceLabel",
-      { key: "capturedByPartyId", reference: "ledgerParty" },
-      {
-        key: "captureAttribution",
-        specialized: "enum:captureAttribution",
-        defaultValue: "none",
-      },
-      {
-        key: "provenanceEvidence",
-        specialized: "json:provenanceEvidence",
-      },
-      { key: "sourceEvidence", specialized: "json:sourceEvidence" },
-      "metadataRevision",
-      { key: "embeddedMetadata", specialized: "json:embeddedMetadata" },
-      { key: "metadataOutcome", specialized: "enum:ImageMetadataOutcome" },
-      "metadataError",
-      { key: "createdAt" },
-      { key: "updatedAt", specialized: "updated-at" },
-      "deletedAt",
-    ],
-    create: [],
-    update: [
-      "filename",
-      "source",
-      "sourcePageUrl",
-      "sourceAssetUrl",
-      "sourceName",
-      "useOriginal",
-      "capturedByPartyId",
-      "capturedAt",
-    ],
-    audit: [],
-    rows: {
-      importTargets: {
-        label: "Import targets",
-        path: [{ edge: "PhotoRunImage.imageId", direction: "incoming" }],
-      },
-    },
-    derived: {
-      // Referenced by a live owner (an attachment, an order document).
-      referenced: { type: "boolean" },
-      processingIssue: { type: "enum", options: ["failed", "review_needed"] },
-      uploadedAgeHours: { type: "number" },
-      // Both match on the same import-run target row.
-      runId: { via: "importTargets.run" },
-      targetState: { via: "importTargets.state" },
-    },
-    sort: {
-      fields: ["createdAt", "updatedAt", "filename", "size", "status"],
-    },
-    output: [
-      "representations",
-      "id",
-      "url",
-      "key",
-      "filename",
-      "size",
-      "contentType",
-      "status",
-      "width",
-      "height",
-      "detectedContentType",
-      "sha256",
-      "renderStatus",
-      "storageStatus",
-      "source",
-      "sourcePageUrl",
-      "sourceAssetUrl",
-      "sourceName",
-      "useOriginal",
-      "verifiedAt",
-      "capturedAt",
-      "capturedAtOffsetMinutes",
-      "captureLocation",
-      "capturePlaceName",
-      "captureDeviceLabel",
-      "capturedByPartyId",
-      "capturedByName",
-      "captureAttribution",
-      "provenanceEvidence",
-      "sourceEvidence",
-      "provenanceEvidenceLabel",
-      "sightings",
-      "createdAt",
-      "updatedAt",
-    ],
-  },
-  fields: {
-    create: null,
-    update: { module: "@cubby/schemas/image", export: "imageUpdateInput" },
-    output: { module: "@cubby/schemas/image", export: "imageOut" },
-    list: {
-      module: "@cubby/schemas/image",
-      export: "imageWithEntitySchema",
-    },
-    detail: {
-      module: "@cubby/schemas/image",
-      export: "imageWithEntitySchema",
-    },
-  },
-  storage: {
-    indexes: [
-      { on: ["key"], unique: true, where: "{deletedAt} IS NULL" },
-      { on: ["createdAt"] },
-      { on: ["status"] },
-    ],
-    checks: [
-      { column: "status" },
-      { column: "renderStatus" },
-      { column: "storageStatus" },
-      { column: "metadataOutcome", values: imageMetadataOutcome.options },
-      {
-        name: "Image_perceptualHash_format_check",
-        sql: "{perceptualHash} IS NULL OR {perceptualHash} ~ '^[0-9a-f]{16}$'",
-      },
-    ],
-    relations: { attachments: { many: "entityAttachment" } },
-  },
-  filters: {
-    schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
-    descriptors: [
-      {
-        columnId: "filename",
-        field: "nameFilter",
-        kind: "text",
-        placeholder: "Filter by filename...",
-        deriveSchema: true,
-        anyOf: ["filename"],
-        schemaDescription: "Filter by filename (substring)",
-      },
-      {
-        columnId: "status",
-        kind: "multiselect",
-        placeholder: "Filter by upload status...",
-        deriveSchema: true,
-        stored: true,
-        schemaFromRead: true,
-        schemaDescription: "Filter by upload status",
-        options: [
-          { value: "PENDING", label: "Pending", color: "var(--slate)" },
-          { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
-          { value: "FAILED", label: "Failed", color: "var(--destructive)" },
-        ],
-      },
-      {
-        columnId: "processingIssue",
-        field: "processingIssue",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter processing issues...",
-        options: [
-          { value: "failed", label: "Failed", color: "var(--destructive)" },
-          {
-            value: "review_needed",
-            label: "Needs review",
-            color: "var(--warning)",
-          },
-        ],
-      },
-      {
-        columnId: "entity",
-        field: "referencePresenceFilter",
-        kind: "presence",
-        derived: "referenced",
-        placeholder: "Filter references...",
-        options: [
-          { value: "has", label: "Has reference", meta: true },
-          { value: "none", label: "(none)", meta: true },
-        ],
-      },
-      {
-        columnId: "createdAt",
-        kind: "range",
-        placeholder: "Filter by created date...",
-        options: [
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
-        ],
-        expandRef: {
-          module: "~/entity/filter-behavior",
-          export: "resolveCreatedDate",
-        },
-        wire: { kind: "range", from: "createdFrom", to: "createdTo" },
-      },
-      {
-        columnId: "updatedAt",
-        kind: "range",
-        placeholder: "Filter by updated date...",
-        options: [
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
-        ],
-        expandRef: {
-          module: "~/entity/filter-behavior",
-          export: "resolveUpdatedDate",
-        },
-        wire: { kind: "range", from: "updatedFrom", to: "updatedTo" },
-      },
-      {
-        columnId: "runId",
-        kind: "idMulti",
-        derived: true,
-        placeholder: "Filter by import run...",
-        brandRef: { entity: "run" },
-      },
-      {
-        columnId: "targetState",
-        kind: "multiselect",
-        derived: true,
-        placeholder: "Filter by import-run target state...",
-        options: [
-          { value: "pending", label: "Pending", color: "var(--slate)" },
-          { value: "prepared", label: "Prepared", color: "var(--info)" },
-          {
-            value: "completed",
-            label: "Completed",
-            color: "var(--positive)",
-          },
-          { value: "skipped", label: "Skipped", color: "var(--slate)" },
-          {
-            value: "unresolved",
-            label: "Unresolved",
-            color: "var(--warning)",
-          },
-          {
-            value: "needs_evidence",
-            label: "Needs evidence",
-            color: "var(--warning)",
-          },
-          {
-            value: "unavailable",
-            label: "Unavailable",
-            color: "var(--destructive)",
-          },
-        ],
-      },
-      {
-        columnId: "source",
-        kind: "multiselect",
-        placeholder: "Filter by source...",
-        deriveSchema: true,
-        stored: true,
-        schemaFromRead: true,
-        options: [
-          { value: "own", label: "Own" },
-          { value: "catalog", label: "Catalog" },
-          { value: "unknown", label: "Unknown" },
-          { value: "screenshot", label: "Screenshot" },
-        ],
-      },
-      {
-        columnId: "captureAttribution",
-        kind: "multiselect",
-        placeholder: "Filter by capture attribution...",
-        deriveSchema: true,
-        stored: true,
-        schemaFromRead: true,
-        options: [
-          { value: "none", label: "None" },
-          { value: "derived", label: "Derived" },
-          { value: "ambiguous", label: "Ambiguous" },
-          { value: "confirmed", label: "Confirmed" },
-        ],
-      },
-      {
-        columnId: "capturedAt",
-        kind: "range",
-        placeholder: "Filter by captured date...",
-        deriveSchema: true,
-        stored: true,
-        range: { kind: "date" },
-        options: [
-          { value: "30d", label: "Last 30 days" },
-          { value: "90d", label: "Last 90 days" },
-          { value: "ytd", label: "Year to date" },
-          { value: "1y", label: "Last 12 months" },
-        ],
-      },
-      {
-        columnId: "capturedByPartyId",
-        kind: "idMulti",
-        placeholder: "Filter by captured by...",
-        brandRef: { entity: "ledgerParty" },
-        currentMember: true,
-        deriveSchema: true,
-        stored: true,
-      },
-      {
-        columnId: "uploadedAgeHours",
-        kind: "range",
-        placeholder: "Filter by upload age...",
-        deriveSchema: true,
-        derived: true,
-        range: {
-          kind: "number",
-          nonnegative: true,
-          describe: {
-            lower: "Only images uploaded at least this many hours ago.",
-            upper: "Only images uploaded at most this many hours ago.",
-          },
-        },
-      },
-    ],
-  },
-  relations: [
-    {
-      key: "captured-by",
-      label: "Captured by",
-      target: "ledgerParty",
-      cardinality: "one",
-      provenance: {
-        kind: "local-path",
-        steps: [{ edge: "Image.capturedByPartyId", direction: "outgoing" }],
-      },
-      inverse: {
-        steps: [{ edge: "Image.capturedByPartyId", direction: "incoming" }],
-      },
-    },
-  ],
-  // Image filenames and the current preferred description/correction are
-  // searchable. The shared search document loader adds only direct owners.
-  search: "semantic",
-  capabilities: {
-    auditable: false,
-    images: { storage: false },
-    delete: { mode: "hard", bulk: true },
-    merge: false,
-    dataQuality: {
-      checks: [
         {
-          id: "image_provenance_unknown",
-          satisfiedLabel: "Source recorded",
-          placement: { field: "source" },
-          facet: "provenance",
-          weight: 3,
-          label: "Source",
-          message: "This image's origin is unknown.",
+          columnId: "capturedAt",
+          kind: "range",
+          placeholder: "Filter by captured date...",
+          deriveSchema: true,
+          stored: true,
+          range: { kind: "date" },
+          options: [
+            { value: "30d", label: "Last 30 days" },
+            { value: "90d", label: "Last 90 days" },
+            { value: "ytd", label: "Year to date" },
+            { value: "1y", label: "Last 12 months" },
+          ],
         },
         {
-          id: "image_capture_attribution",
-          satisfiedLabel: "Capture attributed",
-          placement: { field: "captureAttribution" },
-          facet: "provenance",
-          kind: "defect",
-          weight: 2,
-          label: "Capture attribution",
-          message:
-            "Multiple household members could be the photographer; confirm who captured this.",
+          columnId: "capturedByPartyId",
+          kind: "idMulti",
+          placeholder: "Filter by captured by...",
+          brandRef: { entity: "ledgerParty" },
+          currentMember: true,
+          deriveSchema: true,
+          stored: true,
         },
         {
-          id: "image_capture_date",
-          satisfiedLabel: "Capture date recorded",
-          placement: { field: "capturedAt" },
-          facet: "content",
-          weight: 1,
-          label: "Capture date",
-          message: "No capture date is recorded for this image.",
-        },
-        {
-          id: "image_dimensions",
-          satisfiedLabel: "Dimensions recorded",
-          placement: { field: "width" },
-          facet: "integrity",
-          weight: 1,
-          label: "Dimensions",
-          message: "Raster image width or height is missing or not positive.",
-        },
-        {
-          id: "image_asset_unusable",
-          satisfiedLabel: "File usable",
-          placement: { field: "storageStatus" },
-          facet: "integrity",
-          kind: "defect",
-          weight: 3,
-          scoreCap: 49,
-          label: "Unusable file",
-          message:
-            "The stored file is missing, mismatched, or failed to render.",
-        },
-        {
-          id: "image_sighting_missing",
-          satisfiedLabel: "Sightings recorded",
-          placement: { field: "sightings" },
-          facet: "provenance",
-          weight: 1,
-          label: "Sightings",
-          message:
-            "No live photo-library sighting is recorded for this own-sourced image.",
+          columnId: "uploadedAgeHours",
+          kind: "range",
+          placeholder: "Filter by upload age...",
+          deriveSchema: true,
+          derived: true,
+          range: {
+            kind: "number",
+            nonnegative: true,
+            describe: {
+              lower: "Only images uploaded at least this many hours ago.",
+              upper: "Only images uploaded at most this many hours ago.",
+            },
+          },
         },
       ],
     },
-  },
-  extensions: {
-    ports: {
-      repository: {
-        module: "~/server/domains/image/repo/image.repository",
-        export: "imageRepository",
+    relations: [
+      {
+        key: "captured-by",
+        label: "Captured by",
+        target: "ledgerParty",
+        cardinality: "one",
+        provenance: {
+          kind: "local-path",
+          steps: [{ edge: "Image.capturedByPartyId", direction: "outgoing" }],
+        },
+        inverse: {
+          steps: [{ edge: "Image.capturedByPartyId", direction: "incoming" }],
+        },
+      },
+    ],
+    // Image filenames and the current preferred description/correction are
+    // searchable. The shared search document loader adds only direct owners.
+    search: "semantic",
+    capabilities: {
+      auditable: false,
+      images: { storage: false },
+      delete: { mode: "hard", bulk: true },
+      merge: false,
+      dataQuality: {
+        checks: [
+          {
+            id: "image_provenance_unknown",
+            satisfiedLabel: "Source recorded",
+            placement: { field: "source" },
+            facet: "provenance",
+            weight: 3,
+            label: "Source",
+            message: "This image's origin is unknown.",
+          },
+          {
+            id: "image_capture_attribution",
+            satisfiedLabel: "Capture attributed",
+            placement: { field: "captureAttribution" },
+            facet: "provenance",
+            kind: "defect",
+            weight: 2,
+            label: "Capture attribution",
+            message:
+              "Multiple household members could be the photographer; confirm who captured this.",
+          },
+          {
+            id: "image_capture_date",
+            satisfiedLabel: "Capture date recorded",
+            placement: { field: "capturedAt" },
+            facet: "content",
+            weight: 1,
+            label: "Capture date",
+            message: "No capture date is recorded for this image.",
+          },
+          {
+            id: "image_dimensions",
+            satisfiedLabel: "Dimensions recorded",
+            placement: { field: "width" },
+            facet: "integrity",
+            weight: 1,
+            label: "Dimensions",
+            message: "Raster image width or height is missing or not positive.",
+          },
+          {
+            id: "image_asset_unusable",
+            satisfiedLabel: "File usable",
+            placement: { field: "storageStatus" },
+            facet: "integrity",
+            kind: "defect",
+            weight: 3,
+            scoreCap: 49,
+            label: "Unusable file",
+            message:
+              "The stored file is missing, mismatched, or failed to render.",
+          },
+          {
+            id: "image_sighting_missing",
+            satisfiedLabel: "Sightings recorded",
+            placement: { field: "sightings" },
+            facet: "provenance",
+            weight: 1,
+            label: "Sightings",
+            message:
+              "No live photo-library sighting is recorded for this own-sourced image.",
+          },
+        ],
+      },
+    },
+    extensions: {
+      ports: {
+        repository: {
+          module: "~/server/domains/image/repo/image.repository",
+          export: "imageRepository",
+        },
       },
     },
   },
-});
+  imageReadSchemas,
+);

@@ -212,6 +212,7 @@ export default defineEntity({
     },
     fields: [
       {
+        display: { detail: false, list: false },
         key: "fieldResolutions",
         kind: "json",
         validation: {
@@ -224,11 +225,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "What needs doing?" },
-        display: {
-          list: true,
-          detail: true,
-          standard: "name",
-        },
+        display: { standard: "name" },
         validation: {
           read: z.string().min(1),
           create: z.string().min(1),
@@ -239,11 +236,7 @@ export default defineEntity({
         key: "status",
         kind: "enum",
         control: { kind: "select", options: selectControlOptions.taskStatus },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "subtitle", priority: 10 },
-        },
+        display: { mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: taskStatusSchema,
           create: taskStatusSchema.default("not_started"),
@@ -261,8 +254,6 @@ export default defineEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
           columnLabel: "Assignee",
-          list: true,
-          detail: true,
           width: "md",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
@@ -327,6 +318,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "assigneeName",
         kind: "text",
         validation: { read: z.string().nullable(), create: null, update: null },
@@ -342,8 +334,6 @@ export default defineEntity({
           suggest: { basis: ["name"] },
         },
         display: {
-          list: true,
-          detail: true,
           width: "md",
           mobile: { slot: "meta", priority: 30, interactive: true },
         },
@@ -423,8 +413,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Product",
-          list: true,
-          detail: true,
           width: "md",
           mobile: { slot: "meta", priority: 35, interactive: true },
         },
@@ -498,10 +486,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-        },
+        display: {},
         validation: {
           read: taskShortcode.nullable(),
           create: taskShortcode.nullable().default(null),
@@ -514,8 +499,6 @@ export default defineEntity({
         nullable: true,
         control: { kind: "date" },
         display: {
-          list: true,
-          detail: true,
           format: "plainDate",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
@@ -530,12 +513,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: {
-          list: true,
-          detail: true,
-          listHidden: true,
-          format: "plainDate",
-        },
+        display: { listHidden: true, format: "plainDate" },
         validation: {
           read: plainDate.describe("End of a due-date range").nullable(),
           create: plainDate
@@ -562,12 +540,7 @@ export default defineEntity({
             rules: [TRADE_SUGGEST_RULE],
           },
         },
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          mobile: { slot: "meta", priority: 50 },
-        },
+        display: { width: "sm", mobile: { slot: "meta", priority: 50 } },
         resolution: {
           reset: { trade: null },
           redundancy: "eligible",
@@ -610,7 +583,7 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number" },
-        display: { list: true, listHidden: true },
+        display: { detail: false, listHidden: true },
         validation: {
           read: z.number().nullable(),
           create: z.number().nullable().default(null),
@@ -622,7 +595,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "task", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.array(taskShortcode),
           create: null,
@@ -662,7 +635,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, standard: "image" },
+        display: { detail: false, standard: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -683,6 +656,7 @@ export default defineEntity({
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -692,6 +666,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "projectName",
         kind: "text",
         nullable: true,
@@ -702,6 +677,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "subjectProductName",
         kind: "text",
         nullable: true,
@@ -712,6 +688,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "parentTaskName",
         kind: "text",
         nullable: true,
@@ -725,7 +702,7 @@ export default defineEntity({
         key: "blockingIds",
         kind: "identifier",
         reference: { entity: "task", multiple: true },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.array(taskShortcode),
           create: null,
@@ -733,6 +710,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "subtaskCount",
         kind: "number",
         validation: {
@@ -742,6 +720,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "doneSubtaskCount",
         kind: "number",
         validation: {
@@ -751,6 +730,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: {
@@ -760,6 +740,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "updatedAt",
         kind: "timestamp",
         validation: {

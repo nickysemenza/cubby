@@ -1,7 +1,6 @@
 import { categoryMappingSchema } from "../spending-classification";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
-
 import { optionalFieldResolutionsSchema } from "../field-resolution.js";
 import { spendingCategoryMappingMode } from "../spending-classification.js";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
@@ -87,6 +86,7 @@ export default defineEntity({
     },
     fields: [
       {
+        display: { detail: false, list: false },
         key: "spendingCategoryMapping",
         kind: "json",
         validation: {
@@ -100,11 +100,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        display: {
-          columnLabel: "Spending",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Spending" },
         explanation: {
           ruleId: "productCategory.effective-spending-category",
           description:
@@ -132,6 +128,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
@@ -142,6 +139,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "spendingCategoryEmoji",
         kind: "text",
         nullable: true,
@@ -185,8 +183,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Spending mode",
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Tag", sfSymbol: "tag" },
@@ -203,7 +199,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "spendingCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        display: {},
         // `blocked` keeps the category unresolved: an explicit None.
         resolution: {
           inherit: {
@@ -222,6 +218,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "fieldResolutions",
         kind: "json",
         validation: {
@@ -234,7 +231,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "Category name" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().min(1),
           create: z.string().trim().min(1),
@@ -246,7 +243,7 @@ export default defineEntity({
         kind: "text-array",
         collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.array(z.string()),
           create: z.array(z.string()).default([]),
@@ -258,7 +255,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.string().nullable(),
           create: z.string().trim().nullable().default(null),
@@ -271,12 +268,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "productCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          // The declared tree already shows each row under its parent.
-          listHidden: true,
-        },
+        display: { listHidden: true },
         validation: {
           read: productCategoryShortcode.nullable(),
           create: productCategoryShortcode.nullable().default(null),
@@ -287,7 +279,7 @@ export default defineEntity({
         key: "sortOrder",
         kind: "number",
         control: { kind: "number" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.number().int(),
           create: z.number().int().default(0),
@@ -430,8 +422,6 @@ Rules:
           },
         },
         display: {
-          list: true,
-          detail: true,
           width: "md",
           mobile: { slot: "meta", priority: 10 },
           optionRole: "category",
@@ -477,7 +467,7 @@ Rules:
         nullable: true,
         labelOverride: "Stock tracking",
         control: { kind: "checkbox" },
-        display: { list: true, detail: true, listHidden: true },
+        display: { listHidden: true },
         resolution: {
           reset: { stockTracked: null },
           redundancy: "eligible",
@@ -515,6 +505,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "parentName",
         kind: "text",
         nullable: true,
@@ -531,7 +522,7 @@ Rules:
       {
         key: "path",
         kind: "json",
-        display: { detail: true, detailLabelPath: "pathLabel" },
+        display: { list: false, detailLabelPath: "pathLabel" },
         provenance: {
           kind: "derived",
           sources: [{ label: "Category ancestry" }],
@@ -550,12 +541,7 @@ Rules:
       {
         key: "productCount",
         kind: "number",
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          mobile: { slot: "meta", priority: 20 },
-        },
+        display: { width: "sm", mobile: { slot: "meta", priority: 20 } },
         provenance: {
           kind: "derived",
           sources: [{ entity: "product", relation: "products" }],
@@ -573,6 +559,7 @@ Rules:
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -584,13 +571,13 @@ Rules:
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: { read: z.date(), create: null, update: null },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: { read: z.date(), create: null, update: null },
       },
       { key: "shortcode", kind: "text" },

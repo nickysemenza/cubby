@@ -1,3 +1,22 @@
+import { imageOut } from "./entity-definitions/field-primitives";
+import { dataQuality } from "./data-quality-shape";
+import { locationValuation } from "./location-fields";
+import { recipeSource } from "./recipe-shared";
+import { merchantVendorInference } from "./financial-transaction-fields";
+import { projectRollup } from "./project-output-fields";
+import { recipeTotals, recipeTopLevelFields } from "./recipe-shared";
+import { listLabel } from "./entity-definitions/label-field";
+import { runWorkProgress } from "./run-work-progress";
+import { financialReconciliationSummary } from "./financial-reconciliation";
+import { purchaseReconciliation } from "./purchase-fields";
+import {
+  purchaseShortcode,
+  recipeShortcode,
+  vendorShortcode,
+} from "./identifier-fields";
+import { imageUrlSummary } from "./image-summary";
+import { foodSummary } from "@cubby/usda";
+import { z } from "zod";
 // Not "@cubby/shared": its index reaches generated files, and this module is imported by the
 // generator before they exist.
 import { mapRecord } from "../../shared/src/record";
@@ -32,9 +51,15 @@ import type {
  * `unsupported` is a deliberate, disclosed gap (the native screen shows the
  * reason); `NATIVE_UNSUPPORTED_CEILING` only shrinks.
  */
-export type NativeCoverageEntry =
+export type NativeCoverageEntry = (
   | { readonly status: "implemented" | "generic" | "ownedElsewhere" }
-  | { readonly status: "unsupported"; readonly reason: string };
+  | { readonly status: "unsupported"; readonly reason: string }
+) & {
+  readonly inputs?: readonly {
+    readonly path: string;
+    readonly schema: z.ZodType;
+  }[];
+};
 
 type ListId = { [E in Entity]: ListRendererId<E> }[Entity];
 type DetailId = { [E in Entity]: DetailRendererId<E> }[Entity];
@@ -131,34 +156,121 @@ export const nativeCoverage = {
     ...ownedElsewhere(["image-order"]),
   },
   list: {
-    ...implemented([
-      "recipe-source",
-      "spending-category-summary",
-      "data-quality",
-    ]),
+    "possible-vendor": {
+      status: "generic",
+      inputs: [{ path: "vendorInference", schema: merchantVendorInference }],
+    },
+    "valuation-summary": {
+      status: "generic",
+      inputs: [{ path: "valuation", schema: locationValuation }],
+    },
+    "recipe-source": {
+      status: "implemented",
+      inputs: [{ path: "source", schema: recipeSource }],
+    },
+    "data-quality": {
+      status: "implemented",
+      inputs: [{ path: "dataQuality", schema: dataQuality }],
+    },
+    "uploaded-image": {
+      status: "ownedElsewhere",
+      inputs: [
+        { path: "id", schema: imageOut.shape.id },
+        { path: "url", schema: imageOut.shape.url },
+        { path: "status", schema: imageOut.shape.status },
+      ],
+    },
+    "estimate-kcal": {
+      status: "generic",
+      inputs: [
+        { path: "totals", schema: recipeTotals },
+        { path: "caloriesTotalLabel", schema: listLabel },
+        { path: "yield", schema: recipeTopLevelFields.yield },
+        { path: "servings", schema: recipeTopLevelFields.servings },
+        { path: "updatedAt", schema: z.date() },
+      ],
+    },
+    "estimate-cost": {
+      status: "generic",
+      inputs: [
+        { path: "totals", schema: recipeTotals },
+        { path: "costTotalLabel", schema: listLabel },
+        { path: "yield", schema: recipeTopLevelFields.yield },
+        { path: "servings", schema: recipeTopLevelFields.servings },
+        { path: "updatedAt", schema: z.date() },
+      ],
+    },
+    "recipe-links": {
+      status: "generic",
+      inputs: [
+        { path: "recipes[].recipeId", schema: recipeShortcode },
+        { path: "recipes[].recipe.name", schema: z.string() },
+      ],
+    },
+    "reconciliation-status": {
+      status: "generic",
+      inputs: [
+        { path: "reconciliation", schema: purchaseReconciliation },
+        { path: "expenseTotal", schema: z.number() },
+        { path: "statedTotal", schema: z.number() },
+        {
+          path: "financialReconciliation",
+          schema: financialReconciliationSummary,
+        },
+      ],
+    },
+    "financial-settlement": {
+      status: "generic",
+      inputs: [
+        { path: "id", schema: purchaseShortcode },
+        {
+          path: "financialReconciliation",
+          schema: financialReconciliationSummary,
+        },
+      ],
+    },
+    "order-link": {
+      status: "generic",
+      inputs: [
+        { path: "orderId", schema: z.string() },
+        { path: "orderUrl", schema: z.string() },
+        { path: "vendorName", schema: z.string() },
+      ],
+    },
+    "vendor-cell": {
+      status: "generic",
+      inputs: [
+        { path: "vendorId", schema: vendorShortcode },
+        { path: "vendorName", schema: z.string() },
+        { path: "vendorLogo", schema: imageUrlSummary },
+      ],
+    },
+    "run-throughput": {
+      status: "generic",
+      inputs: [
+        { path: "workProgress", schema: runWorkProgress },
+        { path: "status", schema: z.string() },
+      ],
+    },
+    "task-progress": {
+      status: "generic",
+      inputs: [
+        {
+          path: "rollup",
+          schema: projectRollup.pick({ taskCount: true, doneTaskCount: true }),
+        },
+      ],
+    },
+    "usda-food-link": {
+      status: "generic",
+      inputs: [{ path: "food", schema: foodSummary.nullable() }],
+    },
+    ...implemented(["spending-category-summary"]),
     // Drawn from the field's declared `display.labelPath`: the server-composed figure (a rule
     // computed once, not per client) or the display name of the record a cell links to. The rich
     // web cell (tooltip, pill, link, workbench) stays web-only; the fact it carries does not.
-    ...generic([
-      "estimate-cost",
-      "estimate-kcal",
-      "financial-settlement",
-      "reconciliation-status",
-      "valuation-summary",
-      "tag-links",
-      "purchase-links",
-      "recipe-links",
-      "product-link",
-      "usda-food-link",
-      "vendor-cell",
-      "order-link",
-      "possible-vendor",
-      "task-progress",
-      "run-throughput",
-      "run-activity",
-    ]),
+    ...generic(["tag-links", "purchase-links", "product-link", "run-activity"]),
     // The Image row IS the picture: native draws it as the row thumbnail.
-    ...ownedElsewhere(["uploaded-image"]),
   },
   detail: {
     // Drawn by the one generic detail row from what the declaration says to read: a reference,
@@ -698,3 +810,25 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   sectionAction: 0,
   structuredField: 0,
 } as const satisfies Record<NativeCoverageKind, number>;
+
+/** Named whole-row renderers declare the projection they consume beside their platform disposition. */
+export function rendererReadInputs(surface: "list" | "detail", id: string) {
+  const entries: Readonly<Record<string, NativeCoverageEntry>> =
+    nativeCoverage[surface];
+  return entries[id]?.inputs ?? null;
+}
+
+/** Shared compilation resolves every renderer disposition before any platform emits it. */
+export function requireNativeCoverage(
+  kind: NativeCoverageKind,
+  id: string,
+): NativeCoverageEntry {
+  const entries: Readonly<Record<string, NativeCoverageEntry>> =
+    nativeCoverage[kind];
+  const entry = entries[id];
+  if (entry === undefined)
+    throw new Error(
+      `packages/schemas/src/native-coverage.ts does not classify ${kind} ${JSON.stringify(id)}.`,
+    );
+  return entry;
+}

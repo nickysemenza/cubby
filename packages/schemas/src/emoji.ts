@@ -29,7 +29,7 @@ export const recordEmojiField = {
     placeholder: "Choose an emoji",
     suggest: { basis: ["name"] },
   },
-  display: { detail: true },
+  display: { list: false },
   validation: {
     read: z.string().nullable().optional(),
     create: recordEmojiInput.optional(),

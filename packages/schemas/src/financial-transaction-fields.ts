@@ -246,3 +246,24 @@ export function parseBankDescriptor(raw: string | null | undefined) {
     merchant: (merchant.match(/\p{L}/gu)?.length ?? 0) >= 3 ? merchant : null,
   };
 }
+
+const postedDateStatusSchema = z.object({
+  status: financialTransactionStatus,
+  postedDate: plainDate.nullable(),
+});
+
+export const postedRequiresDate = <T extends z.ZodType>(schema: T) =>
+  schema.refine(
+    (value) => {
+      const transaction = postedDateStatusSchema.parse(value);
+      return transaction.status !== "posted" || transaction.postedDate !== null;
+    },
+    { message: "posted transactions require postedDate", path: ["postedDate"] },
+  );
+
+export function financialTransactionReadSchemas<S extends z.ZodRawShape>(
+  base: z.ZodObject<S>,
+) {
+  const output = postedRequiresDate(base);
+  return { output, list: output, detail: output };
+}

@@ -1096,9 +1096,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           generatedHeader +
           `import definition from ${JSON.stringify(declaration.path)};\n` +
           'import { fieldSchemasOf } from "../entity-definitions/definition";\n' +
-          (entity.dataQuality === null
-            ? ""
-            : 'import { dataQuality } from "../data-quality-shape";\n') +
           filterFields.imports +
           (declaration.enumExports.length
             ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`
@@ -1107,13 +1104,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           // schema by key at load time, so inserting a field mid-declaration
           // cannot shift another field's schema. The rosters were validated
           // complete above; the runtime lookup throws on a missing schema.
-          (entity.dataQuality === null
-            ? `export const ${prefix}FieldSchemas = fieldSchemasOf(definition);\n`
-            : // The compiler synthesizes `dataQuality` without a read schema
-              // (it cannot import the registry it generates), so the real one
-              // is spliced in here.
-              "const declaredFieldSchemas = fieldSchemasOf(definition);\n" +
-              `export const ${prefix}FieldSchemas = { ...declaredFieldSchemas, read: { ...declaredFieldSchemas.read, dataQuality } } as const;\n`) +
+          `export const ${prefix}FieldSchemas = fieldSchemasOf(definition);\n` +
           (filterFields.entries.length
             ? `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`
             : ""),

@@ -1,19 +1,10 @@
-import { listLabel } from "./entity-definitions/label-field";
-import { productCategorySummary } from "./product-category-fields";
-import { fdcId } from "@cubby/usda";
-import { gtin } from "./external-id";
+import locationDefinition from "./entity-definitions/04-location.entity";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { generatedLocationFieldSchemas } from "./generated/entity-field-schemas.location.gen";
-import { numericRangeFields, timestampedFields } from "./base-entity";
-import { amount } from "./codec";
-import { money, moneyNullable } from "./money";
+import { numericRangeFields } from "./base-entity";
+import { money } from "./money";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import {
-  inventoryShortcode,
-  locationShortcode,
-  productShortcode,
-} from "./identifiers";
+import { locationShortcode } from "./identifiers";
 import { firstDisplayableImage, type ImageOut, imageOut } from "./image";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
@@ -23,7 +14,6 @@ import {
   locationType,
   locationValuation,
 } from "./location-fields";
-import { displayImagesField } from "./display-images";
 import { locationBaseFilterFields } from "./generated/location.gen";
 
 export {
@@ -143,11 +133,9 @@ export const locationCoverImage = (loc: {
   // us one from somewhere else; the predicate is the contract, not the mapper.
   firstDisplayableImage<ImageOut>(loc.images, loc.product?.coverImage);
 
-export const locationOutFields = {
-  ...generatedLocationFieldSchemas.read,
-};
+export const locationOutFields = locationDefinition.readSchemas.output.shape;
 
-export const locationOut = z.object(locationOutFields);
+export const locationOut = locationDefinition.readSchemas.output;
 
 export type LocationOut = z.infer<typeof locationOut>;
 
@@ -225,42 +213,8 @@ export const locationPickerItemOut = z.object({
 });
 export type LocationPickerItemOut = z.infer<typeof locationPickerItemOut>;
 
-const locationProductCategory = productCategorySummary;
-
-const locationInventoryProductOut = z.object({
-  id: productShortcode,
-  name: z.string(),
-  primaryGtin: gtin.nullable(),
-  fdc_id: fdcId.nullable(),
-  manufacturer: z.string(),
-  model: z.string().nullable(),
-  notes: z.string().nullable(),
-  expectedQuantity: z.number().int().positive().nullable(),
-  category: locationProductCategory.nullable(),
-  price: moneyNullable,
-  usdaUnavailable: z.boolean().nullable(),
-  ...timestampedFields,
-});
-
-const locationInventoryWithProductOut = z.object({
-  id: inventoryShortcode,
-  amount,
-  valuation: moneyNullable,
-  ...timestampedFields,
-  product: locationInventoryProductOut,
-});
-
-const locationListItemFields = {
-  ...locationOutFields,
-  displayImages: displayImagesField,
-  // Server-composed text for the Valuation column.
-  valuationLabel: listLabel,
-  children: z.array(locationListRefOut),
-  parent: locationListRefOut.nullable(),
-  inventoryEntries: z.array(locationInventoryWithProductOut),
-};
-
-export const locationListItemOut = z.object(locationListItemFields);
+export const locationListItemOut = locationDefinition.readSchemas.list;
+const locationListItemFields = locationListItemOut.shape;
 export type LocationListItemOut = z.infer<typeof locationListItemOut>;
 
 export const locationWithParentNameOut = z.object({
@@ -273,32 +227,12 @@ export type LocationWithParentNameOut = z.infer<
 
 export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
 
-const inventoryItemForTree = z.object({
-  id: inventoryShortcode,
-  amount,
-  productName: z.string(),
-  productId: productShortcode,
-});
-export type InventoryItemForTree = z.infer<typeof inventoryItemForTree>;
-
-export type InfLocation = LocationOut & {
-  children?: InfLocation[];
-  parent?: InfLocation;
-  childCount?: number;
-  directItemCount?: number;
-  totalItemCount?: number;
-  inventoryItems?: InventoryItemForTree[];
-};
-
-export const infLocation: z.ZodType<InfLocation> = z.object({
-  ...locationOutFields,
-  children: z.lazy(() => infLocation.array()).optional(),
-  parent: z.lazy(() => infLocation.optional()),
-  childCount: z.number().int().nonnegative().optional(),
-  directItemCount: z.number().int().nonnegative().optional(),
-  totalItemCount: z.number().int().nonnegative().optional(),
-  inventoryItems: z.array(inventoryItemForTree).optional(),
-});
+export const infLocation = locationDefinition.readSchemas.detail;
+export type InfLocation = z.output<typeof infLocation>;
+export {
+  inventoryItemForTree,
+  type InventoryItemForTree,
+} from "./location-fields";
 
 export const infLocationListOut = z.array(infLocation);
 

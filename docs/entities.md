@@ -825,13 +825,24 @@ must not survive as label conditions in SQL.
 The model owns scalar validation and physical column factories as well as
 presentation. `model.storage` declares stored columns; `create`, `update`,
 `output` and `audit` select fields for their respective consumers.
-The generator emits field schemas and storage factories; canonical schemas
-compose those generated fields with explicit relationship and domain validators.
-Each `entity-field-schemas.<entity>.gen.ts` map is `fieldSchemasOf(definition)`:
-the create/update/read schemas are read off the declaration by roster key at
-load time (never by field index, so a mid-roster insert cannot shift another
-field's schema) and are the declaration's own Zod instances, which is what the
-field-map-drift test checks.
+`defineEntity` constructs the raw `readSchemas.output`, `list`, and `detail`
+objects once. Simple declarations share one base object; domain composers passed
+as its second argument extend or narrow that base in declaration-safe schema
+owners. Product keeps its richer food/detail composition, Location keeps its
+recursive detail shape, and Recipe keeps its lean list. Canonical public exports
+and generated wrappers reuse those instances; relationship and domain schema
+literals have one owner. `model.output` selects the base fields, not the complete
+list/detail roster. Generated field maps still select create/update/read
+validators by key, retaining their original Zod instances.
+
+The base constructor owns the synthesized `dataQuality` field. Its composer
+facts include the declaration's own check-ID enum, built by the same
+`ownDataCheckSchema` helper used by the global generated check catalog. A raw
+composer never imports generated field maps or the generated quality registry.
+Public list/detail consumers and the compiler apply the existing media
+decorators after declarations initialize; those decorators do not belong in
+`defineEntity`, whose Image dependency would cycle.
+
 Generic MCP inputs reuse the canonical create/update contracts. MCP output
 contracts name their audience-specific projections explicitly, which can extend
 canonical outputs; specialized tool digests retain their own projections.
@@ -844,7 +855,6 @@ model: {
     key: "name",
     kind: "text",
     control: { kind: "text" },
-    display: { list: true, detail: true },
     validation: {
       read: z.string(),
       create: z.string().trim().min(1),
@@ -860,8 +870,15 @@ model: {
 Field defaults are non-nullable, a label derived from the camel-case key, and a
 read key equal to that key. Use `labelOverride` for a different label and
 `readKeyOverride: null` for fields without a scalar read
-projection. Missing controls and display flags expose no UI. A reference
-defaults to one entity. A label defaults to the humanized key (a reference
+projection. Missing controls expose no editor. Omitted display flags derive
+from each effective surface schema: the value or reference identity must exist
+and have a supported rendering strategy. A read key or reference declaration
+alone does not establish availability. Explicit `false` omits an eligible field;
+explicit `true` cannot admit an unavailable field. Default-equal flags, labels,
+read keys, column IDs, and list orders fail shared compilation. Fields consumed
+as another field's label or item list default to hidden on both surfaces, so
+helper projections do not become duplicate facts. Other deliberate omissions
+remain explicit. A reference defaults to one entity. A label defaults to the humanized key (a reference
 drops its `Id`; a `<field>Presence` filter field reads "<Field> present").
 Explicit labels, nullability, read keys, and renderers override these
 defaults. Declaration inputs use `display.columnIdOverride` and
@@ -874,8 +891,9 @@ label** for composed presentation text. A reference normally projects
 `<stem>Name` or a nested record's `name`. A custom display label must declare
 `display.labelPath`; both web and native reference renderers read that path
 before the conventional name and preserve the target's identity. Never put an
-identifier in a label projection. `defineEntity` checks label and detail-label
-paths against declared readable Zod fields at TypeScript compile time, including
+identifier in a label projection. `defineEntity` checks simple declarations' label and detail-label paths at
+TypeScript compile time. Shared compilation validates every displayed path
+against its actual decorated list/detail schema, including
 nested properties and array projections. Compile-only schema contracts use
 `*.typecheck.ts` entry points in Knip and run through the schema TypeScript
 check without being imported by the application. The generator also rejects custom
@@ -1156,12 +1174,10 @@ uses the title field's declared width and otherwise keeps the canonical
 `w-64`; contextual `nameClassName` remains the low-level escape hatch. There is
 no second standard-column roster in the browser registry.
 
-`display.detailOrder` optionally orders detail facts independently of model and
-list order; it must be a nonnegative integer. Unspecified facts retain model
-order after explicitly ordered facts. `display.listOrder` does the same for
-generated list columns (model order also drives form field order, so it cannot
-be re-sequenced), and `display.columnId` keeps a stable column id when the
-field key differs — ids are saved layouts, filter bindings, sort ids and
+Compiled `display.detailOrder` places the title first, then follows model order.
+`display.listOrderOverride` orders list columns independently (model order also
+drives form fields); it must be a nonnegative integer differing from the default.
+`display.columnIdOverride` keeps a stable column ID when the field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
 Task and Project assignees use the identifier field’s member-scoped LedgerParty
@@ -1217,15 +1233,22 @@ displays the inherited value beside its `FieldResolutionBadge`, while the
 field itself keeps reading the stored value for edits.
 
 Every list column falls in one of three buckets. A generic column is a
-declared `list: true` scalar rendered by `createEntityDisplayColumns` with no
+schema-eligible scalar with `display.list` enabled, rendered by `createEntityDisplayColumns` with no
 code. A declared column with a named renderer is rendered by the platform's
 manifest registry (a badge, a link, or a relation label) and retains the
 declared label and sort. A legacy override remains only as a migration seam for
 specialist columns not yet manifest-owned. An explicit
 `add()` outside the declaration is reserved for client-hydrated data, relation
 projections, a second projection that hosts a filter control, and the
-synthetic identity column. A `list: true` field with `readKeyOverride: null` needs an
-override; column compilation fails otherwise. `display.listHidden` owns a
+synthetic identity column. A field without a scalar read key needs a valid surface read path, a real nested
+reference identity, or a classified renderer with a proven input projection.
+The compiler traverses dotted keys, `[n]`, and `[]` through optional, nullable,
+lazy, and compatible union schemas; opaque transforms do not invent properties.
+It validates list labels on lists and detail labels/items on detail. Named
+renderers are classified by the existing `native-coverage.ts` owner during
+shared compilation. Whole-row renderers declare their minimum consumed inputs
+beside that disposition. `unsupported` remains a disclosed native gap; compiler
+schema checks do not prove executable web or native registration. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
 field model. `display.valueOptions` is the label/tone roster for an

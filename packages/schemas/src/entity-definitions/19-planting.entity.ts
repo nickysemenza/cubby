@@ -131,7 +131,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "plant" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: plantShortcode,
           create: plantShortcode,
@@ -157,12 +157,7 @@ export default defineEntity({
             },
           ],
         },
-        display: {
-          list: true,
-          detail: true,
-          optionRole: "status",
-          optionColor: "neutral-status",
-        },
+        display: { optionRole: "status", optionColor: "neutral-status" },
         validation: {
           read: plantingOutcome.nullable(),
           create: plantingOutcome.nullable().default(null),
@@ -175,7 +170,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "product" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().default(null),
@@ -188,11 +183,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {
-          list: true,
-          detail: true,
-          mobile: { slot: "subtitle", priority: 10 },
-        },
+        display: { mobile: { slot: "subtitle", priority: 10 } },
         validation: {
           read: locationShortcode.nullable(),
           create: locationShortcode.nullable().default(null),
@@ -205,7 +196,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: taskShortcode.nullable(),
           create: taskShortcode.nullable().default(null),
@@ -246,8 +237,6 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
-          detail: true,
           mobile: { slot: "trailing", priority: 10 },
           optionRole: "status",
           optionColor: "neutral-status",
@@ -263,7 +252,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -275,7 +264,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -287,7 +276,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -299,11 +288,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: {
-          list: true,
-          detail: true,
-          format: "plainDate",
-        },
+        display: { format: "plainDate" },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -315,12 +300,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: {
-          columnLabel: "Transplanted",
-          list: true,
-          detail: true,
-          format: "plainDate",
-        },
+        display: { columnLabel: "Transplanted", format: "plainDate" },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -332,11 +312,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: {
-          list: true,
-          detail: true,
-          format: "plainDate",
-        },
+        display: { format: "plainDate" },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -344,24 +320,28 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "plantName",
         kind: "text",
         nullable: true,
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "sourceProductName",
         kind: "text",
         nullable: true,
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "locationName",
         kind: "text",
         nullable: true,
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "taskName",
         kind: "text",
         nullable: true,
@@ -373,7 +353,7 @@ export default defineEntity({
         key: "guideSowWindow",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         provenance: {
           kind: "derived",
           sources: [{ entity: "plant", relation: "plant" }],
@@ -391,7 +371,7 @@ export default defineEntity({
         key: "guideTransplantWindow",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         provenance: {
           kind: "derived",
           sources: [{ entity: "plant", relation: "plant" }],
@@ -412,11 +392,7 @@ export default defineEntity({
         key: "expectedHarvestStart",
         kind: "date",
         nullable: true,
-        display: {
-          columnLabel: "Harvest",
-          list: true,
-          format: "plainDate",
-        },
+        display: { detail: false, columnLabel: "Harvest", format: "plainDate" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "plant", relation: "plant" }],
@@ -435,6 +411,7 @@ export default defineEntity({
         validation: { read: plainDate.nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "expectedHarvestEnd",
         kind: "date",
         nullable: true,
@@ -446,7 +423,7 @@ export default defineEntity({
         key: "expectedHarvest",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         provenance: {
           kind: "derived",
           sources: [{ entity: "plant", relation: "plant" }],
@@ -461,22 +438,26 @@ export default defineEntity({
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         // `"<plant display name>"`, else "Unknown plant" — the non-null title.
         key: "displayName",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: { read: plantingShortcode, create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "updatedAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },

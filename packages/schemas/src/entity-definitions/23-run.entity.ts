@@ -1,6 +1,5 @@
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
-
 import {
   ledgerPartyShortcode,
   runShortcode,
@@ -253,7 +252,7 @@ export default defineEntity({
         kind: "json",
         labelOverride: "Work",
         display: {
-          list: true,
+          detail: false,
           labelPath: "workProgress.current.label",
           renderer: { list: "run-throughput" },
         },
@@ -268,18 +267,20 @@ export default defineEntity({
         kind: "timestamp",
         labelOverride: "Activity",
         display: {
-          list: true,
+          detail: false,
           labelPath: "activityAt",
           renderer: { list: "run-activity" },
         },
         validation: readOnly(z.iso.datetime().nullable().default(null)),
       },
       {
+        display: { detail: false, list: false },
         key: "iconEntity",
         kind: "text",
         validation: readOnly(z.string()),
       },
       {
+        display: { detail: false, list: false },
         key: "displayName",
         kind: "text",
         validation: readOnly(z.string().min(1)),
@@ -333,8 +334,6 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
-          detail: true,
           width: "sm",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -352,8 +351,6 @@ export default defineEntity({
           })),
         },
         display: {
-          list: true,
-          detail: true,
           width: "sm",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -394,8 +391,6 @@ export default defineEntity({
           ],
         },
         display: {
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Lightning", sfSymbol: "bolt" },
@@ -409,7 +404,7 @@ export default defineEntity({
         // filtering, pagination and counts run on the column everywhere.
         key: "routine",
         kind: "boolean",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.boolean()),
       },
       {
@@ -417,12 +412,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendorAccount" },
-        display: {
-          columnLabel: "Account",
-          list: true,
-          detail: true,
-          labelPath: "vendorAccountLabel",
-        },
+        display: { columnLabel: "Account", labelPath: "vendorAccountLabel" },
         validation: readOnly(vendorAccountShortcode.nullable()),
       },
       {
@@ -430,7 +420,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendor" },
-        display: { list: true, detail: true },
+        display: {},
         validation: readOnly(vendorShortcode.nullable()),
       },
       {
@@ -440,36 +430,33 @@ export default defineEntity({
         // purposes always carry the member scope (`Run_import_party_check`).
         nullable: true,
         reference: { entity: "ledgerParty" },
-        display: {
-          list: true,
-          detail: true,
-        },
+        display: {},
         validation: readOnly(ledgerPartyShortcode.nullable()),
       },
       {
         key: "actorName",
         kind: "text",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string()),
       },
       {
         key: "startedAt",
         kind: "timestamp",
-        display: { list: true, detail: true, format: "timestamp" },
+        display: { format: "timestamp" },
         validation: readOnly(z.date()),
       },
       {
         key: "endedAt",
         kind: "timestamp",
         nullable: true,
-        display: { list: true, detail: true, format: "timestamp" },
+        display: { format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
         key: "retiredAt",
         kind: "timestamp",
         nullable: true,
-        display: { detail: true, format: "timestamp" },
+        display: { list: false, format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
@@ -490,7 +477,7 @@ export default defineEntity({
           ],
         },
         display: {
-          detail: true,
+          list: false,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Archive", sfSymbol: "archivebox" },
@@ -500,7 +487,7 @@ export default defineEntity({
       {
         key: "wallTime",
         kind: "text",
-        display: { detail: true },
+        display: { list: false },
         provenance: {
           kind: "derived",
           sources: [{ label: "Run start and end times" }],
@@ -520,69 +507,69 @@ export default defineEntity({
       {
         key: "ordersSeen",
         kind: "number",
-        display: { list: true, width: "sm" },
+        display: { detail: false, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "imported",
         kind: "number",
-        display: { list: true, width: "sm" },
+        display: { detail: false, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "updated",
         kind: "number",
-        display: { list: true, width: "sm" },
+        display: { detail: false, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "skipped",
         kind: "number",
-        display: { list: true, width: "sm" },
+        display: { detail: false, width: "sm" },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "failureCode",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string().nullable()),
       },
       {
         key: "notes",
         kind: "text",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string().nullable()),
       },
       {
         key: "coordinatorModel",
         kind: "text",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string()),
       },
       {
         key: "skillRevision",
         kind: "text",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string()),
       },
       {
         key: "runtimeRevision",
         kind: "text",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.string()),
       },
       {
         key: "decisionRevision",
         kind: "number",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.number().int()),
       },
       {
         key: "dispatchAttempts",
         kind: "number",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
@@ -590,21 +577,21 @@ export default defineEntity({
         labelOverride: "Failure details",
         kind: "text",
         nullable: true,
-        display: { detail: true, renderer: { detail: "run-failure-details" } },
+        display: { list: false, renderer: { detail: "run-failure-details" } },
         validation: readOnly(z.string().nullable()),
       },
       {
         key: "coordinatorStartedAt",
         kind: "timestamp",
         nullable: true,
-        display: { detail: true, format: "timestamp" },
+        display: { list: false, format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
         key: "auditedAt",
         kind: "timestamp",
         nullable: true,
-        display: { detail: true, format: "timestamp" },
+        display: { list: false, format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
@@ -612,7 +599,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "run" },
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(runShortcode.nullable()),
       },
       {
@@ -620,7 +607,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "run" },
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(runShortcode.nullable()),
       },
       {
@@ -628,7 +615,7 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         display: {
-          detail: true,
+          list: false,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Lightning", sfSymbol: "bolt" },
@@ -646,22 +633,25 @@ export default defineEntity({
         key: "attempt",
         kind: "number",
         nullable: true,
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.number().int().positive().nullable()),
       },
       {
+        display: {},
         key: "vendorAccountLabel",
         kind: "text",
         nullable: true,
         validation: readOnly(z.string().nullable()),
       },
       {
+        display: { detail: false, list: false },
         key: "vendorName",
         kind: "text",
         nullable: true,
         validation: readOnly(z.string().nullable()),
       },
       {
+        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         // Null with `ledgerPartyId` on runs that group AI work.
@@ -669,6 +659,7 @@ export default defineEntity({
         validation: readOnly(z.string().nullable()),
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: readOnly(runShortcode),
@@ -676,13 +667,13 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.date()),
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: readOnly(z.date()),
       },
       { key: "shortcode", kind: "text" },

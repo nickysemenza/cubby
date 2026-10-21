@@ -147,7 +147,7 @@ export default defineEntity({
         key: "purchasedCategories",
         kind: "identifier",
         reference: { entity: "productCategory", multiple: true },
-        display: { detail: true, referencePreviewLimit: 2 },
+        display: { list: false, referencePreviewLimit: 2 },
         validation: {
           read: z.array(purchasedCategorySummary).optional(),
           create: null,
@@ -158,7 +158,7 @@ export default defineEntity({
         key: "principalLineCount",
         provenance: { kind: "derived", sources: [{ entity: "expense" }] },
         kind: "number",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.number().int().optional(),
           create: null,
@@ -172,7 +172,7 @@ export default defineEntity({
           sources: [{ entity: "expense" }, { entity: "product" }],
         },
         kind: "number",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.number().int().optional(),
           create: null,
@@ -180,6 +180,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "defaultSpendingCategoryName",
         kind: "text",
         nullable: true,
@@ -190,6 +191,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "defaultSpendingCategoryEmoji",
         kind: "text",
         nullable: true,
@@ -246,8 +248,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Profile",
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Storefront", sfSymbol: "storefront" },
@@ -270,11 +270,7 @@ export default defineEntity({
             basis: ["name", "website", "notes", "spendingProfile"],
           },
         },
-        display: {
-          columnLabel: "Category",
-          list: true,
-          detail: true,
-        },
+        display: { columnLabel: "Category" },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -282,6 +278,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "fieldResolutions",
         kind: "json",
         validation: {
@@ -332,8 +329,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Item lines",
-          list: true,
-          detail: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -384,7 +379,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "Who are you paying?" },
-        display: { list: true, detail: true, standard: "name" },
+        display: { standard: "name" },
         validation: {
           read: z.string().min(1),
           create: z.string().min(1),
@@ -397,8 +392,6 @@ export default defineEntity({
         nullable: true,
         control: { kind: "text", renderer: "url", placeholder: "https://…" },
         display: {
-          list: true,
-          detail: true,
           format: "external-link",
           width: "md",
           mobile: { slot: "meta", priority: 30, interactive: true },
@@ -414,7 +407,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text", renderer: "url" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z
             .string()
@@ -443,7 +436,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -473,8 +466,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Evidence",
-          list: true,
-          detail: true,
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Receipt", sfSymbol: "receipt" },
@@ -492,7 +483,7 @@ export default defineEntity({
         description:
           "Other names this Vendor trades under. Import finds the Vendor by its name or any alias; Sender proof and Vendor merges add them.",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.array(z.string()),
           create: z.array(z.string()).default([]),
@@ -507,7 +498,7 @@ export default defineEntity({
           kind: "specialized",
           renderer: "tag-list",
         },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: vendorEmailSenderList,
           create: vendorEmailSenderList.default([]),
@@ -522,7 +513,7 @@ export default defineEntity({
           kind: "specialized",
           renderer: "tag-list",
         },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: vendorDomainList,
           create: vendorDomainList.default([]),
@@ -536,7 +527,7 @@ export default defineEntity({
           kind: "specialized",
           renderer: "structured-field",
         },
-        display: { detail: true, detailLabelPath: "agentHintsLabel" },
+        display: { list: false, detailLabelPath: "agentHintsLabel" },
         validation: {
           read: vendorAgentHints,
           create: vendorAgentHints.default({
@@ -556,7 +547,7 @@ export default defineEntity({
           kind: "number",
           placeholder: "Days",
         },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.number().int().nonnegative().nullable(),
           create: z.number().int().nonnegative().nullable().default(null),
@@ -564,6 +555,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: {
@@ -575,12 +567,7 @@ export default defineEntity({
       {
         key: "purchaseCount",
         kind: "number",
-        display: {
-          list: true,
-          detail: true,
-          width: "sm",
-          mobile: { slot: "meta", priority: 20 },
-        },
+        display: { width: "sm", mobile: { slot: "meta", priority: 20 } },
         provenance: {
           kind: "derived",
           sources: [{ entity: "purchase", relation: "purchases" }],
@@ -605,8 +592,6 @@ export default defineEntity({
         // a credit rather than spend. The footer stays exact: `vendorList`
         // returns a `sums.spend` over the whole filtered set.
         display: {
-          list: true,
-          detail: true,
           format: "signedCurrency",
           width: "sm",
           mobile: { slot: "trailing", priority: 5 },
@@ -636,8 +621,6 @@ export default defineEntity({
         nullable: true,
         display: {
           columnLabel: "Last purchase",
-          list: true,
-          detail: true,
           format: "plainDate",
           mobile: { slot: "meta", priority: 35 },
         },
@@ -666,8 +649,6 @@ export default defineEntity({
         nullable: true,
         display: {
           columnLabel: "Mail search",
-          list: true,
-          detail: true,
           width: "sm",
           valueOptions: [
             {
@@ -706,6 +687,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "logo",
         kind: "json",
         nullable: true,
@@ -718,7 +700,7 @@ export default defineEntity({
       {
         key: "createdAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,
@@ -728,7 +710,7 @@ export default defineEntity({
       {
         key: "updatedAt",
         kind: "timestamp",
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.date(),
           create: null,

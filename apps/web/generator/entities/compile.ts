@@ -1,12 +1,23 @@
+import { compileListReadSchema } from "../../src/entity/model/list-read-fields.ts";
+import {
+  withEntityListMedia,
+  withEntityDetailMedia,
+} from "../../../../packages/schemas/src/entity-read-media.ts";
+import type { RawReadSchemas } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+import { resolveFieldDisplay, schemaAtReadPath } from "./presentation.ts";
 import { deriveBulkUpdateFields } from "./bulk.ts";
 import { collectionArraySchema } from "../../../../packages/schemas/src/entity-collection.ts";
 import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
-import { servesKernelGet } from "./list-capabilities.ts";
+import {
+  servesKernelGet,
+  hasGenericListOperation,
+} from "./list-capabilities.ts";
 import { humanize } from "../../../../packages/shared/src/text-case.ts";
 import { parseRangeBounds } from "../../../../packages/shared/src/filter.ts";
 import { compileEnumOptions } from "../../../../packages/shared/src/enum-palette.ts";
 import {
   FILTER_KINDS,
+  defaultReadSchemas,
   parseEntityDeclarationMetadata,
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { z } from "zod";
@@ -55,7 +66,6 @@ import {
   compilePresentation,
   validateRelationSections,
 } from "./presentation.ts";
-
 import { browserRoutes } from "./render/routes.ts";
 
 const SENTINELS = new Set([FILTER_ANY, FILTER_NONE]);
@@ -478,6 +488,35 @@ const storedFieldExplanation = (
   };
 };
 
+const validateFieldOverrides = (
+  field: EntityFieldModelMetadata["fields"][number],
+  context: string,
+  titleField: string,
+  index: number,
+) => {
+  const key = field.key;
+  const inferredLabel = inferredFieldLabel(key, field.reference !== null);
+  if (field.label === inferredLabel)
+    throw new EntityDeclarationError(
+      `${context}.labelOverride is redundant with the inferred label.`,
+    );
+  if (
+    field.readKey !== undefined &&
+    field.readKey === (field.validation.read === null ? null : key)
+  )
+    throw new EntityDeclarationError(
+      `${context}.readKeyOverride is redundant with the declared read schema.`,
+    );
+  if (field.display.columnId === key)
+    throw new EntityDeclarationError(
+      `${context}.display.columnIdOverride is redundant with the field key.`,
+    );
+  if (field.display.listOrder === (key === titleField ? 0 : index + 1))
+    throw new EntityDeclarationError(
+      `${context}.display.listOrderOverride is redundant with model order.`,
+    );
+};
+
 // oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
@@ -486,6 +525,7 @@ const compileFieldModel = (
   entityKey: string,
   titleField: string,
   indexes: NonNullable<EntityDeclarationMetadata["storage"]>["indexes"],
+  readSchemas: RawReadSchemas,
 ): EntityFieldModel => {
   if (value === undefined) {
     return {
@@ -508,6 +548,7 @@ const compileFieldModel = (
   const fields = model.fields.map((field, index): EntityField => {
     const fieldContext = `${entityKey}.${field.key}`;
     const key = field.key;
+    validateFieldOverrides(field, fieldContext, titleField, index);
     if (
       field.kind === "enum" &&
       (field.validation.read !== null ||
@@ -548,7 +589,7 @@ const compileFieldModel = (
         `${fieldContext} cannot declare provenance for a reference field.`,
       );
     const provenance = compileFieldProvenance(field, fieldContext, relations);
-    return {
+    const compiled: EntityField = {
       key,
       kind: field.kind,
       nullable: field.nullable,
@@ -617,8 +658,8 @@ const compileFieldModel = (
         detailOrder: key === titleField ? 0 : index + 1,
         listOrder:
           field.display.listOrder ?? (key === titleField ? 0 : index + 1),
-        list: field.display.list,
-        detail: field.display.detail,
+        list: false,
+        detail: false,
         listHidden: field.display.listHidden ?? false,
         referencePreviewLimit: field.display.referencePreviewLimit ?? null,
         columnLabel: field.display.columnLabel ?? null,
@@ -637,6 +678,22 @@ const compileFieldModel = (
       },
       validation: field.validation,
     };
+    const companion = model.fields.some(
+      (other) =>
+        other.key !== key &&
+        [
+          other.display.labelPath,
+          other.display.detailLabelPath,
+          other.display.itemsPath,
+        ].some((path) => path != null && path === compiled.readKey),
+    );
+    return resolveFieldDisplay(
+      compiled,
+      field.display,
+      readSchemas,
+      entityKey,
+      companion,
+    );
   });
   validateFieldSuggestions(fields, context);
   const isStored = (key: string): boolean =>
@@ -693,34 +750,6 @@ const compileFieldModel = (
         );
     }
     const labelPath = field.display.labelPath;
-    if (
-      field.reference !== null &&
-      !field.reference.multiple &&
-      (field.display.list || field.display.detail)
-    ) {
-      const stem = field.key.replace(/Id$/u, "");
-      const alias = [`${stem}Label`, `${stem}DisplayLabel`].find((key) =>
-        model.output.includes(key),
-      );
-      if (alias && !model.output.includes(`${stem}Name`) && labelPath === null)
-        throw new EntityDeclarationError(
-          `${context}.${field.key} must declare display.labelPath for custom reference label ${alias}.`,
-        );
-      if (labelPath !== null) {
-        const root = labelPath.split(/[.[]/u)[0];
-        if (
-          !model.output.some((key) => {
-            const outputField = model.fields.find(
-              (candidate) => candidate.key === key,
-            );
-            return (outputField?.readKey ?? key) === root;
-          })
-        )
-          throw new EntityDeclarationError(
-            `${context}.${field.key}.display.labelPath must name a read projection.`,
-          );
-      }
-    }
     if (labelPath !== null) {
       if (!DISPLAY_READ_PATH.test(labelPath))
         throw new EntityDeclarationError(
@@ -1917,6 +1946,7 @@ const compiledInspector = (
   fieldModel: EntityFieldModel,
   ports: EntityPorts,
   context: string,
+  readSchemas: RawReadSchemas,
 ): CompiledEntity["inspector"] => ({
   singular: declaration.names.singular,
   plural: declaration.names.plural,
@@ -1928,6 +1958,7 @@ const compiledInspector = (
       capabilities: declaration.capabilities,
       ports,
       hasUpdate: declaration.fields?.update != null,
+      readSchemas,
     },
     `${context}.presentation`,
   ),
@@ -2042,6 +2073,8 @@ export const compileEntity = (
     if (error instanceof Error) throw new EntityDeclarationError(error.message);
     throw error;
   }
+  const rawReadSchemas =
+    declaration.readSchemas ?? defaultReadSchemas(declaration);
   const key = declaration.key;
   if (!/^[a-z][a-zA-Z-]*$/.test(key)) {
     throw new EntityDeclarationError(
@@ -2052,6 +2085,21 @@ export const compileEntity = (
   validateDeclarationCapabilities(declaration, context);
   normalizedDeclarationRelations(declaration.relations, context);
   const descriptor = declarationDescriptor(declaration, context);
+  const readSchemas = {
+    output: rawReadSchemas.output,
+    list:
+      declaration.fields !== null &&
+      declaration.route !== null &&
+      descriptor.browserRoutes !== false
+        ? withEntityListMedia(rawReadSchemas.list)
+        : rawReadSchemas.list,
+    detail:
+      declaration.fields !== null &&
+      (declaration.extensions.ports.repository !== null || key === "image")
+        ? withEntityDetailMedia(rawReadSchemas.detail)
+        : rawReadSchemas.detail,
+  };
+
   const declaredFieldModel = compileFieldModel(
     declaration.model,
     `${context}.model`,
@@ -2059,6 +2107,7 @@ export const compileEntity = (
     key,
     declaration.presentation.titleField,
     declaration.storage?.indexes ?? [],
+    readSchemas,
   );
   const table = compileEntityTable(declaration, declaredFieldModel, context);
   const operationOwners = {
@@ -2071,6 +2120,21 @@ export const compileEntity = (
     key,
     context,
   );
+  if (declaredFieldModel.fields.some((field) => field.readKey !== null)) {
+    for (const surface of ["list", "detail"] as const) {
+      if (
+        !(
+          schemaAtReadPath(
+            readSchemas[surface],
+            declaration.presentation.titleField,
+          ) instanceof z.ZodString
+        )
+      )
+        throw new EntityDeclarationError(
+          `${key}.presentation.titleField is unavailable as text in the actual ${surface} schema.`,
+        );
+    }
+  }
   const filters = declaration.filters;
   const filterAudit = filters.audit === undefined ? false : filters.audit;
   const filterSchema =
@@ -2243,7 +2307,13 @@ export const compileEntity = (
   const route = declaration.route;
   validateRouteCreate(route, fieldModel, context);
   const ports = entityPorts(declaration.extensions.ports);
-  const inspector = compiledInspector(declaration, fieldModel, ports, context);
+  const inspector = compiledInspector(
+    declaration,
+    fieldModel,
+    ports,
+    context,
+    readSchemas,
+  );
   validateSavedViews(
     inspector.list.savedViews,
     fieldModel,
@@ -2346,7 +2416,7 @@ export const compileEntity = (
     shortcode !== null,
     context,
   );
-  return {
+  const compiled: CompiledEntity = {
     key,
     overrides: collectEntityOverrides(raw),
     shortcode,
@@ -2396,6 +2466,24 @@ export const compileEntity = (
     dataQuality,
     classificationPolicies: declaration.capabilities.classificationPolicies,
   };
+  if (hasGenericListOperation(compiled)) {
+    if (!(readSchemas.list instanceof z.ZodObject))
+      throw new EntityDeclarationError(
+        `${key}.readSchemas.list must be an object.`,
+      );
+    try {
+      compileListReadSchema(
+        readSchemas.list,
+        inspector.list.read,
+        inspector.list.read.dependencies,
+      );
+    } catch (error) {
+      throw new EntityDeclarationError(
+        `${key}.presentation.list.read: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return compiled;
 };
 
 export const validateEntityIdentities = (

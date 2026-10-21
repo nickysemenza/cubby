@@ -1,3 +1,5 @@
+import financialTransactionDefinition from "./entity-definitions/14-financialTransaction.entity";
+import { postedRequiresDate } from "./financial-transaction-fields";
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
@@ -228,26 +230,12 @@ export type FinancialTransactionAllocationInput = z.infer<
 const financialTransactionCreateFields =
   generatedFinancialTransactionFieldSchemas.create;
 
-const postedDateStatusSchema = z.object({
-  status: financialTransactionStatus,
-  postedDate: plainDate.nullable(),
-});
-
 const settlementStateSchema = z.object({
   purchaseId: z.string().nullable(),
   allocations: z.array(financialTransactionAllocationInput).optional(),
   kind: financialTransactionKind,
   amount: z.number(),
 });
-
-const postedRequiresDate = <T extends z.ZodType>(schema: T) =>
-  schema.refine(
-    (value) => {
-      const transaction = postedDateStatusSchema.parse(value);
-      return transaction.status !== "posted" || transaction.postedDate !== null;
-    },
-    { message: "posted transactions require postedDate", path: ["postedDate"] },
-  );
 
 /**
  * The refusal when a transaction's allocations do not sum to its amount, compared
@@ -392,9 +380,8 @@ export type MerchantVendorInferenceInput = z.infer<
 export type FinancialTransactionSortField =
   GeneratedEntitySortField<"financialTransaction">;
 
-export const financialTransactionOut = postedRequiresDate(
-  z.object(generatedFinancialTransactionFieldSchemas.read),
-);
+export const financialTransactionOut =
+  financialTransactionDefinition.readSchemas.output;
 export type FinancialTransactionOut = z.infer<typeof financialTransactionOut>;
 
 export const financialTransactionListResponse = createPaginatedResponseSchema(

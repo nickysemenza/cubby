@@ -58,12 +58,7 @@ export default defineEntity({
             { sourceField: "id", targetField: "effectiveSpendingCategoryId" },
           ],
         },
-        display: {
-          list: true,
-          detail: true,
-          width: "lg",
-          referencePreviewLimit: 2,
-        },
+        display: { width: "lg", referencePreviewLimit: 2 },
         validation: {
           read: z
             .array(
@@ -94,7 +89,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         control: { kind: "text" },
-        display: { list: true, detail: true },
+        display: {},
         validation: {
           read: z.string(),
           create: z.string().trim().min(1),
@@ -106,7 +101,7 @@ export default defineEntity({
         kind: "text-array",
         collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: z.array(z.string()),
           create: z.array(z.string()).default([]),
@@ -119,7 +114,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "spendingCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { detail: true },
+        display: { list: false },
         validation: {
           read: code.nullable(),
           create: code.nullable().default(null),
@@ -167,8 +162,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Evidence",
-          list: true,
-          detail: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -226,9 +219,6 @@ export default defineEntity({
         },
         display: {
           columnLabel: "Products",
-          list: true,
-          detail: true,
-          // "Not allowed" is a state too; inferred, it read as a category.
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -239,6 +229,7 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "fieldResolutions",
         kind: "json",
         validation: {
@@ -255,7 +246,7 @@ export default defineEntity({
         nullable: true,
         labelOverride: "Stock tracking",
         control: { kind: "checkbox" },
-        display: { detail: true },
+        display: { list: false },
         resolution: {
           inherit: { from: ["hierarchy"] },
           reset: { stockTracked: null },
@@ -293,16 +284,19 @@ export default defineEntity({
         },
       },
       {
+        display: { detail: false, list: false },
         key: "id",
         kind: "identifier",
         validation: { read: code, create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "createdAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },
       },
       {
+        display: { detail: false, list: false },
         key: "updatedAt",
         kind: "timestamp",
         validation: { read: z.date(), create: null, update: null },

@@ -1,6 +1,8 @@
+import cookbookDefinition from "./entity-definitions/03-cookbook.entity";
+import recipeDefinition from "./entity-definitions/01-recipe.entity";
+import { recipeUsageMcpEntityOut } from "./recipe-fields";
 import { z } from "zod";
 import { batchProgressEvent } from "./batch";
-import { listLabel } from "./entity-definitions/label-field";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { auditDateFilterFields, numericRangeFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -8,14 +10,12 @@ import {
   generatedCookbookFieldSchemas,
   generatedCookbookFilterFields,
 } from "./generated/entity-field-schemas.cookbook.gen";
-import { generatedRecipeFieldSchemas } from "./generated/entity-field-schemas.recipe.gen";
 import { amount } from "./codec";
 import {
   cookbookShortcode,
   ingredientShortcode,
   recipeShortcode,
 } from "./identifiers";
-import { displayImagesField } from "./display-images";
 import { imageUrlSummary } from "./image-summary";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
@@ -26,7 +26,6 @@ import {
 } from "./recipe-shared";
 import {
   recipeIngredientInput,
-  recipeSectionsOut,
   recipeSectionOut,
   ingredientSectionLineOut,
   recipeSectionLineOut,
@@ -65,19 +64,11 @@ export type RecipeRef = z.infer<typeof recipeRefOut>;
 // ingredient in multiple sections. Carries the per-usage provenance (raw imported
 // line, parser-derived modifier) and amounts so ingredient/product detail pages
 // can show usage and surface parser drift.
-export const recipeUsageOut = z.object({
-  id: z.uuid(),
-  recipe: recipeTopLevel,
-  sectionName: z.string().nullish(),
-  amounts: z.array(amount),
-  rawLine: z.string().nullish(),
-  modifier: z.string().nullish(),
-});
-export type RecipeUsage = z.infer<typeof recipeUsageOut>;
-
-/** Public entity-tool projection; the usage row has no public shortcode. */
-export const recipeUsageMcpEntityOut = recipeUsageOut.omit({ id: true });
-
+export {
+  recipeUsageOut,
+  recipeUsageMcpEntityOut,
+  type RecipeUsage,
+} from "./recipe-fields";
 /**
  * Recipe reference as embedded in MCP ingredient reads: identity plus the
  * planning-relevant scalars, minus `notes`/`meta`/`source`/timestamps. A
@@ -122,12 +113,9 @@ export const recipeGraphOut = z.object({
 });
 export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
-export const recipeOutFields = {
-  ...generatedRecipeFieldSchemas.read,
-  sections: recipeSectionsOut,
-};
+export const recipeOutFields = recipeDefinition.readSchemas.output.shape;
 
-export const recipeOut = z.object(recipeOutFields);
+export const recipeOut = recipeDefinition.readSchemas.output;
 
 /** Full recipe output with storage-only section and line identifiers removed. */
 export const recipeMcpEntityOut = recipeOut.extend({
@@ -143,30 +131,7 @@ export const recipeGraphListOut = z.array(recipeGraphOut);
 
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section
 // graph (the list/pickers never read `.sections` — that was the ~4.7s over-fetch).
-export const recipeListItemOut = z.object({
-  ...recipeTopLevelFields,
-  dataQuality: generatedRecipeFieldSchemas.read.dataQuality,
-  totals: recipeTotals.nullish(),
-  // Server-composed text for the computed Cost, Calories and Time columns.
-  costTotalLabel: listLabel,
-  caloriesTotalLabel: listLabel,
-  totalMinutesLabel: listLabel,
-  cost: generatedRecipeFieldSchemas.read.cost,
-  calories: generatedRecipeFieldSchemas.read.calories,
-  protein: generatedRecipeFieldSchemas.read.protein,
-  carbs: generatedRecipeFieldSchemas.read.carbs,
-  fat: generatedRecipeFieldSchemas.read.fat,
-  // Live MealRecipe rows under a live Meal — a soft-deleted Meal's plan
-  // doesn't count. Backs the list's "Meals" column.
-  meals: z.number().int(),
-  /** Live sections. Cheap correlated scalar — the section GRAPH is not on the
-   *  list path (dropping it was the ~4.7s over-fetch fix). */
-  sectionCount: z.number().int(),
-  // The list only ever renders a thumbnail, so the section graph AND the full
-  // image projection stay off this path (loading every image was the same
-  // over-fetch the `totals` comment above dropped `.sections` for).
-  displayImages: displayImagesField,
-});
+export const recipeListItemOut = recipeDefinition.readSchemas.list;
 export type RecipeListItem = z.infer<typeof recipeListItemOut>;
 
 export type RecipeOut = z.infer<typeof recipeOut>;
@@ -187,10 +152,7 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
   total: z.number().int().nonnegative(),
 });
 
-export const cookbookSummary = z.object({
-  ...generatedCookbookFieldSchemas.read,
-  displayImages: displayImagesField,
-});
+export const cookbookSummary = cookbookDefinition.readSchemas.output;
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
 
 export const cookbookFilterFields = {

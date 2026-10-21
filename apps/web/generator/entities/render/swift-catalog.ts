@@ -26,6 +26,7 @@ import {
   type NativeHeroActionPlan,
   nativeCollectionActionPlans,
   nativeCoverage,
+  requireNativeCoverage,
   nativeHeroActionPlans,
 } from "../../../../../packages/schemas/src/native-coverage.ts";
 import { SECTION_ACTION_IDS } from "../../../../../packages/schemas/src/entity-section-actions.ts";
@@ -805,16 +806,15 @@ export const renderSwiftEntityCatalog = (
     kind: keyof typeof nativeCoverage,
     ids: readonly string[],
   ) => {
-    const declared: Readonly<Record<string, NativeCoverageEntry>> =
-      nativeCoverage[kind];
     return Object.fromEntries(
       ids.map((id) => {
-        const entry = declared[id];
-        if (entry === undefined)
-          throw new Error(
-            `packages/schemas/src/native-coverage.ts does not classify ${kind} ${JSON.stringify(id)}.`,
-          );
-        return [id, entry];
+        const entry = requireNativeCoverage(kind, id);
+        return [
+          id,
+          entry.status === "unsupported"
+            ? { status: entry.status, reason: entry.reason }
+            : { status: entry.status },
+        ];
       }),
     );
   };
