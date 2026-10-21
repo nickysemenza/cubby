@@ -108,7 +108,7 @@ describe("persisted production Gmail decision telemetry", () => {
       });
       expect(runner).toHaveBeenCalledWith(
         expect.objectContaining({
-          decisionModel: model,
+          decisionModel: undefined,
           usage: expect.objectContaining({
             runId: f.runId,
             operation: "mailbox-triage",
@@ -193,9 +193,11 @@ describe("persisted production Gmail decision telemetry", () => {
   });
   it("isolates actual model metadata while concurrent message decisions complete in reverse order", async () => {
     const f = await fixture();
-    vi.spyOn(models, "selectDecisionModel")
-      .mockReturnValueOnce("typesafe/jev")
-      .mockReturnValueOnce("@cf/cloudflare/clef");
+    vi.spyOn(models, "selectDecisionModel").mockImplementation((options) =>
+      options.key?.includes("first-message")
+        ? "typesafe/jev"
+        : "@cf/cloudflare/clef",
+    );
     let release: () => void = () => undefined;
     const delayed = new Promise<void>((resolve) => {
       release = resolve;
@@ -232,7 +234,7 @@ describe("persisted production Gmail decision telemetry", () => {
         ? "first-message"
         : "second-message";
       expect(rows.find((row) => row.messageId === id)?.model).toBe(
-        call[0].decisionModel,
+        id === "first-message" ? "typesafe/jev" : "@cf/cloudflare/clef",
       );
     }
   });

@@ -39,7 +39,7 @@ type InsertClient = Pick<ReturnType<typeof drizzle>, "insert">;
  */
 export const SEEDED_RULE_REVISIONS = {
   "field.addition": "2026-10-20.1",
-  "statement_transaction.attach": "2026-10-20.1/2026-10-17.1",
+  "statement_transaction.attach": "2026-10-20.1/2026-10-20.1",
 } as const;
 
 export async function seedBaseWorld(db: InsertClient): Promise<void> {
