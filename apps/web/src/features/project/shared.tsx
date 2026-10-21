@@ -33,12 +33,6 @@ import { badgeVariantColor } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 export { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
-export {
-  nivoBarChrome,
-  nivoChartTheme,
-  nivoCurrencyAxis,
-} from "~/lib/nivo-theme";
-export { TradeBadge } from "./trade-badge";
 
 export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   const { icon: Icon, variant } = getStatusBadgeProps("project", status);

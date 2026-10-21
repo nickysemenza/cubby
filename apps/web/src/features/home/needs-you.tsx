@@ -30,7 +30,7 @@ const NEEDS_YOU_INPUT = workQueueHouseholdInput.parse({
   pageSize: 3,
 });
 
-export const NEEDS_YOU_SEARCH = {
+const NEEDS_YOU_SEARCH = {
   view: "review",
   waitingFor: CURRENT_MEMBER_FILTER,
 } as const;

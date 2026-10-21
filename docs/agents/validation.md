@@ -25,7 +25,12 @@ deterministic content-hash merge gate.
 Keep an isolated test only when its named failure cannot reasonably be observed
 by the retained flow or an existing compiler/generator guard. Remove tests of
 declarations, constants, source spelling and mocks, repeated cases of the same
-shared primitive, and copy-only assertions. An accessible action name used to
+shared primitive, and copy-only assertions. Do not render empty pages across
+the entity catalog to compare section headings with the same declarations or
+to repeat a shared column-composition check. Required populated capability
+tests own shared rendering regressions; retain focused purpose-specific cases
+and real route composition journeys. A test must not eagerly import every
+feature to warm a catalog matrix; let only its rendered lazy fills load. An accessible action name used to
 drive a real interaction still has value; incidental wording is not an outcome.
 Never assert the size, non-emptiness, or exact membership of a growing declared
 set (the entity catalog, manifest, registries, generated output) or count a

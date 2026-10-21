@@ -15,10 +15,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  detailEntities,
-  getEntityDetailOutputSchema,
-} from "~/entity/generated/entity-details.gen";
+import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
 import {
@@ -35,26 +32,6 @@ import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { GenericEntityDetail } from "./generic-entity-detail";
 
 installFeatures();
-// Every declared section renders here, so its lazy fills load at module top
-// level (no hook timeout there): a fill still importing when the file ended
-// timed out its `dynamicImportSettled` wait under load.
-await Promise.all(
-  Object.values(
-    import.meta.glob([
-      "~/features/**/*.tsx",
-      "!**/*.test.tsx",
-      "!**/*.preview.tsx",
-    ]),
-  ).map((load) => load()),
-);
-
-const genericDetailEntities: readonly GenericDetailEntity[] = [
-  ...detailEntities,
-  "image",
-  "cookbook",
-  "run",
-];
-
 const pending = { status: "pending", reason: "totals_missing" } as const;
 const emptyTotals = {
   cost: pending,
@@ -141,34 +118,6 @@ describe("GenericEntityDetail", () => {
     cleanup();
     harness.dispose();
   });
-
-  // Every declared section must coexist on the continuous page. Render once
-  // per entity; continuous-detail.spec.ts owns hash navigation and history.
-  // Slot sections retain their registry-specific tests.
-  it.each(genericDetailEntities)(
-    "%s renders all declared non-slot sections together",
-    async (entity) => {
-      await harness.router.navigate({ to: "/" });
-      const { container } = render(
-        <GenericEntityDetail
-          entity={entity}
-          record={recordFor(entity)}
-          operations={operations}
-        />,
-        { wrapper: harness.wrapper },
-      );
-      for (const section of entitySummary[entity].detail.sections) {
-        if (section.kind === "slot") continue;
-        const element = container.querySelector(`section#${section.id}`);
-        if (!(element instanceof HTMLElement))
-          throw new Error(`${entity} did not render section ${section.id}`);
-        // The facts section is the aside's own h2; the rest sit under a group.
-        expect(within(element).getAllByRole("heading")[0]).toHaveTextContent(
-          section.title ?? "",
-        );
-      }
-    },
-  );
 
   // AI runs had no page before Run moved onto the generic detail: the
   // purchase-import page scoped to a member party. Their page must show what

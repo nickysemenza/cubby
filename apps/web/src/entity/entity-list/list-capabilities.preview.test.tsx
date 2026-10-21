@@ -157,6 +157,12 @@ it("fits populated declared money, count, date and identifier columns", async ()
   await page.viewport(1440, 900);
   await mount("/products?view=table");
   const link = await screen.findByRole("link", { name: productName });
+  // Product declares `images`; generic composition must not prepend `image` too.
+  expect(
+    document.querySelectorAll(
+      'thead th[data-column-id="image"], thead th[data-column-id="images"]',
+    ),
+  ).toHaveLength(1);
   const row = link.closest("tr");
   expect(row).not.toBeNull();
   const width = (id: string) => {
