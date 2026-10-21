@@ -172,8 +172,9 @@ checks; there is no alternate compiler selector or second compiler pass.
 The shared launcher uses one checker per process, including declaration
 producers and imported tooling callers. Parallel checkers duplicate the type
 graph; five worktrees need lower per-session memory more than one check needs
-all the cores. Programs within a session still run sequentially, with no
-machine-wide queue or memory watchdog. Keep `--build` first when invoking the
+all the cores. Programs within `typecheck:web` still run sequentially; the full
+workspace command permits two package checks at once. There is no machine-wide
+queue or memory watchdog. Keep `--build` first when invoking the
 launcher; it appends the checker policy after the caller's arguments.
 
 Runtime Vite imports continue to load real source. Compiler paths alone redirect
