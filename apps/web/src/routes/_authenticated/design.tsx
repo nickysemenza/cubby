@@ -23,6 +23,7 @@ import {
   SectionCompositionsSection,
   QualityChartsSection,
 } from "~/features/design/sections/compositions-section";
+import { EntityLinksSection } from "~/features/design/sections/entity-links-section";
 import {
   LocationTreeSection,
   RecipeUnitsSection,
@@ -151,6 +152,19 @@ const GROUPS: IndexedSectionGroup[] = [
           />
         ),
         content: <DisclosureSection />,
+      },
+      {
+        id: "entity-links",
+        title: "EntityRefLink",
+        icon: ListBulletsIcon,
+        overflowVisible: true,
+        description: (
+          <ComponentsLine
+            components={["EntityRefLink"]}
+            source={["entity/components/entity-ref-link.tsx"]}
+          />
+        ),
+        content: <EntityLinksSection />,
       },
       {
         id: "facts",
@@ -349,7 +363,7 @@ const GROUPS: IndexedSectionGroup[] = [
       },
       {
         id: "values",
-        title: "Dates, pills and filters",
+        title: "Dates, pills and table values",
         icon: CalendarBlankIcon,
         overflowVisible: true,
         description: (
@@ -358,12 +372,18 @@ const GROUPS: IndexedSectionGroup[] = [
               "DateDisplay",
               "EnumPill",
               "GapChipCluster",
+              "StackedValue",
+              "ChipCluster",
+              "MiddleTruncate",
               "FilterBar",
             ]}
             source={[
               "ui/common/date-display.tsx",
               "ui/primitives/enum-pill.tsx",
               "entity/work-queue/work-queue-display.tsx",
+              "ui/common/stacked-value.tsx",
+              "ui/common/chip-cluster.tsx",
+              "ui/common/middle-truncate.tsx",
               "ui/data-table/filter-bar.tsx",
             ]}
           />

@@ -213,7 +213,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     };
   }, [entity, hasUnitMappings]);
   // Declared per entity (`list.titleSubtitle`): the identity's second line
-  // is the record's caption, as on its shelf card.
+  // uses the shelf caption without repeating dedicated list fields.
   const titleCaption = useMemo(() => {
     if (
       !isBrowserRoutedEntity(entity) ||
@@ -222,7 +222,9 @@ export function useStandardColumns<TData extends BaseListRow>({
       return undefined;
     return (row: TData) => {
       const parsed = captionRowSchema.safeParse(row);
-      return parsed.success ? recordCaption(entity, parsed.data) : undefined;
+      return parsed.success
+        ? recordCaption(entity, parsed.data, { excludeListFields: true })
+        : undefined;
     };
   }, [entity]);
   const identityWidth = useMemo(() => {
