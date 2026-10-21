@@ -239,7 +239,6 @@ import {
   foldGtinIntoExternalIds,
   requireCanonicalGtin,
   resolvePrimaryProductCodeInput,
-  syncPrimaryGtin,
   syncProductExternalIds,
   syncProductImages,
   productGallerySnapshot,
@@ -1971,7 +1970,8 @@ export async function updateProduct<TOutput>(
     }
     if (externalIdPatchItems !== undefined)
       await applyProductExternalIdPatch(tx, id, externalIdPatchItems);
-    if (incomingGtin !== undefined) await syncPrimaryGtin(tx, id, incomingGtin);
+    if (incomingGtin !== undefined)
+      await applyPrimaryBarcode(tx, id, incomingGtin);
   };
 
   try {
@@ -2345,6 +2345,49 @@ const applyProductExternalIdPatch = async (
   );
 };
 
+/** The entry shortcut uses the same atomic collection mutation as explicit edits. */
+const applyPrimaryBarcode = async (
+  tx: DrizzleTransaction,
+  id: ProductId,
+  value: string | null,
+) => {
+  const primary =
+    value === null
+      ? await tx.query.entityExternalId.findFirst({
+          where: and(
+            eq(entityExternalId.entityId, id),
+            eq(entityExternalId.source, GTIN_SOURCE),
+            eq(entityExternalId.kind, GTIN_KIND),
+            eq(entityExternalId.isPrimary, true),
+            notDeleted(entityExternalId),
+          ),
+          columns: { externalId: true },
+        })
+      : undefined;
+  const patch: ExternalIdPatch =
+    value !== null
+      ? [
+          {
+            op: "add",
+            key: { source: GTIN_SOURCE, kind: GTIN_KIND, externalId: value },
+            value: { isPrimary: true },
+          },
+        ]
+      : primary
+        ? [
+            {
+              op: "remove",
+              key: {
+                source: GTIN_SOURCE,
+                kind: GTIN_KIND,
+                externalId: primary.externalId,
+              },
+            },
+          ]
+        : [];
+  if (patch.length) await applyProductExternalIdPatch(tx, id, patch);
+};
+
 interface QuickCreateProductInput {
   name: string;
   manufacturer?: string;
@@ -2420,7 +2463,7 @@ export const quickCreateProductRecord = async (
       : await insertWithShortcode(tx, "product", values);
 
     if (incomingGtin != null) {
-      await syncPrimaryGtin(tx, inserted.id, incomingGtin);
+      await applyPrimaryBarcode(tx, inserted.id, incomingGtin);
     }
 
     await logAuditEntry(tx, actor, {

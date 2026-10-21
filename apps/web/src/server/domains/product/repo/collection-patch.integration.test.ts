@@ -91,6 +91,31 @@ describe("collection patches through entity.update", () => {
     externalId,
   });
 
+  it("the barcode shortcut promotes without replacing evidence and clears only its primary", async () => {
+    const code = await create("Shortcut identity drill", {
+      barcode: "012345678905",
+      externalIds: [asin("B0SHORT001")],
+    });
+    const before = (await read(code)).externalIds;
+    await update(code, { barcode: "036000291452" });
+    const promoted = (await read(code)).externalIds;
+    expect(promoted).toEqual(
+      expect.arrayContaining(
+        before.map((row) => ({
+          ...row,
+          isPrimary: row.kind === "gtin_14" ? false : row.isPrimary,
+        })),
+      ),
+    );
+    expect(promoted).toContainEqual(
+      expect.objectContaining({ ...gtin("00036000291452"), isPrimary: true }),
+    );
+    await update(code, { barcode: null });
+    const cleared = (await read(code)).externalIds;
+    expect(cleared).toHaveLength(before.length);
+    expect(cleared).toEqual(expect.arrayContaining(before));
+  });
+
   it("adding identifiers preserves existing values and primary, and explicit promotion retains both", async () => {
     const code = await create("Patch drill", {
       externalIds: [{ ...asin("B0PATCH001"), url: null }],

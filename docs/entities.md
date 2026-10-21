@@ -2991,6 +2991,8 @@ ISBN input; `primaryGtin` remains a derived read of `externalIds`. Omission
 leaves identity alone; null retires only the current primary barcode and the
 oldest remaining barcode is promoted. Setting the shortcut selects the primary
 without removing other identifiers. Collection replacement stays explicit.
+The shortcut builds a collection add/promotion or targeted remove; it shares
+the collection writer's collision checks and primary repair.
 Books inference comes from validated ISBN identity in the collection, with
 Food evidence taking precedence; the barcode editor is available in every category.
 

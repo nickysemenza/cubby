@@ -394,7 +394,7 @@ describe("entity edit definitions", () => {
   // (`{id,a,b,source}`) before the Date ever reaches the form, and an
   // untouched edit stays a no-op — in particular the write-only `barcode`
   // (`readKey: null`, seeded `null`) must not reach the wire as `barcode: null`,
-  // which `syncPrimaryGtin` would read as "retire the primary GTIN".
+  // which the collection writer would read as "retire the primary GTIN".
   it.each([
     {
       servingGrams: 30,
