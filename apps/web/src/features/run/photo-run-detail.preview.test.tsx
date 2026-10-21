@@ -1,4 +1,12 @@
-import { imageShortcode, shortcode } from "@cubby/schemas/identifiers";
+import {
+  imageShortcode,
+  productShortcode,
+  shortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  photoProductCandidate,
+  photoRunCandidatesResponse,
+} from "@cubby/schemas/photo-import-run";
 import type {
   PhotoGroupProposal,
   PhotoRunImage,
@@ -6,17 +14,20 @@ import type {
 } from "@cubby/schemas/photo-import-run";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { page, userEvent } from "vitest/browser";
 
 import type { RunDetail } from "~/contracts/run.contract";
 import { installFeatures } from "~/features/registry";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { mock } from "~/lib/test/mock-schema";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 
 import { PhotoImportRunView } from "./photo-run-detail";
 
 installFeatures();
+const initialUrl = window.location.href;
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: (() => void) | undefined;
@@ -125,6 +136,9 @@ const run: RunDetail = {
   latestProgress: null,
 };
 
+// Native state tests need a decodable local image, not an unreachable CDN.
+const photoDataUrl = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="gray"/></svg>')}`;
+
 const photo = (
   id: string,
   position: number,
@@ -142,8 +156,8 @@ const photo = (
   capturedAtOffsetMinutes: null,
   targetState,
   skipReason: null,
-  originalUrl: `https://img.example.com/${id}.jpg`,
-  cutoutUrl: text.cutout ? `https://img.example.com/${id}-cutout.png` : null,
+  originalUrl: `${photoDataUrl}#${id}`,
+  cutoutUrl: text.cutout ? `${photoDataUrl}#${id}-cutout` : null,
   cutout: null,
   describe: null,
   describeStartedAt: null,
@@ -216,7 +230,8 @@ const committedSweater: PhotoGroupProposal = {
   updatedAt: "2026-09-20T16:04:00.000Z",
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await page.viewport(1440, 900);
   harness = createBrowserTestHarness();
   harness.queryClient.setQueryData(
     photoImport.review.queryKey({ runId: RUN_ID }),
@@ -228,7 +243,7 @@ afterEach(() => {
   restoreDispatch?.();
   restoreDispatch = undefined;
   harness.dispose();
-  window.history.replaceState(null, "", "/");
+  window.history.replaceState(null, "", initialUrl);
   vi.unstubAllGlobals();
 });
 
@@ -447,9 +462,8 @@ describe("PhotoImportRunView", () => {
     expect(await screen.findByText("Progress")).toBeInTheDocument();
 
     // Progress tally derived from `run.targets`, not from the review fetch.
-    const progress = screen
-      .getByText("Progress")
-      .closest("section") as HTMLElement;
+    const progress = screen.getByText("Progress").closest("section");
+    if (!progress) throw new Error("Photo progress section is missing");
     expect(
       within(progress).getByRole("progressbar", { name: "Photos reviewed" }),
     ).toHaveAttribute("aria-valuenow", "2");
@@ -578,4 +592,200 @@ describe("PhotoImportRunView", () => {
     } satisfies PhotoRunReview);
     await waitFor(() => expect(approveItem).toBeEnabled());
   });
+});
+
+const proposedSweater: PhotoGroupProposal = {
+  ...committedSweater,
+  state: "proposed",
+  committedProduct: null,
+  committedAt: null,
+  images: [{ id: shortcode("IMG-4K7M"), purpose: "item" }],
+};
+
+function presentProposal(proposal = proposedSweater) {
+  harness.queryClient.setQueryData(
+    photoImport.review.queryKey({ runId: RUN_ID }),
+    {
+      ...review,
+      review: { ...review.review, proposals: [proposal] },
+      images: review.images.map((image) => ({
+        ...image,
+        targetState: "pending",
+        describe: "ready",
+      })),
+    } satisfies PhotoRunReview,
+  );
+}
+
+it("retries a failed candidate read without disabling approval", async () => {
+  await page.viewport(402, 874);
+  presentProposal();
+  let calls = 0;
+  restoreDispatch = overrideStartDispatch(async (operation) => {
+    if (operation !== "photoImport.candidatesBatch")
+      throw new Error(`Unexpected operation ${operation}`);
+    calls++;
+    return {
+      ok: true,
+      data: photoRunCandidatesResponse.parse({
+        groups: [
+          {
+            groupKey: proposedSweater.groupKey,
+            status: calls === 1 ? "failed" : "ready",
+            error: calls === 1 ? "Synthetic candidate check unavailable" : null,
+            candidates: [],
+            rejectedCandidates: [],
+            selectedComparison: null,
+          },
+        ],
+      }),
+    };
+  });
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  expect(await screen.findByText("Couldn't check ·")).toBeVisible();
+  expect(
+    screen.getByText("Synthetic candidate check unavailable"),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Create product" })).toBeEnabled();
+  await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(
+    await screen.findByText("No matching existing Products."),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Create product" })).toBeEnabled();
+  expect(calls).toBe(2);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(402);
+});
+
+it("keeps a weak candidate behind Compare instead of presenting a duplicate warning", async () => {
+  presentProposal();
+  const candidate = mock(photoProductCandidate, {
+    overrides: {
+      id: productShortcode.parse("PRD-4K7M"),
+      name: "Synthetic related sweater",
+      duplicateStrength: "weak",
+      coverUrl: null,
+      match: {
+        source: "catalog_name",
+        sharedNameTerms: ["sweater"],
+        brandMatches: false,
+      },
+    },
+  });
+  answerOperations(
+    photoRunCandidatesResponse.parse({
+      groups: [
+        {
+          groupKey: proposedSweater.groupKey,
+          status: "ready",
+          error: null,
+          candidates: [candidate],
+          rejectedCandidates: [],
+          selectedComparison: null,
+        },
+      ],
+    }),
+  );
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  expect(
+    await screen.findByRole("button", { name: "Compare existing Products" }),
+  ).toBeVisible();
+  expect(screen.queryByText(candidate.name)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Possible duplicate:/)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Create product" })).toBeEnabled();
+});
+
+it.each(["description", "cutout"] as const)(
+  "treats %s failure according to the server approval boundary",
+  async (failure) => {
+    const proposal = {
+      ...proposedSweater,
+      blockedReason:
+        failure === "description" ? "AI description needs retry" : null,
+    };
+    harness.queryClient.setQueryData(
+      photoImport.review.queryKey({ runId: RUN_ID }),
+      {
+        ...review,
+        review: { ...review.review, proposals: [proposal] },
+        images: review.images.map((image) => ({
+          ...image,
+          targetState: "pending",
+          describe: failure === "description" ? "failed" : "ready",
+          describeReason:
+            failure === "description" ? "Synthetic description failure" : null,
+          cutout: failure === "cutout" ? "failed" : null,
+          cutoutReason:
+            failure === "cutout" ? "Synthetic cutout failure" : null,
+        })),
+      } satisfies PhotoRunReview,
+    );
+    answerOperations({ groups: [] });
+    render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+    const notice = await screen.findByText(
+      failure === "description"
+        ? /Description failed: Synthetic description failure/
+        : /Optional cutout failed: Synthetic cutout failure/,
+    );
+    expect(notice).toBeVisible();
+    expect(
+      within(notice).getByRole("link", { name: "Open photo to retry" }),
+    ).toHaveAttribute("href", "/images/IMG-4K7M");
+    const approve = screen.getByRole("button", { name: "Create product" });
+    expect(approve).toHaveProperty("disabled", failure === "description");
+  },
+);
+
+it("shows exact-identifier evidence without hiding a conflicting size", async () => {
+  const observedName = "Synthetic work boots size 7";
+  presentProposal({
+    ...proposedSweater,
+    product: { kind: "create", create: { name: observedName } },
+  });
+  const candidate = mock(photoProductCandidate, {
+    overrides: {
+      id: productShortcode.parse("PRD-4K7M"),
+      name: "Synthetic work boots size 9",
+      duplicateStrength: "strong",
+      coverUrl: null,
+      match: {
+        source: "catalog_name",
+        sharedNameTerms: ["boots"],
+        brandMatches: false,
+        matchedIdentifiers: ["EXAMPLE-7744"],
+        variant: {
+          color: { relation: "same" },
+          size: { relation: "different" },
+          evidence: {
+            firstTitle: observedName,
+            secondTitle: "Synthetic work boots size 9",
+          },
+        },
+      },
+    },
+  });
+  answerOperations(
+    photoRunCandidatesResponse.parse({
+      groups: [
+        {
+          groupKey: proposedSweater.groupKey,
+          status: "ready",
+          error: null,
+          candidates: [candidate],
+          rejectedCandidates: [],
+          selectedComparison: null,
+        },
+      ],
+    }),
+  );
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  expect(await screen.findByText(/Possible duplicate:/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Compare" }));
+  expect(screen.getByText("Exact identifier")).toBeVisible();
+  expect(screen.getByText("Titles conflict — check evidence")).toBeVisible();
+  await userEvent.click(screen.getByText("Original comparison text"));
+  expect(screen.getByText(`Photo: ${observedName}`)).toBeVisible();
+  expect(
+    screen.getByText("Product: Synthetic work boots size 9"),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Choose Product" })).toBeEnabled();
 });
