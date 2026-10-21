@@ -3,6 +3,7 @@ import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
+import { processConnectionRetirementPage } from "~/server/generic/derived-refresh/repo/connection-retirement";
 import { processDerivedRefreshPage as processPage } from "~/server/generic/derived-refresh/repo/process";
 import type {
   DerivedRefreshPorts,
@@ -77,6 +78,7 @@ export const derivedRefreshDrivers: StepRunDrivers = async () => [
         await retryDerivedRefreshFailures(db);
         await retryEmbeddingArtifactFailures(db);
       }
+      const connections = await processConnectionRetirementPage(db);
       const statements = await processStatementRetirementPage(db);
       if (!statements.done)
         return {
@@ -85,6 +87,21 @@ export const derivedRefreshDrivers: StepRunDrivers = async () => [
           delta: { done: statements.processed, failed: 0 },
         };
       const page = await processDerivedRefreshPage(db);
+      // Edits may keep the connection epoch dirty; its scan must not starve
+      // projection/frontier work that is also needed to settle those inputs.
+      if (!connections.done)
+        return {
+          kind: "progress",
+          done: false,
+          delta: {
+            done: connections.processed + page.processed,
+            failed: page.errors.length,
+          },
+          errors: page.errors.map((message) => ({
+            at: new Date().toISOString(),
+            message,
+          })),
+        };
       const artifacts = page.done
         ? await recoverEmbeddingArtifactsPage(db)
         : null;

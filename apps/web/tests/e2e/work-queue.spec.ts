@@ -410,3 +410,40 @@ test("Record Work queue strip drops a gap as soon as it is accepted", async ({
     "No model or external identifier is recorded.",
   );
 });
+
+// Tab counts share the page population; separate one-row reads repeat every
+// expensive preparation and can exhaust a batched Work queue invocation.
+test("Work queue loads all tab counts with its page read", async ({
+  page,
+}, testInfo) => {
+  const prefix = uniqueName(testInfo, "Shared queue counts");
+  const item = await seedProductPrerequisite(page, { name: prefix });
+  const calls: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    const suffix = path.split("/api/operations/")[1];
+    if (!suffix) return;
+    calls.push(
+      ...(suffix.startsWith("batch~")
+        ? suffix.slice(6).split(",")
+        : [suffix]
+      ).filter((name) => name === "workQueue.list"),
+    );
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/work-queue?query=${encodeURIComponent(prefix)}&source=research`,
+  );
+  await expect(
+    page
+      .getByRole("list", { name: "Work queue", exact: true })
+      .getByRole("link", { name: prefix, exact: true }),
+  ).toHaveAttribute("href", `/products/${item.id}`);
+  const views = page.getByRole("navigation", { name: "Work views" });
+  for (const label of ["All", "Review", "Research", "Waiting", "Automatic"]) {
+    await expect(
+      views.getByRole("button", { name: new RegExp(`^${label}\\s*\\d+$`) }),
+    ).toBeVisible();
+  }
+  expect(calls).toEqual(["workQueue.list"]);
+});

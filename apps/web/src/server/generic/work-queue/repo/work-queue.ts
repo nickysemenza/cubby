@@ -14,7 +14,6 @@ import {
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
-import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
@@ -46,7 +45,7 @@ import {
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER, parseShortcode } from "@cubby/shared";
-import { inArray, or, sql, type SQL } from "drizzle-orm";
+import { or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
@@ -64,7 +63,6 @@ import {
   run as runTable,
   assessmentState as suggestionTable,
 } from "~/server/db/schema";
-import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
 import { buildEmailWhere } from "~/server/domains/email/repo/email";
 import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
@@ -212,40 +210,15 @@ async function workQueueProjection(
 ): Promise<SQL> {
   const selections: SQL[] = [];
   if (!scope.check) {
-    // Use the same currentness check as Relations before counting or paginating Work.
-    // A record's Work covers both ends of a connection, so the record may be
-    // either the Assessment's source or its candidate's target.
+    // Background retirement maintains pending state. Reads never rebuild the
+    // population's evidence; application still revalidates inside its transaction.
     const target = (field: "entityId" | "entityKind") =>
-      sql`prediction.evidence->'candidate'->${"target"}->>${field}`;
+      sql`prediction.target->>${field}`;
     const touches = scope.record
       ? sql`AND ((root.kind=${scope.record.entity} AND root.shortcode=${scope.record.id})
           OR (${target("entityKind")}=${scope.record.entity} AND ${target("entityId")}=${scope.record.id}))`
       : sql``;
-    const pending = await getDb(db)
-      .execute(sql`SELECT DISTINCT root.kind AS "entityKind", root.shortcode AS "entityId"
-      FROM "AssessmentState" current JOIN "Assessment" prediction ON prediction.id=current.id
-      JOIN "Entity" root ON root.id=current."recordId" AND root.kind=current.entity
-      WHERE current.active AND current.status=${suggestionStatus.enum.pending}
-        AND prediction.subject->>'scope' LIKE 'connection.%'
-        AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL ${touches}`);
-    const sources = z.array(entityGraphRootSchema).parse(pending.rows);
-    const freshIds: string[] = [];
-    for (let offset = 0; offset < sources.length; offset += 250) {
-      const groups = await readEntityConnectionsBatch(
-        db,
-        sources.slice(offset, offset + 250),
-      );
-      freshIds.push(
-        ...groups
-          .flat()
-          .filter(
-            (proposal) => proposal.integration.kind === "connection-review",
-          )
-          .map((proposal) => proposal.review.assessmentId),
-      );
-    }
     const reviewable = sql`current.family = ${assessmentFamily.enum.recommendation} AND current.active AND current.status = ${suggestionStatus.enum.pending}
-        AND ${freshIds.length ? inArray(sql`current.id`, freshIds) : sql`false`}
         AND prediction.subject->>'scope' LIKE 'connection.%'
         AND root."deletedAt" IS NULL AND root."mergedIntoId" IS NULL
         AND NOT EXISTS (SELECT 1 FROM "Feedback" reviewed WHERE reviewed."assessmentId" = prediction.id
@@ -265,7 +238,7 @@ async function workQueueProjection(
       'Review the proposed connections and their evidence on the Suggestions page.'::text AS "nextAction",
       ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
       FROM "AssessmentState" current
-      JOIN "Assessment" prediction ON prediction.id = current.id
+      JOIN work_connection_prediction prediction ON prediction.id = current.id
       JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
       LEFT JOIN "Entity" self ON self.kind = ${entity} AND self.shortcode = ${id}
       LEFT JOIN "SearchDocument" document ON document."entityId" = self.id AND document."entityKind" = self.kind AND document."deletedAt" IS NULL
@@ -279,7 +252,7 @@ async function workQueueProjection(
       'Review them on the Suggestions page.'::text AS "nextAction",
       ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
       FROM "AssessmentState" current
-      JOIN "Assessment" prediction ON prediction.id = current.id
+      JOIN work_connection_prediction prediction ON prediction.id = current.id
       JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
       WHERE ${reviewable}
       HAVING count(*) > 0`);
@@ -427,27 +400,6 @@ async function workQueueProjection(
   // One row for the whole family, never one per Suggestion: the Suggestions
   // page is where each is reviewed. A record's own Work counts its own.
   if (scopeAdmitsUnrecorded(scope) || (scope.record && !scope.check)) {
-    const guarded = await getDb(db)
-      .execute(sql`SELECT DISTINCT data->'connectionEvidence'->'candidate'->${"source"} AS source FROM ${suggestionTable}
-      WHERE ${suggestionTable.family}=${assessmentFamily.enum.field} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
-        AND ${suggestionTable.data} ? 'connectionEvidence'`);
-    const sources = z
-      .array(z.object({ source: entityGraphRootSchema }))
-      .parse(guarded.rows)
-      .map((row) => row.source);
-    const freshFieldIds: string[] = [];
-    for (let offset = 0; offset < sources.length; offset += 250) {
-      const groups = await readEntityConnectionsBatch(
-        db,
-        sources.slice(offset, offset + 250),
-      );
-      freshFieldIds.push(
-        ...groups
-          .flat()
-          .filter((proposal) => proposal.integration.kind === "field-review")
-          .map((proposal) => proposal.review.assessmentId),
-      );
-    }
     const own = scope.record
       ? sql`AND ${suggestionTable.entity} = ${scope.record.entity} AND ${suggestionTable.recordId} = (
           SELECT self.id FROM "Entity" self WHERE self.kind = ${scope.record.entity} AND self.shortcode = ${scope.record.id})`
@@ -462,7 +414,6 @@ async function workQueueProjection(
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ${NO_FACT_COLUMNS}
     FROM ${suggestionTable} LEFT JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
     WHERE ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${assessmentFamily.enum.field} AND ${reviewableSuggestionSql}
-      AND (NOT coalesce(${suggestionTable.data} ? 'connectionEvidence', false) OR ${freshFieldIds.length ? inArray(suggestionTable.id, freshFieldIds) : sql`false`})
       ${own}
     HAVING count(*) > 0`);
   }
@@ -877,24 +828,11 @@ async function queryWorkQueue(
       ))
   ))`,
   ];
-  switch (input.view) {
-    case "automatic":
-      conditions.push(
-        sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.automatic}`,
-      );
-      break;
-    case "research":
-      conditions.push(
-        sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.agent_session}`,
-      );
-      break;
-    case "review":
-      conditions.push(
-        sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.human}`,
-      );
-      break;
-    case "waiting":
-      conditions.push(sql`(
+  const viewPredicates = {
+    automatic: sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.automatic}`,
+    research: sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.agent_session}`,
+    review: sql`(${workExecutorSql(sql`routed.source`, sql`routed.kind`)}) = ${workExplanationSchema.shape.executor.enum.human}`,
+    waiting: sql`(
       routed.kind = ${workQueueKindSchema.enum.awaiting_posting}
       OR routed.waiting_kind = ${unresolved}
       OR (routed.entity = ${entitySchema.enum.run} AND EXISTS (
@@ -903,9 +841,8 @@ async function queryWorkQueue(
           AND (waiting.status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline})
             OR waiting."failureCode" IN ('execution_limit'))
       ))
-    )`);
-      break;
-  }
+    )`,
+  };
   if (memberOnly)
     conditions.push(
       sql`(waiting_kind = ${either} OR (waiting_kind = ${members} AND ${currentPartyId}::uuid = ANY(owners) AND NOT EXISTS (SELECT 1 FROM unnest(owners) owner WHERE owner <> ${currentPartyId}::uuid)))`,
@@ -990,6 +927,12 @@ async function queryWorkQueue(
     }
     ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``}
     ${needsExpectedEvidence ? sql`work_product_expected AS MATERIALIZED (${expectedQuantityReadSql()}),` : sql``}
+    work_connection_prediction AS MATERIALIZED (
+      SELECT a.id, a.subject, a.fingerprint, a.evidence->'candidate'->'target' AS target
+      FROM "Assessment" a JOIN "AssessmentState" s ON s.id=a.id
+      WHERE s.family=${assessmentFamily.enum.recommendation} AND s.active AND s.status=${suggestionStatus.enum.pending}
+        AND a.subject->>'scope' LIKE 'connection.%'
+    ),
     ${sql.join(
       quality.ctes().map((cte) => sql`${cte},`),
       sql` `,
@@ -1002,7 +945,9 @@ async function queryWorkQueue(
           SELECT 1 FROM unnest(owners) owner WHERE owner IS NULL OR NOT EXISTS (SELECT 1 FROM members member WHERE member.id = owner)
         ) THEN ${members} ELSE ${unresolved} END AS waiting_kind
       FROM candidates ${candidateConditions.length ? sql`WHERE ${sql.join(candidateConditions, sql` AND `)}` : sql``}
-    ), eligible AS (SELECT * FROM routed WHERE ${sql.join(conditions, sql` AND `)}), ordered AS (
+    ) , filtered AS MATERIALIZED (SELECT * FROM routed WHERE ${sql.join(conditions, sql` AND `)}), eligible AS (
+      SELECT * FROM filtered routed ${input.view ? sql`WHERE ${viewPredicates[input.view]}` : sql``}
+    ), ordered AS (
       SELECT * FROM eligible ORDER BY ${orderBy} LIMIT ${input.pageSize} OFFSET ${input.pageIndex * input.pageSize}
     ), page AS (
       SELECT entity, id, name, key, source, kind, reason, "nextAction", owners, shared, "problemKey", waiting_kind,
@@ -1011,6 +956,15 @@ async function queryWorkQueue(
       FROM ordered eligible
     ) SELECT
       (SELECT count(*)::int FROM eligible) AS total,
+      (SELECT jsonb_build_object('all', count(*)::int,
+        ${sql.join(
+          Object.entries(viewPredicates).flatMap(([view, predicate]) => [
+            sql`${view}::text`,
+            sql`count(*) FILTER (WHERE ${predicate})::int`,
+          ]),
+          sql`, `,
+        )}
+      ) FROM filtered routed) AS "viewCounts",
       coalesce((SELECT jsonb_agg(jsonb_build_object('id', shortcode, 'name', name) ORDER BY name, shortcode) FROM members), '[]'::jsonb) AS members,
       coalesce((SELECT jsonb_agg(jsonb_build_object(
         'entity', entity, 'id', id, 'name', name, 'key', key, 'source', source, 'kind', kind,
@@ -1025,6 +979,7 @@ async function queryWorkQueue(
   const row = z
     .object({
       total: z.number(),
+      viewCounts: workQueueOutSchema.shape.meta.shape.viewCounts,
       members: workQueueOutSchema.shape.members,
       items: workQueueOutSchema.shape.items,
     })
@@ -1045,6 +1000,7 @@ async function queryWorkQueue(
       pageIndex: input.pageIndex,
       pageSize: input.pageSize,
       totalCount: row.total,
+      viewCounts: row.viewCounts,
     },
   });
 }

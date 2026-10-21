@@ -262,6 +262,13 @@ export const workQueueOutSchema = z.object({
     pageIndex: z.number().int().nonnegative(),
     pageSize: z.number().int().positive(),
     totalCount: z.number().int().nonnegative(),
+    viewCounts: z.object({
+      all: z.number().int().nonnegative(),
+      automatic: z.number().int().nonnegative(),
+      research: z.number().int().nonnegative(),
+      review: z.number().int().nonnegative(),
+      waiting: z.number().int().nonnegative(),
+    }),
   }),
 });
 

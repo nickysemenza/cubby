@@ -7,6 +7,7 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { nextPendingEmbeddingWake } from "~/server/generic/embedding/repo/embedding-artifact";
 
+import { nextConnectionRetirementWake } from "./connection-retirement";
 import { nextDerivedRefreshWork, nextDerivedRefreshWake } from "./process";
 import { reconcileAvailability } from "./reconcile";
 import { nextStatementRetirementWake } from "./statement-retirement";
@@ -17,6 +18,7 @@ export async function nextRefreshWake(db: Database) {
       nextDerivedRefreshWake(db),
       nextPendingEmbeddingWake(db),
       nextStatementRetirementWake(db),
+      nextConnectionRetirementWake(db),
     ])
   )
     .filter((date) => date !== null)

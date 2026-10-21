@@ -58,9 +58,14 @@ export const derivedRefreshStatementCursor = z.object({
   inputFingerprint: z.string(),
   completedFingerprint: z.string().nullable(),
 });
+export const derivedRefreshConnectionCursor =
+  derivedRefreshStatementCursor.extend({
+    phase: z.literal("connections"),
+  });
 export const derivedRefreshCursorState = z.union([
   derivedRefreshReconcileCursor,
   derivedRefreshStatementCursor,
+  derivedRefreshConnectionCursor,
 ]);
 
 export const derivedRefreshReceipt = z.object({
