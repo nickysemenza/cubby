@@ -126,13 +126,21 @@ async function observedSessionStatus(page: Page): Promise<number | "unknown"> {
  * flake is attributable without re-running under a trace.
  */
 export async function waitForAppHydration(page: Page) {
-  const shell = page.locator(
-    '[data-app-shell="authenticated"][data-hydrated="true"]',
-  );
   const signIn = page.getByRole("link", { name: "Sign In", exact: true });
 
   try {
-    await shell.waitFor({ state: "attached", timeout: 15000 });
+    // Locator attachment uses increasing retry delays. Poll this explicit
+    // readiness marker in the browser so a hydrated shell does not wait for
+    // the next Node-side retry before the journey can interact with it.
+    const ready = await page.waitForFunction(
+      () =>
+        document.querySelector(
+          '[data-app-shell="authenticated"][data-hydrated="true"]',
+        ) !== null,
+      undefined,
+      { polling: "raf", timeout: 15000 },
+    );
+    await ready.dispose();
   } catch {
     const sawSignIn = await signIn.isVisible().catch(() => false);
     const rateLimited =
