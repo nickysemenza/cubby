@@ -256,7 +256,7 @@ When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
 commit, push, or rebase continuation in the same call.
 
-Commits run only staged-file Oxlint/Oxfmt and the commit-message check below.
+Commits run only staged-file Oxlint/Oxfmt.
 The pre-commit entrypoint invokes installed lint-staged directly; `pnpm
 check:staged` runs the same entrypoint. Partial staging is preserved. Target
 1–2 seconds for ordinary commits; large staged changes can take longer. Hooks
@@ -270,10 +270,8 @@ Confirm staged-check output; a successful commit alone is not validation evidenc
 Fix reported lint issues explicitly and stage the intended corrections. Use the
 commit hook normally; bypass it only when the user explicitly requests that.
 
-The `commit-msg` hook and the `CI passed` job run the
-[outward-text check](../../scripts/check-outward-text.ts) on commit messages
-and PR text respectively. They reject live entity codes; `4K7M` is the one
-allowed example body. Use synthetic examples when correcting a rejection.
+Authors and reviewers enforce synthetic-only outward content under `AGENTS.md`.
+There is no custom commit-message or PR-text identifier scanner.
 
 Checkout and merge hooks run no builds: build, test and dev entry points ensure
 the artifacts they consume. After a branch switch, use `pnpm apple gen` before
