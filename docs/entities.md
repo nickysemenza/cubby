@@ -2986,7 +2986,9 @@ with the old identity in the remove key. A full array remains a full replacement
 for explicit API callers. Ordinary web/native update editors submit keyed patches.
 Their single local collection draft keeps an immutable saved baseline and explicit
 Add, Replace, Remove and Make primary intent; normalization removes this local
-wrapper before input validation and submission. Untouched collections are omitted.
+wrapper before input validation and submission. Mounted optional web controls may register
+undefined leaves; the local value parser omits those unset leaves while preserving
+the strict saved baseline. Untouched collections are omitted.
 An invalid dirty native draft keeps Save reachable so the existing error handler
 shows its diagnostic above preserved input; a valid empty patch remains unsavable.
 Create materializes the initial full collection. Record collections declare

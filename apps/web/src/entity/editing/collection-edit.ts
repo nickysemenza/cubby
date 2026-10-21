@@ -3,6 +3,16 @@ import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 const rowSchema = z.record(z.string(), z.json());
+// Mounted optional form controls register undefined; those leaves carry no edit intent.
+const editableRowSchema = z
+  .record(z.string(), z.json().optional())
+  .transform((row) =>
+    Object.fromEntries(
+      Object.entries(row).flatMap(([key, value]) =>
+        value === undefined ? [] : [[key, value]],
+      ),
+    ),
+  );
 export type CollectionRow = z.infer<typeof rowSchema>;
 export const collectionEditSchema = z.object({
   collectionEdit: z.object({
@@ -11,7 +21,7 @@ export const collectionEditSchema = z.object({
       z.object({
         localKey: z.string(),
         baseline: rowSchema.nullable(),
-        value: rowSchema.nullable(),
+        value: editableRowSchema.nullable(),
         primaryIntent: z.boolean(),
         replacing: z.boolean(),
       }),
