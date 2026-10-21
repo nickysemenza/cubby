@@ -102,8 +102,11 @@ type ScoredListEntity = {
  * that carries the 0–100 score. Its id is also the sort field, so the
  * column header sorts by score (asc = weakest row first — the worklist).
  */
-const qualityRow = z.object({ dataQuality: dataQuality.nullish() });
-const dataQualityRenderer = <TRow extends object>(
+// Only the cell's status and score: the Work queue's rows carry no more.
+const qualityRow = z.object({
+  dataQuality: dataQuality.pick({ status: true, score: true }).nullish(),
+});
+export const createDataQualityColumn = <TRow extends object>(
   helper: CubbyColumnHelper<TRow>,
   scored = true,
 ): CubbyColumnCollection<TRow> =>
@@ -147,13 +150,13 @@ const unscoredCoverage = <
   E extends Exclude<ListEntity, ScoredListEntity>,
 >() => ({
   "data-quality": implemented<ListRenderer<E>>((helper) =>
-    dataQualityRenderer(helper, false),
+    createDataQualityColumn(helper, false),
   ),
 });
 
 const scoredCoverage = <E extends ScoredListEntity>() => ({
   "data-quality": implemented<ListRenderer<E>>((helper) =>
-    dataQualityRenderer(helper),
+    createDataQualityColumn(helper),
   ),
 });
 
@@ -234,7 +237,7 @@ const buildListRendererCoverage = () => {
     cookbook: scoredCoverage<"cookbook">(),
     image: {
       "data-quality": implemented<ListRenderer<"image">>((helper) =>
-        dataQualityRenderer(helper),
+        createDataQualityColumn(helper),
       ),
       "uploaded-image": implemented(uploadedImageRenderer),
     },
@@ -291,7 +294,7 @@ const buildListRendererCoverage = () => {
     "usda-food": {
       "data-quality": implemented<
         ClientListRenderer<ClientListRows["usda-food"]>
-      >((helper) => dataQualityRenderer(helper, false)),
+      >((helper) => createDataQualityColumn(helper, false)),
     },
   } satisfies {
     [E in ListRendererEntity]: EntityListRendererCoverage<E>;

@@ -35,11 +35,8 @@ import type { z } from "zod";
 
 import { verbBulkAction } from "~/entity/actions/action-verb-ui";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import {
-  entities,
-  entityDetailParams,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
+import { createDataQualityColumn } from "~/entity/display/list-field-renderers";
+import { isBrowserRoutedEntity } from "~/entity/entities";
 import {
   buildFiltersFromManifest,
   type FilterSpecCore,
@@ -54,6 +51,7 @@ import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import { Page, usePageWorkbenchTarget } from "~/entity/page/page";
 import {
   createCurrencyColumn,
+  createImageColumn,
   createPlainDateColumn,
   createSelectColumn,
 } from "~/entity/table/column-helpers";
@@ -347,6 +345,11 @@ function queueColumns(
   return createCubbyColumnCollection<QueueTableRow>((add) => {
     add(buildSelectColumn<QueueTableRow>());
     add(
+      createImageColumn(helper, {
+        rowEntity: (row) => row.entity ?? undefined,
+      }),
+    );
+    add(
       helper.accessor((row) => workRowType(row) ?? "Problem", {
         id: "entity",
         header: "Type",
@@ -388,18 +391,19 @@ function queueColumns(
           const vendor = info.row.original.vendor;
           return vendor ? (
             <EntityRefLink
-              variant="table"
-              to={entities.vendor.routes.detail}
-              params={entityDetailParams(vendor.id)}
-              title={vendor.name}
-              className="truncate"
-            >
-              {vendor.name}
-            </EntityRefLink>
+              variant="chip"
+              entity="vendor"
+              id={vendor.id}
+              name={vendor.name}
+            />
           ) : null;
         },
         meta: attachCubbyColumnMeta<QueueTableRow>({
           linksTo: "vendor",
+          entityRefs: (row) =>
+            row.vendor
+              ? [{ entityKind: "vendor", entityId: row.vendor.id }]
+              : [],
           mobile: { slot: "subtitle", priority: 1 },
           cellData: textCellData<QueueTableRow>(
             "text",
@@ -415,6 +419,10 @@ function queueColumns(
       }),
     );
     add(createCurrencyColumn(helper, "amount", { header: "Amount" }));
+    // Quality is stated after the page is read, so the server cannot sort it.
+    createDataQualityColumn(helper).visit((column) =>
+      add({ ...column, enableSorting: false }),
+    );
     add(
       helper.accessor((row) => row.reason, {
         id: "reason",
@@ -442,12 +450,9 @@ function queueColumns(
       helper.accessor((row) => waitingForLabel(row.waitingFor), {
         id: "waitingFor",
         header: "Waiting for",
-        size: 130,
+        size: 190,
         cell: (info) => (
-          <WaitingForPill
-            waitingFor={info.row.original.waitingFor}
-            memberOptions={memberOptions}
-          />
+          <WaitingForPill waitingFor={info.row.original.waitingFor} />
         ),
         meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "trailing", priority: 1, interactive: true },
