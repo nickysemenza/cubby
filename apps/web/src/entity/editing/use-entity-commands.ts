@@ -179,7 +179,16 @@ const kernelOptionsByEntity = new Map<string, object>();
 const kernelOptionsFor = (entity: string) => {
   const cached = kernelOptionsByEntity.get(entity);
   if (cached) return cached;
-  const options = entityMutation.mutate.forEntity(entity).mutationOptions();
+  const declared = entityMutation.mutate.forEntity(entity).mutationOptions();
+  // A subsequent editor must load the committed collection roles, not reuse
+  // the previous edit's baseline while its invalidation is still in flight.
+  const options = {
+    ...declared,
+    meta: {
+      ...declared.meta,
+      invalidationCompletion: { removeInactive: true },
+    },
+  };
   kernelOptionsByEntity.set(entity, options);
   return options;
 };
