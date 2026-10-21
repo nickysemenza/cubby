@@ -1,0 +1,51 @@
+apps/apple/App/Tests/Entity/NativeCoverageViewPathTests.swift
+  s_9b829d577c7e4c::t_2922142dee411c 14,21
+apps/apple/App/Shared/DesignSystem/RecordListRow.swift
+  s_4045d1ea7ec5a2::t_2b829bd029ee54 11,19-26,51,69
+apps/apple/App/Shared/Today/TodayView.swift
+  s_e76cd5771b33ea::t_0604fe4de028f1 154
+apps/apple/App/Shared/AppShell/RootView.swift
+  s_e76cd5771b33ea::t_a46c0df5f9a2b0 99-105,107
+apps/apple/App/Shared/AppShell/DeveloperOverlays.swift
+  s_e76cd5771b33ea::t_3eddbec469e448 96-98,100-106,108,123-126
+apps/apple/App/Shared/Search/SearchView.swift
+  s_e76cd5771b33ea::t_5b7971a6df2dea 340-346,352
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_e76cd5771b33ea::t_f79463492e520c 108-113,156-158,258,260,268,270-271,319-419,558-567,664-666,704-706,729-735,905-907,917-936,938-940,951-952,1010,1059-1065,1120,1136-1143,1154-1190,1192-1194,1197-1202,1205,1214-1216,1327,1341-1348,1350,1358,1365,1368-1373,1380-1386,1391,1396,1398-1402,1404-1406,1409-1420,1422-1431,1433,1435-1436,1438-1439,1441-1442,1445-1458,1460-1467,1469-1473,1476-1484
+apps/apple/App/Shared/Entity/List/EntityRowPresentation.swift
+  s_4045d1ea7ec5a2::t_ce9fca2f308a99 140-156,168
+apps/apple/App/Tests/Entity/List/EntityRowPresentationTests.swift
+  s_4045d1ea7ec5a2::t_89231cd19439d1 44-74,84-85,95,156,165-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d960ebbe2cc26ae0384191f7c299437b02918965",
+  "prompts": {},
+  "sessions": {
+    "s_4045d1ea7ec5a2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15f95-5f13-7c30-9aea-0f43d7a0bfae",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9b829d577c7e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50921043-a281-4b85-b2bc-3d0bef6e67fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_e76cd5771b33ea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15f95-2744-7da3-add2-d479d4489989",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
