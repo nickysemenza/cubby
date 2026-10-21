@@ -333,31 +333,32 @@ Assert that the intended container is unique; do not use `first()` to hide a
 second matching record. Replay against the final rebased source when main
 changes the affected layout.
 
-## Preview tests (real-browser layout invariants)
+## Required component-browser tests
 
-The `preview` Vitest project (`**/*.preview.test.tsx`, `pnpm --dir apps/web
-test:preview`) renders components in a real headless Chromium tab via
-Playwright, at the widths the app actually ships — a phone (402x874) and a
-desktop (1440x900) — and asserts layout facts jsdom cannot see: bounding-box
-sizes, whether a rerender changed an element's height (a layout-shift
-regression), and which `min-width`/media-query breakpoint actually applies.
-Use the `ui` (jsdom) tier for a distinct event, accessibility or conditional
-rendering failure that the retained journey cannot reasonably expose. Keep
-copy-only and DOM-structure assertions out of both tiers. Reach for `preview`
-only when the behavior under test IS the
-layout (a fixed-footprint glyph across states, an inline review folding
-instead of growing the page, a headline that must not wrap). It is opt-in
-(not part of `pnpm test`) because a real browser launch is slower than the
-shared jsdom graph; select it with `--project=preview`, `--project preview`,
-`test:preview`, or a direct `.preview.test.tsx` file argument. It is not
-wired into CI yet — doing so would need a Playwright browser install step in
-the combined `Auxiliary tests and builds` lane, which every web change would pay for; wire it into that
-existing workflow once more than one component family needs it. Preview specs
-need Tailwind's real
-CSS output (`tooling/preview-test-setup.ts` imports `~/styles.css`) since a
-utility class only affects a real browser's layout once Tailwind has
-generated it — jsdom tests never needed this because jsdom has no layout
-engine to feed.
+The `capability` Vitest project runs the explicitly selected shared list/table
+coverage in `vitest.config.ts`. Production renderers run in headless Chromium
+with the real Tailwind CSS. It is part of `pnpm test` and the existing Auxiliary lane;
+that runner installs Chromium before running the tests. No additional runner
+is allocated. Other `**/*.preview.test.tsx` files remain opt-in through
+`pnpm --dir apps/web test:preview`; they are not retained merge-gate coverage
+until migrated into the required roster.
+
+Shared list, table, card and detail presentation capabilities have one owner
+here: populated/empty/loading states, responsive layout, overflow, focus and
+interaction state. Use actual declarations, column modules and renderers with
+schema-valid responses through their existing operation seam. Record outbound
+requests; do not implement a second filter engine. A capability matrix replaces
+route × viewport × state copies. Native previews retain native layout, media
+queries, scrolling and observers; only jsdom setup supplies browser emulation.
+
+Keep server inclusion/exclusion, full-filter totals and stored effects at the
+real HTTP or PostgreSQL boundary. Keep a small real browser composition suite
+for navigation/history, actual inspectors, grouped/nested loading and retry,
+asset rendering and consequential edits. Component responses cannot establish
+those contracts. When moving coverage, name the retained owner or the deliberate
+coverage tradeoff in the deleting commit. Use the `ui` jsdom tier for a distinct
+failure that does not need native browser behavior; avoid duplicating the same
+shared capability in both tiers.
 
 ## Test and dev data factories
 

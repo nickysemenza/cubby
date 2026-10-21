@@ -2,6 +2,13 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, vi } from "vitest";
 
+import { configureBrowserTestEnvironment } from "~/lib/test/browser-harness";
+
+import { installUiBrowserApis } from "./ui-browser-apis";
+
+const restoreEnvironment =
+  configureBrowserTestEnvironment(installUiBrowserApis);
+
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>();
   return {
@@ -61,5 +68,9 @@ afterEach(() => {
 // the end of each file, after every tree has unmounted: settling after each
 // test would instead render a resolved slot into the next test.
 afterAll(async () => {
-  await vi.dynamicImportSettled();
+  try {
+    await vi.dynamicImportSettled();
+  } finally {
+    restoreEnvironment();
+  }
 });

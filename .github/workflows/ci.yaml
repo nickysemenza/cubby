@@ -233,6 +233,9 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
+      - name: Install Chromium for required component-browser tests
+        if: ${{ matrix.worker }}
+        run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
       - name: ${{ matrix.step || 'Run lane' }}
         if: ${{ !matrix.browser }}
         run: ${{ matrix.run }}

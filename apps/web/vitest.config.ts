@@ -297,59 +297,93 @@ export default defineConfig({
             sequence: { groupOrder: 1 },
           },
         },
-        {
-          // Real Chromium via the Playwright provider — not jsdom. Renders
-          // components at real device widths and reads real layout (bounding
-          // boxes, `getComputedStyle`, whether a rerender changed an
-          // element's height) that jsdom cannot: jsdom has no layout engine,
-          // so every box is 0x0 and CSS media queries never match a width.
-          extends: true,
-          // Tailwind (unlike `unit`/`ui`, which never render real layout)
-          // has to actually generate the utility classes the components use
-          // — a real browser's layout engine reads them for real, so a
-          // width invariant is only meaningful if `min-h-11`, `md:min-w-0`,
-          // etc. actually apply. `preview-test-setup.ts` imports the app's
-          // real `styles.css` entry point to feed it.
-          plugins: [react(), tailwindcss()],
-          // Vite's default dependency scanner (no `index.html` here) falls
-          // back to crawling the whole `src` tree for an entry, which reaches
-          // `#tanstack-start-entry`/`#tanstack-router-entry` — virtual
-          // specifiers only `@tanstack/react-start`'s own Vite plugin
-          // resolves (that plugin isn't loaded here; the real app's
-          // `vite.config.ts` is a separate config this one never imports).
-          // Unlike the `ui`/`unit` projects, browser mode can't fall back to
-          // skipping a failed scan (it needs a real prebundle to serve to
-          // the browser), so a scan failure is fatal here. Pointing the
-          // scanner's entries at only the preview test files keeps the crawl
-          // out of server-only modules it was never going to test, while
-          // still discovering (and properly CJS-interop-converting) every
-          // dependency those files actually reach.
-          optimizeDeps: {
-            entries: [join(import.meta.dirname, "src/**/*.preview.test.tsx")],
-            exclude: [
-              "@tanstack/react-start",
-              "@tanstack/react-start-server",
-              "@tanstack/start-server-core",
-            ],
-          },
-          test: {
-            name: "preview",
-            include: ["**/*.preview.test.tsx"],
-            setupFiles: ["./tooling/preview-test-setup.ts"],
-            browser: {
-              enabled: true,
-              headless: true,
-              provider: playwright(),
-              instances: [{ browser: "chromium" }],
-            },
-            // Chromium launch + page navigation per file is slower than a
-            // shared jsdom graph; give it real room instead of flaking on
-            // the fast tiers' 5s/10s budget.
-            testTimeout: 20_000,
-            isolate: false,
-            sequence: { groupOrder: 2 },
-          },
-        },
+        ...["preview", "capability"].map(
+          (name) =>
+            ({
+              // Real Chromium via the Playwright provider — not jsdom. Renders
+              // components at real device widths and reads real layout (bounding
+              // boxes, `getComputedStyle`, whether a rerender changed an
+              // element's height) that jsdom cannot: jsdom has no layout engine,
+              // so every box is 0x0 and CSS media queries never match a width.
+              extends: true,
+              // Tailwind (unlike `unit`/`ui`, which never render real layout)
+              // has to actually generate the utility classes the components use
+              // — a real browser's layout engine reads them for real, so a
+              // width invariant is only meaningful if `min-h-11`, `md:min-w-0`,
+              // etc. actually apply. `preview-test-setup.ts` imports the app's
+              // real `styles.css` entry point to feed it.
+              plugins: [react(), tailwindcss()],
+              // Vite's default dependency scanner (no `index.html` here) falls
+              // back to crawling the whole `src` tree for an entry, which reaches
+              // `#tanstack-start-entry`/`#tanstack-router-entry` — virtual
+              // specifiers only `@tanstack/react-start`'s own Vite plugin
+              // resolves (that plugin isn't loaded here; the real app's
+              // `vite.config.ts` is a separate config this one never imports).
+              // Unlike the `ui`/`unit` projects, browser mode can't fall back to
+              // skipping a failed scan (it needs a real prebundle to serve to
+              // the browser), so a scan failure is fatal here. Pointing the
+              // scanner's entries at only the preview test files keeps the crawl
+              // out of server-only modules it was never going to test, while
+              // still discovering (and properly CJS-interop-converting) every
+              // dependency those files actually reach.
+              optimizeDeps: {
+                // Lazy feature imports must be prebundled before a test starts;
+                // discovering them mid-test reloads the tab and loses assertions.
+                include: [
+                  "@hookform/resolvers/zod",
+                  "@phosphor-icons/react/dist/csr/Book",
+                  "@phosphor-icons/react/dist/csr/Bookmark",
+                  "@phosphor-icons/react/dist/csr/Calculator",
+                  "@phosphor-icons/react/dist/csr/CalendarCheck",
+                  "@phosphor-icons/react/dist/csr/CameraPlus",
+                  "@phosphor-icons/react/dist/csr/CaretDoubleLeft",
+                  "@phosphor-icons/react/dist/csr/CaretDoubleRight",
+                  "@phosphor-icons/react/dist/csr/Flame",
+                  "@phosphor-icons/react/dist/csr/Flask",
+                  "@phosphor-icons/react/dist/csr/GridFour",
+                  "@phosphor-icons/react/dist/csr/ListDashes",
+                  "@phosphor-icons/react/dist/csr/Thermometer",
+                  "@phosphor-icons/react/dist/csr/Timer",
+                  "@tanstack/react-virtual",
+                  "d3-force",
+                  "p-map",
+                ],
+                entries: [
+                  join(import.meta.dirname, "src/**/*.preview.test.tsx"),
+                ],
+                exclude: [
+                  "@tanstack/react-start",
+                  "@tanstack/react-start-server",
+                  "@tanstack/start-server-core",
+                ],
+              },
+              test: {
+                name,
+                include:
+                  name === "capability"
+                    ? [
+                        "src/lib/test/browser-harness.preview.test.tsx",
+                        "src/entity/entity-list/list-capabilities.preview.test.tsx",
+                        "src/ui/data-table/table-density.preview.test.tsx",
+                        "src/ui/data-table/rendered-column-fit.preview.test.tsx",
+                      ]
+                    : ["**/*.preview.test.tsx"],
+                setupFiles: ["./tooling/preview-test-setup.ts"],
+                browser: {
+                  enabled: true,
+                  headless: true,
+                  provider: playwright(),
+                  instances: [{ browser: "chromium" }],
+                },
+                // Chromium launch + page navigation per file is slower than a
+                // shared jsdom graph; give it real room instead of flaking on
+                // the fast tiers' 5s/10s budget.
+                testTimeout: 20_000,
+                isolate: false,
+                sequence: { groupOrder: 2 },
+              },
+            }) satisfies TestProjectConfiguration,
+        ),
         {
           extends: true,
           test: {

@@ -13,8 +13,11 @@ Choose the cheapest boundary that can expose the failure. Headless HTTP/native
 service checks establish stored values, totals, provenance, ownership and error
 contracts; a small browser or Tester Army journey establishes navigation,
 editing and supported visible outcomes. AI chooses a path through the real UI;
-deterministic read-back establishes whether the action worked. Previews cover
-presentation states, not writes or navigation. Live model journeys always use Jev decisions through Cloudflare AI Gateway;
+deterministic read-back establishes whether the action worked. Required native-browser previews own shared presentation and interaction
+capabilities once, using production renderers and injected read responses. Keep
+route composition, navigation and persisted outcomes in real E2E/HTTP journeys;
+previews cannot prove server filtering or writes. See the
+[coverage ownership rules](validation-tests.md#required-component-browser-tests). Live model journeys always use Jev decisions through Cloudflare AI Gateway;
 explicit PR labels and manual dispatch control
 when they run (see [Tester Army](../tester-army.md)). They do not replace the
 deterministic content-hash merge gate.
