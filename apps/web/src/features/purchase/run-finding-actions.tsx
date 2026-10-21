@@ -1,8 +1,8 @@
 import { operationCommandRequest } from "~/contracts/define";
 import { problemsContract } from "~/contracts/problems.contract";
 import type { RunDetail } from "~/contracts/run.contract";
-import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
+import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { formatCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

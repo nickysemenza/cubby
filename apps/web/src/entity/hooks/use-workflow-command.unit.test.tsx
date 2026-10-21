@@ -106,13 +106,11 @@ it("patches before catalog invalidation and awaits its active refresh", async ()
   const activeKey = ["synthetic-active-review"];
   const inactiveKey = ["synthetic-inactive-review"];
   client.setQueryData(activeKey, "old");
-  client
-    .getQueryCache()
-    .build(client, {
-      queryKey: inactiveKey,
-      queryFn: async () => null,
-      meta: { cacheTags: [["suggestions"]] },
-    });
+  client.getQueryCache().build(client, {
+    queryKey: inactiveKey,
+    queryFn: async () => null,
+    meta: { cacheTags: [["suggestions"]] },
+  });
   const observer = new QueryObserver(client, {
     queryKey: activeKey,
     meta: { cacheTags: [["suggestions"]] },
