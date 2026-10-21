@@ -113,6 +113,7 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   await expect(page).toHaveURL(neighborURL);
   await page.goBack();
   await expect(card).toBeVisible();
+  await page.getByRole("button", { name: "Paths list", exact: true }).click();
   await page.getByRole("button", { name: "Fit focus", exact: true }).click();
   await graph
     .locator(`.react-flow__node[data-id="expense:${expense.id}"]`)
@@ -532,6 +533,7 @@ test("graph thumbnails retain label space and canonical navigation", async ({
       );
     }),
   ).toBe(true);
+  await card.click();
   await expect(
     page.getByRole("link", { name: "Open record", exact: true }),
   ).toHaveAttribute("href", `/images/${image.id}`);
