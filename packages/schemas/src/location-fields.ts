@@ -116,7 +116,7 @@ export function locationReadSchemas<S extends z.ZodRawShape>(
   const detail: z.ZodObject<
     S & {
       children: z.ZodOptional<z.ZodLazy<z.ZodType<RecursiveLocation[]>>>;
-      parent: z.ZodLazy<z.ZodType<RecursiveLocation | undefined>>;
+      parent: z.ZodOptional<z.ZodLazy<z.ZodType<RecursiveLocation>>>;
       childCount: z.ZodOptional<z.ZodNumber>;
       directItemCount: z.ZodOptional<z.ZodNumber>;
       totalItemCount: z.ZodOptional<z.ZodNumber>;
@@ -127,9 +127,9 @@ export function locationReadSchemas<S extends z.ZodRawShape>(
     children: z
       .lazy((): z.ZodType<RecursiveLocation[]> => recursiveSchema().array())
       .optional(),
-    parent: z.lazy((): z.ZodType<RecursiveLocation | undefined> =>
-      recursiveSchema().optional(),
-    ),
+    parent: z
+      .lazy((): z.ZodType<RecursiveLocation> => recursiveSchema())
+      .optional(),
     childCount: z.number().int().nonnegative().optional(),
     directItemCount: z.number().int().nonnegative().optional(),
     totalItemCount: z.number().int().nonnegative().optional(),

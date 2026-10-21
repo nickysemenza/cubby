@@ -511,6 +511,7 @@ export type ImportTargetSummary = z.infer<typeof importTargetSummarySchema>;
 export function imageReadSchemas<
   S extends z.ZodRawShape & { dataQuality: z.ZodType },
 >(base: z.ZodObject<S>) {
+  const field = <K extends keyof S>(key: K): S[K] => base.shape[key];
   const { dataQuality: _quality, ...outputFields } = base.shape;
   const output = z.object(outputFields);
   const related = base.extend({
@@ -518,7 +519,7 @@ export function imageReadSchemas<
     // `imageWithRelationsToAPI` builds the base shape and every real producer
     // (`imageList`, `getImageById`, `getImagesByShortcodes`) merges in the
     // batch-loaded score.
-    dataQuality: base.shape.dataQuality.optional(),
+    dataQuality: field("dataQuality").optional(),
     associations: z.array(imageAssociationSchema),
     processingIssue: imageProcessingIssue.nullable().optional(),
     importTarget: importTargetSummarySchema.nullable().optional(),

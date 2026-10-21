@@ -140,19 +140,20 @@ export function recipeReadSchemas<
   },
 >(base: z.ZodObject<S>) {
   const output = base.extend({ sections: recipeSectionsOut });
+  const field = <K extends keyof S>(key: K): S[K] => base.shape[key];
   const list = z.object({
     ...recipeTopLevelFields,
-    dataQuality: base.shape.dataQuality,
+    dataQuality: field("dataQuality"),
+    cost: field("cost"),
+    calories: field("calories"),
+    protein: field("protein"),
+    carbs: field("carbs"),
+    fat: field("fat"),
     totals: recipeTotals.nullish(),
     // Server-composed text for the computed Cost, Calories and Time columns.
     costTotalLabel: listLabel,
     caloriesTotalLabel: listLabel,
     totalMinutesLabel: listLabel,
-    cost: base.shape.cost,
-    calories: base.shape.calories,
-    protein: base.shape.protein,
-    carbs: base.shape.carbs,
-    fat: base.shape.fat,
     // Live MealRecipe rows under a live Meal — a soft-deleted Meal's plan
     // doesn't count. Backs the list's "Meals" column.
     meals: z.number().int(),
