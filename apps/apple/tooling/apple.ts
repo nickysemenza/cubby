@@ -12,7 +12,7 @@
 //   pnpm apple sim           build Cubby-iOS, install + launch on a simulator
 //   pnpm apple gen           build-rust.sh → pnpm generate → xcodegen
 //   pnpm apple test          swift test for CubbyKit
-//   pnpm apple check [host|app|lint]  cached native checks (all by default)
+//   pnpm apple check [host|app|lint]  native checks (all by default)
 //   pnpm apple clean [--apply]  preview/remove this checkout's build artifacts
 //
 // Options: --device <name> (ios; default: the first paired iPhone),

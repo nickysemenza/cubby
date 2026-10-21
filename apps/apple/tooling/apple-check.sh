@@ -44,7 +44,6 @@ if ! xcode-select -p >/dev/null 2>&1; then
 fi
 
 if [ "$mode" = host ]; then
-  apps/apple/scripts/prepare-project.sh --sources
   host_log="$(mktemp)"
   trap 'rm -f "$host_log"' EXIT
   host_status=0
@@ -54,7 +53,7 @@ if [ "$mode" = host ]; then
 fi
 
 
-apps/apple/scripts/prepare-project.sh
+xcodegen generate --spec apps/apple/project.yml --use-cache
 
 # The existing Apple command owns Xcode paths and flags for launches and checks.
 node apps/apple/tooling/apple.ts build-check app
