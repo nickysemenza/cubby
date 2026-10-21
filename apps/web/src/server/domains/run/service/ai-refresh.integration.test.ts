@@ -326,6 +326,61 @@ describe("targeted prompt refresh", () => {
     ).toHaveLength(1);
   });
 
+  // Failure: background admission hides an otherwise valid interactive answer.
+  it.each(["capacity", "obsolete policy"] as const)(
+    "keeps live answers available during %s deferral",
+    async (state) => {
+      const item = await productFixture(
+        ctx,
+        "Synthetic deferred live groceries",
+      );
+      const manifest = await compiledRefreshManifest();
+      if (state === "obsolete policy")
+        manifest["field:product.categoryId"]!.policyFingerprint =
+          "synthetic-obsolete-policy";
+      const activation = await activateAiRefresh(
+        ctx.db,
+        "synthetic-live-deferral",
+        { enabled: true, startDiscovery: false, manifest },
+      );
+      if (state === "capacity") {
+        for (let index = 0; index < 2; index++)
+          await ensureRun(ctx.db, systemActor(), {
+            purpose: "ai_refresh",
+            trigger: "scheduled",
+            status: "running",
+            input: aiRefreshRunInput.parse({
+              kind: "ai_refresh",
+              mailboxId: `synthetic-parked-${index}`,
+              activation,
+            }),
+          });
+      }
+      const output = await inferFieldAssessments(
+        kernelCtx(ctx),
+        {
+          entity: "product",
+          entityId: item.id,
+          savedRecord: true,
+          basisMode: "suggested",
+          targets: ["categoryId"],
+          basis: { name: "Synthetic groceries", categoryId: null },
+        },
+        categoryPorts(0.97).suggestPorts,
+      );
+      expect(output.suggestions.categoryId?.value).toBe(
+        taxonomyShortcode("food"),
+      );
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(fieldRefreshTarget),
+      ).toEqual([]);
+      expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+    },
+  );
+
   // A two-target inference cap cannot bound one Workflow/Run per catalog record.
   it("joins Product discovery targets to one active refresh Run across repeated passes", async () => {
     await productFixture(ctx, "Synthetic refresh hammer");

@@ -253,6 +253,24 @@ async function prepareField(
   return { snapshot, provenance, lastWrite };
 }
 
+/** An old Worker must not enqueue or recover work for another executable policy. */
+async function currentAiRefreshActivation(db: Database) {
+  const current = await readAiRefreshActivation(db);
+  if (!current?.enabled) return null;
+  const compiled = await compiledRefreshManifest();
+  if (
+    Object.keys(current.manifest).length !== Object.keys(compiled).length ||
+    Object.entries(compiled).some(
+      ([feature, policy]) =>
+        current.manifest[feature]?.promptVersion !== policy.promptVersion ||
+        current.manifest[feature]?.policyFingerprint !==
+          policy.policyFingerprint,
+    )
+  )
+    return null;
+  return current;
+}
+
 /** Live saved-record questions enqueue the same canonical work as discovery.
  * Client draft basis and the inactive interactive prediction never authorize writes.
  */
@@ -261,8 +279,8 @@ export async function scheduleSavedFieldQuestion(
   target: Extract<AiEvaluationTarget, { kind: "field" }>,
   ports: AiRefreshPorts = {},
 ) {
-  const activation = await readAiRefreshActivation(db);
-  if (!activation?.enabled) return;
+  const activation = await currentAiRefreshActivation(db);
+  if (!activation) return;
   const prepared = await prepareField(db, target, ports);
   if (
     !prepared ||
@@ -293,9 +311,9 @@ export async function scheduleSavedFieldQuestion(
     [{ target, provenance: prepared.provenance, snapshot: prepared.snapshot }],
   );
   if (result.kind === "deferred")
-    throw new Error(
-      `Saved field evaluation scheduling deferred: ${result.reason}`,
-    );
+    log.info("Saved field evaluation scheduling deferred", {
+      reason: result.reason,
+    });
 }
 
 async function scheduleProductIdentityDiscovery(
@@ -1079,20 +1097,9 @@ export async function executeAiRefreshTarget(
 }
 
 export async function recoverAiRefresh(db: Database) {
-  const current = await readAiRefreshActivation(db);
+  const current = await currentAiRefreshActivation(db);
   // The singleton owns activation. An old Worker can still receive recovery work.
-  if (!current?.enabled) return false;
-  const compiled = await compiledRefreshManifest();
-  if (
-    Object.keys(current.manifest).length !== Object.keys(compiled).length ||
-    Object.entries(compiled).some(
-      ([feature, policy]) =>
-        current.manifest[feature]?.promptVersion !== policy.promptVersion ||
-        current.manifest[feature]?.policyFingerprint !==
-          policy.policyFingerprint,
-    )
-  )
-    return false;
+  if (!current) return false;
   const { reconcileWorkflowRuns } =
     await import("~/server/workflows/runs/lifecycle");
   await reconcileWorkflowRuns(db);

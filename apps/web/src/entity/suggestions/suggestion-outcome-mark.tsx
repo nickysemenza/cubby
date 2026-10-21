@@ -9,7 +9,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { ClassicV2 } from "loading-dev";
-import type { ReactNode, SyntheticEvent } from "react";
+import type { KeyboardEvent, ReactNode, SyntheticEvent } from "react";
 
 import { cn } from "~/lib/utils";
 import { Stack } from "~/ui/layout";
@@ -35,9 +35,13 @@ const MIN_LISTED_ALTERNATIVE = 0.05;
 /** Beyond the top three the popover stops being a glance. */
 const MAX_LISTED_ALTERNATIVES = 3;
 
-// Disclosures own activation; a grid's Enter/Space handlers must not consume it.
 function stopPropagation(event: SyntheticEvent) {
   event.stopPropagation();
+}
+
+// Disclosures own activation; navigation keys still belong to the grid.
+function stopActivationKey(event: KeyboardEvent) {
+  if (event.key === "Enter" || event.key === " ") event.stopPropagation();
 }
 
 /** `FieldSuggestionHint`'s callers (form fields, `external-id-kind-suggestion.tsx`)
@@ -325,7 +329,7 @@ function MarkGlyph({
       }
       onMouseDown={stopPropagation}
       onClick={stopPropagation}
-      onKeyDown={stopPropagation}
+      onKeyDown={stopActivationKey}
       className={cn(
         glyphTriggerClass(surface),
         compactLabel && "w-auto gap-1 px-1 text-xs text-muted-foreground",
@@ -384,7 +388,7 @@ function UnsettledMark({
         aria-label={text}
         onMouseDown={stopPropagation}
         onClick={stopPropagation}
-        onKeyDown={stopPropagation}
+        onKeyDown={stopActivationKey}
         className={cn(
           glyphTriggerClass(surface),
           empty && "w-auto gap-1 px-1 text-xs text-muted-foreground",

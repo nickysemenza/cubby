@@ -967,6 +967,9 @@ Saved-record list and detail questions opt into canonical background evaluation
 with `savedRecord`; the server prepares evidence from the saved entity rather
 than trusting the client's displayed basis. Interactive form predictions remain
 inactive and never schedule automatic writes, even when editing a saved record.
+Admission deferrals keep interactive answers available; the next live question
+retries canonical scheduling. Live scheduling waits for activation to match the
+executable policy, just as recovery does.
 Applied and rejected rows cannot re-enter pending application, and unchanged
 settled inputs skip repeated inference. Below-threshold or ambiguous proposals
 remain available for review. This field policy needs no measured-rule switch,
