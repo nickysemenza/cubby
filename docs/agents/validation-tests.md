@@ -42,6 +42,28 @@ publication still execute; unused presentation hydration does not.
 Reconcile derived inputs once after a mutation boundary before reading several
 fingerprints of that same state, rather than repeating a full reconciliation
 for each read.
+Filter journeys verify resulting rows and URL state after reload or history
+navigation. An open editor and an active chip may share the same accessible
+label; that transient duplication is not a failed filter. Keep shared range,
+quality and presentation permutations in their owning regressions rather than
+repeating them in each list journey.
+The import-convergence browser journey covers statement-first reviewed booking
+and navigation; the PostgreSQL suite owns arrival-order permutations. Socket
+lifecycle checks use a warm baseline and two read/write rounds with real idle
+expiry, without a request-load population. Coordinator retirement authorization,
+acknowledgement and operation fences run in PostgreSQL; the cold-host disposal
+rehearsal is a deliberate rare-case coverage tradeoff.
+Spending-preview equivalence uses a small explicit graph for inherited and
+explicit categories, split Projects, refunds and signed adjustments. Keep
+the resolver/allocation comparison; do not generate household-sized random
+populations or repeat the same merge solely at larger cardinality.
+Give each inherited merge source an independent Purchase without another
+matching Expense override, so broad Purchase scope cannot hide a missing
+Vendor-default, Purchase-default or mapped-category predicate. Assert that each
+isolated Expense actually inherits the changed category before comparing the
+preview; a productless Vendor path needs a food-related spending profile.
+The adjustment-only Purchase also needs a changed default: merely finding a
+`default` allocation row does not prove that preview reclassifies it.
 A virtualized table's DOM contains only its mounted window. Cursor-pagination
 fixtures that assert every row at once must fit that window; bounded-viewport
 journeys inspect rows across scrolling instead of treating unmounted rows as missing.

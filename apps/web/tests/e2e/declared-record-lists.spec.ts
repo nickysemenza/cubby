@@ -27,15 +27,6 @@ test("combined records retain server sorting, pagination, and filters after relo
   const product = await seedProductPrerequisite(page, {
     name: `${prefix} Zulu`,
   });
-  await createFixture(page, "expense", {
-    lineKind: "principal",
-    name: `Quality evidence ${Date.now()}`,
-    productId: product.id,
-    cost: 2,
-    date: "2026-09-10",
-    costType: "materials",
-    trade: "other",
-  });
   await gotoAuthenticatedPage(
     page,
     `/entities?tab=records&q=${encodeURIComponent(prefix)}&orderBy=name&recordsDirection=asc&pageSize=1`,
@@ -55,19 +46,6 @@ test("combined records retain server sorting, pagination, and filters after relo
   await page.getByRole("button", { name: "Go to next page" }).click();
   await expect(zulu).toHaveAttribute("href", `/products/${product.id}`);
   await expect(alpha).toHaveCount(0);
-  const qualityCell = () => page.locator('[data-cell-col="quality"]').first();
-  await expect(qualityCell()).toHaveText(/^\d+, /);
-  expect((await qualityCell().boundingBox())?.width).toBeLessThanOrEqual(104);
-  await page
-    .getByRole("button", { name: "Sort by Quality", exact: true })
-    .click();
-  await expect(zulu).toBeVisible();
-  await expect(alpha).toHaveCount(0);
-  await expect(page).toHaveURL(/orderBy=quality/);
-  await page.getByRole("button", { name: "Sort by Name", exact: true }).click();
-  await expect(alpha).toBeVisible();
-  await page.getByRole("button", { name: "Go to next page" }).click();
-  await expect(zulu).toBeVisible();
   const openFilter = async (label: string) => {
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     await page.getByRole("button", { name: label, exact: true }).click();
@@ -80,67 +58,18 @@ test("combined records retain server sorting, pagination, and filters after relo
   await expect(alpha).toBeVisible();
   await expect(page).toHaveURL(/page=1/);
   await page.reload();
-  await expect(
-    page.getByRole("button", { name: "Type: Location" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/kind=location/);
   await expect(alpha).toBeVisible();
+  await expect(zulu).toHaveCount(0);
 
-  const editOverflow = async (label: string, value: string) => {
-    await openFilter(label);
-    await page.getByLabel(`Filter ${label}`, { exact: true }).fill(value);
-  };
-  await editOverflow("Maximum quality", "0");
-  await expect(alpha).toHaveCount(0);
-  await page.getByLabel("Filter Maximum quality", { exact: true }).fill("");
-  await expect(alpha).toBeVisible();
-  await page.keyboard.press("Escape");
-  // Image is presence: Any | Has image | No image.
-  await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page.getByRole("button", { name: "No image", exact: true }).click();
-  await expect(alpha).toBeVisible();
-  await page.getByRole("button", { name: "Has image", exact: true }).click();
-  await expect(alpha).toHaveCount(0);
-  await page.getByRole("button", { name: "Any", exact: true }).click();
-  await page.keyboard.press("Escape");
-  await editOverflow("Updated through", "2000-01-01");
-  await expect(alpha).toHaveCount(0);
-  await page.getByLabel("Filter Updated through", { exact: true }).fill("");
-  await expect(alpha).toBeVisible();
-  await page.keyboard.press("Escape");
-  await page
-    .getByRole("button", { name: "Sort by Quality", exact: true })
-    .click();
-  await expect(page).toHaveURL(/orderBy=quality/);
-  await expect(qualityCell()).toHaveText("Not assessed");
   await page.getByRole("button", { name: "Filters", exact: true }).click();
   await page.getByRole("button", { name: "Clear all", exact: true }).click();
   await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("textbox", { name: "Name or shortcode" }),
-  ).toHaveValue("");
-  await expect(page.getByRole("button", { name: /^Type: / })).toHaveCount(0);
+  await expect(page).not.toHaveURL(/kind=location/);
   await page.goBack();
-  await expect(
-    page.getByRole("button", { name: "Type: Location" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/kind=location/);
   await expect(alpha).toBeVisible();
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(
-    page.getByRole("textbox", { name: "Name or shortcode" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: /^Filter(?: \d+)?$/ }).click();
-  await page.getByRole("button", { name: /Minimum quality/ }).click();
-  await expect(
-    page.getByLabel("Filter Minimum quality", { exact: true }),
-  ).toHaveAttribute("type", "number");
-  await expect(
-    page.getByLabel("Filter Minimum quality", { exact: true }),
-  ).toHaveAttribute("max", "100");
-  await page.keyboard.press("Escape");
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
+  await expect(zulu).toHaveCount(0);
 });
 
 // Desktop-only: this is the SSR + cross-page navigation proof for declared

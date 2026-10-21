@@ -54,14 +54,11 @@ import { chooseOption, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 
 type EvidenceSource = "gmail" | "retailer" | "photo" | "csv";
-/** Both booking paths retain browser coverage: a statement aggregate needs
- * reviewed receipt reconciliation; a receipt first links existing itemization.
- * Both exercise photo approval and destination navigation. PostgreSQL keeps
- * a Latin square plus two seeded arrival orders; the first row also guards
- * the Problems sample limit. */
+/** The browser owns reviewed reconciliation after statement booking, photo
+ * approval and destination navigation. PostgreSQL exercises all six arrival
+ * orders; this journey also guards the crowded Problems sample. */
 export const BROWSER_SOURCE_ORDERS = [
   ["csv", "photo", "retailer", "gmail"],
-  ["retailer", "gmail", "csv", "photo"],
 ] as const satisfies readonly (readonly EvidenceSource[])[];
 
 /** Itemization that arrives after a booked aggregate stays a `conflict` until

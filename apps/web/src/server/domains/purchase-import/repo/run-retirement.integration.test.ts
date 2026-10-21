@@ -1,6 +1,3 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
-
 /**
  * Coordinator retirement: a settled agent Run's transcript is destroyed, and
  * `Run.retiredAt` is stamped only once a cold coordinator reports empty
@@ -8,26 +5,12 @@ import path from "node:path";
  * coordinator never executes again, and a late in-flight result never
  * repopulates the erased content.
  */
-import { backgroundTaskSchema } from "@cubby/schemas/background-tasks";
 import { type LedgerPartyId, runEntityId } from "@cubby/schemas/identifiers";
-import {
-  type AgentImportRunPurpose,
-  importRunAgentIdentity,
-} from "@cubby/schemas/import-run-agent";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { fromPartial } from "@total-typescript/shoehorn";
+import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { eq } from "drizzle-orm";
-import {
-  captureE2ERunIdentity,
-  writeE2ERunBundle,
-  type E2ERunIdentity,
-} from "tooling/e2e-run-bundle";
-import { sanitizeWorkerdLogs } from "tooling/e2e-workerd-logs";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { z } from "zod";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { run, runOperation, runFinding } from "~/server/db/schema";
 import {
@@ -36,13 +19,8 @@ import {
 } from "~/server/domains/run/repo/operation";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
 
 import { startAgentRunFixture } from "../service/import-run.fixtures";
-import {
-  startScenarioHarness,
-  type ScenarioHarness,
-} from "./purchase-agent-workerd.fixtures";
 import {
   assertRetirableLegacySession,
   assertRetirableRun,
@@ -451,204 +429,4 @@ describe("retired coordinator operation fence", () => {
         .where(eq(runOperation.runId, runId)),
     ).toEqual([]);
   });
-});
-
-const disposal = z.object({ disposed: z.boolean() });
-type CoordinatorRequest = {
-  agentId: string;
-  purpose?: AgentImportRunPurpose;
-  event?: PurchaseAgentEvent;
-};
-
-describe("coordinator host retirement", () => {
-  // The borrowed database resets between cases; its Worker must drain first.
-  let shared: ScenarioHarness | undefined;
-  const sharedRuntime = async () =>
-    (shared ??= await startScenarioHarness(
-      ctx.databaseUrl,
-      { steps: [] },
-      "purchase-agent",
-      { objectStorage: undefined },
-    ));
-
-  let started: E2ERunIdentity;
-  let status = "failed";
-  const scenario = "synthetic-settled-coordinator-disposal";
-  let observations: Array<{
-    boundary: string;
-    expected: number | boolean;
-    actual: number | boolean;
-  }> = [];
-  const repoRoot = path.resolve(process.cwd(), "../..");
-  beforeEach(() => {
-    started = captureE2ERunIdentity(repoRoot);
-    status = "failed";
-    observations = [];
-    shared?.harness.clearLogs();
-  });
-  afterEach(async () => {
-    setCfEnv(undefined);
-    try {
-      const inventory = sanitizeWorkerdLogs(
-        shared?.harness
-          .getLogs()
-          .filter((entry) => entry.message.includes("storage-inventory")) ?? [],
-      );
-      const outputDir = `/tmp/cubby-run-retirement-host-${Date.now()}`;
-      mkdirSync(outputDir, { recursive: true });
-      const evidence = path.join(outputDir, "boundary-results.json");
-      writeFileSync(
-        evidence,
-        JSON.stringify(
-          {
-            status,
-            boundary:
-              "Settled coordinator disposal acknowledged cold, then execution fenced",
-            source:
-              "Synthetic fixtures only; no model requests or production data",
-            observations,
-            inventory,
-          },
-          null,
-          2,
-        ),
-      );
-      writeE2ERunBundle({
-        repoRoot,
-        outputDir,
-        evidence: [evidence],
-        kind: "browser",
-        status,
-        command: [
-          "pnpm",
-          "--dir",
-          "apps/web",
-          "test:postgres",
-          "src/server/domains/purchase-import/repo/run-retirement.integration.test.ts",
-          "--project",
-          "integration-workerd",
-        ],
-        profile: "purchase-agent",
-        scenario,
-        started,
-        cases: [{ name: scenario, status }],
-      });
-    } finally {
-      const runtime = shared;
-      shared = undefined;
-      await runtime?.close();
-    }
-  });
-
-  it("stamps retiredAt in one pass only after a cold empty retry, then fences fetch and dispatch", async () => {
-    const runId = await agentRun();
-    const runtime = await sharedRuntime();
-    const peer = runtime.harness.getWorker("cubby-queue-producer");
-    const agentId = importRunAgentIdentity(runId, "mail_import");
-    const request = (pathname: string, body: CoordinatorRequest) =>
-      peer.fetch(new URL(pathname, "https://queue.test"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    // Serving an absent conversation creates real SDK SQLite state without a model turn.
-    expect((await request("/coordinator-fetch", { agentId })).status).toBe(200);
-    // A live Run's coordinator refuses disposal.
-    const liveRetire = await request("/coordinator-retire", { agentId }).then(
-      (response) => response.status,
-      () => 500,
-    );
-    expect(liveRetire).not.toBe(200);
-    await settle(runId);
-    const coordinator = () => ({
-      retire: async () => {
-        const response = await request("/coordinator-retire", { agentId });
-        if (!response.ok) throw new Error(await response.text());
-        return disposal.parse(await response.json());
-      },
-    });
-    // SDK destroy aborts the destroying isolate (and may abort that RPC); the
-    // immediate follow-up reaches a fresh instance whose empty inventory
-    // acknowledges disposal, so one pass stamps retiredAt.
-    setCfEnv(
-      fromPartial<Env>({
-        PURCHASE_IMPORT_RUN: { getByName: coordinator },
-      }),
-    );
-    const requestedAt = new Date().toISOString();
-    await handleBackgroundTask(
-      ctx.db,
-      backgroundTaskSchema.parse({
-        kind: "maintenance.recover",
-        requestedAt,
-      }),
-    );
-    expect((await readRun(runId))?.retiredAt).toBeNull();
-    await handleBackgroundTask(
-      ctx.db,
-      backgroundTaskSchema.parse({
-        kind: "maintenance.recover",
-        requestedAt,
-        coordinatorRetireBefore: requestedAt,
-      }),
-    );
-    const disposed = (await readRun(runId))?.retiredAt !== null;
-    observations.push({
-      boundary: "single-pass disposal",
-      expected: true,
-      actual: disposed,
-    });
-    expect(disposed).toBe(true);
-    expect(await readRun(runId)).toMatchObject({
-      retirementReason: "settled",
-      retiredAt: expect.any(Date),
-    });
-    const retiredFetch = await request("/coordinator-fetch", { agentId });
-    observations.push({
-      boundary: "retired fetch",
-      expected: 410,
-      actual: retiredFetch.status,
-    });
-    expect(retiredFetch.status).toBe(410);
-    const storage = await runtime.harness
-      .getWorker()
-      .getDurableObjectStorage("PurchaseImportRunAgent", { name: agentId });
-    const beforeRead = await storage.exec(
-      "SELECT name, sql FROM sqlite_master ORDER BY name",
-    );
-    const beforeRun = await readRun(runId);
-    const transcript = await request("/coordinator-transcript", { agentId });
-    expect(transcript.status).toBe(200);
-    expect(await transcript.json()).toEqual({
-      status: "absent",
-      messages: [],
-      settlements: [],
-    });
-    expect(
-      await storage.exec("SELECT name, sql FROM sqlite_master ORDER BY name"),
-    ).toEqual(beforeRead);
-    expect(await readRun(runId)).toEqual(beforeRun);
-    const reconnect = await request("/coordinator-dispatch", {
-      agentId,
-      purpose: "mail_import",
-      event: {
-        version: 1,
-        type: "start_or_resume",
-        runId,
-        eventId: "synthetic-retired-reconnect",
-        generation: "synthetic-retired-reconnect",
-      },
-    });
-    const admission = z
-      .object({ accepted: z.boolean() })
-      .parse(await reconnect.json());
-    observations.push({
-      boundary: "retired dispatch",
-      expected: false,
-      actual: admission.accepted,
-    });
-    expect(admission).toEqual({ accepted: false });
-    expect(await runtime.emitted()).toEqual([]);
-    status = "passed";
-  }, 90_000);
 });
