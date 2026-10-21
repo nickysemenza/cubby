@@ -220,22 +220,25 @@ units, and a qualified rate/ETA. Unknown totals use a moving ink segment;
 reduced motion keeps that segment visible and stationary. Progress owns its
 activity animation separately from intentionally static loading skeletons.
 
-The dedicated Work queue is a triage list, not a table. Line tabs (All,
-Review, Research, Waiting, Automatic) carry each view's server total in mono
-and a J/K · Enter hint; the view, filters and sort are URL state, and the
-shared infinite pager loads more work on scroll. Each decision row reads its
-type and record name (with vendor and sign-toned amount, and the Waiting for
-pill, on the right), then a muted line with the reason and next action beside
-the rule's details and one Review or Open button. A gap row's reason is its
-gap messages as sentences. Waiting for uses the current household member
-roster, Either for shared work and an explicit Unresolved state with its
-explanation. Clicking a row inspects its record (J/K step, Enter opens the
-full page); pending Suggestions open the Suggestions page scoped to their
-family or record. Checkboxes select record-backed work independently of the
-inspector, and a floating dark selection bar offers only the queue's bulk
-actions: Copy codes (source shortcodes, deduplicating records with multiple
-work reasons) and Select all N matching. Aggregate Problems rows have no
-shortcode and are not selectable. A record's own rows appear on its detail
+The dedicated Work queue is a workbench table across record types. Its
+workbench band carries line tabs (All, Review, Research, Waiting, Automatic)
+with each view's server total in mono; a tab presets the View filter, beside
+the Type, Waiting for, Kind, Source, Check and Vendor any-of filters. Filters,
+sort and Group by (Type, Waiting for or Next action, sectioned by the server
+ahead of the sort) are URL state, and the shared infinite pager loads more
+work on scroll. Columns are Type, Record (the record's link), Vendor,
+sign-toned Amount, Reason, the Waiting for pill, and the rule's details with
+one Review or Open; Next action, Kind, Date and Source are Columns-menu
+toggles, because a rule's next action repeats down thousands of rows and
+belongs to Details and the inspector. A gap row's reason is its gap messages
+as sentences. Waiting for uses the current household member roster, Either
+for shared work and an explicit Unresolved state with its explanation.
+Clicking a row inspects its record (J/K step, Enter opens the full page);
+Suggestion, Run and Problems rows open through their own link. Checkboxes
+select record-backed work independently of the inspector, and a floating
+dark selection bar offers only the queue's bulk actions: Copy codes (source
+shortcodes, deduplicating records with multiple work reasons) and Select all
+N matching. Aggregate Problems rows have no shortcode and are not selectable. A record's own rows appear on its detail
 page and inspector as a compact Work queue ledger — gap chips or reason,
 muted next action, trailing Waiting for pill — absent when the record has no
 work. Reason is enriched after paging and remains unsortable; projected

@@ -181,6 +181,65 @@ function applyView(
 const isListEntity = (entity: Entity | undefined): entity is ListEntity =>
   listEntities.some((candidate) => candidate === entity);
 
+/** One tab under a list title: a view preset and its server count. */
+export interface ViewTab {
+  key: string;
+  label: string;
+  count: number | undefined;
+  active: boolean;
+  onSelect: () => void;
+  description?: string;
+  tone?: "destructive" | "warning";
+}
+
+/** View presets as line tabs under a list title, each with its count. */
+export function ViewTabs({
+  tabs,
+  label = "Saved views",
+}: {
+  tabs: readonly ViewTab[];
+  label?: string;
+}) {
+  return (
+    <nav
+      aria-label={label}
+      className="flex min-w-0 [scrollbar-width:none] items-end gap-0.5 overflow-x-auto overscroll-x-contain"
+    >
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          aria-pressed={tab.active}
+          title={tab.description}
+          onClick={tab.onSelect}
+          className={cn(
+            "-mb-px flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            tab.active
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {tab.label}
+          {tab.count !== undefined && (
+            <span
+              className={cn(
+                "text-pill font-mono font-normal tabular-nums",
+                tab.tone === "destructive"
+                  ? "text-destructive"
+                  : tab.tone === "warning"
+                    ? "text-warning"
+                    : "text-muted-foreground",
+              )}
+            >
+              {formatCount(tab.count)}
+            </span>
+          )}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 /**
  * The entity's declared saved views as tabs under the list title, each with
  * its count, "All" first. The active tab is the view whose filters the list
@@ -202,67 +261,30 @@ export function SavedViewTabs<TData extends RowData>({
   const activeView = views.find((view) =>
     isViewActive(view, columnFilters, view.sort ?? sorting),
   );
-  const allActive = activeView === undefined && columnFilters.length === 0;
-  const tab = (
-    key: string,
-    label: string,
-    count: number | undefined,
-    active: boolean,
-    onSelect: () => void,
-    description?: string,
-    tone?: "destructive" | "warning",
-  ) => (
-    <button
-      key={key}
-      type="button"
-      aria-pressed={active}
-      title={description}
-      onClick={onSelect}
-      className={cn(
-        "-mb-px flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {label}
-      {count !== undefined && (
-        <span
-          className={cn(
-            "text-pill font-mono font-normal tabular-nums",
-            tone === "destructive"
-              ? "text-destructive"
-              : tone === "warning"
-                ? "text-warning"
-                : "text-muted-foreground",
-          )}
-        >
-          {formatCount(count)}
-        </span>
-      )}
-    </button>
-  );
   return (
-    <nav
-      aria-label="Saved views"
-      className="flex min-w-0 [scrollbar-width:none] items-end gap-0.5 overflow-x-auto overscroll-x-contain"
-    >
-      {tab("all", "All", total, allActive, () => {
-        appliers.onApplyFilters([]);
-        appliers.onResetPage?.();
-      })}
-      {views.map((view) =>
-        tab(
-          view.id,
-          view.label,
-          counts.get(view.id),
-          view === activeView,
-          () => applyView(view, appliers),
-          view.description,
-          view.tone,
-        ),
-      )}
-    </nav>
+    <ViewTabs
+      tabs={[
+        {
+          key: "all",
+          label: "All",
+          count: total,
+          active: activeView === undefined && columnFilters.length === 0,
+          onSelect: () => {
+            appliers.onApplyFilters([]);
+            appliers.onResetPage?.();
+          },
+        },
+        ...views.map((view) => ({
+          key: view.id,
+          label: view.label,
+          count: counts.get(view.id),
+          active: view === activeView,
+          onSelect: () => applyView(view, appliers),
+          description: view.description,
+          tone: view.tone,
+        })),
+      ]}
+    />
   );
 }
 

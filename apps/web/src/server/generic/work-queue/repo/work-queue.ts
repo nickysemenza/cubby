@@ -16,6 +16,7 @@ import {
 import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
   financialTransactionStatus,
   financialTransactionKind,
@@ -126,6 +127,8 @@ const members = workWaitingForSchema.options[1].shape.kind.value;
 const unresolved = workWaitingForSchema.options[2].shape.kind.value;
 
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
+/** A grouped read's section for rows without a value (no next action). */
+const WORK_QUEUE_NO_GROUP_LABEL = "None";
 type Candidate = Pick<WorkQueueRow, "source" | "kind" | "nextAction"> & {
   reason: string | SQL;
 };
@@ -774,6 +777,9 @@ async function queryWorkQueue(
   const sources = oneOrManyValues(input.source);
   if (sources?.length)
     candidateConditions.push(sql`source IN (${textList(sources)})`);
+  const recordTypes = oneOrManyValues(input.entity);
+  if (recordTypes?.length)
+    candidateConditions.push(sql`entity IN (${textList(recordTypes)})`);
   const kinds = oneOrManyValues(input.kind);
   if (kinds?.length)
     candidateConditions.push(sql`kind IN (${textList(kinds)})`);
@@ -895,9 +901,15 @@ async function queryWorkQueue(
     date: sql`date`,
     vendor: sql`(SELECT v.name FROM "Vendor" v WHERE v.id = eligible.vendor_id AND v."deletedAt" IS NULL)`,
   };
+  // A grouped read orders by its section first, so loaded rows are a prefix
+  // of the summary's sections; an empty value is the trailing no-value section.
+  const groupExpression = input.group
+    ? sql`nullif(${sortExpressions[input.group]}, '')`
+    : undefined;
   // Every sort places nulls last in both directions; name and key break ties.
   const orderBy = sql.join(
     [
+      ...(groupExpression ? [sql`${groupExpression} ASC NULLS LAST`] : []),
       ...sorts.map(
         (sort) =>
           sql`${sortExpressions[sort.orderBy]} ${sort.direction === "desc" ? sql`DESC` : sql`ASC`} NULLS LAST`,
@@ -965,6 +977,14 @@ async function queryWorkQueue(
           sql`, `,
         )}
       ) FROM filtered routed) AS "viewCounts",
+      ${
+        groupExpression
+          ? sql`(SELECT coalesce(jsonb_agg(to_jsonb(sections) ORDER BY sections.key = ${FILTER_NONE}, sections.key), '[]'::jsonb) FROM (
+              SELECT coalesce(section, ${FILTER_NONE}::text) AS key, coalesce(section, ${WORK_QUEUE_NO_GROUP_LABEL}::text) AS label, count(*)::int AS count
+              FROM (SELECT ${groupExpression} AS section FROM eligible) sectioned GROUP BY section
+            ) sections)`
+          : sql`NULL::jsonb`
+      } AS groups,
       coalesce((SELECT jsonb_agg(jsonb_build_object('id', shortcode, 'name', name) ORDER BY name, shortcode) FROM members), '[]'::jsonb) AS members,
       coalesce((SELECT jsonb_agg(jsonb_build_object(
         'entity', entity, 'id', id, 'name', name, 'key', key, 'source', source, 'kind', kind,
@@ -980,6 +1000,7 @@ async function queryWorkQueue(
     .object({
       total: z.number(),
       viewCounts: workQueueOutSchema.shape.meta.shape.viewCounts,
+      groups: workQueueOutSchema.shape.meta.shape.groups.nullable(),
       members: workQueueOutSchema.shape.members,
       items: workQueueOutSchema.shape.items,
     })
@@ -1001,6 +1022,7 @@ async function queryWorkQueue(
       pageSize: input.pageSize,
       totalCount: row.total,
       viewCounts: row.viewCounts,
+      ...(row.groups ? { groups: row.groups } : {}),
     },
   });
 }

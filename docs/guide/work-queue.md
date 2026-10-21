@@ -100,8 +100,8 @@ and completed receipts never reopen.
 
 ## Show the flow and its effects
 
-The queue is the scannable overview: record identity, reason, readiness and next
-action. Opening an item shows its prerequisite records, evidence and expected
+The queue is the scannable overview: record identity, reason and readiness;
+the next action belongs to the action details and an optional column. Opening an item shows its prerequisite records, evidence and expected
 changes in context. Record pages and Run progress consume the same
 server-projected explanation. Full explanations use the shared action-details
 popover. Virtualized queue rows retain their fixed height; opening details

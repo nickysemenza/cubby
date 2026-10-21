@@ -284,7 +284,12 @@ export function SortMenu<TData extends RowData>({
   );
 }
 
-function GroupMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
+/** Group by over the table meta's choices; absent when it offers none. */
+export function GroupMenu<TData extends RowData>({
+  table,
+}: {
+  table: Table<TData>;
+}) {
   const grouping = table.options.meta?.grouping;
   if (!grouping?.choices.length) return null;
   const active = grouping.choices.find(
