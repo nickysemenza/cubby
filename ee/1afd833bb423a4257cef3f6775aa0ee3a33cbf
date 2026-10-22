@@ -1,0 +1,29 @@
+apps/web/tests/e2e/finance-category-display.spec.ts
+  s_d04e55f8362046::t_0c3638560757b8 12-16,228-253,371-373,375-393,395-396
+apps/web/tests/e2e/finance-itemization.spec.ts
+  s_d04e55f8362046::t_8bc6885cfa81ce 1,8-11,13-16,18-48,50-52,54-56,58-63
+apps/web/tests/e2e/resolution-evidence.spec.ts
+  s_d04e55f8362046::t_9954b3eb9aa653 8,19-58,60
+apps/web/tests/e2e/spending-classification-review.spec.ts
+  s_d04e55f8362046::t_53faf8e05e5dbf 12,22-57
+apps/web/tests/e2e/support/import-order-convergence.helpers.ts
+  s_d04e55f8362046::t_1c0e651ad8f588 40,151-154,283-284
+apps/web/tests/e2e/table-work-signals.spec.ts
+  s_d04e55f8362046::t_6ba2154ce642a7 9,22-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ee1afd833bb423a4257cef3f6775aa0ee3a33cbf",
+  "prompts": {},
+  "sessions": {
+    "s_d04e55f8362046": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a165dc-2abb-7671-aae0-8cec2ac283bc",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
