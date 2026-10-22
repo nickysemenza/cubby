@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -241,9 +241,10 @@ describe("image execution history conservation", () => {
         .from(imageProcessingAttempt)
         .where(eq(imageProcessingAttempt.jobId, jobId)),
     ).toHaveLength(0);
+    // Claims use the application clock, which can lag the database clock in CI.
     await getDb(ctx.db)
       .update(durableJob)
-      .set({ availableAt: sql`now()` })
+      .set({ availableAt: new Date(0) })
       .where(eq(durableJob.key, `image-processing:${jobId}`));
     const lease = await claim(jobId);
     const deviceId = crypto.randomUUID();
@@ -604,7 +605,7 @@ describe("image execution history conservation", () => {
       .where(eq(durableJob.key, `image-processing:${jobId}`));
     await getDb(ctx.db)
       .update(durableJob)
-      .set({ availableAt: sql`now()` })
+      .set({ availableAt: new Date(0) })
       .where(eq(durableJob.key, `image-processing:${jobId}`));
     const current = await claim(jobId);
     const cloudAnalysis = {
