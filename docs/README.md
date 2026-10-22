@@ -29,7 +29,6 @@ the repository.
 | `adr/`                     | Durable decisions and their reasoning; keep even after implementation. [Index](adr/README.md).              |
 | `agents/`                  | Cross-app agent rules and validation contracts.                                                             |
 | `guide/`                   | Household-facing guide bundled into the app's Documentation route.                                          |
-| `plans/`                   | Proposed or in-progress work; status at the top of each plan governs.                                       |
 | `runbooks/`                | Operational procedures that require current-environment checks.                                             |
 | `apps/*/docs/` (repo root) | Rules for one app only (web runtime and UI, Xcode MCP); that app's `AGENTS.md` names when to load each one. |
 
@@ -46,3 +45,17 @@ Delete completed plans and dated reports after moving durable rationale to its
 behavior owner and unresolved work to the backlog. Verify status against
 implementation before removing active work. Git history is the archive; this
 policy requires no new drift checks.
+
+Keep always-loaded `AGENTS.md` files as short contracts and conditional pointers.
+Skill descriptions route tasks; their bodies own workflow steps. Put app-specific
+rules in app references, and keep global preferences out of repository copies.
+Use section anchors for large references so a narrow task does not require a
+whole-file read. Add a document only for a distinct audience, behavior owner or
+loading branch; extend the existing owner otherwise. File count alone is not a
+pruning criterion: merging independent references can increase context loaded.
+
+Mechanical rules belong in the existing formatter, linter or checks; prose
+records judgment and rationale. Before adding a rule after an incident, check
+whether an existing rule or unwired check already owns it. Fix that owner
+instead of adding another reminder. Keep ADRs as decision history, household
+guides as product content, and connector skill entry points as discovery paths.

@@ -981,7 +981,7 @@ span. Other code uses `withTrace` for child operations and
 build these helpers run work without tracing.
 
 Authenticated Start, workflow-stream, HTTP and MCP failures follow the
-[raw diagnostic contract](../AGENTS.md#product-constraints). Only credential-shaped
+[raw diagnostic contract](agents/domain-rules.md#error-diagnostics). Only credential-shaped
 values are redacted. Request-scoped reporting captures the original exception
 and supplies correlation/Sentry references; a capture ID is an attempt, not
 proof of ingestion, and MCP batch items retain separate references.

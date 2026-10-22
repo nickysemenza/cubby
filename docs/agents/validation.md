@@ -8,6 +8,29 @@ implementation it guards. Use real implementations; mocks are for external
 seams that cannot run locally. Negative fixtures must satisfy earlier admission
 contracts so the observed failure reaches the intended guard.
 
+## Entry points
+
+Read the section for the current decision; follow its links when triggered.
+Publication does not require loading every test, native-stack or performance rule.
+
+| Decision                                           | Section                                                   |
+| -------------------------------------------------- | --------------------------------------------------------- |
+| Add, retain or delete a test                       | [Test retention](#test-retention)                         |
+| Choose a test boundary                             | [Signal and speed](#signal-and-speed)                     |
+| Run a focused check or diagnose a failure          | [During implementation](#during-implementation)           |
+| Choose evidence for the changed behavior           | [Before opening a PR](#before-opening-a-pr)               |
+| Commit, push, inspect CI or assess merge readiness | [Commit, push, and merge](#commit-push-and-merge)         |
+| Capture UI evidence                                | [PR screenshots](#pr-screenshots)                         |
+| Publish dependent PRs                              | [Native PR stacks](#native-pr-stacks)                     |
+| Evaluate a performance change                      | [Performance review](#performance-review)                 |
+| Run a broad local diagnostic                       | [Explicit local diagnostics](#explicit-local-diagnostics) |
+
+For prose-only changes, use the staged formatting hook and check changed links;
+no typecheck, generation, build or runtime tests are required. CI still owns the
+final-content merge gate. Record passing checks with the revision or inputs they
+cover; reuse them until those inputs change. A new handoff, review or push alone
+does not invalidate evidence.
+
 ## Signal and speed
 
 Choose the cheapest boundary that can expose the failure. Classify individual

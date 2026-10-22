@@ -304,6 +304,15 @@ On workerd, wall clocks omit synchronous CPU: use CPU-time/sampling for WASM or
 JS hot paths. WASM hot-path tracing stays `trace, skip_all`; a global INFO
 subscriber accumulates in reused isolates.
 
+## Error diagnostics
+
+The trusted household sees raw diagnostics in toasts, Technical details and
+HTTP/MCP error bodies: SQL text and parameters, Postgres SQLSTATE codes and
+upstream response bodies. Preserve these rather than replacing them with generic
+messages. Only credential-shaped values are redacted (`scrubErrorMessage`).
+This governs error surfaces; repository and outward-facing
+content still uses synthetic evidence under the root agent rules.
+
 ## MCP and observability traps
 
 Read [MCP operating patterns](mcp.md) for bounded reads, batch writes, file
