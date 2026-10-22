@@ -1,5 +1,8 @@
 // Nx's supported HTTP contract: GET /v1/cache/{hash} -> 200|404,
 // PUT -> 200|409. Authenticated immutable objects certify passing task results.
+// CI also publishes its merged HTML test reports here: PUT /v1/reports/{key}
+// requires the cache credential, and GET /reports/{key} serves them publicly.
+// CI runs only synthetic data and test credentials, so reports are public.
 interface Env {
   CACHE: R2Bucket;
   CACHE_TOKEN: string;
@@ -107,9 +110,84 @@ async function stats(env: Env) {
   };
 }
 
+// {run}/{attempt}/{vitest|playwright}/{file path}; the bucket's 30-day expiry
+// retires reports with cache entries. No segment may be empty or a dot path.
+const reportKey =
+  /^(\d+\/\d+\/(?:vitest|playwright))((?:\/[A-Za-z0-9_@+-][A-Za-z0-9._@+-]*)*)$/;
+const reportTypes = new Map([
+  ["html", "text/html; charset=utf-8"],
+  ["js", "text/javascript; charset=utf-8"],
+  ["mjs", "text/javascript; charset=utf-8"],
+  ["css", "text/css; charset=utf-8"],
+  ["json", "application/json"],
+  ["svg", "image/svg+xml"],
+  ["png", "image/png"],
+  ["jpeg", "image/jpeg"],
+  ["jpg", "image/jpeg"],
+  ["webp", "image/webp"],
+  ["ico", "image/x-icon"],
+  ["webm", "video/webm"],
+  ["woff2", "font/woff2"],
+  ["zip", "application/zip"],
+  ["gz", "application/gzip"],
+  ["txt", "text/plain; charset=utf-8"],
+  ["md", "text/plain; charset=utf-8"],
+]);
+
+async function report(
+  request: Request,
+  env: Env,
+  key: string,
+  write: boolean,
+): Promise<Response> {
+  const root = key.endsWith("/");
+  const match = reportKey.exec(root ? key.slice(0, -1) : key);
+  if (!match) return new Response("not found", { status: 404 });
+  // A report root serves its index. The root needs a trailing slash so the
+  // reports' relative asset paths resolve inside it.
+  if (!write && !match[2] && !root)
+    return Response.redirect(`${request.url}/`, 308);
+  const objectKey = `reports/${match[1]}${match[2] || "/index.html"}`;
+  if (write) {
+    if (!authorized(request, env.CACHE_TOKEN))
+      return new Response("unauthorized", { status: 401 });
+    if (request.method !== "PUT")
+      return new Response("method not allowed", {
+        status: 405,
+        headers: { allow: "PUT" },
+      });
+    if (!request.body) return new Response("missing body", { status: 400 });
+    // Reruns publish under their own attempt, so a key is written once.
+    await env.CACHE.put(objectKey, request.body);
+    return new Response("stored");
+  }
+  if (request.method !== "GET" && request.method !== "HEAD")
+    return new Response("method not allowed", {
+      status: 405,
+      headers: { allow: "GET, HEAD" },
+    });
+  const object = await env.CACHE.get(objectKey);
+  if (!object) return new Response("not found", { status: 404 });
+  const extension = objectKey.slice(objectKey.lastIndexOf(".") + 1);
+  return new Response(request.method === "HEAD" ? null : object.body, {
+    headers: {
+      "content-type":
+        reportTypes.get(extension.toLowerCase()) ?? "application/octet-stream",
+      "cache-control": "public, max-age=300",
+      "x-content-type-options": "nosniff",
+      // Playwright's hosted trace viewer fetches trace archives cross-origin.
+      "access-control-allow-origin": "*",
+    },
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const path = new URL(request.url).pathname;
+    if (path.startsWith("/reports/"))
+      return report(request, env, path.slice("/reports/".length), false);
+    if (path.startsWith("/v1/reports/"))
+      return report(request, env, path.slice("/v1/reports/".length), true);
     if (["/", "/dashboard.js", "/styles.css"].includes(path)) {
       if (request.method !== "GET" && request.method !== "HEAD")
         return new Response("method not allowed", { status: 405 });

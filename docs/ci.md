@@ -87,8 +87,9 @@ entries after 30 days. Rotate `CACHE_TOKEN` in the Worker and update the Actions
 publishers. Browser and native compiler caches are separate from Nx result passes.
 
 The Worker's public root is an aggregate dashboard; `/stats.json` returns its
-fixed last-24-hour snapshot. Cache archive routes still require the bearer
-credential. Only authenticated cache operations write `cubby_nx_cache` Analytics
+fixed last-24-hour snapshot. `/reports/` serves published CI test reports,
+which hold only synthetic data, and expires them with cache entries. Cache
+archive routes and report uploads still require the bearer credential. Only authenticated cache operations write `cubby_nx_cache` Analytics
 Engine events: outcome, GET/PUT method, artifact bytes and operation duration.
 No hash, archive, terminal output, request identity or credential is recorded.
 `GET /healthz` checks Worker reachability and authentication without touching
@@ -417,8 +418,14 @@ traces for seven days, named by commit SHA and shard, and a blob report.
 `Test report` waits for Validation and the test lanes (not Rust or Apple),
 downloads the Vitest and Playwright blobs,
 and merges each runner's shards into one HTML report (`vitest --merge-reports`,
-`playwright merge-reports`), kept for 14 days. The Vitest report opens in
-[Vitest Viewer](https://viewer.vitest.dev/) from its artifact URL. The job
+`playwright merge-reports`). It publishes both to the Nx cache Worker, which
+serves them publicly at `/reports/{run}/{attempt}/{vitest|playwright}/`, and
+also uploads them as 14-day artifacts. Publishing needs the cache credentials
+and the `CUBBY_REPORTS_URL` Actions variable, the Worker's public origin: Actions
+withholds step outputs containing the secret `NX_CACHE_URL`, so links cannot
+derive from it. Fork PRs and an unset variable fall back to the artifacts.
+(Vitest Viewer cannot open Actions artifact URLs: they require a signed-in
+browser and block cross-origin reads.) The job
 summary (`apps/web/tooling/ci-report/summary.ts`) lists each Linux test lane's
 result and duration from the Actions API, shard balance, per-runner totals, failures,
 tests that passed only on retry, and the slowest tests. It is informative and
