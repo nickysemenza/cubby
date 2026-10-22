@@ -567,6 +567,7 @@ function LiveEntityRelationTable({
           only: plan.columns ?? undefined,
           skipSpecialized: true,
           onSaveField,
+          onSaveFields: onSaveField?.row,
         })
           .filter(
             (column) =>
@@ -672,7 +673,7 @@ function LiveEntityRelationTable({
   useSectionEmpty(resolvedEmpty);
   const { pluralLabel } = entities[target];
 
-  if (list.workbench.error) {
+  if (list.workbench.error && list.data.length === 0) {
     return (
       <ErrorDisplay
         title={title.toLocaleLowerCase()}

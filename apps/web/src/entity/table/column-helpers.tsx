@@ -207,6 +207,10 @@ export function createNameColumn<T extends BaseRow>(
     className?: string;
     editable?: {
       onSave: (newValue: string, row: T) => Promise<void>;
+      saveFields?: (
+        row: T,
+        values: import("~/ui/data-table/cell-data").PasteFieldValues,
+      ) => Promise<void>;
       /** Stored edit value when the visible identity is a computed title. */
       getValue?: (row: T) => string | null;
     };
@@ -237,6 +241,12 @@ export function createNameColumn<T extends BaseRow>(
     nameValue,
     editable ? (row, v) => editable.onSave(v ?? "", row) : undefined,
   );
+  if (editable?.saveFields && cellData.applyPaste) {
+    cellData.rowWrite = {
+      field: options?.id ?? String(resolvedFieldName),
+      save: editable.saveFields,
+    };
+  }
   const config = {
     id: options?.id ?? String(resolvedFieldName),
     enableSorting: options?.enableSorting ?? true,
@@ -398,7 +408,6 @@ export function createNameColumn<T extends BaseRow>(
             // it with a derived label would silently persist that label as a
             // real name on the next save.
             value={editValue}
-            retainCommittedValue={entity !== "task"}
             onSave={(newVal) =>
               editable.onSave(newVal ?? "", info.row.original)
             }

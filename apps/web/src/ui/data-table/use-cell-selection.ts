@@ -14,6 +14,7 @@ import {
   type CellSelection,
   gridToTsv,
   type PasteColumnTarget,
+  type PasteOp,
   parseTsv,
   selectionRect,
 } from "./cell-clipboard-model";
@@ -204,12 +205,15 @@ function handleEditKey<TItem extends RowData>(
   }
 }
 
-function emitPasteToast(summary: PasteSummary): void {
+function emitPasteToast(
+  summary: PasteSummary,
+  options?: Parameters<typeof toast.error>[1],
+): void {
   match(summary.variant)
-    .with("success", () => toast.success(summary.message))
-    .with("warning", () => toast.warning(summary.message))
-    .with("error", () => toast.error(summary.message))
-    .with("info", () => toast.info(summary.message))
+    .with("success", () => toast.success(summary.message, options))
+    .with("warning", () => toast.warning(summary.message, options))
+    .with("error", () => toast.error(summary.message, options))
+    .with("info", () => toast.info(summary.message, options))
     .exhaustive();
 }
 
@@ -488,28 +492,57 @@ export function useCellSelection<TItem extends RowData>({
         return;
       }
 
-      const result = await runPastePlan({
-        ops: plan.ops,
-        rows: rowsNow.map((r) => r.original),
-        columnCellData,
-        formatError: getErrorMessage,
-        concurrency: 5,
-      });
-
-      emitPasteToast(
-        summarizePasteResult({
-          cellTotal: plan.cellTotal,
-          opCount: plan.ops.length,
-          updated: result.updated,
-          unchanged: result.unchanged,
-          failed: result.failed,
-          errors: result.errors,
-        }),
-      );
-
-      if (result.updatedOps.length > 0) {
-        flashCoords(container, result.updatedOps, "pasted");
-      }
+      // Retry keeps the original row identities even if refetch reorders the table.
+      const targetRows = rowsNow.map((r) => r.original);
+      const targetColumnIds = [...selectableColumnIdsRef.current];
+      const apply = async (
+        ops: readonly PasteOp[],
+        cellTotal: number,
+      ): Promise<void> => {
+        const toastId = toast.loading("Saving pasted rows…");
+        const result = await runPastePlan({
+          ops,
+          rows: targetRows,
+          columnCellData,
+          formatError: getErrorMessage,
+          concurrency: 5,
+        });
+        emitPasteToast(
+          summarizePasteResult({
+            cellTotal,
+            opCount: ops.length,
+            updated: result.updated,
+            unchanged: result.unchanged,
+            failed: result.failed,
+            errors: result.errors,
+          }),
+          result.failedOps.length > 0
+            ? {
+                id: toastId,
+                description: result.errors.join("\n"),
+                action: {
+                  label: "Retry failed rows",
+                  onClick: () => {
+                    void apply(result.failedOps, result.failedOps.length);
+                  },
+                },
+              }
+            : { id: toastId },
+        );
+        if (result.updatedOps.length > 0) {
+          const coords = result.updatedOps.flatMap((op) => {
+            const row = rowsRef.current.findIndex(
+              (current) => current.id === rowsNow[op.row]?.id,
+            );
+            const col = selectableColumnIdsRef.current.indexOf(
+              targetColumnIds[op.col] ?? "",
+            );
+            return row < 0 || col < 0 ? [] : [{ row, col }];
+          });
+          flashCoords(container, coords, "pasted");
+        }
+      };
+      await apply(plan.ops, plan.cellTotal);
     },
     [buildColumnCellData, flashCoords, getSelection],
   );

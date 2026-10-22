@@ -157,7 +157,7 @@ export function MatchStatementDialog({
       setSaveError(error instanceof Error ? error.message : String(error));
       return;
     }
-    await invalidateOperationTags(
+    void invalidateOperationTags(
       queryClient,
       entityRipple("financialTransaction"),
       { removeInactive: true },

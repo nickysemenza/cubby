@@ -154,6 +154,52 @@ describe("progressive list lifecycle", () => {
     expect(session.state("first", "derived").state).toBe("pending");
   });
 
+  it("keeps a confirmed reference when a later base refresh omits it and enrichment fails", async () => {
+    const previous = new ProgressiveListSession<{
+      id: string;
+      name: string;
+      project?: string;
+    }>(() => {});
+    previous.setPages([[{ id: "first", name: "First" }]]);
+    await previous.load(rows.slice(0, 1), ["relations"], async () => ({
+      groups: [
+        {
+          id: "relations",
+          state: "ready",
+          data: [{ id: "first", project: "Old project" }],
+        },
+      ],
+      missingIds: [],
+    }));
+    previous.setPages([
+      [{ id: "first", name: "First", project: "Confirmed project" }],
+    ]);
+    const refreshed = new ProgressiveListSession<{
+      id: string;
+      name: string;
+      project?: string;
+    }>(() => {});
+    refreshed.retain(previous, ["project"]);
+    refreshed.setPages([[{ id: "first", name: "First" }]]);
+    await refreshed.load(rows.slice(0, 1), ["relations"], async () => ({
+      groups: [
+        {
+          id: "relations",
+          state: "error",
+          error: {
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Synthetic relation refresh failed",
+          },
+        },
+      ],
+      missingIds: [],
+    }));
+    expect(refreshed.rows()).toEqual([
+      { id: "first", name: "First", project: "Confirmed project" },
+    ]);
+    expect(refreshed.state("first", "relations").state).toBe("error");
+  });
+
   it("batches missing visible groups once per page and reuses ready groups", async () => {
     const session = new ProgressiveListSession(() => {});
     const requests: string[][] = [];

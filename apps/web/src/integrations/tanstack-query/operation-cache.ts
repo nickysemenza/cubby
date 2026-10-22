@@ -1,4 +1,4 @@
-import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
+import type { Query, QueryClient } from "@tanstack/react-query";
 
 import {
   EMPTY_INVALIDATION_TAG_SET,
@@ -35,11 +35,11 @@ export async function invalidateOperationTags(
 ) {
   if (invalidations.length === 0) return;
   const predicate = matchesTags(invalidations);
-  await queryClient.invalidateQueries({ predicate });
-  // Passive queries do not refetch on mount. An editor that closes after a
-  // write can drop its stale cache so following its result reads fresh data.
+  // Evict inactive baselines immediately; unrelated active refreshes cannot
+  // hold navigation or a newly opened editor hostage.
   if (options?.removeInactive)
     queryClient.removeQueries({ predicate, type: "inactive" });
+  await queryClient.invalidateQueries({ predicate });
 }
 
 export const cancelQueriesByTags = (
@@ -49,28 +49,3 @@ export const cancelQueriesByTags = (
   tags.length === 0
     ? Promise.resolve()
     : queryClient.cancelQueries({ predicate: matchesTags(tags) });
-
-export const snapshotQueriesByTags = (
-  queryClient: QueryClient,
-  tags: readonly OperationCacheTag[],
-): Array<[QueryKey, unknown]> =>
-  tags.length === 0
-    ? []
-    : queryClient.getQueriesData({ predicate: matchesTags(tags) });
-
-export const updateQueriesByTags = <TData>(
-  queryClient: QueryClient,
-  tags: readonly OperationCacheTag[],
-  updater: (old: TData | undefined) => TData | undefined,
-): void => {
-  if (tags.length === 0) return;
-  queryClient.setQueriesData<TData>({ predicate: matchesTags(tags) }, updater);
-};
-
-/** Roll a snapshot from `snapshotQueriesByTags` back into the cache. */
-export const restoreQueries = (
-  queryClient: QueryClient,
-  snapshot: ReadonlyArray<readonly [QueryKey, unknown]>,
-): void => {
-  for (const [key, data] of snapshot) queryClient.setQueryData(key, data);
-};

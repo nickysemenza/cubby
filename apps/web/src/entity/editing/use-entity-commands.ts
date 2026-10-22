@@ -1,17 +1,15 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import {
   countPrimaryDeletedReferences,
-  entityMutationScope,
   parseEntityWriteResult,
 } from "~/entity/entity-mutation";
 import {
   executeEntityMutationCommand,
   type EntityMutationTransport,
 } from "~/entity/entity-mutation-command";
-import { runTaskRecordTransaction } from "~/entity/task-record-transactions";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
@@ -182,15 +180,7 @@ const kernelOptionsFor = (entity: string) => {
   const cached = kernelOptionsByEntity.get(entity);
   if (cached) return cached;
   const declared = entityMutation.mutate.forEntity(entity).mutationOptions();
-  // A subsequent editor must load the committed collection roles, not reuse
-  // the previous edit's baseline while its invalidation is still in flight.
-  const options = {
-    ...declared,
-    meta: {
-      ...declared.meta,
-      invalidationCompletion: { removeInactive: true },
-    },
-  };
+  const options = declared;
   kernelOptionsByEntity.set(entity, options);
   return options;
 };
@@ -266,7 +256,6 @@ export function useEntityCommands<E extends EditableEntity>(
   entity: E,
   options?: EntityCommandsOptions,
 ): EntityCommands<E> {
-  const client = useQueryClient();
   const productionPort = useEntityMutationPort();
   const port = options?.mutationPort ?? productionPort;
   const [issues, setIssues] = useState<readonly EntityEditIssue[]>([]);
@@ -278,24 +267,20 @@ export function useEntityCommands<E extends EditableEntity>(
   // every write in the app rather than per call site.
   const mutation = useMutation({
     ...kernelOptionsFor(entity),
-    scope: entityMutationScope(entity),
     mutationFn: async (command: EntityEditCommand<E>) =>
       await port.execute(command),
   });
 
   const bulkMutation = useMutation({
     ...kernelOptionsFor(entity),
-    scope: entityMutationScope(entity),
     mutationFn: async (command: EntityBulkUpdateCommand<E>) =>
       await port.executeBulk(command),
   });
 
   const executeCommand = useCallback(
     async (command: EntityEditCommand<E>) =>
-      await runTaskRecordTransaction(client, command, () =>
-        mutation.mutateAsync(command),
-      ),
-    [client, mutation],
+      await mutation.mutateAsync(command),
+    [mutation],
   );
 
   const submit = useCallback(

@@ -11,9 +11,14 @@ Router subscriptions select the scalar or derived value a component consumes;
 components that genuinely consume the full dynamic search state retain it.
 Do not enable global structural sharing merely to narrow scalar subscriptions.
 Pass the displayed selection as mutation variables at the action boundary.
-Queries stay passive on remount. When a write closes an editor, await
-`invalidateOperationTags` with `removeInactive` so navigation cannot reuse that
-editor's stale detail cache. `useEntityCommands` opts into the root mutation cache's `invalidationCompletion` policy once for every ordinary editor; do not duplicate invalidation in each dialog.
+Queries stay passive on ordinary remount, but invalidated queries refetch when
+reactivated. Detail loaders fetch invalidated records before returning them.
+Ordinary saves finish at the validated server receipt. The root mutation cache
+retires older reads, publishes confirmed compatible scalar fields into existing
+projections, evicts inactive baselines, then refreshes active views independently.
+Do not await a broad refresh in an editor or duplicate command invalidation in a
+presentation wrapper. A refresh failure preserves the accepted write and offers
+read retry, never write retry.
 Create-from-picker dialogs resolve the pending choice synchronously from the
 saved receipt's identity/title before closing. They must not require a full
 detail schema from a mutation response; later picker queries own expanded rows.
@@ -135,32 +140,35 @@ factory result to a module-level constant referenced by a splittable property
 in the route's literal options object; loader-time helpers stay React-free in
 `detail-loader.ts`.
 
-## Shared Task write state
+## Confirmed edit state
 
-Task rename and delete commands use request-local TanStack DB transactions in
-`entity/task-record-transactions.ts`. The collection holds only pending changes;
-Query remains the canonical record and freshness owner. Generic lists (including
-expanded children), detail pages and inspector previews project those changes.
-Each command executes once through `useEntityCommands`; the transaction survives
-through that command's awaited invalidation and then disappears. A failed delete
-drops only its own overlay instead of restoring an entire list snapshot. Task name
-cells use the shared value after saving rather than retaining a second committed
-value. Drafts and retry state stay in the editor.
+Query owns server records across entity lists, detail and inspector views.
+`receipt-reconciliation.ts` consumes complete mutation receipts before adapters
+narrow their public results. Only declared fields with matching stored/read
+representations patch existing records. Inline reference/inherited edits fetch
+one authoritative detail projection before releasing their editor, following
+replacement reads if another write cancels the first attempt. Its declared read
+fields update loaded rows, including deferred references; a genuine read failure
+is reported separately from the accepted write. Confirmed deletes
+and merged-away identities retire centrally. Never seed full detail from a
+partial receipt or retain a second committed value in a cell.
 
-Task writes share one Query mutation scope so a later successful write cannot be
-hidden by an older still-pending write. Other entity writes retain their existing
-lifecycle. Only pure name updates and delete commands receive optimistic overlays;
-compound/inherited fields and bulk updates use server reconciliation. No collection
-loads, local filtering, joins, counts, or offset pagination are introduced. Lists
-keep their server membership, ordering and progressive enrichment, with pending
-loaded deletions removed from the visible row count. Deleted details stay visible
-until the authoritative read reports absence. Native and background changes still
-use the existing invalidation and refresh rules.
+Editors show Saving… until acceptance. Offline writes reject without queuing;
+overlapping writes to the same record reject while unrelated records stay usable.
+Draft and failed-write retry state remain local. Collection and inherited-value
+editors load an authoritative baseline on reopening when their cache was retired
+or invalidated. That dependent action may wait; the accepted save is complete.
 
-This is the Task pilot for #2948, not a full normalized entity store. The remaining
-snapshot helpers and local accepted-value state serve other entities. Expand only
-after comparing the adapter and projection cost with receipt-aware Query updates;
-do not infer app-wide savings from the disposable SDK prototype.
+Loaded views retain data with Updating… during reconciliation and report refresh
+failure separately. Server reads own membership, ordering, counts and paging: a
+saved row may briefly remain in its previous position. Do not append offset pages
+while the current list is reconciling or its refresh has failed. Retained
+progressive enrichment must not overwrite confirmed base fields.
+
+Clipboard paste prepares all changed fields before issuing one update per row.
+Invalid rows issue no writes; successful sibling rows remain saved. Errors keep
+row and field context, and retry targets failed original row identities only.
+Multi-field rows without a shared atomic row writer reject before dispatch.
 
 ## List loading and enrichment
 
@@ -217,14 +225,12 @@ Capture its identity before dispatch and compare it on completion; a query key
 alone cannot distinguish leaving a view and returning to it. Cache invalidation
 still completes for authorized writes. Ordinary workflow commands execute through
 the generated operation catalog with its mutation metadata and optional scope.
-When a command patches a saved snapshot, its awaited `onResult` runs before
-catalog invalidation. Opt into `invalidationCompletion` when the caller's
-serialized mutation must include active refresh and inactive-cache removal;
-keep the serialization scope on the transport-owning mutation. A presentation
-mutation that awaits a command must not acquire the command's same scope: Query
-would pause the inner command behind its caller. The Task presentation wrapper
-also leaves invalidation to that command; direct transport factories retain
-scope and completion metadata.
+When a command patches a saved snapshot, synchronous `onResult` receipt work runs
+before catalog invalidation. Asynchronous follow-up failures are reported
+separately from the accepted command. Keep serialization scope on a
+transport-owning mutation only when the workflow requires it; a presentation
+wrapper awaiting that command must not acquire the same scope. Ordinary entity
+commands share neither a global nor entity-wide serialization scope.
 
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;

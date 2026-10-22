@@ -5,6 +5,7 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import superjson from "superjson";
+import { z } from "zod";
 
 import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -17,6 +18,7 @@ import {
   invalidateOperationTags,
   resolveInvalidationTags,
 } from "./operation-cache";
+import { cancelQueriesByTags } from "./operation-cache";
 import { operationInvalidationTags } from "./operation-catalog";
 import { installOperationRecorder } from "./operation-recorder";
 import {
@@ -24,6 +26,10 @@ import {
   shouldToastQueryError,
 } from "./query-error-policy";
 import { QUERY_CLIENT_DEFAULT_OPTIONS } from "./query-policy";
+import {
+  mutationReceipt,
+  reconcileMutationReceipt,
+} from "./receipt-reconciliation";
 
 // React Query fires these cache error callbacks from inside its notify cycle,
 // which can land during React's render/commit phase (e.g. a background query
@@ -35,6 +41,11 @@ function deferToastError<Failure>(error: Failure) {
   setTimeout(() => showErrorToast(error), 0);
 }
 
+const writeTargets = z.object({
+  id: z.string().optional(),
+  ids: z.array(z.string()).optional(),
+});
+
 export interface RootMutationSuccessRuntime {
   registeredInvalidations<Variables>(
     operation: string | undefined,
@@ -44,7 +55,6 @@ export interface RootMutationSuccessRuntime {
     queryClient: QueryClient;
     result: Result;
     invalidations: InvalidationTagSet;
-    invalidationCompletion?: { removeInactive?: boolean };
   }): void | Promise<void>;
 }
 
@@ -52,20 +62,17 @@ const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
   registeredInvalidations: (operation, variables) =>
     operationInvalidationTags(operation, variables) ??
     EMPTY_INVALIDATION_TAG_SET,
-  afterSuccess: ({ queryClient, invalidations, invalidationCompletion }) => {
-    const refreshed = invalidateOperationTags(
-      queryClient,
-      invalidations,
-      invalidationCompletion,
-    );
+  afterSuccess: async ({ queryClient, result, invalidations }) => {
+    // Retire reads begun before the receipt before publishing confirmed values.
+    await cancelQueriesByTags(queryClient, invalidations);
+    reconcileMutationReceipt(queryClient, mutationReceipt(result));
+    void invalidateOperationTags(queryClient, invalidations, {
+      removeInactive: true,
+    });
     // A mutation's own derived work (an AI description, a recomputed
     // valuation, a refreshed embedding) lands on the queue shortly after this
     // returns — there is no batch left to watch, so re-check on a fixed
     // schedule instead.
-    if (invalidationCompletion)
-      return refreshed.then(() => {
-        scheduleDeferredInvalidation(queryClient, invalidations);
-      });
     scheduleDeferredInvalidation(queryClient, invalidations);
   },
 };
@@ -86,6 +93,42 @@ export function getContext(
       },
     }),
     mutationCache: new MutationCache({
+      onMutate: (variables, current) => {
+        if (typeof navigator !== "undefined" && navigator.onLine === false)
+          throw new Error(
+            "Cannot save while offline. Reconnect and submit again.",
+          );
+        if (current.options.meta?.operation !== "entity.mutate") return;
+        const targets = writeTargets.safeParse(variables);
+        if (!targets.success) return;
+        const ids = new Set(
+          targets.data.ids ?? (targets.data.id ? [targets.data.id] : []),
+        );
+        if (!ids.size) return;
+        const conflict = queryClient
+          .getMutationCache()
+          .getAll()
+          .some((other) => {
+            if (
+              other.mutationId >= current.mutationId ||
+              other.state.status !== "pending" ||
+              other.options.meta?.operation !== "entity.mutate" ||
+              other.options.meta.entity !== current.options.meta?.entity
+            )
+              return false;
+            const parsed = writeTargets.safeParse(other.state.variables);
+            return (
+              parsed.success &&
+              (
+                parsed.data.ids ?? (parsed.data.id ? [parsed.data.id] : [])
+              ).some((id) => ids.has(id))
+            );
+          });
+        if (conflict)
+          throw new Error(
+            "This record is already saving. Wait for that save to finish.",
+          );
+      },
       onError: (error, _variables, _onMutateResult, mutation) => {
         if (!shouldToastMutationError(mutation)) return;
         deferToastError(error);
@@ -113,7 +156,6 @@ export function getContext(
           queryClient,
           result: data,
           invalidations,
-          invalidationCompletion: mutation.meta?.invalidationCompletion,
         });
       },
     }),

@@ -57,7 +57,7 @@ export function AttachExistingImageDialog({
   const attach = useMutation(
     imageOperations.attachExisting.mutationOptions({
       onSuccess: async (result) => {
-        await invalidateOperationTags(queryClient, ripple.image);
+        void invalidateOperationTags(queryClient, ripple.image);
         toast.success(
           result.reused ? "Image was already attached." : "Image attached.",
         );

@@ -1,4 +1,4 @@
-import type { DefaultOptions } from "@tanstack/react-query";
+import type { DefaultOptions, Query } from "@tanstack/react-query";
 
 import type { CacheProfile } from "~/contracts/cache-policy";
 
@@ -23,13 +23,13 @@ export const QUERY_CLIENT_DEFAULT_OPTIONS = {
     gcTime: 5 * MINUTE,
     retry: false,
     networkMode: "online",
-    refetchOnMount: false,
+    refetchOnMount: (query: Query) => query.state.isInvalidated,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   },
   mutations: {
     retry: false,
-    networkMode: "online",
+    networkMode: "always",
   },
 } as const satisfies Pick<DefaultOptions, "queries" | "mutations">;
 

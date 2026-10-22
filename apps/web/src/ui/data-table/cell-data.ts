@@ -13,7 +13,7 @@
  * "amount" | "entity:<name>"): paste is allowed between any two columns of the
  * same base kind (e.g. one text column into another), not scoped per-column.
  * Builders throw on invalid pastes — the clipboard surfaces the message as a
- * toast — and resolve with the saved value for the cell's optimistic display.
+ * toast. Canonical row props own the displayed accepted value.
  *
  * Logic-only module (no React components of its own). Amount values reach the
  * WASM boundary via `tryFormatAmount` for canonical rendering and
@@ -60,10 +60,36 @@ export interface ColumnCellData<
   getNumericValue?: (row: TData) => number | null;
   /** null → nothing to copy (empty TSV field). */
   getCopyPayload: (row: TData) => CellCopyPayload | null;
-  /** Absent → column is read-only for paste. Resolves with the saved value (for optimistic display). */
+  /** Absent → column is read-only for paste. Resolves after the write is accepted. */
   applyPaste?: (row: TData, payload: CellPastePayload) => Promise<TSaved>;
+  /** Parse and validate without writing; shares the single-cell parser. */
+  preparePaste?: (payload: CellPastePayload) => CellJsonValue;
+  /** All fields in a row must share this semantic command to paste together. */
+  rowWrite?: {
+    field: string;
+    save: (row: TData, values: PasteFieldValues) => Promise<void>;
+  };
   /** Absent unless this specific relation is nullable. */
   applyClear?: (row: TData) => Promise<TSaved>;
+}
+
+export type PasteFieldValues = Record<string, CellJsonValue>;
+
+function pasteHandlers<TData, TValue extends CellJsonValue>(
+  parse: (payload: CellPastePayload) => TValue,
+  save: ((row: TData, value: TValue) => Promise<void>) | undefined,
+  fieldValue: (value: TValue) => CellJsonValue = (value) => value,
+): Pick<ColumnCellData<TData, TValue>, "applyPaste" | "preparePaste"> {
+  return save
+    ? {
+        preparePaste: (payload) => fieldValue(parse(payload)),
+        applyPaste: async (row, payload) => {
+          const value = parse(payload);
+          await save(row, value);
+          return value;
+        },
+      }
+    : {};
 }
 
 const pastedStringSchema = z.string();
@@ -82,8 +108,8 @@ const pastedString = (payload: CellPastePayload): string => {
  * `CellClipboardSpec` for the single-cell clipboard registry (detail-page and
  * in-table editable cells). The kind key is the base kind; copy/paste delegate
  * to the column's row-parametrized builders, so select validation, amount
- * parsing, etc. live in exactly one place (and the range engine, which calls
- * `applyPaste` directly, gets the same validation for free).
+ * parsing, etc. live in exactly one place. The range engine uses `preparePaste`
+ * to validate that same value before the shared row command writes it.
  */
 export function specFromCellData<TData, TSaved>(
   cellData: ColumnCellData<TData, TSaved>,
@@ -112,14 +138,11 @@ export function textCellData<TData>(
         ? null
         : { text: value, json: value };
     },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const raw = pastedString({ json, text });
-          const next = raw.trim() === "" ? null : raw.trim();
-          await save(row, next);
-          return next;
-        }
-      : undefined,
+    ...pasteHandlers<TData, string | null>(({ json, text }) => {
+      const raw = pastedString({ json, text });
+      const next = raw.trim() === "" ? null : raw.trim();
+      return next;
+    }, save),
   };
 }
 
@@ -135,15 +158,12 @@ export function dateCellData<TData>(
         ? null
         : { text: value, json: value };
     },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const raw = pastedString({ json, text });
-          const parsed = parsePlainDateInput(raw);
-          if (!parsed.ok) throw new Error(parsed.error);
-          await save(row, parsed.value);
-          return parsed.value;
-        }
-      : undefined,
+    ...pasteHandlers<TData, string | null>(({ json, text }) => {
+      const raw = pastedString({ json, text });
+      const parsed = parsePlainDateInput(raw);
+      if (!parsed.ok) throw new Error(parsed.error);
+      return parsed.value;
+    }, save),
   };
 }
 
@@ -159,26 +179,19 @@ export function booleanCellData<TData>(
       const value = getValue(row);
       return value == null ? null : { text: String(value), json: value };
     },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const typed = pastedBooleanSchema.safeParse(json);
-          const normalized = (text ?? "").trim().toLowerCase();
-          const value = typed.success
-            ? typed.data
-            : normalized === "true" ||
-                normalized === "yes" ||
-                normalized === "1"
-              ? true
-              : normalized === "false" ||
-                  normalized === "no" ||
-                  normalized === "0"
-                ? false
-                : null;
-          if (value === null) throw new Error("Pasted value is not a boolean");
-          await save(row, value);
-          return value;
-        }
-      : undefined,
+    ...pasteHandlers<TData, boolean>(({ json, text }) => {
+      const typed = pastedBooleanSchema.safeParse(json);
+      const normalized = (text ?? "").trim().toLowerCase();
+      const value = typed.success
+        ? typed.data
+        : normalized === "true" || normalized === "yes" || normalized === "1"
+          ? true
+          : normalized === "false" || normalized === "no" || normalized === "0"
+            ? false
+            : null;
+      if (value === null) throw new Error("Pasted value is not a boolean");
+      return value;
+    }, save),
   };
 }
 
@@ -194,19 +207,16 @@ export function numberCellData<TData>(
       const value = getValue(row);
       return value == null ? null : { text: String(value), json: value };
     },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const parsedNumber = pastedNumberSchema.safeParse(json);
-          const num = parsedNumber.success
-            ? parsedNumber.data
-            : Number.parseFloat((text ?? "").replace(/[^0-9.-]/g, ""));
-          if (Number.isNaN(num)) {
-            throw new Error("Pasted value is not a number");
-          }
-          await save(row, num);
-          return num;
-        }
-      : undefined,
+    ...pasteHandlers<TData, number | null>(({ json, text }) => {
+      const parsedNumber = pastedNumberSchema.safeParse(json);
+      const num = parsedNumber.success
+        ? parsedNumber.data
+        : Number.parseFloat((text ?? "").replace(/[^0-9.-]/g, ""));
+      if (Number.isNaN(num)) {
+        throw new Error("Pasted value is not a number");
+      }
+      return num;
+    }, save),
   };
 }
 
@@ -223,21 +233,18 @@ export function selectCellData<TData>(
       const opt = selectOptions.find((o) => o.value === value);
       return { text: opt?.label ?? value, json: value };
     },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const candidate = pastedString({ json, text }).trim();
-          const opt =
-            selectOptions.find((o) => o.value === candidate) ??
-            selectOptions.find(
-              (o) => o.label.toLowerCase() === candidate.toLowerCase(),
-            );
-          if (!opt || opt.value === "") {
-            throw new Error(`"${candidate}" is not a valid option here`);
-          }
-          await save(row, opt.value);
-          return opt.value;
-        }
-      : undefined,
+    ...pasteHandlers<TData, string>(({ json, text }) => {
+      const candidate = pastedString({ json, text }).trim();
+      const opt =
+        selectOptions.find((o) => o.value === candidate) ??
+        selectOptions.find(
+          (o) => o.label.toLowerCase() === candidate.toLowerCase(),
+        );
+      if (!opt || opt.value === "") {
+        throw new Error(`"${candidate}" is not a valid option here`);
+      }
+      return opt.value;
+    }, save),
   };
 }
 
@@ -262,20 +269,21 @@ export function entityCellData<TData, TId extends string>(
         ? { text: item.name, json: { id: item.id, name: item.name } }
         : null;
     },
-    applyPaste: save
-      ? async (row, { json }) => {
-          const parsed = pastedEntitySchema.safeParse(json);
-          if (!parsed.success) {
-            throw new Error(`Paste a ${entity} cell here`);
-          }
-          const pasted = {
-            id: parseId(parsed.data.id),
-            name: parsed.data.name,
-          };
-          await save(row, pasted.id);
-          return { id: pasted.id, name: pasted.name };
+    ...pasteHandlers<TData, Pick<ComboboxItem<TId>, "id" | "name">>(
+      ({ json }) => {
+        const parsed = pastedEntitySchema.safeParse(json);
+        if (!parsed.success) {
+          throw new Error(`Paste a ${entity} cell here`);
         }
-      : undefined,
+        const pasted = {
+          id: parseId(parsed.data.id),
+          name: parsed.data.name,
+        };
+        return { id: pasted.id, name: pasted.name };
+      },
+      save ? (row, value) => save(row, value.id) : undefined,
+      (value) => value.id,
+    ),
     applyClear: clear
       ? async (row) => {
           await clear(row);
@@ -319,10 +327,9 @@ export function amountCellData<TData>(
         json,
       };
     },
-    applyPaste: async (row, { json, text }) => {
+    ...pasteHandlers<TData, Amount>(({ json, text }) => {
       const typed = amountSchema.safeParse(json);
       if (typed.success) {
-        await save(row, typed.data);
         return typed.data;
       }
       // No typed payload — free text ("1 1/2 cups", "2.5 lb", "5 each", "3",
@@ -340,9 +347,8 @@ export function amountCellData<TData>(
         unit: preserveWrittenWholeUnit(text, parsed.unit),
       };
       if (parsed.upper_value != null) next.upperValue = parsed.upper_value;
-      await save(row, next);
       return next;
-    },
+    }, save),
   };
 }
 
@@ -411,21 +417,18 @@ export function tagsCellData<TData>(
         ? null
         : { text: tags.join(", "), json: [...tags] };
     },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const parsedTags = pastedTagsSchema.safeParse(json);
-          const fromJson = parsedTags.success ? parsedTags.data : undefined;
-          const next =
-            fromJson ??
-            (text ?? "")
-              .split(",")
-              .map((t) => t.trim().toLowerCase())
-              .filter((t) => t !== "");
-          const value = next.length === 0 ? null : next;
-          await save(row, value);
-          return value;
-        }
-      : undefined,
+    ...pasteHandlers<TData, string[] | null>(({ json, text }) => {
+      const parsedTags = pastedTagsSchema.safeParse(json);
+      const fromJson = parsedTags.success ? parsedTags.data : undefined;
+      const next =
+        fromJson ??
+        (text ?? "")
+          .split(",")
+          .map((t) => t.trim().toLowerCase())
+          .filter((t) => t !== "");
+      const value = next.length === 0 ? null : next;
+      return value;
+    }, save),
   };
 }
 

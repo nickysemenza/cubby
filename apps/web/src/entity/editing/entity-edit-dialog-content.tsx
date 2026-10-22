@@ -27,6 +27,7 @@ import {
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import type { UnparsedError } from "~/lib/error-utils";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormWrapper } from "~/ui/forms/form-utils";
 import { Overlay } from "~/ui/overlays/overlay";
 
@@ -301,16 +302,18 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   mutationPort,
   onSubmitOverride,
   evidence,
-}: EntityEditDialogProps<E>) {
+  baseline,
+}: EntityEditDialogProps<E> & { baseline?: EntityEditRecord }) {
   const sessionRequest: RuntimeEntityEditRequest<E> = {
     ...request,
+    record: baseline ?? request.record,
     surface: "dialog",
   };
   const session = useEntityEditSession(sessionRequest, { mutationPort });
   const resetSession = session.reset;
   const presentation = getEntityEditorPresentation<E>(request);
   const context = request.context ?? {};
-  const record = request.record;
+  const record = baseline ?? request.record;
   const resolved = resolveEntityEdit(entityEditRegistry, sessionRequest);
   const intentFields = isResolvedEntityEdit(resolved)
     ? resolved.fields.map((field) => field.id)
@@ -425,13 +428,25 @@ export function EntityEditDialogContent<E extends EditableEntity>({
                 );
               }
               const saved = z.object({ id: z.string() }).parse(result.result);
-              await receiptHandler.current?.(saved.id);
+              const acknowledge = receiptHandler.current;
+              void Promise.resolve()
+                .then(() => acknowledge?.(saved.id))
+                .catch((error) => {
+                  showErrorToast(
+                    error,
+                    "Saved, but suggestion acknowledgement failed",
+                  );
+                });
               toast.success(presentation.successMessage(result.result));
               toastMutationWarnings(result.result.sideEffects);
               // Success before close: a create-from-picker caller resolves its
               // pending selection in `onSuccess`, and closing first rejects
               // that pending selection as a cancel.
-              await onSuccess?.(result.result);
+              try {
+                await onSuccess?.(result.result);
+              } catch (error) {
+                showErrorToast(error, "Saved, but follow-up work failed");
+              }
               close();
             })
             .catch((error: UnparsedError) =>

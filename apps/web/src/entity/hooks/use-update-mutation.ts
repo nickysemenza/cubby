@@ -12,6 +12,7 @@ import {
   type StandardEntity,
 } from "~/entity/entity-contracts";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import type { PasteFieldValues } from "~/ui/data-table/cell-data";
 
 import {
   useActionMutation,
@@ -50,6 +51,10 @@ export type EntityFieldSave = (
   field: string,
   value: string | number | boolean | null,
 ) => Promise<void>;
+type EntityRowSave = (
+  row: { id: string },
+  values: PasteFieldValues,
+) => Promise<void>;
 
 /**
  * The `onSaveField` a generic list or embedded relation table hands
@@ -61,7 +66,7 @@ export type EntityFieldSave = (
 export function useEntityFieldSave(
   entity: string,
   options?: { mutationPort?: EntityMutationPort },
-): EntityFieldSave | undefined {
+): (EntityFieldSave & { row: EntityRowSave }) | undefined {
   const standard = isGeneratedBrowserCrudEntity(entity);
   const mutationEntity: StandardEntity = standard ? entity : "product";
   const update = useUpdateMutation({
@@ -72,9 +77,23 @@ export function useEntityFieldSave(
   return useMemo(
     () =>
       standard
-        ? async (row, field, value) => {
-            await update.mutateAsync({ id: row.id, data: { [field]: value } });
-          }
+        ? Object.assign(
+            async (
+              row: { id: string },
+              field: string,
+              value: string | number | boolean | null,
+            ) => {
+              await update.mutateAsync({
+                id: row.id,
+                data: { [field]: value },
+              });
+            },
+            {
+              row: async (row: { id: string }, values: PasteFieldValues) => {
+                await update.mutateAsync({ id: row.id, data: values });
+              },
+            },
+          )
         : undefined,
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- mutation result objects change every render; mutateAsync is the stable operation port.
     [standard, update.mutateAsync],

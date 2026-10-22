@@ -136,7 +136,7 @@ function QueryHarness({ children }: { children: ReactNode }) {
 }
 
 describe("useOptimisticDelete", () => {
-  it("optimistically removes paginated rows, then restores the snapshot on a registered refusal", async () => {
+  it("retains paginated rows until a delete is accepted and preserves them on refusal", async () => {
     const command = createDeferredCommandPort();
     const key = [["product"], { page: "all" }] as const;
     const original = {
@@ -171,19 +171,9 @@ describe("useOptimisticDelete", () => {
     render(<>{hook.result.current.deleteDialog}</>, { wrapper: QueryHarness });
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
-    await waitFor(() =>
-      expect(harness.queryClient.getQueryData(key)).toEqual({
-        pages: [
-          {
-            items: [{ id: "PRD-3333", name: "Bananas" }],
-            count: 1,
-            meta: { totalCount: 1, cursor: "next" },
-          },
-        ],
-        pageParams: [0],
-      }),
-    );
+    expect(harness.queryClient.getQueryData(key)).toEqual(original);
 
+    await waitFor(() => expect(command.requests).toHaveLength(1));
     command.resolve(refusedProduct);
     await waitFor(() =>
       expect(harness.queryClient.getQueryData(key)).toEqual(original),

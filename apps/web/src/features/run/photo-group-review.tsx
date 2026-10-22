@@ -222,7 +222,6 @@ export function usePhotoRunReview(
 function useReviewAction(runId: string) {
   const queryClient = useQueryClient();
   const { mutateAsync: execute } = useWorkflowCommand({
-    invalidationCompletion: { removeInactive: true },
     onResult: ({ result }) => {
       const data = reviewPhotoGroupsOutput.parse(result);
       queryClient.setQueryData(photoImport.review.queryKey({ runId }), (old) =>
@@ -880,7 +879,7 @@ function IdentityDecision({
     ) => photoImport.resolveConcern.call(input),
     onSuccess: async (_data, input) => {
       session.acknowledge(replyId, input.reply ?? "");
-      await invalidateOperationTags(queryClient, ripple.runOnly);
+      void invalidateOperationTags(queryClient, ripple.runOnly);
     },
     onError: (error) => showErrorToast(error),
   });
@@ -1673,7 +1672,7 @@ function ProductPanel({
           name: proposal.review?.observedName ?? proposalName(proposal),
         },
       });
-      await invalidateOperationTags(queryClient, ripple.runOnly);
+      void invalidateOperationTags(queryClient, ripple.runOnly);
     },
     onError: (error) => showErrorToast(error),
   });

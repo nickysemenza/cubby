@@ -24,6 +24,7 @@ import {
   dispatchClipboardEvent,
   makeClipboardData,
 } from "~/ui/data-table/cell-clipboard-test-helpers";
+import { runPastePlan } from "~/ui/data-table/cell-paste-executor";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -481,6 +482,10 @@ describe("declared entity displays", () => {
       text: "Raised bed",
       json: { id: "LOC-TEST", name: "Raised bed" },
     });
+    expect(
+      cellData.preparePaste?.({ json: { id: "LOC-NEXT", name: "Sun bed" } }),
+    ).toBe("LOC-NEXT");
+    expect(onSaveField).not.toHaveBeenCalled();
     await expect(
       cellData.applyPaste?.(row, {
         json: { id: "LOC-NEXT", name: "Sun bed" },
@@ -908,9 +913,11 @@ describe("generic enum fields", () => {
     };
     const helper = createCubbyColumnHelper<typeof record>();
     const onSaveField = vi.fn().mockResolvedValue(undefined);
+    const onSaveFields = vi.fn().mockResolvedValue(undefined);
     const columns = createEntityDisplayColumns("expense", helper, undefined, {
       only: ["cost", "date", "future", "productQuantity", "costType"],
       onSaveField,
+      onSaveFields,
     });
     const cells = new Map(
       columns.visit((column) => [column.id, column.meta?.cellData] as const),
@@ -934,6 +941,26 @@ describe("generic enum fields", () => {
     expect(onSaveField).toHaveBeenCalledWith(record, "productQuantity", -1);
     await cells.get("future")?.applyPaste?.(record, { json: true });
     expect(onSaveField).toHaveBeenCalledWith(record, "future", true);
+    onSaveField.mockClear();
+    const result = await runPastePlan({
+      rows: [record],
+      columnCellData: [cells.get("cost") ?? null, cells.get("future") ?? null],
+      ops: [
+        { row: 0, col: 0, source: { kind: "currency", text: "25", json: 25 } },
+        {
+          row: 0,
+          col: 1,
+          source: { kind: "boolean", text: "true", json: true },
+        },
+      ],
+      formatError: String,
+    });
+    expect(result.updated).toBe(2);
+    expect(onSaveFields).toHaveBeenCalledExactlyOnceWith(record, {
+      cost: 25,
+      future: true,
+    });
+    expect(onSaveField).not.toHaveBeenCalled();
   });
 
   it("pastes enum labels through the rendered cell and range descriptor with the same stored value", async () => {
@@ -966,6 +993,11 @@ describe("generic enum fields", () => {
     await waitFor(() =>
       expect(save).toHaveBeenLastCalledWith(record, "status", "done"),
     );
+    expect(screen.getByRole("button")).toHaveTextContent("Not started");
+    const [confirmed] = columns.visit((column) =>
+      renderRowCell(column.cell, { ...record, status: "done" }),
+    );
+    view.rerender(<>{confirmed}</>);
     expect(screen.getByRole("button")).toHaveTextContent("Done");
     save.mockClear();
     await expect(data.applyPaste(record, { text: "Done" })).resolves.toBe(

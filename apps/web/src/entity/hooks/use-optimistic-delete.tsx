@@ -1,5 +1,5 @@
-import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { UseMutationOptions } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -7,14 +7,6 @@ import { toast } from "sonner";
 import type { EntityActionDefinition } from "~/entity/actions/entity-action-definition";
 import type { EditableEntity, EntityEditResult } from "~/entity/editing/types";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
-import { removeCachedListItems } from "~/entity/hooks/optimistic-list";
-import {
-  cancelQueriesByTags,
-  restoreQueries,
-  snapshotQueriesByTags,
-  updateQueriesByTags,
-} from "~/integrations/tanstack-query/operation-cache";
-import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { DropdownMenuSeparator } from "~/ui/primitives/dropdown-menu";
@@ -34,10 +26,6 @@ interface DeleteCommandPort {
   remove: (ids: readonly string[]) => Promise<EntityEditResult<EditableEntity>>;
 }
 
-interface DeleteRollbackContext {
-  previousData: Array<[QueryKey, unknown]>;
-}
-
 interface DeleteTarget extends EntityActionRow {
   displayName: string;
 }
@@ -45,8 +33,7 @@ interface DeleteTarget extends EntityActionRow {
 type OptimisticDeleteMutationOptions = UseMutationOptions<
   DeleteMutationResult,
   Error,
-  DeleteMutationVariables,
-  DeleteRollbackContext
+  DeleteMutationVariables
 >;
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
@@ -76,10 +63,10 @@ interface UseOptimisticDeleteReturn<TData extends { id: string }> {
 }
 
 /**
- * Hook for optimistic delete with cache rollback.
+ * Shared confirmed-delete presentation.
  *
  * Owns only what a list needs on top of the shared `DeleteEntityDialog`:
- * - Optimistic removal from query cache, and rollback on error
+ * - Confirmed removal owned by the root receipt reconciler
  * - The delete bulk action and row-menu item that stage targets for the dialog
  *
  * Single-row delete (row menu / swipe action) and bulk delete (selection
@@ -95,7 +82,6 @@ export function useOptimisticDelete<
   impactPreviewOperations,
   emptyLabel,
 }: UseOptimisticDeleteOptions<TData>): UseOptimisticDeleteReturn<TData> {
-  const queryClient = useQueryClient();
   const registeredDelete =
     deletable?.entity !== undefined && deletable.entity !== "image";
   const commandEntity: EditableEntity =
@@ -146,35 +132,13 @@ export function useOptimisticDelete<
           } satisfies OptimisticDeleteMutationOptions)
         : deletable.mutationOptions();
 
-      // Extend with optimistic updates
+      // Keep the canonical rows until the server confirms deletion.
       return {
         ...baseMutationOptions,
-        onMutate: async (variables: { ids: string[] }) => {
-          // Task transactions project pending deletes without mutating Query snapshots.
-          if (registeredDelete && deletable.entity === "task" && !commandPort)
-            return { previousData: [] };
-          // The NARROW surface: only queries that list this entity's own rows can
-          // have a deleted id spliced out of them. A product delete ripples to
-          // recipes and dashboards too, but `removeDeletedIdsFromCache` has
-          // nothing sensible to say about those — it would walk them, match no
-          // id, and hand back the same object.
-          const patched: readonly OperationCacheTag[] = [[deletable.entity]];
-          await cancelQueriesByTags(queryClient, patched);
-          const previousData = snapshotQueriesByTags(queryClient, patched);
-          const deletedIds = new Set(variables.ids);
-          updateQueriesByTags(queryClient, patched, (old) =>
-            removeCachedListItems(old, deletedIds),
-          );
-          return { previousData };
-        },
         onSuccess,
-        onError: (error, _variables, context) => {
-          // Roll back optimistic update on error
-          if (context) restoreQueries(queryClient, context.previousData);
-          onError(error);
-        },
+        onError,
       };
-    }, [commandPort, deleteCommands, deletable, queryClient, registeredDelete]);
+    }, [deleteCommands, deletable, registeredDelete]);
 
   // Always call useMutation unconditionally (Rules of Hooks).
   // When deletable is not configured, pass a no-op mutation function.
@@ -185,8 +149,7 @@ export function useOptimisticDelete<
   const deleteMutation = useMutation<
     DeleteMutationResult,
     Error,
-    DeleteMutationVariables,
-    DeleteRollbackContext
+    DeleteMutationVariables
   >(deleteMutationOptions ?? noopMutationOptions);
   const { isPending: isDeletePending, mutateAsync: mutateDelete } =
     deleteMutation;
@@ -323,8 +286,8 @@ export function useOptimisticDelete<
             try {
               await submitDelete();
             }
-            // SILENT: `useMutation` has already rolled back the snapshot and
-            // shown the structured refusal toast; keep this dialog open for
+            // SILENT: `useMutation` has shown the structured refusal toast;
+            // canonical rows remain unchanged. Keep this dialog open for
             // retry.
             catch {}
           }}

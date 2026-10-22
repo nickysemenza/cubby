@@ -3,7 +3,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode } from "react";
 import { z } from "zod";
 
 import { entities } from "~/entity/entities";
@@ -11,8 +11,8 @@ import { type GenericDetailEntity } from "~/entity/entity-detail/detail-record";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
 import { readRecordField } from "~/entity/entity-references";
 import { Page } from "~/entity/page/page";
-import { useTaskRecordProjection } from "~/entity/task-record-transactions";
 import { EmptyState } from "~/ui/feedback/empty-state";
+import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { useDetailTitle } from "~/ui/hooks/use-document-title";
 import { Button } from "~/ui/primitives/button";
 
@@ -121,24 +121,11 @@ export function detailPage<TQuery extends DetailQueryFactory>({
     // SAFETY: the route factory's query options resolve to the page's
     // schema-derived record, while the router library hides that correlation
     // behind conditional generic overloads.
-    const { data: serverData } = useSuspenseQuery(
+    const detailQuery = useSuspenseQuery(
       query(shortcode) as UseSuspenseQueryOptions<DetailRecord<TQuery> | null>,
     );
 
-    const records = useMemo(
-      () =>
-        serverData
-          ? [
-              {
-                ...serverData,
-                id: readRecordField(serverData, "id", z.string()),
-              },
-            ]
-          : [],
-      [serverData],
-    );
-    const projected = useTaskRecordProjection(entity ?? "", records);
-    const data = projected[0] ?? serverData;
+    const data = detailQuery.data;
 
     useDetailTitle(shortcode, (data ? title(data) : undefined) ?? undefined);
 
@@ -147,7 +134,18 @@ export function detailPage<TQuery extends DetailQueryFactory>({
     // not-found transition rather than a blank successful detail page.
     if (!data) throw notFound();
 
-    return render(data, shortcode);
+    return (
+      <>
+        <QueryRefreshStatus
+          refreshing={detailQuery.isRefetching}
+          error={detailQuery.isRefetchError ? detailQuery.error : undefined}
+          onRetry={() => {
+            void detailQuery.refetch();
+          }}
+        />
+        {render(data, shortcode)}
+      </>
+    );
   };
 }
 

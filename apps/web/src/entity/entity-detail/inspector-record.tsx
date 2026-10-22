@@ -5,7 +5,7 @@ import {
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/entity/actions/entity-actions";
@@ -26,7 +26,6 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { PreviewQuery } from "~/entity/preview/preview-query";
 import { readPathValue } from "~/entity/read-path";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
-import { useTaskRecordProjection } from "~/entity/task-record-transactions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { FactsAddProvider, FactsDensityProvider } from "~/ui/common/facts";
 import { KeyNumbers } from "~/ui/common/key-numbers";
@@ -297,15 +296,7 @@ export function InspectorRecord<E extends GenericDetailEntity>(props: {
   onRecordResolved: (record: EntityActionRow | undefined) => void;
   onNameResolved: (name: string) => void;
 }) {
-  const serverQuery = useQuery(
-    entityDetailFor(props.entity).queryOptions(props.id),
-  );
-  const records = useMemo(
-    () => (serverQuery.data ? [serverQuery.data] : []),
-    [serverQuery.data],
-  );
-  const projected = useTaskRecordProjection(props.entity, records);
-  const query = { ...serverQuery, data: projected[0] ?? serverQuery.data };
+  const query = useQuery(entityDetailFor(props.entity).queryOptions(props.id));
   return (
     <PreviewQuery
       query={query}

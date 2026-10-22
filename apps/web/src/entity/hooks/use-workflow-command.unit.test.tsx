@@ -87,8 +87,8 @@ it("serializes scoped operations while publishing their exact bodies and metadat
   client.clear();
 });
 
-// Saved results must land before refetch, and serialized callers await the refresh.
-it("patches before catalog invalidation and awaits its active refresh", async () => {
+// Saved results land before refetch without holding the write behind that read.
+it("patches before catalog invalidation and finishes while refresh is pending", async () => {
   const gate = Promise.withResolvers<void>();
   const events: string[] = [];
   vi.stubGlobal(
@@ -124,7 +124,6 @@ it("patches before catalog invalidation and awaits its active refresh", async ()
   const { result } = renderHook(
     () =>
       useWorkflowCommand({
-        invalidationCompletion: { removeInactive: true },
         onResult: async () => {
           events.push("patch");
           client.setQueryData(activeKey, "committed");
@@ -157,7 +156,7 @@ it("patches before catalog invalidation and awaits its active refresh", async ()
     await waitFor(() => expect(events).toContain("refresh"));
     expect(events.slice(0, 2)).toEqual(["patch", "refresh"]);
     expect(client.getQueryData(activeKey)).toBe("committed");
-    expect(settled).toBe(false);
+    await waitFor(() => expect(settled).toBe(true));
     await act(async () => {
       gate.resolve();
       await Promise.all(pending);

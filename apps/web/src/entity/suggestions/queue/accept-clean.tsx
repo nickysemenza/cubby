@@ -144,7 +144,7 @@ export function useAcceptClean(
       running: false,
       failures,
     });
-    await invalidateOperationTags(
+    void invalidateOperationTags(
       queryClient,
       suggestions.acceptClean.invalidates({ filters: target.filters }),
     );

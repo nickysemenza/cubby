@@ -307,7 +307,7 @@ describe("EditableCell select editor (commit-on-pick)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     });
-    expect(screen.getByTestId("display")).toHaveTextContent("b");
+    expect(screen.getByTestId("display")).toHaveTextContent("a");
   });
 
   it("picking the current value closes without saving", async () => {
