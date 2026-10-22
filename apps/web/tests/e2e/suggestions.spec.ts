@@ -642,6 +642,10 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await expect(rowFor(hold)).toHaveCount(0);
   expect(await spendingTotal()).toBe(103.57);
 
+  // The preceding acceptance commits search work before the row disappears.
+  // Settle that work before this serializable fixture import updates the same
+  // refresh Job; the offline pump can otherwise change it under our snapshot.
+  await drainDerivedRefreshFrontier(db);
   // Publish manual review work without scheduling import-clean execution,
   // which would legitimately finish the same booking before the bulk click.
   const posted = await recordSourceTransactionRecords(
