@@ -883,7 +883,7 @@ export class MacImportDriver {
     );
     this.record(["owned-shortcut", label], 0, this.observe());
   }
-  async openStatementImport(): Promise<void> {
+  async openTransactionImport(): Promise<void> {
     await this.click("id=browse.importStatement");
     await this.wait("id=statement.csv.chooseFile");
   }

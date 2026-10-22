@@ -344,6 +344,16 @@ export type EntityStorageField = Readonly<{
   default: EntityStorageDefaultKind;
   defaultValue: DeclarationValue;
   reference: string | null;
+  referenceOptions?: Readonly<{
+    column: string;
+    onUpdate?:
+      | "cascade"
+      | "restrict"
+      | "no action"
+      | "set null"
+      | "set default";
+  }>;
+  defaultSql?: string;
   specialized: string | null;
 }>;
 type EntityFieldModelSort = Readonly<{

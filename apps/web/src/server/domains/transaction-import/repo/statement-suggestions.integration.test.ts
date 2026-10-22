@@ -1,10 +1,10 @@
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
-  recordStatementRowsInput,
-  type StatementImportInput,
-  type StatementRowInput,
-} from "@cubby/schemas/statement-row";
+  recordSourceTransactionRecordsInput,
+  type TransactionImportInput,
+  type SourceTransactionRecordInput,
+} from "@cubby/schemas/source-transaction-record";
 import {
   STATEMENT_LABEL_REVISION,
   type StatementSuggestionOut,
@@ -34,12 +34,12 @@ import {
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
-import * as statementSuggestionsRepo from "~/server/domains/statement-import/repo/statement-suggestions";
+import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
+import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
 import {
   labelStatementSuggestions as runStatementLabels,
   precomputeStatementSuggestionLabels as runStatementPrecompute,
-} from "~/server/domains/statement-import/service/statement-suggestion-labels";
+} from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
@@ -51,11 +51,11 @@ import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import {
-  getStatementRowSummary,
-  listStatementRows,
-  recordStatementRows,
-  updateStatementRows,
-} from "./statement-row";
+  getSourceTransactionRecordSummary,
+  recordSourceTransactionRecords,
+  updateSourceTransactionRecords,
+} from "./source-transaction-record";
+import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
 import {
   buildChargeProposals,
   generateStatementSuggestionPage,
@@ -65,8 +65,8 @@ import {
 } from "./statement-suggestions";
 
 const importInput = (
-  overrides: Partial<StatementImportInput> = {},
-): StatementImportInput => ({
+  overrides: Partial<TransactionImportInput> = {},
+): TransactionImportInput => ({
   source: "monarch",
   label: "synthetic-export.csv",
   fingerprint: "fp-suggest-1",
@@ -78,8 +78,8 @@ const importInput = (
 
 let position = 0;
 const rowInput = (
-  overrides: Partial<StatementRowInput> = {},
-): StatementRowInput => ({
+  overrides: Partial<SourceTransactionRecordInput> = {},
+): SourceTransactionRecordInput => ({
   accountDescriptor: "Synthetic Card (...4242)",
   statementDate: "2026-05-04",
   providerAmount: -42.5,
@@ -135,12 +135,12 @@ async function statementSpendingAdvice(
 
 const record = (
   ctx: Ctx,
-  rows: StatementRowInput[],
-  importOverrides: Partial<StatementImportInput> = {},
+  rows: SourceTransactionRecordInput[],
+  importOverrides: Partial<TransactionImportInput> = {},
 ) =>
-  recordStatementRows(
+  recordSourceTransactionRecords(
     ctx.db,
-    recordStatementRowsInput.parse({
+    recordSourceTransactionRecordsInput.parse({
       import: importInput(importOverrides),
       rows,
     }),
@@ -396,7 +396,7 @@ describe("statement Transaction suggestions", () => {
       source: string;
       chargeKey: string;
     }>(
-      sql`SELECT source, "chargeKey" FROM "StatementRow" WHERE "deletedAt" IS NULL`,
+      sql`SELECT source, "chargeKey" FROM "SourceTransactionRecord" WHERE "deletedAt" IS NULL`,
     );
     const charges = rows.map(({ source, chargeKey }) => ({
       source,
@@ -453,7 +453,9 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-suggest-2" },
     );
     expect(
-      await getStatementRowSummary(ctx.db, { matchState: "unmatched" }),
+      await getSourceTransactionRecordSummary(ctx.db, {
+        matchState: "unmatched",
+      }),
     ).toMatchObject({ unmatched: 4, unmatchedCharges: 2 });
 
     expect(await generate(ctx)).toBe(2);
@@ -484,8 +486,10 @@ describe("statement Transaction suggestions", () => {
     expect(first).toMatchObject({ recommended: "create", clean: false });
     expect(first?.create?.kind).toBe("purchase");
 
-    const rows = await listStatementRows(ctx.db, { search: "EXAMPLE CAFE" });
-    await updateStatementRows(
+    const rows = await listSourceTransactionRecords(ctx.db, {
+      search: "EXAMPLE CAFE",
+    });
+    await updateSourceTransactionRecords(
       ctx.db,
       {
         selector: {
@@ -501,9 +505,9 @@ describe("statement Transaction suggestions", () => {
       ctx.actor,
     );
     expect(
-      (await listStatementRows(ctx.db, { search: "EXAMPLE CAFE" })).data.map(
-        (row) => row.matchState,
-      ),
+      (
+        await listSourceTransactionRecords(ctx.db, { search: "EXAMPLE CAFE" })
+      ).data.map((row) => row.matchState),
     ).toEqual(["ignored", "ignored"]);
     // Reads follow the authoritative ignore; they never retire the advice.
     expect((await suggestions(ctx)).map((row) => row.merchant)).toEqual([
@@ -523,10 +527,10 @@ describe("statement Transaction suggestions", () => {
       await card(ctx);
       const observed = rowInput({ rowPosition: undefined });
       await record(ctx, [observed], { fingerprint: "synthetic-idless-first" });
-      const [first] = (await listStatementRows(ctx.db, {})).data;
+      const [first] = (await listSourceTransactionRecords(ctx.db, {})).data;
       await record(ctx, [observed], { fingerprint: "synthetic-idless-second" });
       const [second] = (
-        await listStatementRows(ctx.db, {
+        await listSourceTransactionRecords(ctx.db, {
           importFingerprint: "synthetic-idless-second",
         })
       ).data;
@@ -542,7 +546,7 @@ describe("statement Transaction suggestions", () => {
       if (decision === "settled") {
         await accept(ctx, reviewed);
       } else {
-        await updateStatementRows(
+        await updateSourceTransactionRecords(
           ctx.db,
           {
             selector: {
@@ -559,7 +563,7 @@ describe("statement Transaction suggestions", () => {
         );
       }
       await generate(ctx);
-      const after = (await listStatementRows(ctx.db, {})).data;
+      const after = (await listSourceTransactionRecords(ctx.db, {})).data;
       expect(after.find((row) => row.id === first!.id)).toMatchObject({
         matchState: decision === "settled" ? "matched" : "ignored",
       });
@@ -587,7 +591,7 @@ describe("statement Transaction suggestions", () => {
       status: "applied",
       active: true,
     });
-    const [row] = (await listStatementRows(ctx.db, {})).data;
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(row).toMatchObject({ matchState: "matched" });
     expect(row?.accountId).toMatch(/^FAC-/);
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
@@ -628,7 +632,7 @@ describe("statement Transaction suggestions", () => {
       transactionId: existing.id,
       fields: ["postedDate"],
     });
-    const [row] = (await listStatementRows(ctx.db, {})).data;
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(row).toMatchObject({
       matchState: "matched",
       transactionId: existing.id,
@@ -729,7 +733,7 @@ describe("statement Transaction suggestions", () => {
     });
     await accept(ctx, posted!);
     const states = Object.fromEntries(
-      (await listStatementRows(ctx.db, {})).data.map((row) => [
+      (await listSourceTransactionRecords(ctx.db, {})).data.map((row) => [
         row.rawDescription,
         row.matchState,
       ]),
@@ -768,7 +772,7 @@ describe("statement Transaction suggestions", () => {
       chargeKey: string;
     }>(sql`
       SELECT source, "chargeKey"
-      FROM "StatementRow" WHERE "deletedAt" IS NULL ORDER BY source, "chargeKey"
+      FROM "SourceTransactionRecord" WHERE "deletedAt" IS NULL ORDER BY source, "chargeKey"
     `);
     const removeFailure = await rejectStatementPublication(
       ctx,
@@ -845,7 +849,7 @@ describe("statement Transaction suggestions", () => {
     await record(ctx, [
       rowInput({ providerTransactionId: "synthetic-reappeared-charge" }),
     ]);
-    const [observation] = (await listStatementRows(ctx.db, {})).data;
+    const [observation] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!observation) throw new Error("Missing synthetic source observation");
     await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
@@ -976,7 +980,7 @@ describe("statement Transaction suggestions", () => {
         .where(notDeleted(expense)),
     ).toEqual([{ cost: 300 }]);
     expect(
-      (await listStatementRows(ctx.db, {})).data.find(
+      (await listSourceTransactionRecords(ctx.db, {})).data.find(
         (row) => row.rawDescription === "EXAMPLE HOTEL HOLD",
       ),
     ).toMatchObject({
@@ -1069,7 +1073,9 @@ describe("statement Transaction suggestions", () => {
     // A rule pass over unchanged evidence keeps the labels.
     expect(await generate(ctx)).toBe(0);
     await accept(ctx, labelled!);
-    expect((await listStatementRows(ctx.db, {})).data[0]).toMatchObject({
+    expect(
+      (await listSourceTransactionRecords(ctx.db, {})).data[0],
+    ).toMatchObject({
       matchState: "matched",
     });
   });
@@ -1335,7 +1341,7 @@ describe("statement Transaction suggestions", () => {
     });
     await accept(ctx, after!);
     expect(
-      (await listStatementRows(ctx.db, {})).data.every(
+      (await listSourceTransactionRecords(ctx.db, {})).data.every(
         (row) => row.matchState === "matched",
       ),
     ).toBe(true);
@@ -1900,10 +1906,12 @@ describe("statement Transaction suggestions", () => {
       await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
     ).toEqual([]);
     expect(
-      (await listStatementRows(ctx.db, {})).data.map(({ current, amount }) => ({
-        current,
-        amount,
-      })),
+      (await listSourceTransactionRecords(ctx.db, {})).data.map(
+        ({ current, amount }) => ({
+          current,
+          amount,
+        }),
+      ),
     ).toEqual(
       expect.arrayContaining([
         { current: false, amount: 42.5 },
@@ -2023,7 +2031,7 @@ describe("statement Transaction suggestions", () => {
           inclusive: true,
         });
         expect(
-          (await listStatementRows(ctx.db, {})).data.every(
+          (await listSourceTransactionRecords(ctx.db, {})).data.every(
             (row) => row.matchState === "unmatched",
           ),
         ).toBe(true);
@@ -2043,7 +2051,7 @@ describe("statement Transaction suggestions", () => {
         expect(resumed.failed).toEqual([]);
         expect(resumed.next).toBeNull();
         expect(laterCalls).toBe(retainedLaterCalls);
-        const rows = (await listStatementRows(ctx.db, {})).data;
+        const rows = (await listSourceTransactionRecords(ctx.db, {})).data;
         const winner =
           resolution === "retry"
             ? "EXAMPLE GROCER 0001"
@@ -2296,7 +2304,7 @@ describe("statement Transaction suggestions", () => {
     await record(ctx, [rowInput()]);
     await generate(ctx);
     const [suggestion] = await suggestions(ctx);
-    const [row] = (await listStatementRows(ctx.db, {})).data;
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
     await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
@@ -2442,7 +2450,7 @@ describe("statement Transaction suggestions", () => {
         { fingerprint: "fp-older-again" },
       );
       const rowsOf = async (search: string) =>
-        (await listStatementRows(ctx.db, { search })).data;
+        (await listSourceTransactionRecords(ctx.db, { search })).data;
       const olderRows = await rowsOf("EXAMPLE CAFE 0001");
       expect(olderRows).toHaveLength(2);
       const [canonical] = await rowsOf("EXAMPLE CAFE 0002");
@@ -2455,7 +2463,7 @@ describe("statement Transaction suggestions", () => {
       // Another observation of the same charge, not the one the ref names.
       expect(reobserved.externalId).not.toBe(original.externalId);
       expect(reobserved.chargeKey).toBe(original.chargeKey);
-      await updateStatementRows(
+      await updateSourceTransactionRecords(
         ctx.db,
         {
           selector: {

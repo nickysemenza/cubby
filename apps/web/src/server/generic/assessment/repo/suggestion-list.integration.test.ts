@@ -1,9 +1,9 @@
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
-  recordStatementRowsInput,
-  type StatementImportInput,
-  type StatementRowInput,
-} from "@cubby/schemas/statement-row";
+  recordSourceTransactionRecordsInput,
+  type TransactionImportInput,
+  type SourceTransactionRecordInput,
+} from "@cubby/schemas/source-transaction-record";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
 import { eq } from "drizzle-orm";
@@ -14,14 +14,14 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { assessmentState, statementRow } from "~/server/db/schema";
+import { assessmentState, sourceTransactionRecord } from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
-import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
+import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { readAssessmentRecordRefs } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
@@ -42,8 +42,8 @@ type Ctx = ReturnType<typeof withTestDb>;
 
 let position = 0;
 const rowInput = (
-  overrides: Partial<StatementRowInput> = {},
-): StatementRowInput => ({
+  overrides: Partial<SourceTransactionRecordInput> = {},
+): SourceTransactionRecordInput => ({
   accountDescriptor: "Synthetic Card (...4242)",
   statementDate: "2026-05-04",
   providerAmount: -42.5,
@@ -56,8 +56,8 @@ const rowInput = (
   ...overrides,
 });
 const importInput = (
-  overrides: Partial<StatementImportInput> = {},
-): StatementImportInput => ({
+  overrides: Partial<TransactionImportInput> = {},
+): TransactionImportInput => ({
   source: "monarch",
   label: "synthetic-export.csv",
   fingerprint: "fp-list-1",
@@ -68,12 +68,15 @@ const importInput = (
 });
 const record = (
   ctx: Ctx,
-  rows: StatementRowInput[],
-  overrides: Partial<StatementImportInput> = {},
+  rows: SourceTransactionRecordInput[],
+  overrides: Partial<TransactionImportInput> = {},
 ) =>
-  recordStatementRows(
+  recordSourceTransactionRecords(
     ctx.db,
-    recordStatementRowsInput.parse({ import: importInput(overrides), rows }),
+    recordSourceTransactionRecordsInput.parse({
+      import: importInput(overrides),
+      rows,
+    }),
     ctx.actor,
   );
 const card = (ctx: Ctx) =>
@@ -169,7 +172,7 @@ describe("cross-family Suggestion list", () => {
       (await listSuggestionPage(ctx.db, { family: "statement_transaction" }))
         .items,
     ).toHaveLength(1);
-    await getDb(ctx.db).update(statementRow).set({
+    await getDb(ctx.db).update(sourceTransactionRecord).set({
       disposition: "ignored",
       dispositionReason: "not_modeled",
       dispositionNote: "Synthetic unmodeled charge",

@@ -2,7 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { emailPurchaseLink } from "@cubby/schemas/email-fields";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   completeDescribeImageJobs,
@@ -42,7 +42,7 @@ import {
   proposePhotoGroups,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { stagePhotoImport } from "~/server/domains/photo-import/service/photo-import-stage.service";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -378,10 +378,10 @@ async function createConvergenceHarness(ctx: TestDbContext) {
   }
 
   async function statement() {
-    const { source, ...row } = names.statementRow;
-    const recorded = await recordStatementRows(
+    const { source, ...row } = names.sourceTransactionRecord;
+    const recorded = await recordSourceTransactionRecords(
       db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         import: {
           source,
           label: token,
@@ -396,8 +396,8 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       where: eq(schema.financialAccount.id, cardId),
     });
     const evidence = recorded.batchId
-      ? await database.query.statementRow.findFirst({
-          where: eq(schema.statementRow.batchId, recorded.batchId),
+      ? await database.query.sourceTransactionRecord.findFirst({
+          where: eq(schema.sourceTransactionRecord.batchId, recorded.batchId),
         })
       : undefined;
     if (!account || !evidence)
@@ -412,7 +412,7 @@ async function createConvergenceHarness(ctx: TestDbContext) {
         status: "posted",
         postedDate: "2026-09-12",
         merchant: names.name,
-        rawDescription: names.statementRow.rawDescription,
+        rawDescription: names.sourceTransactionRecord.rawDescription,
         sourceRefs: [{ source, externalId: evidence.externalId }],
       }),
     });

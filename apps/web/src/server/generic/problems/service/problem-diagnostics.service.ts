@@ -441,14 +441,16 @@ export const diagnosticAdapters = {
       return healthyCount((await findInvalidFinancialJson(db)).length);
     },
   },
-  "incomplete-statement-imports": {
+  "incomplete-transaction-imports": {
     sample: async (db, _options, limit) => {
-      const { findIncompleteStatementImports } = await loadFinancialDetectors();
-      return healthySample(findIncompleteStatementImports(db), limit);
+      const { findIncompleteTransactionImports } =
+        await loadFinancialDetectors();
+      return healthySample(findIncompleteTransactionImports(db), limit);
     },
     count: async (db) => {
-      const { findIncompleteStatementImports } = await loadFinancialDetectors();
-      return healthyCount((await findIncompleteStatementImports(db)).length);
+      const { findIncompleteTransactionImports } =
+        await loadFinancialDetectors();
+      return healthyCount((await findIncompleteTransactionImports(db)).length);
     },
   },
   "project-date-window-drift": {

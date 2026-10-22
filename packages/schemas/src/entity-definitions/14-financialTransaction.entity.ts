@@ -1120,6 +1120,10 @@ export default defineEntity(
         "notes",
       ],
       rows: {
+        acceptedSourceRecords: {
+          label: "Accepted source records",
+          repository: { record: { reference: "sourceTransactionRecord" } },
+        },
         settlementRefs: {
           label: "Settlement references",
           path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
@@ -1127,6 +1131,7 @@ export default defineEntity(
         },
       },
       derived: {
+        sourceTransactionRecordId: { via: "acceptedSourceRecords.record" },
         merchant: { type: "text" },
         // Allocated to a live Purchase (not the mirror column, which is NULL
         // for a transaction split across two purchases).
@@ -1306,6 +1311,14 @@ export default defineEntity(
         export: "financialTransactionFilterFields",
       },
       descriptors: [
+        {
+          columnId: "sourceTransactionRecordId",
+          kind: "idMulti",
+          brandRef: { entity: "sourceTransactionRecord" },
+          deriveSchema: true,
+          derived: true,
+          placeholder: "Filter source records...",
+        },
         {
           columnId: "allocationIntegrity",
           kind: "multiselect",
@@ -1562,6 +1575,20 @@ export default defineEntity(
       ],
     },
     relations: [
+      {
+        key: "sourceRecords",
+        label: "Source transaction records",
+        target: "sourceTransactionRecord",
+        cardinality: "many",
+        provenance: {
+          kind: "derived",
+          filter: "transactionId",
+          evidence: [
+            "EntityExternalId.settlement_ref",
+            "SourceTransactionRecord.chargeKey",
+          ],
+        },
+      },
       {
         key: "spendingCategory",
         label: "Spending category",

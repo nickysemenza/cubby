@@ -17,6 +17,8 @@ import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
 export type { SearchHit } from "@cubby/schemas/search";
 
 export const entityKindMap = {
+  sourceTransactionRecord: "sourceTransactionRecord",
+  transactionImport: "transactionImport",
   product: "product",
   recipe: "recipe",
   ingredient: "ingredient",

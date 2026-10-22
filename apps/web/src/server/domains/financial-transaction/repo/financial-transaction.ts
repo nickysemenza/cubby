@@ -32,6 +32,7 @@ import { capitalize, sortBy, uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
@@ -428,6 +429,9 @@ const financialTransactionScaffold = listScaffold(
   "financialTransaction",
   financialTransaction,
   {
+    rows: {
+      acceptedSourceRecords: sql`SELECT "transaction" AS "owner", "record" FROM (${sourceTransactionSettlements}) accepted`,
+    },
     derived: {
       // An unnamed merchant leads a descending list.
       merchant: { sql: sql`${financialTransaction.merchant}`, nulls: "high" },

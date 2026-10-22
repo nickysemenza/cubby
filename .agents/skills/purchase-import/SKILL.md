@@ -97,8 +97,11 @@ checksums, replay, money conservation and unresolved-identity review still apply
 2. For Monarch MCP transactions or statement exports, use
    [financial-evidence-import](../financial-evidence-import/SKILL.md). That skill
    owns client parsing, complete source enumeration, normalization and bounded
-   `statement_rows.record` calls. Cubby owns scheduling, matching and booking;
-   financial intake does not chain agent transaction/Expense writes.
+   `source_transaction_records.record` calls. Cubby owns scheduling, matching and booking;
+   financial intake does not chain agent transaction/Expense writes. Inspect
+   retained Source transaction records and Transaction imports through
+   `entity_read` (`sourceTransactionRecord` / `transactionImport`), using their
+   declared projections rather than specialized roster APIs.
 3. Take own-item and label photos directly on iPhone/Mac or upload a
    `photo_inventory` run. The [photo-inventory-import
    skill](../photo-inventory-import/SKILL.md) proposes groups for review and

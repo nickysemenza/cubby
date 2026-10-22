@@ -5,7 +5,7 @@ import {
   parseShortcodeFor,
   type FinancialAccountShortcode,
 } from "@cubby/schemas/identifiers";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import {
   transferPairJudgment,
   type TransferPairJudgment,
@@ -29,13 +29,13 @@ import {
   ledgerParty,
   ledgerTransfer,
   run,
-  statementRow,
+  sourceTransactionRecord,
 } from "~/server/db/schema";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
-import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -179,9 +179,9 @@ describe("transfer-pair suggestions", () => {
     rows: Row[],
     options: { source?: string; fingerprint?: string } = {},
   ) =>
-    recordStatementRows(
+    recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         import: {
           source: options.source ?? "monarch",
           label: "Synthetic export.csv",
@@ -1301,11 +1301,13 @@ describe("transfer-pair suggestions", () => {
     // Statement review converged both observations on one transaction.
     const observed = await unwrapDb(ctx.db)
       .select({
-        source: statementRow.source,
-        externalId: statementRow.externalId,
+        source: sourceTransactionRecord.source,
+        externalId: sourceTransactionRecord.externalId,
       })
-      .from(statementRow)
-      .where(eq(statementRow.accountDescriptor, "Synthetic checking"));
+      .from(sourceTransactionRecord)
+      .where(
+        eq(sourceTransactionRecord.accountDescriptor, "Synthetic checking"),
+      );
     await transaction(bank, 400, "2026-08-03", {
       rawDescription: "ONLINE TRANSFER TO SAVINGS 7788",
       sourceRefs: observed,
@@ -1338,10 +1340,10 @@ describe("transfer-pair suggestions", () => {
     ]);
     const [observed] = await unwrapDb(ctx.db)
       .select({
-        source: statementRow.source,
-        externalId: statementRow.externalId,
+        source: sourceTransactionRecord.source,
+        externalId: sourceTransactionRecord.externalId,
       })
-      .from(statementRow);
+      .from(sourceTransactionRecord);
     const recorded = await transaction(bank, 175, "2026-08-03", {
       sourceRefs: [observed!],
       rawDescription: "ONLINE TRANSFER TO SAVINGS",
@@ -1581,11 +1583,13 @@ describe("transfer-pair suggestions", () => {
     const [pair] = await discoverTransferPairs(ctx.db);
     const observed = await unwrapDb(ctx.db)
       .select({
-        externalId: statementRow.externalId,
-        legacy: statementRow.legacyReference,
+        externalId: sourceTransactionRecord.externalId,
+        legacy: sourceTransactionRecord.legacyReference,
       })
-      .from(statementRow)
-      .where(eq(statementRow.accountDescriptor, "Synthetic checking"));
+      .from(sourceTransactionRecord)
+      .where(
+        eq(sourceTransactionRecord.accountDescriptor, "Synthetic checking"),
+      );
     expect(observed).toHaveLength(2);
     expect(pair!.outflow.refs.map((ref) => ref.externalId).sort()).toEqual(
       [
@@ -1614,12 +1618,14 @@ describe("transfer-pair suggestions", () => {
     // Settlement must also claim every observation's account, as a statement create does.
     const claimed = await unwrapDb(ctx.db)
       .select({ account: financialAccount.shortcode })
-      .from(statementRow)
+      .from(sourceTransactionRecord)
       .leftJoin(
         financialAccount,
-        eq(financialAccount.id, statementRow.accountId),
+        eq(financialAccount.id, sourceTransactionRecord.accountId),
       )
-      .where(eq(statementRow.accountDescriptor, "Synthetic checking"));
+      .where(
+        eq(sourceTransactionRecord.accountDescriptor, "Synthetic checking"),
+      );
     expect(claimed.map((row) => row.account)).toEqual(
       observed.map(() => checking),
     );

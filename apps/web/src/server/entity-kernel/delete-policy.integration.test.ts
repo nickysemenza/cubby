@@ -54,6 +54,7 @@ import type {
   RunId,
 } from "@cubby/schemas/identifiers";
 import { attachableImageEntityId } from "@cubby/schemas/image";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq, getTableColumns, type SQL, sql } from "drizzle-orm";
 import {
   getTableConfig,
@@ -61,7 +62,11 @@ import {
   type PgTable,
 } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
-import { seedEntity, TEST_HOME_SHORTCODE } from "tooling/test-setup";
+import {
+  seedEntity,
+  TEST_HOME_SHORTCODE,
+  TEST_ACTOR,
+} from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -98,8 +103,7 @@ import {
   orderMailEvent,
   photoGroupProposal,
   photoRunImage,
-  statementImport,
-  statementRow,
+  sourceTransactionRecord,
 } from "~/server/db/schema";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
@@ -108,6 +112,7 @@ import {
   sourceOrderObservationFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   ENTITY_KERNEL_ENTITIES,
@@ -181,10 +186,23 @@ const physical = (edge: IncomingEdge) => {
   const primary =
     config.primaryKeys[0]?.columns.map((c) => c.name) ??
     config.columns.filter((c) => c.primary).map((c) => c.name);
+  // Retained membership tables use a unique pair instead of a primary key.
+  const unique = config.indexes.find(
+    (index) => index.config.unique && !index.config.where,
+  );
+  const identity = primary.length
+    ? primary
+    : (unique?.config.columns.flatMap((column) =>
+        "name" in column && typeof column.name === "string"
+          ? [column.name]
+          : [],
+      ) ?? []);
+  if (!identity.length)
+    throw new Error(`No stable row identity for ${config.name}`);
   return {
     tableName: config.name,
     columnName: column.name,
-    primary,
+    primary: identity,
     softDeletable: "deletedAt" in getTableColumns(table),
     // An `EntityLink` edge is one link kind's rows of a shared column.
     scopeSql: edge.scope
@@ -897,28 +915,46 @@ async function seedLedgerSourceClaims(db: Database, ids: StagingIds) {
     }).catch(() => undefined);
 }
 
-/** StatementRow.accountId. */
-async function seedStatementRow(db: Database, ids: StagingIds) {
+/** Account resolution, explicit supersession, and retained intake memberships. */
+async function seedSourceTransactionRecord(db: Database, ids: StagingIds) {
   if (!ids.financialAccountId) return;
-  await ensureExternalSources(db, ["delete-policy"]);
-  const batch = await insertAndReturn(db, statementImport, {
-    source: "delete-policy",
-    label: "Delete policy fixture",
-    fingerprint: "delete-policy-1",
-  }).catch(() => undefined);
-  if (!batch) return;
-  await insertAndReturn(db, statementRow, {
-    batchId: batch.id,
-    source: "delete-policy",
-    // `externalId` must be `v1:<64 lowercase hex chars>` (a content hash).
-    externalId: `v1:${"a".repeat(64)}`,
-    accountDescriptor: "Delete policy card",
-    statementDate: "2024-01-15",
-    amount: 10,
-    providerAmount: 10,
-    rawDescription: "Delete policy fixture row",
-    accountId: ids.financialAccountId,
-  }).catch(() => undefined);
+  await recordSourceTransactionRecords(
+    db,
+    recordSourceTransactionRecordsInput.parse({
+      import: {
+        source: "delete-policy",
+        label: "Synthetic deletion evidence",
+        fingerprint: "delete-policy-1",
+        rowCountDeclared: 2,
+      },
+      rows: ["predecessor", "successor"].map((part, index) => ({
+        rowPosition: index + 1,
+        accountDescriptor: "Synthetic deletion account",
+        statementDate: "2026-01-15",
+        providerAmount: -10,
+        rawDescription: `Synthetic deletion ${part}`,
+      })),
+    }),
+    TEST_ACTOR,
+  );
+  const predecessor = await getDb(db).query.sourceTransactionRecord.findFirst({
+    where: eq(
+      sourceTransactionRecord.rawDescription,
+      "Synthetic deletion predecessor",
+    ),
+  });
+  const successor = await getDb(db).query.sourceTransactionRecord.findFirst({
+    where: eq(
+      sourceTransactionRecord.rawDescription,
+      "Synthetic deletion successor",
+    ),
+  });
+  if (!predecessor || !successor)
+    throw new Error("Synthetic source record staging failed");
+  await getDb(db)
+    .update(sourceTransactionRecord)
+    .set({ accountId: ids.financialAccountId, supersededByRowId: successor.id })
+    .where(eq(sourceTransactionRecord.id, predecessor.id));
 }
 
 /**
@@ -1231,7 +1267,7 @@ async function seedImageProcessingRows(db: Database, ids: StagingIds) {
  * portions, the import-run staging tables (`ImportPreparedOrder`,
  * `RunOperation`, `PhotoRunImage`, `RunFinding`, `PhotoGroupProposal`, `OrderMailAttachment`),
  * review/settlement metadata (`ProductMatchCandidate`, `LedgerSourceClaim`,
- * `StatementRow`), `Cookbook`, `ExpenseAttribution`, a second `InventoryEntry`,
+ * `SourceTransactionRecord`), `Cookbook`, `ExpenseAttribution`, a second `InventoryEntry`,
  * and image processing rows (`ImageProcessingJob`, `ImageDerivative`). Each
  * write targets real seeded rows resolved through `shortcodeByPrefix`, so a
  * subsequent delete of one of those rows exercises the edge's real
@@ -1272,7 +1308,7 @@ async function seedDeletePolicyStagingRows(
   await seedMealChildRows(db, ids);
   await seedProductMatchCandidate(db, ids);
   await seedLedgerSourceClaims(db, ids);
-  await seedStatementRow(db, ids);
+  await seedSourceTransactionRecord(db, ids);
   await seedCookbookExpenseAttributionInventory(db, ids);
 
   // Everything below needs the import run seeded alongside the source claim.

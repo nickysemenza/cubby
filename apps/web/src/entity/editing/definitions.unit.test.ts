@@ -164,13 +164,11 @@ describe("entity edit definitions", () => {
       expect(new Set(fieldIds).size, `${entity} field ids`).toBe(
         fieldIds.length,
       );
-      expect(definition.operations.create, `${entity} create`).toBeDefined();
       expect(definition.operations.update, `${entity} update`).toBeDefined();
       expect(definition.operations.delete, `${entity} delete`).toBeDefined();
 
       for (const operation of ["create", "update", "delete"] as const) {
         const declaration = definition.operations[operation];
-        expect(declaration, `${entity} ${operation}`).toBeDefined();
         if (!declaration) continue;
         expect(declaration.intents[declaration.defaultIntent]).toBeDefined();
         for (const [intent, capability] of Object.entries(

@@ -55,8 +55,8 @@ import {
   readStatementSuggestions,
   statementSuggestionKeys,
   statementSuggestionStatusCounts,
-} from "~/server/domains/statement-import/repo/statement-suggestion-read";
-import { kindAgreed } from "~/server/domains/statement-import/repo/statement-transaction-kind";
+} from "~/server/domains/transaction-import/repo/statement-suggestion-read";
+import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
 import {
   fieldSuggestionKeys,

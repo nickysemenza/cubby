@@ -46,9 +46,8 @@ env:
   NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
 
 # Every Linux lane starts on every run and replays unchanged tasks from the Nx
-# cache. Only the Rust runner and the Apple lanes are path-filtered; a Linux
-# probe then keeps a cached Apple pass off macOS. `CI passed` is the one
-# required check (docs/adr/0020-cache-routed-ci.md).
+# cache. Only the Rust runner and the Apple lanes are path-filtered.
+# `CI passed` is the one required check (docs/adr/0020-cache-routed-ci.md).
 jobs:
   plan:
     name: Plan
@@ -287,16 +286,14 @@ jobs:
       # One crate at a time: both share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
-  # Selected native lanes run on macOS and reuse only compiler/artifact caches.
+  # Native jobs use independent hosted VMs and compiler/artifact caches.
+  # Workflow concurrency cancels superseded PRs; repository-wide lane queues
+  # would serialize unrelated PRs even when macOS capacity is available.
   apple-host:
     name: Apple host tests
     needs: plan
     if: ${{ !cancelled() && needs.plan.outputs.apple == 'true' }}
     runs-on: xcode-27
-    concurrency:
-      group: cubby-apple-host
-      cancel-in-progress: false
-      queue: max
     timeout-minutes: 40
     env:
       # The restore and save steps must name the same paths.
@@ -340,10 +337,6 @@ jobs:
     needs: plan
     if: ${{ !cancelled() && needs.plan.outputs.apple == 'true' }}
     runs-on: xcode-27
-    concurrency:
-      group: cubby-apple-simulator
-      cancel-in-progress: false
-      queue: max
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

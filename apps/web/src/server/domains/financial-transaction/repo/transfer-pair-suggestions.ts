@@ -6,7 +6,7 @@ import {
   type AssessmentProducer,
 } from "@cubby/schemas/assessment";
 import {
-  type FinancialStatementImportRow,
+  type FinancialTransactionImportRow,
   type FinancialTransactionKind,
   financialTransactionCreateInput,
   financialTransactionKind,
@@ -45,18 +45,18 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
-import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import { previewFinancialTransactionImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   CHARGE_STATE,
   chargeKeyOf,
   chargeStateOf,
-} from "~/server/domains/statement-import/repo/statement-charge";
-import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
-import { updateStatementRows } from "~/server/domains/statement-import/repo/statement-row";
-import { statementTransactionKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
+} from "~/server/domains/transaction-import/repo/statement-charge";
+import { statementTransactionKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
@@ -84,7 +84,8 @@ const OVERLAP_WINDOW_DAYS = 3;
 /** Pool reach around the seeds: a candidate's competitors and overlaps included. */
 const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
 const PREVIEW_CHUNK = 500;
-const TRANSFER_PAIR_GENERATION_PAGE = 32;
+// Amortize Job dispatch between pages; the byte bound still limits publications.
+const TRANSFER_PAIR_GENERATION_PAGE = 128;
 const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
 const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
 
@@ -379,7 +380,7 @@ type ObservationRow = z.infer<typeof observationRow>;
 const previewRowFor = (
   charge: ChargeRef,
   row: ObservationRow,
-): FinancialStatementImportRow => ({
+): FinancialTransactionImportRow => ({
   key: chargeId(charge),
   source: row.source,
   account: row.accountDescriptor,
@@ -436,7 +437,7 @@ async function loadStatementLegs(
   // A scope selects whole charges; their state still reads every observation.
   const state = conditions.length
     ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM "StatementRow" seen
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM "SourceTransactionRecord" seen
         WHERE seen."deletedAt" IS NULL AND ${sql.join(conditions, sql` AND `)}
       )`)
     : CHARGE_STATE;
@@ -449,11 +450,11 @@ async function loadStatementLegs(
       r."statementDate"::text AS "statementDate", r."providerAmount", r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus", r."providerNotes",
       r."accountId"::text AS "accountId", si.fingerprint AS "importFingerprint",
-      ARRAY(SELECT m."importId"::text FROM ${statementImportMembers} m WHERE m."statementRowId" = r.id) AS "importIds"
+      ARRAY(SELECT m."importId"::text FROM ${transactionImportMembers} m WHERE m."statementRowId" = r.id) AS "importIds"
     FROM ${state} cs
-    JOIN "StatementRow" r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
+    JOIN "SourceTransactionRecord" r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
       AND r."deletedAt" IS NULL
-    JOIN "StatementImport" si ON si.id = r."batchId"
+    JOIN "TransactionImport" si ON si.id = r."batchId"
     WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
     ORDER BY r."createdAt" DESC, r.id
   `);
@@ -481,7 +482,7 @@ async function loadStatementLegs(
 
   const legs: LegFacts[] = [];
   for (const page of chunk(charges, PREVIEW_CHUNK)) {
-    const preview = await previewFinancialStatementImport(
+    const preview = await previewFinancialTransactionImport(
       db,
       {
         rows: page.map(({ charge, canonical }) =>
@@ -957,7 +958,7 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
       ? [
           sql`SELECT 'stmt:' || r.source || ':' || r."chargeKey" AS key,
           -r."providerAmount" AS amount, NULL::text AS "recordedKind", r."sourceCategory"
-        FROM "StatementRow" r
+        FROM "SourceTransactionRecord" r
         WHERE r.current AND r."deletedAt" IS NULL
           AND (r.source, r."chargeKey") IN (${sql.join(
             charges.map(
@@ -1311,7 +1312,7 @@ export async function refreshTransferPairStatements(
     publishChargeProposal,
     STATEMENT_SUGGESTION_REVISION,
   } =
-    await import("~/server/domains/statement-import/repo/statement-suggestions");
+    await import("~/server/domains/transaction-import/repo/statement-suggestions");
   const proposals = await buildChargeProposals(db, charges);
   proposals.sort((a, b) =>
     chargeId(a.charge).localeCompare(chargeId(b.charge)),
@@ -1406,7 +1407,7 @@ async function nextTransferPairSeeds(
         ${input.since ? sql`AND COALESCE(ft."postedDate", ft."transactionDate") >= ${input.since}::date` : sql``}
       UNION
       SELECT 'stmt:' || r.source || ':' || ${chargeKeyOf("r")} AS key
-      FROM "StatementRow" r
+      FROM "SourceTransactionRecord" r
       WHERE r."deletedAt" IS NULL AND r."sourceCategory" IS NOT NULL
         ${input.since ? sql`AND r."statementDate" >= ${input.since}::date` : sql``}
     ) seeds
@@ -1860,7 +1861,7 @@ async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
       "A new transfer leg requires retained source identity.",
     );
   const { rows } = await unwrapDb(db).execute<{ providerStatus: unknown }>(sql`
-    SELECT "providerStatus" FROM "StatementRow" WHERE source=${leg.charge.source}
+    SELECT "providerStatus" FROM "SourceTransactionRecord" WHERE source=${leg.charge.source}
       AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND "deletedAt" IS NULL
   `);
   if (rows.length !== 1)
@@ -1936,7 +1937,7 @@ export async function applyTransferPair(
       if (leg.transactionId) return leg.transactionId;
       const status = await currentStatementStatus(txDb, leg);
       if (leg.charge)
-        await updateStatementRows(
+        await updateSourceTransactionRecords(
           txDb,
           {
             selector: {

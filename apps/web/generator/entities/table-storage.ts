@@ -1,5 +1,6 @@
 import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { z } from "zod";
+import { retainedTableExports } from "../../../../packages/schemas/src/child-tables/retained.ts";
 
 import type { EntityDeclarationMetadata } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import {
@@ -276,9 +277,12 @@ export const validateEntityTables = (
   entities: readonly CompiledEntity[],
   moduleChildren: readonly ChildTableDeclaration[] = [],
 ) => {
-  const tables = new Set(
-    entities.flatMap((entity) => (entity.table === null ? [] : [entity.key])),
-  );
+  const tables = new Set([
+    ...retainedTableExports,
+    ...entities.flatMap((entity) =>
+      entity.table === null ? [] : [entity.key],
+    ),
+  ]);
   for (const child of [
     ...entities.flatMap((entity) => entity.children),
     ...moduleChildren,

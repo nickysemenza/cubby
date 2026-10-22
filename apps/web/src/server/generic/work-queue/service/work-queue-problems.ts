@@ -44,12 +44,12 @@ import { computeAttentionItems } from "~/server/domains/project/repo/attention";
 import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
 import { loadProjectSubtreeRollups } from "~/server/domains/project/repo/subtree";
 import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
-import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
-import { findIncompleteStatementImports } from "~/server/generic/problems/repo/detectors-financial";
+import { findIncompleteTransactionImports } from "~/server/generic/problems/repo/detectors-financial";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
@@ -135,7 +135,7 @@ const excludedDiagnostics = new Set([
   "products-with-better-upc-data",
   "image-metadata-outcomes", // Re-admitted by the maintenance step's retry.
   "referential-liveness-violations",
-  "incomplete-statement-imports", // Reviewed through current accounts below.
+  "incomplete-transaction-imports", // Reviewed through current accounts below.
 ]);
 const hasPublicRecord = (entity: Entity): entity is ShortcodeEntity =>
   shortcodeEntities.some((kind) => kind === entity);
@@ -442,21 +442,21 @@ export async function additionalWorkProblemSelections(
     };
   }
   if (includeAccounts)
-    diagnostics.incompleteStatementImports = async () => {
+    diagnostics.incompleteTransactionImports = async () => {
       const rows: SQL[] = [];
-      for (const incomplete of await findIncompleteStatementImports(db)) {
+      for (const incomplete of await findIncompleteTransactionImports(db)) {
         const owners = sql`coalesce((
       SELECT array_agg(DISTINCT account."ledgerPartyId")
-      FROM "StatementImport" batch
-      JOIN ${statementImportMembers} member ON member."importId" = batch.id
-      JOIN "StatementRow" row ON row.id = member."statementRowId" AND row."deletedAt" IS NULL
+      FROM "TransactionImport" batch
+      JOIN ${transactionImportMembers} member ON member."importId" = batch.id
+      JOIN "SourceTransactionRecord" row ON row.id = member."statementRowId" AND row."deletedAt" IS NULL
       LEFT JOIN "FinancialAccount" account ON account.id = row."accountId" AND account."deletedAt" IS NULL
       WHERE batch.source = ${incomplete.source} AND batch.fingerprint = ${incomplete.fingerprint} AND batch."deletedAt" IS NULL
     ), ARRAY[NULL::uuid])`;
         rows.push(
           workDiagnosticCandidate(
-            "incompleteStatementImports",
-            `problem:incompleteStatementImports:${incomplete.source}:${incomplete.fingerprint}`,
+            "incompleteTransactionImports",
+            `problem:incompleteTransactionImports:${incomplete.source}:${incomplete.fingerprint}`,
             incomplete.label,
             owners,
             {

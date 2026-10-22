@@ -150,9 +150,10 @@ describe("purchase-agent automatic mutations", () => {
         ),
       ),
       trusted: { runId: run.id, grantId: "synthetic-grant" },
-      toolName: "statement_rows.update",
+      toolName: "entity.update",
       args: {
-        selector: { source: "synthetic", externalIds: ["row-a", "row-b"] },
+        entity: "sourceTransactionRecord",
+        id: "STR-ABCDE",
         data: { disposition: "open", dispositionNote: null },
       },
       execution: { runId: run.id, operationId: "synthetic:restore" },

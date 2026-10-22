@@ -448,9 +448,9 @@ export const duplicateFinancialTransactionSourceRefSchema = z.object({
  * This is deliberately the ONLY statement-ledger detector. "Every unmatched row"
  * is not a defect list: it is the drift worklist, 15k rows at its widest, and
  * putting it here would make `activity.problems` unusable. Unmatched rows are read
- * through `finance_read.statement_rows({matchState:"unmatched"})` instead.
+ * through `finance_read.source_transaction_records({matchState:"unmatched"})` instead.
  */
-export const incompleteStatementImportSchema = z.object({
+export const incompleteTransactionImportSchema = z.object({
   source: z.string(),
   label: z.string(),
   fingerprint: z.string(),
@@ -805,10 +805,10 @@ export const problemDetectors = {
       description: z.string().min(1),
     }),
   ),
-  incompleteStatementImports: detector(
+  incompleteTransactionImports: detector(
     "fast",
     "defect",
-    incompleteStatementImportSchema,
+    incompleteTransactionImportSchema,
   ),
   // --- coverage lane ---
   // USDA-coverage detectors — share one product scan + USDA enrichment.

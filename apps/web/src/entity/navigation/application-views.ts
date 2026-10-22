@@ -13,7 +13,6 @@ import { ChartLineIcon } from "@phosphor-icons/react/dist/csr/ChartLine";
 import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
 import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
-import { CurrencyCircleDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
 import { LayoutIcon } from "@phosphor-icons/react/dist/csr/Layout";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
@@ -207,12 +206,14 @@ export const activityViews = [
           "Project monthly spend from baseline, estimates and plans.",
         icon: ChartLineIcon,
       },
-      {
-        to: "/statement-rows",
-        label: "Reconcile",
-        description: "Match imported statement evidence to recorded purchases.",
-        icon: CurrencyCircleDollarIcon,
-      },
+      recordDestination(
+        "sourceTransactionRecord",
+        "Review financial evidence and its reconciliation judgments.",
+      ),
+      recordDestination(
+        "transactionImport",
+        "Inspect financial evidence collections and retained coverage.",
+      ),
     ],
   },
 ] as const satisfies readonly ActivityViewDefinition[];

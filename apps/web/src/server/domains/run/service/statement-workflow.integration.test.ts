@@ -1,6 +1,6 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
@@ -16,7 +16,7 @@ import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
 import * as spendingAdvice from "~/server/domains/financial-transaction/service/spending-advice";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
@@ -64,9 +64,9 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
       name: "Synthetic workflow spending",
     },
   );
-  await recordStatementRows(
+  await recordSourceTransactionRecords(
     ctx.db,
-    recordStatementRowsInput.parse({
+    recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         label: "synthetic-workflow.csv",

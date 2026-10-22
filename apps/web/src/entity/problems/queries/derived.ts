@@ -483,8 +483,8 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
-    key: "incompleteStatementImports",
-    problemClass: PROBLEM_CLASS.incompleteStatementImports,
+    key: "incompleteTransactionImports",
+    problemClass: PROBLEM_CLASS.incompleteTransactionImports,
     executionLane: "fast",
     continuation: {
       kind: "none",
@@ -498,7 +498,7 @@ export const derivedProblemQueries = [
       "Every statement import has its declared number of rows attached.",
     source: {
       kind: "derived",
-      diagnostic: "incomplete-statement-imports",
+      diagnostic: "incomplete-transaction-imports",
       grain: "aggregate",
       operations: [
         { label: "Count stored rows per statement import" },

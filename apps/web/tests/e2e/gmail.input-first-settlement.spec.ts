@@ -1,4 +1,4 @@
-import { recordStatementRowsOut } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsOut } from "@cubby/schemas/source-transaction-record";
 import { startOperation } from "./support/start-operation";
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
@@ -104,13 +104,17 @@ test("reviews statement charge groups and refunds against captured retailer orde
   ).length;
   const recorded = await startOperation(
     page.request,
-    "statementRow.record",
+    "sourceTransactionRecord.record",
     statementInput,
   );
   expect(recorded.ok(), await recorded.text()).toBe(true);
-  const result = recordStatementRowsOut.parse(recorded.body);
+  const result = recordSourceTransactionRecordsOut.parse(recorded.body);
   expect(result.inserted).toBe(3);
   if (!result.batchId) throw new Error("Recorded statement batch missing");
+  const collection = await database.query.transactionImport.findFirst({
+    where: eq(schema.transactionImport.shortcode, result.batchId),
+  });
+  if (!collection) throw new Error("Retained transaction import missing");
   expect(
     await database.query.financialTransaction.findMany({
       where: eq(schema.financialTransaction.accountId, cardId),
@@ -121,12 +125,12 @@ test("reviews statement charge groups and refunds against captured retailer orde
     { description: descriptions.charge, kind: "purchase" },
     { description: descriptions.refund, kind: "refund" },
   ] as const) {
-    const evidence = await database.query.statementRow.findFirst({
+    const evidence = await database.query.sourceTransactionRecord.findFirst({
       where: and(
-        eq(schema.statementRow.source, statementInput.import.source),
-        eq(schema.statementRow.batchId, result.batchId),
-        eq(schema.statementRow.rawDescription, decision.description),
-        notDeleted(schema.statementRow),
+        eq(schema.sourceTransactionRecord.source, statementInput.import.source),
+        eq(schema.sourceTransactionRecord.batchId, collection.id),
+        eq(schema.sourceTransactionRecord.rawDescription, decision.description),
+        notDeleted(schema.sourceTransactionRecord),
       ),
     });
     if (!evidence) throw new Error("Normalized settlement evidence missing");
@@ -421,11 +425,11 @@ test("reviews statement charge groups and refunds against captured retailer orde
   ).toHaveLength(0);
   const replay = await startOperation(
     page.request,
-    "statementRow.record",
+    "sourceTransactionRecord.record",
     statementInput,
   );
   expect(replay.ok(), await replay.text()).toBe(true);
-  expect(recordStatementRowsOut.parse(replay.body)).toMatchObject({
+  expect(recordSourceTransactionRecordsOut.parse(replay.body)).toMatchObject({
     inserted: 0,
     alreadyInThisBatch: 3,
   });

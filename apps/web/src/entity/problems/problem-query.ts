@@ -62,7 +62,7 @@ export type DiagnosticKey =
   | "product-identifiers-outside-issuer"
   | "provisional-financial-accounts"
   | "invalid-financial-json"
-  | "incomplete-statement-imports"
+  | "incomplete-transaction-imports"
   | "title-derivable-unit-size"
   | "project-date-window-drift";
 

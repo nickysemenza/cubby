@@ -411,7 +411,7 @@ export const KNOWN_STATEMENT_SOURCES = [
  * One already-parsed statement row. Cubby accepts data, never a CSV path or
  * upload: parsing and export handling belong to the MCP client.
  */
-export const financialStatementImportRow = z.strictObject({
+export const financialTransactionImportRow = z.strictObject({
   importFingerprint: z.string().min(1).optional(),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
@@ -439,38 +439,38 @@ export const financialStatementImportRow = z.strictObject({
   notes: z.string().nullable().default(null),
   kind: financialTransactionKind.optional(),
 });
-export type FinancialStatementImportRow = z.infer<
-  typeof financialStatementImportRow
+export type FinancialTransactionImportRow = z.infer<
+  typeof financialTransactionImportRow
 >;
 
-export const financialStatementImportPreviewInput = z.strictObject({
+export const financialTransactionImportPreviewInput = z.strictObject({
   rows: z
-    .array(financialStatementImportRow)
+    .array(financialTransactionImportRow)
     .min(1)
     .max(FINANCIAL_STATEMENT_IMPORT_MAX_ROWS)
     .refine(
       ...uniqueBy(
-        (row: FinancialStatementImportRow) => row.key,
+        (row: FinancialTransactionImportRow) => row.key,
         "rows must have unique keys",
       ),
     ),
 });
-export type FinancialStatementImportPreviewInput = z.infer<
-  typeof financialStatementImportPreviewInput
+export type FinancialTransactionImportPreviewInput = z.infer<
+  typeof financialTransactionImportPreviewInput
 >;
 
-export const financialStatementImportPreviewStatus = z.enum([
+export const financialTransactionImportPreviewStatus = z.enum([
   "already_recorded",
   "ready_to_create",
   "possible_existing",
   "unresolved_account",
   "indistinguishable_duplicate",
 ]);
-export type FinancialStatementImportPreviewStatus = z.infer<
-  typeof financialStatementImportPreviewStatus
+export type FinancialTransactionImportPreviewStatus = z.infer<
+  typeof financialTransactionImportPreviewStatus
 >;
 
-const financialStatementImportProposedTransaction = z.object({
+const financialTransactionImportProposedTransaction = z.object({
   sourceRef: financialTransactionSourceRef,
   amount: nonZeroAmount,
   kind: financialTransactionKind,
@@ -491,13 +491,13 @@ const financialStatementProvisionalAccount = z.object({
   sourceAliases: financialAccountSourceAliases,
 });
 
-export const financialStatementImportPreviewRow = z.object({
+export const financialTransactionImportPreviewRow = z.object({
   key: z.string(),
-  status: financialStatementImportPreviewStatus,
+  status: financialTransactionImportPreviewStatus,
   accountId: financialAccountShortcode.nullable(),
   accountName: z.string().nullable(),
   provisionalAccount: financialStatementProvisionalAccount.nullable(),
-  proposed: financialStatementImportProposedTransaction,
+  proposed: financialTransactionImportProposedTransaction,
   existingTransactionIds: z.array(financialTransactionShortcode),
   existingTransactions: z
     .array(
@@ -520,8 +520,8 @@ export const financialStatementImportPreviewRow = z.object({
     ),
 });
 
-export const financialStatementImportPreviewOut = z.object({
-  rows: z.array(financialStatementImportPreviewRow),
+export const financialTransactionImportPreviewOut = z.object({
+  rows: z.array(financialTransactionImportPreviewRow),
   summary: z.object({
     rowsIn: z.number().int(),
     alreadyRecorded: z.number().int(),
@@ -531,6 +531,6 @@ export const financialStatementImportPreviewOut = z.object({
     indistinguishableDuplicate: z.number().int(),
   }),
 });
-export type FinancialStatementImportPreviewOut = z.infer<
-  typeof financialStatementImportPreviewOut
+export type FinancialTransactionImportPreviewOut = z.infer<
+  typeof financialTransactionImportPreviewOut
 >;

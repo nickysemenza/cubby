@@ -1,24 +1,18 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { buildTakeSkip } from "@cubby/schemas/pagination";
+import type { TransactionImportId } from "@cubby/schemas/identifiers";
 import type {
-  FindStatementRowDriftInput,
-  RecordStatementRowsInput,
-  StatementRowDriftCandidate,
-  StatementRowFilters,
-  StatementRowOut,
-  StatementRowSelector,
-  UpdateStatementRowsInput,
-} from "@cubby/schemas/statement-row";
-import {
-  statementImportOut,
-  statementRowMatchState,
-  statementRowOut,
-} from "@cubby/schemas/statement-row";
+  FindSourceTransactionRecordDriftInput,
+  RecordSourceTransactionRecordsInput,
+  SourceTransactionRecordDriftCandidate,
+  SourceTransactionRecordLegacyFilters,
+  SourceTransactionRecordSelector,
+  UpdateSourceTransactionRecordsInput,
+} from "@cubby/schemas/source-transaction-record";
+import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
+import { generateShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -31,43 +25,44 @@ import {
 } from "~/server/db/helpers";
 import {
   financialAccount,
-  statementImport,
-  statementImportRow,
-  statementRow,
+  transactionImport,
+  transactionImportRecord,
+  sourceTransactionRecord,
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import {
+  sourceTransactionRecordExternalId,
+  sourceTransactionRecordOccurrenceId,
+} from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   CHARGE_STATE,
   LIVE_REFS,
   chargeKeyOf,
-} from "~/server/domains/statement-import/repo/statement-charge";
-import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
+} from "~/server/domains/transaction-import/repo/statement-charge";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import {
-  statementRowExternalId,
-  statementRowOccurrenceId,
-} from "~/server/domains/statement-import/repo/statement-row-identity";
-import {
-  merchantVendorInferences,
-  normalizeMerchant,
-} from "~/server/domains/vendor/repo/merchant-vendor-inference";
+  insertPayloadsWithIdentities,
+  isEntityShortcodeCollision,
+} from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createAppError } from "~/server/errors/app-error";
+import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+
+import { auditEvidenceRows, evidenceChanges } from "./intake-audit";
+import { assertSourceTransactionRecordSupersessionAllowed } from "./source-transaction-record-lifecycle";
 
 // `cs` carries the charge-level state: repeated observations of one charge
 // inherit each other's ignore, supersession and match.
-const FROM_WITH_REFS = sql`FROM "StatementRow"
+const FROM_WITH_REFS = sql`FROM "SourceTransactionRecord"
   LEFT JOIN ${LIVE_REFS} lr
-    ON lr.source = "StatementRow"."source"
-   AND lr."externalId" = "StatementRow"."externalId"
+    ON lr.source = "SourceTransactionRecord"."source"
+   AND lr."externalId" = "SourceTransactionRecord"."externalId"
   LEFT JOIN ${CHARGE_STATE} cs
-    ON cs.source = "StatementRow"."source"
-   AND cs."chargeKey" = ${chargeKeyOf('"StatementRow"')}`;
-
-const matchedTransaction = sql<
-  string | null
->`COALESCE(lr.shortcode, cs.shortcode)`;
+    ON cs.source = "SourceTransactionRecord"."source"
+   AND cs."chargeKey" = ${chargeKeyOf('"SourceTransactionRecord"')}`;
 
 const matchStateSql = sql<string>`CASE
   WHEN cs.ignored THEN 'ignored'
@@ -76,123 +71,42 @@ const matchStateSql = sql<string>`CASE
   ELSE 'unmatched'
 END`;
 
-/**
- * Outer-column references in these subqueries are written out by hand rather
- * than interpolated as drizzle columns, because drizzle renders a column
- * UNQUALIFIED — `"supersededByRowId"`, not `"StatementRow"."supersededByRowId"`.
- * An unqualified name resolves against the subquery's own table first, so the
- * self-join below silently became `successor.id = successor."supersededByRowId"`:
- * never true, always NULL, and no error, because the alias really does have
- * that column. Qualify explicitly whenever a subquery reads the same table.
- */
-const accountShortcode = sql<string | null>`(
-  SELECT fa.shortcode FROM "FinancialAccount" fa
-  WHERE fa.id = "StatementRow"."accountId" AND fa."deletedAt" IS NULL
-)`;
-
-const accountNameSql = sql<string | null>`(
-  SELECT fa.name FROM "FinancialAccount" fa
-  WHERE fa.id = "StatementRow"."accountId" AND fa."deletedAt" IS NULL
-)`;
-
-const supersededByExternalId = sql<string | null>`(
-  SELECT successor."externalId" FROM "StatementRow" successor
-  WHERE successor.id = "StatementRow"."supersededByRowId"
-)`;
-
 const importFingerprint = sql<string>`(
-  SELECT si.fingerprint FROM "StatementImport" si
-  WHERE si.id = "StatementRow"."batchId"
+  SELECT si.fingerprint FROM "TransactionImport" si
+  WHERE si.id = "SourceTransactionRecord"."batchId"
 )`;
 
-const columns = {
-  id: statementRow.id,
-  source: statementRow.source,
-  externalId: statementRow.externalId,
-  rowPosition: statementRow.rowPosition,
-  providerTransactionId: statementRow.providerTransactionId,
-  legacyExternalId: statementRow.legacyExternalId,
-  chargeKey: statementRow.chargeKey,
-  current: statementRow.current,
-  withdrawnAt: sql<Date | null>`${statementRow.withdrawnAt} AT TIME ZONE 'UTC'`,
-  providerAccountId: statementRow.providerAccountId,
-  providerData: statementRow.providerData,
-  accountDescriptor: statementRow.accountDescriptor,
-  statementDate: statementRow.statementDate,
-  amount: statementRow.amount,
-  providerAmount: statementRow.providerAmount,
-  merchant: statementRow.merchant,
-  rawDescription: statementRow.rawDescription,
-  sourceCategory: statementRow.sourceCategory,
-  providerStatus: statementRow.providerStatus,
-  providerNotes: statementRow.providerNotes,
-  accountId: statementRow.accountId,
-  disposition: statementRow.disposition,
-  dispositionReason: statementRow.dispositionReason,
-  dispositionNote: statementRow.dispositionNote,
-  notes: statementRow.notes,
-  createdAt: statementRow.createdAt,
-  updatedAt: statementRow.updatedAt,
-  accountShortcode,
-  accountName: accountNameSql,
-  supersededBy: supersededByExternalId,
-  importFingerprint,
-  matchState: matchStateSql,
-  transactionShortcode: matchedTransaction,
-} as const;
-
-type StatementRowSqlValue = string | number | Date | null;
-type StatementRowRow = {
-  [K in keyof typeof columns]: StatementRowSqlValue;
-};
-
+type SourceTransactionRecordSqlValue = string | number | Date | null;
 /**
  * The reads run as raw SQL, so values arrive as the pg driver types them rather
  * than as drizzle's column modes: timestamps and `date` columns come back as
  * Date objects, numerics as strings. Coerce here so the output contract is the
  * same whichever way a row was fetched.
  */
-const asDate = (value: StatementRowSqlValue): Date =>
+const asDate = (value: SourceTransactionRecordSqlValue): Date =>
   value instanceof Date ? value : new Date(String(value));
 
-const asPlainDate = (value: StatementRowSqlValue): string => {
+const asPlainDate = (value: SourceTransactionRecordSqlValue): string => {
   if (!(value instanceof Date)) return String(value).slice(0, 10);
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
   return `${value.getFullYear()}-${month}-${day}`;
 };
 
-const toOut = (row: StatementRowRow): StatementRowOut =>
-  statementRowOut.parse({
-    ...row,
-    statementDate: asPlainDate(row.statementDate),
-    createdAt: asDate(row.createdAt),
-    updatedAt: asDate(row.updatedAt),
-    withdrawnAt: row.withdrawnAt === null ? null : asDate(row.withdrawnAt),
-    amount: Number(row.amount),
-    providerAmount: Number(row.providerAmount),
-    accountId: row.accountShortcode
-      ? parseShortcodeFor("financialAccount", String(row.accountShortcode))
-      : null,
-    transactionId: row.transactionShortcode
-      ? parseShortcodeFor(
-          "financialTransaction",
-          String(row.transactionShortcode),
-        )
-      : null,
-  });
-
 const observedInImport = (fingerprint: string) => sql`EXISTS (
-  SELECT 1 FROM ${statementImportMembers} member
-  JOIN "StatementImport" si ON si.id = member."importId"
-  WHERE member."statementRowId" = "StatementRow".id
+  SELECT 1 FROM ${transactionImportMembers} member
+  JOIN "TransactionImport" si ON si.id = member."importId"
+  WHERE member."statementRowId" = "SourceTransactionRecord".id
     AND si.fingerprint = ${fingerprint}
-    AND si.source = "StatementRow".source AND si."deletedAt" IS NULL
+    AND si.source = "SourceTransactionRecord".source AND si."deletedAt" IS NULL
 )`;
 
-const buildConditions = (filters: StatementRowFilters): SQL[] => {
-  const conditions: SQL[] = [notDeleted(statementRow)];
-  if (filters.source) conditions.push(eq(statementRow.source, filters.source));
+const buildConditions = (
+  filters: SourceTransactionRecordLegacyFilters,
+): SQL[] => {
+  const conditions: SQL[] = [notDeleted(sourceTransactionRecord)];
+  if (filters.source)
+    conditions.push(eq(sourceTransactionRecord.source, filters.source));
   // Addressed by the export's client-supplied fingerprint, never its uuid: a
   // uuid must not reach a URL or an MCP payload.
   if (filters.importFingerprint)
@@ -202,33 +116,43 @@ const buildConditions = (filters: StatementRowFilters): SQL[] => {
   // unfiltered query.
   if (filters.accountId)
     conditions.push(
-      sql`${statementRow.accountId} = (
+      sql`${sourceTransactionRecord.accountId} = (
         SELECT fa.id FROM "FinancialAccount" fa
         WHERE fa.shortcode = ${filters.accountId} AND fa."deletedAt" IS NULL
       )`,
     );
   if (filters.sourceCategory)
-    conditions.push(eq(statementRow.sourceCategory, filters.sourceCategory));
+    conditions.push(
+      eq(sourceTransactionRecord.sourceCategory, filters.sourceCategory),
+    );
   if (filters.disposition)
-    conditions.push(eq(statementRow.disposition, filters.disposition));
+    conditions.push(
+      eq(sourceTransactionRecord.disposition, filters.disposition),
+    );
   if (filters.dispositionReason)
     conditions.push(
-      eq(statementRow.dispositionReason, filters.dispositionReason),
+      eq(sourceTransactionRecord.dispositionReason, filters.dispositionReason),
     );
   if (filters.matchState)
     conditions.push(sql`${matchStateSql} = ${filters.matchState}`);
   if (filters.dateFrom)
-    conditions.push(sql`${statementRow.statementDate} >= ${filters.dateFrom}`);
+    conditions.push(
+      sql`${sourceTransactionRecord.statementDate} >= ${filters.dateFrom}`,
+    );
   if (filters.dateTo)
-    conditions.push(sql`${statementRow.statementDate} <= ${filters.dateTo}`);
+    conditions.push(
+      sql`${sourceTransactionRecord.statementDate} <= ${filters.dateTo}`,
+    );
   conditions.push(
-    ...rangeConditions(statementRow.amount, filters, "amount").filter(
-      (c): c is SQL => c !== undefined,
-    ),
+    ...rangeConditions(
+      sourceTransactionRecord.amount,
+      filters,
+      "amount",
+    ).filter((c): c is SQL => c !== undefined),
   );
   if (filters.search) {
     const search = formatSearchTerm(
-      statementRow.rawDescription,
+      sourceTransactionRecord.rawDescription,
       filters.search,
     );
     if (search) conditions.push(search);
@@ -236,74 +160,9 @@ const buildConditions = (filters: StatementRowFilters): SQL[] => {
   return conditions;
 };
 
-export async function listStatementRows(
+export async function getSourceTransactionRecordSummary(
   db: Database,
-  filters: StatementRowFilters,
-  pagination?: PaginationParams,
-  sort?: SortParams,
-) {
-  const where = and(...buildConditions(filters))!;
-  const { take, skip } = buildTakeSkip(
-    pagination ?? { pageIndex: 0, pageSize: 50 },
-  );
-  const direction = sort?.direction === "asc" ? asc : desc;
-  const orderColumn =
-    sort?.orderBy === "amount"
-      ? statementRow.amount
-      : sort?.orderBy === "accountDescriptor"
-        ? statementRow.accountDescriptor
-        : sort?.orderBy === "rawDescription"
-          ? statementRow.rawDescription
-          : sort?.orderBy === "createdAt"
-            ? statementRow.createdAt
-            : statementRow.statementDate;
-
-  // Raw SQL rather than the drizzle builder because both the projection and the
-  // WHERE may reference `lr`, and the count has to see the same join — a count
-  // taken without it would disagree with the page whenever `matchState` filters.
-  const projection = sql.join(
-    Object.entries(columns).map(
-      (entry) => sql`${entry[1]} AS ${sql.identifier(entry[0])}`,
-    ),
-    sql`, `,
-  );
-  const [data, counted] = await Promise.all([
-    unwrapDb(db).execute<StatementRowRow>(sql`
-      SELECT ${projection}
-      ${FROM_WITH_REFS}
-      WHERE ${where}
-      -- Tie-broken by id: statementDate alone is not unique, and an unstable
-      -- sort silently repeats or skips rows across pages.
-      ORDER BY ${direction(orderColumn)}, ${asc(statementRow.id)}
-      LIMIT ${take} OFFSET ${skip}
-    `),
-    unwrapDb(db).execute<{ count: number }>(sql`
-      SELECT count(*)::int AS count ${FROM_WITH_REFS} WHERE ${where}
-    `),
-  ]);
-  const output = data.rows.map((row) => toOut(row));
-  const eligibleMerchants = output.flatMap((row) =>
-    row.matchState === "unmatched" && row.merchant ? [row.merchant] : [],
-  );
-  const inferences = await merchantVendorInferences(db, eligibleMerchants);
-  return {
-    data: output.map((row) => ({
-      ...row,
-      vendorInference:
-        row.matchState === "unmatched" && row.merchant
-          ? (inferences.get(normalizeMerchant(row.merchant)) ?? {
-              status: "none" as const,
-              candidates: [],
-            })
-          : null,
-    })),
-    count: Number(counted.rows[0]?.count ?? 0),
-  };
-}
-
-export async function getStatementRowSummary(
-  db: Database,
-  filters: StatementRowFilters,
+  filters: SourceTransactionRecordLegacyFilters,
 ) {
   const where = and(...buildConditions(filters))!;
   const { rows } = await unwrapDb(db).execute<{
@@ -323,17 +182,17 @@ export async function getStatementRowSummary(
       count(*)::int AS total,
       COALESCE(sum(amount), 0) AS "amountTotal",
       ${sql.join(
-        statementRowMatchState.options.map(
+        sourceTransactionRecordMatchState.options.map(
           (state) => sql`
             count(*) FILTER (WHERE ms = ${state})::int AS ${sql.identifier(state)},
             COALESCE(sum(amount) FILTER (WHERE ms = ${state}), 0) AS ${sql.identifier(`${state}Amount`)}`,
         ),
         sql`,`,
       )},
-      count(DISTINCT charge) FILTER (WHERE ms = ${statementRowMatchState.enum.unmatched})::int AS "unmatchedCharges"
+      count(DISTINCT charge) FILTER (WHERE ms = ${sourceTransactionRecordMatchState.enum.unmatched})::int AS "unmatchedCharges"
     FROM (
-      SELECT ${matchStateSql} AS ms, ${statementRow.amount} AS amount,
-        "StatementRow".source || ':' || ${chargeKeyOf('"StatementRow"')} AS charge
+      SELECT ${matchStateSql} AS ms, ${sourceTransactionRecord.amount} AS amount,
+        "SourceTransactionRecord".source || ':' || ${chargeKeyOf('"SourceTransactionRecord"')} AS charge
       ${FROM_WITH_REFS}
       WHERE ${where}
     ) t
@@ -356,11 +215,11 @@ export async function getStatementRowSummary(
 
 const storedRowCount = async (
   tx: DrizzleTransaction,
-  batchId: string,
+  batchId: TransactionImportId,
 ): Promise<number> => {
   const result = await unwrapDb(tx).execute<{ count: number }>(sql`
-    SELECT count(*)::int AS count FROM ${statementImportMembers} member
-    JOIN "StatementRow" sr ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
+    SELECT count(*)::int AS count FROM ${transactionImportMembers} member
+    JOIN "SourceTransactionRecord" sr ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
     WHERE member."importId" = ${batchId}
   `);
   return Number(result.rows[0]?.count ?? 0);
@@ -368,19 +227,31 @@ const storedRowCount = async (
 
 async function insertStatementEvidence(
   tx: DrizzleTransaction,
-  rows: (typeof statementRow.$inferInsert)[],
+  rows: Omit<typeof sourceTransactionRecord.$inferInsert, "shortcode">[],
 ) {
   if (!rows.length) return [];
-  const inserted = await unwrapDb(tx)
-    .insert(statementRow)
-    .values(rows)
-    .onConflictDoNothing({
-      target: [statementRow.source, statementRow.externalId],
-      where: sql`"StatementRow"."deletedAt" IS NULL`,
-    })
-    .returning({ id: statementRow.id });
-  if (inserted.length) await recordContextRefresh(tx, "StatementRow", []);
-  return inserted;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      return await unwrapDb(tx).transaction((nested) =>
+        insertPayloadsWithIdentities(
+          nested,
+          sourceTransactionRecord,
+          "sourceTransactionRecord",
+          rows.map((row) => ({
+            ...row,
+            shortcode: generateShortcode("sourceTransactionRecord"),
+          })),
+        ),
+      );
+    } catch (error) {
+      if (
+        !isEntityShortcodeCollision(error, "SourceTransactionRecord") ||
+        attempt === 9
+      )
+        throw error;
+    }
+  }
+  throw new Error("Failed to mint financial evidence identities");
 }
 
 /**
@@ -404,7 +275,7 @@ function statementSignWarning(
 }
 
 type RecordedMember = Pick<
-  typeof statementRow.$inferSelect,
+  typeof sourceTransactionRecord.$inferSelect,
   | "id"
   | "legacyExternalId"
   | "chargeKey"
@@ -420,7 +291,7 @@ function retainedCollectionObservation({
   legacyExternalId,
 }: {
   priorMembers: readonly RecordedMember[];
-  row: RecordStatementRowsInput["rows"][number];
+  row: RecordSourceTransactionRecordsInput["rows"][number];
   externalId: string;
   legacyExternalId: string;
 }) {
@@ -459,7 +330,7 @@ function retainedCollectionObservation({
 /** Source identity and immutable observation derivation are independent of booking. */
 async function prepareStatementObservations(
   tx: DrizzleTransaction,
-  input: RecordStatementRowsInput,
+  input: RecordSourceTransactionRecordsInput,
   observedAt: Date,
   priorMembers: readonly RecordedMember[],
 ) {
@@ -470,26 +341,26 @@ async function prepareStatementObservations(
   const previousProviderRows = providerIds.length
     ? await unwrapDb(tx)
         .select()
-        .from(statementRow)
+        .from(sourceTransactionRecord)
         .where(
           and(
-            eq(statementRow.source, source),
-            inArray(statementRow.providerTransactionId, providerIds),
-            notDeleted(statementRow),
+            eq(sourceTransactionRecord.source, source),
+            inArray(sourceTransactionRecord.providerTransactionId, providerIds),
+            notDeleted(sourceTransactionRecord),
           ),
         )
     : [];
   const retainedAccountIds = previousProviderRows.length
     ? await unwrapDb(tx)
         .select({
-          chargeKey: statementRow.chargeKey,
-          providerAccountId: statementRow.providerAccountId,
+          chargeKey: sourceTransactionRecord.chargeKey,
+          providerAccountId: sourceTransactionRecord.providerAccountId,
         })
-        .from(statementRow)
+        .from(sourceTransactionRecord)
         .where(
           and(
-            eq(statementRow.source, source),
-            inArray(statementRow.chargeKey, [
+            eq(sourceTransactionRecord.source, source),
+            inArray(sourceTransactionRecord.chargeKey, [
               ...new Set(previousProviderRows.map((prior) => prior.chargeKey)),
             ]),
           ),
@@ -524,7 +395,7 @@ async function prepareStatementObservations(
   for (const row of [...input.rows].sort(
     (a, b) => (a.rowPosition ?? 0) - (b.rowPosition ?? 0),
   )) {
-    const legacyExternalId = await statementRowExternalId({
+    const legacyExternalId = await sourceTransactionRecordExternalId({
       source,
       account: row.accountDescriptor,
       date: row.statementDate,
@@ -536,7 +407,7 @@ async function prepareStatementObservations(
     let chargeKey = row.providerTransactionId
       ? `provider:${await sha256Hex(JSON.stringify([source, providerAccountId ?? row.accountDescriptor, row.providerTransactionId]))}`
       : row.rowPosition !== undefined
-        ? await statementRowOccurrenceId(
+        ? await sourceTransactionRecordOccurrenceId(
             source,
             input.import.fingerprint,
             row.rowPosition,
@@ -615,7 +486,7 @@ async function prepareStatementObservations(
           }),
         )}`
       : row.rowPosition !== undefined
-        ? await statementRowOccurrenceId(
+        ? await sourceTransactionRecordOccurrenceId(
             source,
             input.import.fingerprint,
             row.rowPosition,
@@ -674,10 +545,10 @@ async function prepareStatementObservations(
 /** Completion and source absence are persisted proofs, independent of booking. */
 async function completeEvidenceCollection(
   tx: DrizzleTransaction,
-  input: RecordStatementRowsInput,
-  batchId: string,
+  input: RecordSourceTransactionRecordsInput,
+  batchId: TransactionImportId,
   existingBatch:
-    | Pick<typeof statementImport.$inferSelect, "completedAt">
+    | Pick<typeof transactionImport.$inferSelect, "completedAt">
     | undefined,
   rows: Awaited<ReturnType<typeof prepareStatementObservations>>,
   rowCountStored: number,
@@ -685,7 +556,7 @@ async function completeEvidenceCollection(
 ) {
   const { source } = input.import;
   let completed = existingBatch?.completedAt != null;
-  if (input.complete) {
+  if (input.complete && !completed) {
     if (
       !input.import.coverage ||
       input.import.rowCountDeclared === null ||
@@ -697,9 +568,9 @@ async function completeEvidenceCollection(
       );
     completed = true;
     await unwrapDb(tx)
-      .update(statementImport)
+      .update(transactionImport)
       .set({ completedAt: new Date() })
-      .where(eq(statementImport.id, batchId));
+      .where(eq(transactionImport.id, batchId));
   }
   let withdrawn = 0;
   const withdrawnChargeKeys: string[] = [];
@@ -717,17 +588,17 @@ async function completeEvidenceCollection(
       );
     const candidates = await unwrapDb(tx)
       .select()
-      .from(statementRow)
+      .from(sourceTransactionRecord)
       .where(
         and(
-          eq(statementRow.source, source),
-          eq(statementRow.current, true),
-          notDeleted(statementRow),
+          eq(sourceTransactionRecord.source, source),
+          eq(sourceTransactionRecord.current, true),
+          notDeleted(sourceTransactionRecord),
           inArray(
-            statementRow.providerTransactionId,
+            sourceTransactionRecord.providerTransactionId,
             input.confirmedWithdrawals,
           ),
-          sql`COALESCE(${statementRow.providerAccountId}, ${statementRow.accountDescriptor}) = ${coverage.account}`,
+          sql`COALESCE(${sourceTransactionRecord.providerAccountId}, ${sourceTransactionRecord.accountDescriptor}) = ${coverage.account}`,
         ),
       );
     for (const row of candidates) {
@@ -741,12 +612,12 @@ async function completeEvidenceCollection(
         ) ||
         (
           await unwrapDb(tx)
-            .select({ id: statementImportRow.statementRowId })
-            .from(statementImportRow)
+            .select({ id: transactionImportRecord.statementRowId })
+            .from(transactionImportRecord)
             .where(
               and(
-                eq(statementImportRow.importId, batchId),
-                eq(statementImportRow.statementRowId, row.id),
+                eq(transactionImportRecord.importId, batchId),
+                eq(transactionImportRecord.statementRowId, row.id),
               ),
             )
             .limit(1)
@@ -758,13 +629,13 @@ async function completeEvidenceCollection(
         );
       if (row.withdrawnAt === null) {
         await unwrapDb(tx)
-          .update(statementRow)
+          .update(sourceTransactionRecord)
           .set({
             withdrawnAt: observedAt,
             withdrawalImportId: batchId,
             lastObservedAt: observedAt,
           })
-          .where(eq(statementRow.id, row.id));
+          .where(eq(sourceTransactionRecord.id, row.id));
         withdrawn += 1;
         withdrawnChargeKeys.push(row.chargeKey);
       }
@@ -782,9 +653,24 @@ async function completeEvidenceCollection(
  * Idempotent — re-submitting an export inserts nothing. Pass `dryRun` to learn
  * what a real call would do without creating the batch or the rows.
  */
-export async function recordStatementRows(
+const importAuditColumns = {
+  id: transactionImport.id,
+  shortcode: transactionImport.shortcode,
+  source: transactionImport.source,
+  label: transactionImport.label,
+  fingerprint: transactionImport.fingerprint,
+  dateKind: transactionImport.dateKind,
+  observedAt: transactionImport.observedAt,
+  coverage: transactionImport.coverage,
+  rowCountDeclared: transactionImport.rowCountDeclared,
+  completedAt: transactionImport.completedAt,
+  createdAt: transactionImport.createdAt,
+  updatedAt: transactionImport.updatedAt,
+};
+
+export async function recordSourceTransactionRecords(
   db: Database,
-  input: RecordStatementRowsInput,
+  input: RecordSourceTransactionRecordsInput,
   actor: ActorContext,
 ) {
   const { source } = input.import;
@@ -796,19 +682,13 @@ export async function recordStatementRows(
         `intake:${source}`,
       ]);
       const [existingBatch] = await unwrapDb(tx)
-        .select({
-          id: statementImport.id,
-          observedAt: statementImport.observedAt,
-          coverage: statementImport.coverage,
-          rowCountDeclared: statementImport.rowCountDeclared,
-          completedAt: statementImport.completedAt,
-        })
-        .from(statementImport)
+        .select(importAuditColumns)
+        .from(transactionImport)
         .where(
           and(
-            eq(statementImport.source, source),
-            eq(statementImport.fingerprint, input.import.fingerprint),
-            notDeleted(statementImport),
+            eq(transactionImport.source, source),
+            eq(transactionImport.fingerprint, input.import.fingerprint),
+            notDeleted(transactionImport),
           ),
         )
         .limit(1);
@@ -829,19 +709,23 @@ export async function recordStatementRows(
       const priorMembers = existingBatch
         ? await unwrapDb(tx)
             .select({
-              id: statementRow.id,
-              legacyExternalId: statementRow.legacyExternalId,
-              chargeKey: statementRow.chargeKey,
-              rowPosition: statementRow.rowPosition,
-              externalId: statementRow.externalId,
-              providerTransactionId: statementRow.providerTransactionId,
+              id: sourceTransactionRecord.id,
+              legacyExternalId: sourceTransactionRecord.legacyExternalId,
+              chargeKey: sourceTransactionRecord.chargeKey,
+              rowPosition: sourceTransactionRecord.rowPosition,
+              externalId: sourceTransactionRecord.externalId,
+              providerTransactionId:
+                sourceTransactionRecord.providerTransactionId,
             })
-            .from(statementImportRow)
+            .from(transactionImportRecord)
             .innerJoin(
-              statementRow,
-              eq(statementRow.id, statementImportRow.statementRowId),
+              sourceTransactionRecord,
+              eq(
+                sourceTransactionRecord.id,
+                transactionImportRecord.statementRowId,
+              ),
             )
-            .where(eq(statementImportRow.importId, existingBatch.id))
+            .where(eq(transactionImportRecord.importId, existingBatch.id))
         : [];
       const rows = await prepareStatementObservations(
         tx,
@@ -853,12 +737,12 @@ export async function recordStatementRows(
       const stored = ids.length
         ? await unwrapDb(tx)
             .select()
-            .from(statementRow)
+            .from(sourceTransactionRecord)
             .where(
               and(
-                eq(statementRow.source, source),
-                inArray(statementRow.externalId, ids),
-                notDeleted(statementRow),
+                eq(sourceTransactionRecord.source, source),
+                inArray(sourceTransactionRecord.externalId, ids),
+                notDeleted(sourceTransactionRecord),
               ),
             )
         : [];
@@ -868,35 +752,63 @@ export async function recordStatementRows(
         );
         if (
           saved &&
-          [
-            saved.accountDescriptor !== incoming.accountDescriptor,
-            saved.statementDate !== incoming.statementDate,
-            saved.providerAmount !== incoming.providerAmount,
-            saved.rawDescription !== incoming.rawDescription,
-            saved.providerTransactionId !== incoming.providerTransactionId,
-          ].some(Boolean)
+          evidenceChanges(
+            {
+              accountDescriptor: saved.accountDescriptor,
+              statementDate: saved.statementDate,
+              providerAmount: saved.providerAmount,
+              rawDescription: saved.rawDescription,
+              rowPosition: incoming.providerTransactionId
+                ? null
+                : saved.rowPosition,
+              providerTransactionId: saved.providerTransactionId,
+              providerAccountId: saved.providerAccountId,
+              providerData: saved.providerData,
+              merchant: saved.merchant,
+              sourceCategory: saved.sourceCategory,
+              providerStatus: saved.providerStatus,
+              providerNotes: saved.providerNotes,
+            },
+            {
+              accountDescriptor: incoming.accountDescriptor,
+              statementDate: incoming.statementDate,
+              providerAmount: incoming.providerAmount,
+              rawDescription: incoming.rawDescription,
+              rowPosition: incoming.providerTransactionId
+                ? null
+                : (incoming.rowPosition ?? null),
+              providerTransactionId: incoming.providerTransactionId,
+              providerAccountId: incoming.providerAccountId,
+              providerData: incoming.providerData,
+              merchant: incoming.merchant,
+              sourceCategory: incoming.sourceCategory,
+              providerStatus: incoming.providerStatus,
+              providerNotes: incoming.providerNotes,
+            },
+          )
         )
           throw createAppError(
             "CONSTRAINT_VIOLATION",
             "An observation identity cannot change its original evidence.",
           );
       }
-      const heads = rows.length
+      const retainedHeads = rows.length
         ? await unwrapDb(tx)
             .select()
-            .from(statementRow)
+            .from(sourceTransactionRecord)
             .where(
               and(
-                eq(statementRow.source, source),
+                eq(sourceTransactionRecord.source, source),
                 inArray(
-                  statementRow.chargeKey,
+                  sourceTransactionRecord.chargeKey,
                   rows.map((row) => row.chargeKey),
                 ),
-                eq(statementRow.current, true),
-                notDeleted(statementRow),
+                eq(sourceTransactionRecord.current, true),
+                // includes-deleted: a deleted newer head still prevents an old import replay from activating its predecessor.
               ),
             )
         : [];
+      const heads = retainedHeads.filter((head) => head.deletedAt === null);
       const novel = rows.filter(
         (row) => !stored.some((saved) => saved.externalId === row.externalId),
       );
@@ -947,46 +859,68 @@ export async function recordStatementRows(
       };
       if (input.dryRun) return base;
       await ensureExternalSources(tx, [source]);
-      const batchId =
-        existingBatch?.id ??
-        (
-          await unwrapDb(tx)
-            .insert(statementImport)
-            .values({
-              source,
-              label: input.import.label,
-              fingerprint: input.import.fingerprint,
-              dateKind: input.import.dateKind,
-              rowCountDeclared: input.import.rowCountDeclared,
-              notes: input.import.notes,
-              observedAt,
-              coverage: input.import.coverage ?? null,
-            })
-            .returning({ id: statementImport.id })
-        )[0]?.id;
+      const auditScope = and(
+        eq(sourceTransactionRecord.source, source),
+        notDeleted(sourceTransactionRecord),
+        or(
+          rows.length
+            ? inArray(
+                sourceTransactionRecord.chargeKey,
+                rows.map((row) => row.chargeKey),
+              )
+            : undefined,
+          input.confirmedWithdrawals.length
+            ? inArray(
+                sourceTransactionRecord.providerTransactionId,
+                input.confirmedWithdrawals,
+              )
+            : undefined,
+        ) ?? sql`false`,
+      );
+      const beforeRows = await unwrapDb(tx)
+        .select()
+        .from(sourceTransactionRecord)
+        .where(auditScope);
+      const batch =
+        existingBatch ??
+        (await insertWithShortcode(tx, "transactionImport", {
+          source,
+          label: input.import.label,
+          fingerprint: input.import.fingerprint,
+          dateKind: input.import.dateKind,
+          rowCountDeclared: input.import.rowCountDeclared,
+          notes: input.import.notes,
+          observedAt,
+          coverage: input.import.coverage ?? null,
+        }));
+      const batchId = batch.id;
       if (!batchId)
         throw createAppError(
           "CONSTRAINT_VIOLATION",
           "Failed to record financial evidence collection.",
         );
       for (const row of rows) {
-        const newer = heads.some(
+        const newer = retainedHeads.some(
           (head) =>
             head.chargeKey === row.chargeKey &&
             (head.lastObservedAt > observedAt ||
+              (head.deletedAt !== null &&
+                head.externalId !== row.externalId &&
+                head.lastObservedAt >= observedAt) ||
               (head.withdrawnAt !== null && head.withdrawnAt >= observedAt)),
         );
         if (newer) row.current = false;
         else
           await unwrapDb(tx)
-            .update(statementRow)
+            .update(sourceTransactionRecord)
             .set({ current: false })
             .where(
               and(
-                eq(statementRow.source, source),
-                eq(statementRow.chargeKey, row.chargeKey),
-                eq(statementRow.current, true),
-                sql`${statementRow.externalId} <> ${row.externalId}`,
+                eq(sourceTransactionRecord.source, source),
+                eq(sourceTransactionRecord.chargeKey, row.chargeKey),
+                eq(sourceTransactionRecord.current, true),
+                notDeleted(sourceTransactionRecord),
+                sql`${sourceTransactionRecord.externalId} <> ${row.externalId}`,
               ),
             );
       }
@@ -1012,7 +946,7 @@ export async function recordStatementRows(
         );
       for (const row of rows.filter((candidate) => candidate.current))
         await unwrapDb(tx)
-          .update(statementRow)
+          .update(sourceTransactionRecord)
           .set({
             current: true,
             withdrawnAt: null,
@@ -1021,38 +955,43 @@ export async function recordStatementRows(
           })
           .where(
             and(
-              eq(statementRow.source, source),
-              eq(statementRow.externalId, row.externalId),
-              sql`${statementRow.lastObservedAt} <= ${observedAt.toISOString()} AND (${statementRow.withdrawnAt} IS NULL OR ${statementRow.withdrawnAt} < ${observedAt.toISOString()}) AND (${statementRow.lastObservedAt} < ${observedAt.toISOString()} OR NOT ${statementRow.current} OR ${statementRow.withdrawnAt} IS NOT NULL)`,
+              eq(sourceTransactionRecord.source, source),
+              eq(sourceTransactionRecord.externalId, row.externalId),
+              notDeleted(sourceTransactionRecord),
+              sql`${sourceTransactionRecord.lastObservedAt} <= ${observedAt.toISOString()} AND (${sourceTransactionRecord.withdrawnAt} IS NULL OR ${sourceTransactionRecord.withdrawnAt} < ${observedAt.toISOString()}) AND (${sourceTransactionRecord.lastObservedAt} < ${observedAt.toISOString()} OR NOT ${sourceTransactionRecord.current} OR ${sourceTransactionRecord.withdrawnAt} IS NOT NULL)`,
             ),
           );
       const retained = ids.length
         ? await unwrapDb(tx)
-            .select({ id: statementRow.id })
-            .from(statementRow)
+            .select({ id: sourceTransactionRecord.id })
+            .from(sourceTransactionRecord)
             .where(
               and(
-                eq(statementRow.source, source),
-                inArray(statementRow.externalId, ids),
-                notDeleted(statementRow),
+                eq(sourceTransactionRecord.source, source),
+                inArray(sourceTransactionRecord.externalId, ids),
+                notDeleted(sourceTransactionRecord),
               ),
             )
         : [];
-      if (retained.length)
-        await unwrapDb(tx)
-          .insert(statementImportRow)
-          .values(
-            retained.map((row) => ({
-              importId: batchId,
-              statementRowId: row.id,
-            })),
-          )
-          .onConflictDoNothing({
-            target: [
-              statementImportRow.importId,
-              statementImportRow.statementRowId,
-            ],
-          });
+      const addedMembers = retained.length
+        ? await unwrapDb(tx)
+            .insert(transactionImportRecord)
+            .values(
+              retained.map((row) => ({
+                importId: batchId,
+                statementRowId: row.id,
+              })),
+            )
+            .onConflictDoNothing({
+              target: [
+                transactionImportRecord.importId,
+                transactionImportRecord.statementRowId,
+              ],
+            })
+            .returning({
+              statementRowId: transactionImportRecord.statementRowId,
+            })
+        : [];
       const rowCountStored = await storedRowCount(tx, batchId);
       const { completed, withdrawn, withdrawnChargeKeys } =
         await completeEvidenceCollection(
@@ -1065,7 +1004,41 @@ export async function recordStatementRows(
           observedAt,
         );
       if (novel.length || revised.length || withdrawn)
-        await recordContextRefresh(tx, "StatementRow", []);
+        await recordContextRefresh(tx, "SourceTransactionRecord", []);
+      const afterRows = await unwrapDb(tx)
+        .select()
+        .from(sourceTransactionRecord)
+        .where(auditScope);
+      await auditEvidenceRows(
+        tx,
+        actor,
+        "sourceTransactionRecord",
+        beforeRows,
+        afterRows,
+      );
+      const [afterBatch] = await unwrapDb(tx)
+        .select(importAuditColumns)
+        .from(transactionImport)
+        .where(eq(transactionImport.id, batchId));
+      if (afterBatch) {
+        const changes = evidenceChanges(existingBatch, afterBatch) ?? {};
+        if (!existingBatch && input.import.notes !== null)
+          changes.notes = { from: null, to: input.import.notes };
+        if (addedMembers.length)
+          changes.records = {
+            from: null,
+            to: addedMembers.map((member) => member.statementRowId),
+          };
+        if (Object.keys(changes).length)
+          await logAuditEntries(tx, actor, [
+            {
+              entityKind: "transactionImport",
+              entityId: batchId,
+              action: existingBatch ? "update" : "create",
+              changes,
+            },
+          ]);
+      }
       const { reconcileRecordedFinancialEvidence } =
         await import("./statement-evidence-correction");
       const correctionReviews = await reconcileRecordedFinancialEvidence(
@@ -1105,7 +1078,7 @@ export async function recordStatementRows(
  *
  * Detection, not prevention: the hash is stored externally as a transaction's
  * `settlement_ref` EntityExternalId with no back-reference, so changing what it
- * covers would orphan every ref (`statement-row-identity.ts` says so at
+ * covers would orphan every ref (`source-transaction-record-identity.ts` says so at
  * length). Reporting, not repair: `(accountDescriptor, statementDate,
  * providerAmount)` also matches genuine same-day same-amount pairs, so a
  * candidate is a question. The remedy stays the explicit, per-row
@@ -1113,29 +1086,34 @@ export async function recordStatementRows(
  *
  * Rows already superseded drop out, so the list shrinks as it is worked.
  */
-export async function findStatementRowDrift(
+export async function findSourceTransactionRecordDrift(
   db: Database,
-  input: FindStatementRowDriftInput,
+  input: FindSourceTransactionRecordDriftInput,
 ) {
   const conditions: SQL[] = [
-    notDeleted(statementRow),
+    notDeleted(sourceTransactionRecord),
     // An already-linked predecessor is a settled question. Only the predecessor
     // carries the link, so a resolved pair leaves one live row in its group and
     // the `count(*) > 1` gate drops it.
-    sql`${statementRow.supersededByRowId} IS NULL`,
+    sql`${sourceTransactionRecord.supersededByRowId} IS NULL`,
   ];
-  if (input.source) conditions.push(eq(statementRow.source, input.source));
+  if (input.source)
+    conditions.push(eq(sourceTransactionRecord.source, input.source));
   if (input.dateFrom)
-    conditions.push(sql`${statementRow.statementDate} >= ${input.dateFrom}`);
+    conditions.push(
+      sql`${sourceTransactionRecord.statementDate} >= ${input.dateFrom}`,
+    );
   if (input.dateTo)
-    conditions.push(sql`${statementRow.statementDate} <= ${input.dateTo}`);
+    conditions.push(
+      sql`${sourceTransactionRecord.statementDate} <= ${input.dateTo}`,
+    );
   if (input.importFingerprint)
     conditions.push(observedInImport(input.importFingerprint));
   const where = and(...conditions)!;
   // Coexisting rows are distinct purchases even when another export owned one first.
   const unsharedPair = sql`NOT EXISTS (
-    SELECT 1 FROM ${statementImportMembers} left_member
-    JOIN ${statementImportMembers} right_member ON right_member."importId" = left_member."importId"
+    SELECT 1 FROM ${transactionImportMembers} left_member
+    JOIN ${transactionImportMembers} right_member ON right_member."importId" = left_member."importId"
     WHERE left_member."statementRowId" = a.id AND right_member."statementRowId" = b.id
   )`;
   const sameBatchGate = input.includeSameBatch
@@ -1148,8 +1126,8 @@ export async function findStatementRowDrift(
   const { rows } = await unwrapDb(db).execute<{
     source: string;
     accountDescriptor: string;
-    statementDate: StatementRowSqlValue;
-    providerAmount: StatementRowSqlValue;
+    statementDate: SourceTransactionRecordSqlValue;
+    providerAmount: SourceTransactionRecordSqlValue;
     crossBatch: boolean;
     externalId: string;
     rawDescription: string;
@@ -1157,11 +1135,11 @@ export async function findStatementRowDrift(
     providerStatus: string | null;
     disposition: string;
     importFingerprint: string;
-    createdAt: StatementRowSqlValue;
+    createdAt: SourceTransactionRecordSqlValue;
   }>(sql`
     WITH eligible AS (
       SELECT id, source, "chargeKey", "accountDescriptor", "statementDate", "providerAmount", "createdAt"
-      FROM "StatementRow" WHERE ${where}
+      FROM "SourceTransactionRecord" WHERE ${where}
     ), drifted AS (
       SELECT a.source, a."accountDescriptor", a."statementDate", a."providerAmount",
              min(least(a."createdAt", b."createdAt")) AS "firstSeen",
@@ -1175,30 +1153,30 @@ export async function findStatementRowDrift(
       ORDER BY "crossBatch" DESC, "firstSeen" DESC
       LIMIT ${probe}
     )
-    SELECT "StatementRow"."source",
-           "StatementRow"."accountDescriptor",
-           "StatementRow"."statementDate",
-           "StatementRow"."providerAmount",
+    SELECT "SourceTransactionRecord"."source",
+           "SourceTransactionRecord"."accountDescriptor",
+           "SourceTransactionRecord"."statementDate",
+           "SourceTransactionRecord"."providerAmount",
            d."crossBatch",
-           "StatementRow"."externalId",
-           "StatementRow"."rawDescription",
-           "StatementRow"."merchant",
-           "StatementRow"."providerStatus",
-           "StatementRow"."disposition",
+           "SourceTransactionRecord"."externalId",
+           "SourceTransactionRecord"."rawDescription",
+           "SourceTransactionRecord"."merchant",
+           "SourceTransactionRecord"."providerStatus",
+           "SourceTransactionRecord"."disposition",
            ${importFingerprint} AS "importFingerprint",
-           "StatementRow"."createdAt"
-    FROM "StatementRow"
+           "SourceTransactionRecord"."createdAt"
+    FROM "SourceTransactionRecord"
     JOIN drifted d
-      ON d."source" = "StatementRow"."source"
-     AND d."accountDescriptor" = "StatementRow"."accountDescriptor"
-     AND d."statementDate" = "StatementRow"."statementDate"
-     AND d."providerAmount" = "StatementRow"."providerAmount"
+      ON d."source" = "SourceTransactionRecord"."source"
+     AND d."accountDescriptor" = "SourceTransactionRecord"."accountDescriptor"
+     AND d."statementDate" = "SourceTransactionRecord"."statementDate"
+     AND d."providerAmount" = "SourceTransactionRecord"."providerAmount"
     WHERE ${where}
-    ORDER BY d."firstSeen" DESC, "StatementRow"."createdAt" ASC,
-             "StatementRow"."externalId" ASC
+    ORDER BY d."firstSeen" DESC, "SourceTransactionRecord"."createdAt" ASC,
+             "SourceTransactionRecord"."externalId" ASC
   `);
 
-  const byGroup = new Map<string, StatementRowDriftCandidate>();
+  const byGroup = new Map<string, SourceTransactionRecordDriftCandidate>();
   for (const row of rows) {
     const statementDate = asPlainDate(row.statementDate);
     const providerAmount = Number(row.providerAmount);
@@ -1233,12 +1211,12 @@ export async function findStatementRowDrift(
   };
 }
 
-const selectorConditions = (selector: StatementRowSelector): SQL => {
+const selectorConditions = (selector: SourceTransactionRecordSelector): SQL => {
   if ("externalIds" in selector)
     return and(
-      notDeleted(statementRow),
-      eq(statementRow.source, selector.source),
-      sql`${statementRow.externalId} IN (${sql.join(
+      notDeleted(sourceTransactionRecord),
+      eq(sourceTransactionRecord.source, selector.source),
+      sql`${sourceTransactionRecord.externalId} IN (${sql.join(
         selector.externalIds.map((id) => sql`${id}`),
         sql`, `,
       )})`,
@@ -1260,15 +1238,14 @@ const selectorConditions = (selector: StatementRowSelector): SQL => {
   return and(...conditions)!;
 };
 
-export async function updateStatementRows(
+export async function updateSourceTransactionRecords(
   db: Database,
-  input: UpdateStatementRowsInput,
-  // Unused: StatementRow has no `AuditEntityKind` — see deleteStatementRows.
-  _actor: ActorContext,
+  input: UpdateSourceTransactionRecordsInput,
+  actor: ActorContext,
 ) {
   const { data, selector } = input;
   return withTransaction(db, async (tx) => {
-    const values: Partial<typeof statementRow.$inferInsert> = {};
+    const values: Partial<typeof sourceTransactionRecord.$inferInsert> = {};
     if (data.disposition !== undefined) values.disposition = data.disposition;
     if (data.dispositionReason !== undefined)
       values.dispositionReason = data.dispositionReason;
@@ -1310,13 +1287,16 @@ export async function updateStatementRows(
             "supersededByExternalId requires an explicit source/externalIds selector.",
           );
         const [successor] = await unwrapDb(tx)
-          .select({ id: statementRow.id })
-          .from(statementRow)
+          .select({ id: sourceTransactionRecord.id })
+          .from(sourceTransactionRecord)
           .where(
             and(
-              eq(statementRow.source, selector.source),
-              eq(statementRow.externalId, data.supersededByExternalId),
-              notDeleted(statementRow),
+              eq(sourceTransactionRecord.source, selector.source),
+              eq(
+                sourceTransactionRecord.externalId,
+                data.supersededByExternalId,
+              ),
+              notDeleted(sourceTransactionRecord),
             ),
           )
           .limit(1);
@@ -1331,8 +1311,19 @@ export async function updateStatementRows(
 
     if (Object.keys(values).length === 0) return { affected: 0 };
 
+    const before = await unwrapDb(tx)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(selectorConditions(selector));
+    if (values.supersededByRowId)
+      for (const predecessor of before)
+        await assertSourceTransactionRecordSupersessionAllowed(
+          tx,
+          predecessor,
+          values.supersededByRowId,
+        );
     const updated = await unwrapDb(tx)
-      .update(statementRow)
+      .update(sourceTransactionRecord)
       .set(values)
       .where(
         and(
@@ -1347,69 +1338,23 @@ export async function updateStatementRows(
           ),
         ),
       )
-      .returning({ id: statementRow.id });
-    if (updated.length) await recordContextRefresh(tx, "StatementRow", []);
+      .returning();
+    await auditEvidenceRows(
+      tx,
+      actor,
+      "sourceTransactionRecord",
+      before,
+      updated,
+    );
+    if (updated.length)
+      await recordContextRefresh(tx, "SourceTransactionRecord", []);
     return { affected: updated.length };
   });
 }
 
-/**
- * Soft-delete the selected rows. Rare by design: a row that will never match is
- * `ignored` with its reasoning, which keeps the evidence. Deletion is for rows
- * that should never have been recorded — a mis-parsed export.
- */
-export async function deleteStatementRows(
-  db: Database,
-  selector: StatementRowSelector,
-  // Unused: StatementRow isn't in entity-core.ts's `Entity` union, so
-  // `logAuditEntry` has no `AuditEntityKind` to name it under — nothing here
-  // can produce a truthful audit entry. TODO: once StatementRow gets a
-  // manifest entry, route this through `removeEntity` instead (also brings
-  // cascade/locking, and `removeEntity` needs an id list, not a filter
-  // selector — same promotion this selector shape is blocked on today).
-  _actor: ActorContext,
-) {
-  return withTransaction(db, async (tx) => {
-    const deleted = await unwrapDb(tx)
-      .update(statementRow)
-      .set({ deletedAt: new Date() })
-      .where(selectorConditions(selector))
-      .returning({ id: statementRow.id });
-    if (deleted.length) await recordContextRefresh(tx, "StatementRow", []);
-    return { affected: deleted.length };
-  });
-}
-
-export async function listStatementImports(db: Database, source?: string) {
-  const rows = await unwrapDb(db)
-    .select({
-      id: statementImport.id,
-      source: statementImport.source,
-      label: statementImport.label,
-      fingerprint: statementImport.fingerprint,
-      dateKind: statementImport.dateKind,
-      rowCountDeclared: statementImport.rowCountDeclared,
-      observedAt: statementImport.observedAt,
-      completedAt: statementImport.completedAt,
-      coverage: statementImport.coverage,
-      createdAt: statementImport.createdAt,
-      updatedAt: statementImport.updatedAt,
-      rowCountStored: sql<number>`(
-        SELECT count(*)::int FROM ${statementImportMembers} member
-        JOIN "StatementRow" sr ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
-        WHERE member."importId" = "StatementImport"."id"
-      )`,
-    })
-    .from(statementImport)
-    .where(
-      and(
-        notDeleted(statementImport),
-        source ? eq(statementImport.source, source) : undefined,
-      ),
-    )
-    .orderBy(desc(statementImport.createdAt));
-  return {
-    data: rows.map((row) => statementImportOut.parse(row)),
-    count: rows.length,
-  };
-}
+export {
+  sourceTransactionRecordRepository,
+  transactionImportRepository,
+  listSourceTransactionRecordsRead,
+} from "./entity-repositories";
+export { assertSourceTransactionRecordDeletionAllowed } from "./source-transaction-record-lifecycle";

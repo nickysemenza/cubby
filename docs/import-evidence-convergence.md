@@ -173,11 +173,48 @@ aggregate reimbursement to its original Purchase or retire an unchanged
 aggregate and attach its bank evidence to a reviewed transfer. Edited,
 itemized, or source-claimed lines require individual review.
 
+## Financial evidence entities
+
+[Terminology](guide/terminology.md#naming-policy) owns the names; the
+[README overview](../README.md#financial-evidence) owns the entity map.
+Both entities use generated list and detail routes in the Financial evidence
+area: `/source-transaction-records` and `/transaction-imports`.
+
+Source transaction records enter through `source_transaction_records.record`.
+Generic create and merge are unavailable. Provider facts, identity, revisions,
+collection membership and source coverage remain intake-owned and immutable
+through generic commands. Generic updates edit only declared household judgment
+fields: account resolution, disposition and its explanation, supersession and
+notes. A successor is an explicit reviewed record relationship, not a match
+inferred from similar descriptions or amounts. These commands use the shared
+audit path. Import membership audits record the newly received record IDs for each chunk; public audit reads resolve the declared record relationship to shortcodes,
+without copying the collection’s growing membership into every audit entry.
+Prefer an explained ignore judgment when evidence should remain
+retained but leave reconciliation worklists.
+
+Transaction imports are read-only outside intake. Neither generic create,
+update, merge nor delete changes their metadata or membership. Intake owns
+resumption, count/completion updates and source-confirmed withdrawal; deleting
+a collection is not a reconciliation operation.
+
+Generic deletion of a source transaction record blocks while a live predecessor
+supersedes to it or an accepted FinancialTransaction source reference claims it.
+It preserves those relationships rather than detaching or cascading evidence.
+Resolve the accepted relationship through its owning workflow before retrying;
+a withdrawal is recorded evidence and never an instruction to delete history. Deleting a current revision does not promote an older one; replaying an older import still respects the deleted head’s observation time.
+
+Use `entity_read.get`, `entity_read.list` and `entity_read.search` for records,
+imports and their declared projections; use generic entity commands for judgment
+updates and guarded deletes. The specialized summary and drift reads remain
+workflow computations. `record` owns intake and `previewSuggestion` owns the
+read-only review projection. The former custom list, import roster, update and
+delete APIs have no separate replacement surface.
+
 ## Normalized financial evidence intake
 
 Claude/Codex use the [financial-evidence-import skill](../.agents/skills/financial-evidence-import/SKILL.md)
 to read Monarch MCP or parse Monarch, Mint, Copilot and Apple Card exports
-locally. Cubby accepts normalized observations through `statement_rows.record`;
+locally. Cubby accepts normalized observations through `source_transaction_records.record`;
 the application has no financial CSV parser, upload, mapping, preview/commit,
 native file picker or CSV CLI. USDA parsing and expense report exports are
 independent of financial intake.
@@ -357,17 +394,23 @@ quality remain distinct from deterministic import convergence.
 Follow [production change rules](agents/domain-rules.md#production-changes).
 Historical backfills must preserve unknown acquisition origin and evidence;
 existing bank transactions and Expenses are not automatically reclassified or
-booked. Deployment never applies migrations.
+booked. Apply the preserving schema migration and matching clients through the
+[production migration runbook](runbooks/production-migrations.md). After release,
+verify retained observation and import identities, membership and source references,
+unchanged spending, an audited judgment edit, and generic reads/connections on web,
+Apple and a reconnected MCP session. Local validation does not establish these
+production outcomes.
 
 ## Reviewing statement outcomes
 
 Suggestions is the reconciliation workspace: Pending proposals, optional Automatic
-decisions audit, and Automatic rules. Statement Rows is the imported-evidence
-browser and defaults to all observations; its scoped review links preserve the
-account, amount and date. Several rows can describe the same charge.
+decisions audit, and Automatic rules. Source transaction records is the generic
+imported-evidence browser; Transaction imports shows the retained collections.
+Filter the declared evidence projection by account, amount, date and match state
+as needed. Several observations can describe the same charge.
 
 Statement review shows Source, Proposed result and Evidence. The read-only
-`statementRow.previewSuggestion` revalidates the Assessment fingerprint and live
+`sourceTransactionRecord.previewSuggestion` revalidates the Assessment fingerprint and live
 charge before projecting a draft through the same action gates and spending
 planner as acceptance. It writes no aliases or records. The preview identifies
 transaction changes, vendor reuse/creation and alias effects, Purchase/Expense

@@ -18,7 +18,8 @@ they must not create Purchase spending. Exact aggregate-to-itemized replacement
 uses the reconciliation writer and refreshes the automatic booking fingerprint.
 
 1. Read the committed Purchase, its allocations, and existing
-   FinancialTransactions. Search saved StatementRows by the vendor's known
+   FinancialTransactions. Search Source transaction records with `entity_read.list` or
+   `entity_read.search` (`entity: "sourceTransactionRecord"`) by the vendor's known
    descriptors, then verify amount, posted date, account identity, and source
    references. Include matched and ignored rows: a prior disposition or source
    category is a judgment to verify, not proof that the charge is unrelated.
@@ -183,7 +184,8 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
    application>}`.
 3. A charge with `siblings` has a same-amount charge from another export: the
    pair may be one charge whose descriptor firmed up. Supersede the thinner row
-   (`statement_rows.update` with `supersededByExternalId`) before creating
+   (generic `entity.update` on `sourceTransactionRecord`, setting
+   `supersededByRowId` to the reviewed successor record ID) before creating
    either. A `claimed` candidate already settles another charge from the same
    source, so it is never clean: attach only when this row is that charge
    re-exported under a new descriptor; two visits for the same amount are two

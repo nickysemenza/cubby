@@ -208,6 +208,8 @@ const shortcodeParser =
  * literal-keyed list; `satisfies` fails to compile when an entity is missing.
  */
 const PARSE_CANONICAL_SHORTCODE = {
+  sourceTransactionRecord: shortcodeParser("sourceTransactionRecord"),
+  transactionImport: shortcodeParser("transactionImport"),
   email: shortcodeParser("email"),
   imageJob: shortcodeParser("imageJob"),
   spendingCategory: shortcodeParser("spendingCategory"),

@@ -1,6 +1,6 @@
 {
-  "id": "35c4b96b-89b8-4591-8347-3e913271db5d",
-  "prevId": "39ebad0a-bec9-4ea0-9d56-d41fd2d5f122",
+  "id": "e5070dc7-013d-468e-a482-910128b0afca",
+  "prevId": "35c4b96b-89b8-4591-8347-3e913271db5d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2002,11 +2002,11 @@
       "checkConstraints": {
         "Entity_kind_check": {
           "name": "Entity_kind_check",
-          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'plant', 'spendingCategory', 'email', 'imageJob')"
+          "value": "\"Entity\".\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'wish', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'plant', 'spendingCategory', 'email', 'imageJob', 'sourceTransactionRecord', 'transactionImport')"
         },
         "Entity_shortcode_prefix_check": {
           "name": "Entity_shortcode_prefix_check",
-          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'run' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' WHEN 'spendingCategory' THEN \"Entity\".\"shortcode\" LIKE 'SPC-%' WHEN 'email' THEN \"Entity\".\"shortcode\" LIKE 'EML-%' WHEN 'imageJob' THEN \"Entity\".\"shortcode\" LIKE 'IPR-%' ELSE false END"
+          "value": "\"Entity\".\"shortcode\" IS NULL OR CASE \"Entity\".\"kind\" WHEN 'product' THEN \"Entity\".\"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"Entity\".\"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"Entity\".\"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"Entity\".\"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"Entity\".\"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"Entity\".\"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"Entity\".\"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"Entity\".\"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"Entity\".\"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"Entity\".\"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"Entity\".\"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"Entity\".\"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"Entity\".\"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"Entity\".\"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"Entity\".\"shortcode\" LIKE 'FTX-%' WHEN 'wish' THEN \"Entity\".\"shortcode\" LIKE 'WSH-%' WHEN 'expense' THEN \"Entity\".\"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"Entity\".\"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"Entity\".\"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"Entity\".\"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"Entity\".\"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"Entity\".\"shortcode\" LIKE 'CAT-%' WHEN 'run' THEN \"Entity\".\"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"Entity\".\"shortcode\" LIKE 'DEV-%' WHEN 'plant' THEN \"Entity\".\"shortcode\" LIKE 'PLANT-%' WHEN 'spendingCategory' THEN \"Entity\".\"shortcode\" LIKE 'SPC-%' WHEN 'email' THEN \"Entity\".\"shortcode\" LIKE 'EML-%' WHEN 'imageJob' THEN \"Entity\".\"shortcode\" LIKE 'IPR-%' WHEN 'sourceTransactionRecord' THEN \"Entity\".\"shortcode\" LIKE 'STR-%' WHEN 'transactionImport' THEN \"Entity\".\"shortcode\" LIKE 'TIM-%' ELSE false END"
         },
         "Entity_merge_not_self_check": {
           "name": "Entity_merge_not_self_check",
@@ -19063,16 +19063,10 @@
       },
       "isRLSEnabled": false
     },
-    "public.SpendingCategory": {
-      "name": "SpendingCategory",
+    "public.SourceTransactionRecord": {
+      "name": "SourceTransactionRecord",
       "schema": "",
       "columns": {
-        "emoji": {
-          "name": "emoji",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "id": {
           "name": "id",
           "type": "uuid",
@@ -19085,411 +19079,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "aliases": {
-          "name": "aliases",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "parentId": {
-          "name": "parentId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "itemizationExpectation": {
-          "name": "itemizationExpectation",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unknown'"
-        },
-        "productExpectation": {
-          "name": "productExpectation",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unknown'"
-        },
-        "stockTracked": {
-          "name": "stockTracked",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "SpendingCategory_shortcode_unique": {
-          "name": "SpendingCategory_shortcode_unique",
-          "columns": [
-            {
-              "expression": "shortcode",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "SpendingCategory_parentId_idx": {
-          "name": "SpendingCategory_parentId_idx",
-          "columns": [
-            {
-              "expression": "parentId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "SpendingCategory_parentId_SpendingCategory_id_fk": {
-          "name": "SpendingCategory_parentId_SpendingCategory_id_fk",
-          "tableFrom": "SpendingCategory",
-          "tableTo": "SpendingCategory",
-          "columnsFrom": [
-            "parentId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "SpendingCategory_entity_identity_fk": {
-          "name": "SpendingCategory_entity_identity_fk",
-          "tableFrom": "SpendingCategory",
-          "tableTo": "Entity",
-          "columnsFrom": [
-            "id",
-            "shortcode"
-          ],
-          "columnsTo": [
-            "id",
-            "shortcode"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "SpendingCategory_itemizationExpectation_check": {
-          "name": "SpendingCategory_itemizationExpectation_check",
-          "value": "\"SpendingCategory\".\"itemizationExpectation\" IN ('unknown', 'required', 'not_expected')"
-        },
-        "SpendingCategory_productExpectation_check": {
-          "name": "SpendingCategory_productExpectation_check",
-          "value": "\"SpendingCategory\".\"productExpectation\" IN ('unknown', 'required', 'not_expected', 'not_allowed')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.StatementImport": {
-      "name": "StatementImport",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fingerprint": {
-          "name": "fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dateKind": {
-          "name": "dateKind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unknown'"
-        },
-        "rowCountDeclared": {
-          "name": "rowCountDeclared",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "observedAt": {
-          "name": "observedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "coverage": {
-          "name": "coverage",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "completedAt": {
-          "name": "completedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deletedAt": {
-          "name": "deletedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "StatementImport_source_fingerprint_key": {
-          "name": "StatementImport_source_fingerprint_key",
-          "columns": [
-            {
-              "expression": "source",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "fingerprint",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"StatementImport\".\"deletedAt\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "StatementImport_source_idx": {
-          "name": "StatementImport_source_idx",
-          "columns": [
-            {
-              "expression": "source",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "StatementImport_source_ExternalSource_slug_fk": {
-          "name": "StatementImport_source_ExternalSource_slug_fk",
-          "tableFrom": "StatementImport",
-          "tableTo": "ExternalSource",
-          "columnsFrom": [
-            "source"
-          ],
-          "columnsTo": [
-            "slug"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "StatementImport_source_slug_check": {
-          "name": "StatementImport_source_slug_check",
-          "value": "\"StatementImport\".\"source\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND \"StatementImport\".\"source\" = lower(trim(\"StatementImport\".\"source\"))"
-        },
-        "StatementImport_dateKind_check": {
-          "name": "StatementImport_dateKind_check",
-          "value": "\"StatementImport\".\"dateKind\" IN ('posted', 'transaction', 'unknown')"
-        },
-        "StatementImport_rowCountDeclared_check": {
-          "name": "StatementImport_rowCountDeclared_check",
-          "value": "\"StatementImport\".\"rowCountDeclared\" IS NULL OR \"StatementImport\".\"rowCountDeclared\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.StatementImportRow": {
-      "name": "StatementImportRow",
-      "schema": "",
-      "columns": {
-        "importId": {
-          "name": "importId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "statementRowId": {
-          "name": "statementRowId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "StatementImportRow_import_row_key": {
-          "name": "StatementImportRow_import_row_key",
-          "columns": [
-            {
-              "expression": "importId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "statementRowId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "StatementImportRow_row_idx": {
-          "name": "StatementImportRow_row_idx",
-          "columns": [
-            {
-              "expression": "statementRowId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "StatementImportRow_importId_StatementImport_id_fk": {
-          "name": "StatementImportRow_importId_StatementImport_id_fk",
-          "tableFrom": "StatementImportRow",
-          "tableTo": "StatementImport",
-          "columnsFrom": [
-            "importId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "StatementImportRow_statementRowId_StatementRow_id_fk": {
-          "name": "StatementImportRow_statementRowId_StatementRow_id_fk",
-          "tableFrom": "StatementImportRow",
-          "tableTo": "StatementRow",
-          "columnsFrom": [
-            "statementRowId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.StatementRow": {
-      "name": "StatementRow",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
         },
         "batchId": {
           "name": "batchId",
@@ -19691,8 +19280,23 @@
         }
       },
       "indexes": {
-        "StatementRow_source_externalId_key": {
-          "name": "StatementRow_source_externalId_key",
+        "SourceTransactionRecord_shortcode_unique": {
+          "name": "SourceTransactionRecord_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "SourceTransactionRecord_source_externalId_key": {
+          "name": "SourceTransactionRecord_source_externalId_key",
           "columns": [
             {
               "expression": "source",
@@ -19708,13 +19312,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"StatementRow\".\"deletedAt\" IS NULL",
+          "where": "\"SourceTransactionRecord\".\"deletedAt\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "StatementRow_batch_position_key": {
-          "name": "StatementRow_batch_position_key",
+        "SourceTransactionRecord_batch_position_key": {
+          "name": "SourceTransactionRecord_batch_position_key",
           "columns": [
             {
               "expression": "batchId",
@@ -19730,13 +19334,13 @@
             }
           ],
           "isUnique": true,
-          "where": "\"StatementRow\".\"deletedAt\" IS NULL",
+          "where": "\"SourceTransactionRecord\".\"deletedAt\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "StatementRow_source_providerTransactionId_idx": {
-          "name": "StatementRow_source_providerTransactionId_idx",
+        "SourceTransactionRecord_source_providerTransactionId_idx": {
+          "name": "SourceTransactionRecord_source_providerTransactionId_idx",
           "columns": [
             {
               "expression": "source",
@@ -19756,8 +19360,8 @@
           "method": "btree",
           "with": {}
         },
-        "StatementRow_source_charge_idx": {
-          "name": "StatementRow_source_charge_idx",
+        "SourceTransactionRecord_source_charge_idx": {
+          "name": "SourceTransactionRecord_source_charge_idx",
           "columns": [
             {
               "expression": "source",
@@ -19777,8 +19381,8 @@
           "method": "btree",
           "with": {}
         },
-        "StatementRow_batchId_idx": {
-          "name": "StatementRow_batchId_idx",
+        "SourceTransactionRecord_batchId_idx": {
+          "name": "SourceTransactionRecord_batchId_idx",
           "columns": [
             {
               "expression": "batchId",
@@ -19792,8 +19396,8 @@
           "method": "btree",
           "with": {}
         },
-        "StatementRow_statementDate_idx": {
-          "name": "StatementRow_statementDate_idx",
+        "SourceTransactionRecord_statementDate_idx": {
+          "name": "SourceTransactionRecord_statementDate_idx",
           "columns": [
             {
               "expression": "statementDate",
@@ -19807,8 +19411,8 @@
           "method": "btree",
           "with": {}
         },
-        "StatementRow_worklist_idx": {
-          "name": "StatementRow_worklist_idx",
+        "SourceTransactionRecord_worklist_idx": {
+          "name": "SourceTransactionRecord_worklist_idx",
           "columns": [
             {
               "expression": "statementDate",
@@ -19818,13 +19422,13 @@
             }
           ],
           "isUnique": false,
-          "where": "\"StatementRow\".\"deletedAt\" IS NULL AND \"StatementRow\".\"disposition\" = 'open' AND \"StatementRow\".\"supersededByRowId\" IS NULL",
+          "where": "\"SourceTransactionRecord\".\"deletedAt\" IS NULL AND \"SourceTransactionRecord\".\"disposition\" = 'open' AND \"SourceTransactionRecord\".\"supersededByRowId\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "StatementRow_account_date_amount_idx": {
-          "name": "StatementRow_account_date_amount_idx",
+        "SourceTransactionRecord_account_date_amount_idx": {
+          "name": "SourceTransactionRecord_account_date_amount_idx",
           "columns": [
             {
               "expression": "accountId",
@@ -19850,8 +19454,8 @@
           "method": "btree",
           "with": {}
         },
-        "StatementRow_descriptor_date_amount_idx": {
-          "name": "StatementRow_descriptor_date_amount_idx",
+        "SourceTransactionRecord_descriptor_date_amount_idx": {
+          "name": "SourceTransactionRecord_descriptor_date_amount_idx",
           "columns": [
             {
               "expression": "source",
@@ -19883,8 +19487,8 @@
           "method": "btree",
           "with": {}
         },
-        "StatementRow_rawDescription_gin_idx": {
-          "name": "StatementRow_rawDescription_gin_idx",
+        "SourceTransactionRecord_rawDescription_gin_idx": {
+          "name": "SourceTransactionRecord_rawDescription_gin_idx",
           "columns": [
             {
               "expression": "\"rawDescription\" gin_trgm_ops",
@@ -19897,13 +19501,43 @@
           "concurrently": false,
           "method": "gin",
           "with": {}
+        },
+        "SourceTransactionRecord_withdrawalImportId_idx": {
+          "name": "SourceTransactionRecord_withdrawalImportId_idx",
+          "columns": [
+            {
+              "expression": "withdrawalImportId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "SourceTransactionRecord_supersededByRowId_idx": {
+          "name": "SourceTransactionRecord_supersededByRowId_idx",
+          "columns": [
+            {
+              "expression": "supersededByRowId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "StatementRow_batchId_StatementImport_id_fk": {
-          "name": "StatementRow_batchId_StatementImport_id_fk",
-          "tableFrom": "StatementRow",
-          "tableTo": "StatementImport",
+        "SourceTransactionRecord_batchId_TransactionImport_id_fk": {
+          "name": "SourceTransactionRecord_batchId_TransactionImport_id_fk",
+          "tableFrom": "SourceTransactionRecord",
+          "tableTo": "TransactionImport",
           "columnsFrom": [
             "batchId"
           ],
@@ -19913,9 +19547,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "StatementRow_source_ExternalSource_slug_fk": {
-          "name": "StatementRow_source_ExternalSource_slug_fk",
-          "tableFrom": "StatementRow",
+        "SourceTransactionRecord_source_ExternalSource_slug_fk": {
+          "name": "SourceTransactionRecord_source_ExternalSource_slug_fk",
+          "tableFrom": "SourceTransactionRecord",
           "tableTo": "ExternalSource",
           "columnsFrom": [
             "source"
@@ -19926,10 +19560,10 @@
           "onDelete": "no action",
           "onUpdate": "cascade"
         },
-        "StatementRow_withdrawalImportId_StatementImport_id_fk": {
-          "name": "StatementRow_withdrawalImportId_StatementImport_id_fk",
-          "tableFrom": "StatementRow",
-          "tableTo": "StatementImport",
+        "SourceTransactionRecord_withdrawalImportId_TransactionImport_id_fk": {
+          "name": "SourceTransactionRecord_withdrawalImportId_TransactionImport_id_fk",
+          "tableFrom": "SourceTransactionRecord",
+          "tableTo": "TransactionImport",
           "columnsFrom": [
             "withdrawalImportId"
           ],
@@ -19939,9 +19573,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "StatementRow_accountId_FinancialAccount_id_fk": {
-          "name": "StatementRow_accountId_FinancialAccount_id_fk",
-          "tableFrom": "StatementRow",
+        "SourceTransactionRecord_accountId_FinancialAccount_id_fk": {
+          "name": "SourceTransactionRecord_accountId_FinancialAccount_id_fk",
+          "tableFrom": "SourceTransactionRecord",
           "tableTo": "FinancialAccount",
           "columnsFrom": [
             "accountId"
@@ -19952,15 +19586,30 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "StatementRow_supersededByRowId_StatementRow_id_fk": {
-          "name": "StatementRow_supersededByRowId_StatementRow_id_fk",
-          "tableFrom": "StatementRow",
-          "tableTo": "StatementRow",
+        "SourceTransactionRecord_supersededByRowId_SourceTransactionRecord_id_fk": {
+          "name": "SourceTransactionRecord_supersededByRowId_SourceTransactionRecord_id_fk",
+          "tableFrom": "SourceTransactionRecord",
+          "tableTo": "SourceTransactionRecord",
           "columnsFrom": [
             "supersededByRowId"
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "SourceTransactionRecord_entity_identity_fk": {
+          "name": "SourceTransactionRecord_entity_identity_fk",
+          "tableFrom": "SourceTransactionRecord",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -19970,37 +19619,197 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "StatementRow_position_check": {
-          "name": "StatementRow_position_check",
-          "value": "\"StatementRow\".\"rowPosition\" IS NULL OR \"StatementRow\".\"rowPosition\" > 0"
+        "SourceTransactionRecord_position_check": {
+          "name": "SourceTransactionRecord_position_check",
+          "value": "\"SourceTransactionRecord\".\"rowPosition\" IS NULL OR \"SourceTransactionRecord\".\"rowPosition\" > 0"
         },
-        "StatementRow_source_slug_check": {
-          "name": "StatementRow_source_slug_check",
-          "value": "\"StatementRow\".\"source\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND \"StatementRow\".\"source\" = lower(trim(\"StatementRow\".\"source\"))"
+        "SourceTransactionRecord_source_slug_check": {
+          "name": "SourceTransactionRecord_source_slug_check",
+          "value": "\"SourceTransactionRecord\".\"source\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND \"SourceTransactionRecord\".\"source\" = lower(trim(\"SourceTransactionRecord\".\"source\"))"
         },
-        "StatementRow_amount_whole_cent_check": {
-          "name": "StatementRow_amount_whole_cent_check",
-          "value": "abs(\"StatementRow\".\"amount\" * 100 - round(\"StatementRow\".\"amount\" * 100)) < 0.0000001"
+        "SourceTransactionRecord_amount_whole_cent_check": {
+          "name": "SourceTransactionRecord_amount_whole_cent_check",
+          "value": "abs(\"SourceTransactionRecord\".\"amount\" * 100 - round(\"SourceTransactionRecord\".\"amount\" * 100)) < 0.0000001"
         },
-        "StatementRow_providerAmount_whole_cent_check": {
-          "name": "StatementRow_providerAmount_whole_cent_check",
-          "value": "abs(\"StatementRow\".\"providerAmount\" * 100 - round(\"StatementRow\".\"providerAmount\" * 100)) < 0.0000001"
+        "SourceTransactionRecord_providerAmount_whole_cent_check": {
+          "name": "SourceTransactionRecord_providerAmount_whole_cent_check",
+          "value": "abs(\"SourceTransactionRecord\".\"providerAmount\" * 100 - round(\"SourceTransactionRecord\".\"providerAmount\" * 100)) < 0.0000001"
         },
-        "StatementRow_providerStatus_check": {
-          "name": "StatementRow_providerStatus_check",
-          "value": "\"StatementRow\".\"providerStatus\" IS NULL OR \"StatementRow\".\"providerStatus\" IN ('posted', 'pending')"
+        "SourceTransactionRecord_providerStatus_check": {
+          "name": "SourceTransactionRecord_providerStatus_check",
+          "value": "\"SourceTransactionRecord\".\"providerStatus\" IS NULL OR \"SourceTransactionRecord\".\"providerStatus\" IN ('posted', 'pending')"
         },
-        "StatementRow_disposition_check": {
-          "name": "StatementRow_disposition_check",
-          "value": "(\"StatementRow\".\"disposition\" = 'open' AND \"StatementRow\".\"dispositionReason\" IS NULL AND \"StatementRow\".\"dispositionNote\" IS NULL)\n          OR (\"StatementRow\".\"disposition\" = 'ignored' AND \"StatementRow\".\"dispositionReason\" IS NOT NULL AND \"StatementRow\".\"dispositionNote\" IS NOT NULL)"
+        "SourceTransactionRecord_disposition_check": {
+          "name": "SourceTransactionRecord_disposition_check",
+          "value": "(\"SourceTransactionRecord\".\"disposition\" = 'open' AND \"SourceTransactionRecord\".\"dispositionReason\" IS NULL AND \"SourceTransactionRecord\".\"dispositionNote\" IS NULL)\n          OR (\"SourceTransactionRecord\".\"disposition\" = 'ignored' AND \"SourceTransactionRecord\".\"dispositionReason\" IS NOT NULL AND \"SourceTransactionRecord\".\"dispositionNote\" IS NOT NULL)"
         },
-        "StatementRow_dispositionReason_check": {
-          "name": "StatementRow_dispositionReason_check",
-          "value": "\"StatementRow\".\"dispositionReason\" IS NULL OR \"StatementRow\".\"dispositionReason\" IN\n          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')"
+        "SourceTransactionRecord_dispositionReason_check": {
+          "name": "SourceTransactionRecord_dispositionReason_check",
+          "value": "\"SourceTransactionRecord\".\"dispositionReason\" IS NULL OR \"SourceTransactionRecord\".\"dispositionReason\" IN\n          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')"
         },
-        "StatementRow_externalId_format_check": {
-          "name": "StatementRow_externalId_format_check",
-          "value": "\"StatementRow\".\"externalId\" ~ '^v[123]:[0-9a-f]{64}$'"
+        "SourceTransactionRecord_externalId_format_check": {
+          "name": "SourceTransactionRecord_externalId_format_check",
+          "value": "\"SourceTransactionRecord\".\"externalId\" ~ '^v[123]:[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.SpendingCategory": {
+      "name": "SpendingCategory",
+      "schema": "",
+      "columns": {
+        "emoji": {
+          "name": "emoji",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aliases": {
+          "name": "aliases",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "parentId": {
+          "name": "parentId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "itemizationExpectation": {
+          "name": "itemizationExpectation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "productExpectation": {
+          "name": "productExpectation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "stockTracked": {
+          "name": "stockTracked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "SpendingCategory_shortcode_unique": {
+          "name": "SpendingCategory_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "SpendingCategory_parentId_idx": {
+          "name": "SpendingCategory_parentId_idx",
+          "columns": [
+            {
+              "expression": "parentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "SpendingCategory_parentId_SpendingCategory_id_fk": {
+          "name": "SpendingCategory_parentId_SpendingCategory_id_fk",
+          "tableFrom": "SpendingCategory",
+          "tableTo": "SpendingCategory",
+          "columnsFrom": [
+            "parentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "SpendingCategory_entity_identity_fk": {
+          "name": "SpendingCategory_entity_identity_fk",
+          "tableFrom": "SpendingCategory",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "SpendingCategory_itemizationExpectation_check": {
+          "name": "SpendingCategory_itemizationExpectation_check",
+          "value": "\"SpendingCategory\".\"itemizationExpectation\" IN ('unknown', 'required', 'not_expected')"
+        },
+        "SpendingCategory_productExpectation_check": {
+          "name": "SpendingCategory_productExpectation_check",
+          "value": "\"SpendingCategory\".\"productExpectation\" IN ('unknown', 'required', 'not_expected', 'not_allowed')"
         }
       },
       "isRLSEnabled": false
@@ -20296,6 +20105,299 @@
           "columnsTo": [
             "id",
             "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.TransactionImport": {
+      "name": "TransactionImport",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dateKind": {
+          "name": "dateKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "rowCountDeclared": {
+          "name": "rowCountDeclared",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "observedAt": {
+          "name": "observedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "coverage": {
+          "name": "coverage",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "TransactionImport_shortcode_unique": {
+          "name": "TransactionImport_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "TransactionImport_source_fingerprint_key": {
+          "name": "TransactionImport_source_fingerprint_key",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "fingerprint",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"TransactionImport\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "TransactionImport_source_idx": {
+          "name": "TransactionImport_source_idx",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "TransactionImport_source_ExternalSource_slug_fk": {
+          "name": "TransactionImport_source_ExternalSource_slug_fk",
+          "tableFrom": "TransactionImport",
+          "tableTo": "ExternalSource",
+          "columnsFrom": [
+            "source"
+          ],
+          "columnsTo": [
+            "slug"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "cascade"
+        },
+        "TransactionImport_entity_identity_fk": {
+          "name": "TransactionImport_entity_identity_fk",
+          "tableFrom": "TransactionImport",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "id",
+            "shortcode"
+          ],
+          "columnsTo": [
+            "id",
+            "shortcode"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "TransactionImport_source_slug_check": {
+          "name": "TransactionImport_source_slug_check",
+          "value": "\"TransactionImport\".\"source\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND \"TransactionImport\".\"source\" = lower(trim(\"TransactionImport\".\"source\"))"
+        },
+        "TransactionImport_dateKind_check": {
+          "name": "TransactionImport_dateKind_check",
+          "value": "\"TransactionImport\".\"dateKind\" IN ('posted', 'transaction', 'unknown')"
+        },
+        "TransactionImport_rowCountDeclared_check": {
+          "name": "TransactionImport_rowCountDeclared_check",
+          "value": "\"TransactionImport\".\"rowCountDeclared\" IS NULL OR \"TransactionImport\".\"rowCountDeclared\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.TransactionImportRecord": {
+      "name": "TransactionImportRecord",
+      "schema": "",
+      "columns": {
+        "importId": {
+          "name": "importId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statementRowId": {
+          "name": "statementRowId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "TransactionImportRecord_import_row_key": {
+          "name": "TransactionImportRecord_import_row_key",
+          "columns": [
+            {
+              "expression": "importId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "statementRowId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "TransactionImportRecord_row_idx": {
+          "name": "TransactionImportRecord_row_idx",
+          "columns": [
+            {
+              "expression": "statementRowId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "TransactionImportRecord_importId_TransactionImport_id_fk": {
+          "name": "TransactionImportRecord_importId_TransactionImport_id_fk",
+          "tableFrom": "TransactionImportRecord",
+          "tableTo": "TransactionImport",
+          "columnsFrom": [
+            "importId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "TransactionImportRecord_statementRowId_SourceTransactionRecord_id_fk": {
+          "name": "TransactionImportRecord_statementRowId_SourceTransactionRecord_id_fk",
+          "tableFrom": "TransactionImportRecord",
+          "tableTo": "SourceTransactionRecord",
+          "columnsFrom": [
+            "statementRowId"
+          ],
+          "columnsTo": [
+            "id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

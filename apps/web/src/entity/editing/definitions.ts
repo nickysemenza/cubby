@@ -818,7 +818,15 @@ const buildEntityDefinition = <E extends EditableEntity>(
           }),
         },
       },
-      create: operationDefinition(entity, "create", operationIntents("create")),
+      ...(declared.create.length
+        ? {
+            create: operationDefinition(
+              entity,
+              "create",
+              operationIntents("create"),
+            ),
+          }
+        : {}),
       update: operationDefinition(entity, "update", operationIntents("update")),
     },
   };

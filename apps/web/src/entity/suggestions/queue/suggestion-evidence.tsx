@@ -29,7 +29,7 @@ import {
   suggestionBasisLabels,
 } from "~/entity/suggestions/suggestion-body";
 import { renderOptionCell } from "~/entity/table/column-helpers";
-import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { sourceTransactionRecord } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
@@ -68,7 +68,7 @@ function SpendingResultFacts({
   amount,
   merchant,
 }: {
-  row: StatementRow;
+  row: SourceTransactionRecord;
   plan: Extract<FinancialSpendingPlan, { status: "ready" }>;
   amount: number;
   merchant: string | null;
@@ -164,7 +164,7 @@ function SpendingEvidence({
   merchant,
   previewState,
 }: {
-  row: StatementRow;
+  row: SourceTransactionRecord;
   plan: FinancialSpendingPlan | null;
   amount: number;
   merchant: string | null;
@@ -476,13 +476,13 @@ function EvidenceFacts({ rows }: { rows: [string, ReactNode][] }) {
   );
 }
 
-type StatementRow = Extract<
+type SourceTransactionRecord = Extract<
   SuggestionListRow,
   { family: "statement_transaction" }
 >;
 
 /** The kind a created transaction takes; a change stays a draft until review. */
-function KindPicker({ row }: { row: StatementRow }) {
+function KindPicker({ row }: { row: SourceTransactionRecord }) {
   const { draft, setDraft, outcome } = useSuggestionReview();
   const kind = draft(row.id).kind ?? row.evidence.create?.kind ?? null;
   return (
@@ -539,7 +539,7 @@ function TransactionPreviewFacts({
 }
 
 /** The charge beside each candidate it could be, with what attaching would copy. */
-function StatementEvidence({ row }: { row: StatementRow }) {
+function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
   const charge = row.evidence;
   // An Automatic rule already applied it: evidence only, nothing to choose.
   const settled = row.automaticRule !== null;
@@ -563,7 +563,7 @@ function StatementEvidence({ row }: { row: StatementRow }) {
   };
   const choice = statementChoice(row);
   const preview = useQuery({
-    ...statementRow.previewSuggestion.queryOptions({
+    ...sourceTransactionRecord.previewSuggestion.queryOptions({
       assessmentId: row.assessmentId,
       expectedFingerprint: row.fingerprint ?? "",
       application: statementApplication(

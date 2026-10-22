@@ -19,19 +19,12 @@ Before changing visible UI (layout, spacing, density, color, copy), load the
 [Validation policy](../../docs/agents/validation.md) owns browser test choice
 and delivery evidence.
 
-Verify browser work by reading, not by looking: `read_page`, `get_page_text`,
-`read_console_messages`, and `javascript_tool` answer almost every question and
-cost a few hundred tokens. A screenshot averages ~11k tokens — measured, they
-are a third of everything the agent reads across a session, and context that
-large is what makes each turn slower. Take one only when the question is
-genuinely visual (layout, spacing, colour) or as a single final proof for the
-user; never to confirm text, structure, or that a page loaded. PR screenshots are
-saved to files and attached unopened, so they cost nothing here
-([PR screenshots](../../docs/agents/validation.md#pr-screenshots)). Two preview-pane
-traps: a hidden tab has `visibilityState: "hidden"` (rAF suspended, blank
-below-the-fold screenshots, a fake "freeze") — verify with a tall viewport and a
-fresh navigation; and a ref-click can fail to fire a React `onClick` (silent
-no-op) where a coordinate click works.
+Use structured page text, snapshots and console output to verify text, structure
+and loading. Use screenshots for visual questions or final visual evidence;
+[PR screenshots](../../docs/agents/validation.md#pr-screenshots) owns capture and
+attachment. A hidden preview tab can suspend rAF and leave below-the-fold
+screenshots blank: check with a tall viewport and fresh navigation. If a ref-click
+silently fails to fire a React `onClick`, try a coordinate click.
 
 Native owns fieldwork: barcode/QR scanning, recount, sweep, and the location
 photo pass live in `apps/apple`, and the web app is not an installable PWA. Do

@@ -201,7 +201,7 @@ retains normal publication and freshness checks.
 Canonical repository lists use `listScaffold.read` with schema-picked output
 bindings in `list-projection.ts`. The assembler selects and validates present
 canonical scalars, converts root identity, excludes private foreign keys, and
-owns quality/media completion. Reference instructions distinguish stored UUID
+owns quality/media completion. Generic browser list schemas include `displayImages`; declare it in `presentation.list.read.media` and enable `media` in the repository read plan, including entities with no images. This keeps the field out of the base response until its media loader runs. Reference instructions distinguish stored UUID
 lookups from already projected public IDs. Domain bindings retain their typed
 computations and page-batch inputs; their output schema determines admission
 from the canonical partition. Shared batches memoize once for the selected page,

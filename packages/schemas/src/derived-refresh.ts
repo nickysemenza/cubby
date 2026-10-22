@@ -25,7 +25,7 @@ export const derivedRefreshContext = z.enum([
   "OrderMail",
   "OrderMailEvent",
   "AssessmentState",
-  "StatementRow",
+  "SourceTransactionRecord",
 ]);
 export type DerivedRefreshContext = z.infer<typeof derivedRefreshContext>;
 

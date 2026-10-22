@@ -12,6 +12,7 @@ import {
   generatedEntityListFields,
   type GeneratedListScopeKey,
   type GeneratedListScopeTarget,
+  type GeneratedRowSet,
 } from "@cubby/schemas/entity-list-fields";
 import {
   entityInspectorMetadata,
@@ -1555,6 +1556,7 @@ const scopeValue = listFilterValues.optional();
 
 /** What the generic facet operation needs from an entity's list scaffold. */
 interface ListFacetCounter {
+  repositoryRows(key: string): SQL;
   selectionIds(
     db: Database | DrizzleTransaction,
     filters: ListFilterValues,
@@ -1577,6 +1579,31 @@ const facetCounters = new Map<Entity, ListFacetCounter>();
 /** The entity's facet counter once its repository module has loaded. */
 export const listFacetCounter = (entity: Entity): ListFacetCounter | null =>
   facetCounters.get(entity) ?? null;
+
+/** Static SQL for an explicitly opted-in repository reference connection. */
+export const repositoryConnectionRows = (
+  entity: Entity,
+  key: string,
+  column: string,
+): SQL => {
+  const rowSet: GeneratedRowSet | undefined = Object.entries(
+    generatedEntityListFields[entity].rows,
+  ).find(([name]) => name === key)?.[1];
+  if (
+    rowSet?.storage.kind !== "repository" ||
+    !rowSet.storage.columns[column] ||
+    !rowSet.storage.connections.includes(column)
+  )
+    throw new Error(
+      `${entity}.model.rows.${key}.${column} is not a declared repository reference with connection: true`,
+    );
+  const scaffold = facetCounters.get(entity);
+  if (!scaffold)
+    throw new Error(
+      `${entity}.model.rows.${key}: connection SQL is unavailable; load the entity repository to register its listScaffold before reading connections`,
+    );
+  return scaffold.repositoryRows(key);
+};
 
 /**
  * `entity`/`table` scope the helpers to one entity's list. Call once per
@@ -1714,6 +1741,15 @@ export function listScaffold<
   };
   const scaffold = {
     entity,
+
+    repositoryRows(key: string): SQL {
+      const entry = rowsSql[key];
+      if (!(entry instanceof SQL))
+        throw new Error(
+          `${entity}.model.rows.${key}: connections require static repository SQL in listScaffold's rows argument; ${entry === undefined ? "no SQL was registered" : "prepared rows are not supported"}`,
+        );
+      return entry;
+    },
 
     /**
      * The live records `filters` selects, as an id subquery: what a related

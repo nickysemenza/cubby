@@ -28,6 +28,8 @@ import {
   expense,
   financialAccount,
   financialTransaction,
+  sourceTransactionRecord,
+  transactionImport,
   gardenEntry,
   image,
   ingredient,
@@ -1106,7 +1108,95 @@ async function getGardenEntryEmbeddingTexts(
   }));
 }
 
+async function getSourceTransactionRecordSearchTexts(
+  db: Database | DrizzleTransaction,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const rows = await unwrapDb(db).query.sourceTransactionRecord.findMany(
+    withOptionalLimit(
+      {
+        columns: {
+          id: true,
+          source: true,
+          rawDescription: true,
+          merchant: true,
+          accountDescriptor: true,
+          sourceCategory: true,
+          notes: true,
+        },
+        where: and(
+          notDeleted(sourceTransactionRecord),
+          options.ids?.length
+            ? inArray(
+                sourceTransactionRecord.id,
+                options.ids.map((id) =>
+                  parseEntityId("sourceTransactionRecord", id),
+                ),
+              )
+            : undefined,
+        ),
+      },
+      options.limit,
+    ),
+  );
+  return rows.map((row) => ({
+    entityKind: "sourceTransactionRecord",
+    entityId: row.id,
+    embeddingText: normalizeSearchText(
+      [
+        row.source,
+        row.rawDescription,
+        row.merchant,
+        row.accountDescriptor,
+        row.sourceCategory,
+        row.notes,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    ),
+  }));
+}
+async function getTransactionImportSearchTexts(
+  db: Database | DrizzleTransaction,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const rows = await unwrapDb(db).query.transactionImport.findMany(
+    withOptionalLimit(
+      {
+        columns: {
+          id: true,
+          source: true,
+          label: true,
+          fingerprint: true,
+          notes: true,
+        },
+        where: and(
+          notDeleted(transactionImport),
+          options.ids?.length
+            ? inArray(
+                transactionImport.id,
+                options.ids.map((id) => parseEntityId("transactionImport", id)),
+              )
+            : undefined,
+        ),
+      },
+      options.limit,
+    ),
+  );
+  return rows.map((row) => ({
+    entityKind: "transactionImport",
+    entityId: row.id,
+    embeddingText: normalizeSearchText(
+      [row.source, row.label, row.fingerprint, row.notes]
+        .filter(Boolean)
+        .join(" "),
+    ),
+  }));
+}
+
 const embeddingTextLoaders = {
+  sourceTransactionRecord: getSourceTransactionRecordSearchTexts,
+  transactionImport: getTransactionImportSearchTexts,
   image: getImageEmbeddingTexts,
   product: getProductEmbeddingTexts,
   recipe: getRecipeEmbeddingTexts,

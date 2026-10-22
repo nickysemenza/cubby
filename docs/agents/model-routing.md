@@ -103,29 +103,60 @@ question for these engineering decisions. The parent resolves them within the
 approved scope and keeps file ownership disjoint. Only a material change to the
 user's approved outcome or constraints goes back to the user.
 
-## Compact context
+## Context and tool output
 
-During multi-stage work, retain the goal, owned files/symbols, decisions,
-validation evidence, and next unresolved question. After compaction or handoff,
-resume from that checkpoint and re-read only changed inputs or missing evidence.
-Keep related implementation and diagnosis together; unrelated work starts a
-fresh session. Do not repeatedly reset a task and pay for the same discovery.
+Start with the requested outcome and a bounded search for its owner. Read the
+matching section and direct dependencies; expand when a named uncertainty,
+failure or changed contract requires it. An unrelated subsystem is not required
+reading merely because a router lists it. Reuse unchanged reads.
 
-Give a lane its scope, allowed commands, exclusions, completion criterion, and
-return shape. Return result, commands, duration, relevant output, and limits;
-return findings with file/line evidence rather than transcripts. Start from
-a self-contained brief and targeted files/searches, not full history. Escalate
-diagnosed gaps with the evidence needed to resolve them.
+At handoff or compaction, retain the goal, owned files/symbols, decisions,
+validation commands and covered inputs, limitations, and next unresolved question.
+Resume from that checkpoint; re-read changed inputs or missing evidence. Keep
+related diagnosis together; start unrelated tasks in a fresh session.
+
+Give delegated work a self-contained brief, targeted paths, exclusions,
+completion criterion and return shape, rather than full history. Return findings
+with file/line evidence, commands, duration and limits; omit transcripts.
+Independent reviewers may explore freely, but reuse valid check results.
 
 For verbose commands, save full output under ignored `artifacts/` and return
-status plus relevant excerpts. Select fields and page records before returning
-MCP results. Budget the combined output of batched calls; truncation requires
-targeted read-back before drawing a conclusion. The runtime tool-output limit
-lives in `.codex/config.toml`; it does not reduce host-injected instructions or
-configure Claude. Keep the skill catalog uncapped so token savings do not limit
-discovery. Keep concise progress and completion reports.
+status plus failure excerpts. Select fields and page records before returning
+MCP results. Bound the combined output of batched calls; truncation requires
+targeted read-back. Read status or structured text for nonvisual browser questions;
+request screenshots when appearance is the question.
 
-Use host completion notifications for CI/jobs where available, otherwise one
-bounded wait; unchanged polling adds no evidence. Validation ownership and
-reuse follow [validation](validation.md#before-opening-a-pr). Application runtime
-model names are unrelated to agent routing.
+Use host completion notifications for CI/jobs where available; otherwise use a
+bounded wait. Re-read only when status changes. Validation ownership and reuse
+follow [validation](validation.md#before-opening-a-pr).
+
+## Host settings and measurement
+
+Repository settings cannot shrink host-injected instructions, tool schemas or
+global skill catalogs. Keep required skills discoverable; use host tool search
+or on-demand catalogs when the host supports them. The fallback history cap in
+`.codex/config.toml` limits tool output, not startup context, and does not
+configure Claude. Explicit host/session settings may override repo defaults.
+
+[Issue #2317](https://github.com/nickysemenza/cubby/issues/2317) owns the measured
+comparison; instruction word counts alone do not establish token or cost savings.
+Use existing host/session usage before adding telemetry:
+
+- Record effective provider/model/effort, host, revision, task outcome and
+  enabled instruction, skill and tool sources. Separate always-loaded material
+  from references fetched during work.
+- Compare representative completed tasks before and after a change. Separate
+  uncached input, cached input, output/reasoning where reported, tool-result
+  volume, elapsed time, retries and review defects. Label unavailable fields;
+  context size alone does not establish billed cost or quota consumption.
+- Count each parent session's cumulative usage once; account for child usage
+  separately without adding repeated snapshots. Attribute repeated reads and
+  checks to the evidence or input change that required them.
+- Verify effective settings and required skill discovery in each supported host
+  (Codex CLI, Claude Code and T3), including targeted read-back after truncation.
+  A repo config change alone does not prove that the host applied it.
+
+Publish aggregate or synthetic evidence only. Keep raw session logs private.
+Change one context/routing variable at a time and assess correctness alongside
+usage; cheaper setup that causes retries is not a completed-task improvement.
+Application runtime model routing is a separate concern.

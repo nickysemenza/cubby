@@ -11,7 +11,7 @@ import type { StatementTransactionJudgment } from "@cubby/schemas/statement-sugg
 import { cents } from "@cubby/shared";
 
 import { STATEMENT_CHARGE_IDENTITY_FEATURE } from "~/server/ai/policy/features";
-import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestions";
 
 /** What a field rule reads from the published proposal. */
 export type FieldRuleFacts = {

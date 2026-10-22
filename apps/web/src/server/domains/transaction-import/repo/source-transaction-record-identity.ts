@@ -35,7 +35,7 @@ const canonical = (value: string) =>
  */
 const SEPARATOR = "\u0000";
 
-export type StatementRowIdentityInput = {
+export type SourceTransactionRecordIdentityInput = {
   /** Provider slug. Namespaces the hash — see the note on collisions below. */
   source: string;
   /** The export's own account label, verbatim. */
@@ -65,8 +65,8 @@ export type StatementRowIdentityInput = {
  * that makes "absent from both exports" usable evidence. One transaction can
  * carry both refs; that is why settlement references have no primary slot.
  */
-export async function statementRowExternalId(
-  row: StatementRowIdentityInput,
+export async function sourceTransactionRecordExternalId(
+  row: SourceTransactionRecordIdentityInput,
 ): Promise<string> {
   const payload = [
     `${row.source}:v1`,
@@ -80,7 +80,7 @@ export async function statementRowExternalId(
 
 /** Immutable observation identity. Provider IDs and content are reconciliation
  * evidence; neither may collapse two positions in the same export. */
-export async function statementRowOccurrenceId(
+export async function sourceTransactionRecordOccurrenceId(
   source: string,
   fingerprint: string,
   rowPosition: number,

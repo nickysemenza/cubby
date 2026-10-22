@@ -7,7 +7,7 @@ import {
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { testUserId } from "@cubby/schemas/testing";
 import { chromium, expect, request } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
@@ -26,9 +26,9 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { unparsedStartOperationResultSchema } from "~/server/operation-runtime/start-operation.contract";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
-import { financialAccount, statementRow } from "~/server/db/schema";
+import { financialAccount, sourceTransactionRecord } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -529,7 +529,7 @@ async function recordSyntheticStatement(
     ],
     provisional: false,
   });
-  const input = recordStatementRowsInput.parse({
+  const input = recordSourceTransactionRecordsInput.parse({
     import: {
       source: "monarch",
       label: "Synthetic wardrobe statement",
@@ -560,15 +560,18 @@ async function recordSyntheticStatement(
     complete: false,
   });
   const actor = buildActorContext(testUserId(userId), "mcp");
-  const recorded = await recordStatementRows(db, input, actor);
+  const recorded = await recordSourceTransactionRecords(db, input, actor);
   if (recorded.inserted !== 2 || !recorded.batchId)
     throw new Error("Synthetic normalized statement evidence missing");
-  const evidence = await getDb(db).query.statementRow.findFirst({
+  const evidence = await getDb(db).query.sourceTransactionRecord.findFirst({
     where: and(
-      eq(statementRow.source, "monarch"),
-      eq(statementRow.batchId, recorded.batchId),
-      eq(statementRow.providerTransactionId, "synthetic-statement-1"),
-      notDeleted(statementRow),
+      eq(sourceTransactionRecord.source, "monarch"),
+      eq(sourceTransactionRecord.batchId, recorded.batchId),
+      eq(
+        sourceTransactionRecord.providerTransactionId,
+        "synthetic-statement-1",
+      ),
+      notDeleted(sourceTransactionRecord),
     ),
   });
   if (!evidence) throw new Error("Synthetic charge evidence missing");
@@ -590,7 +593,7 @@ async function recordSyntheticStatement(
       ],
     },
   );
-  const replay = await recordStatementRows(db, input, actor);
+  const replay = await recordSourceTransactionRecords(db, input, actor);
   const transactions = await pool.query<{ shortcode: string }>(
     `SELECT t.shortcode FROM "FinancialTransaction" t
      JOIN "FinancialAccount" a ON a.id = t."accountId"
@@ -858,7 +861,7 @@ async function reimportInNewRunAndAssertNoOp(
  * Trap 1 + 2: an overlapping normalized statement batch whose rows were already imported,
  * alongside a decoy charge sharing the purchase's exact amount on a different
  * day/merchant. Only the decoy row may be recorded; the overlap must not
- * mint a second StatementRow under a new batch. Returns the decoy
+ * mint a second SourceTransactionRecord under a new batch. Returns the decoy
  * FinancialTransaction so the duplicate-order-history trap can confirm it
  * stays unmatched.
  */
@@ -897,9 +900,9 @@ async function recordOverlappingStatementAndDecoy(
       rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
     },
   ] as const;
-  const recorded = await recordStatementRows(
+  const recorded = await recordSourceTransactionRecords(
     db,
-    recordStatementRowsInput.parse({
+    recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         label: "Synthetic wardrobe followup",
@@ -934,11 +937,14 @@ async function recordOverlappingStatementAndDecoy(
   const fixtureVisaId = fixtureVisa[0]?.shortcode;
   if (fixtureVisa.length !== 1 || !fixtureVisaId)
     throw new Error("Fixture Visa account is unavailable for the decoy charge");
-  const evidence = await getDb(db).query.statementRow.findFirst({
+  const evidence = await getDb(db).query.sourceTransactionRecord.findFirst({
     where: and(
-      eq(statementRow.source, "monarch"),
-      eq(statementRow.providerTransactionId, "synthetic-statement-decoy"),
-      notDeleted(statementRow),
+      eq(sourceTransactionRecord.source, "monarch"),
+      eq(
+        sourceTransactionRecord.providerTransactionId,
+        "synthetic-statement-decoy",
+      ),
+      notDeleted(sourceTransactionRecord),
     ),
   });
   if (!evidence) throw new Error("Synthetic decoy evidence missing");

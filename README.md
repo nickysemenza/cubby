@@ -103,7 +103,9 @@ flowchart TB
   VendorAccount -- "a member buys from" --> Vendor
   Purchase -- "itemized into" --> Expense
   SpendingCategory -- "what it was for" --> Expense
-  FinancialAccount -- "has statement rows" --> FinancialTransaction
+  TransactionImport -- "retains observations" --> SourceTransactionRecord
+  SourceTransactionRecord -- "evidences" --> FinancialTransaction
+  FinancialAccount -- "has transactions" --> FinancialTransaction
   FinancialTransaction -- "paid for" --> Purchase
   LedgerTransfer -- "reimburses between" --> LedgerParty
   Device -- "owned by" --> LedgerParty
@@ -185,6 +187,16 @@ flowchart TB
 | **SpendingCategory** `SPC-`     | What money was spent on                                                                             | Tree; 1:N Expense, Purchase, FinancialTransaction                                 | Budget views, classification                                                                     |
 | **FinancialAccount** `FAC-`     | A card or bank account                                                                              | 1:N FinancialTransaction; owner LedgerParty                                       | Statement import                                                                                 |
 | **FinancialTransaction** `FTX-` | A charge, refund or payment from a statement, as evidence only                                      | N:1 FinancialAccount; N:M Purchase via allocations that sum exactly to its amount | Reconciliation: match / mismatch / pending                                                       |
+
+### Financial evidence
+
+| Entity                             | What it is                                                         | Relates to                                                                                             | Typical use                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **SourceTransactionRecord** `STR-` | One retained provider observation or revision, never spending      | TransactionImport membership; resolved FinancialAccount; settlement references to FinancialTransaction | Generic evidence browsing and reviewed reconciliation judgments               |
+| **TransactionImport** `TIM-`       | One immutable source file or MCP snapshot, resumable across chunks | N:M SourceTransactionRecord                                                                            | Inspect retained counts, scope, and completion separately from reconciliation |
+
+Provider facts remain immutable; the [evidence lifecycle](docs/import-evidence-convergence.md#financial-evidence-entities)
+owns supported edits and deletion guards.
 
 ### People and system
 

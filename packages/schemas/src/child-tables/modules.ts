@@ -295,100 +295,23 @@ export const modulesChildren = [
       },
     ],
   }),
-  defineChildTable({
-    name: "StatementImport",
-    exportName: "statementImport",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "source",
-        kind: "text",
-        notNull: true,
-        reference: {
-          table: "externalSource",
-          column: "slug",
-          onUpdate: "cascade",
-        },
-      },
-      { key: "label", kind: "text", notNull: true },
-      { key: "fingerprint", kind: "text", notNull: true },
-      /**
-       * Which date the provider's rows carry. Recorded, never resolved: one export
-       * has one convention, and 19% of charges present in both Copilot and Monarch
-       * are dated differently because the providers disagree on posting vs
-       * transaction date. Stating it beats guessing per row.
-       */
-      { key: "dateKind", kind: "text", notNull: true, default: "unknown" },
-      { key: "rowCountDeclared", kind: "integer" },
-      {
-        key: "observedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      { key: "coverage", kind: "jsonb" },
-      { key: "completedAt", kind: "timestamp" },
-      { key: "notes", kind: "text" },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-        onUpdateNow: true,
-      },
-      { key: "deletedAt", kind: "timestamp" },
-    ],
-    indexes: [
-      {
-        name: "StatementImport_source_fingerprint_key",
-        unique: true,
-        on: ["source", "fingerprint"],
-        where: "{deletedAt} IS NULL",
-      },
-      { name: "StatementImport_source_idx", on: ["source"] },
-    ],
-    checks: [
-      {
-        name: "StatementImport_source_slug_check",
-        sql: "{source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND {source} = lower(trim({source}))",
-      },
-      {
-        name: "StatementImport_dateKind_check",
-        sql: "{dateKind} IN ('posted', 'transaction', 'unknown')",
-      },
-      {
-        name: "StatementImport_rowCountDeclared_check",
-        sql: "{rowCountDeclared} IS NULL OR {rowCountDeclared} >= 0",
-      },
-    ],
-  }),
+
   /** Export membership is independent of a statement's first-ingesting batch. */
   defineChildTable({
-    name: "StatementImportRow",
-    exportName: "statementImportRow",
+    name: "TransactionImportRecord",
+    exportName: "transactionImportRecord",
     columns: [
       {
         key: "importId",
         kind: "uuid",
         notNull: true,
-        reference: { table: "statementImport", column: "id" },
+        reference: { table: "transactionImport", column: "id" },
       },
       {
         key: "statementRowId",
         kind: "uuid",
         notNull: true,
-        reference: { table: "statementRow", column: "id" },
+        reference: { table: "sourceTransactionRecord", column: "id" },
       },
       {
         key: "createdAt",
@@ -399,11 +322,11 @@ export const modulesChildren = [
     ],
     indexes: [
       {
-        name: "StatementImportRow_import_row_key",
+        name: "TransactionImportRecord_import_row_key",
         unique: true,
         on: ["importId", "statementRowId"],
       },
-      { name: "StatementImportRow_row_idx", on: ["statementRowId"] },
+      { name: "TransactionImportRecord_row_idx", on: ["statementRowId"] },
     ],
   }),
   /**
@@ -418,197 +341,4 @@ export const modulesChildren = [
    * the judgments an agent explicitly writes (`accountId`, `disposition*`,
    * `supersededByRowId`, `notes`).
    */
-  defineChildTable({
-    name: "StatementRow",
-    exportName: "statementRow",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "batchId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "statementImport", column: "id" },
-      },
-      {
-        key: "source",
-        kind: "text",
-        notNull: true,
-        reference: {
-          table: "externalSource",
-          column: "slug",
-          onUpdate: "cascade",
-        },
-      },
-      { key: "externalId", kind: "text", notNull: true },
-      { key: "rowPosition", kind: "integer" },
-      { key: "providerTransactionId", kind: "text" },
-      { key: "legacyExternalId", kind: "text" },
-      { key: "legacyReference", kind: "text" },
-      {
-        key: "chargeKey",
-        kind: "text",
-        notNull: true,
-        default: { sql: "gen_random_uuid()::text" },
-      },
-      { key: "current", kind: "boolean", notNull: true, default: true },
-      { key: "withdrawnAt", kind: "timestamp" },
-      {
-        key: "withdrawalImportId",
-        kind: "uuid",
-        reference: { table: "statementImport", column: "id" },
-      },
-      {
-        key: "lastObservedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      { key: "providerAccountId", kind: "text" },
-      { key: "providerData", kind: "jsonb" },
-      { key: "accountDescriptor", kind: "text", notNull: true },
-      { key: "statementDate", kind: "date", notNull: true },
-      { key: "amount", kind: "doublePrecision", notNull: true },
-      /**
-       * The export's own signed figure. Earns its bytes: with it,
-       * (source, accountDescriptor, statementDate, providerAmount,
-       * rawDescription) reproduces the hash payload exactly, so the ledger can
-       * audit its own identity function. Without it `externalId` is an
-       * unverifiable opaque token — and that hash is the whole matching mechanism.
-       */
-      { key: "providerAmount", kind: "doublePrecision", notNull: true },
-      { key: "merchant", kind: "text" },
-      { key: "rawDescription", kind: "text", notNull: true },
-      { key: "sourceCategory", kind: "text" },
-      { key: "providerStatus", kind: "text" },
-      { key: "providerNotes", kind: "text" },
-      {
-        key: "accountId",
-        kind: "uuid",
-        type: "FinancialAccountId",
-        reference: { table: "financialAccount", column: "id" },
-      },
-      { key: "disposition", kind: "text", notNull: true, default: "open" },
-      { key: "dispositionReason", kind: "text" },
-      { key: "dispositionNote", kind: "text" },
-      /**
-       * A pending row that posts on a different date is a *different* row — the
-       * export really did contain two. This link is agent-written, never
-       * inferred, and drops the predecessor from the worklist without deleting
-       * the evidence that it existed.
-       */
-      {
-        key: "supersededByRowId",
-        kind: "uuid",
-        reference: { table: "statementRow", column: "id" },
-      },
-      { key: "notes", kind: "text" },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-        onUpdateNow: true,
-      },
-      { key: "deletedAt", kind: "timestamp" },
-    ],
-    types: [
-      { module: "@cubby/schemas/identifiers", exports: ["FinancialAccountId"] },
-    ],
-    indexes: [
-      {
-        name: "StatementRow_source_externalId_key",
-        unique: true,
-        on: ["source", "externalId"],
-        where: "{deletedAt} IS NULL",
-      },
-      {
-        name: "StatementRow_batch_position_key",
-        unique: true,
-        on: ["batchId", "rowPosition"],
-        where: "{deletedAt} IS NULL",
-      },
-      {
-        name: "StatementRow_source_providerTransactionId_idx",
-        on: ["source", "providerTransactionId"],
-      },
-      { name: "StatementRow_source_charge_idx", on: ["source", "chargeKey"] },
-      { name: "StatementRow_batchId_idx", on: ["batchId"] },
-      { name: "StatementRow_statementDate_idx", on: ["statementDate"] },
-      {
-        name: "StatementRow_worklist_idx",
-        on: [{ column: "statementDate", desc: true }],
-        where:
-          "{deletedAt} IS NULL AND {disposition} = 'open' AND {supersededByRowId} IS NULL",
-      },
-      {
-        name: "StatementRow_account_date_amount_idx",
-        on: ["accountId", "statementDate", "amount"],
-      },
-      // The drift sweep groups on the DESCRIPTOR, not `accountId` — that column
-      // is an agent-written judgment and is null for most of the backlog, so the
-      // index above does not serve the group. Deliberately not partial on
-      // `deletedAt`: `drizzle-kit push` applies index predicates as a no-op, so a
-      // partial index here would exist in the schema file and nowhere else.
-      {
-        name: "StatementRow_descriptor_date_amount_idx",
-        on: ["source", "accountDescriptor", "statementDate", "providerAmount"],
-      },
-      {
-        name: "StatementRow_rawDescription_gin_idx",
-        using: "gin",
-        on: [{ sql: "{rawDescription} gin_trgm_ops" }],
-      },
-    ],
-    checks: [
-      {
-        name: "StatementRow_position_check",
-        sql: "{rowPosition} IS NULL OR {rowPosition} > 0",
-      },
-      {
-        name: "StatementRow_source_slug_check",
-        sql: "{source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND {source} = lower(trim({source}))",
-      },
-      {
-        name: "StatementRow_amount_whole_cent_check",
-        sql: "abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
-      },
-      {
-        name: "StatementRow_providerAmount_whole_cent_check",
-        sql: "abs({providerAmount} * 100 - round({providerAmount} * 100)) < 0.0000001",
-      },
-      {
-        name: "StatementRow_providerStatus_check",
-        sql: "{providerStatus} IS NULL OR {providerStatus} IN ('posted', 'pending')",
-      },
-      // Ignoring a row is a judgment and must carry its reasoning; leaving it open
-      // is the default and needs none.
-      {
-        name: "StatementRow_disposition_check",
-        sql: "({disposition} = 'open' AND {dispositionReason} IS NULL AND {dispositionNote} IS NULL)\n          OR ({disposition} = 'ignored' AND {dispositionReason} IS NOT NULL AND {dispositionNote} IS NOT NULL)",
-      },
-      // The enum is enforced by zod at the router/MCP boundary, but the bulk
-      // disposition scripts write this column over raw SQL and bypass that. A
-      // typo would store cleanly and then throw on the read path, 500ing the list
-      // for the whole source — so the vocabulary is pinned here too.
-      {
-        name: "StatementRow_dispositionReason_check",
-        sql: "{dispositionReason} IS NULL OR {dispositionReason} IN\n          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')",
-      },
-      {
-        name: "StatementRow_externalId_format_check",
-        sql: "{externalId} ~ '^v[123]:[0-9a-f]{64}$'",
-      },
-    ],
-  }),
 ];

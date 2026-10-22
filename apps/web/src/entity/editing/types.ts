@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 
 import type {
@@ -24,26 +23,8 @@ import type {
 } from "./intent-types";
 import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
 
-/**
- * Entities with the standard create/update router contract. The editing
- * registry is deliberately narrower than `Entity`: images, cookbooks,
- * external USDA foods, read-only Runs, Emails and Image jobs have
- * different lifecycles and must opt in explicitly if they ever gain this
- * editing surface.
- */
-export type EditableEntity = Exclude<
-  Entity,
-  "image" | "usda-food" | "cookbook" | "run" | "email" | "imageJob"
->;
-
-type _EditableEntityMatchesTypedCatalog =
-  EditableEntity extends TypedEditableEntity
-    ? TypedEditableEntity extends EditableEntity
-      ? true
-      : never
-    : never;
-const _editableEntityCatalogIsExhaustive: _EditableEntityMatchesTypedCatalog = true;
-void _editableEntityCatalogIsExhaustive;
+/** Editing capabilities come from declared intents, including update-only entities. */
+export type EditableEntity = TypedEditableEntity;
 
 /** The transport-level operation executed against the entity router. */
 export type EntityEditOperation = "create" | "update" | "delete";

@@ -20,6 +20,7 @@ import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
 import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
 import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
+import { FilesIcon } from "@phosphor-icons/react/dist/csr/Files";
 import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { HeartIcon } from "@phosphor-icons/react/dist/csr/Heart";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
@@ -190,6 +191,7 @@ const PHOSPHOR_ICONS = {
   ChefHat: ChefHatIcon,
   CreditCard: CreditCardIcon,
   Envelope: EnvelopeIcon,
+  Files: FilesIcon,
   Hammer: HammerIcon,
   Heart: HeartIcon,
   Image: ImageIcon,
@@ -241,6 +243,14 @@ const withEntityNames = <
   ) as never;
 
 const entityDefinitions = withEntityNames({
+  sourceTransactionRecord: {
+    ...generatedBrowserRoutes.sourceTransactionRecord,
+    color: INK.slate,
+  },
+  transactionImport: {
+    ...generatedBrowserRoutes.transactionImport,
+    color: INK.slate,
+  },
   spendingCategory: {
     ...generatedBrowserRoutes.spendingCategory,
     color: INK.slate,

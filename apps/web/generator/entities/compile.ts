@@ -828,6 +828,9 @@ const compileFieldModel = (
       default: defaultKind,
       defaultValue,
       reference: field.reference ?? null,
+      referenceOptions:
+        "referenceOptions" in field ? field.referenceOptions : undefined,
+      defaultSql: "defaultSql" in field ? field.defaultSql : undefined,
       specialized: field.specialized ?? null,
     };
   });
