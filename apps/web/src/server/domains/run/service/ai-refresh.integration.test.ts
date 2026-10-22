@@ -90,11 +90,19 @@ import {
   PRIMARY_MODEL,
   kernelCtx,
   productCategoryId,
-  productFixture,
   seedPending,
   runCode,
   startSuggestionSweep,
 } from "./suggestion-sweep.fixtures";
+
+// Refresh scenarios consume identities; the refreshed fields are read back
+// through their owning queries after the mutation under test.
+const productFixture = (ctx: Parameters<typeof kernelCtx>[0], name: string) =>
+  createProductIdentityFixture(
+    ctx.db,
+    makeProductInput({ name, manufacturer: "Synthetic maker" }),
+    ctx.actor,
+  );
 
 const evaluationExecution = <T>(
   db: import("~/server/db").Database,
