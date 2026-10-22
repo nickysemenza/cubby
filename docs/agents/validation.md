@@ -23,6 +23,22 @@ route composition, navigation and persisted outcomes in real E2E/HTTP journeys;
 previews cannot prove server filtering or writes. See the
 [coverage ownership rules](validation-tests.md#required-component-browser-tests).
 
+## Test retention
+
+Adding a committed test requires a specific, plausible failure in behavior we
+own, a gap in existing coverage or compiler/generator guards, and enough impact
+or recurrence risk to justify its maintenance and runtime cost. Establish those
+before writing the test. Straightforward library swaps, renderer migrations,
+and low-risk refactors normally reuse existing coverage.
+
+For new tests, library rendering smoke checks, prop forwarding, SVG node counts,
+exact style attributes, and one-off migration parity checks are disposable
+verification. Use temporary browser probes, screenshots, or scripts for these
+and remove them before committing. Do not turn implementation-time checks into
+permanent tests merely because they passed or caught an issue during development.
+Retained assertions exercise meaningful user or system outcomes through the
+smallest existing test setup that can expose the failure.
+
 Keep an isolated test only when its named failure cannot reasonably be observed
 by the retained flow or an existing compiler/generator guard. Remove tests of
 declarations, constants, source spelling and mocks, repeated cases of the same
