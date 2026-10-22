@@ -643,7 +643,10 @@ describe("problems — understated meal cost", () => {
     expect(quality).toMatchObject({
       status: "defect",
       score: 99,
-      gaps: [{ check: "meal_recipe_cost_incomplete", kind: "defect" }],
+      gaps: [
+        { check: "meal_recipe_cost_incomplete", kind: "defect" },
+        { check: "meal_display_image", kind: "missing" },
+      ],
     });
 
     expect(row).toMatchObject({
