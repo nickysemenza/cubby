@@ -58,6 +58,11 @@ describe("buildFinancialTransferPairSuggestions", () => {
             inflowTransactionId: transactionShortcode("FTX-INFLOW"),
             amount: 120,
             dateDistanceDays: 2,
+            reasons: [
+              "equal and opposite amount",
+              "dated within the requested date window",
+              "different financial accounts",
+            ],
             fromAccountId: accountShortcode("FAC-A"),
             toAccountId: accountShortcode("FAC-B"),
             from: { kind: "member", id: memberPartyId, name: "Alex" },

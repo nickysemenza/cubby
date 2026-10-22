@@ -209,6 +209,10 @@ of existing facts. Completed collections reject additional membership. A reappea
 withdrawn charge stays in review rather than silently recreating retired spending. After verified historical backfill, routine
 Monarch pulls overlap two weeks; refresh older windows deliberately when needed.
 
+Collection rosters return metadata without bulk-loading retained source notes or
+archives. Recording retries read only the immutable collection header, so a large
+historical archive does not repeat on every bounded chunk.
+
 Source-confirmed withdrawals require a completed all-visibility account/window
 and an explicit recheck. The retained current head records its withdrawal and
 proof collection. Old observations cannot reactivate it; only newer positive
@@ -231,7 +235,9 @@ funding date stays unchanged.
 
 Suggestions remain one per actionable charge. Matching a source observation is
 separate from booking Expenses. Existing candidates must be rejected before a
-new transaction can be created. Descriptor/amount/date coincidence is advisory;
+new transaction can be created. Historical collection membership may include surplus or mispositioned evidence.
+It cannot by itself dismiss an existing settlement candidate during Suggestions
+discovery; ambiguous identity remains review work before new spending. Descriptor/amount/date coincidence is advisory;
 a different source's observation does not become a second charge merely because
 its text differs. Existing clean-booking and measured attach rules retain their
 own authority and revalidate current evidence before writing.

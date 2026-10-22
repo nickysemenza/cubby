@@ -1,3 +1,4 @@
+import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -11,6 +12,7 @@ import {
   statementRow,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
+import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 
@@ -195,6 +197,85 @@ describe("generated booking evidence corrections", () => {
       await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
     ).toEqual({ status: "unchanged", reason: "already_current" });
     expect(await lineage()).toEqual(corrected);
+  });
+
+  // Direct correction probes cannot establish the real intake's
+  // corroboration and completed-window proof, including empty windows.
+  it("corrects and retires through normalized intake with persisted source proof", async () => {
+    const { input, money } = await fixture();
+    const providerTransactionId = "synthetic-intake-correction";
+    const providerAccountId = "synthetic-intake-account";
+    await getDb(ctx.db)
+      .update(statementRow)
+      .set({ providerTransactionId, providerAccountId })
+      .where(eq(statementRow.chargeKey, "synthetic-charge"));
+    const coverage = {
+      account: providerAccountId,
+      from: "2026-09-01",
+      to: "2026-09-30",
+      visibility: "all",
+    };
+    const revision = recordStatementRowsInput.parse({
+      import: {
+        source: input.source,
+        label: "Synthetic source revision",
+        fingerprint: "synthetic-real-source-revision",
+        observedAt: "2026-11-01T00:00:00Z",
+        rowCountDeclared: 1,
+        coverage,
+      },
+      rows: [
+        {
+          providerTransactionId,
+          providerAccountId,
+          accountDescriptor: "Synthetic cash",
+          statementDate: "2026-09-01",
+          providerAmount: -40,
+          rawDescription: "Synthetic store",
+          providerStatus: null,
+        },
+      ],
+      complete: true,
+    });
+    expect(
+      await recordStatementRows(ctx.db, revision, ctx.actor),
+    ).toMatchObject({ inserted: 1, revised: 1, correctionReviews: [] });
+    expect(await money()).toEqual({
+      amount: 40,
+      status: "observed",
+      allocations: [40],
+      expenses: [40],
+    });
+    const withdrawal = recordStatementRowsInput.parse({
+      import: {
+        ...revision.import,
+        label: "Synthetic source withdrawal",
+        fingerprint: "synthetic-real-source-withdrawal",
+        observedAt: "2026-11-02T00:00:00Z",
+        rowCountDeclared: 0,
+      },
+      rows: [],
+      complete: true,
+      confirmedWithdrawals: [providerTransactionId],
+    });
+    expect(
+      await recordStatementRows(ctx.db, withdrawal, ctx.actor),
+    ).toMatchObject({ withdrawn: 1, correctionReviews: [] });
+    expect(await money()).toEqual({
+      amount: 40,
+      status: "void",
+      allocations: [],
+      expenses: [],
+    });
+    expect(
+      await recordStatementRows(ctx.db, withdrawal, ctx.actor),
+    ).toMatchObject({ withdrawn: 0, revised: 0 });
+    expect(await money()).toEqual({
+      amount: 40,
+      status: "void",
+      allocations: [],
+      expenses: [],
+    });
   });
 
   // A later posted date can cross funding periods; the original accepted

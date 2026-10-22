@@ -151,7 +151,6 @@ type FinancialStatementPreviewPreparation = Awaited<
 export async function previewFinancialStatementImport(
   db: Database,
   input: FinancialStatementImportPreviewInput,
-  duplicateProviderIds?: ReadonlySet<string>,
   options: FinancialStatementPreviewOptions = {},
 ): Promise<FinancialStatementImportPreviewOut> {
   const suggestionPolicy = options.candidatePolicy === "suggestion";
@@ -376,12 +375,13 @@ export async function previewFinancialStatementImport(
       (fingerprintCounts.get(externalId) ?? 0) > 1) ||
     Boolean(
       row.providerTransactionId &&
-      (duplicateProviderIds?.has(row.providerTransactionId) ||
-        input.rows.filter(
-          (other) =>
-            other.source === row.source &&
-            other.providerTransactionId === row.providerTransactionId,
-        ).length > 1),
+      input.rows.filter(
+        (other) =>
+          other.source === row.source &&
+          other.providerTransactionId === row.providerTransactionId &&
+          (other.providerAccountId ?? canonical(other.account)) ===
+            (row.providerAccountId ?? canonical(row.account)),
+      ).length > 1,
     )
       ? "indistinguishable_duplicate"
       : recorded > 0
@@ -411,12 +411,15 @@ export async function previewFinancialStatementImport(
         notes: row.notes,
       };
     const account = accountFor(row);
-    const exactOccurrence = parsedTransactions.filter((transaction) =>
-      transaction.sourceRefs.some(
-        (ref) =>
-          ref.source === sourceRef.source &&
-          ref.externalId === sourceRef.externalId,
-      ),
+    const exactOccurrence = parsedTransactions.filter(
+      (transaction) =>
+        (!row.providerAccountId ||
+          (account && transaction.accountId === account.id)) &&
+        transaction.sourceRefs.some(
+          (ref) =>
+            ref.source === sourceRef.source &&
+            ref.externalId === sourceRef.externalId,
+        ),
     );
     const providerMatches =
       account && row.providerTransactionId
@@ -520,7 +523,9 @@ export async function previewFinancialStatementImport(
           )
     ).filter(
       (transaction) =>
-        !belongsToAnotherOccurrence(transaction) &&
+        // Historical collections can retain surplus or mispositioned membership.
+        // Discovery must keep a claimed settlement visible for identity review.
+        (suggestionPolicy || !belongsToAnotherOccurrence(transaction)) &&
         !(suggestionPolicy && transaction.status === "void"),
     );
 

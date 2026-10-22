@@ -360,14 +360,17 @@ type TransferEvidenceLeg = Pick<
   allocationCount: number;
 };
 
+export const transferEvidenceStatuses: readonly TransferEvidenceLeg["status"][] =
+  ["observed", "pending", "posted"];
+
 /** Why a leg cannot evidence a transfer, as a clause after its shortcode. */
 export const transferEvidenceLegProblem = (
   leg: TransferEvidenceLeg,
 ): string | null =>
   leg.accountDeletedAt !== null
     ? `is on deleted account ${leg.accountShortcode}`
-    : leg.status !== "posted"
-      ? `is ${leg.status}; only posted transactions can evidence a transfer`
+    : !transferEvidenceStatuses.includes(leg.status)
+      ? `is ${leg.status}; only observed, pending, or posted transactions can evidence a transfer`
       : leg.allocationCount > 0
         ? `has ${leg.allocationCount} live allocation(s) to a Purchase; remove them before using it as transfer evidence`
         : leg.bookingLineCount > 0
@@ -421,7 +424,7 @@ async function assertEvidenceSet(
   )
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "Transfer evidence must be posted, unallocated, have no live booked Expenses, and match the transfer amount. Review a booked spending conversion before attaching transfer evidence.",
+      "Transfer evidence must have observed, pending, or posted status, be unallocated, have no live booked Expenses, and match the transfer amount. Review a booked spending conversion before attaching transfer evidence.",
     );
   if (
     rows.some(

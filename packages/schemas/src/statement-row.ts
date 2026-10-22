@@ -72,7 +72,6 @@ export const statementImportOut = z.object({
   observedAt: z.date(),
   completedAt: z.date().nullable(),
   coverage: z.json().nullable(),
-  notes: z.string().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

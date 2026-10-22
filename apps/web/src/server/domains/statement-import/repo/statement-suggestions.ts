@@ -772,7 +772,6 @@ export async function buildChargeProposals(
         previewRowFor(charge, canonical),
       ),
     },
-    undefined,
     {
       candidatePolicy: "suggestion",
       preparation,

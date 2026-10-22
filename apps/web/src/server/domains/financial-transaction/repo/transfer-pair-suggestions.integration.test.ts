@@ -35,6 +35,7 @@ import { labelTransferPairSuggestions } from "~/server/domains/financial-transac
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -74,6 +75,7 @@ import {
  * - Pending, allocated, already-paired or soft-deleted records (or records
  *   on a deleted account or owner) become legs.
  * - A created statement leg carries only one of its charge's refs.
+ * - Two provider accounts sharing a descriptor resolve to the same account.
  * - A discovery page misses a competing leg outside its seeds, publishes a
  *   pair twice, or retires a live pair before all discovery pages finish.
  * - Replaying a discovery cursor duplicates publications, or retirement
@@ -146,6 +148,7 @@ describe("transfer-pair suggestions", () => {
     name: string,
     ledgerPartyId: Awaited<ReturnType<typeof owner>> | null,
     identity: FinancialAccountIdentity = checking,
+    providerAccountId: string | null = null,
   ) =>
     (
       await createRepoEntity(ctx, "financialAccount", {
@@ -155,7 +158,7 @@ describe("transfer-pair suggestions", () => {
         sourceAliases: ["monarch", "copilot"].map((source) => ({
           source,
           alias: name,
-          externalAccountId: null,
+          externalAccountId: providerAccountId,
         })),
       })
     ).output!.id;
@@ -168,8 +171,9 @@ describe("transfer-pair suggestions", () => {
     amount: number;
     description: string;
     category?: string | null;
-    status?: "posted" | "pending";
+    status?: "posted" | "pending" | null;
     providerTransactionId?: string;
+    providerAccountId?: string;
   };
   const statement = (
     rows: Row[],
@@ -194,9 +198,10 @@ describe("transfer-pair suggestions", () => {
           rawDescription: row.description,
           sourceCategory:
             row.category === undefined ? "Transfer" : row.category,
-          providerStatus: row.status ?? "posted",
+          providerStatus: row.status === undefined ? "posted" : row.status,
           providerNotes: null,
           providerTransactionId: row.providerTransactionId ?? null,
+          providerAccountId: row.providerAccountId ?? null,
           rowPosition: ++position,
         })),
       }),
@@ -764,7 +769,12 @@ describe("transfer-pair suggestions", () => {
 
   it("pairs two same-owner statement legs clean only after both are labelled, then applies once", async () => {
     const member = await owner("Synthetic member");
-    const from = await account("Synthetic checking", member);
+    await account(
+      "Synthetic checking",
+      member,
+      checking,
+      "synthetic-account-a",
+    );
     const to = await account("Synthetic savings", member, savings);
     await statement([
       {
@@ -772,15 +782,25 @@ describe("transfer-pair suggestions", () => {
         date: "2026-05-04",
         amount: 180,
         description: "ONLINE TRANSFER TO SAVINGS",
+        providerAccountId: "synthetic-account-b",
+        status: null,
       },
       {
         account: "Synthetic savings",
         date: "2026-05-05",
         amount: -180,
         description: "ONLINE TRANSFER FROM CHECKING",
+        status: "pending",
       },
     ]);
 
+    expect(await discoverTransferPairs(ctx.db)).toEqual([]);
+    const from = await account(
+      "Synthetic checking",
+      member,
+      checking,
+      "synthetic-account-b",
+    );
     const [raw] = await discoverTransferPairs(ctx.db);
     expect(raw).toMatchObject({
       outflow: {
@@ -835,6 +855,27 @@ describe("transfer-pair suggestions", () => {
       [-180, 180],
     );
     expect(new Set(legs.map((leg) => leg.ledgerTransferId)).size).toBe(1);
+    expect(
+      legs
+        .map((leg) => ({
+          amount: leg.amount,
+          status: leg.status,
+          postedDate: leg.postedDate,
+        }))
+        .sort((a, b) => a.amount - b.amount),
+    ).toEqual([
+      { amount: -180, status: "pending", postedDate: null },
+      { amount: 180, status: "observed", postedDate: null },
+    ]);
+    const claimed = await unwrapDb(ctx.db)
+      .select({ account: financialAccount.shortcode })
+      .from(financialTransaction)
+      .leftJoin(
+        financialAccount,
+        eq(financialAccount.id, financialTransaction.accountId),
+      )
+      .where(eq(financialTransaction.shortcode, result.outflowTransactionId));
+    expect(claimed).toEqual([{ account: from }]);
     const [move] = await transfers();
     expect(move!.fromPartyId).toBe(move!.toPartyId);
     expect(result.transferId).toMatch(/^LTR-/);
@@ -1275,7 +1316,7 @@ describe("transfer-pair suggestions", () => {
       sourceRefs: [observed!],
       rawDescription: "ONLINE TRANSFER TO SAVINGS",
     });
-    await statement([
+    const revision = await statement([
       {
         account: "Synthetic checking",
         date: "2026-08-04",
@@ -1290,21 +1331,25 @@ describe("transfer-pair suggestions", () => {
         description: "ONLINE TRANSFER FROM CHECKING",
       },
     ]);
-    const [pair] = await discoverTransferPairs(ctx.db);
+    expect(await discoverTransferPairs(ctx.db)).toEqual([]);
+    expect(revision.correctionReviews).toMatchObject([
+      { transactionId: recorded.id, reason: expect.any(String) },
+    ]);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const review = await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+      limit: 50,
+    });
     expect(
-      pair?.outflow.overlaps.some(
-        (overlap) => overlap.transactionId === recorded.id,
+      review.items.flatMap((item) =>
+        item.family === "statement_transaction" && item.evidence.reviewReason
+          ? [item.evidence.reviewReason]
+          : [],
       ),
-    ).toBe(true);
-    expect(pair?.apply.available).toBe(false);
-    await expect(
-      applyTransferPair(ctx.db, kernelCtx(ctx), {
-        key: pair!.key,
-        expectedFingerprint: await fingerprintTransferPair(pair!),
-        reviewed: true,
-      }),
-    ).rejects.toThrow(/overlap|statement/i);
-    expect(await liveTransactions()).toHaveLength(1);
+    ).toEqual([expect.stringContaining("amount changed")]);
+    expect(await liveTransactions()).toMatchObject([
+      { amount: 175, status: "posted" },
+    ]);
     expect(await transfers()).toEqual([]);
   });
 
@@ -1392,7 +1437,7 @@ describe("transfer-pair suggestions", () => {
     expect(await liveTransactions()).toHaveLength(2);
   });
 
-  it("excludes pending, allocated, already-paired and soft-deleted legs and deleted accounts or owners", async () => {
+  it("excludes expected transactions, allocated, already-paired and soft-deleted legs and deleted accounts or owners", async () => {
     const member = await owner("Synthetic member");
     const bank = await account("Synthetic checking", member);
     const reserve = await account("Synthetic savings", member, savings);
@@ -1408,7 +1453,7 @@ describe("transfer-pair suggestions", () => {
     const paired = await transaction(bank, 11, "2026-05-01");
     await transaction(reserve, -11, "2026-05-01");
     await transaction(bank, 12, "2026-05-02", {
-      status: "pending",
+      status: "expected",
       postedDate: null,
     });
     await transaction(bank, 13, "2026-05-03", {
@@ -1449,19 +1494,6 @@ describe("transfer-pair suggestions", () => {
         amount: -16,
         description: "ONLINE TRANSFER FROM CHECKING",
       },
-      {
-        account: "Synthetic checking",
-        date: "2026-05-07",
-        amount: 17,
-        description: "ONLINE TRANSFER TO SAVINGS",
-      },
-      {
-        account: "Synthetic savings",
-        date: "2026-05-07",
-        amount: -17,
-        description: "ONLINE TRANSFER FROM CHECKING",
-        status: "pending",
-      },
     ]);
     // Soft deletes, set directly: the exclusions are the read's, not the writer's.
     await unwrapDb(ctx.db).execute(
@@ -1496,11 +1528,18 @@ describe("transfer-pair suggestions", () => {
         date: "2026-05-04",
         amount: 33,
         description: "ONLINE TRANSFER TO SAVINGS",
+        providerTransactionId: "synthetic-reexport-transfer",
       },
     ];
     // One charge, exported twice by the same source.
     await statement(rows, { fingerprint: "synthetic-first-export" });
-    await statement(rows, { fingerprint: "synthetic-second-export" });
+    await statement(
+      rows.map((row) => ({
+        ...row,
+        description: "ONLINE TRANSFER TO SAVINGS UPDATED",
+      })),
+      { fingerprint: "synthetic-second-export" },
+    );
     await statement([
       {
         account: "Synthetic savings",
@@ -1513,7 +1552,7 @@ describe("transfer-pair suggestions", () => {
     const observed = await unwrapDb(ctx.db)
       .select({
         externalId: statementRow.externalId,
-        legacy: statementRow.legacyExternalId,
+        legacy: statementRow.legacyReference,
       })
       .from(statementRow)
       .where(eq(statementRow.accountDescriptor, "Synthetic checking"));
@@ -1522,7 +1561,7 @@ describe("transfer-pair suggestions", () => {
       [
         ...new Set([
           ...observed.map((row) => row.externalId),
-          observed[0]!.legacy!,
+          ...observed.flatMap((row) => (row.legacy ? [row.legacy] : [])),
         ]),
       ].sort(),
     );

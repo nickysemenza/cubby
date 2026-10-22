@@ -676,7 +676,9 @@ async function completeEvidenceCollection(
   tx: DrizzleTransaction,
   input: RecordStatementRowsInput,
   batchId: string,
-  existingBatch: typeof statementImport.$inferSelect | undefined,
+  existingBatch:
+    | Pick<typeof statementImport.$inferSelect, "completedAt">
+    | undefined,
   rows: Awaited<ReturnType<typeof prepareStatementObservations>>,
   rowCountStored: number,
   observedAt: Date,
@@ -794,7 +796,13 @@ export async function recordStatementRows(
         `intake:${source}`,
       ]);
       const [existingBatch] = await unwrapDb(tx)
-        .select()
+        .select({
+          id: statementImport.id,
+          observedAt: statementImport.observedAt,
+          coverage: statementImport.coverage,
+          rowCountDeclared: statementImport.rowCountDeclared,
+          completedAt: statementImport.completedAt,
+        })
         .from(statementImport)
         .where(
           and(
@@ -1384,7 +1392,6 @@ export async function listStatementImports(db: Database, source?: string) {
       observedAt: statementImport.observedAt,
       completedAt: statementImport.completedAt,
       coverage: statementImport.coverage,
-      notes: statementImport.notes,
       createdAt: statementImport.createdAt,
       updatedAt: statementImport.updatedAt,
       rowCountStored: sql<number>`(
