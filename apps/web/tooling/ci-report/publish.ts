@@ -6,26 +6,31 @@
  *
  * NX_CACHE_URL is the Worker's public origin, not a secret: Actions withholds
  * step outputs that contain a secret. Writes `url=` to GITHUB_OUTPUT. Without
- * the token (fork PRs) it publishes nothing and exits successfully; the
- * artifact remains.
+ * the token (fork PRs) it publishes nothing; the artifact remains.
  */
 import { appendFileSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, sep } from "node:path";
+import { extname, join, sep } from "node:path";
 
-const [kind, input, ...excluded] = process.argv.slice(2);
-if ((kind !== "vitest" && kind !== "playwright") || !input)
+const [kind, directory, ...excluded] = process.argv.slice(2);
+if ((kind !== "vitest" && kind !== "playwright") || !directory)
   throw new Error("usage: publish.ts <vitest|playwright> <dir> [exclude...]");
-const directory = input;
 const { NX_CACHE_URL, NX_CACHE_TOKEN, GITHUB_RUN_ID, GITHUB_OUTPUT } =
   process.env;
 if (!NX_CACHE_URL || !NX_CACHE_TOKEN || !GITHUB_RUN_ID) {
-  console.log(
-    "No report host configured; the report stays an Actions artifact.",
-  );
+  console.log("No cache token; the report stays an Actions artifact.");
   process.exit(0);
 }
 
-const prefix = `${GITHUB_RUN_ID}/${process.env.GITHUB_RUN_ATTEMPT ?? "1"}/${kind}`;
+// Browsers need these typed; they sniff images and ignore types on fetches.
+const types = new Map([
+  [".html", "text/html; charset=utf-8"],
+  [".js", "text/javascript"],
+  [".mjs", "text/javascript"],
+  [".css", "text/css"],
+  [".svg", "image/svg+xml"],
+]);
+
+const prefix = `/reports/${GITHUB_RUN_ID}/${process.env.GITHUB_RUN_ATTEMPT ?? "1"}/${kind}/`;
 const files = readdirSync(directory, { recursive: true, encoding: "utf8" })
   .map((entry) => entry.split(sep).join("/"))
   .filter(
@@ -35,33 +40,21 @@ const files = readdirSync(directory, { recursive: true, encoding: "utf8" })
       ) && statSync(join(directory, entry)).isFile(),
   );
 
-async function put(file: string): Promise<void> {
-  const url = new URL(`/v1/reports/${prefix}/${file}`, NX_CACHE_URL);
-  for (let attempt = 1; ; attempt++) {
-    // Transport failures and 5xx responses retry; other statuses are final.
-    const status = await fetch(url, {
-      method: "PUT",
-      headers: { authorization: `Bearer ${NX_CACHE_TOKEN}` },
-      body: readFileSync(join(directory, file)),
-    }).then(
-      (response) => response.status,
-      (error: unknown) => String(error),
-    );
-    if (status === 200) return;
-    if (attempt === 3 || (typeof status === "number" && status < 500))
-      throw new Error(`PUT ${file}: ${status}`);
-    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-  }
-}
-
-// A small fixed pool: reports hold hundreds of small files.
-const queue = [...files];
 await Promise.all(
-  Array.from({ length: 8 }, async () => {
-    for (let file = queue.shift(); file; file = queue.shift()) await put(file);
+  files.map(async (file) => {
+    const response = await fetch(new URL(prefix + file, NX_CACHE_URL), {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${NX_CACHE_TOKEN}`,
+        "content-type":
+          types.get(extname(file).toLowerCase()) ?? "application/octet-stream",
+      },
+      body: readFileSync(join(directory, file)),
+    });
+    if (!response.ok) throw new Error(`PUT ${file}: HTTP ${response.status}`);
   }),
 );
 
-const url = new URL(`/reports/${prefix}/`, NX_CACHE_URL).href;
+const url = new URL(prefix, NX_CACHE_URL).href;
 console.log(`Published ${files.length} files to ${url}`);
 if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, `url=${url}\n`);

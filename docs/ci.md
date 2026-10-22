@@ -87,9 +87,10 @@ entries after 30 days. Rotate `CACHE_TOKEN` in the Worker and update the Actions
 publishers. Browser and native compiler caches are separate from Nx result passes.
 
 The Worker's public root is an aggregate dashboard; `/stats.json` returns its
-fixed last-24-hour snapshot. `/reports/` serves published CI test reports,
-which hold only synthetic data, and expires them with cache entries. Cache
-archive routes and report uploads still require the bearer credential. Only authenticated cache operations write `cubby_nx_cache` Analytics
+fixed last-24-hour snapshot. `/reports/` is a public read of the bucket's
+`reports/` prefix, for CI test reports holding only synthetic data; uploads
+require the bearer credential and set each file's content type. Cache archive
+routes require the credential. Only authenticated cache operations write `cubby_nx_cache` Analytics
 Engine events: outcome, GET/PUT method, artifact bytes and operation duration.
 No hash, archive, terminal output, request identity or credential is recorded.
 `GET /healthz` checks Worker reachability and authentication without touching
