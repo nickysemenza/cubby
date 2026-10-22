@@ -1,5 +1,6 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
+import type { RunStepDeclaration } from "@cubby/schemas/run-fields";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -24,15 +25,34 @@ import {
   retryRunStep,
   type StepDriver,
   type StepPage,
-  type StepRunDrivers,
+  type StepPlan,
 } from "./step-run";
 
-/** A driver that serves scripted pages and records what it was asked. */
-function scripted(key: string, pages: StepPage[]) {
+/**
+ * A driver that serves scripted pages and records what it was asked. A
+ * `total` makes it a `count` step whose COUNT the engine calls.
+ */
+function scripted(key: string, pages: StepPage[], total?: number) {
   const seen: { cursor: unknown; retried: unknown }[] = [];
-  const driver: StepDriver = {
+  let counts = 0;
+  const declaration: RunStepDeclaration = {
     key,
     label: `Synthetic ${key}`,
+    purpose: "A synthetic step.",
+    action: `Running ${key}`,
+    unit: "items",
+    input:
+      total === undefined
+        ? { mode: "tally", reason: "once" }
+        : { mode: "count" },
+  };
+  const driver: StepDriver = {
+    ...(total !== undefined && {
+      count: async () => {
+        counts++;
+        return { total, boundary: null };
+      },
+    }),
     page: async ({ step }) => {
       seen.push({ cursor: step.cursor, retried: step.meta?.retryRefs });
       const next = pages.shift();
@@ -40,7 +60,7 @@ function scripted(key: string, pages: StepPage[]) {
       return next;
     },
   };
-  return { driver, seen, pages };
+  return { entry: { declaration, driver }, seen, pages, counts: () => counts };
 }
 
 const advanceStepRun = (
@@ -102,7 +122,7 @@ describe("step-ledger Runs", () => {
 
   async function drive(
     params: { runId: RunId; attempt: number },
-    drivers: StepRunDrivers,
+    drivers: StepPlan,
     limit = 20,
   ) {
     const kinds: string[] = [];
@@ -132,7 +152,7 @@ describe("step-ledger Runs", () => {
       },
       { kind: "progress", delta: { done: 1 }, done: true },
     ]);
-    const drivers = async () => [batch.driver];
+    const drivers = [batch.entry];
     expect(await advanceStepRun(ctx.db, params, drivers)).toMatchObject({
       kind: "continue",
       waitSeconds: 60,
@@ -338,10 +358,12 @@ describe("step-ledger Runs", () => {
   // Reopening a failed pass must stop presenting its terminal sample before its next page.
   it("resets the active progress sample immediately on a step retry", async () => {
     const { id, params } = await startRun();
-    const pages = scripted("synthetic-retry", [
-      { kind: "progress", found: 2, delta: { done: 1, failed: 1 }, done: true },
-    ]);
-    await drive(params, async () => [pages.driver]);
+    const pages = scripted(
+      "synthetic-retry",
+      [{ kind: "progress", delta: { done: 1, failed: 1 }, done: true }],
+      2,
+    );
+    await drive(params, [pages.entry]);
     await retryRunStep(ctx.db, id, "synthetic-retry");
     const owner = (await readRun(id))!;
     expect(
@@ -358,28 +380,19 @@ describe("step-ledger Runs", () => {
   // Step-ledger work has no RunTargets; the shared progress read must still expose real counts.
   it("reports processed items and failures for a Run without targets", async () => {
     const { id, params } = await startRun();
-    const pages = scripted("synthetic-items", [
-      {
-        kind: "progress",
-        found: 10,
-        delta: { done: 3, skipped: 1, failed: 1 },
-        cursor: "synthetic-next",
-        done: false,
-      },
-    ]);
-    const advance = await advanceStepRun(ctx.db, params, async () => [
-      pages.driver,
-    ]);
-    expect(advance).toMatchObject({
-      summary: {
-        phase: "synthetic-items",
-        unit: "items",
-        pageProcessed: 5,
-        cumulative: { processed: 5, total: 10, failures: 1 },
-        labels: null,
-        cursor: { page: 2 },
-      },
-    });
+    const pages = scripted(
+      "synthetic-items",
+      [
+        {
+          kind: "progress",
+          delta: { done: 3, skipped: 1, failed: 1 },
+          cursor: "synthetic-next",
+          done: false,
+        },
+      ],
+      10,
+    );
+    await advanceStepRun(ctx.db, params, [pages.entry]);
     // Runs already in flight may have phase samples only for work since a deploy.
     // Read the pre-existing ledger counts; never rewrite the active checkpoint.
     await getDb(ctx.db)
@@ -425,18 +438,22 @@ describe("step-ledger Runs", () => {
   // Exploratory work must show counts without inventing a zero-sized completed population.
   it("reports an authoritative failed step after an earlier successful sample", async () => {
     const { id, params } = await startRun();
-    const pages = scripted("synthetic-failure", [
-      { kind: "progress", found: 10, delta: { done: 1 }, done: false },
-      {
-        kind: "progress",
-        delta: { failed: 1 },
-        errors: [
-          { at: new Date().toISOString(), message: "Synthetic item failed" },
-        ],
-        done: true,
-      },
-    ]);
-    const drivers: StepRunDrivers = async () => [pages.driver];
+    const pages = scripted(
+      "synthetic-failure",
+      [
+        { kind: "progress", delta: { done: 1 }, done: false },
+        {
+          kind: "progress",
+          delta: { failed: 1 },
+          errors: [
+            { at: new Date().toISOString(), message: "Synthetic item failed" },
+          ],
+          done: true,
+        },
+      ],
+      10,
+    );
+    const drivers: StepPlan = [pages.entry];
     await drive(params, drivers);
     const owner = (await readRun(id))!;
     expect(await getRunLiveProgress(ctx.db, owner.shortcode)).toMatchObject({
@@ -460,32 +477,33 @@ describe("step-ledger Runs", () => {
 
   it("pages each step in order, keeps failures with raw errors, and retries only the failed step", async () => {
     const { id, params } = await startRun();
-    const exif = scripted("exif", [
-      {
-        kind: "progress",
-        found: 5,
-        delta: { done: 2 },
-        cursor: 2,
-        done: false,
-      },
-      {
-        kind: "progress",
-        delta: { done: 2, failed: 1 },
-        errors: [
-          {
-            at: new Date().toISOString(),
-            message: "R2 object not found: synthetic/IMG-0001.heic (404)",
-            ref: "image:synthetic-1",
-          },
-        ],
-        cursor: 5,
-        done: true,
-      },
-    ]);
-    const embed = scripted("embeddings", [
-      { kind: "progress", found: 0, done: true },
-    ]);
-    const drivers: StepRunDrivers = async () => [exif.driver, embed.driver];
+    const exif = scripted(
+      "exif",
+      [
+        {
+          kind: "progress",
+          delta: { done: 2 },
+          cursor: 2,
+          done: false,
+        },
+        {
+          kind: "progress",
+          delta: { done: 2, failed: 1 },
+          errors: [
+            {
+              at: new Date().toISOString(),
+              message: "R2 object not found: synthetic/IMG-0001.heic (404)",
+              ref: "image:synthetic-1",
+            },
+          ],
+          cursor: 5,
+          done: true,
+        },
+      ],
+      5,
+    );
+    const embed = scripted("embeddings", [{ kind: "progress", done: true }], 0);
+    const drivers: StepPlan = [exif.entry, embed.entry];
 
     expect(await drive(params, drivers)).toEqual([
       "continue",
@@ -552,46 +570,61 @@ describe("step-ledger Runs", () => {
     });
   });
 
-  it("waits on a child Run and records its totals without double counting", async () => {
+  // A count step freezes its population once; inputs that left eligibility
+  // before the pager reached them end as `removed`, never as 100% done.
+  it("freezes a step's count once and ends departed inputs as removed", async () => {
     const { id, params } = await startRun();
-    const childRunId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "suggestion_sweep",
-      trigger: "manual",
-      status: "running",
-    });
-    const counts = { found: 10, done: 4, failed: 0, skipped: 1 };
-    const child = scripted("fields", [
-      { kind: "child", childRunId, counts, state: "running" },
-      { kind: "child", childRunId, counts, state: "running" },
-      {
-        kind: "child",
-        childRunId,
-        counts: { found: 10, done: 9, failed: 0, skipped: 1 },
-        state: "done",
-      },
-    ]);
-    const drivers: StepRunDrivers = async () => [child.driver];
-    expect(await drive(params, drivers)).toEqual(["wait"]);
-    expect(await drive(params, drivers)).toEqual(["wait"]);
+    const scan = scripted(
+      "scan",
+      [
+        { kind: "progress", delta: { done: 3 }, cursor: 3, done: false },
+        { kind: "progress", delta: { done: 4 }, cursor: 7, done: true },
+      ],
+      10,
+    );
+    await advanceStepRun(ctx.db, params, [scan.entry]);
     expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
-      state: "waiting",
-      childRunId,
-      done: 4,
-      left: 5,
+      state: "running",
+      found: 10,
+      done: 3,
+      left: 7,
+      meta: { input: { mode: "count", total: 10 } },
     });
-    expect(await drive(params, drivers)).toEqual(["continue", "finished"]);
+    await drive(params, [scan.entry]);
+    expect(scan.counts()).toBe(1);
     expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
       state: "done",
-      done: 9,
-      skipped: 1,
+      found: 10,
+      done: 7,
       left: 0,
+      meta: { tallies: { removed: 3 } },
+    });
+  });
+
+  // A tally step has no denominator: progress never shows a total or ETA.
+  it("reports a tally step's work without a total", async () => {
+    const { id, params } = await startRun();
+    const tally = scripted("tally", [
+      { kind: "progress", delta: { done: 4 }, cursor: 4, done: false },
+    ]);
+    await advanceStepRun(ctx.db, params, [tally.entry]);
+    expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
+      found: 0,
+      done: 4,
+      left: null,
+    });
+    const owner = (await readRun(id))!;
+    expect(await getRunLiveProgress(ctx.db, owner.shortcode)).toMatchObject({
+      workProgress: {
+        current: { processed: 4, total: null, etaSeconds: null },
+      },
     });
   });
 
   it("marks a scheduled pass that found nothing as routine", async () => {
     const { id, params } = await startRun("scheduled");
-    const idle = scripted("idle", [{ kind: "progress", found: 0, done: true }]);
-    await drive(params, async () => [idle.driver]);
+    const idle = scripted("idle", [{ kind: "progress", done: true }], 0);
+    await drive(params, [idle.entry]);
     expect(await readRun(id)).toMatchObject({
       status: "completed",
       routine: true,
@@ -600,18 +633,21 @@ describe("step-ledger Runs", () => {
 
   it("permits the member to retry a failed step on a cancelled Run", async () => {
     const { id, params } = await startRun();
-    const broken = scripted("broken", [
-      {
-        kind: "progress",
-        found: 1,
-        delta: { failed: 1 },
-        errors: [
-          { at: new Date().toISOString(), message: "Synthetic item failed" },
-        ],
-        done: true,
-      },
-    ]);
-    await drive(params, async () => [broken.driver]);
+    const broken = scripted(
+      "broken",
+      [
+        {
+          kind: "progress",
+          delta: { failed: 1 },
+          errors: [
+            { at: new Date().toISOString(), message: "Synthetic item failed" },
+          ],
+          done: true,
+        },
+      ],
+      1,
+    );
+    await drive(params, [broken.entry]);
     await getDb(ctx.db)
       .update(run)
       .set({ status: "failed", failureCode: "user_cancelled" })
@@ -627,18 +663,21 @@ describe("step-ledger Runs", () => {
   // Retrying an old pass while another is active must not hit the unique index.
   it("refuses to retry a maintenance step while another pass is active", async () => {
     const { id, params } = await startRun();
-    const broken = scripted("broken", [
-      {
-        kind: "progress",
-        found: 1,
-        delta: { failed: 1 },
-        errors: [
-          { at: new Date().toISOString(), message: "Synthetic item failed" },
-        ],
-        done: true,
-      },
-    ]);
-    await drive(params, async () => [broken.driver]);
+    const broken = scripted(
+      "broken",
+      [
+        {
+          kind: "progress",
+          delta: { failed: 1 },
+          errors: [
+            { at: new Date().toISOString(), message: "Synthetic item failed" },
+          ],
+          done: true,
+        },
+      ],
+      1,
+    );
+    await drive(params, [broken.entry]);
     await startRun();
     await expect(retryRunStep(ctx.db, id, "broken")).rejects.toThrow(
       /is still running or paused; retry this step once it ends/,
@@ -651,25 +690,28 @@ describe("step-ledger Runs", () => {
   it("re-admits every failed item on retry, not only the displayed sample", async () => {
     const { id, params } = await startRun();
     const refs = Array.from({ length: 25 }, (_, n) => `image:synthetic-${n}`);
-    const exif = scripted("exif", [
-      {
-        kind: "progress",
-        found: 25,
-        delta: { failed: 25 },
-        errors: refs.map((ref) => ({
-          at: new Date().toISOString(),
-          message: "R2 object not found (404)",
-          ref,
-        })),
-        done: true,
-      },
-    ]);
-    await drive(params, async () => [exif.driver]);
+    const exif = scripted(
+      "exif",
+      [
+        {
+          kind: "progress",
+          delta: { failed: 25 },
+          errors: refs.map((ref) => ({
+            at: new Date().toISOString(),
+            message: "R2 object not found (404)",
+            ref,
+          })),
+          done: true,
+        },
+      ],
+      25,
+    );
+    await drive(params, [exif.entry]);
     expect((await readRunSteps(ctx.db, id))[0]?.errors).toHaveLength(20);
     exif.pages.push({ kind: "progress", delta: { done: 25 }, done: true });
     await retryRunStep(ctx.db, id, "exif");
     const attempt = attemptOf(await readRun(id));
-    await drive({ runId: id, attempt }, async () => [exif.driver]);
+    await drive({ runId: id, attempt }, [exif.entry]);
     expect(exif.seen.at(-1)?.retried).toEqual(refs);
   });
 

@@ -17,7 +17,7 @@ import {
   loadRunTimeline,
 } from "~/server/domains/purchase-import/repo/run-service";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
-import { readRunStepsReport } from "~/server/domains/run/repo/run-step";
+import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
@@ -156,8 +156,9 @@ export const RUN_REPORTS = {
     return {
       blocks: runStepsBlocks({
         code,
+        purpose,
         status,
-        steps: await readRunStepsReport(
+        steps: await readRunSteps(
           execution.request.db,
           await execution.read(runId),
         ),

@@ -3,7 +3,7 @@ import { withTransactionDatabase } from "~/server/db/helpers";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 import { repeatJob } from "~/server/generic/jobs/repo/jobs";
 
-import { prepareConnectionSweepPage } from "./connection-refresh";
+import { prepareConnectionDiscoveryRoster } from "./connection-refresh";
 
 /** A completed bounded pass repeats; failures and member controls stay terminal. */
 export const claimDerivedDiscovery = (db: Database) =>
@@ -19,9 +19,9 @@ export const claimDerivedDiscovery = (db: Database) =>
 
 export const prepareConnectionDiscoveryPage = (
   db: Database,
-  input: Parameters<typeof prepareConnectionSweepPage>[1],
+  input: Parameters<typeof prepareConnectionDiscoveryRoster>[1],
 ) =>
   withTransactionDatabase(db, async (tx) => {
     await assertCurrentJob(tx);
-    return prepareConnectionSweepPage(tx, input);
+    return prepareConnectionDiscoveryRoster(tx, input);
   });

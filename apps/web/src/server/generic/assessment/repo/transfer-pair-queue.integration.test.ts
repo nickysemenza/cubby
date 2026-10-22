@@ -159,14 +159,15 @@ describe("transfer pairs in the global queue", () => {
       if (outcome.kind !== "continue") break;
     }
     expect(outcome?.kind).toBe("finished");
-    expect(await readRunSteps(ctx.db, runId)).toEqual([
-      expect.objectContaining({
-        key: "transfer_pair",
-        state: "done",
-        found: 1,
-        done: 1,
-      }),
-    ]);
+    // The scan's denominator is its frozen seed COUNT, never the pages done.
+    const [scan] = await readRunSteps(ctx.db, runId);
+    expect(scan).toMatchObject({
+      key: "transfer_pair_scan",
+      state: "done",
+      left: 0,
+      meta: { input: { mode: "count" }, tallies: { pairs: 1 } },
+    });
+    expect(scan!.found).toBeGreaterThan(0);
     expect(
       (
         await listSuggestionPage(ctx.db, {

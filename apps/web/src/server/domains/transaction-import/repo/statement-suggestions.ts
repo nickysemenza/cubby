@@ -1808,6 +1808,24 @@ export async function generateStatementSuggestionPage(
   };
 }
 
+const holdAccounts = async (db: Database, scope?: StatementSuggestionScope) =>
+  scope?.accountIds ??
+  (
+    await unwrapDb(db).execute<{ id: string }>(sql`
+      SELECT DISTINCT ft."accountId" AS id FROM "FinancialTransaction" ft
+      WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
+    `)
+  ).rows.map((row) => String(row.id));
+
+/** The holds `generateStatementHoldVoidPage` pages, for a step's frozen count. */
+export async function countStatementPendingHolds(
+  db: Database,
+  scope?: StatementSuggestionScope,
+) {
+  return (await statementPendingTransactions(db, await holdAccounts(db, scope)))
+    .length;
+}
+
 /** Vanished holds use their own bounded transaction-ID cursor, including non-voidable holds. */
 export async function generateStatementHoldVoidPage(
   db: Database,
@@ -1825,14 +1843,7 @@ export async function generateStatementHoldVoidPage(
       WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
     ),
   );
-  const accounts =
-    input.scope?.accountIds ??
-    (
-      await unwrapDb(db).execute<{ id: string }>(sql`
-      SELECT DISTINCT ft."accountId" AS id FROM "FinancialTransaction" ft
-      WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
-    `)
-    ).rows.map((row) => String(row.id));
+  const accounts = await holdAccounts(db, input.scope);
   const holds = await statementPendingTransactions(db, accounts, {
     after: input.after,
     limit,

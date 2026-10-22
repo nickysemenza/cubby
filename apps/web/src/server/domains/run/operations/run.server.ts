@@ -52,7 +52,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
+import { isExecutedRunPurpose } from "~/server/workflows/runs/contract";
 
 /** Import runs belong to a household member's ledger party. */
 async function memberParty(context: AuthenticatedRequestContext) {
@@ -124,7 +124,7 @@ async function controlRunOperation(
       "Historical vendor-search Runs cannot execute again; start current research instead.",
     );
   // A Workflow executes these Runs: cancel and retry act on its instance.
-  if (target && isWorkflowRunPurpose(target.purpose)) {
+  if (target && isExecutedRunPurpose(target.purpose)) {
     const { controlWorkflowRun } =
       await import("~/server/workflows/runs/control");
     await controlWorkflowRun(

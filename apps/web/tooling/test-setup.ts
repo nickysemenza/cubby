@@ -163,19 +163,31 @@ export async function setup(project: TestProject) {
 }
 
 /**
- * The one row the template does not carry. `AuditLog.userId` is NOT NULL ->
- * `user.id` and virtually every repo mutation writes an audit row, so this must
- * exist before any test body runs — including after each reset.
+ * The rows the template does not carry. `AuditLog.userId` is NOT NULL ->
+ * `user.id` and virtually every repo mutation writes an audit row, so the test
+ * user must exist before any test body runs — including after each reset. The
+ * reserved system user exists in production; routine passes create their Runs
+ * as it whenever a background drain finds work.
  */
 async function seedTestUser(rawDb: ReturnType<typeof drizzle>) {
-  await rawDb.insert(schema.user).values({
-    id: TEST_USER_ID,
-    name: "Test User",
-    email: "test@example.com",
-    emailVerified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  await rawDb.insert(schema.user).values([
+    {
+      id: TEST_USER_ID,
+      name: "Test User",
+      email: "test@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: "cubby-system",
+      name: "System",
+      email: "system@example.test",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ]);
 }
 
 /**

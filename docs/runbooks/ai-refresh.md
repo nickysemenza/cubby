@@ -58,9 +58,9 @@ retain inference and actual business-write provenance.
 Discovery advances durable cursors through at most 200 field targets and 400
 eligible Emails per invocation; Email execution rosters still cap at 200.
 Ordinary refresh execution has two active Run slots across the household,
-including funding/auth pauses and connection Sweep children. Discovery is a
-separate activation Run; a Sweep's connection child retains its explicit parent
-while consuming the same admission capacity. Product, field and on-demand connection targets share a running
+including funding/auth pauses. Discovery is a separate activation Run, and
+routine connection discovery is its own `connection_discovery` Run. A Sweep
+owns its connection evaluations directly and takes no Run slot. Product, field and on-demand connection targets share a running
 non-Email Run for their actor and activation revision. New policy work waits
 for capacity rather than joining an older policy owner. Frozen Email rosters retain their mailbox and
 200-item boundary. A short scheduling transaction uses a nonblocking advisory
@@ -72,7 +72,7 @@ to that owner. Inspect its roster before cancelling; same-fingerprint work stays
 stopped until explicit member retry.
 If both slots are paused for authentication, ordinary refresh work waits until
 the member resolves authentication, resumes or cancels an owner. Cancelling a
-Sweep child also stops its parent roster step rather than reviving that child.
+Sweep stops the evaluations it owns or requested.
 
 When slots are full, discovery retains the affected stream's cursor and waits
 30 seconds in its existing Workflow before trying again. Capacity waits do not
@@ -175,7 +175,7 @@ UTC ISO text cast to `timestamp` so the driver's local timezone cannot shift a
 cutoff.
 
 Proposed cleanup: choose an explicit UTC cutoff and the ordinary refresh owners
-to stop, excluding the current discovery Run, explicit Sweep children and member
+to stop, excluding the current discovery Run, Sweeps and member
 work outside this scope. Under the AI-admission lock, mark selected active Runs
 `failed` / `user_cancelled`, set `endedAt` and the cancellation diagnostic, and
 cancel their pending evaluations in a batch, mirroring Run control. Preserve

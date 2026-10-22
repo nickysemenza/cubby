@@ -120,7 +120,7 @@ import {
 } from "~/server/generic/work-queue/repo/work-queue-routing";
 import {
   isStepRunPurpose,
-  WORKFLOW_RUN_PURPOSES,
+  EXECUTED_RUN_PURPOSES,
 } from "~/server/workflows/runs/contract";
 
 import { loadWorkContexts } from "./work-context";
@@ -574,7 +574,7 @@ async function workQueueProjection(
       where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
         // A running maintenance pass or Sweep is not member work; its failed
         // or stalled outcomes still surface through the failure paths.
-        WORKFLOW_RUN_PURPOSES.filter(
+        EXECUTED_RUN_PURPOSES.filter(
           (purpose) => !isStepRunPurpose(purpose),
         ).map((purpose) => sql`${purpose}`),
         sql`, `,

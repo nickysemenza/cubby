@@ -1,7 +1,7 @@
 /** Persistence seam for the catalog-wide conversion projection. */
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import type { ProductConversionCoverageFreshness } from "@cubby/schemas/problems";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
@@ -173,6 +173,15 @@ export const markProductConversionCoverageInputStale = async (
     })),
   );
 };
+
+/** The population the broad conversions pass pages. */
+export async function countProductCoverageSources(db: Database) {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(product)
+    .where(notDeleted(product));
+  return row?.n ?? 0;
+}
 
 /** A broad pass pages product owners, independently of changed endpoints. */
 export async function selectProductCoverageIdsPage(

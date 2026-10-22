@@ -132,7 +132,7 @@ async function workKeyTip(
 }
 
 /** Whether any target would insert a new row or reopen a settled one. */
-async function hasAdmissibleTarget(
+export async function hasAdmissibleTarget(
   db: Database,
   targets: readonly EvaluationTargetInput[],
 ) {

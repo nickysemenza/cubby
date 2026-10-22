@@ -22,7 +22,7 @@ import {
 } from "~/server/generic/jobs/repo/execution";
 import { enqueueJob, retryJob } from "~/server/generic/jobs/repo/jobs";
 
-import type { WorkflowRunParams, WorkflowRunPurpose } from "./contract";
+import type { WorkflowRunParams, ExecutedRunPurpose } from "./contract";
 
 export const runFailureText = (
   error: Error | string,
@@ -68,9 +68,15 @@ export const recordRunProgress = (
     detail,
   });
 
+/**
+ * A member's launch, resume or retry outranks unattended Run execution:
+ * priority orders Jobs within one kind, never across kinds.
+ */
+export const MANUAL_RUN_PRIORITY = 10;
+
 type LaunchWorkflowRunInput = {
   runId: RunId;
-  purpose: WorkflowRunPurpose;
+  purpose: ExecutedRunPurpose;
   automatic?: boolean;
 };
 type LaunchedWorkflowRun = { attempt: number; instanceId: string };
@@ -95,11 +101,13 @@ export async function launchWorkflowRun(
       .where(eq(runTable.id, input.runId))
       .for("update");
     if (!owner) throw new Error("Run no longer exists");
+    const priority = input.automatic ? 0 : MANUAL_RUN_PRIORITY;
     let execution = await enqueueJob(tx, {
       key: `run:${input.runId}`,
       kind: "run.execute",
       input: { runId: input.runId, purpose: input.purpose },
       runId: input.runId,
+      priority,
     });
     if (["failed", "cancelled", "paused"].includes(execution.state)) {
       if (input.automatic) return null;
@@ -121,8 +129,17 @@ export async function launchWorkflowRun(
         kind: execution.kind,
         input: execution.input,
         runId: input.runId,
+        priority,
         invalidate: true,
       });
+    }
+    if (!input.automatic && execution.priority < priority) {
+      const [raised] = await getDb(tx)
+        .update(job)
+        .set({ priority })
+        .where(eq(job.id, execution.id))
+        .returning();
+      if (raised) execution = raised;
     }
     if (!input.automatic) {
       const pending = await getDb(tx).execute<{

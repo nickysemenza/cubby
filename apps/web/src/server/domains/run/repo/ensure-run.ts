@@ -28,7 +28,7 @@ import {
   insertWithShortcode,
   type ShortcodeGeneratorPort,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
+import { isExecutedRunPurpose } from "~/server/workflows/runs/contract";
 
 /**
  * The actor for work with nobody behind it: crons, retries, scheduled
@@ -148,7 +148,7 @@ export async function ensureRun(
     if (
       !completed &&
       input.execution !== false &&
-      isWorkflowRunPurpose(input.purpose)
+      isExecutedRunPurpose(input.purpose)
     )
       await enqueueJob(tx, {
         key: `run:${row.id}`,

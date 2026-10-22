@@ -14,7 +14,7 @@ import {
   runWorkSample,
 } from "@cubby/schemas/run-work-progress";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -28,7 +28,8 @@ import {
 export type RunStepRow = typeof runStep.$inferSelect;
 export type StepRunOwner = typeof run.$inferSelect;
 export type RunStepDefinition = { key: string; label: string };
-export type RunStepRead = RunStepRow & { left: number };
+/** `left` is null for a step without a frozen count (a tally or an estimate). */
+export type RunStepRead = RunStepRow & { left: number | null };
 
 /** Creates a Run's ordered steps once; a relaunch keeps every count and cursor. */
 export async function ensureRunSteps(
@@ -70,6 +71,46 @@ const TERMINAL: readonly RunStepState[] = ["done", "failed"];
 export const isTerminalStep = (state: RunStepState) => TERMINAL.includes(state);
 
 /**
+ * Moves a queued or paused step to running. `frozen` is the population a
+ * step counts once per generation; a resumed or retried step passes null.
+ */
+export async function startRunStep(
+  db: Database,
+  runId: RunId,
+  key: string,
+  frozen: { found: number; input: NonNullable<RunStepMeta["input"]> } | null,
+) {
+  const write = async (tx: Database) => {
+    const [row] = await getDb(tx)
+      .update(runStep)
+      .set({
+        state: "running",
+        pausedReason: null,
+        pausedUntil: null,
+        startedAt: sql`coalesce(${runStep.startedAt}, ${new Date()})`,
+        ...(frozen && {
+          found: frozen.found,
+          meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || ${JSON.stringify({ input: frozen.input })}::jsonb`,
+        }),
+      })
+      .where(
+        and(
+          eq(runStep.runId, runId),
+          eq(runStep.key, key),
+          inArray(runStep.state, ["queued", "paused"]),
+        ),
+      )
+      .returning();
+    return row ?? null;
+  };
+  if (!hasWorkflowExecution()) return write(db);
+  return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
+    return write(tx);
+  });
+}
+
+/**
  * Applies one page's outcome in a single statement: counts are increments so a
  * page is recorded once per committed write, errors keep the newest sample.
  */
@@ -91,18 +132,10 @@ async function writeRunStepPage(
   runId: RunId,
   key: string,
   page: {
-    delta?: Partial<RunStepCounts>;
-    /** Replaces `found` when the driver knows the backlog size. */
-    found?: number;
-    /**
-     * Replaces every count with a child Run's own totals; absolute, so a
-     * re-read of the same child never double counts.
-     */
-    counts?: RunStepCounts;
+    delta?: Partial<Omit<RunStepCounts, "found">>;
     errors?: readonly RunStepError[];
     cursor?: unknown;
     state?: RunStepState;
-    childRunId?: RunId | null;
     pausedReason?: string | null;
     pausedUntil?: Date | null;
     meta?: RunStepMeta;
@@ -121,27 +154,17 @@ async function writeRunStepPage(
       )
     : null;
   const now = new Date();
-  const counts = page.counts
-    ? page.counts
-    : {
-        found:
-          page.found === undefined
-            ? sql`${runStep.found} + ${delta.found ?? 0}`
-            : page.found,
-        done: sql`${runStep.done} + ${delta.done ?? 0}`,
-        failed: sql`${runStep.failed} + ${delta.failed ?? 0}`,
-        skipped: sql`${runStep.skipped} + ${delta.skipped ?? 0}`,
-      };
   await getDb(db)
     .update(runStep)
     .set({
-      ...counts,
+      done: sql`${runStep.done} + ${delta.done ?? 0}`,
+      failed: sql`${runStep.failed} + ${delta.failed ?? 0}`,
+      skipped: sql`${runStep.skipped} + ${delta.skipped ?? 0}`,
       pages: sql`${runStep.pages} + 1`,
       ...(errors && {
         errors: sql`(SELECT coalesce(jsonb_agg(e ORDER BY ord), '[]'::jsonb) FROM (SELECT e, ord FROM jsonb_array_elements(${runStep.errors} || ${JSON.stringify(errors)}::jsonb) WITH ORDINALITY AS t(e, ord) ORDER BY ord DESC LIMIT ${RUN_STEP_ERROR_SAMPLE}) newest)`,
       }),
       ...(page.cursor !== undefined && { cursor: page.cursor }),
-      ...(page.childRunId !== undefined && { childRunId: page.childRunId }),
       ...(page.pausedReason !== undefined && {
         pausedReason: page.pausedReason,
       }),
@@ -198,25 +221,6 @@ export async function reopenRunStep(
   return row ?? null;
 }
 
-/** Steps with `left` and the shortcode of the child Run a step delegates to. */
-export async function readRunStepsReport(db: Database, runId: RunId) {
-  const steps = await readRunSteps(db, runId);
-  const childIds = steps.flatMap((step) =>
-    step.childRunId ? [step.childRunId] : [],
-  );
-  const children = childIds.length
-    ? await getDb(db)
-        .select({ id: run.id, shortcode: run.shortcode })
-        .from(run)
-        .where(inArray(run.id, childIds))
-    : [];
-  return steps.map((step) => ({
-    ...step,
-    childShortcode:
-      children.find((child) => child.id === step.childRunId)?.shortcode ?? null,
-  }));
-}
-
 /** Steps with their derived `left`, in order. */
 export async function readRunSteps(
   db: Database,
@@ -228,26 +232,17 @@ export async function readRunSteps(
   }));
 }
 
-export const leftOf = (counts: RunStepCounts) =>
-  Math.max(counts.found - counts.done - counts.failed - counts.skipped, 0);
-
-/** The step-ledger parent whose step delegates to this Run, if any. */
-export async function stepParentOf(db: Database, childRunId: RunId) {
-  const [row] = await getDb(db)
-    .select({
-      runId: runStep.runId,
-      key: runStep.key,
-      shortcode: run.shortcode,
-      purpose: run.purpose,
-      status: run.status,
-      progress: run.progress,
-    })
-    .from(runStep)
-    .innerJoin(run, eq(run.id, runStep.runId))
-    .where(eq(runStep.childRunId, childRunId))
-    .limit(1);
-  return row ?? null;
-}
+export const leftOf = (step: RunStepRow) =>
+  step.meta?.input && step.meta.input.mode !== "count"
+    ? null
+    : Math.max(
+        step.found -
+          step.done -
+          step.failed -
+          step.skipped -
+          (step.meta?.tallies?.removed ?? 0),
+        0,
+      );
 
 const attemptIs = (_attempt: number) => {
   const execution = currentJobExecution();
@@ -319,50 +314,6 @@ export async function readStepRunOwner(db: Database, runId: RunId) {
   return owner ?? null;
 }
 
-/** A step's child Run as its parent step reads it. */
-export async function readChildRun(db: Database, childRunId: RunId) {
-  const [row] = await getDb(db)
-    .select({
-      id: run.id,
-      shortcode: run.shortcode,
-      purpose: run.purpose,
-      status: run.status,
-      progress: run.progress,
-      failureCode: run.failureCode,
-      dispatchError: run.dispatchError,
-    })
-    .from(run)
-    .where(eq(run.id, childRunId));
-  return row ?? null;
-}
-
-/** Ends a child Run that turned out to have no work, before it is launched. */
-export async function settleEmptyChildRun(db: Database, childRunId: RunId) {
-  await getDb(db)
-    .update(run)
-    .set({ status: "completed", endedAt: new Date() })
-    .where(
-      and(
-        eq(run.id, childRunId),
-        inArray(run.status, ["running", "paused"]),
-        attemptIs(0),
-      ),
-    );
-}
-
-/**
- * Holds a freshly created child out of recovery (which launches running
- * attempt-0 Runs) until its parent finishes its roster and launches it.
- */
-export async function holdChildRun(db: Database, childRunId: RunId) {
-  await getDb(db)
-    .update(run)
-    .set({ status: "paused" })
-    .where(
-      and(eq(run.id, childRunId), eq(run.status, "running"), attemptIs(0)),
-    );
-}
-
 /**
  * An unfinished Sweep that covers this whole family (no scope), if one
  * exists; a member's scoped Sweep never stands in for routine coverage.
@@ -383,6 +334,49 @@ export async function activeSweepFor(db: Database, family: string) {
   return row?.id ?? null;
 }
 
+/**
+ * A restarted routine pass abandons the Run its earlier generation opened;
+ * that Run ends with the counts it reached instead of staying open.
+ */
+export async function endSupersededRoutineRuns(
+  db: Database,
+  pass: { purpose: string; input: unknown; keep: RunId },
+) {
+  const ended = await getDb(db)
+    .update(run)
+    .set({
+      status: "completed",
+      endedAt: new Date(),
+      notes: "Superseded by a newer pass",
+    })
+    .where(
+      and(
+        eq(run.purpose, pass.purpose),
+        eq(run.status, "running"),
+        sql`${run.input} = ${JSON.stringify(pass.input)}::jsonb`,
+        sql`${run.id} <> ${pass.keep}`,
+      ),
+    )
+    .returning({ id: run.id });
+  if (!ended.length) return;
+  await getDb(db)
+    .update(runStep)
+    .set({
+      state: "done",
+      endedAt: new Date(),
+      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || '{"action":null}'::jsonb`,
+    })
+    .where(
+      and(
+        inArray(
+          runStep.runId,
+          ended.map((row) => row.id),
+        ),
+        inArray(runStep.state, ["queued", "running", "waiting", "paused"]),
+      ),
+    );
+}
+
 /** Another unfinished Run of a purpose that allows only one at a time. */
 export async function otherActiveRun(
   db: Database,
@@ -401,22 +395,4 @@ export async function otherActiveRun(
     )
     .limit(1);
   return row?.shortcode ?? null;
-}
-
-/**
- * The unfinished child Runs a step-ledger Run delegated to, by parentage: a
- * step's `childRunId` misses a child still being prepared (the connection
- * roster) and earlier children a retry relaunched together (field).
- */
-export async function unfinishedStepChildren(db: Database, runId: RunId) {
-  return getDb(db)
-    .select({ id: run.id, shortcode: run.shortcode, purpose: run.purpose })
-    .from(run)
-    .where(
-      and(
-        eq(run.parentRunId, runId),
-        inArray(run.status, ["running", "paused", "paused_auth"]),
-        isNull(run.deletedAt),
-      ),
-    );
 }

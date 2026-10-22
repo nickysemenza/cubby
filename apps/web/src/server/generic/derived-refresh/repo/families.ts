@@ -1,3 +1,4 @@
+import { derivedRefreshFamily } from "@cubby/schemas/run-fields";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -8,13 +9,8 @@ import {
 import { job } from "~/server/db/retained-tables";
 import { enqueueJob, repeatJob } from "~/server/generic/jobs/repo/jobs";
 
-export const refreshFamily = z.enum([
-  "search",
-  "recipes",
-  "conversions",
-  "embeddings",
-  "orphans",
-]);
+/** The manifest's `derived_refresh` steps are the families. */
+export const refreshFamily = derivedRefreshFamily;
 export const refreshFamilyInput = z.object({ family: refreshFamily });
 export type RefreshFamily = z.infer<typeof refreshFamily>;
 export const REFRESH_INTERVAL_MS = 2 * 60_000;

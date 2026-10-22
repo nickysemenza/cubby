@@ -2213,6 +2213,19 @@ their cursors are absent. Counts may lag while background work converges; reads
 never change evidence or financial/import facts. Valid semantic matches remain
 usable while incomplete current embeddings withhold exhaustive coverage.
 
+Each family pass is a routine `derived_refresh` Run step declared in
+`RUN_KINDS` (`packages/schemas/src/activity-fields.ts`) and driven by a
+`RoutineStepDriversFor<"derived_refresh">` entry (`generic/derived-refresh/repo/process.ts`).
+The Job still owns the pass. Its Run is created by the first page with
+pending writes, in a transaction checked against the current Job, and rides in
+the Job cursor. An idle pass leaves no Run. The step freezes its population
+then: a COUNT for recipes, conversions, embeddings and orphans, and the live
+document count as an estimate for search. Invalidation restarts the pass, and
+the new Run ends the abandoned generation's Run with its counts. Connection
+discovery follows the same lazy pattern as a `connection_discovery` Run that
+owns its evaluations. Routine kinds are hidden from the Runs list by its
+declared initial filter.
+
 Embedding execution retains the provider result, physical upload hash and
 mutation receipt while awaiting visibility. A stopped artifact's explicit retry
 uses a fresh physical Job ID, preserving the old diagnostic and protecting the

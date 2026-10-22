@@ -25,10 +25,10 @@ import {
   extractAndStoreImageMetadata,
   type ExtractImageMetadataPorts,
 } from "~/server/domains/image/service/image-metadata-extraction.service";
+import type { StepDriversFor } from "~/server/domains/run/service/run-step-registry";
 import type {
   StepContext,
   StepDriver,
-  StepRunDrivers,
 } from "~/server/domains/run/service/step-run";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
@@ -72,21 +72,19 @@ const detail = (values: Record<string, number | string | boolean>) => ({
   detail: values,
 });
 
-/** A step whose work is one bounded call; failures stay on the step. */
+/**
+ * A step whose work is one bounded call (a `tally` step: it has no stored
+ * population to count); failures stay on the step.
+ */
 function onceStep(
-  key: string,
-  label: string,
   work: (context: StepContext) => Promise<{
-    found: number;
-    done?: number;
+    done: number;
     errors?: RunStepError[];
-    meta?: RunStepMeta;
+    meta?: Pick<RunStepMeta, "detail">;
     more?: boolean;
   }>,
 ): StepDriver {
   return {
-    key,
-    label,
     page: async (context) => {
       let outcome;
       try {
@@ -95,19 +93,14 @@ function onceStep(
         const errors = failuresOf(error);
         return {
           kind: "progress",
-          delta: { found: errors.length, failed: errors.length },
+          delta: { failed: errors.length },
           errors,
           done: true,
         };
       }
-      const failed = outcome.errors?.length ?? 0;
       return {
         kind: "progress",
-        delta: {
-          found: outcome.found + failed,
-          done: outcome.done ?? outcome.found,
-          failed,
-        },
+        delta: { done: outcome.done, failed: outcome.errors?.length ?? 0 },
         ...(outcome.errors?.length && { errors: outcome.errors }),
         ...(outcome.meta && { meta: outcome.meta }),
         done: !outcome.more,
@@ -118,11 +111,16 @@ function onceStep(
 
 const imageRef = (id: string) => `image:${id}`;
 
-function exifStep(ports: MaintenancePorts): StepDriver {
+function exifStep(
+  ports: MaintenancePorts,
+): StepDriversFor<"maintenance">["exif"] {
   const pageSize = ports.pageSize?.exif ?? 50;
   return {
-    key: "exif",
-    label: "EXIF/GPS extraction",
+    count: async ({ db }) => ({
+      total: await countImagesStaleMetadata(db),
+      // The keyset cursor walks the backlog once; rows that leave it end `removed`.
+      boundary: null,
+    }),
     page: async (context) => {
       const { db, step } = context;
       const retried = retryRefs(context, "image:").map((id) =>
@@ -157,13 +155,9 @@ function exifStep(ports: MaintenancePorts): StepDriver {
         rows.map((row) => row.id),
         ports,
       );
-      const processed = step.done + step.failed + step.skipped + rows.length;
       return {
         kind: "progress",
         delta: counts.delta,
-        // Found is what this pass handled plus what is still waiting.
-        found:
-          processed + (rows.length ? await countImagesStaleMetadata(db) : 0),
         errors: counts.errors,
         cursor: rows.at(-1)?.cursor ?? cursor,
         done: rows.length < pageSize,
@@ -217,8 +211,6 @@ async function extractImages(
 function imageBackfillStep(ports: MaintenancePorts): StepDriver {
   const pageSize = ports.pageSize?.imageBackfill ?? 5;
   return {
-    key: "image-backfill",
-    label: "Image work admission",
     page: async ({ db, step, run }) => {
       const after = z
         .object({ createdAt: z.string(), id: z.string() })
@@ -233,7 +225,6 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
       return {
         kind: "progress",
         delta: { done: page.scheduled },
-        found: step.done + page.scheduled,
         ...(last ? { cursor: last.cursor } : {}),
         done: page.images.length < pageSize,
       };
@@ -242,23 +233,25 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
 }
 
 /**
- * One driver per backlog, in order. The paid image backfill is last: a budget
- * pause stops the whole Run, so every free backlog drains before it.
+ * One driver per declared maintenance step (`RUN_KINDS.maintenance`); the
+ * manifest owns their order. The paid image backfill is last: a budget pause
+ * stops the whole Run, so every free backlog drains before it.
  */
-export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
-  return [
-    onceStep("ai-refresh", "AI refresh observation", async () => {
+export function maintenanceStepDrivers(
+  ports: MaintenancePorts = {},
+): StepDriversFor<"maintenance"> {
+  return {
+    "ai-refresh": onceStep(async () => {
       const egress = getAiGatewayEgress(CUBBY_AI_GATEWAY_ID);
       if (import.meta.env.CUBBY_LOCAL_RUNTIME || isE2eAuthTestMode() || !egress)
-        return { found: 0, meta: detail({ observed: false }) };
+        return { done: 0, meta: detail({ observed: false }) };
       await egress.observeAiRefresh();
-      return { found: 0, meta: detail({ observed: true }) };
+      return { done: 1, meta: detail({ observed: true }) };
     }),
-    onceStep("image-repair", "Image processing repair", async ({ db }) => {
+    "image-repair": onceStep(async ({ db }) => {
       const repaired = await repairImageProcessingWork(db);
-      const found = repaired.orphans + repaired.executorless;
       return {
-        found,
+        done: repaired.orphans + repaired.executorless,
         more: repaired.more,
         meta: detail({
           orphans: repaired.orphans,
@@ -266,40 +259,44 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
         }),
       };
     }),
-    exifStep(ports),
-
-    onceStep("pending-uploads", "Abandoned uploads", async ({ db }) => {
-      const found = await countCullablePendingImages(db, PENDING_UPLOAD_HOURS);
-      if (!found) return { found: 0 };
-      const culled = await cullPendingImageStorage(db, PENDING_UPLOAD_HOURS);
-      return {
-        found,
-        done: culled.count,
-        more: culled.count > 0 && culled.count < found,
-      };
-    }),
-    onceStep("photo-runs", "Photo Run advance", async ({ db }) => {
+    exif: exifStep(ports),
+    "pending-uploads": {
+      count: async ({ db }) => ({
+        total: await countCullablePendingImages(db, PENDING_UPLOAD_HOURS),
+        boundary: null,
+      }),
+      page: async ({ db, step }) => {
+        if (!step.found) return { kind: "progress", done: true };
+        const culled = await cullPendingImageStorage(db, PENDING_UPLOAD_HOURS);
+        return {
+          kind: "progress",
+          delta: { done: culled.count },
+          done: culled.count === 0 || step.done + culled.count >= step.found,
+        };
+      },
+    },
+    "photo-runs": onceStep(async ({ db }) => {
       const { advanceWaitingPhotoRuns } =
         await import("~/server/domains/photo-import/repo/run/lifecycle");
-      return { found: await advanceWaitingPhotoRuns(db) };
+      return { done: await advanceWaitingPhotoRuns(db) };
     }),
-    onceStep("coordinators", "Coordinator retirement", async ({ db }) => {
+    coordinators: onceStep(async ({ db }) => {
       const { retireCoordinators } =
         await import("~/server/workflows/catch-up");
       const retired = await retireCoordinators(
         db,
         new Date(Date.now() - RETIRE_COORDINATORS_AFTER_MS),
       );
-      return { found: retired?.retired ?? 0 };
+      return { done: retired?.retired ?? 0 };
     }),
-    onceStep("runs", "Stale and routine Runs", async ({ db }) => {
+    runs: onceStep(async ({ db }) => {
       const { maintainRunHistory } =
         await import("~/server/workflows/catch-up");
       const history = await maintainRunHistory(db);
       return {
         // Pruned history is not backlog: counting it would keep every pass
         // that prunes from ever being routine itself.
-        found: history.expired + history.reconciled,
+        done: history.expired + history.reconciled,
         errors: history.failures.map((entry) =>
           failure(
             `Stale Run could not be moved to review: ${entry.error}`,
@@ -313,7 +310,7 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
         }),
       };
     }),
-    onceStep("original-disposal", "Email original disposal", async ({ db }) => {
+    "original-disposal": onceStep(async ({ db }) => {
       const [
         { disposeUnrelatedOriginals, disposeExpiredSearchOriginals },
         { productionOrderMailAttachmentStorage },
@@ -326,7 +323,7 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
         disposeExpiredSearchOriginals(db, productionOrderMailAttachmentStorage),
       ]);
       return {
-        found: results.reduce(
+        done: results.reduce(
           (total, result) =>
             total + (result.status === "fulfilled" ? result.value : 0),
           0,
@@ -336,28 +333,28 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
         ),
       };
     }),
-    onceStep("derived-refresh", "Derived work admission", async ({ db }) => {
+    "derived-refresh": onceStep(async ({ db }) => {
       await (
         await import("~/server/generic/derived-refresh/repo/families")
       ).scheduleRefreshFamilies(db, { invalidate: true });
-      return { found: 0, meta: detail({ admitted: true }) };
+      return { done: 0, meta: detail({ admitted: true }) };
     }),
-    onceStep("calendar", "Calendar refresh", async () => {
+    calendar: onceStep(async () => {
       const origin = getAppOrigin();
-      if (!origin) return { found: 0, meta: detail({ refreshed: false }) };
+      if (!origin) return { done: 0, meta: detail({ refreshed: false }) };
       const { calendarFeedStateFor } =
         await import("~/server/domains/calendar/repo/client");
       await (await calendarFeedStateFor(origin)).refreshNow("cron.daily");
-      return { found: 0, meta: detail({ refreshed: true }) };
+      return { done: 0, meta: detail({ refreshed: true }) };
     }),
-    onceStep("mail-discovery", "Mail discovery", async ({ db }) => {
+    "mail-discovery": onceStep(async ({ db }) => {
       // Each mailbox's pass is its own `mail_discovery` Run with its own
       // history; this step only starts them, so it is never backlog.
       const { discoverPurchases } = await import("~/server/workflows/catch-up");
       try {
         const { mail } = await discoverPurchases(db);
         return {
-          found: 0,
+          done: 0,
           meta: detail({
             started: mail?.started ?? 0,
             running: mail?.running ?? 0,
@@ -366,12 +363,9 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
         };
       } catch (error) {
         if (!(error instanceof AggregateError)) throw error;
-        return { found: 0, errors: failuresOf(error) };
+        return { done: 0, errors: failuresOf(error) };
       }
     }),
-    imageBackfillStep(ports),
-  ];
+    "image-backfill": imageBackfillStep(ports),
+  };
 }
-
-export const maintenanceDrivers: StepRunDrivers = async () =>
-  maintenanceSteps();
