@@ -146,8 +146,10 @@
     <p>
       <strong>Scope:</strong> one bounded server page, two Project records, and
       optimistic writes. This proves collection behavior, not a production
-      migration. The separate on-demand loading probe requested an unbounded
-      fallback and was rejected.
+      migration. The separate on-demand probe now stays bounded with lexical
+      cursor ordering and a direct left join. Deep offset pages still load their
+      preceding rows; production ordering and freshness need a generic
+      integration.
     </p>
     <section>
       <h2>Guided walkthroughs</h2>
@@ -4932,19 +4934,19 @@
           pe(([, y]) => {
             let O = {};
             if (o) {
-              for (let [ne, Be] of Object.entries(o))
-                O[ne] = Be.type === "agg" ? y[ne] : void 0;
+              for (let [ie, Be] of Object.entries(o))
+                O[ie] = Be.type === "agg" ? y[ie] : void 0;
               jC(O, y, v, l);
             } else
-              for (let ne = 0; ne < t.length; ne++)
-                O[`__key_${ne}`] = y[l.groupValues[ne]];
+              for (let ie = 0; ie < t.length; ie++)
+                O[`__key_${ie}`] = y[l.groupValues[ie]];
             let P = c ? Bm(y, l) : void 0,
               N = P?.correlationKey,
               A = c ? OC(y, l) : void 0,
               E = [],
               U = [];
-            for (let ne = 0; ne < t.length; ne++)
-              (E.push(y[l.groupKeys[ne]]), U.push(y[l.groupValues[ne]]));
+            for (let ie = 0; ie < t.length; ie++)
+              (E.push(y[l.groupKeys[ie]]), U.push(y[l.groupValues[ie]]));
             A !== void 0 && E.push(A);
             let W = f
                 ? A !== void 0
@@ -4954,18 +4956,18 @@
                   ? E[0]
                   : Je(E),
               q = f ? "single_group" : _C(U),
-              oe = { ...y, $selected: O },
+              ne = { ...y, $selected: O },
               B = y[l.virtual];
             return (
-              (oe.$synced = B?.synced ?? !0),
-              (oe.$hasPendingWrites = !oe.$synced),
-              (oe.$origin = B?.hasLocal ? "local" : "remote"),
-              (oe.$key = q),
-              (oe.$collectionId = a ?? oe.$collectionId),
+              (ne.$synced = B?.synced ?? !0),
+              (ne.$hasPendingWrites = !ne.$synced),
+              (ne.$origin = B?.hasLocal ? "local" : "remote"),
+              (ne.$key = q),
+              (ne.$collectionId = a ?? ne.$collectionId),
               c &&
                 N !== void 0 &&
-                (SC(oe, q), ln(oe, N, P?.parentContext ?? null)),
-              [c ? W : q, oe]
+                (SC(ne, q), ln(ne, N, P?.parentContext ?? null)),
+              [c ? W : q, ne]
             );
           }),
         )),
@@ -4981,8 +4983,8 @@
               let E = A.$selected;
               if (l.groupKeyRefs.length > 0) {
                 let q = { ...E };
-                (l.groupKeyRefs.forEach((oe, B) => {
-                  q[oe] = A[l.groupValues[B]];
+                (l.groupKeyRefs.forEach((ne, B) => {
+                  q[ne] = A[l.groupValues[B]];
                 }),
                   (E = q));
               }
@@ -5317,14 +5319,14 @@
         }
         if ($ && O) {
           let P = FC(n, r.compareOptions),
-            N = n.every(({ expression: ne }) =>
-              ne.type !== "ref" ? !1 : Ln(e, ne, r)?.sourceId === $,
+            N = n.every(({ expression: ie }) =>
+              ie.type !== "ref" ? !1 : Ln(e, ie, r)?.sourceId === $,
             ),
             A = Le(new ye(O.path), !0),
             E = vr(P[0].compareOptions),
-            U = (ne, Be) => E(ne && A(ne), Be && A(Be)),
+            U = (ie, Be) => E(ie && A(ie), Be && A(Be)),
             W =
-              e.where?.some((ne) => [...Lm(Wr(ne))].some((Be) => Be !== b)) ??
+              e.where?.some((ie) => [...Lm(Wr(ie))].some((Be) => Be !== b)) ??
               !1,
             q =
               W &&
@@ -5333,7 +5335,7 @@
               e.join[0].from.type === "collectionRef"
                 ? e.join[0].from.sourceId
                 : void 0,
-            oe = {
+            ne = {
               sourceId: $,
               alias: b,
               offset: c ?? 0,
@@ -5346,12 +5348,12 @@
               sourceHoldsAllRows: O.collection.config.syncMode !== "on-demand",
               requiresFullSource:
                 P.some(
-                  ({ compareOptions: ne }) => ne.stringSort === "custom",
+                  ({ compareOptions: ie }) => ie.stringSort === "custom",
                 ) ||
                 !N ||
                 e.from.type !== "collectionRef" ||
                 e.from.sourceId !== $ ||
-                (e.join?.some(({ type: ne }) => ne !== "left") ?? !1) ||
+                (e.join?.some(({ type: ie }) => ie !== "left") ?? !1) ||
                 (e.where?.some(wa) ?? !1) ||
                 (W && q === void 0) ||
                 (e.fnWhere?.length ?? 0) > 0 ||
@@ -5360,13 +5362,13 @@
                 e.fnHaving !== void 0 ||
                 e.distinct === !0,
             };
-          ((h = oe), (o[$] = oe));
-          let B = oe.joinedFilterSourceId !== void 0 && !oe.sourceHoldsAllRows;
+          ((h = ne), (o[$] = ne));
+          let B = ne.joinedFilterSourceId !== void 0 && !ne.sourceHoldsAllRows;
           (m || B) &&
-            (p = (ne) => {
-              oe.dataNeeded = (Be) => {
-                let Ze = ne(Be && ((le) => U(le[b], Be) <= 0));
-                return Math.max(0, oe.limit - Ze);
+            (p = (ie) => {
+              ne.dataNeeded = (Be) => {
+                let Ze = ie(Be && ((le) => U(le[b], Be) <= 0));
+                return Math.max(0, ne.limit - Ze);
               };
             });
         }
@@ -6253,14 +6255,14 @@
             let U = new Set();
             for (let W of E.operations) {
               let q = W.key,
-                oe =
+                ne =
                   this.isLocalOnly ||
                   this.pendingLocalChanges.has(q) ||
                   this.pendingLocalOrigins.has(q) ||
                   U.has(q)
                     ? "local"
                     : "remote";
-              (oe === "local" && U.add(q),
+              (ne === "local" && U.add(q),
                 this.dE.delete(q),
                 W.type === "delete"
                   ? (this.syncedData.delete(q, u),
@@ -6273,7 +6275,7 @@
                         : W.value,
                       u,
                     ),
-                    this.rowOrigins.set(q, oe)),
+                    this.rowOrigins.set(q, ne)),
                 this.pendingLocalChanges.delete(q),
                 this.pendingLocalOrigins.delete(q),
                 this.isDeferredSyncKey(q) || this.heldOptimisticRows.delete(q),
@@ -6318,7 +6320,7 @@
                   ? U.previousValue
                   : void 0,
               q = !o && !h.has(E) && !m.has(E) && W !== void 0 ? W : v.get(E),
-              oe = this.get(E),
+              ne = this.get(E),
               B =
                 this.preSyncVirtualState.get(E) ??
                 this.ak(E, {
@@ -6326,8 +6328,8 @@
                   optimisticUpserts: h,
                   optimisticDeletes: m,
                 }),
-              ne = this.ak(E),
-              Be = B.$synced !== ne.$synced || B.$origin !== ne.$origin,
+              ie = this.ak(E),
+              Be = B.$synced !== ie.$synced || B.$origin !== ie.$origin,
               Ze = (le) =>
                 yx(
                   le,
@@ -6337,16 +6339,16 @@
                   () => B.$origin,
                 );
             if (q === void 0) {
-              if (oe === void 0) continue;
-              b.push({ type: "insert", key: E, value: oe });
+              if (ne === void 0) continue;
+              b.push({ type: "insert", key: E, value: ne });
             } else
-              oe === void 0
+              ne === void 0
                 ? b.push({ type: "delete", key: E, value: Ze(q) })
-                : (Be || !Ee(q, oe)) &&
+                : (Be || !Ee(q, ne)) &&
                   b.push({
                     type: "update",
                     key: E,
-                    value: oe,
+                    value: ne,
                     previousValue: Ze(q),
                   });
           }
@@ -7453,19 +7455,19 @@
           h = p ? ro(p) : void 0,
           m = (B) => {
             if (B !== void 0 && this.aC.has(B)) return !1;
-            let ne = this.collection.get(B);
-            return ne === void 0 ? !1 : (h?.(ne) ?? !0);
+            let ie = this.collection.get(B);
+            return ie === void 0 ? !1 : (h?.(ie) ?? !0);
           },
           v = d,
           b = [],
           $ = [];
         if (u) {
           let { expression: B } = n[0],
-            ne = this.collection.currentStateAsChanges({
+            ie = this.collection.currentStateAsChanges({
               where: $i(B, new et(d)),
             });
-          if (ne) {
-            let Be = ne.map((le) => le.key).filter(m);
+          if (ie) {
+            let Be = ie.map((le) => le.key).filter(m);
             $.push(...Be);
             let Ze = f.take(i - $.length, d, m);
             $.push(...Ze);
@@ -7477,9 +7479,9 @@
           P = O.type === "ref" ? Le(new ye(Zr(O)), !0) : null;
         for (; I() > 0 && !y();) {
           for (let B of $) {
-            let ne = this.collection.get(B);
-            (b.push({ type: "insert", key: B, value: ne }),
-              (v = P ? P(ne) : ne));
+            let ie = this.collection.get(B);
+            (b.push({ type: "insert", key: B, value: ie }),
+              (v = P ? P(ie) : ie));
           }
           $ = f.take(I(), v, m);
         }
@@ -7501,11 +7503,11 @@
             offset: o ?? 0,
             subscription: this,
           },
-          { demand: W, result: q, started: oe } = this.dD(U);
+          { demand: W, result: q, started: ne } = this.dD(U);
         this.a4(W) &&
           (a?.(q, W.acquisition.options, (B) => this.e6(W, B)),
           this.a4(W) &&
-            (oe && this.co(q, W, W.acquisition.options, s), this.a4(W)));
+            (ne && this.co(q, W, W.acquisition.options, s), this.a4(W)));
       }
       d0(t) {
         if (((t = this.cy(t)), this.loadedInitialState || this.ej)) return t;
@@ -12460,14 +12462,14 @@
                 : "unknown";
         },
         W = Hc(t.on).map(([Ae, nt]) => tN(Ae, nt, A, U)),
-        { mainExpr: q, joinedExpr: oe } = W[0],
+        { mainExpr: q, joinedExpr: ne } = W[0],
         B = W.some(({ joinedExpr: Ae }) =>
           Ut(Ae).some((nt) => {
             let Un = U(nt);
             return Un === "ancestor" || Un === "unknown";
           }),
         ),
-        ne =
+        ie =
           P !== void 0 &&
           (t.from.type === "queryRef" ||
             ((t.type === "right" || t.type === "full") && !I) ||
@@ -12492,7 +12494,7 @@
           b,
           $,
           y,
-          ne ? P : void 0,
+          ie ? P : void 0,
         );
       if (Be !== A) throw new ss();
       ((n[A] = Ze), N && (v[A] = le));
@@ -12501,13 +12503,13 @@
       if (!Er) throw new os(i);
       if (!xt) throw new os(le);
       let oi = sN(t.type, Er, xt, I),
-        ht = ne ? void 0 : oi.activeSource,
+        ht = ie ? void 0 : oi.activeSource,
         zt = oi.lazySource,
         Pt = W.map((Ae) => Le(Ae.mainExpr)),
         tr = W.map((Ae) => Le(Ae.joinedExpr)),
-        si = e.pipe(pe(([Ae, nt]) => Fk(Ae, nt, r, "main", Pt, ne, y))),
+        si = e.pipe(pe(([Ae, nt]) => Fk(Ae, nt, r, "main", Pt, ie, y))),
         Ur = Ze.pipe(
-          pe(([Ae, nt]) => Fk(Ae, XA(A, nt), A, "joined", tr, ne, y)),
+          pe(([Ae, nt]) => Fk(Ae, XA(A, nt), A, "joined", tr, ie, y)),
         );
       if (!["inner", "left", "right", "full"].includes(t.type))
         throw new vc(t.type);
@@ -12521,7 +12523,7 @@
           pr =
             Ae.type === "unionAll"
               ? []
-              : Fd(h, Ae, ht === "main" ? A : r, ht === "main" ? oe : q, zt, b);
+              : Fd(h, Ae, ht === "main" ? A : r, ht === "main" ? ne : q, zt, b);
         if (!nt && pr.length > 0) {
           for (let rr of pr) d.add(rr.sourceId);
           let Mr = pr.map((rr) => zg(l, rr)),
@@ -12617,8 +12619,8 @@
           P && P !== e.alias && (f[e.alias] = P);
           let A = $.pipeline.pipe(
             pe((E) => {
-              let [U, [W, q, oe, B, ne]] = E;
-              return m ? [U, jc(W, oe, B, ne)] : [U, W];
+              let [U, [W, q, ne, B, ie]] = E;
+              return m ? [U, jc(W, ne, B, ie)] : [U, W];
             }),
           );
           return { alias: e.alias, input: A, collectionId: $.collectionId };
@@ -12973,16 +12975,16 @@
           collectionId: U,
           pipeline: W,
           sources: q,
-          sourceIncludes: oe,
+          sourceIncludes: ne,
           directIncludes: B,
-          isUnionFrom: ne,
+          isUnionFrom: ie,
           isParentRouted: Be,
         } = yN(y.from, O, n, i, r, o, s, Rg, c, u, P, N, I, l);
       Object.assign(A, q);
-      let Ze = l !== void 0 || oe.length > 0 || B.length > 0,
+      let Ze = l !== void 0 || ne.length > 0 || B.length > 0,
         le = W,
         Er = d?.path[0],
-        xt = !ne && !Be && l !== void 0 && d !== void 0 && Er === E;
+        xt = !ie && !Be && l !== void 0 && d !== void 0 && Er === E;
       if (l && d && xt) {
         let K = A[E],
           Q = K,
@@ -13054,12 +13056,12 @@
               return dn(K(Y));
             }),
           );
-      let ht = [...B, ...oe.map(({ include: K }) => K)],
+      let ht = [...B, ...ne.map(({ include: K }) => K)],
         zt = !!y.fnSelect && ht.length > 0,
         Pt = y.select ? [] : [...B],
         tr = [],
         si = [
-          ...oe.map(({ sourceAlias: K, include: Q }) => ({
+          ...ne.map(({ sourceAlias: K, include: Q }) => ({
             include: Q,
             keyPrefix: `${K}.`,
             paths:
@@ -13274,9 +13276,9 @@
               pe(([K, Q]) => {
                 let re = Tc(Q),
                   Y =
-                    ne && re
+                    ie && re
                       ? re.value
-                      : !ne && !y.join && !y.groupBy
+                      : !ie && !y.join && !y.groupBy
                         ? Q[E]
                         : Q;
                 return [K, { ...Q, $selected: Y }];
@@ -13538,11 +13540,11 @@
         } = Jk(y, t, n, i, r, o, s, a, c, u, l, d, f, p);
         ($ || (($ = O), (I = N)), (m[O] = P), v.push(...A));
         let W = (p && !E ? eI(Gd(P, O), p, O, h) : Gd(P, O)).pipe(
-          pe(([q, oe]) => {
+          pe(([q, ne]) => {
             let B = `${O}:${Hd(q)}`,
-              Be = oe[O]?.[Dt] ?? q,
+              Be = ne[O]?.[Dt] ?? q,
               Ze = `${O}:${Hd(Be)}`,
-              le = p ? { ...oe, [Dt]: Ze, [O]: { ...oe[O], [Dt]: Ze } } : oe;
+              le = p ? { ...ne, [Dt]: Ze, [O]: { ...ne[O], [Dt]: Ze } } : ne;
             return [B, le];
           }),
         );
@@ -13583,11 +13585,11 @@
         for (let [A, E] of P.sourceWhereClauses) f.set(A, E);
         let N = P.pipeline.pipe(
           pe((A) => {
-            let [E, [U, W, q, oe, B]] = A,
-              ne = `${y}:${Hd(E)}`,
+            let [E, [U, W, q, ne, B]] = A,
+              ie = `${y}:${Hd(E)}`,
               Be = `${y}:${Hd(B ?? E)}`,
-              Ze = p ? jc(U, q, oe, Be) : U;
-            return [ne, Ze];
+              Ze = p ? jc(U, q, ne, Be) : U;
+            return [ie, Ze];
           }),
         );
         b = b ? b.pipe(Al(N)) : N;
@@ -13667,8 +13669,8 @@
           y && y !== e.alias && (d[e.alias] = y);
           let P = v.pipeline.pipe(
             pe((N) => {
-              let [A, [E, U, W, q, oe]] = N,
-                B = jc(iI(E), W, q, oe);
+              let [A, [E, U, W, q, ne]] = N,
+                B = jc(iI(E), W, q, ne);
               return [A, B];
             }),
           );
@@ -19229,7 +19231,7 @@
         U = typeof t == "function" ? t({}) : t,
         W = A === "on-demand" && typeof t != "function" ? U : void 0,
         q = W && vt(W),
-        oe = (M) => {
+        ne = (M) => {
           if (typeof t != "function") return;
           (M.length >= U.length && U.every((X, H) => Ee(X, M[H]))) ||
             console.warn(
@@ -19241,7 +19243,7 @@
       if (!r) throw new $f();
       if (!$) throw new _f();
       let B = { lastError: void 0, errorCount: 0, observers: new Map() },
-        ne = 0,
+        ie = 0,
         Be = new WeakMap(),
         Ze = new WeakMap(),
         le = new WeakSet(),
@@ -19498,14 +19500,14 @@
                     T &&
                       ((T = !1),
                       G(),
-                      te.delete(ie),
+                      te.delete(oe),
                       te.size === 0 && Zt.delete(k),
                       fe());
                   },
-                  ie = () => {
+                  oe = () => {
                     ce(() => Z(z()));
                   };
-                (te.add(ie),
+                (te.add(oe),
                   Zt.set(k, te),
                   (G = g.subscribe((fe) => {
                     queueMicrotask(() => {
@@ -19527,7 +19529,7 @@
                 for (;;) {
                   if (!G.isSuccess) return G;
                   if (
-                    (await new Promise((ie) => queueMicrotask(ie)),
+                    (await new Promise((oe) => queueMicrotask(oe)),
                     ee.deferDataRefresh)
                   ) {
                     G = await Z_(T, g, () => new Ft());
@@ -19648,9 +19650,9 @@
                 let te = new Map();
                 return (
                   V.forEach((ce) => {
-                    let ie = ee.get(ce),
+                    let oe = ee.get(ce),
                       fe = Ne.get(ce);
-                    ie && fe && te.set(ce, { value: ie, owners: new Set(fe) });
+                    oe && fe && te.set(ce, { value: oe, owners: new Set(fe) });
                   }),
                   te
                 );
@@ -19660,9 +19662,9 @@
                 let te = new Map();
                 return (
                   G_(g).forEach((ce) => {
-                    let ie = ee.get(ce),
+                    let oe = ee.get(ce),
                       fe = Ne.get(ce);
-                    ie && fe && te.set(ce, { value: ie, owners: new Set(fe) });
+                    oe && fe && te.set(ce, { value: oe, owners: new Set(fe) });
                   }),
                   te
                 );
@@ -19673,11 +19675,11 @@
               let G = T.map((te) => Vh(te.metadata, te.key));
               return (
                 T.forEach((te, ce) => {
-                  let ie = G[ce];
-                  ie.size !== 0 &&
-                    (Vi(te.key, ie),
-                    ie.has(g) &&
-                      Z.set(te.key, { value: te.value, owners: ie }));
+                  let oe = G[ce];
+                  oe.size !== 0 &&
+                    (Vi(te.key, oe),
+                    oe.has(g) &&
+                      Z.set(te.key, { value: te.value, owners: oe }));
                 }),
                 Z
               );
@@ -19765,8 +19767,8 @@
                   T = (ce) => {
                     if (!C) return;
                     C = !1;
-                    let ie = ct.get(k) - 1;
-                    (ie === 0 ? ct.delete(k) : ct.set(k, ie),
+                    let oe = ct.get(k) - 1;
+                    (oe === 0 ? ct.delete(k) : ct.set(k, oe),
                       Z.delete(G),
                       Z.size === 0 && Zt.delete(k),
                       ce());
@@ -19796,8 +19798,8 @@
                       await Li(g, k);
                       return;
                     }
-                    let ie = Fi(k);
-                    ie !== !0 && (await ie);
+                    let oe = Fi(k);
+                    oe !== !0 && (await oe);
                   })().then(
                     () => T(z),
                     (ce) => T(() => V(ce)),
@@ -19844,13 +19846,13 @@
                 G = C?.getCurrentResult(),
                 te = G !== void 0 && nt(q, G) !== void 0,
                 ce = xe?.collection.get(`${An}${V}`),
-                ie = bl(ce, V) !== void 0,
+                oe = bl(ce, V) !== void 0,
                 fe =
                   !g.refetch &&
                   W !== void 0 &&
                   q !== V &&
                   (Z ||
-                    (!ie &&
+                    (!oe &&
                       !B.observers.has(V) &&
                       (Jt.get(q) ?? 0) > 0 &&
                       G?.isSuccess === !0 &&
@@ -19873,7 +19875,7 @@
               if (
                 (bl(Mn, ae) !== void 0 && Ht.add(ae),
                 wl(ae),
-                oe(ge),
+                ne(ge),
                 B.observers.has(ae))
               ) {
                 (Jt.set(ae, (Jt.get(ae) || 0) + 1),
@@ -20093,7 +20095,7 @@
               let G = Z ?? oS(g, k),
                 te = new Map(ee._state.acceptedSyncedEntries()),
                 ce = V !== void 0,
-                ie = ce ? new Set(V.keys()) : G_(T),
+                oe = ce ? new Set(V.keys()) : G_(T),
                 fe = r.getQueryCache().find({ queryKey: g, exact: !0 }),
                 ge =
                   fe !== void 0 && Ss.get(fe) === fe.state.data
@@ -20101,7 +20103,7 @@
                     : void 0;
               if (A === "eager")
                 Q.forEach((Pe, Ve) => {
-                  te.has(Ve) && ge !== void 0 && ge > Pe && ie.add(Ve);
+                  te.has(Ve) && ge !== void 0 && ge > Pe && oe.add(Ve);
                 });
               else if (
                 ge !== void 0 &&
@@ -20127,7 +20129,7 @@
                       } catch {
                         return;
                       }
-                      ie.add(Ye);
+                      oe.add(Ye);
                     }
                   });
                 }
@@ -20146,7 +20148,7 @@
               let hr = new Map(),
                 di = new Set(),
                 on = We.get(T),
-                fi = new Set([...ie, ...ae.keys()]),
+                fi = new Set([...oe, ...ae.keys()]),
                 Mn = new Map();
               fi.forEach((Pe) => {
                 let Ve = Ne.get(Pe);
@@ -20184,11 +20186,11 @@
                 throw Pe;
               };
               try {
-                (We.set(T, new Set(ie)),
+                (We.set(T, new Set(oe)),
                   X(),
                   (pi = !0),
                   xe && xe.collection.delete(`${An}${T}`),
-                  ie.forEach((Ye) => {
+                  oe.forEach((Ye) => {
                     let ue = ce ? V.get(Ye)?.value : te.get(Ye),
                       ke = ae.get(Ye);
                     if (ke)
@@ -20205,7 +20207,7 @@
                   }),
                   ae.forEach((Ye, ue) => {
                     let ke = Q.get(ue);
-                    if (!ie.has(ue) && ke !== void 0 && (ge ?? 0) <= ke) return;
+                    if (!oe.has(ue) && ke !== void 0 && (ge ?? 0) <= ke) return;
                     ke !== void 0 && ge !== void 0 && ge > ke && hr.set(ue, ke);
                     let Ke = yl(ue),
                       nr = !Ke.has(T),
@@ -20214,7 +20216,7 @@
                       ha(ue, T),
                       Vn
                         ? H({ type: "insert", value: Ye })
-                        : !ie.has(ue) &&
+                        : !oe.has(ue) &&
                           (k.isFetchedAfterMount ||
                             (ke !== void 0 && ge !== void 0 && ge > ke)) &&
                           !Ee(te.get(ue), Ye) &&
@@ -20269,15 +20271,15 @@
                 te = await H_(T, G.length === 0);
               if (ee.status === "cleaned-up" || vn.get(T) !== z) throw new lt();
               let ce = K,
-                ie = r.getQueryCache().find({ queryKey: g, exact: !0 }),
-                fe = ie ? Rt.get(ie) : void 0,
+                oe = r.getQueryCache().find({ queryKey: g, exact: !0 }),
+                fe = oe ? Rt.get(oe) : void 0,
                 ge = Z !== void 0 && Z < ce ? iS(G, Z, T) : G;
               (await qh(g, k, z, te, V, ge),
                 Z !== void 0 &&
                   Z < ce &&
                   Se.get(T) === Z &&
-                  ie &&
-                  Rt.get(ie) === fe &&
+                  oe &&
+                  Rt.get(oe) === fe &&
                   Se.set(T, ce));
             },
             fP = (g, k, z, V) => {
@@ -20310,15 +20312,15 @@
               let V = Ro,
                 C = new AbortController(),
                 Z = () => {},
-                T = new Promise((ie) => {
-                  Z = ie;
+                T = new Promise((oe) => {
+                  Z = oe;
                 });
               ((C.settleRefetchAtFetchBoundary = Z), vn.set(g, C));
               let G;
               try {
                 G = z(C.signal, C);
-              } catch (ie) {
-                G = Promise.reject(ie);
+              } catch (oe) {
+                G = Promise.reject(oe);
               }
               if (G === !0) {
                 vn.get(g) === C &&
@@ -20359,11 +20361,11 @@
                           return;
                         if (!Mr(T)) {
                           queueMicrotask(() => {
-                            let ie = B.observers.get(k);
-                            ie &&
-                              ie === Z &&
-                              Mr(ie.getCurrentQuery()) &&
-                              V(ie.getCurrentResult());
+                            let oe = B.observers.get(k);
+                            oe &&
+                              oe === Z &&
+                              Mr(oe.getCurrentQuery()) &&
+                              V(oe.getCurrentResult());
                           });
                           return;
                         }
@@ -20371,13 +20373,13 @@
                           (K > 0 || Y > (Rt.get(T) ?? Y)) &&
                           T.state.dataUpdateCount > (fu.get(T) ?? 0)
                         ) {
-                          let ie = T.state.dataUpdateCount;
-                          if (Wt.get(T) !== ie) {
-                            (Wt.set(T, ie),
+                          let oe = T.state.dataUpdateCount;
+                          if (Wt.get(T) !== oe) {
+                            (Wt.set(T, oe),
                               queueMicrotask(() => {
                                 B.observers.get(k) === Z &&
                                   T.state.data === C.data &&
-                                  T.state.dataUpdateCount === ie &&
+                                  T.state.dataUpdateCount === oe &&
                                   V(C);
                               }));
                             return;
@@ -20425,7 +20427,7 @@
                       let ce = nS(g, C);
                       if (G && "items" in ce) {
                         Co++;
-                        let ie = (async () => {
+                        let oe = (async () => {
                             await dP();
                             let ge = B.observers.get(k);
                             if (ge?.getCurrentQuery() !== G) throw new Ft();
@@ -20462,7 +20464,7 @@
                           fe = () => {
                             Co--;
                           };
-                        (ie.then(fe, fe), K_(k, C, ie));
+                        (oe.then(fe, fe), K_(k, C, oe));
                         return;
                       }
                     }
@@ -20601,7 +20603,7 @@
                     H({ type: "delete", value: ae });
                   }),
                 te && xe.collection.delete(G));
-              let ie = ce ? me() : !0,
+              let oe = ce ? me() : !0,
                 fe = () => {
                   Z.forEach((ae) => {
                     let hr = $(ae);
@@ -20609,9 +20611,9 @@
                       re.delete(hr);
                   });
                 },
-                ge = no(ie);
+                ge = no(oe);
               (ge === !0 ? fe() : ge.then(fe, () => {}),
-                ie === !0 ? C() : ie.then(C, () => {}),
+                oe === !0 ? C() : oe.then(C, () => {}),
                 B.observers.delete(g),
                 k?.state.fetchStatus !== "fetching" && Se.delete(g),
                 Bt.delete(g),
@@ -20862,7 +20864,7 @@
           return await Promise.all(we);
         },
         ui = () => {
-          if (ne > 0) return !0;
+          if (ie > 0) return !0;
           for (let M of ga?.collection._state.transactions.values() ?? [])
             if (M.state === "persisting") return !0;
           return !1;
@@ -21092,11 +21094,11 @@
           await Do(void 0, !1));
       }
       let Uh = async (M, L) => {
-          ne++;
+          ie++;
           try {
             return await M(L);
           } finally {
-            ne--;
+            ie--;
           }
         },
         nP = I
@@ -24583,7 +24585,7 @@ ${n.join(`
                 W = U !== void 0,
                 q = E?._zod?.optout === "optional";
               if ((v.write(`const ${P} = ${b(N)};`), W && q)) {
-                let oe =
+                let ne =
                   U === "optional"
                     ? `${P}_present`
                     : `${P}.value !== undefined || ${P}_present`;
@@ -24593,7 +24595,7 @@ ${n.join(`
           if (${P}.issues.length) {${$(P, N)}
           }
 
-          if (${oe}) {
+          if (${ne}) {
             newResult[${N}] = ${P}.value;
           }
         }
@@ -39724,23 +39726,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                 throw Error("Prototype refuses an unbounded Task read");
               let E = [...i.values()];
               for (let q of P) {
-                let oe = q.field.at(-1);
+                let ne = q.field.at(-1);
                 if (
-                  !["id", "projectId"].includes(oe) ||
+                  !["id", "projectId"].includes(ne) ||
                   !["eq", "in"].includes(q.operator)
                 )
                   throw Error("Unsupported server predicate");
                 E = E.filter((B) =>
                   q.operator === "eq"
-                    ? B[oe] === q.value
-                    : q.value.includes(B[oe]),
+                    ? B[ne] === q.value
+                    : q.value.includes(B[ne]),
                 );
               }
               if (
                 N.some((q) => q.field.at(-1) !== "id" || q.direction !== "asc")
               )
                 throw Error("Unsupported server sort");
-              E.sort((q, oe) => q.id.localeCompare(oe.id));
+              E.sort((q, ne) => (q.id < ne.id ? -1 : q.id > ne.id ? 1 : 0));
               let U = y?.offset ?? 0,
                 W = E.length;
               return (
@@ -39791,7 +39793,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         ),
         h = ou((I) =>
           I.from({ task: f })
-            .orderBy(({ task: y }) => y.id, "asc")
+            .orderBy(({ task: y }) => y.id, {
+              direction: "asc",
+              stringSort: "lexical",
+            })
             .limit(2)
             .select(({ task: y }) => ({ ...y })),
         ),
@@ -39801,15 +39806,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             .select(({ task: y }) => ({ ...y })),
         ),
         v = ou((I) =>
-          I.from({ task: h })
-            .join({ project: p }, ({ task: y, project: O }) =>
+          I.from({ task: f })
+            .leftJoin({ project: p }, ({ task: y, project: O }) =>
               $i(y.projectId, O.id),
             )
+            .orderBy(({ task: y }) => y.id, {
+              direction: "asc",
+              stringSort: "lexical",
+            })
+            .limit(2)
             .select(({ task: y, project: O }) => ({
               id: y.id,
               name: y.name,
-              project: O.name,
-              projectId: O.id,
+              project: O?.name,
+              projectId: y.projectId,
             })),
         ),
         b = [h, m, v].map((I) => I.subscribeChanges(u));

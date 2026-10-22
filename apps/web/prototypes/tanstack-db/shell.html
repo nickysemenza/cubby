@@ -146,8 +146,10 @@
     <p>
       <strong>Scope:</strong> one bounded server page, two Project records, and
       optimistic writes. This proves collection behavior, not a production
-      migration. The separate on-demand loading probe requested an unbounded
-      fallback and was rejected.
+      migration. The separate on-demand probe now stays bounded with lexical
+      cursor ordering and a direct left join. Deep offset pages still load their
+      preceding rows; production ordering and freshness need a generic
+      integration.
     </p>
     <section>
       <h2>Guided walkthroughs</h2>

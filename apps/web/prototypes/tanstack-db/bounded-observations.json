@@ -1,0 +1,197 @@
+[
+  {
+    "args": [],
+    "exitCode": 0,
+    "observation": {
+      "verdict": "bounded read completed",
+      "rows": [
+        {
+          "id": "TSK-SYNTHETIC-00",
+          "name": "Synthetic Task 0"
+        },
+        {
+          "id": "TSK-SYNTHETIC-01",
+          "name": "Synthetic Task 1"
+        }
+      ],
+      "loaded": 2,
+      "server": 50,
+      "requests": [
+        {
+          "limit": 2,
+          "filters": [],
+          "offset": 0,
+          "returned": 2
+        },
+        {
+          "filters": [
+            {
+              "field": ["id"],
+              "operator": "eq",
+              "value": "TSK-SYNTHETIC-01"
+            }
+          ],
+          "offset": 0,
+          "returned": 1
+        }
+      ]
+    }
+  },
+  {
+    "args": ["--locale"],
+    "exitCode": 1,
+    "observation": {
+      "verdict": "bounded-loading guard refused the reproduction",
+      "error": "Refused unbounded fallback",
+      "requests": [
+        {
+          "limit": 2,
+          "filters": [],
+          "offset": 0,
+          "returned": 2
+        },
+        {
+          "filters": []
+        }
+      ]
+    }
+  },
+  {
+    "args": ["--offset=40"],
+    "exitCode": 0,
+    "observation": {
+      "verdict": "bounded read completed",
+      "rows": [
+        {
+          "id": "TSK-SYNTHETIC-40",
+          "name": "Synthetic Task 40"
+        },
+        {
+          "id": "TSK-SYNTHETIC-41",
+          "name": "Synthetic Task 41"
+        }
+      ],
+      "loaded": 42,
+      "server": 50,
+      "requests": [
+        {
+          "limit": 42,
+          "filters": [],
+          "offset": 0,
+          "returned": 42
+        },
+        {
+          "filters": [
+            {
+              "field": ["id"],
+              "operator": "eq",
+              "value": "TSK-SYNTHETIC-41"
+            }
+          ],
+          "offset": 0,
+          "returned": 1
+        }
+      ]
+    }
+  },
+  {
+    "args": ["--after=TSK-SYNTHETIC-39"],
+    "exitCode": 0,
+    "observation": {
+      "verdict": "bounded read completed",
+      "rows": [
+        {
+          "id": "TSK-SYNTHETIC-40",
+          "name": "Synthetic Task 40"
+        },
+        {
+          "id": "TSK-SYNTHETIC-41",
+          "name": "Synthetic Task 41"
+        }
+      ],
+      "loaded": 2,
+      "server": 50,
+      "requests": [
+        {
+          "limit": 2,
+          "filters": [
+            {
+              "field": ["id"],
+              "operator": "gt",
+              "value": "TSK-SYNTHETIC-39"
+            }
+          ],
+          "offset": 0,
+          "returned": 2
+        },
+        {
+          "filters": [
+            {
+              "field": ["id"],
+              "operator": "gt",
+              "value": "TSK-SYNTHETIC-39"
+            },
+            {
+              "field": ["id"],
+              "operator": "eq",
+              "value": "TSK-SYNTHETIC-41"
+            }
+          ],
+          "offset": 0,
+          "returned": 1
+        }
+      ]
+    }
+  },
+  {
+    "args": ["--join", "--after=TSK-SYNTHETIC-39"],
+    "exitCode": 0,
+    "observation": {
+      "verdict": "bounded read completed",
+      "rows": [
+        {
+          "id": "TSK-SYNTHETIC-40",
+          "name": "Synthetic Task 40",
+          "project": "Sample project"
+        },
+        {
+          "id": "TSK-SYNTHETIC-41",
+          "name": "Synthetic Task 41",
+          "project": "Sample project"
+        }
+      ],
+      "loaded": 2,
+      "server": 50,
+      "requests": [
+        {
+          "limit": 2,
+          "filters": [
+            {
+              "field": ["id"],
+              "operator": "gt",
+              "value": "TSK-SYNTHETIC-39"
+            }
+          ],
+          "offset": 0,
+          "returned": 2
+        },
+        {
+          "filters": [
+            {
+              "field": ["id"],
+              "operator": "gt",
+              "value": "TSK-SYNTHETIC-39"
+            },
+            {
+              "field": ["id"],
+              "operator": "eq",
+              "value": "TSK-SYNTHETIC-41"
+            }
+          ],
+          "offset": 0,
+          "returned": 1
+        }
+      ]
+    }
+  }
+]

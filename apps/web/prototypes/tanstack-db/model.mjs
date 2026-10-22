@@ -119,7 +119,7 @@ export async function createPrototype(
           )
         )
           throw Error("Unsupported server sort");
-        rows.sort((a, b) => a.id.localeCompare(b.id));
+        rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         const offset = subset?.offset ?? 0;
         const total = rows.length;
         rows = rows
@@ -170,7 +170,10 @@ export async function createPrototype(
   const list = createLiveQueryCollection((q) =>
     q
       .from({ task: tasks })
-      .orderBy(({ task }) => task.id, "asc")
+      .orderBy(({ task }) => task.id, {
+        direction: "asc",
+        stringSort: "lexical",
+      })
       .limit(2)
       .select(({ task }) => ({ ...task })),
   );
@@ -183,15 +186,20 @@ export async function createPrototype(
   // This join describes ONLY the bounded loaded page, not complete Project membership.
   const related = createLiveQueryCollection((q) =>
     q
-      .from({ task: list })
-      .join({ project: projects }, ({ task, project }) =>
+      .from({ task: tasks })
+      .leftJoin({ project: projects }, ({ task, project }) =>
         eq(task.projectId, project.id),
       )
+      .orderBy(({ task }) => task.id, {
+        direction: "asc",
+        stringSort: "lexical",
+      })
+      .limit(2)
       .select(({ task, project }) => ({
         id: task.id,
         name: task.name,
-        project: project.name,
-        projectId: project.id,
+        project: project?.name,
+        projectId: task.projectId,
       })),
   );
   const subscriptions = [list, detail, related].map((c) =>
