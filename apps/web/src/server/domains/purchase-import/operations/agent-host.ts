@@ -26,7 +26,6 @@ import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
-  PurchaseDispatchEnvironment,
   PurchaseImportRunAgentRpc,
 } from "~/server/domains/purchase-agent/service/environment";
 import {
@@ -105,17 +104,6 @@ function purchaseAgentEnvironment(
         ),
       }),
     settlementPollMs: testDurationOverrideMs(env.CUBBY_TEST_SETTLEMENT_POLL_MS),
-  };
-}
-
-/** The dispatch handler's environment: any Run's services and coordinator. */
-export function purchaseDispatchEnvironment(
-  env: Env,
-  ctx: HostContext,
-): PurchaseDispatchEnvironment {
-  return {
-    run: (runId) => runServicesFor(env, ctx, runId),
-    coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
   };
 }
 

@@ -74,7 +74,7 @@ export const productionJobHandlers: JobHandlers = {
       if (!env)
         throw new Error("Purchase dispatch host environment is unavailable");
       const { purchaseDispatchEnvironment } =
-        await import("~/server/domains/purchase-import/operations/agent-host");
+        await import("~/server/domains/purchase-import/operations/agent-services");
       const pending: Promise<unknown>[] = [];
       const outcome = await deliverPurchaseDispatch(
         event,

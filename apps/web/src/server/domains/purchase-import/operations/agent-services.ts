@@ -21,7 +21,10 @@ import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
-import type { RunServices } from "~/server/domains/purchase-agent/service/environment";
+import type {
+  PurchaseDispatchEnvironment,
+  RunServices,
+} from "~/server/domains/purchase-agent/service/environment";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
 
 /** The MCP endpoint the delegation bearer's audience names. */
@@ -101,6 +104,21 @@ export function authorizeLegacyRetirement(
       await import("../repo/run-retirement");
     await assertRetirableLegacySession(db, agentSessionId);
   });
+}
+
+/**
+ * The dispatch handler's environment: any Run's services and coordinator.
+ * It lives here, not beside the Durable Object, so the Job handler graph
+ * (which the Start transport reaches) never imports `cloudflare:workers`.
+ */
+export function purchaseDispatchEnvironment(
+  env: Env,
+  ctx: HostContext,
+): PurchaseDispatchEnvironment {
+  return {
+    run: (runId) => runServicesFor(env, ctx, runId),
+    coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
+  };
 }
 
 /** The services of `runId`, executing with this Worker's bindings. */

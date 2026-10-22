@@ -54,16 +54,12 @@ export function corpusTemplateHash(
     write: false,
     metafile: true,
     logLevel: "silent",
-    // Job handlers reach the purchase agent, whose prompts are `?raw` Markdown.
-    loader: { ".wasm": "file", ".md": "text" },
+    loader: { ".wasm": "file" },
     outdir: join(root, ".cubby-corpus-graph"),
   });
   for (const file of [
     ...new Set([
-      // `?raw` imports name the file they read.
-      ...Object.keys(graph.metafile.inputs).map((input) =>
-        input.replace(/\?raw$/u, ""),
-      ),
+      ...Object.keys(graph.metafile.inputs),
       ...globSync(
         [
           "../../packages/*/src/**/*.{ts,tsx,js,mjs,cjs,json,wasm}",
