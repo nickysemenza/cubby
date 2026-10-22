@@ -51,6 +51,11 @@ not be treated as ready merely because a fingerprint matches.
 
 ## Running
 
+iOS photo matching and library sync register their background-task launch callbacks
+on the main queue to match their `@MainActor` isolation. Background execution
+describes the app lifecycle; it does not require callback delivery on a background
+thread. The handlers retain their asynchronous work and expiration cancellation.
+
 `pnpm apple <command>` from the repo root ([tooling/apple.ts](tooling/apple.ts)) runs the
 build order above lazily (the xcframework from the Nx cache; xcodegen with `--use-cache`, so a
 `project.yml` edit regenerates and an unchanged spec is a no-op), prints each step's wall-clock
