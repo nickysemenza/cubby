@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { startOperation } from "./support/start-operation";
@@ -269,11 +270,7 @@ test("approves two selected photo groups with one reviewed batch action", async 
     `Selected batch ${Date.now()}`,
     e2eRuntime.objectStorageUrl,
   );
-  await gotoAuthenticatedPage(
-    page,
-    `/runs/${seed.runId}#work`,
-    page.getByRole("heading", { name: "Photo review" }),
-  );
+
   const proposed = await startOperation(
     page.request,
     "photoImport.saveGroups",
@@ -283,6 +280,11 @@ test("approves two selected photo groups with one reviewed batch action", async 
     },
   );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#work`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
 
   // Reviewing a batch must not require switching a single mounted editor;
   // selecting all still goes through the explicit, revision-checked approval.
@@ -369,7 +371,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await gotoAuthenticatedPage(
     page,
     `/runs/${seed.runId}#work`,
-    page.getByRole("heading", { name: "Photo review" }),
+    page.getByRole("heading", { name: "Work", exact: true }),
   );
 
   await openDetailActions(page);
@@ -564,11 +566,7 @@ test("suggests an existing variant and previews every merge decision for a creat
     create: { name: createdName },
   };
   seed.groups[0]!.review!.observedName = createdName;
-  await gotoAuthenticatedPage(
-    page,
-    `/runs/${seed.runId}#work`,
-    page.getByRole("heading", { name: "Photo review" }),
-  );
+
   await configureVariantDecisions(e2eRuntime.harness, [
     {
       feature: "product-variant-relation",
@@ -585,6 +583,11 @@ test("suggests an existing variant and previews every merge decision for a creat
     },
   );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#work`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
 
   const group = page.locator("[data-photo-group]").filter({
     has: page.getByRole("heading", { name: createdName }),
@@ -1036,58 +1039,58 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
 // their inputs, and the selected match must not repeat as a duplicate suggestion.
 // Wrong selections must stop being suggested, including after a new group key
 // inherits those photos. The create draft still exposes literal label gaps.
-test("distinguishes attach and create, exposes evidence, and suppresses rejected candidates after regroup", async ({
-  page,
-  e2eRuntime,
-}) => {
-  test.setTimeout(90_000);
-  const productName = "Synthetic shell jacket blue XL";
+async function seedEvidenceReview(
+  page: Page,
+  objectStorageUrl: string,
+  evidence = false,
+) {
+  const productName = `Synthetic shell jacket blue XL ${Date.now()}`;
   const existing = await createEntityFixture(page, "product", {
     name: productName,
     manufacturer: "Synthetic Outfitters",
     model: "SJ-104",
-    externalIds: [{ source: "amazon", kind: "asin", externalId: "B0SYNTH123" }],
+    externalIds: evidence
+      ? [{ source: "amazon", kind: "asin", externalId: "B0SYNTH123" }]
+      : [],
   });
   const runName = `Synthetic evidence ${Date.now()}`;
-  const seed = await seedPhotoGroupReviewRun(
-    page,
-    runName,
-    e2eRuntime.objectStorageUrl,
-  );
+  const seed = await seedPhotoGroupReviewRun(page, runName, objectStorageUrl);
   await seedPhotoReviewLabelText(
     seed.soloImage.shortcode,
     "Synthetic shell jacket blue XL",
   );
-  const cover = await seedImagePrerequisite(
-    "Synthetic jacket cover",
-    e2eRuntime.objectStorageUrl,
-  );
-  await attachProductImagePrerequisite(page, cover.id, existing.id, "item");
-  const vendor = await createEntityFixture(page, "vendor", {
-    name: "Example Outfitters",
-    website: "https://example.test",
-  });
-  const purchase = await createEntityFixture(page, "purchase", {
-    vendorId: vendor.id,
-    orderId: "Synthetic jacket order",
-    date: "2026-03-04",
-    defaultTrade: "other",
-  });
-  await createEntityFixture(page, "expense", {
-    name: "Synthetic jacket purchase",
-    purchaseId: purchase.id,
-    trade: "other",
-    costType: "materials",
-    cost: 49,
-    date: "2026-03-04",
-    productId: existing.id,
-    productQuantity: 1,
-  });
-  await createEntityFixture(page, "inventory", {
-    productId: existing.id,
-    locationId: seed.location.id,
-    amount: { value: 1, unit: "ea" },
-  });
+  if (evidence) {
+    const cover = await seedImagePrerequisite(
+      "Synthetic jacket cover",
+      objectStorageUrl,
+    );
+    await attachProductImagePrerequisite(page, cover.id, existing.id, "item");
+    const vendor = await createEntityFixture(page, "vendor", {
+      name: "Example Outfitters",
+      website: "https://example.test",
+    });
+    const purchase = await createEntityFixture(page, "purchase", {
+      vendorId: vendor.id,
+      orderId: "Synthetic jacket order",
+      date: "2026-03-04",
+      defaultTrade: "other",
+    });
+    await createEntityFixture(page, "expense", {
+      name: "Synthetic jacket purchase",
+      purchaseId: purchase.id,
+      trade: "other",
+      costType: "materials",
+      cost: 49,
+      date: "2026-03-04",
+      productId: existing.id,
+      productQuantity: 1,
+    });
+    await createEntityFixture(page, "inventory", {
+      productId: existing.id,
+      locationId: seed.location.id,
+      amount: { value: 1, unit: "ea" },
+    });
+  }
   const groups = [
     {
       ...seed.groups[0]!,
@@ -1121,6 +1124,18 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
+  return { productName, runName, seed, groups };
+}
+
+test("distinguishes attach and create and exposes saved photo evidence", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const { productName, runName, seed } = await seedEvidenceReview(
+    page,
+    e2eRuntime.objectStorageUrl,
+    true,
+  );
   await gotoAuthenticatedPage(
     page,
     `/runs/${seed.runId}#photo-group-g1`,
@@ -1261,9 +1276,6 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   ).toBeVisible();
   await expect(nameField.getByText(/Label:|Label differs/)).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
-
-  await page.setViewportSize({ width: 1440, height: 1000 });
   await create.getByRole("button", { name: /^Add ‘xl’ to name$/i }).click();
   await expect(
     create.getByRole("textbox", { name: "New product name", exact: true }),
@@ -1297,10 +1309,21 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attachChecks.getByText("Matches the label").first(),
   ).toBeAttached();
+});
 
-  await page.setViewportSize({ width: 390, height: 844 });
-
-  await page.setViewportSize({ width: 1440, height: 1000 });
+test("keeps proposed edits separate while saved product evidence loads, fails, and recovers", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const { seed, groups } = await seedEvidenceReview(
+    page,
+    e2eRuntime.objectStorageUrl,
+  );
+  await seedPhotoReviewLabelText(
+    seed.itemImage.shortcode,
+    "Synthetic Outfitters\nSJ-104\nSynthetic shell jacket blue XL",
+  );
+  const attach = page.locator("#photo-group-g1");
   // Evidence keeps the saved value; pending edits appear separately as a diff.
   const changed = await startOperation(page.request, "photoImport.saveGroups", {
     runId: seed.runId,
@@ -1314,9 +1337,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   expect(changed.ok(), await changed.text()).toBeTruthy();
   // Pending fields must never stand in for saved evidence during loading/failure.
   const releaseCurrent = Promise.withResolvers<void>();
-  let failCurrent = true;
-  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (!failCurrent) return route.continue();
+  const interceptCurrent: Parameters<Page["route"]>[1] = async (route) => {
     if (
       await unbatchFor(route, ["entity.detail", "photoImport.productEvidence"])
     )
@@ -1334,8 +1355,13 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
       status: 503,
       body: "Synthetic saved product evidence unavailable",
     });
-  });
-  await page.reload();
+  };
+  await page.route(`**${BROWSER_OPERATION_PATH}/*`, interceptCurrent);
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#photo-group-g1`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
   const modelRow = attach.locator('[data-cross-check="model"]');
   try {
     await expect(modelRow).toContainText("Loading current product");
@@ -1345,7 +1371,7 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   }
   await expect(modelRow).toContainText("Current product unavailable");
   await expect(modelRow).not.toContainText("SJ-999");
-  failCurrent = false;
+  await page.unroute(`**${BROWSER_OPERATION_PATH}/*`, interceptCurrent);
   const inferred = page.waitForResponse(
     (response) =>
       response.request().postData()?.includes("photoImport.candidatesBatch") ===
@@ -1369,7 +1395,22 @@ test("distinguishes attach and create, exposes evidence, and suppresses rejected
   await expect(
     attach.getByLabel("Proposed model change").locator("del"),
   ).toHaveText("104");
+});
 
+test("persists rejected photo candidates after reload and regroup", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const { productName, seed, groups } = await seedEvidenceReview(
+    page,
+    e2eRuntime.objectStorageUrl,
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#photo-group-g1`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const attach = page.locator("#photo-group-g1");
   await attach
     .getByRole("button", { name: "Not this one…", exact: true })
     .click();

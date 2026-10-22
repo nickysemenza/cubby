@@ -257,6 +257,11 @@ job.
 A runtime borrowing a `withTestDb` database must close in `afterEach` before
 the next reset. Suite-level reuse leaves unowned Worker database sessions and
 causes reset to fail; `afterAll` cleanup is too late.
+Purchase-agent scenarios capture source/build provenance at suite boundaries and
+write one checksummed bundle with separate per-case reports. Their Workers still
+close after each case; Mail-only scenarios omit object storage. Socket-lifecycle
+coverage shortens the configured pool idle timeout and observes three times that
+interval per quiet window, preserving real expiry without production-length waits.
 
 Native relation journeys scroll the navigation row back into view after inspecting
 its badges, then wait for the destination detail marker before inspecting
@@ -316,6 +321,13 @@ the retained Email's `content` and `checksum`; `purchase_import.commit` and
 it in the retained original and proposal: tests share a worker database, so
 unrelated fixtures must not collide on Product name/manufacturer. Repeated
 orders for the same item reuse the Product reference returned by resolution.
+
+Independent garden create/edit/journal, meal product/ingredient/manual-food,
+recipe nutrition basis/catalog/scale, and photo evidence/recovery/rejection
+journeys use separate graphs. Product photo creation owns upload coverage;
+label nutrition review starts from an attached verified image. Keep prerequisite
+writes in `createFixtureGraph` when no intermediate read is asserted, so derived
+refresh runs against the committed graph once.
 
 CI's web E2E artifact is Playwright's built-in HTML report and retained traces.
 Each Playwright job uploads them under an artifact name containing the tested

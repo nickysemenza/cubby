@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 
@@ -16,9 +17,7 @@ import { expect, test } from "./support/e2e-test";
 
 const createdItemSchema = z.object({ item: z.object({ id: z.string() }) });
 
-test("a planting's generic pages: create, edit status, log a journal entry, and a location's relation sections", async ({
-  page,
-}) => {
+async function seedGarden(page: Page) {
   const suffix = Date.now();
   const cropName = `e2e garden crop ${suffix}`;
   const growingBedName = `e2e growing bed ${suffix}`;
@@ -26,13 +25,27 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
 
   const crop = await seedPlantPrerequisite(page, cropName);
   const growingBed = await seedLocationPrerequisite(page, growingBedName);
-  const emptyShelf = await seedLocationPrerequisite(page, emptyShelfName);
   // Seed an existing planting and create another through the generic dialog.
   const existingPlanting = await seedPlantingPrerequisite(page, {
     plantId: crop.id,
     locationId: growingBed.id,
   });
 
+  return {
+    cropName,
+    growingBedName,
+    emptyShelfName,
+    crop,
+    growingBed,
+    existingPlanting,
+  };
+}
+
+test("location relation sections create a planting and list both plantings", async ({
+  page,
+}) => {
+  const { crop, cropName, growingBed, emptyShelfName } = await seedGarden(page);
+  const emptyShelf = await seedLocationPrerequisite(page, emptyShelfName);
   // Section ids are stable manifest ids (`04-location.entity.ts`); the
   // heading text itself gains a live row count once data loads
   // (`SectionCard`), so the id is the precise handle for "is this section
@@ -83,7 +96,13 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   await expect(
     page.locator(`a[href="/plants/${crop.id}"]`, { hasText: cropName }),
   ).toHaveCount(2);
+});
 
+test("a planting opens from its list inspector and saves an edited status", async ({
+  page,
+}) => {
+  const { growingBed, existingPlanting } = await seedGarden(page);
+  await gotoAuthenticatedPage(page, `/plantings?locationId=${growingBed.id}`);
   // Edit `status` on the seeded planting through the generic edit dialog —
   // it is an ordinary editable field now, not a lifecycle verb.
   await page.locator(`a[href="/plantings/${existingPlanting.id}"]`).click();
@@ -97,7 +116,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   await page
     .getByRole("button", { name: "Edit Planting", exact: true })
     .click();
-  dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Edit Planting")).toBeVisible();
   await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
   await page.getByRole("option", { name: "Finished", exact: true }).click();
@@ -111,14 +130,22 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
     {},
   );
   expect(await updated.json()).toMatchObject({ status: "finished" });
+});
 
+test("a planting journal entry persists and appears in its location relation", async ({
+  page,
+}) => {
+  const { growingBedName, growingBed, existingPlanting } =
+    await seedGarden(page);
+  const gardenEntriesSection = page.locator("#garden-entries");
+  await gotoAuthenticatedPage(page, `/plantings/${existingPlanting.id}`);
   // The Journal relation section's create button opens the generic garden
   // entry dialog seeded with this planting's id.
   await page
     .getByRole("heading", { level: 2, name: "Work", exact: true })
     .scrollIntoViewIfNeeded();
   await page.getByRole("button", { name: "Log entry...", exact: true }).click();
-  dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Garden Entry")).toBeVisible();
   await selectComboboxItem(
     page,

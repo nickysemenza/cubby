@@ -12,6 +12,7 @@ import {
 import {
   createEvidenceHarnessContext,
   createFixture,
+  createFixtureGraph,
   ensureMemberParty,
   seedConcurrently,
 } from "./fixtures/core";
@@ -73,62 +74,88 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   page,
 }, testInfo) => {
   const name = uniqueName(testInfo, "Synthetic relationship roles");
-  const vendor = await createFixture(page, "vendor", {
-    name: `${name} vendor`,
-  });
-  const purchase = await createFixture(page, "purchase", {
-    vendorId: vendor.id,
-    orderId: `${name} order`,
-    date: "2026-01-05",
-  });
-  const mixed = await seedProductPrerequisite(page, { name: `${name} mixed` });
-  const linked = await seedProductPrerequisite(page, {
-    name: `${name} linked`,
-  });
-  const planned = await seedProductPrerequisite(page, {
-    name: `${name} planned`,
-  });
-  const unknown = await seedProductPrerequisite(page, {
-    name: `${name} unknown`,
-  });
-  const adjusted = await seedProductPrerequisite(page, {
-    name: `${name} adjusted`,
-  });
-  for (const line of [
-    { cost: 20, productQuantity: 1 },
-    { cost: -5, productQuantity: 0 },
-    { cost: -10, productQuantity: -1 },
-    { cost: 0, productQuantity: -1 },
-    { cost: 25, productQuantity: 1, future: true },
-  ])
-    await evidenceLine(page, {
-      name: `${name} mixed line`,
-      productId: mixed.id,
-      purchaseId: purchase.id,
-      ...line,
-    });
-  await evidenceLine(page, {
-    name: `${name} planned line`,
-    productId: planned.id,
-    purchaseId: purchase.id,
-    cost: 25,
-    productQuantity: 1,
-    future: true,
-  });
-  await evidenceLine(page, {
-    name: `${name} unknown line`,
-    productId: unknown.id,
-    purchaseId: purchase.id,
-    cost: null,
-    productQuantity: null,
-  });
-  await evidenceLine(page, {
-    name: `${name} adjustment line`,
-    productId: adjusted.id,
-    purchaseId: purchase.id,
-    cost: -5,
-    productQuantity: 0,
-  });
+  const { purchase, mixed, linked } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const vendor = await create("vendor", {
+        name: `${name} vendor`,
+      });
+      const purchase = await create("purchase", {
+        vendorId: vendor.id,
+        orderId: `${name} order`,
+        date: "2026-01-05",
+      });
+      const mixed = await create("product", { name: `${name} mixed` });
+      const linked = await create("product", {
+        name: `${name} linked`,
+      });
+      const planned = await create("product", {
+        name: `${name} planned`,
+      });
+      const unknown = await create("product", {
+        name: `${name} unknown`,
+      });
+      const adjusted = await create("product", {
+        name: `${name} adjusted`,
+      });
+      for (const line of [
+        { cost: 20, productQuantity: 1 },
+        { cost: -5, productQuantity: 0 },
+        { cost: -10, productQuantity: -1 },
+        { cost: 0, productQuantity: -1 },
+        { cost: 25, productQuantity: 1, future: true },
+      ])
+        await create("expense", {
+          date: "2026-01-05",
+          costType: "materials",
+          trade: "other",
+          lineKind: "principal",
+          lineBasis: "item_line",
+          name: `${name} mixed line`,
+          productId: mixed.id,
+          purchaseId: purchase.id,
+          ...line,
+        });
+      await create("expense", {
+        date: "2026-01-05",
+        costType: "materials",
+        trade: "other",
+        lineKind: "principal",
+        lineBasis: "item_line",
+        name: `${name} planned line`,
+        productId: planned.id,
+        purchaseId: purchase.id,
+        cost: 25,
+        productQuantity: 1,
+        future: true,
+      });
+      await create("expense", {
+        date: "2026-01-05",
+        costType: "materials",
+        trade: "other",
+        lineKind: "principal",
+        lineBasis: "item_line",
+        name: `${name} unknown line`,
+        productId: unknown.id,
+        purchaseId: purchase.id,
+        cost: null,
+        productQuantity: null,
+      });
+      await create("expense", {
+        date: "2026-01-05",
+        costType: "materials",
+        trade: "other",
+        lineKind: "principal",
+        lineBasis: "item_line",
+        name: `${name} adjustment line`,
+        productId: adjusted.id,
+        purchaseId: purchase.id,
+        cost: -5,
+        productQuantity: 0,
+      });
+      return { purchase, mixed, linked };
+    },
+  );
   await linkProducts(page, purchase.id, [mixed.id, linked.id]);
 
   await gotoAuthenticatedPage(page, `/purchases/${purchase.id}#work`);

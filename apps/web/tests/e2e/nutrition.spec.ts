@@ -9,14 +9,17 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-test("nutrition matrix shares URL basis, preserves partial ranges and zero, and exposes the catalog", async ({
+test("nutrition matrix shares URL basis and preserves partial ranges after reload", async ({
   page,
 }, testInfo) => {
   const name = `E2E nutrition ${Date.now()}-${testInfo.workerIndex}`;
   const { recipe, incomplete } = await seedNutritionPrerequisite(page, name);
   await gotoAuthenticatedPage(page, `/recipes/${recipe.id}?view=data`);
   const contributions = page.getByTestId("nutrition-contributions");
-  const focus = page.getByRole("combobox", { name: "Focused nutrient" });
+  const focus = page.getByRole("combobox", {
+    name: "Focused nutrient",
+    exact: true,
+  });
   const table = page.getByRole("table", { name: "Recipe Ingredients Table" });
   await expect(contributions).toContainText("150–250 kcal");
   await expect(
@@ -41,6 +44,23 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
     page.getByRole("button", { name: "Per serving", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(contributions).toContainText("75–125 kcal");
+});
+
+test("nutrition matrix preserves zero and exposes focused and catalog nutrients", async ({
+  page,
+}, testInfo) => {
+  const name = `E2E nutrition catalog ${Date.now()}-${testInfo.workerIndex}`;
+  const { recipe } = await seedNutritionPrerequisite(page, name);
+  await gotoAuthenticatedPage(
+    page,
+    `/recipes/${recipe.id}?view=data&nutritionBasis=serving`,
+  );
+  const contributions = page.getByTestId("nutrition-contributions");
+  const focus = page.getByRole("combobox", {
+    name: "Focused nutrient",
+    exact: true,
+  });
+  const table = page.getByRole("table", { name: "Recipe Ingredients Table" });
   await selectComboboxItem(page, focus, "Sodium");
   await expect(contributions).toContainText("0 mg known · partial");
   await selectComboboxItem(page, focus, "Calcium");
@@ -70,6 +90,14 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
     .click();
   await page.keyboard.press("Escape");
   await expect(table.getByRole("columnheader", { name: /Zinc/ })).toBeVisible();
+});
+
+test("recipe nutrition keeps per-serving totals independent of recipe scale", async ({
+  page,
+}, testInfo) => {
+  const name = `E2E nutrition scale ${Date.now()}-${testInfo.workerIndex}`;
+  const { recipe } = await seedNutritionPrerequisite(page, name);
+  const contributions = page.getByTestId("nutrition-contributions");
   await gotoAuthenticatedPage(page, `/recipes/${recipe.id}?view=data&scale=2`);
   await expect(contributions).toContainText("300–500 kcal");
   await page.getByRole("button", { name: "Per serving", exact: true }).click();

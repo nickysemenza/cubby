@@ -1,3 +1,4 @@
+import { startOperation } from "./support/start-operation";
 import type { Route } from "@playwright/test";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
@@ -9,7 +10,7 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-test("meal nutrition keeps entered product and ingredient amounts while deriving current estimates", async ({
+test("meal product nutrition preserves entered amounts on creation", async ({
   page,
 }, testInfo) => {
   const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
@@ -70,7 +71,27 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(member.getByLabel(/^Protein: 4\.5 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Carbs: 30 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Fat: 6 g\./)).toHaveCount(2);
+});
 
+test("meal product nutrition preserves entered amounts through edits and removal", async ({
+  page,
+}, testInfo) => {
+  const name = `Nutrition edit ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
+  const fixture = await seedMealNutritionPrerequisite(page, name);
+  // Creation through this dialog is covered by the preceding Product food test.
+  const seeded = await startOperation(page.request, "meal.saveFood", {
+    mealId: fixture.meal.id,
+    ledgerPartyId: fixture.member.id,
+    sourceKind: "product",
+    productId: fixture.product.id,
+    amount: { value: 1.5, unit: "serving" },
+  });
+  expect(seeded.ok(), await seeded.text()).toBeTruthy();
+  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
+  const member = page.getByRole("region", { name: `${name} member nutrition` });
+  const productRow = member
+    .getByRole("listitem")
+    .filter({ has: page.getByText(`${name} snack`, { exact: true }) });
   await productRow.getByText("Details and editing", { exact: true }).click();
   await productRow.getByRole("button", { name: "Edit amount" }).click();
   const editDialog = page.getByRole("dialog", { name: "Edit food" });
@@ -86,6 +107,20 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(member.getByLabel(/^Carbs: 40 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Fat: 8 g\./)).toHaveCount(2);
 
+  await page.reload();
+  await expect(page.getByText("Food updated", { exact: true })).toBeHidden();
+  await productRow.getByText("Details and editing", { exact: true }).click();
+  await productRow.getByRole("button", { name: "Remove food" }).click();
+  await expect(productRow).toHaveCount(0);
+});
+
+test("meal ingredient nutrition preserves entered amounts through removal", async ({
+  page,
+}, testInfo) => {
+  const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
+  const fixture = await seedMealNutritionPrerequisite(page, name);
+  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
+  const member = page.getByRole("region", { name: `${name} member nutrition` });
   await openDetailActions(page);
   await page.getByRole("button", { name: "Add food", exact: true }).click();
   const ingredientDialog = page.getByRole("dialog", { name: "Add food" });
@@ -113,18 +148,29 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
   await expect(ingredientRow.getByText(/serving/)).toBeVisible();
   await expect(ingredientRow.getByText("Estimated weight 15 g")).toBeVisible();
 
-  const productDetails = productRow.getByRole("button", {
-    name: "Details and editing",
-    exact: true,
-  });
-  if ((await productDetails.getAttribute("aria-expanded")) === "true") {
-    await productDetails.click();
-  }
-  await page.evaluate(() => window.scrollTo({ top: 0 }));
-  await expect(page.getByText("Food updated", { exact: true })).toBeHidden({
-    timeout: 5000,
-  });
+  await page.reload();
+  const refreshedIngredientRow = page
+    .getByRole("region", { name: `${name} member nutrition` })
+    .getByRole("listitem")
+    .filter({ hasText: `${name} snack ingredient` });
+  await refreshedIngredientRow
+    .getByText("Details and editing", { exact: true })
+    .click();
+  await refreshedIngredientRow
+    .getByRole("button", { name: "Remove food" })
+    .click();
+  await expect(
+    page.getByRole("region", { name: `${name} member nutrition` }),
+  ).toHaveCount(0);
+});
 
+test("meal nutrition links planned days and today from home", async ({
+  page,
+}, testInfo) => {
+  const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
+  const fixture = await seedMealNutritionPrerequisite(page, name, {
+    seedProductPortion: true,
+  });
   await gotoAuthenticatedPage(
     page,
     `/meals?view=nutrition&date=${fixture.futureDate}`,
@@ -149,35 +195,18 @@ test("meal nutrition keeps entered product and ingredient amounts while deriving
       url.searchParams.get("view") === "nutrition" &&
       url.searchParams.get("date") === fixture.today,
   );
+});
 
-  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
-  const refreshedProductRow = page
-    .getByRole("region", { name: `${name} member nutrition` })
-    .getByRole("listitem")
-    .filter({
-      has: page.getByText(`${name} snack`, { exact: true }),
-    });
-  await refreshedProductRow
-    .getByText("Details and editing", { exact: true })
-    .click();
-  await refreshedProductRow
-    .getByRole("button", { name: "Remove food" })
-    .click();
-  await expect(refreshedProductRow).toHaveCount(0);
-  const refreshedIngredientRow = page
-    .getByRole("region", { name: `${name} member nutrition` })
-    .getByRole("listitem")
-    .filter({ hasText: `${name} snack ingredient` });
-  await refreshedIngredientRow
-    .getByText("Details and editing", { exact: true })
-    .click();
-  await refreshedIngredientRow
-    .getByRole("button", { name: "Remove food" })
-    .click();
-  await expect(
-    page.getByRole("region", { name: `${name} member nutrition` }),
-  ).toHaveCount(0);
-
+test("daily nutrition keeps manual food input after a failed save and retries it", async ({
+  page,
+  e2eRuntime,
+}, testInfo) => {
+  const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
+  const fixture = await seedMealNutritionPrerequisite(page, name);
+  const dispatcherUrl = new URL(
+    browserOperationPath("meal.saveFood"),
+    e2eRuntime.baseURL,
+  ).href;
   await gotoAuthenticatedPage(
     page,
     `/meals?view=nutrition&date=${fixture.inlineDate}`,

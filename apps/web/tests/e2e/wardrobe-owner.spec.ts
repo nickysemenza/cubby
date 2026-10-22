@@ -3,7 +3,7 @@ import {
   seedProductCategoryPrerequisite,
   seedWardrobePrerequisites,
 } from "./fixtures/catalog";
-import { createEntityFixture } from "./fixtures/core";
+import { createEntityFixture, seedConcurrently } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -294,20 +294,23 @@ test("mobile list section headers stay pinned while their section scrolls", asyn
     name: `${name} Tops`,
     parentId: taxonomyShortcode("apparel"),
   });
-  for (let index = 0; index < 14; index++) {
-    const product = await createEntityFixture(page, "product", {
-      name: `${name} shirt ${index}`,
-      manufacturer: "Fixture",
-      categoryId: category.id,
-    });
-    await createEntityFixture(page, "inventory", {
-      productId: product.id,
-      locationId: location.id,
-      amount: { value: 1, unit: "each" },
-      ownershipMode: "explicit",
-      ownerLedgerPartyId: owner.id,
-    });
-  }
+  await seedConcurrently(
+    Array.from({ length: 14 }, (_, index) => index),
+    async (index) => {
+      const product = await createEntityFixture(page, "product", {
+        name: `${name} shirt ${index}`,
+        manufacturer: "Fixture",
+        categoryId: category.id,
+      });
+      await createEntityFixture(page, "inventory", {
+        productId: product.id,
+        locationId: location.id,
+        amount: { value: 1, unit: "each" },
+        ownershipMode: "explicit",
+        ownerLedgerPartyId: owner.id,
+      });
+    },
+  );
   const header = page
     .locator('[data-slot="list-section-header"]')
     .filter({ hasText: `${name} Tops` });
