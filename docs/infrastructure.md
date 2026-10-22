@@ -789,6 +789,8 @@ Scope summaries describe selected accounts/imports without exposing source IDs.
 A Sweep selecting exactly transfer pairs and statements is named Financial
 reconciliation; its stored purpose remains `sweep`.
 
+Observed throughput is available after the first completed interval; it does
+not by itself support a completion estimate.
 Step ETA uses at least three consecutive progress intervals (up to twelve),
 including elapsed queue and handoff time between observations. The displayed
 range spans observed per-item durations with a margin and rounds outwards to

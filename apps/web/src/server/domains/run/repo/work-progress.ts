@@ -107,8 +107,10 @@ export function sampleRunWork(
       ? [{ processed, elapsedMs: elapsed }]
       : []),
   ].slice(-12);
+  // Throughput is an observation, not an ETA. The estimate separately requires
+  // three intervals before extrapolating remaining work.
   const ratePerSecond =
-    intervals.length >= 3
+    intervals.length > 0
       ? (intervals.reduce((sum, interval) => sum + interval.processed, 0) *
           1000) /
         intervals.reduce((sum, interval) => sum + interval.elapsedMs, 0)
