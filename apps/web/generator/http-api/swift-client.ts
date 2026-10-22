@@ -5,6 +5,14 @@ import type { OpenApiDocument } from "./openapi.ts";
 import { type SwiftRoute, swiftString } from "./swift-routes.ts";
 
 const jsonComponent = z.object({ schema: z.object({ $ref: z.string() }) });
+const errorResponseSchema = z.object({
+  headers: z.never().optional(),
+  content: z.strictObject({
+    "application/json": z.object({
+      schema: z.object({ $ref: z.literal("#/components/schemas/ApiError") }),
+    }),
+  }),
+});
 const responseSchema = z.object({
   parameters: z
     .array(
@@ -27,15 +35,8 @@ const responseSchema = z.object({
       headers: z.never().optional(),
       content: z.strictObject({ "application/json": jsonComponent }),
     }),
-    default: z.object({
-      headers: z.never().optional(),
-      content: z.strictObject({
-        "application/json": z.object({
-          schema: z.object({
-            $ref: z.literal("#/components/schemas/ApiError"),
-          }),
-        }),
-      }),
+    default: z.strictObject({
+      $ref: z.literal("#/components/responses/ApiError"),
     }),
   }),
 });
@@ -45,6 +46,7 @@ export const renderSwiftClient = (
   document: OpenApiDocument,
   routes: readonly SwiftRoute[],
 ): EntityArtifacts => {
+  errorResponseSchema.parse(document.components?.responses?.ApiError);
   const methods = routes.map((route) => {
     if (route.pathParameters.length > 0)
       throw new Error(

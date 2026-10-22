@@ -23,6 +23,11 @@ are also erased from this native document. The server still validates the full
 schemas. Entity rows use the manifest; records with remaining typed consumers
 stay typed through `NATIVE_TYPED_RECORDS` (`type-overrides.ts`).
 
+Every operation references the same `components.responses.ApiError` response.
+This keeps the typed error body while compiling one response wrapper instead
+of one per operation. Generation rejects divergent native error contracts;
+the server still sends each real status code and the same diagnostic body.
+
 Reusable domain schemas keep semantic enums shared. After normalization the
 emitter folds anonymous schemas with identical validation constraints, while
 retaining distinct named domain types. Inventory and task mutation results use

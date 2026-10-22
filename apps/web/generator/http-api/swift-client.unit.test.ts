@@ -6,6 +6,18 @@ import { collectSwiftRoutes } from "./swift-routes.ts";
 const document = {
   openapi: "3.0.3",
   info: { title: "Example API", version: "1.0.0" },
+  components: {
+    responses: {
+      ApiError: {
+        description: "Failure",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/ApiError" },
+          },
+        },
+      },
+    },
+  },
   paths: {
     "/api/v1/example/read": {
       get: {
@@ -19,14 +31,7 @@ const document = {
               },
             },
           },
-          default: {
-            description: "Failure",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ApiError" },
-              },
-            },
-          },
+          default: { $ref: "#/components/responses/ApiError" },
         },
       },
     },
