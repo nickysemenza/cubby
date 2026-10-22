@@ -38,7 +38,7 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
         } else {
           const tags = combineRippleTags(...categories.map(entityRipple));
           await cancelQueriesByTags(client, tags);
-          await invalidateOperationTags(client, tags, { removeInactive: true });
+          await invalidateOperationTags(client, tags);
         }
       }
     } finally {

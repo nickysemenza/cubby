@@ -54,6 +54,7 @@ export const cancelQueriesByTags = (
 export async function resyncOperationQueries(queryClient: QueryClient) {
   const predicate = (query: Query) => Boolean(query.meta?.cacheTags?.length);
   await queryClient.cancelQueries({ predicate });
-  queryClient.removeQueries({ predicate, type: "inactive" });
+  // Inactive queries can still own streamed markup awaiting hydration.
+  // Preserve that baseline; mount and detail loaders refetch invalidated data.
   await queryClient.invalidateQueries({ predicate });
 }
