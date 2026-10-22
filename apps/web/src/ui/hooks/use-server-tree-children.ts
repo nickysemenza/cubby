@@ -115,10 +115,12 @@ type ChildResult<TData> = {
  */
 export function useServerTreeChildren<TData extends { id: string }>({
   enabled,
+  projectRows,
   scope,
   planFor,
 }: {
   enabled: boolean;
+  projectRows?: (rows: readonly TData[]) => TData[];
   /** Changes whenever the filters or sort change. */
   scope: string;
   planFor: (nesting: ListNesting, pageIndex: number) => ListQueryPlan<TData>;
@@ -176,6 +178,19 @@ export function useServerTreeChildren<TData extends { id: string }>({
     [],
   );
 
+  const loadedChildren = useMemo(
+    () => results.flatMap((page) => page.data?.items ?? []),
+    [results],
+  );
+  const projectedChildren = useMemo(
+    () => (projectRows ? projectRows(loadedChildren) : loadedChildren),
+    [projectRows, loadedChildren],
+  );
+  const projectedById = useMemo(
+    () => new Map(projectedChildren.map((row) => [row.id, row])),
+    [projectedChildren],
+  );
+
   const childrenByParent = useMemo(() => {
     const byParent = new Map<
       string,
@@ -191,14 +206,18 @@ export function useServerTreeChildren<TData extends { id: string }>({
         ]);
     });
     for (const [parentId, pages] of pagesByParent) {
-      const items = pages.flatMap((page) => page.data?.items ?? []);
+      const sourceItems = pages.flatMap((page) => page.data?.items ?? []);
+      const items = sourceItems.flatMap((row) => {
+        const projected = projectedById.get(row.id);
+        return projected ? [projected] : [];
+      });
       const failed = pages.filter(
         (page) => page.error || page.data?.enrichmentError,
       );
       const last = pages.at(-1);
       // Every page of one scope reports the same total.
       const meta = pages.find((page) => page.data)?.data?.meta;
-      const remaining = meta ? meta.totalCount - items.length : 0;
+      const remaining = meta ? meta.totalCount - sourceItems.length : 0;
       const status: ServerTreeChildStatus | undefined =
         failed.length > 0
           ? {
@@ -224,7 +243,7 @@ export function useServerTreeChildren<TData extends { id: string }>({
       byParent.set(parentId, status ? { items, status } : { items });
     }
     return byParent;
-  }, [loadMore, requests, results]);
+  }, [loadMore, requests, results, projectedById]);
 
   const onExpandedChange = useCallback<OnChangeFn<ExpandedState>>(
     (updater) =>

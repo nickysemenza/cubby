@@ -135,6 +135,33 @@ factory result to a module-level constant referenced by a splittable property
 in the route's literal options object; loader-time helpers stay React-free in
 `detail-loader.ts`.
 
+## Shared Task write state
+
+Task rename and delete commands use request-local TanStack DB transactions in
+`entity/task-record-transactions.ts`. The collection holds only pending changes;
+Query remains the canonical record and freshness owner. Generic lists (including
+expanded children), detail pages and inspector previews project those changes.
+Each command executes once through `useEntityCommands`; the transaction survives
+through that command's awaited invalidation and then disappears. A failed delete
+drops only its own overlay instead of restoring an entire list snapshot. Task name
+cells use the shared value after saving rather than retaining a second committed
+value. Drafts and retry state stay in the editor.
+
+Task writes share one Query mutation scope so a later successful write cannot be
+hidden by an older still-pending write. Other entity writes retain their existing
+lifecycle. Only pure name updates and delete commands receive optimistic overlays;
+compound/inherited fields and bulk updates use server reconciliation. No collection
+loads, local filtering, joins, counts, or offset pagination are introduced. Lists
+keep their server membership, ordering and progressive enrichment, with pending
+loaded deletions removed from the visible row count. Deleted details stay visible
+until the authoritative read reports absence. Native and background changes still
+use the existing invalidation and refresh rules.
+
+This is the Task pilot for #2948, not a full normalized entity store. The remaining
+snapshot helpers and local accepted-value state serve other entities. Expand only
+after comparing the adapter and projection cost with receipt-aware Query updates;
+do not infer app-wide savings from the disposable SDK prototype.
+
 ## List loading and enrichment
 
 Extend the generic list enrichment pipeline for data shared across rows,
@@ -193,7 +220,11 @@ the generated operation catalog with its mutation metadata and optional scope.
 When a command patches a saved snapshot, its awaited `onResult` runs before
 catalog invalidation. Opt into `invalidationCompletion` when the caller's
 serialized mutation must include active refresh and inactive-cache removal;
-keep the serialization scope on that outer mutation only.
+keep the serialization scope on the transport-owning mutation. A presentation
+mutation that awaits a command must not acquire the command's same scope: Query
+would pause the inner command behind its caller. The Task presentation wrapper
+also leaves invalidation to that command; direct transport factories retain
+scope and completion metadata.
 
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;

@@ -398,6 +398,7 @@ export function createNameColumn<T extends BaseRow>(
             // it with a derived label would silently persist that label as a
             // real name on the next save.
             value={editValue}
+            retainCommittedValue={entity !== "task"}
             onSave={(newVal) =>
               editable.onSave(newVal ?? "", info.row.original)
             }

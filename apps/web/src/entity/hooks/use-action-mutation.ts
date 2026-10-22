@@ -152,13 +152,19 @@ export function useEntityActionMutation<
     bulkUpdate: async (variables) => await commands.bulkUpdateAction(variables),
   } satisfies EntityActionExecutors<E>;
   const execute = executorFor(executors, operation);
+  const actionOptions = mutationFn();
 
   return useMutation<
     EntityActionData<E, A>,
     Error,
     EntityActionVariables<E, A>
   >({
-    ...mutationFn(),
+    ...actionOptions,
+    // The command owns serialization; sharing its scope here deadlocks the
+    // outer mutation against the inner one it awaits. Task refresh is owned
+    // by that same command, so the presentation layer must not repeat it.
+    scope: undefined,
+    meta: entity === "task" ? { entity } : actionOptions.meta,
     mutationFn: execute,
     onSuccess: (data) =>
       showSuccess(

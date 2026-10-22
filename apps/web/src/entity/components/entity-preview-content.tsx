@@ -4,7 +4,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/entity/actions/entity-actions";
@@ -24,6 +24,7 @@ import {
   readRecordField,
 } from "~/entity/entity-references";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
+import { useTaskRecordProjection } from "~/entity/task-record-transactions";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
@@ -228,7 +229,13 @@ function ManifestPreviewContent<E extends ManifestPreviewEntity>({
   onNameResolved,
   onRecordResolved,
 }: { entity: E; id: string } & StandardPreviewPresentation) {
-  const query = useQuery(entityDetailFor(entity).queryOptions(id));
+  const serverQuery = useQuery(entityDetailFor(entity).queryOptions(id));
+  const records = useMemo(
+    () => (serverQuery.data ? [serverQuery.data] : []),
+    [serverQuery.data],
+  );
+  const projected = useTaskRecordProjection(entity, records);
+  const query = { ...serverQuery, data: projected[0] ?? serverQuery.data };
   return (
     <PreviewQuery
       query={query}
