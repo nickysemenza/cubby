@@ -1,0 +1,295 @@
+.github/workflows/apple-testflight.yaml
+  s_2f5ef323e3bb48::t_313d4e50af6087 73,80
+.github/workflows/ci.yaml
+  s_2f5ef323e3bb48::t_2aade1d702f400 77,92,265,283,287
+Cargo.toml
+  s_2f5ef323e3bb48::t_da260d3b812cd2 6-50,86-88
+apps/apple/AGENTS.md
+  s_2f5ef323e3bb48::t_45cc98bb4b5dfc 206-207
+apps/apple/CubbyKit/Sources/CubbyKit/FFI/IngredientParser.swift
+  s_2f5ef323e3bb48::t_03ac64c1603aa2 4-5,27,41-51
+apps/apple/CubbyKit/Sources/CubbyKit/FFI/RecipeScaling.swift
+  s_2f5ef323e3bb48::t_f29768320a3b4e 36
+apps/apple/CubbyKit/Tests/CubbyKitTests/Format/DisplayFormatTests.swift
+  s_2f5ef323e3bb48::t_530eb3730883be 93-94,97-113,116
+apps/web/cloudflare.config.ts
+  s_2f5ef323e3bb48::t_e5d30252fa0311 36-56,98-99,101,103,108,115,152,155
+apps/web/generator/entities/data-quality.ts
+  s_2f5ef323e3bb48::t_51deae5fb82d97 1,156-162
+apps/web/src/cf-server.ts
+  s_2f5ef323e3bb48::t_81a26cbfcef54a 3-6,8,17-21
+apps/web/src/entity/entity-detail/detail-slots.unit.test.ts
+  s_033c97ccc35358::t_10ec9bace0e8c5 77-78,80-82,84-86
+apps/web/src/features/recipe/richtext.tsx
+  s_2f5ef323e3bb48::t_d4b020f1ff7bcc 19
+apps/web/src/features/registry.tsx
+  s_033c97ccc35358::t_25b743e976255b 297
+apps/web/src/lib/auth.ts
+  s_2f5ef323e3bb48::t_f49fe5fe966ef7 13-17,85-97,99-120,122-124,126,128-131,133-266,268-281,283-315
+apps/web/src/lib/wasm-runtime.ts
+  s_2f5ef323e3bb48::t_26558c41139722 1-128
+apps/web/src/lib/wasm.ts
+  s_2f5ef323e3bb48::t_470b7d2bc7f914 1,3,5-6,8
+apps/web/src/server/ai/gateway-forward.ts
+  s_2f5ef323e3bb48::t_889bb7204bb218 1,24
+apps/web/src/server/cf-env.ts
+  s_2f5ef323e3bb48::t_5e62dacfdee0c2 15,46-57,60,64,75,82,87,105,124,128,133,136,143,147,159,172,175,177-179,182,184,187
+apps/web/src/server/clients/scraper.ts
+  s_2f5ef323e3bb48::t_bf125404cb507e 1,12,68
+apps/web/src/server/clients/scraper.unit.test.ts
+  s_2f5ef323e3bb48::t_3d80ed74504ade 1
+apps/web/src/server/domains/calendar/operations/durable-object.ts
+  s_2f5ef323e3bb48::t_0a12c3cec3ba30 7,216-222
+apps/web/src/server/domains/image-processing/service/model-image.ts
+  s_2f5ef323e3bb48::t_46145e3615852c 1
+apps/web/src/server/domains/purchase-import/operations/agent-services.ts
+  s_2f5ef323e3bb48::t_ba16fecc33b10f 23,28,47-58,269
+apps/web/src/server/domains/purchase-import/operations/mail-attachment-purpose.ts
+  s_2f5ef323e3bb48::t_3d3f4202b7bd4c 21
+apps/web/src/server/domains/purchase-import/repo/gmail/read-content.ts
+  s_2f5ef323e3bb48::t_53eb7d7e26c645 19
+apps/web/src/server/domains/purchase-import/repo/mail-financial-event.ts
+  s_2f5ef323e3bb48::t_d464d56ca4dd33 28
+apps/web/src/server/domains/purchase-import/service/gmail/email-compaction.workers.test.ts
+  s_2f5ef323e3bb48::t_fb682ce30edcbb 3
+apps/web/src/server/domains/purchase-import/service/gmail/email-html.fixtures.ts
+  s_2f5ef323e3bb48::t_1af71cb71ce399 5
+apps/web/src/server/domains/purchase-import/service/gmail/relevance.ts
+  s_2f5ef323e3bb48::t_a22fe58632af25 26
+apps/web/src/server/domains/purchase-import/service/gmail/triage.ts
+  s_2f5ef323e3bb48::t_16fcbd217d8195 1,16
+apps/web/src/server/domains/purchase-import/service/gmail/triage.unit.test.ts
+  s_2f5ef323e3bb48::t_9f20b6aa5e9deb 4
+apps/web/src/server/domains/purchase-import/service/mail-import-rule.ts
+  s_2f5ef323e3bb48::t_f8af827b2d792d 17
+apps/web/src/server/domains/purchase-import/service/mail-source-judgment.ts
+  s_2f5ef323e3bb48::t_0ecaafaf1f26f8 21
+apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.integration.test.ts
+  s_2f5ef323e3bb48::t_bdf63a848e48ab 396-397,400,409-412,421,509-512
+apps/web/src/server/entity-kernel/repo/entity-records.integration.test.ts
+  s_2f5ef323e3bb48::t_1d71768cba8e51 123-124,185,188,191
+apps/web/src/server/generic/assessment/repo/suggestion-families.ts
+  s_2f5ef323e3bb48::t_6794359521a24a 191-196
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_2f5ef323e3bb48::t_9819adc80e958f 32-33,61-118,296,602
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_2f5ef323e3bb48::t_19f15c6baf7f88 479,481,488,493
+apps/web/src/server/generic/data-quality/repo/finance-checks.integration.test.ts
+  s_2f5ef323e3bb48::t_f6ca5ce494a227 75-77,79-80,113,117-118,329-330,449-450,521,523-524,591-592,626-628,633-634,712-713
+apps/web/src/server/generic/data-quality/repo/pantry-checks.integration.test.ts
+  s_2f5ef323e3bb48::t_9064049551fb3b 88-89,123-124,300-301,334-335,364-366,551-552
+apps/web/src/server/generic/data-quality/repo/registry.ts
+  s_2f5ef323e3bb48::t_233ae764ed5e9c 72-77
+apps/web/src/server/generic/data-quality/repo/run-checks.integration.test.ts
+  s_2f5ef323e3bb48::t_b61b4ce821ebd9 88-90,204
+apps/web/src/server/generic/data-quality/repo/sql.ts
+  s_2f5ef323e3bb48::t_7f7c423af91cce 1,22,46-60
+apps/web/src/server/generic/problems/repo/problems.integration.test.ts
+  s_2f5ef323e3bb48::t_aab52e7ba0263a 646-649
+apps/web/src/server/http/auth-configuration.ts
+  s_2f5ef323e3bb48::t_29419e7f2949aa 1-49
+apps/web/src/server/http/auth-configuration.unit.test.ts
+  s_2f5ef323e3bb48::t_45fe87fc2e7eab 1-126
+apps/web/src/server/http/guard-session.boundary.ts
+  s_2f5ef323e3bb48::t_65db9d0abb8cb7 1,7
+apps/web/src/server/http/http-api-handler.ts
+  s_2f5ef323e3bb48::t_91a25179d10cde 4,483-493,528
+apps/web/src/server/http/http-api.ts
+  s_2f5ef323e3bb48::t_4c9c75e3de0449 1,11-14
+apps/web/src/server/http/native-workspace-session.ts
+  s_2f5ef323e3bb48::t_f0bba4d968ef42 1,14
+apps/web/src/server/http/oauth/metadata.ts
+  s_2f5ef323e3bb48::t_e550ceb7b53881 1,34,38,46
+apps/web/src/server/http/request-context.ts
+  s_2f5ef323e3bb48::t_d3cbfa8e401c7f 18,215
+apps/web/src/server/http/routes/api/ai/chatgpt.ts
+  s_2f5ef323e3bb48::t_399f11bab7748e 6,30,34
+apps/web/src/server/http/routes/api/auth/catch-all.ts
+  s_2f5ef323e3bb48::t_caccedb413d30f 1,7,10
+apps/web/src/server/http/routes/api/debug/usda-release.ts
+  s_2f5ef323e3bb48::t_4c926e61d42d3c 4,32,36
+apps/web/src/server/http/routes/api/import/agent/oauth.callback.impl.ts
+  s_2f5ef323e3bb48::t_264a4cfd9ddd0f 3,18,63,83
+apps/web/src/server/http/routes/api/import/agent/oauth.start.ts
+  s_2f5ef323e3bb48::t_ef3c22b0eb1517 11,31
+apps/web/src/server/mcp/auth.ts
+  s_2f5ef323e3bb48::t_8ecbca9c2e158e 5,11,41,81
+apps/web/src/server/wasm.ts
+  s_2f5ef323e3bb48::t_69ef39a972de91 1-6
+apps/web/src/server/worker-bindings.ts
+  s_2f5ef323e3bb48::t_5269fde5bf6a8d 2-3,48
+apps/web/src/server/worker-identity.ts
+  s_2f5ef323e3bb48::t_60c13123fa0715 1-30
+apps/web/src/server/worker/http.ts
+  s_2f5ef323e3bb48::t_a8e5c63164399b 1-395
+apps/web/src/server/worker/queue.ts
+  s_2f5ef323e3bb48::t_72ac43f7dad556 1-75
+apps/web/src/server/worker/scheduled.integration.test.ts
+  s_2f5ef323e3bb48::t_6dccb5cc1c6281 1-30
+apps/web/src/server/worker/scheduled.ts
+  s_2f5ef323e3bb48::t_89ebf997b9186e 1-113
+apps/web/src/server/worker/worker.unit.test.ts
+  s_2f5ef323e3bb48::t_ab62c5f0283ef0 1-123
+apps/web/src/ui/text/format-amount.tsx
+  s_2f5ef323e3bb48::t_57e2b0327edb57 75,103-104
+apps/web/src/ui/text/format-amount.unit.test.ts
+  s_2f5ef323e3bb48::t_6b447dc6e8ed5d 1,6-20
+apps/web/tests/e2e/record-emoji-categories.spec.ts
+  s_2f5ef323e3bb48::t_f07c1587b767a4 1-2,349-352,363-380,383
+apps/web/tests/e2e/run-presentation.spec.ts
+  s_2f5ef323e3bb48::t_5001594ae34df1 94,96,111
+apps/web/tooling/checks/check-client-bundle.ts
+  s_2f5ef323e3bb48::t_e9264fa5aea837 54
+apps/web/tooling/checks/check-client-bundle.unit.test.ts
+  s_2f5ef323e3bb48::t_7a4a6a4b761eed 56,68,70
+apps/web/tooling/dev/config-runtime-boundary.test.ts
+  s_2f5ef323e3bb48::t_8c862ce4f2e409 3-4,10-12,50-59,66-87
+apps/web/tooling/dev/config.ts
+  s_2f5ef323e3bb48::t_f351c7d9d8ae88 2,7-14,16-26,47,54,79-80
+apps/web/tooling/dev/worker.ts
+  s_2f5ef323e3bb48::t_db6a737f09a66a 6,8,169-170,172,176,178,261-295,297
+apps/web/tooling/mac-import-e2e.ts
+  s_2f5ef323e3bb48::t_9940a2ca79bfd2 37,203
+apps/web/tooling/source-fingerprint.ts
+  s_2f5ef323e3bb48::t_157f035eb4fbe2 38-41
+apps/web/tooling/ui-test-setup.ts
+  s_2f5ef323e3bb48::t_a87153b20febd0 4,44-46
+apps/web/tooling/web-build-provenance.ts
+  s_2f5ef323e3bb48::t_82a8801993f6d3 94,121
+apps/web/tooling/web-build-provenance.unit.test.ts
+  s_2f5ef323e3bb48::t_f5d22d6c32af3d 258,261-264
+apps/web/worker-identity.json
+  s_2f5ef323e3bb48::t_64ea02312ef694 1-18
+cookbook-wasm/Cargo.toml
+  s_2f5ef323e3bb48::t_374b825078bfd2 2-4,7-8,18-23,25-26
+cookbook-wasm/project.json
+  s_2f5ef323e3bb48::t_e8a60103aa22ca 1-12
+cubby-ffi/Cargo.toml
+  s_2f5ef323e3bb48::t_a3555942d1347a 4-5,12-14,32-37
+cubby-ffi/src/display.rs
+  s_2f5ef323e3bb48::t_2a0a04bfc3314a 1-193
+cubby-ffi/src/ingredient.rs
+  s_2f5ef323e3bb48::t_4a209c61baa250 1-116
+cubby-ffi/src/isbn.rs
+  s_2f5ef323e3bb48::t_06a3d201613804 1-81
+cubby-ffi/src/lib.rs
+  s_2f5ef323e3bb48::t_2529458d4c1206 1-8,10-15,19-22,24-27
+cubby-ffi/src/scaling.rs
+  s_2f5ef323e3bb48::t_3ea3ad793e1f04 1-72
+docs/adr/0019-domain-first-server-layout.md
+  s_2f5ef323e3bb48::t_a536e3c3577351 43
+docs/agents/generic-paths.md
+  s_2f5ef323e3bb48::t_6eea0fff44a322 251-252
+docs/agents/validation-tests.md
+  s_2f5ef323e3bb48::t_c2b4022a78e189 5-8
+docs/ci.md
+  s_2f5ef323e3bb48::t_2028388e1012d9 189-190,195,214-231
+docs/development.md
+  s_2f5ef323e3bb48::t_e03bac3ae22ea8 47-57,61-62,64-69,344-349,356-374
+docs/entities.md
+  s_2f5ef323e3bb48::t_25bae8740af863 2400-2407
+knip.json
+  s_2f5ef323e3bb48::t_617f245221dd79 118
+nx.json
+  s_2f5ef323e3bb48::t_2297e97b82c4b2 88
+packages/schemas/src/data-quality.ts
+  s_2f5ef323e3bb48::t_d1c196b45bb6ad 1
+packages/schemas/src/entity-definitions/data-quality-image.ts
+  s_2f5ef323e3bb48::t_3c4d83c4568e02 1-15
+packages/schemas/src/entity-definitions/definition.ts
+  s_2f5ef323e3bb48::t_a1f581d1222df2 1,2980-2984,3012,3014-3020,3023
+packages/shared/golden-vectors/display-format.json
+  s_2f5ef323e3bb48::t_bf023bb5afd640 2,533-592
+packages/wasm/.gitignore
+  s_2f5ef323e3bb48::t_f5f78aaba655d6 1-4
+packages/wasm/package.json
+  s_2f5ef323e3bb48::t_14d7c8b79c9e28 7,14,17-22,24
+packages/wasm/workerd.js
+  s_2f5ef323e3bb48::t_5425b69361e2f3 1-4,6-7,9-10,13,15
+recipebridge/Cargo.toml
+  s_2f5ef323e3bb48::t_4bc584c0e8e987 4-6,22-25,27-28,33-35,37-46,49-54,59-71,78-82
+recipebridge/project.json
+  s_2f5ef323e3bb48::t_5d57484b048b92 6
+recipebridge/src/ai_usage.rs
+  s_2f5ef323e3bb48::t_58fce528814740 6,8,12-13,35-36,44
+recipebridge/src/availability.rs
+  s_2f5ef323e3bb48::t_24cae4a9d3b61e 5,18,20,22,26,28,37-38,46-47,56-57,69-70,77,79,93-94,99,103-104,111-112,119,122,129,134,139-140,211,242-245,249,252-258,262-264,303,307,317-319,384,689,696,703-740,860-865
+recipebridge/src/conversion.rs
+  s_2f5ef323e3bb48::t_dc56bd85a324ac 9-12,14,17,19,22-26,30-31,52-53,56,59,64-67,74,82-83,90,98-99,121,256,270,283-284,290-291,306,339,354,382,387,401,450,483
+recipebridge/src/costing/consumption.rs
+  s_2f5ef323e3bb48::t_792e6c3ffc3d74 11,36-37,53-54
+recipebridge/src/costing/engine.rs
+  s_2f5ef323e3bb48::t_b93d3cbb42ca13 16-18,20-23,31,35,39,46,109,112-114,119,135,147,185,191-203,284,287,290,292,300-307,316,321-322,324-328,331-338,341,390-391,504,508-512,528,545,551,555,573-576,580,619-621,914-920,968,970-971,1212-1225,1282-1283,1358,1441,1444
+recipebridge/src/costing/graphs.rs
+  s_2f5ef323e3bb48::t_16d3419647dd64 1-206
+recipebridge/src/costing/mod.rs
+  s_2f5ef323e3bb48::t_8b864a7b8c9b57 9,17-18,31,41
+recipebridge/src/costing/types.rs
+  s_2f5ef323e3bb48::t_29778418a84b5d 9,18-19,27-28,46,49,54,59-60,66,73-74,79,86-87,96-97,113-114,116,121,125-126,128,133-134,153-154,159,167-168,178-179,181,186-187,189,194-195,212-213,215,217,219,225-226,237-238,243,251,265,274,280-281,284,290-291,299-300,307,311,329-330
+recipebridge/src/display_format.rs
+  s_2f5ef323e3bb48::t_8f3d7576fbf10a 5-7,10,12,18-19,87-90,131-132,151,156,168-175,180-181,196,207-209,211,224,229,241,253-254,260-262,265,303-310,323,342,349,356,358,360,368,370,372,380,387-400,407-411,416-422,427-428
+recipebridge/src/email.rs
+  s_2f5ef323e3bb48::t_ed14beb330a298 10,12,15,29-30,40-41,52-53,61-62,202,696,851
+recipebridge/src/estimates.rs
+  s_2f5ef323e3bb48::t_f80b7f50466e82 8,10,17-18,23,27-28,37-38,45-46,51,57,67,116-117,123-124,130-131,135-136,140-141,321,330,335,344,362
+recipebridge/src/food_calculation.rs
+  s_2f5ef323e3bb48::t_059ec734892895 4,8,10,12,17,23-24,30-31,40-41,45,48,52-53,59,66,69,79-80,83,89-90,94,190-191,425
+recipebridge/src/food_mappings.rs
+  s_2f5ef323e3bb48::t_a05291e92357ec 17,19,25-26,30,36-37,40,43,46,54-55,62-63,68,77-78,82,87,93-94,106,310-311,368,377
+recipebridge/src/html.rs
+  s_2f5ef323e3bb48::t_6b28cebc62c802 1,139,141
+recipebridge/src/isbn.rs
+  s_2f5ef323e3bb48::t_97806651ac5acb 7-8,15,17,23-24,29,136,138-142,153,158-159,166,187,211,213-214,233,235-236
+recipebridge/src/lib.rs
+  s_2f5ef323e3bb48::t_50fb53ed46072f 1-7,18,23-27,36,38,52-53,81,126,149,167,204-205,262-263,270,277,289-290,301,309
+recipebridge/src/model_image.rs
+  s_2f5ef323e3bb48::t_7e6c123bad76e1 10,57,62,66,77-79,85,108,136
+recipebridge/src/needs.rs
+  s_2f5ef323e3bb48::t_7b6db345defaa2 19,21,35-36,49-50,57,65-66,73-74,82-83,92-93,100,109-110,129-130,138,143-144,152-153,156,165-166,169,172,177,197-202,209,219,221,455,468
+recipebridge/src/parse.rs
+  s_2f5ef323e3bb48::t_d363f214a7519f 20,25,27,38-39,60-61,91-92,108-109,119-120,149-150,154-155,179-180,192-193,212-213,221-222,245-246,257-258,281,287-289,298-299,306,319,324,329-345,352-359,361-362,369,371,381,391,423,439,445,455,464,473-474,509,663,668-669
+recipebridge/src/reconcile.rs
+  s_2f5ef323e3bb48::t_017b706ee83614 1
+recipebridge/src/scaling.rs
+  s_2f5ef323e3bb48::t_20a6930d588433 9,18-19,31-32,39,47-48,50,58,60,69-70,76,84,89-91,96,98,103-105,110-113
+recipebridge/tests/costing.rs
+  s_2f5ef323e3bb48::t_c6202bb0f2f45b 490,494-497,507-510,518-527,882,886,891,914,918,922-963,1015-1063
+scripts/apple-ffi.ts
+  s_2f5ef323e3bb48::t_99e605c785fbd8 1-3,5,7-17,19-27,29,31-60
+scripts/ensure.test.ts
+  s_2f5ef323e3bb48::t_868ceab6b85461 14-18,69-143
+scripts/ensure.ts
+  s_2f5ef323e3bb48::t_9445355f92c859 4,8,64-65,67-68
+scripts/rust-fingerprint.ts
+  s_2f5ef323e3bb48::t_cc639c98bae7a5 14,39-42,55-87,111,113,120-121,132-166,168-193
+scripts/wasm.ts
+  s_2f5ef323e3bb48::t_4bf0f91a5f9b33 1-65
+tools/oxlint/cubby/domain-layers.test.ts
+  s_2f5ef323e3bb48::t_5b21a8ccd4d242 8-25,208-216
+tools/oxlint/cubby/rules/domain-layers.ts
+  s_2f5ef323e3bb48::t_934c42b5cf0631 11,39-40,78,91-92,121,154-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d210a505e5e6511ee0bb1fda359bb585f7137cf2",
+  "prompts": {},
+  "sessions": {
+    "s_033c97ccc35358": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60bf3a4f-d655-4028-9f82-d84fe59d64b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_2f5ef323e3bb48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "983d1247-580e-4791-a535-3dd4fb15b7d6",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
