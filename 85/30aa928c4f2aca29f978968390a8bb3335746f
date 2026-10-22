@@ -1,0 +1,105 @@
+.github/actions/playwright/action.yml
+  s_eeef2ac4fa7615::t_a2ec66e3b145b3 48,61-69
+.github/workflows/ci.yaml
+  s_eeef2ac4fa7615::t_61b7bac1de5624 182-191,235,237-238,240-241,244,246,257-260,383-456
+apps/apple/scripts/check-openapi-warnings.test.ts
+  s_eeef2ac4fa7615::t_be409fc0f5dd09 14,23,25-27
+apps/apple/tooling/apple-package-resolution.test.ts
+  s_eeef2ac4fa7615::t_016be32d757874 11,76
+apps/apple/tooling/apple-release.test.ts
+  s_eeef2ac4fa7615::t_6e391a095700f0 6,86
+apps/apple/tooling/apple-simulator-selection.test.ts
+  s_eeef2ac4fa7615::t_7eb698984dc092 4
+apps/apple/tooling/apple-validation.test.ts
+  s_eeef2ac4fa7615::t_acc805cb6d223a 14,23-25
+apps/apple/tooling/mac-app-approval.test.ts
+  s_eeef2ac4fa7615::t_2d08423bfb2ea9 5,29
+apps/apple/tooling/mac-app-install.test.ts
+  s_eeef2ac4fa7615::t_21fd2e72820e15 14,55,115,149
+apps/apple/tooling/mac-presentation-helper.test.ts
+  s_eeef2ac4fa7615::t_f8e4126bdf84f9 12,78
+apps/apple/tooling/shared-device-command.test.ts
+  s_eeef2ac4fa7615::t_6d9b9d85efa854 6,47
+apps/apple/tooling/simulator-server.test.ts
+  s_eeef2ac4fa7615::t_2c84379fb7f132 2
+apps/nx-cache/tests/cache.test.mjs
+  s_eeef2ac4fa7615::t_58e5e8041fa53a 3,165
+apps/web/.gitignore
+  s_eeef2ac4fa7615::t_3636e613dea92d 4-5
+apps/web/generator/artifacts.test.ts
+  s_eeef2ac4fa7615::t_1de72c6174d967 5,47
+apps/web/generator/claude-plugin.test.ts
+  s_eeef2ac4fa7615::t_ca2ff94711ecae 4
+apps/web/generator/entities/bulk.test.ts
+  s_eeef2ac4fa7615::t_5ac1f41430be22 2
+apps/web/package.json
+  s_eeef2ac4fa7615::t_92041ea478d819 7,37
+apps/web/playwright.config.ts
+  s_eeef2ac4fa7615::t_6a38ac31f851cb 65-66,68-73
+apps/web/project.json
+  s_eeef2ac4fa7615::t_ef63d088604ea7 59-65,80-84,133,151-154
+apps/web/tooling/ci-report/summary.ts
+  s_eeef2ac4fa7615::t_5e6180e54ed607 1-212
+apps/web/tooling/ci-report/vitest-records-reporter.ts
+  s_eeef2ac4fa7615::t_7e9b1a474fcb7e 1-44
+apps/web/tooling/dev-services/dev-db-docker.test.ts
+  s_eeef2ac4fa7615::t_24548ebc388bb1 6,89
+apps/web/tooling/dev-services/dev-db.test.ts
+  s_eeef2ac4fa7615::t_b4620c23a458ba 7,89
+apps/web/tooling/dev-services/dev-profile.test.ts
+  s_eeef2ac4fa7615::t_adb746204f40e5 2
+apps/web/tooling/dev-services/process-identity.test.ts
+  s_eeef2ac4fa7615::t_317a832ad90efd 5,41
+apps/web/tooling/dev-services/test-services.test.ts
+  s_eeef2ac4fa7615::t_7c323e9604f423 19,119,152,197
+apps/web/tooling/dev/config-runtime-boundary.test.ts
+  s_eeef2ac4fa7615::t_8892942e29c58d 3
+apps/web/tooling/dev/dev-session.test.ts
+  s_eeef2ac4fa7615::t_71ca04db375bd5 7,74
+apps/web/tooling/native-driver-diagnostics.test.ts
+  s_eeef2ac4fa7615::t_ca80ac83214c97 13,151,203,265,286-287
+apps/web/tooling/native-replay-progress-reporter.test.ts
+  s_eeef2ac4fa7615::t_e56cc2b8dcc9b7 5
+apps/web/tooling/native-text-entry-diagnostics.test.ts
+  s_eeef2ac4fa7615::t_7c0f475e7ee5ff 13,59,94,127,152,168-169
+apps/web/tooling/workers-test.cloudflare.config.ts
+  s_eeef2ac4fa7615::t_b0a94a6837daff 5
+apps/web/vitest.config.ts
+  s_eeef2ac4fa7615::t_ec1f6d855f62c4 3,13,83-134,197-200,202,227-239,272-274,279,281,461,495-557,573-577,579-589
+docs/agents/validation-tests.md
+  s_eeef2ac4fa7615::t_c744dadfa4e412 363-364,369-370
+docs/ci.md
+  s_eeef2ac4fa7615::t_53f6b716640081 362-367,384-387,391-401,415-424
+nx.json
+  s_eeef2ac4fa7615::t_56021323772b1e 114-116
+package.json
+  s_eeef2ac4fa7615::t_36d894dadc9425 11,23-24,29,68
+pnpm-lock.yaml
+  s_eeef2ac4fa7615::t_0bc0cfe5930988 258-260,16774-16791,16814-16836,16846-16854,16869,21342-21369
+project.json
+  s_eeef2ac4fa7615::t_887ce17de4d4a5 100-103
+scripts/ensure.test.ts
+  s_eeef2ac4fa7615::t_c8e18c418c59b9 12,36-38,74-76
+tools/oxlint/anti-slop/anti-slop-rules.test.ts
+  s_eeef2ac4fa7615::t_6ce42b8a00ef45 6,80,108,448
+tools/oxlint/cubby/domain-layers.test.ts
+  s_eeef2ac4fa7615::t_0b925f4531bd1f 2
+apps/web/tooling/ci-report/records.ts
+  s_eeef2ac4fa7615::t_fbbe8e4386e86b 1-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8530aa928c4f2aca29f978968390a8bb3335746f",
+  "prompts": {},
+  "sessions": {
+    "s_eeef2ac4fa7615": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96cf421e-31d0-4e4a-9fa3-bcaf218e9b61",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
