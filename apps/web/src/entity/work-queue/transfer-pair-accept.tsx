@@ -3,10 +3,8 @@ import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import {
-  financialTransaction,
-  householdContribution,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
+import { householdContribution } from "~/integrations/tanstack-query/generated/catalog/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

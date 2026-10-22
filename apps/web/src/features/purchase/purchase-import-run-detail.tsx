@@ -38,10 +38,8 @@ import {
   PhotoRunGroupingAction,
 } from "~/features/run/photo-run-detail";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  aiFunding,
-  run as runOperations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { aiFunding } from "~/integrations/tanstack-query/generated/catalog/aiFunding.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { AiCost } from "~/ui/common/ai-cost";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";

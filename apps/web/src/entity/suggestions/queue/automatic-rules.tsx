@@ -6,7 +6,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { Section } from "~/ui/layout/section";

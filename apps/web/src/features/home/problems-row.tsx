@@ -2,7 +2,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 
-import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { formatCount } from "~/lib/number-format";
 
 import { HomeRow } from "./home-list";

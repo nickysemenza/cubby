@@ -20,7 +20,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import { MobileCardView } from "~/entity/table/mobile-card-view";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   createCubbyColumnCollection,

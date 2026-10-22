@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { Page } from "~/entity/page/page";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Stack } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";

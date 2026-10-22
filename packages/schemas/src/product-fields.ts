@@ -3,6 +3,10 @@ import { z } from "zod";
 import { productShortcode } from "./identifier-fields";
 import { moneyNullable, positiveMoneyNullable } from "./money";
 
+/** A USDA food link is a positive fdc_id, shared by identity and cache policy. */
+export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
+  fdc_id != null && fdc_id > 0;
+
 /** Cycle-safe Product field schemas used by generated contracts. */
 export const productCategory = productCategorySummary;
 

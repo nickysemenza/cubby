@@ -1,7 +1,7 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { useContext } from "react";
 
-import { assessment } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
 
 import {
   type EntitySuggestionsOperations,

@@ -7,7 +7,7 @@ import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 
 const NO_ITEMS: FilterOptionItem[] = [];
 

@@ -13,7 +13,7 @@ import {
   ContributionGapsTable,
   MoneyCell,
 } from "~/features/finance/household-contribution-format";
-import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { householdContribution } from "~/integrations/tanstack-query/generated/catalog/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { KeyNumbers } from "~/ui/common/key-numbers";
 import { DatePickerInput } from "~/ui/date-picker-input";

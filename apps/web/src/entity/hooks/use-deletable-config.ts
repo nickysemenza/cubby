@@ -8,7 +8,7 @@ import {
   isGeneratedBrowserCrudEntity,
 } from "~/entity/entity-contracts";
 import type { GeneratedBrowserCrudEntity } from "~/entity/generated/entity-routes.gen";
-import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { image } from "~/integrations/tanstack-query/generated/catalog/image.gen";
 
 type DeletableEntity = GeneratedBrowserCrudEntity | "image";
 

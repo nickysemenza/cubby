@@ -49,6 +49,7 @@
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml",
+        "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPI/Client.gen.swift",
         "{workspaceRoot}/docs/guide/how-values-are-determined.md"
       ]
     },

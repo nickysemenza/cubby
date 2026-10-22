@@ -7,10 +7,8 @@ import { useState } from "react";
 
 import { usePageCount } from "~/entity/page/page";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  assessment,
-  suggestions,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Picker } from "~/ui/combobox/picker";
 import { DateDisplay } from "~/ui/common/date-display";

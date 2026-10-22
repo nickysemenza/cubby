@@ -16,10 +16,8 @@ import {
   featureRegistry,
 } from "~/entity/feature-registry";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
-import {
-  ingredient,
-  vendor,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
+import { vendor } from "~/integrations/tanstack-query/generated/catalog/vendor.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { Overlay } from "~/ui/overlays/overlay";
 

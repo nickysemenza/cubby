@@ -224,11 +224,11 @@ export const calendarSourceMatches = (
       ),
   );
 
-export const calendarRangeInput = z
+export const calendarWindowInput = z
   .object({
     startDate: plainDate,
     endDateExclusive: plainDate,
-    ...calendarFilterFields,
+    kinds: calendarFilterFields.kinds,
   })
   .strict()
   .refine((value) => value.startDate < value.endDateExclusive, {
@@ -239,6 +239,10 @@ export const calendarRangeInput = z
     message: `calendar range cannot exceed ${MAX_CALENDAR_RANGE_DAYS} days`,
     path: ["endDateExclusive"],
   });
+/** Web calendar queries additionally intersect the ordinary source filters. */
+export const calendarRangeInput = calendarWindowInput.safeExtend({
+  filters: calendarFilterFields.filters,
+});
 export type CalendarRangeInput = z.infer<typeof calendarRangeInput>;
 
 export const calendarDaySummary = z.object({

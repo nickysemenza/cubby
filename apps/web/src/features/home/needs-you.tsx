@@ -8,7 +8,7 @@ import {
   WorkRowLink,
   workRowType,
 } from "~/features/work-queue/work-row-link";
-import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { formatCount } from "~/lib/number-format";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { EmptyState } from "~/ui/feedback/empty-state";

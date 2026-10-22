@@ -18,7 +18,7 @@ import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
 import { WithVendorShortcodeSearch } from "~/entity/picker/with-vendor-search";
 import { tradeOptions } from "~/entity/presentation/trade-options";
-import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";

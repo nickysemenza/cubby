@@ -50,7 +50,7 @@ import {
   reconciliationDelta,
 } from "~/features/purchase/purchase-reconciliation";
 import { RunFindingActions } from "~/features/purchase/run-finding-actions";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 import { formatCalendarDay, formatTimestamp } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/number-format";

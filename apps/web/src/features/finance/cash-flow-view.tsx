@@ -22,7 +22,7 @@ import {
   cashFlowInputFromSearch,
 } from "~/features/finance/cash-flow-search";
 import { monthLabel } from "~/features/project/project-formatting";
-import { cashFlow } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cashFlow } from "~/integrations/tanstack-query/generated/catalog/cashFlow.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { KeyNumbers } from "~/ui/common/key-numbers";

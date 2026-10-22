@@ -16,10 +16,8 @@ import { createContext, useContext, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
-import {
-  fieldExplanation,
-  suggestions,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
 import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { collection } from "~/integrations/tanstack-query/generated/catalog/collection.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 describe("smart Collection cache contract", () => {

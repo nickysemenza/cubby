@@ -15,6 +15,7 @@ import {
   nameStructuralComponents,
   type JsonSchema,
 } from "../../../generator/http-api/document-passes";
+import { shareNativeErrorResponses } from "../../../generator/http-api/openapi";
 import { NATIVE_TYPED_RECORDS } from "../../../generator/http-api/type-overrides";
 import { httpMetadataSchema } from "./router";
 import { httpRoutes } from "./routes";
@@ -57,6 +58,7 @@ const parameter = z.looseObject({
   content: z.unknown().optional(),
 });
 const response = z.looseObject({
+  $ref: z.string().optional(),
   content: z
     .record(z.string(), z.looseObject({ schema: schemaNode.optional() }))
     .optional(),
@@ -92,8 +94,16 @@ const resolve = (ref: string) => {
     throw new Error(`Unresolved component reference ${ref}`);
   return { name, schema };
 };
-const responseRef = (value: z.output<typeof response> | undefined) =>
-  value?.content?.["application/json"]?.schema?.$ref;
+const responseComponents = z
+  .record(z.string(), response)
+  .parse(document.components.responses ?? {});
+const responseRef = (value: z.output<typeof response> | undefined) => {
+  const resolved =
+    value?.$ref === "#/components/responses/ApiError"
+      ? responseComponents.ApiError
+      : value;
+  return resolved?.content?.["application/json"]?.schema?.$ref;
+};
 const isAnonymous = (name: string) =>
   /^(?:(?:input|output)_schema\d+|(?:Input|Output)Shared[0-9A-F]{16})$/u.test(
     name,
@@ -136,6 +146,24 @@ const POST_QUERIES = httpRoutes(httpContract)
   .map((route) => route.path.replace(":id", "{id}"));
 
 describe("generated HTTP OpenAPI document", () => {
+  it("keeps the native calendar window free of web-only filter graphs", () => {
+    const input = schemas.CalendarWindowInput;
+    expect(input?.required).toEqual(
+      expect.arrayContaining(["startDate", "endDateExclusive"]),
+    );
+    expect(Object.keys(input?.properties ?? {}).sort()).toEqual([
+      "endDateExclusive",
+      "kinds",
+      "startDate",
+    ]);
+    const route = paths["/api/v1/calendar/range"]?.post;
+    expect(route).toBeDefined();
+    expect(JSON.stringify(route?.requestBody)).toContain(
+      "#/components/schemas/CalendarWindowInput",
+    );
+    expect(schemas.CalendarRangeInput).toBeUndefined();
+  });
+
   it("keeps shared native presentation open without its unused typed graphs", () => {
     // Pin the reviewed native erasures; expanding the emitter policy needs a consumer review.
     for (const name of [
@@ -243,7 +271,13 @@ describe("generated HTTP OpenAPI document", () => {
       [...text.matchAll(/"\$ref":"([^"]+)"/gu)].map((match) => match[1] ?? ""),
     );
     expect(references.size).toBeGreaterThan(0);
-    for (const ref of references) resolve(ref);
+    for (const ref of references) {
+      const prefix = "#/components/responses/";
+      if (ref.startsWith(prefix)) {
+        if (responseComponents[ref.slice(prefix.length)] === undefined)
+          throw new Error(`Unresolved response reference ${ref}`);
+      } else resolve(ref);
+    }
   });
 
   it("carries no component unreachable from a path or the typed-record keep-list", () => {
@@ -257,6 +291,7 @@ describe("generated HTTP OpenAPI document", () => {
       });
     const queue = [
       ...refsIn(JSON.stringify(document.paths)),
+      ...refsIn(JSON.stringify(document.components.responses)),
       ...NATIVE_TYPED_RECORDS,
     ];
     for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
@@ -296,11 +331,45 @@ describe("generated HTTP OpenAPI document", () => {
         (status) => !["200", "201"].includes(status),
       );
       expect(statuses).toEqual(["default"]);
+      expect(entry.responses.default?.$ref).toBe(
+        "#/components/responses/ApiError",
+      );
       expect(resolve(responseRef(entry.responses.default) ?? "").name).toBe(
         "ApiError",
       );
     }
   });
+
+  it.each(["500", "default"])(
+    "rejects divergent error status %s before sharing response types",
+    (status) => {
+      const error = {
+        description: "Error",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/ApiError" },
+          },
+        },
+      };
+      expect(() =>
+        shareNativeErrorResponses(
+          {
+            "400": error,
+            [status]: {
+              ...error,
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/OtherError" },
+                },
+              },
+            },
+          },
+          "example.read",
+          undefined,
+        ),
+      ).toThrow(`example.read: error status ${status}`);
+    },
+  );
 
   it("carries query parameters as plain form values", () => {
     for (const entry of operations) {

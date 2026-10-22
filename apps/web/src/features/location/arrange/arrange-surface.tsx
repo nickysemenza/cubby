@@ -6,7 +6,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { ProductImageSummariesProvider } from "~/entity/presentation/product-image-summaries";
 import { collectTreeProductIds } from "~/features/location/location-gallery-data";
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useHydrated } from "~/ui/hooks/use-hydrated";

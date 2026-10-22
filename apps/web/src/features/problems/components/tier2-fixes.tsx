@@ -11,8 +11,8 @@ import {
   useEntityActionMutation,
 } from "~/entity/hooks/use-action-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
-import { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
+import { vendor } from "~/integrations/tanstack-query/generated/catalog/vendor.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

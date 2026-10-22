@@ -64,11 +64,9 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { readReferenceField } from "~/entity/entity-references";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  ai,
-  assessment,
-  suggestions,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy";
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";

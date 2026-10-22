@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import { useEntityOptions } from "~/ui/hooks/use-entity-options";
 
 import { RecordEmoji } from "./record-emoji";

@@ -3,7 +3,7 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { type ReactNode, useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { Stack } from "~/ui/layout";
 import {
   AlertDialog,

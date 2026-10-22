@@ -40,7 +40,7 @@ import type {
   TableStateReturn,
   useTableState,
 } from "~/entity/table/use-table-state";
-import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import { formatCount } from "~/lib/number-format";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import {

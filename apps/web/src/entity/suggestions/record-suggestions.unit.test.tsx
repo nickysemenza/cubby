@@ -26,7 +26,7 @@ import { z } from "zod";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { installFeatures } from "~/features/registry";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";

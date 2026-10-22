@@ -65,11 +65,9 @@ import {
   RUN_TARGET_STATE_VARIANT,
 } from "~/features/run/run-target-state";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  photoImport,
-  product as productOperations,
-  purchaseImport,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
+import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";

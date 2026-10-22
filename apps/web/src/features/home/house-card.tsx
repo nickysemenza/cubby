@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { DateDisplay } from "~/ui/common/date-display";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

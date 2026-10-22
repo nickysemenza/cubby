@@ -21,18 +21,17 @@ type Tag = z.infer<typeof tagSchema>;
 const rippleSchema = z.record(z.string(), z.unknown());
 const overrideMembersSchema = z.record(z.string(), z.unknown());
 type OverrideMembers = z.infer<typeof overrideMembersSchema>;
-const overridesSchema = z.record(z.string(), overrideMembersSchema);
 
 const cacheTagsModuleSchema = z.object({ ripple: rippleSchema });
 const cachePolicyModuleSchema = z.object({
   ENTITY_ROOT_TAGS: z.array(tagSchema),
 });
-const overridesModuleSchema = z.object({ operationOverrides: overridesSchema });
+const overridesModuleSchema = z.record(z.string(), z.unknown());
 
 /** What the catalog needs from the hand-written client modules. */
 type ClientModules = {
   ripple: z.infer<typeof rippleSchema>;
-  overrides: z.infer<typeof overridesSchema>;
+  overrides: Record<string, OverrideMembers>;
   entityRootTags: readonly Tag[];
 };
 
@@ -40,9 +39,18 @@ const loadClientModules = async (): Promise<ClientModules> => ({
   ripple: cacheTagsModuleSchema.parse(
     await import(pathToFileURL(CACHE_TAGS_MODULE).href),
   ).ripple,
-  overrides: overridesModuleSchema.parse(
-    await import(pathToFileURL(OPERATION_OVERRIDES_MODULE).href),
-  ).operationOverrides,
+  overrides: Object.fromEntries(
+    Object.entries(
+      overridesModuleSchema.parse(
+        await import(pathToFileURL(OPERATION_OVERRIDES_MODULE).href),
+      ),
+    )
+      .filter(([name]) => name.endsWith("Overrides"))
+      .map(([name, value]) => [
+        name.slice(0, -"Overrides".length),
+        overrideMembersSchema.parse(value),
+      ]),
+  ),
   entityRootTags: cachePolicyModuleSchema.parse(
     await import(pathToFileURL(CACHE_POLICY_MODULE).href),
   ).ENTITY_ROOT_TAGS,
@@ -67,14 +75,12 @@ const domainExportName = (contractExport: string): string => {
 type UsedImports = {
   entityRootTags: boolean;
   operationOverrides: boolean;
-  rippleFor: boolean;
 };
 
 class CatalogRenderer {
   readonly used: UsedImports = {
     entityRootTags: false,
     operationOverrides: false,
-    rippleFor: false,
   };
   private readonly entityRootsJson: string;
 
@@ -129,7 +135,6 @@ class CatalogRenderer {
     const [only, ...rest] = keys;
     if (only === undefined) return "ripple.none";
     if (rest.length === 0) return property("ripple", only);
-    this.used.rippleFor = true;
     return `rippleFor(${JSON.stringify(keys)})`;
   }
 
@@ -183,9 +188,7 @@ class CatalogRenderer {
       .map(([name, code]) => `${name}: ${code}`);
     if (override !== undefined) {
       this.used.operationOverrides = true;
-      fields.push(
-        `...${property(property("operationOverrides", domainName), member)}`,
-      );
+      fields.push(`...${property(`${domainName}Overrides`, member)}`);
     }
     return `  ${memberKey(member)}: { ${fields.join(", ")} },`;
   }
@@ -212,41 +215,54 @@ class CatalogRenderer {
             : overrideMembersSchema.parse(overrides[member]),
         ) ?? [],
     );
-    return `export const ${name} = /* @__PURE__ */ defineOperationDomain(contracts.${exportName}${
+    return `export const ${name} = /* @__PURE__ */ defineOperationDomain(contract${
       members.length > 0 ? `, {\n${members.join("\n")}\n}` : ""
     });\n`;
   }
 
-  imports(): string[] {
+  imports(
+    exportName: string,
+    module: string,
+    name: string,
+    body: string,
+  ): string[] {
+    const cacheImports = [
+      ...(body.includes("ripple.") || body.includes("ripple[")
+        ? ["ripple"]
+        : []),
+      ...(body.includes("rippleFor(") ? ["rippleFor"] : []),
+    ];
     return [
-      `import * as contracts from "~/contracts/index";`,
+      `import { ${exportName} as contract } from "${module}";`,
       ...(this.used.entityRootTags
         ? [`import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";`]
         : []),
-      `import { ripple${this.used.rippleFor ? ", rippleFor" : ""} } from "~/integrations/tanstack-query/cache-tags";`,
+      ...(cacheImports.length
+        ? [
+            `import { ${cacheImports.join(", ")} } from "~/integrations/tanstack-query/cache-tags";`,
+          ]
+        : []),
       `import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";`,
       ...(this.used.operationOverrides
         ? [
-            `import { operationOverrides } from "~/integrations/tanstack-query/operation-overrides";`,
+            `import { ${name}Overrides } from "~/integrations/tanstack-query/operation-overrides/${name}";`,
           ]
         : []),
     ];
   }
 }
 
-/**
- * The browser catalog: one domain object per contract, in contract declaration
- * order, each query member carrying its resolved cache tags and each mutation
- * its invalidation fan-out. Fails generation on a name collision, an
- * `invalidates` row `ripple` does not have, a malformed tag, or an override that
- * matches no contract member.
- */
-export const renderClientCatalog = async (): Promise<string> => {
+/** Generate isolated domain modules plus test-only enumeration and lazy commands. */
+export const renderClientCatalog = async (): Promise<{
+  domains: { relativePath: string; source: string }[];
+  all: { relativePath: string; source: string };
+  commands: { relativePath: string; source: string };
+  commandRuntime: { relativePath: string; source: string };
+}> => {
   const modules = await loadClientModules();
-  const renderer = new CatalogRenderer(modules);
-  const names = new Map<string, string>();
   const loadedContracts = await loadContracts();
-  const blocks = loadedContracts.map((loaded) => {
+  const names = new Map<string, string>();
+  const domains = loadedContracts.map((loaded) => {
     const name = domainExportName(loaded.exportName);
     const existing = names.get(name);
     if (existing !== undefined)
@@ -254,7 +270,19 @@ export const renderClientCatalog = async (): Promise<string> => {
         `${loaded.exportName} and ${existing} both map to the client catalog export ${name}.`,
       );
     names.set(name, loaded.exportName);
-    return renderer.renderDomain(loaded);
+    const renderer = new CatalogRenderer(modules);
+    const body = renderer.renderDomain(loaded);
+    return {
+      name,
+      relativePath: `apps/web/src/integrations/tanstack-query/generated/catalog/${name}.gen.ts`,
+      source:
+        generatedHeader +
+        renderer
+          .imports(loaded.exportName, loaded.module, name, body)
+          .join("\n") +
+        "\n\n" +
+        body,
+    };
   });
   const unknownDomain = Object.keys(modules.overrides).find(
     (domain) => !names.has(domain),
@@ -263,35 +291,69 @@ export const renderClientCatalog = async (): Promise<string> => {
     throw new Error(
       `operationOverrides.${unknownDomain} does not match any contract export named ${unknownDomain}Contract.`,
     );
-  return (
+
+  const allSource =
     generatedHeader +
-    `// The browser catalog: one domain object per contract, each member carrying\n` +
-    `// its resolved cache tags (defaulting to [domain, member]) or invalidation\n` +
-    `// fan-out. Cache policy is authored as data on the contract members\n` +
-    `// (contracts/cache-policy.ts); policy that reads the call's input lives in\n` +
-    `// operation-overrides.ts and is spread onto its member here.\n\n` +
-    `${renderer.imports().join("\n")}\n\n` +
-    blocks.join("\n") +
-    `\nexport function workflowCommandOptions(operation: string) {\n  switch (operation) {\n${loadedContracts
-      .flatMap(({ exportName, contract }) =>
-        Object.entries(contract.ops).flatMap(([member, definition]) => {
-          if (
-            definition.kind !== "mutation" ||
-            definition.command === undefined
-          )
-            return [];
-          const descriptor = property(domainExportName(exportName), member);
-          const declared = property(
-            property(property("contracts", exportName), "ops"),
-            member,
-          );
-          return [
-            `    case ${JSON.stringify(`${contract.domain}.${member}`)}: return { ...${descriptor}.mutationOptions(), command: ${declared}.command!, parse: (body: Record<string, unknown>) => ${declared}.input.parse(body), mutationFn: async (body: Record<string, unknown>): Promise<unknown> => ${descriptor}.call(${declared}.input.parse(body)) };`,
-          ];
-        }),
+    domains
+      .map(
+        ({ name }) =>
+          `export { ${name} } from "~/integrations/tanstack-query/generated/catalog/${name}.gen";`,
       )
-      .join(
-        "\n",
-      )}\n    default: throw new Error(\`Undeclared user command: \${operation}\`);\n  }\n}\n`
+      .join("\n") +
+    "\n";
+
+  const commandCases = loadedContracts.flatMap(({ exportName, contract }) =>
+    Object.entries(contract.ops).flatMap(([member, definition]) => {
+      if (definition.kind !== "mutation" || definition.command === undefined)
+        return [];
+      const operation = `${contract.domain}.${member}`;
+      const name = domainExportName(exportName);
+      const descriptor = property(name, member);
+      const commandJson = JSON.stringify(z.json().parse(definition.command));
+      if (commandJson === undefined)
+        throw new Error(
+          `${operation} command metadata is not JSON-compatible.`,
+        );
+      return [
+        {
+          domain: name,
+          metadata: `    case ${JSON.stringify(operation)}: return ${commandJson};`,
+          options: `    case ${JSON.stringify(operation)}: { const descriptor = ${descriptor}; const input = descriptor.definition.input; if (!input) throw new Error(\`Command \${operation} has no input schema.\`); return { ...descriptor.mutationOptions(), command: workflowCommandMetadata(operation), mutationFn: async (body: Record<string, unknown>): Promise<unknown> => descriptor.call(input.parse(body)) }; }`,
+        },
+      ];
+    }),
   );
+  const commandSource =
+    generatedHeader +
+    `import type { WorkflowCommandMetadata } from "@cubby/schemas/workflow-command";\n\n` +
+    `export function workflowCommandMetadata(operation: string): WorkflowCommandMetadata {\n  switch (operation) {\n${commandCases.map(({ metadata }) => metadata).join("\n")}\n    default: throw new Error(\`Undeclared user command: \${operation}\`);\n  }\n}\n\n` +
+    `export async function loadWorkflowCommandOptions(operation: string) {\n  const { workflowCommandOptions } = await import("~/integrations/tanstack-query/generated/command-runtime.gen");\n  return workflowCommandOptions(operation);\n}\n`;
+  const commandRuntimeSource =
+    generatedHeader +
+    `import { workflowCommandMetadata } from "~/integrations/tanstack-query/generated/commands.gen";\n` +
+    [...new Set(commandCases.map(({ domain }) => domain))]
+      .map(
+        (domain) =>
+          `import { ${domain} } from "~/integrations/tanstack-query/generated/catalog/${domain}.gen";`,
+      )
+      .join("\n") +
+    `\n\nexport function workflowCommandOptions(operation: string) {\n  switch (operation) {\n${commandCases.map(({ options }) => options).join("\n")}\n    default: throw new Error(\`Undeclared user command: \${operation}\`);\n  }\n}\n`;
+  return {
+    domains,
+    all: {
+      relativePath:
+        "apps/web/src/integrations/tanstack-query/generated/catalog/all.gen.ts",
+      source: allSource,
+    },
+    commands: {
+      relativePath:
+        "apps/web/src/integrations/tanstack-query/generated/commands.gen.ts",
+      source: commandSource,
+    },
+    commandRuntime: {
+      relativePath:
+        "apps/web/src/integrations/tanstack-query/generated/command-runtime.gen.ts",
+      source: commandRuntimeSource,
+    },
+  };
 };

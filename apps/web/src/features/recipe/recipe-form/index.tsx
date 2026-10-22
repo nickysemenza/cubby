@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields";
-import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useImageState } from "~/ui/hooks/use-image-state";

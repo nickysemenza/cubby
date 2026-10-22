@@ -6,7 +6,7 @@ import { format, parseISO } from "date-fns";
 import { actionsForSurface } from "~/entity/actions/action-items";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { mealListLabel } from "~/features/meal/meal-format";
-import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout";

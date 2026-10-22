@@ -23,7 +23,7 @@ import {
   createNameColumn,
 } from "~/entity/table/column-helpers";
 import RTable from "~/entity/table/table";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog/collection.gen";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {

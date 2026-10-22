@@ -37,7 +37,7 @@ import { upc } from "@cubby/shared/upc";
 import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
-import { productRefOut } from "./product-fields";
+import { hasFdcLink, productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { dateBound, dateRangeFields, numericRangeFields } from "./base-entity";
 import { amount } from "./codec";
@@ -90,14 +90,6 @@ export {
 export { productPricingOut } from "./product-fields";
 
 export type ProductCategory = ProductCategorySummary;
-
-/**
- * The explicit USDA food link: a positive `fdc_id`. One definition shared by
- * {@link impliedProductFeature} and the problems repo's food-category
- * detector, so "what counts as an fdc link" can't drift between them.
- */
-export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
-  fdc_id != null && fdc_id > 0;
 
 /**
  * The category feature a Product's identity evidence implies, read from the

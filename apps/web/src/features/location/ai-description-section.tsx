@@ -10,7 +10,7 @@ import {
   AiTextDiff,
 } from "~/entity/suggestions/ai-proposal-card";
 import { useAiProposal } from "~/entity/suggestions/use-ai-proposal";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 

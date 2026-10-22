@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
 import { CATEGORY_TREE_INPUT } from "~/entity/presentation/category-label";
 import { getFeatureColor } from "~/entity/presentation/category-theme";
-import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { product } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 
 import {
   buildCategoryHierarchy,

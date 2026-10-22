@@ -8,7 +8,7 @@ import {
   aiFundingStatusQuery,
   PaidRunButton,
 } from "~/features/account/ai-funding";
-import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";

@@ -20,11 +20,9 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import {
-  image as imageOperations,
-  imageProcessing,
-  assessment,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
+import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog/image.gen";
+import { imageProcessing } from "~/integrations/tanstack-query/generated/catalog/imageProcessing.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";

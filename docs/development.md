@@ -28,7 +28,12 @@ Start streams   →  cancellable workflow streams
   Every other operation is a contract in `apps/web/src/contracts/`, implemented
   once in a domain's `operations` module
   (`src/server/domains/<domain>/operations.server.ts` or `operations/*.server.ts`).
-  The browser, HTTP API and MCP are adapters over it.
+  The browser, HTTP API and MCP are adapters over it. Generated browser module
+  ownership and command loading live in [browser cache policy](entities.md#browser-cache-policy).
+  HTTP `httpWire` projections can narrow unused optional native input fields
+  without narrowing browser contracts. The calendar's typed window retains date
+  limits and kinds; web queries additionally accept source filters. Use
+  `safeExtend` when extending a refined schema so its refinements survive.
 - The server is domain-first ([ADR 0019](adr/0019-domain-first-server-layout.md)):
   `src/server/domains/<entity>/` per manifest entity plus cross-entity feature
   folders (`purchase-import`, `photo-import`, `calendar`, …),
@@ -255,6 +260,8 @@ native PostgreSQL installation remain owned by their existing runners.
   toolchain settings; unrelated root package-script changes do not invalidate it.
   Generation and WASM preparation always enter Nx; there is no separate local
   marker or stat-based cache deciding whether Nx runs.
+  Keep new emitted paths in the root `generate.outputs` list in `project.json`.
+  Verify that a cache hit restores a missing new output after changing that list.
   Use `node scripts/ensure.ts wasm` to prepare it explicitly through that cache;
   `pnpm wasm` forces the build command. Keep generated WASM checkout-local
   rather than copying or symlinking another worktree's output.

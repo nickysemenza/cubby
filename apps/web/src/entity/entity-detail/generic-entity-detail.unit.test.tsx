@@ -18,11 +18,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
-import {
-  fieldExplanation,
-  entityList,
-  entityTimeline,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog/entityTimeline.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { buildQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";

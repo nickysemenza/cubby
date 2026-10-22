@@ -59,7 +59,12 @@ export type ContractMember = {
   input?: z.ZodType;
 };
 type Contract = { domain: string; ops: Record<string, ContractMember> };
-export type LoadedContract = { exportName: string; contract: Contract };
+export type LoadedContract = {
+  exportName: string;
+  /** Direct contract module resolved from the contracts index AST. */
+  module: string;
+  contract: Contract;
+};
 export type DeclaredOperation = {
   kind: Kind;
   observability: OperationObservability;
@@ -254,11 +259,23 @@ export const loadContracts = (): Promise<LoadedContract[]> => {
     const files = readdirSync(CONTRACTS_ROOT)
       .filter((name) => name.endsWith(".contract.ts"))
       .sort();
+    const contractModules = new Map<string, string>();
+    for (const statement of parseFile(indexPath).body) {
+      if (statement.type !== "ExportNamedDeclaration" || !statement.source)
+        continue;
+      const file = statement.source.value.replace(/^\.\//u, "");
+      if (!file.endsWith(".contract")) continue;
+      const sourcePath = join(CONTRACTS_ROOT, `${file}.ts`);
+      for (const specifier of statement.specifiers) {
+        if (specifier.type !== "ExportSpecifier") continue;
+        const exportName = propertyName(specifier.exported);
+        if (exportName)
+          contractModules.set(exportName, moduleSpecifier(sourcePath));
+      }
+    }
     const reexported = new Set(
-      parseFile(indexPath).body.flatMap((statement) =>
-        statement.type === "ExportNamedDeclaration" && statement.source
-          ? [statement.source.value.replace(/^\.\//u, "")]
-          : [],
+      [...contractModules.values()].map((module) =>
+        module.slice("~/contracts/".length),
       ),
     );
     for (const file of files) {
@@ -275,7 +292,12 @@ export const loadContracts = (): Promise<LoadedContract[]> => {
         throw new Error(
           `apps/web/src/contracts/index.ts export ${exportName} is not a defineContract() value.`,
         );
-      loaded.push({ exportName, contract: value });
+      const module = contractModules.get(exportName);
+      if (!module)
+        throw new Error(
+          `apps/web/src/contracts/index.ts export ${exportName} has no direct contract module.`,
+        );
+      loaded.push({ exportName, module, contract: value });
     }
     return loaded.sort((a, b) => a.exportName.localeCompare(b.exportName));
   })();

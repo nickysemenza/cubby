@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { z } from "zod";
 
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import {
   entityBrowserMutationCommandSchema,
   type EntityBrowserMutationInput,

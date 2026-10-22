@@ -2,7 +2,7 @@ import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
 import { useChunkedRecordQuery } from "~/entity/hooks/use-chunked-record-query";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 
 export type ProductImageMap = Record<string, ImageOut[]>;
 

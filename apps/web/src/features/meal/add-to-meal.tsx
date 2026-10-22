@@ -23,11 +23,9 @@ import { Picker } from "~/entity/picker/picker";
 import { useEntitySuggestionsQuery } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionHint } from "~/entity/suggestions/field-suggestion-hint";
 import { SuggestionVisitProvider } from "~/entity/suggestions/suggestion-review";
-import {
-  entityMutation,
-  ai,
-  meal,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
+import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 import { formatDateSpan } from "~/lib/date-span";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";

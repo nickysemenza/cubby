@@ -40,10 +40,8 @@ import {
   listEntities,
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
-import {
-  entityGraph,
-  entityList,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Button } from "~/ui/primitives/button";

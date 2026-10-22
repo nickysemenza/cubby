@@ -24,7 +24,7 @@ import {
   readRecordField,
 } from "~/entity/entity-references";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
 import {

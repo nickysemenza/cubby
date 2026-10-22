@@ -35,10 +35,8 @@ import {
   markProductsUsdaUnavailableStream,
 } from "~/features/product/product-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  ai,
-  ingredient,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/catalog/ingredient.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";

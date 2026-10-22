@@ -65,7 +65,7 @@ import {
 import { entityDetailFor } from "~/entity/entity-detail";
 import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   PresignedUploadError,

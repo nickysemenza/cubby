@@ -51,6 +51,35 @@ const webModule = (path: string) =>
 const SESSION_COOKIE_NAME = "__Secure-better-auth.session_token";
 
 export type OpenApiDocument = ReturnType<typeof generateOpenApi>;
+type NativeResponses = NonNullable<
+  NonNullable<OpenApiDocument["components"]>["responses"]
+>;
+
+/** Fold only identical error responses; every status must survive contract validation. */
+export const shareNativeErrorResponses = (
+  responses: NativeResponses,
+  operation: string,
+  shared: NativeResponses[string] | undefined,
+): NativeResponses[string] | undefined => {
+  const errors = Object.entries(responses).filter(
+    ([status]) => status === "default" || Number(status) >= 400,
+  );
+  for (const [status, response] of errors) {
+    const error = { ...response, description: "Error" };
+    if (
+      shared !== undefined &&
+      JSON.stringify(shared) !== JSON.stringify(error)
+    )
+      throw new Error(
+        `${operation}: error status ${status} differs from the shared native error contract`,
+      );
+    shared = error;
+    delete responses[status];
+  }
+  if (errors.length > 0)
+    responses.default = { $ref: "#/components/responses/ApiError" };
+  return shared;
+};
 
 const buildOpenApiDocument = async (): Promise<{
   document: OpenApiDocument;
@@ -247,6 +276,7 @@ const buildOpenApiDocument = async (): Promise<{
     return `${operation}${type === "response" ? "Output" : "Input"}`;
   };
 
+  let sharedErrorResponse: NativeResponses[string] | undefined;
   const document = generateOpenApi(
     httpContract,
     {
@@ -278,14 +308,11 @@ const buildOpenApiDocument = async (): Promise<{
         // that treats any status >= 400 as a failure needs one error type, and
         // per-status cases cost a generated client a case each. The server
         // still returns the real status codes (405 too, with the same body).
-        const errors = Object.entries(operation.responses).filter(
-          ([status]) => Number(status) >= 400,
+        sharedErrorResponse = shareNativeErrorResponses(
+          operation.responses,
+          metadata.operation,
+          sharedErrorResponse,
         );
-        const [, first] = errors[0] ?? [];
-        if (first !== undefined) {
-          for (const [status] of errors) delete operation.responses[status];
-          operation.responses.default = { ...first, description: "Error" };
-        }
         return operation;
       },
       schemaTransformer: ({ schema, appRoute, type }) => {
@@ -315,6 +342,12 @@ const buildOpenApiDocument = async (): Promise<{
       },
     },
   );
+  if (sharedErrorResponse === undefined)
+    throw new Error("Native API has no shared error response");
+  document.components = {
+    ...document.components,
+    responses: { ApiError: sharedErrorResponse },
+  };
 
   /** `…/input___shared#/definitions/schema0` -> `…/input_schema0`. */
   const nameSharedDefinitions = (schemas: Record<string, JsonSchema>) =>
@@ -502,7 +535,11 @@ const pruneUnreachableComponents = (
   components: Record<string, JsonSchema>,
 ): Record<string, JsonSchema> => {
   const reachable = new Set<string>();
-  const queue = [...refsIn(document.paths), ...NATIVE_TYPED_RECORDS];
+  const queue = [
+    ...refsIn(document.paths),
+    ...refsIn(document.components?.responses),
+    ...NATIVE_TYPED_RECORDS,
+  ];
   for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
     if (reachable.has(name)) continue;
     reachable.add(name);

@@ -12,7 +12,7 @@ import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { useBulkStream } from "~/entity/hooks/use-bulk-stream";
 import { IngredientUsagePanel } from "~/features/ingredient/ingredient-usage-panel";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog/recipeStreams.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";

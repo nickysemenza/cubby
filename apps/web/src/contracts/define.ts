@@ -19,7 +19,7 @@ import { kernelActionName } from "~/contracts/mcp-define";
  * `integrations/tanstack-query/operation-overrides.ts`. The one server-facing
  * hint is a query's `readPolicy: "strong"` (see `QueryContract`), a
  * data-freshness requirement. That is what lets ONE declaration feed the browser
- * catalog (the generated `catalog.gen.ts`, which resolves the cache data and
+ * catalog (generated per-domain catalog modules, which resolves the cache data and
  * defaults every query's tags to `[domain, member]`), the server implementers
  * (`implementOperationDomain` / `implementSubscriptionDomain`), the operation
  * registry generator (which imports these modules at build time), and the
@@ -92,10 +92,11 @@ export interface HttpWire {
 }
 
 /**
- * `httpWire` replaces a type-only carrier's input and output on the HTTP
- * wire (the entity kernel operations): the route documents and accepts the
- * loose wire schema, always as a POST body, while the server handler still
- * parses the real per-entity input. `nullable` turns a null result into 404.
+ * `httpWire` projects an operation's HTTP input and output, always as a POST
+ * body. Entity kernel operations use loose wire schemas while their handlers
+ * parse the real per-entity input; native-only views can instead narrow an
+ * unused optional input surface. The handler still owns domain validation.
+ * `nullable` turns a null result into 404.
  *
  * `native` names the reason the Apple app calls this operation. The HTTP API
  * carries exactly the flagged members, so the flag is the only way an

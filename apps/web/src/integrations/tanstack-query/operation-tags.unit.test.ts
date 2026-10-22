@@ -13,7 +13,7 @@ import {
   rippleFor,
   type InvalidationTagSet,
 } from "./cache-tags";
-import * as catalog from "./generated/catalog.gen";
+import * as catalog from "./generated/catalog/all.gen";
 import { matchesTags } from "./operation-cache";
 import type { OperationCacheTag } from "./operation-meta";
 
@@ -74,7 +74,7 @@ const isInvalidationPolicy = (
 /**
  * There is no runtime registry of operation descriptors — `defineOperationDomain`
  * only records mutation invalidation policies — so the catalog is reassembled by
- * walking the domain objects the generated `catalog.gen.ts` exports. `path` is
+ * walking the domain objects the test-only `catalog/all.gen.ts` exports. `path` is
  * the domain's export name.
  */
 const descriptors: ReadonlyArray<{ path: string; descriptor: AnyDescriptor }> =

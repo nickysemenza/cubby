@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { type ReactNode, useMemo } from "react";
 
-import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { RecordDot, RecordList, RecordRow } from "~/ui/common/record-list";

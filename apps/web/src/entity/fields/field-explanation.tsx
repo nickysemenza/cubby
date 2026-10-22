@@ -19,7 +19,7 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";

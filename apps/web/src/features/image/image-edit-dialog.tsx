@@ -2,7 +2,7 @@ import type { ImageWithEntity } from "@cubby/schemas/image";
 import { useState } from "react";
 
 import { useImageUpdateMutation } from "~/entity/hooks/use-update-mutation";
-import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog/image.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Overlay } from "~/ui/overlays/overlay";

@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

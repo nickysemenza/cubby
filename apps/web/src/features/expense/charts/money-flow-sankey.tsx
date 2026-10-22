@@ -13,7 +13,7 @@ import { FlowArrowIcon } from "@phosphor-icons/react/dist/csr/FlowArrow";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
 import { nivoChartTheme, nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/number-format";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";

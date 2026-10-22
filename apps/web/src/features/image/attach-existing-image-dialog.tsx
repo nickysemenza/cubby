@@ -8,10 +8,8 @@ import { toast } from "sonner";
 import { entityLabel } from "~/entity/entities";
 import { buildSearchHitComboboxItem } from "~/entity/picker/combobox-builders";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  image as imageOperations,
-  search,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog/image.gen";
+import { search } from "~/integrations/tanstack-query/generated/catalog/search.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";

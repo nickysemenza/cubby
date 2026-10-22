@@ -15,13 +15,11 @@ import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
 import { TodayNutrition } from "~/features/meal/daily-nutrition";
 import { installFeatures } from "~/features/registry";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import {
-  expense,
-  location,
-  meal,
-  entityReport,
-  problems,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
+import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
+import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { Section } from "~/ui/layout";
 import { PageHeader } from "~/ui/layout/page-header";

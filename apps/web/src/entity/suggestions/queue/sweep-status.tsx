@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel } from "~/ui/layout/panel";
 

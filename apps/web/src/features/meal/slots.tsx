@@ -17,7 +17,7 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
-import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 import { Picker } from "~/ui/combobox/picker";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";

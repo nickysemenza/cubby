@@ -13,7 +13,7 @@ import {
   ripple,
   type InvalidationTagSet,
 } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
 import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
 import { collectBulkStream } from "~/lib/bulk-progress";
 

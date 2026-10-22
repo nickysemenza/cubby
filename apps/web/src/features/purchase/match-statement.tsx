@@ -18,10 +18,8 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  purchase as purchaseOperations,
-  financialTransaction as financeOperations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { financialTransaction as financeOperations } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
 import { Overlay } from "~/ui/overlays/overlay";

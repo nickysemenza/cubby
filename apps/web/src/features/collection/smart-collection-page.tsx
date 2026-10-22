@@ -12,7 +12,7 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog/collection.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Stack } from "~/ui/layout";

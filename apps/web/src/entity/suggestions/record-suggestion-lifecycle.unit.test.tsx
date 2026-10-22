@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { EntityMutationPort } from "~/entity/editing/types";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

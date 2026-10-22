@@ -6,10 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { installFeatures } from "~/features/registry";
-import {
-  entityGraph,
-  recommendations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";

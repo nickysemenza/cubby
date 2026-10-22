@@ -23,7 +23,7 @@ import { EntityIntentFields } from "~/entity/editing/entity-primitive-fields";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
-import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { product } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {

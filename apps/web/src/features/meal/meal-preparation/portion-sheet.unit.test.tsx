@@ -14,7 +14,7 @@ import {
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { PortionSheet } from "./portion-sheet";

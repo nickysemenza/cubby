@@ -28,7 +28,7 @@ import {
 } from "~/entity/entity-timeline";
 import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
-import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog/entityTimeline.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { formatCount, formatCurrency } from "~/lib/number-format";

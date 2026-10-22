@@ -71,7 +71,7 @@ import {
   waitingForLabel,
   WorkActionDetails,
 } from "~/entity/work-queue/work-queue-display";
-import { workQueue } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
 import type { PickerOption } from "~/ui/combobox/picker-option";

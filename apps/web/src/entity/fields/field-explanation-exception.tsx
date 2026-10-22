@@ -8,7 +8,7 @@ import { useId, useMemo, useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { MarkdownText } from "~/entity/prose/markdown";
-import { dataQuality } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { dataQuality } from "~/integrations/tanstack-query/generated/catalog/dataQuality.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Button } from "~/ui/primitives/button";

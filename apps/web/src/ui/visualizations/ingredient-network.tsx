@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
 import { NetworkChart } from "~/ui/charts/network-chart";
 import {
   Visualization,

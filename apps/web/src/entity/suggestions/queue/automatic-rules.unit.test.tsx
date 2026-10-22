@@ -11,7 +11,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
