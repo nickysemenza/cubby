@@ -78,7 +78,7 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
   page,
 }) => {
   test.slow();
-  const prefix = uniqueName("Complete matching tasks");
+  const prefix = uniqueName(test.info(), "Complete matching tasks");
   const count = defaultPagination.pageSize + 1;
   const selected = await seedConcurrently(
     Array.from({ length: count }, (_, index) => index),
@@ -89,7 +89,7 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
       }),
   );
   const outside = await seedTaskPrerequisite(page, {
-    name: uniqueName("Outside matching scope"),
+    name: uniqueName(test.info(), "Outside matching scope"),
     status: "in_progress",
   });
   await page.setViewportSize({ width: 1440, height: 900 });
