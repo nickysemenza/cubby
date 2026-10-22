@@ -40,7 +40,10 @@ export function DetailPagePending() {
   // so the pending page can say what it's loading. `strict: false` because this
   // component is shared across every detail route (and `$id` ones have no
   // `shortcode` param at all).
-  const { shortcode } = useParams({ strict: false });
+  const shortcode = useParams({
+    strict: false,
+    select: (params) => params.shortcode,
+  });
   useDocumentTitle(shortcode);
   const label = shortcode
     ? `Loading ${shortcode} details…`

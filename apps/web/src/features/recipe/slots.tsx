@@ -30,7 +30,17 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
     flowLayout,
     scale,
     nutritionBasis = "whole",
-  } = useSearch({ from: "/_authenticated/recipes/$shortcode" });
+  } = useSearch({
+    from: "/_authenticated/recipes/$shortcode",
+    select: ({ costingGap, view, flowLayout, scale, nutritionBasis }) => ({
+      costingGap,
+      view,
+      flowLayout,
+      scale,
+      nutritionBasis,
+    }),
+    structuralSharing: true,
+  });
   const navigate = useNavigate();
   const recipeView = view ?? "read";
   const setRecipeView = (next: RecipeViewMode) => {
@@ -97,6 +107,12 @@ export const RecipeActions: DetailSlotComponent<"recipe"> = ({
 }) => {
   const { view, scale, nutritionBasis } = useSearch({
     from: "/_authenticated/recipes/$shortcode",
+    select: ({ view, scale, nutritionBasis }) => ({
+      view,
+      scale,
+      nutritionBasis,
+    }),
+    structuralSharing: true,
   });
   return (
     <Row gap="sm" wrap>

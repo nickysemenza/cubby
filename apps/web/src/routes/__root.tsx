@@ -176,16 +176,18 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootComponent() {
-  const search = Route.useSearch();
+  const nativeWorkspaceParam = Route.useSearch({
+    select: (search) => search.nativeWorkspace,
+  });
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
   const nativeAuth =
-    Boolean(search.nativeWorkspace) && pathname.startsWith("/auth/");
+    Boolean(nativeWorkspaceParam) && pathname.startsWith("/auth/");
   const nativeWorkspace =
     nativeAuth ||
-    isNativeRunEvidence(pathname, search.nativeWorkspace) ||
-    isNativeConnections(pathname, search.nativeWorkspace);
+    isNativeRunEvidence(pathname, nativeWorkspaceParam) ||
+    isNativeConnections(pathname, nativeWorkspaceParam);
   const buildMetadata = Route.useLoaderData();
   const footer = <AppFooter metadata={buildMetadata} />;
   const { queryClient } = Route.useRouteContext();
