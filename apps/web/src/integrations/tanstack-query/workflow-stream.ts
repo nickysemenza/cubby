@@ -7,7 +7,6 @@ import {
 } from "~/integrations/tanstack-query/operation-recorder";
 import { unwrapStartOperationResult } from "~/integrations/tanstack-query/start-transport";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import { callWorkflowStream } from "~/lib/workflow-stream-call";
 import {
   unparsedStartOperationDataSchema,
   unparsedStartOperationResultSchema,
@@ -48,6 +47,7 @@ export async function openWorkflowStream<
     }, 0);
   };
   try {
+    const { callWorkflowStream } = await import("~/lib/workflow-stream-call");
     const stream = await callWorkflowStream({
       data: {
         operation: options.operation,
