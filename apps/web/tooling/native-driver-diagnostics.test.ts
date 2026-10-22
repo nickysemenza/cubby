@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   collectNativeDriverDiagnostics,
@@ -148,7 +148,7 @@ test("projects SDK startup traces to fixed phases and numeric timings", async ()
       /private|device|session|credential|runnerPath/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -200,7 +200,7 @@ test("ignores old, incomplete, malformed and unsupported diagnostics", async () 
       },
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -262,7 +262,7 @@ test("seals replay snapshot timings before SDK cleanup without exporting raw tra
       status: "fail",
       session: "synthetic:replay:driver",
     });
-    rmSync(daemon, { recursive: true, force: true });
+    rmSync(daemon, { recursive: true, force: true, maxRetries: 5 });
     const result = JSON.parse(
       readFileSync(
         join(output, "native-replay-driver-diagnostics.json"),
@@ -283,7 +283,7 @@ test("seals replay snapshot timings before SDK cleanup without exporting raw tra
   } finally {
     if (previous === undefined) delete process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
     else process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR = previous;
-    rmSync(daemon, { recursive: true, force: true });
-    rmSync(output, { recursive: true, force: true });
+    rmSync(daemon, { recursive: true, force: true, maxRetries: 5 });
+    rmSync(output, { recursive: true, force: true, maxRetries: 5 });
   }
 });

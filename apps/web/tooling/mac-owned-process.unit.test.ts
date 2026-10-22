@@ -20,7 +20,7 @@ afterEach(async () => {
       });
   }
   for (const directory of directories.splice(0))
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
 });
 async function fixture(termination: "exit" | "ignore" | "rename" = "exit") {
   const directory = mkdtempSync(path.join(tmpdir(), "cubby-owned-process-"));

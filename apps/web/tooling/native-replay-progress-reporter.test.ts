@@ -2,7 +2,7 @@
 // validated step counters, commands, and elapsed time may reach CI output.
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
-import { test } from "node:test";
+import { test } from "vitest";
 
 const reporter = new URL(
   "./native-replay-progress-reporter.ts",

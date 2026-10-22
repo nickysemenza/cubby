@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // Cleanup must be preview-only by default and never traverse outside a checkout
 // or remove files that an active build has open.
@@ -20,7 +20,9 @@ test("Apple cleanup previews, preserves open build files, and refuses redirected
     return t.skip("Apple cleanup uses macOS lsof");
   const { cleanApple } = await import("./apple.ts");
   const root = mkdtempSync(join(tmpdir(), "apple-clean-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.onTestFinished(() =>
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 }),
+  );
   const derived = join(root, "apps/apple/DerivedData");
   mkdirSync(derived, { recursive: true });
   const output = join(derived, "synthetic-output");

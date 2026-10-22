@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { test } from "node:test";
+import { test } from "vitest";
 import { resolveDevProfile } from "../dev-services/dev-profile.ts";
 
 // Mixed revisions must not mark a live legacy supervisor/runtime stopped:
@@ -71,6 +71,6 @@ test("down preserves live legacy sessions and reports how to resolve ownership",
       process.kill(process.pid, 0);
     }
   } finally {
-    rmSync(profile.stateDir, { recursive: true, force: true });
+    rmSync(profile.stateDir, { recursive: true, force: true, maxRetries: 5 });
   }
 });

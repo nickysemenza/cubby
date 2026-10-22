@@ -62,7 +62,7 @@ async function withBaselineDatabase(
       await run(client, folder);
     });
   } finally {
-    rmSync(folder, { recursive: true, force: true });
+    rmSync(folder, { recursive: true, force: true, maxRetries: 5 });
   }
 }
 

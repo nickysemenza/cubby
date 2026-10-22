@@ -73,7 +73,7 @@ afterEach(async () => {
   await Promise.all(
     temporaryRoots
       .splice(0)
-      .map((root) => rm(root, { force: true, recursive: true })),
+      .map((root) => rm(root, { force: true, recursive: true, maxRetries: 5 })),
   );
 });
 

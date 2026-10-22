@@ -210,7 +210,6 @@
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",
-    "test": "node ../../scripts/ensure.ts generate && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

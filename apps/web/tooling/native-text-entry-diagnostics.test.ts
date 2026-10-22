@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   readNativeTextEntryDiagnostics,
@@ -56,7 +56,7 @@ test("retains numeric commit progress without private runner log content", () =>
       /private|credential|runner|2026/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -91,7 +91,7 @@ test("rejects unsafe numbers, malformed records and unrelated file paths", () =>
       undefined,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -124,7 +124,7 @@ test("reads only the completed replay session before its temporary daemon is rem
     );
     assert.equal(readReplayTextEntryDiagnostics(root, ".."), undefined);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -149,7 +149,7 @@ test("captures the SDK fail callback before replay daemon cleanup", async () => 
       session,
       message: "synthetic-private",
     });
-    rmSync(daemon, { recursive: true, force: true });
+    rmSync(daemon, { recursive: true, force: true, maxRetries: 5 });
     assert.deepEqual(
       JSON.parse(
         readFileSync(
@@ -165,7 +165,7 @@ test("captures the SDK fail callback before replay daemon cleanup", async () => 
   } finally {
     if (previous === undefined) delete process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
     else process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR = previous;
-    rmSync(daemon, { recursive: true, force: true });
-    rmSync(output, { recursive: true, force: true });
+    rmSync(daemon, { recursive: true, force: true, maxRetries: 5 });
+    rmSync(output, { recursive: true, force: true, maxRetries: 5 });
   }
 });

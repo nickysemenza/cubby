@@ -85,7 +85,7 @@ it("clones the application corpus, retains checkout edits, and collects only aba
     } finally {
       await db.end();
     }
-    rmSync(checkout, { recursive: true, force: true });
+    rmSync(checkout, { recursive: true, force: true, maxRetries: 5 });
     await pruneCheckoutDatabases(admin, "cubby_dev_requested");
     expect(
       (await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name]))
@@ -96,7 +96,7 @@ it("clones the application corpus, retains checkout edits, and collects only aba
       `DROP DATABASE IF EXISTS ${databaseIdentifier(name)} WITH (FORCE)`,
     );
     await admin.end();
-    rmSync(checkout, { recursive: true, force: true });
+    rmSync(checkout, { recursive: true, force: true, maxRetries: 5 });
   }
 }, 120_000);
 
@@ -130,7 +130,7 @@ it("collects only idle derived checkout names and refreshes reused ownership", a
       );
     }
     await connected.connect();
-    rmSync(checkout, { recursive: true, force: true });
+    rmSync(checkout, { recursive: true, force: true, maxRetries: 5 });
     await pruneCheckoutDatabases(admin, "cubby_dev_requested");
     expect(
       (await connected.query("SELECT 1 AS retained")).rows[0].retained,
@@ -176,7 +176,7 @@ it("collects only idle derived checkout names and refreshes reused ownership", a
         `DROP DATABASE IF EXISTS ${databaseIdentifier(name)} WITH (FORCE)`,
       );
     await admin.end();
-    rmSync(checkout, { recursive: true, force: true });
-    rmSync(nextCheckout, { recursive: true, force: true });
+    rmSync(checkout, { recursive: true, force: true, maxRetries: 5 });
+    rmSync(nextCheckout, { recursive: true, force: true, maxRetries: 5 });
   }
 });

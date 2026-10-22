@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { productionWorker } from "../../cloudflare.config.ts";
-import { test } from "node:test";
+import { test } from "vitest";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { isFileLoadingAllowed, resolveConfig } from "vite";
 

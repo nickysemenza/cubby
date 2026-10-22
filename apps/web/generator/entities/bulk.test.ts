@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 import { deriveBulkUpdateFields } from "./bulk.ts";
 
 test("bulk derivation keeps ordinary updates and shared references but excludes identity and owned attachments", () => {

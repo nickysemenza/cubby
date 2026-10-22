@@ -151,6 +151,6 @@ it("seeds a complete connected household with real stored images and skips a com
       `DROP DATABASE IF EXISTS ${databaseIdentifier(name)} WITH (FORCE)`,
     );
     await admin.end();
-    rmSync(checkout, { recursive: true, force: true });
+    rmSync(checkout, { recursive: true, force: true, maxRetries: 5 });
   }
 }, 120_000);
