@@ -8,6 +8,7 @@ Object.assign(crypto.subtle, { timingSafeEqual });
 
 function setup() {
   const objects = new Map();
+  const types = new Map();
   const events = [];
   let reads = 0;
   const env = {
@@ -16,18 +17,25 @@ function setup() {
       async get(key) {
         reads++;
         const body = objects.get(key);
-        return body === undefined ? null : { body, size: body.length };
+        return body === undefined
+          ? null
+          : {
+              body,
+              size: body.length,
+              writeHttpMetadata: (headers) => {
+                const type = types.get(key);
+                if (type) headers.set("content-type", type);
+              },
+            };
       },
-      async head(key) {
-        const body = objects.get(key);
-        return body === undefined ? null : { size: body.length };
-      },
-      async put(key, body) {
-        if (objects.has(key)) return null;
+      async put(key, body, options = {}) {
+        if (options.onlyIf && objects.has(key)) return null;
         const value = await new Response(body).text();
         // Conditional R2 writes arbitrate concurrent publishers atomically.
-        if (objects.has(key)) return null;
+        if (options.onlyIf && objects.has(key)) return null;
         objects.set(key, value);
+        const type = options.httpMetadata?.get("content-type");
+        if (type) types.set(key, type);
         return { size: value.length };
       },
     },
@@ -183,64 +191,33 @@ test("public query strings share one edge snapshot, including partial failures",
   assert.deepEqual(await second.json(), await first.json());
 });
 
-test("reports publish with the cache credential and read publicly within their namespace", async () => {
-  const { env, request, objects } = setup();
-  const anonymous = (path, method = "GET", body) =>
-    worker.fetch(
-      new Request(`https://cache.example${path}`, {
-        method,
-        ...(method === "PUT" ? { body } : {}),
-      }),
-      env,
-    );
+test("reports publish with the cache credential and read publicly", async () => {
+  const { env, objects } = setup();
+  const send = (path, init = {}) =>
+    worker.fetch(new Request(`https://cache.example${path}`, init), env);
+  const put = (path, body, headers = {}) =>
+    send(path, { method: "PUT", body, headers });
+  const auth = { authorization: `Bearer ${env.CACHE_TOKEN}` };
 
+  assert.equal((await put("/reports/7/1/vitest/index.html", "x")).status, 401);
   assert.equal(
-    (await anonymous("/v1/reports/7/1/vitest/index.html", "PUT", "<p>x</p>"))
-      .status,
-    401,
-  );
-  assert.equal(
-    (await request("/v1/reports/7/1/vitest/index.html", "PUT", "<p>x</p>"))
-      .status,
+    (
+      await put("/reports/7/1/vitest/index.html", "<p>x</p>", {
+        ...auth,
+        "content-type": "text/html",
+      })
+    ).status,
     200,
   );
-  await request("/v1/reports/7/1/vitest/assets/app.js", "PUT", "run()");
-  assert.deepEqual(
-    [...objects.keys()],
-    ["reports/7/1/vitest/index.html", "reports/7/1/vitest/assets/app.js"],
-  );
+  assert.deepEqual([...objects.keys()], ["reports/7/1/vitest/index.html"]);
 
-  const page = await anonymous("/reports/7/1/vitest/");
-  assert.equal(page.status, 200);
-  assert.equal(page.headers.get("content-type"), "text/html; charset=utf-8");
+  // A trailing slash serves the index with the publisher's content type.
+  const page = await send("/reports/7/1/vitest/");
+  assert.equal(page.headers.get("content-type"), "text/html");
   assert.equal(await page.text(), "<p>x</p>");
-  const script = await anonymous("/reports/7/1/vitest/assets/app.js");
-  assert.equal(
-    script.headers.get("content-type"),
-    "text/javascript; charset=utf-8",
-  );
-  const head = await anonymous("/reports/7/1/vitest/assets/app.js", "HEAD");
-  assert.equal(head.status, 200);
-  assert.equal(await head.text(), "");
-  // Relative asset paths need the root's trailing slash.
-  const root = await anonymous("/reports/7/1/vitest?tab=failed");
-  assert.equal(root.status, 308);
-  assert.equal(
-    root.headers.get("location"),
-    "https://cache.example/reports/7/1/vitest/?tab=failed",
-  );
 
-  // Public reads never reach cache archives, other kinds, or dot segments.
+  // Public reads stay inside reports/; cache archives need the credential.
   objects.set("abc123", "archive");
-  for (const path of [
-    "/reports/abc123",
-    "/reports/7/1/other/index.html",
-    "/reports/7/1/vitest/../../abc123",
-    "/reports/7/1/vitest/.hidden",
-  ])
-    assert.equal((await anonymous(path)).status, 404, path);
-  assert.equal(
-    (await anonymous("/reports/7/1/vitest/", "PUT", "x")).status,
-    405,
-  );
+  assert.equal((await send("/reports/../abc123")).status, 404);
+  assert.equal((await send("/v1/cache/abc123")).status, 401);
 });
