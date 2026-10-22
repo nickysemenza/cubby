@@ -98,6 +98,7 @@ export async function launchWorkflowRun(
     let execution = await enqueueJob(tx, {
       key: `run:${input.runId}`,
       kind: "run.execute",
+      priority: input.automatic ? 0 : 100,
       input: { runId: input.runId, purpose: input.purpose },
       runId: input.runId,
     });
@@ -120,11 +121,18 @@ export async function launchWorkflowRun(
         key: execution.key,
         kind: execution.kind,
         input: execution.input,
+        priority: 100,
         runId: input.runId,
         invalidate: true,
       });
     }
     if (!input.automatic) {
+      // A member can promote work originally admitted automatically.
+      if (execution.priority < 100)
+        await getDb(tx)
+          .update(job)
+          .set({ priority: 100 })
+          .where(eq(job.id, execution.id));
       const pending = await getDb(tx).execute<{
         id: string;
       }>(sql`SELECT j.id FROM "Job" j JOIN "AiEvaluation" e ON j.key='ai-evaluation:' || e.id::text
@@ -144,7 +152,7 @@ export async function launchWorkflowRun(
     await runAfterCommit(tx, async () => {
       await (
         await import("../background-tasks/publish")
-      ).wakeJobs({ source: "run-launch", jobId: execution.id });
+      ).wakeJobs({ source: "run-launch" });
     });
     return { attempt: execution.generation, instanceId: execution.id };
   });

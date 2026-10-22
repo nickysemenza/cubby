@@ -19,7 +19,6 @@ import type { startMailImport } from "./mail-import-run";
 
 describe("selected Email import", () => {
   const ctx = withTestDb();
-  const queue = { send: async () => undefined };
   const seed = async (owned = true, party?: { id: string }) => {
     const owner =
       party ??
@@ -88,13 +87,7 @@ describe("selected Email import", () => {
     const source = await seed();
     const port = await launcher(source.party.id);
     expect(
-      await startEmailImport(
-        ctx.db,
-        { items: [source.item] },
-        ctx.actor,
-        queue,
-        port,
-      ),
+      await startEmailImport(ctx.db, { items: [source.item] }, ctx.actor, port),
     ).toEqual({ runIds: [port.row.shortcode] });
     expect(port.launch.mock.calls[0]?.[1]).toMatchObject({
       ledgerPartyId: source.party.id,
@@ -114,13 +107,9 @@ describe("selected Email import", () => {
       { runId: second.row.id, status: "running" },
     ];
     expect(
-      await startEmailImport(
-        ctx.db,
-        { items: [source.item] },
-        ctx.actor,
-        queue,
-        { launch },
-      ),
+      await startEmailImport(ctx.db, { items: [source.item] }, ctx.actor, {
+        launch,
+      }),
     ).toEqual({ runIds: [first.row.shortcode, second.row.shortcode] });
   });
 
@@ -129,7 +118,7 @@ describe("selected Email import", () => {
     const foreign = await seed(false);
     const port = await launcher(own.party.id);
     const run = (items: (typeof own.item)[]) =>
-      startEmailImport(ctx.db, { items }, ctx.actor, queue, port);
+      startEmailImport(ctx.db, { items }, ctx.actor, port);
     await expect(
       run([{ ...own.item, expectedChecksum: "0".repeat(64) }]),
     ).rejects.toThrow(/changed/u);
@@ -147,7 +136,6 @@ describe("selected Email import", () => {
         ctx.db,
         { items: [a.item, b.item] },
         ctx.actor,
-        queue,
         port,
       ),
     ).toEqual({ runIds: [port.row.shortcode] });

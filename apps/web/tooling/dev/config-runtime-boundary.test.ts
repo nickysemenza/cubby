@@ -5,8 +5,8 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import { isFileLoadingAllowed, resolveConfig } from "vite";
 
 // Config imports become denied runtime modules. Startup must still be able to
-// load the shared Workflow policy without exposing deployment configuration.
-test("Cloudflare config keeps the runtime Workflow policy loadable", async () => {
+// load the shared Job page limits without exposing deployment configuration.
+test("Cloudflare config keeps the runtime Job page limits loadable", async () => {
   const root = path.resolve(import.meta.dirname, "../..");
   // Deny derivation is independent of the app's environment/persistence options.
   // Keep this real plugin boundary cheap instead of preparing a dev database.
@@ -30,14 +30,14 @@ test("Cloudflare config keeps the runtime Workflow policy loadable", async () =>
       );
     }
   }
-  for (const file of ["workflow-limits.ts", "workflow-platform-limits.json"]) {
+  for (const file of ["job-page-limits.ts"]) {
     assert.equal(
       isFileLoadingAllowed(
         config,
         path.resolve(root, "../../packages/shared/src", file),
       ),
       true,
-      `${file} must remain loadable by the Workflow runtime`,
+      `${file} must remain loadable by the Job runtime`,
     );
   }
   assert.equal(

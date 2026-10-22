@@ -11,6 +11,15 @@ export const jobState = z.enum([
 ]);
 export type JobState = z.infer<typeof jobState>;
 
+export const jobWaitReasons = [
+  "provider_capacity",
+  "ai_funding_window",
+  "device",
+  "rate_limit",
+] as const;
+export const jobWaitReason = z.enum(jobWaitReasons);
+export type JobWaitReason = z.infer<typeof jobWaitReason>;
+
 export const jobPayload = z.json();
 export type JobPayload = z.infer<typeof jobPayload>;
 
@@ -19,6 +28,8 @@ export const enqueueJobInput = z.object({
   kind: z.string().min(1),
   input: jobPayload,
   runId: z.uuid().nullable().optional(),
+  subjectKind: z.string().min(1).nullable().optional(),
+  subjectId: z.string().min(1).nullable().optional(),
   priority: z.number().int().optional(),
   maxAttempts: z.number().int().positive().optional(),
   availableAt: z.date().optional(),
@@ -32,5 +43,7 @@ export const jobPage = z.object({
   cursor: jobPayload.optional(),
   result: jobPayload.optional(),
   availableAt: z.date().optional(),
+  waitReason: jobWaitReason.optional(),
+  waitUntil: z.date().optional(),
 });
 export type JobPage = z.infer<typeof jobPage>;

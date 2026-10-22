@@ -1,6 +1,6 @@
 {
-  "id": "e5070dc7-013d-468e-a482-910128b0afca",
-  "prevId": "35c4b96b-89b8-4591-8347-3e913271db5d",
+  "id": "a49c3d16-9698-4bb2-a0d8-9fa65526c816",
+  "prevId": "e5070dc7-013d-468e-a482-910128b0afca",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2315,6 +2315,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "subjectKind": {
+          "name": "subjectKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subjectId": {
+          "name": "subjectId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waitReason": {
+          "name": "waitReason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waitUntil": {
+          "name": "waitUntil",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "input": {
           "name": "input",
           "type": "jsonb",
@@ -2465,6 +2489,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "Job_subject_idx": {
+          "name": "Job_subject_idx",
+          "columns": [
+            {
+              "expression": "subjectKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "subjectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2486,6 +2531,14 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "Job_waitReason_check": {
+          "name": "Job_waitReason_check",
+          "value": "\"Job\".\"waitReason\" IN ('provider_capacity','ai_funding_window','device','rate_limit')"
+        },
+        "Job_subject_check": {
+          "name": "Job_subject_check",
+          "value": "(\"Job\".\"subjectKind\" IS NULL) = (\"Job\".\"subjectId\" IS NULL)"
+        },
         "Job_state_check": {
           "name": "Job_state_check",
           "value": "\"Job\".\"state\" IN ('queued','running','retry_wait','paused','completed','failed','cancelled')"
@@ -17448,13 +17501,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "dispatchAttempts": {
-          "name": "dispatchAttempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
         },
         "dispatchError": {
           "name": "dispatchError",

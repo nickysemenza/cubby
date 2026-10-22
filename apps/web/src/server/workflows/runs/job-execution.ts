@@ -1,5 +1,6 @@
 import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { jobWaitReason } from "@cubby/schemas/job";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -59,6 +60,7 @@ export const runJobHandler = defineJobHandler(
               throw new JobDeferredError(
                 paused.pausedReason ?? "Step capacity wait",
                 paused.pausedUntil,
+                next.waitReason ?? "provider_capacity",
               );
             throw new JobPausedError(
               paused?.pausedReason ?? "Step requires member attention",
@@ -70,10 +72,17 @@ export const runJobHandler = defineJobHandler(
               : next.kind === "continue"
                 ? (next.waitSeconds ?? 0)
                 : 60;
+          const availableAt = new Date(Date.now() + seconds * 1000);
           return {
             page: {
               done: false,
-              availableAt: new Date(Date.now() + seconds * 1000),
+              availableAt,
+              ...(next.kind === "continue" && seconds > 0
+                ? {
+                    waitUntil: availableAt,
+                    waitReason: jobWaitReason.enum.provider_capacity,
+                  }
+                : {}),
             },
           };
         }
@@ -136,13 +145,20 @@ export const runJobHandler = defineJobHandler(
             const page = await (
               await import("~/server/domains/run/service/ai-refresh")
             ).discoverAiRefresh(db);
+            const availableAt = new Date(
+              Date.now() +
+                (page.deferred ? 30_000 : page.complete ? 120_000 : 0),
+            );
             return {
               page: {
                 done: false,
-                availableAt: new Date(
-                  Date.now() +
-                    (page.deferred ? 30_000 : page.complete ? 120_000 : 0),
-                ),
+                availableAt,
+                ...(page.deferred
+                  ? {
+                      waitUntil: availableAt,
+                      waitReason: jobWaitReason.enum.provider_capacity,
+                    }
+                  : {}),
               },
             };
           }
@@ -193,6 +209,7 @@ export const aiEvaluationJobHandler = defineJobHandler(
       throw new JobDeferredError(
         settled.error ?? "AI evidence resume",
         new Date(Date.now() + 1_000),
+        "provider_capacity",
       );
     if (settled?.state === "failed")
       throw new Error(settled.error ?? "AI evaluation failed");

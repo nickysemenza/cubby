@@ -9,7 +9,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 
-import type { PurchaseAgentQueueProducer } from "./domains/purchase-agent/service/purchase-agent-queue-types";
 import type { VectorizeIndexBinding } from "./generic/embedding/service/semantic/vector-store";
 import type { TelemetryQueueProducer } from "./observability/telemetry-queue-types";
 import type { BackgroundQueueProducer } from "./workflows/background-queue-types";
@@ -78,15 +77,6 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   // SAFETY: native configuration infers Env bindings structurally;
   // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
-};
-
-/** Queue producer for the per-run purchase-import agent's events. */
-export const getPurchaseAgentQueue = ():
-  | PurchaseAgentQueueProducer
-  | undefined => {
-  // SAFETY: cloudflare.config.ts declares this queue binding; this
-  // adapter narrows it to the single send method Cubby's producer owns.
-  return cfEnv?.PURCHASE_AGENT_QUEUE as PurchaseAgentQueueProducer | undefined;
 };
 
 /** Worker secrets are not part of the generated Wrangler Env type. */
@@ -186,4 +176,6 @@ export const getAiGatewayEgress = (gatewayId: string) =>
   cfEnv?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
 
 export const getAppOrigin = () => cfEnv?.APP_ORIGIN;
-export const isE2eAuthTestMode = () => cfEnv?.E2E_AUTH_TEST_MODE === "true";
+
+/** Host-only access for constructing the narrowed purchase dispatch services. */
+export const getPurchaseDispatchHostEnv = () => cfEnv;

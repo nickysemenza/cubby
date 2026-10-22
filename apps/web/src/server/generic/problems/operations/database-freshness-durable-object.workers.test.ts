@@ -1,8 +1,4 @@
-import {
-  evictDurableObject,
-  runDurableObjectAlarm,
-  runInDurableObject,
-} from "cloudflare:test";
+import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
@@ -46,17 +42,5 @@ describe("database freshness Durable Object", () => {
       }).consistency,
     ).toBe("bounded-stale");
     expect(await first.readFreshness()).toEqual(write);
-  });
-
-  // Regression: an older deploy's Problem counts refresh alarm can fire
-  // before the constructor deletes it.
-  it("drains an alarm left by an older deploy without changing freshness", async () => {
-    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
-    const before = await stub.readFreshness();
-    await runInDurableObject(stub, (_instance, state) =>
-      state.storage.setAlarm(Date.now() + 60_000),
-    );
-    expect(await runDurableObjectAlarm(stub)).toBe(true);
-    expect(await stub.readFreshness()).toEqual(before);
   });
 });

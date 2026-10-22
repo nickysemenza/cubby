@@ -1,125 +1,56 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { jobState } from "@cubby/schemas/job";
+import {
+  purchaseAgentEvent,
+  type PurchaseAgentEvent,
+} from "@cubby/schemas/purchase-import";
+import { runStatus } from "@cubby/schemas/run-fields";
+import { sql } from "drizzle-orm";
 
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
-import type { PurchaseAgentQueueProducer } from "~/server/domains/purchase-agent/service/purchase-agent-queue-types";
+import { runAfterCommit } from "~/server/db/helpers/core";
+import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
-/** Retry the persisted handoff only while the coordinator has not acknowledged it. */
-export function researchDispatchPending(scope: typeof runTable.$inferSelect) {
-  return (
-    !scope.deletedAt &&
-    !scope.retiredAt &&
-    scope.coordinatorStartedAt === null &&
-    (scope.status === "dispatch_failed" ||
-      (scope.status === "running" && scope.dispatchAttempts === 0))
-  );
-}
-
-/**
- * Producer-side dispatch accounting. Its own module because both the run
- * service and the paths that admit runs (hunts, receipts, manual sync) need
- * it, and those paths are themselves imported by the run service.
- */
-
-/** Mark the producer hand-off. A delivery can be retried only with this id. */
-export async function recordRunDispatchAttempt(
-  db: Database,
-  input: { runId: string; eventId: string; error?: string },
-) {
-  const runId = runEntityId.parse(input.runId);
-  const [run] = await getDb(db)
-    .update(runTable)
-    .set({
-      dispatchAttempts: sql`${runTable.dispatchAttempts} + 1`,
-      dispatchError:
-        input.error === undefined ? null : scrubErrorMessage(input.error),
-      status: input.error ? "dispatch_failed" : "running",
-      failureCode: input.error ? "dispatch_failed" : null,
-      endedAt: input.error ? new Date() : null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(runTable.id, runId),
-        eq(runTable.dispatchEventId, input.eventId),
-        inArray(runTable.status, ["running", "dispatch_failed"]),
-      ),
-    )
-    .returning({ id: runTable.id, status: runTable.status });
-  if (run) return run;
-  const [settled] = await getDb(db)
-    .select({ id: runTable.id, status: runTable.status })
-    .from(runTable)
-    .where(
-      and(eq(runTable.id, runId), eq(runTable.dispatchEventId, input.eventId)),
-    )
-    .limit(1);
-  if (settled) return settled;
-  throw new Error("Import run dispatch generation is no longer active");
-}
-
-/**
- * The one producer hand-off. Every path that starts a coordinator sends
- * through here so `dispatchAttempts` counts the initial delivery, not only
- * the retry route. A `retry` event resumes the active generation and is not a
- * new attempt: `recordRunDispatchAttempt` would reject its event id.
- */
+/** Commit handoff intent with admission. Retries retain one operation identity. */
 export async function dispatchRunEvent(
-  db: Database,
-  queue: PurchaseAgentQueueProducer,
-  event: PurchaseAgentEvent,
+  db: RepositoryQueryInput,
+  submitted: PurchaseAgentEvent,
 ) {
-  if (event.type !== "start_or_resume") {
-    await queue.send(event);
-    return;
-  }
-  try {
-    await queue.send(event);
-  } catch (error) {
-    await recordRunDispatchAttempt(db, {
-      runId: event.runId,
-      eventId: event.eventId,
-      error: error instanceof Error ? error.message : "Queue send failed",
-    });
-    throw error;
-  }
-  await recordRunDispatchAttempt(db, {
+  const event = purchaseAgentEvent.parse(submitted);
+  const saved = await enqueueJob(db, {
+    key: `purchase-dispatch:${event.runId}:${event.type}:${event.eventId}`,
+    kind: "purchase.dispatch",
     runId: event.runId,
-    eventId: event.eventId,
+    input: event,
   });
+  await runAfterCommit(db, () => wakeJobs({ source: "purchase.dispatch" }));
+  return saved;
 }
 
-/** Hand a newly admitted agent Run to its coordinator; a failure stays retryable. */
 export async function dispatchStartedRun(
-  db: Database,
+  db: RepositoryQueryInput,
   run: { id: string; eventId: string; purpose: string },
-): Promise<"running" | "dispatch_failed"> {
-  const queue = getPurchaseAgentQueue();
-  if (!queue) {
-    await recordRunDispatchAttempt(db, {
-      runId: run.id,
-      eventId: run.eventId,
-      error: "Purchase import agent queue is unavailable",
-    });
-    return "dispatch_failed";
-  }
-  try {
-    await dispatchRunEvent(db, queue, {
-      version: 1,
-      runId: run.id,
-      purpose: agentImportRunPurpose.parse(run.purpose),
-      eventId: run.eventId,
-      generation: run.eventId,
-      type: "start_or_resume",
-    });
-    return "running";
-  } catch {
-    return "dispatch_failed";
-  }
+): Promise<"running"> {
+  await dispatchRunEvent(db, {
+    version: 1,
+    runId: run.id,
+    purpose: agentImportRunPurpose.parse(run.purpose),
+    eventId: run.eventId,
+    generation: run.eventId,
+    type: "start_or_resume",
+  });
+  return "running";
+}
+
+/** Only the current unstarted generation can inherit terminal Job diagnostics. */
+export async function reconcilePurchaseDispatches(db: Database) {
+  await getDb(db)
+    .execute(sql`UPDATE "Run" r SET status=${runStatus.enum.dispatch_failed}, "failureCode"=${runStatus.enum.dispatch_failed},
+    "dispatchError"=j.error, "endedAt"=now(), "updatedAt"=now()
+    FROM "Job" j WHERE j.kind='purchase.dispatch' AND j.state=${jobState.enum.failed} AND j."runId"=r.id
+      AND j.input->>'type'='start_or_resume' AND j.input->>'eventId'=r."dispatchEventId"
+      AND r.status=${runStatus.enum.running} AND r."coordinatorStartedAt" IS NULL AND r."retiredAt" IS NULL AND r."deletedAt" IS NULL`);
 }

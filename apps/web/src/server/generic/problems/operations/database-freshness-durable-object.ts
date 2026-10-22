@@ -26,9 +26,6 @@ export class DatabaseFreshnessDurableObject
     void ctx.blockConcurrencyWhile(() => ctx.storage.deleteAlarm());
   }
 
-  /** An older deploy's refresh alarm may fire before the constructor deletes it. */
-  async alarm() {}
-
   readFreshness() {
     const row = this.ctx.storage.sql
       .exec<{ last_write_at: number }>(

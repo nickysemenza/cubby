@@ -1,5 +1,6 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { JobWaitReason } from "@cubby/schemas/job";
 import type {
   RunStepCounts,
   RunStepError,
@@ -11,6 +12,7 @@ import { pick } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { setJobStepKey } from "~/server/generic/jobs/context";
 import {
   isStepRunPurpose,
   type StepRunPurpose,
@@ -87,6 +89,7 @@ export type StepPage = (
       cursor?: unknown;
     }
 ) & {
+  waitReason?: JobWaitReason;
   work?: RunWorkItems & { finished?: boolean };
   labels?: { reused: number; generated: number };
   pageProcessed?: number;
@@ -154,7 +157,7 @@ export type StepPageSummary = z.infer<typeof stepPageSummary>;
 export type StepAdvance = (
   | { kind: "continue"; execution?: RunStepExecution; waitSeconds?: number }
   | { kind: "wait"; seconds: number }
-  | { kind: "paused" }
+  | { kind: "paused"; waitReason?: JobWaitReason }
   | { kind: "finished" }
   | { kind: "lost" }
 ) & { summary?: StepPageSummary };
@@ -290,6 +293,7 @@ export async function advanceStepRun(
     await finishStepRun(db, owner, steps, params.attempt);
     return { kind: "finished" };
   }
+  setJobStepKey(current.key);
   const driver = list.find((candidate) => candidate.key === current.key);
   if (!driver) {
     await recordRunStepPage(db, owner.id, current.key, {
@@ -359,7 +363,11 @@ export async function advanceStepRun(
       page.until,
       params.attempt,
     );
-    return { kind: "paused", summary };
+    return {
+      kind: "paused",
+      waitReason: page.waitReason,
+      summary,
+    };
   }
   if (page.kind === "child") {
     const ended = page.state === "done" || page.state === "failed";
@@ -388,7 +396,11 @@ export async function advanceStepRun(
         page.pausedUntil ?? null,
         params.attempt,
       );
-      return { kind: "paused", summary };
+      return {
+        kind: "paused",
+        waitReason: page.waitReason,
+        summary,
+      };
     }
     if (ended) {
       await stepEnded(db, owner, current, page.counts, stamp);

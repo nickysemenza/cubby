@@ -2,15 +2,13 @@
  * The web Worker entry. Sections, in file order:
  * - `handler.fetch`: env bridging, maintenance mode, direct sockets, then
  *   TanStack Start.
- * - `handler.queue`: `cubby-purchase-agent` (the purchase agent's consumer,
- *   `server/domains/purchase-agent/service/queue`), `cubby-telemetry`, then background tasks
+ * - `handler.queue`: telemetry ingestion and durable Job wakes
  *   (`server/workflows/background-tasks/consume`).
- * - `handler.scheduled`: the one daily maintenance cron.
- * - Durable Object and Workflow re-exports, then the Sentry-wrapped default.
+ * - `handler.scheduled`: minute Job recovery and daily maintenance.
+ * - Durable Object re-exports, then the Sentry-wrapped default.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { createLogger, originalLoggedError } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 // CF Workers production entry point.
@@ -43,8 +41,6 @@ import {
   withDatabaseRequestMetrics,
 } from "./server/db/db-observability";
 import { recordDatabaseWrite } from "./server/db/freshness/client";
-import type { PurchaseAgentQueueBatch } from "./server/domains/purchase-agent/service/environment";
-import { purchaseAgentQueueEnvironment } from "./server/domains/purchase-import/operations/agent-host";
 import {
   reportServerError,
   withErrorReporting,
@@ -175,17 +171,6 @@ const handler = {
     env: Env,
     ctx: { waitUntil(promise: Promise<unknown>): void },
   ) {
-    if (
-      !isMaintenanceMode(env) &&
-      !import.meta.env.CUBBY_LOCAL_RUNTIME &&
-      env.E2E_AUTH_TEST_MODE !== "true"
-    ) {
-      ctx.waitUntil(
-        env.AI_GATEWAY_EGRESS.getByName(CUBBY_AI_GATEWAY_ID)
-          .observeAiRefresh()
-          .catch((error: unknown) => Sentry.captureException(error)),
-      );
-    }
     const startedAt = performance.now();
     const invocationOrdinal = ++fetchInvocationOrdinal;
     const runFetch = (entrySpan: AppSpan) =>
@@ -557,30 +542,17 @@ const handler = {
     });
   },
 
-  // Background queue consumer. Each message is a complete task; there is no
-  // execution row behind it. Per-message ack/retry so one failing task never
-  // replays its siblings, and the queue's own retry budget is the only retry.
+  // Deliveries wake the durable Job drain and always acknowledge. Job owns
+  // retries, including when a wake envelope is unreadable.
   async queue(
-    batch: BackgroundQueueBatch | TelemetryQueueBatch | PurchaseAgentQueueBatch,
+    batch: BackgroundQueueBatch | TelemetryQueueBatch,
     env: Env,
-    ctx: { waitUntil(promise: Promise<unknown>): void },
+    _ctx: { waitUntil(promise: Promise<unknown>): void },
   ) {
     setCfEnv(env);
     await withInvocationTrace(
       "cf.queue",
       async () => {
-        if (batch.queue === "cubby-purchase-agent") {
-          // The agent's consumer holds no database client: each Run service it
-          // calls opens its own (`server/domains/purchase-import/operations/agent-services`).
-          const { consumePurchaseAgentQueue } =
-            await import("./server/domains/purchase-agent/service/queue");
-          await consumePurchaseAgentQueue(
-            batch,
-            purchaseAgentQueueEnvironment(env, ctx),
-          );
-          return;
-        }
-
         // A task can launch independent maintenance transactions concurrently.
         // Lease separate clients and close the bounded pools after the batch.
         await withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
@@ -644,6 +616,13 @@ const handler = {
               import("./server/db"),
               import("./server/workflows/catch-up"),
             ]);
+            await (
+              await import("./server/workflows/ai-refresh-startup")
+            ).publishAiRefreshActivation(
+              db,
+              env.CF_VERSION_METADATA.id,
+              __GIT_COMMIT__,
+            );
             await recoverMissedWork(db);
           });
           return;
@@ -654,7 +633,7 @@ const handler = {
           "daily-maintenance",
           async () => {
             // The cron only launches the pass; its steps drain each backlog
-            // page by page in StepRunWorkflow, one active pass at a time.
+            // page by page through run.execute Jobs, one active pass at a time.
             await withInvocationDb(
               env.HYPERDRIVE.connectionString,
               async () => {

@@ -2,7 +2,10 @@ import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  withJobExecution,
+  type JobExecutionDetails,
+} from "~/server/generic/jobs/context";
 import {
   JobPausedError,
   JobDeferredError,
@@ -49,13 +52,25 @@ export async function advanceJob(
 ) {
   const claimed = await claimJob(db, id);
   if (!claimed) return "skipped";
+  const details: JobExecutionDetails = { stepKey: null };
+  const entry = () =>
+    log.child({
+      runId: claimed.runId,
+      jobId: id,
+      kind: claimed.kind,
+      stepKey: details.stepKey,
+      generation: claimed.generation,
+      attempt: claimed.attempts,
+      waitReason: null,
+    });
+  entry().info("claim");
   const handler = handlers[claimed.kind];
   let renewing: Promise<boolean> | undefined;
   const heartbeat = setInterval(() => {
     if (!renewing) {
       renewing = renewJob(db, claimed)
         .catch((error: unknown) => {
-          log.error("lease renewal failed", { jobId: id, error });
+          entry().error("lease renewal failed", { error });
           return false;
         })
         .finally(() => {
@@ -66,15 +81,31 @@ export async function advanceJob(
   try {
     if (!handler)
       throw new Error(`No job handler registered for ${claimed.kind}`);
-    const prepared = await withJobExecution(db, claimed, () =>
-      handler.prepare(db, claimed),
+    const prepared = await withJobExecution(
+      db,
+      claimed,
+      () => handler.prepare(db, claimed),
+      details,
     );
+    entry().info("page", {
+      awaitExternal: Boolean(prepared.awaitExternal),
+      waitReason: prepared.page.waitReason ?? null,
+    });
     if (prepared.awaitExternal) return "dispatched";
-    return (await withJobExecution(db, claimed, () =>
-      publishJobPage(db, claimed, prepared.page, prepared.publish),
-    ))
-      ? "succeeded"
-      : "superseded";
+    const published = await withJobExecution(
+      db,
+      claimed,
+      () => publishJobPage(db, claimed, prepared.page, prepared.publish),
+      details,
+    );
+    entry().info("publish", {
+      published,
+      done: prepared.page.done,
+      waitReason: prepared.page.done
+        ? null
+        : (prepared.page.waitReason ?? null),
+    });
+    return published ? "succeeded" : "superseded";
   } catch (error) {
     const causes: unknown[] = [];
     let cause: unknown = error;
@@ -95,7 +126,12 @@ export async function advanceJob(
       await publishJobPage(db, claimed, {
         done: false,
         ...(claimed.cursor === null ? {} : { cursor: claimed.cursor }),
-        availableAt: deferred.until,
+        waitUntil: deferred.until,
+        waitReason: deferred.reason,
+      });
+      entry().info("defer", {
+        waitReason: deferred.reason,
+        waitUntil: deferred.until,
       });
       return "deferred";
     }
@@ -104,7 +140,7 @@ export async function advanceJob(
       return "superseded";
     }
     await failJob(db, claimed, error);
-    log.error("execution failed", { jobId: id, kind: claimed.kind, error });
+    entry().error("fail", { error });
     return "failed";
   } finally {
     clearInterval(heartbeat);

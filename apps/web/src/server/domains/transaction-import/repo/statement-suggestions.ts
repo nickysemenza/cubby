@@ -31,8 +31,8 @@ import {
   statementApplicationOrder,
 } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
+import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { inArray, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -1735,7 +1735,7 @@ export async function generateStatementSuggestionPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+      JOB_PAGE_LIMITS.suggestionsPerPage,
     ),
   );
   const charges = await nextUnmatchedCharges(db, {
@@ -1822,7 +1822,7 @@ export async function generateStatementHoldVoidPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+      JOB_PAGE_LIMITS.suggestionsPerPage,
     ),
   );
   const accounts =

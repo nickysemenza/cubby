@@ -13,13 +13,19 @@ export async function prepareEmbeddingCleanupPage(
   after?: string,
   limit = 25,
 ) {
-  const rows = await getDb(db).execute<{ id: string }>(sql`
-    SELECT physical.id FROM (
+  const rows = await getDb(db).execute<{
+    id: string;
+    subjectKind: string | null;
+    subjectId: string | null;
+  }>(sql`
+    SELECT physical.id, coalesce(e."entityKind", j."subjectKind") AS "subjectKind", coalesce(e."entityId"::text, j."subjectId") AS "subjectId" FROM (
       SELECT e.id FROM "EntityEmbedding" e
       WHERE (e."deletedAt" IS NOT NULL OR e."artifactState" IN (${embeddingArtifactState.enum.retired},${embeddingArtifactState.enum.failed})) AND e."deletionId" IS NULL
       UNION
       SELECT j.id FROM "Job" j WHERE j.kind='embedding.refresh' AND j.state IN (${jobState.enum.completed},${jobState.enum.failed},${jobState.enum.cancelled})
     ) physical
+    LEFT JOIN "EntityEmbedding" e ON e.id=physical.id
+    LEFT JOIN "Job" j ON j.id=physical.id
     WHERE ${after ? sql`physical.id > ${after}::uuid` : sql`true`}
       AND NOT EXISTS (SELECT 1 FROM "EntityEmbedding" e WHERE e.id=physical.id AND e."artifactState"=${embeddingArtifactState.enum.selected} AND e."deletedAt" IS NULL)
       AND NOT EXISTS (SELECT 1 FROM "Job" active WHERE active.id=physical.id AND active.state IN (${jobState.enum.queued},${jobState.enum.running},${jobState.enum.retry_wait},${jobState.enum.paused}))
@@ -32,6 +38,8 @@ export async function prepareEmbeddingCleanupPage(
         await enqueueJob(tx, {
           key: `embedding-cleanup:${row.id}`,
           kind: "embedding.cleanup",
+          subjectKind: row.subjectKind,
+          subjectId: row.subjectId,
           input: { artifactId: row.id },
         });
     },

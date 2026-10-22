@@ -1,6 +1,5 @@
 import { parseEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -15,6 +14,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import {
+  job,
   aiUsage,
   assessment,
   feedback,
@@ -50,6 +50,8 @@ import { controlRun, loadRunDetail, markRunFailed } from "./run-service";
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
 describe("mail research admission", () => {
   const ctx = withTestDb();
+  const dispatches = () =>
+    getDb(ctx.db).select().from(job).where(eq(job.kind, "purchase.dispatch"));
   // The Run's admitted Emails, frozen at their admitted checksums.
   const frozenSources = async (runId: string) => {
     const [saved] = await getDb(ctx.db)
@@ -84,15 +86,11 @@ describe("mail research admission", () => {
   // Admission freezes the Mail population before any of its targets finish.
   it("reports the known Mail import total while its roster is active", async () => {
     const { party, mail } = await source();
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id],
-      },
-      { send: async () => {} },
-    );
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
     if (!admitted) throw new Error("Synthetic Mail Run missing");
     const [owner] = await getDb(ctx.db)
       .select({ shortcode: run.shortcode })
@@ -132,8 +130,7 @@ describe("mail research admission", () => {
       .update(emailTable)
       .set({ runId: classificationRunId })
       .where(eq(emailTable.orderMailId, mail.id));
-    const queue = { send: async () => {} };
-    await importPendingEmails(ctx.db, queue);
+    await importPendingEmails(ctx.db);
     expect(
       await getDb(ctx.db)
         .select()
@@ -144,7 +141,7 @@ describe("mail research admission", () => {
       mailboxId: "synthetic-mailbox",
       enabled: true,
     });
-    await importPendingEmails(ctx.db, queue);
+    await importPendingEmails(ctx.db);
     const [owner] = await getDb(ctx.db)
       .select()
       .from(run)
@@ -153,7 +150,7 @@ describe("mail research admission", () => {
     expect(await frozenSources(owner!.id)).toEqual([
       { orderMailId: mail.id, checksum: mail.rawChecksum },
     ]);
-    await importPendingEmails(ctx.db, queue);
+    await importPendingEmails(ctx.db);
     expect(
       await getDb(ctx.db)
         .select()
@@ -203,9 +200,7 @@ describe("mail research admission", () => {
       messageId: "synthetic-retained-later",
       checksum: "c".repeat(64),
     });
-    await expect(
-      importPendingEmails(ctx.db, { send: async () => {} }),
-    ).resolves.toBeDefined();
+    await expect(importPendingEmails(ctx.db)).resolves.toBeDefined();
     const [owner] = await getDb(ctx.db)
       .select()
       .from(run)
@@ -251,9 +246,7 @@ describe("mail research admission", () => {
           throw new Error("Synthetic source changed after selection");
       });
     try {
-      const result = await importPendingEmails(ctx.db, {
-        send: async () => {},
-      });
+      const result = await importPendingEmails(ctx.db);
       expect(result.errors).toHaveLength(1);
       expect(String(result.errors[0])).toContain(
         "Synthetic source changed after selection",
@@ -275,15 +268,11 @@ describe("mail research admission", () => {
   // history grade without granting authority to rewrite the imported ledger.
   it("freezes Mail import outcomes with rule provenance and immutable retry identity", async () => {
     const { party, mail } = await source();
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id],
-      },
-      { send: async () => {} },
-    );
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
     if (!admitted) throw new Error("Synthetic Run missing");
     const input = {
       mail,
@@ -377,15 +366,11 @@ describe("mail research admission", () => {
 
   it("preserves the parent Email outcome after a retry transfers its live assignment", async () => {
     const { party, mail } = await source();
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id],
-      },
-      { send: async () => {} },
-    );
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
     if (!admitted) throw new Error("Synthetic parent missing");
     await settleMail(ctx.db, {
       mail,
@@ -445,16 +430,11 @@ describe("mail research admission", () => {
       messageId: "synthetic-settled",
       checksum: "c".repeat(64),
     });
-    const queue = { send: async () => {} };
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id, settled.id],
-      },
-      queue,
-    );
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id, settled.id],
+    });
     if (!admitted) throw new Error("Synthetic Run missing");
     const runId = parseEntityId("run", admitted.runId);
     await settleMail(ctx.db, {
@@ -504,15 +484,11 @@ describe("mail research admission", () => {
       status: "pending",
     });
 
-    const [again] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id],
-      },
-      queue,
-    );
+    const [again] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
     if (!again) throw new Error("Synthetic readmission missing");
     const againId = parseEntityId("run", again.runId);
     await markRunFailed(ctx.db, {
@@ -535,15 +511,11 @@ describe("mail research admission", () => {
       messageId: "synthetic-blocked",
       checksum: "d".repeat(64),
     });
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id, blocked.id],
-      },
-      { send: async () => {} },
-    );
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id, blocked.id],
+    });
     if (!admitted) throw new Error("Synthetic Run missing");
     const runId = parseEntityId("run", admitted.runId);
     await settleMail(ctx.db, {
@@ -585,14 +557,13 @@ describe("mail research admission", () => {
       userId: ctx.actor.userId,
       messageIds: [mail.id],
     };
-    const queue = { send: async () => {} };
-    const [first] = await startMailImport(ctx.db, admission, queue);
+    const [first] = await startMailImport(ctx.db, admission);
     if (!first) throw new Error("Synthetic Run missing");
     await markRunFailed(ctx.db, {
       runId: parseEntityId("run", first.runId),
       failureCode: "agent_failed",
     });
-    const [second] = await startMailImport(ctx.db, admission, queue);
+    const [second] = await startMailImport(ctx.db, admission);
     expect(second?.runId).not.toBe(first.runId);
     const [owned] = await getDb(ctx.db)
       .select({ runId: emailTable.runId, status: emailTable.status })
@@ -603,15 +574,11 @@ describe("mail research admission", () => {
 
   it("preserves a migrated blocked receipt after its successor completes and the live Email changes", async () => {
     const { party, mail } = await source();
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id],
-      },
-      { send: async () => {} },
-    );
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
     if (!admitted) throw new Error("Synthetic migrated parent missing");
     const db = getDb(ctx.db);
     const parent = await db.query.run.findFirst({
@@ -710,24 +677,15 @@ describe("mail research admission", () => {
         executionPolicy: "classification_only",
       },
     });
-    const events: PurchaseAgentEvent[] = [];
     await expect(
-      startMailImport(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          messageIds: [mail.id],
-          parentRunId: parent,
-        },
-        {
-          send: async (event) => {
-            events.push(event);
-          },
-        },
-      ),
+      startMailImport(ctx.db, {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+        parentRunId: parent,
+      }),
     ).rejects.toThrow(/classification.only/iu);
-    expect(events).toEqual([]);
+    expect(await dispatches()).toEqual([]);
     expect(
       (await getDb(ctx.db).select().from(run)).filter(
         (row) => row.purpose === "mail_import",
@@ -737,18 +695,12 @@ describe("mail research admission", () => {
   it("refuses selected Luna when cancellation completes during source validation", async () => {
     const { party, mail } = await source();
     if (!mail.rawChecksum) throw new Error("Synthetic checksum missing");
-    const [admitted] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [mail.id],
-        expectedChecksums: [
-          { orderMailId: mail.id, checksum: mail.rawChecksum },
-        ],
-      },
-      { send: async () => {} },
-    );
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+      expectedChecksums: [{ orderMailId: mail.id, checksum: mail.rawChecksum }],
+    });
     if (!admitted) throw new Error("Synthetic Run missing");
     const [saved] = await getDb(ctx.db)
       .select({ shortcode: run.shortcode })
@@ -811,18 +763,14 @@ describe("mail research admission", () => {
     "admits member-selected coordinator $model past a spent background budget",
     async ({ provider, model, endpoint }) => {
       const { party, mail } = await source();
-      const [admitted] = await startMailImport(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          messageIds: [mail.id],
-          expectedChecksums: [
-            { orderMailId: mail.id, checksum: mail.rawChecksum! },
-          ],
-        },
-        { send: async () => {} },
-      );
+      const [admitted] = await startMailImport(ctx.db, {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+        expectedChecksums: [
+          { orderMailId: mail.id, checksum: mail.rawChecksum! },
+        ],
+      });
       if (!admitted) throw new Error("Selected mail Run missing");
       let transmissions = 0;
       const paid = gatewayFetchThrough({
@@ -919,18 +867,14 @@ describe("mail research admission", () => {
     "refuses selected Luna retries when current source changes: %s",
     async (change) => {
       const { party, mail } = await source();
-      const [admitted] = await startMailImport(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          messageIds: [mail.id],
-          expectedChecksums: [
-            { orderMailId: mail.id, checksum: mail.rawChecksum! },
-          ],
-        },
-        { send: async () => {} },
-      );
+      const [admitted] = await startMailImport(ctx.db, {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id],
+        expectedChecksums: [
+          { orderMailId: mail.id, checksum: mail.rawChecksum! },
+        ],
+      });
       if (!admitted) throw new Error("Synthetic selection missing");
       const admittedId = parseEntityId("run", admitted.runId);
       await getDb(ctx.db)
@@ -997,33 +941,23 @@ describe("mail research admission", () => {
       .where(eq(emailTable.orderMailId, mail.id));
     const before = await getDb(ctx.db).select().from(emailTable);
     const retainedBefore = await getDb(ctx.db).select().from(orderMail);
-    const events: PurchaseAgentEvent[] = [];
     await expect(
-      startMailImport(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          mailboxId: mail.mailboxId,
-          messageIds: [mail.id],
-        },
-        {
-          send: async (event) => {
-            events.push(event);
-          },
-        },
-      ),
+      startMailImport(ctx.db, {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        mailboxId: mail.mailboxId,
+        messageIds: [mail.id],
+      }),
     ).rejects.toThrow(/historical.*ownership|original.*mapping/u);
-    expect(events).toEqual([]);
+    expect(await dispatches()).toEqual([]);
     expect(await getDb(ctx.db).select().from(run)).toEqual([]);
     expect(await getDb(ctx.db).select().from(emailTable)).toEqual(before);
     expect(await getDb(ctx.db).select().from(orderMail)).toEqual(
       retainedBefore,
     );
   });
-  it("publishes admitted mail only after the enclosing transaction commits", async () => {
+  it("commits mail admission and dispatch intent atomically", async () => {
     const { party, mail } = await source();
-    const events: unknown[] = [];
     const input = {
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
@@ -1032,47 +966,43 @@ describe("mail research admission", () => {
     };
     await expect(
       withTransaction(ctx.db, async (tx) => {
-        await startMailImport(databaseForTransaction(tx), input, {
-          send: async (event: PurchaseAgentEvent) => {
-            events.push(event);
-          },
-        });
-        expect(events).toEqual([]);
+        await startMailImport(databaseForTransaction(tx), input);
+        expect(
+          await getDb(databaseForTransaction(tx))
+            .select()
+            .from(job)
+            .where(eq(job.kind, "purchase.dispatch")),
+        ).toHaveLength(1);
         throw new Error("Synthetic admission rollback");
       }),
     ).rejects.toThrow("Synthetic admission rollback");
-    expect(events).toEqual([]);
+    expect(await dispatches()).toEqual([]);
     expect(await getDb(ctx.db).select().from(run)).toEqual([]);
     await withTransaction(ctx.db, async (tx) => {
-      await startMailImport(databaseForTransaction(tx), input, {
-        send: async (event: PurchaseAgentEvent) => {
-          events.push(event);
-        },
-      });
-      expect(events).toEqual([]);
+      await startMailImport(databaseForTransaction(tx), input);
+      expect(
+        await getDb(databaseForTransaction(tx))
+          .select()
+          .from(job)
+          .where(eq(job.kind, "purchase.dispatch")),
+      ).toHaveLength(1);
     });
-    expect(events).toHaveLength(1);
+    expect(await dispatches()).toHaveLength(1);
   });
   it("admits a source set once, with durable message ownership and no browser prerequisite", async () => {
     const { party, mail } = await source();
-    const events: unknown[] = [];
-    const queue = {
-      send: async (event: PurchaseAgentEvent) => {
-        events.push(event);
-      },
-    };
     const input = {
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
       mailboxId: mail.mailboxId,
       messageIds: [mail.id],
     };
-    const first = await startMailImport(ctx.db, input, queue);
+    const first = await startMailImport(ctx.db, input);
     expect(first).toHaveLength(1);
-    expect(await startMailImport(ctx.db, input, queue)).toEqual(first);
+    expect(await startMailImport(ctx.db, input)).toEqual(first);
     const [result] = first;
     if (!result) throw new Error("Research Run was not created");
-    expect(events).toHaveLength(1);
+    expect(await dispatches()).toHaveLength(1);
     const [saved] = await getDb(ctx.db)
       .select()
       .from(run)
@@ -1104,17 +1034,13 @@ describe("mail research admission", () => {
       trigger: "scheduled",
       status: "running",
     });
-    const [started] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        mailboxId: mail.mailboxId,
-        messageIds: [mail.id],
-        parentRunId,
-      },
-      { send: async (_event: PurchaseAgentEvent) => {} },
-    );
+    const [started] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      messageIds: [mail.id],
+      parentRunId,
+    });
     if (!started) throw new Error("Synthetic mail child was not created");
     const [saved] = await getDb(ctx.db)
       .select()
@@ -1128,7 +1054,6 @@ describe("mail research admission", () => {
   });
   it("refuses stale and foreign source admission without creating a Run", async () => {
     const { party, mail } = await source();
-    const queue = { send: async (_event: PurchaseAgentEvent) => {} };
     const input = {
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
@@ -1136,23 +1061,13 @@ describe("mail research admission", () => {
       messageIds: [mail.id],
     };
     await expect(
-      startMailImport(
-        ctx.db,
-        {
-          ...input,
-          expectedChecksums: [
-            { orderMailId: mail.id, checksum: "b".repeat(64) },
-          ],
-        },
-        queue,
-      ),
+      startMailImport(ctx.db, {
+        ...input,
+        expectedChecksums: [{ orderMailId: mail.id, checksum: "b".repeat(64) }],
+      }),
     ).rejects.toThrow(/changed/);
     await expect(
-      startMailImport(
-        ctx.db,
-        { ...input, userId: "synthetic-other-user" },
-        queue,
-      ),
+      startMailImport(ctx.db, { ...input, userId: "synthetic-other-user" }),
     ).rejects.toThrow(/member|owner/);
     expect(await getDb(ctx.db).select().from(run)).toEqual([]);
   });
@@ -1169,28 +1084,21 @@ describe("mail research admission", () => {
       content: mail.content,
     });
     if (!second) throw new Error("Second synthetic source did not persist");
-    const events: unknown[] = [];
-    const queue = {
-      send: async (event: PurchaseAgentEvent) => {
-        events.push(event);
-      },
-    };
     const input = {
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
       mailboxId: mail.mailboxId,
       messageIds: [mail.id],
     };
-    const [first] = await startMailImport(ctx.db, input, queue);
+    const [first] = await startMailImport(ctx.db, input);
     if (!first) throw new Error("First research Run was not created");
-    const overlapping = await startMailImport(
-      ctx.db,
-      { ...input, messageIds: [mail.id, second.id] },
-      queue,
-    );
+    const overlapping = await startMailImport(ctx.db, {
+      ...input,
+      messageIds: [mail.id, second.id],
+    });
     expect(overlapping).toHaveLength(2);
     expect(overlapping).toContainEqual(first);
-    expect(events).toHaveLength(2);
+    expect(await dispatches()).toHaveLength(2);
     const [stillOwned] = await getDb(ctx.db)
       .select()
       .from(emailTable)
@@ -1202,31 +1110,7 @@ describe("mail research admission", () => {
       { orderMailId: second.id },
     ]);
   });
-  it("redelivers a committed admission when the coordinator was never dispatched", async () => {
-    const { party, mail } = await source();
-    const events: unknown[] = [];
-    const queue = {
-      send: async (event: PurchaseAgentEvent) => {
-        events.push(event);
-      },
-    };
-    const input = {
-      ledgerPartyId: party.id,
-      userId: ctx.actor.userId,
-      mailboxId: mail.mailboxId,
-      messageIds: [mail.id],
-    };
-    const [first] = await startMailImport(ctx.db, input, queue);
-    if (!first) throw new Error("Research Run was not created");
-    // The durable admission survives a process exit before its first queue send.
-    await getDb(ctx.db)
-      .update(run)
-      .set({ dispatchAttempts: 0 })
-      .where(eq(run.id, parseEntityId("run", first.runId)));
-    events.length = 0;
-    expect(await startMailImport(ctx.db, input, queue)).toEqual([first]);
-    expect(events).toHaveLength(1);
-  });
+
   it("does not relaunch retained historical mail after Gmail excluded or deleted it", async () => {
     const { party, mail } = await source();
     await getDb(ctx.db)
@@ -1235,24 +1119,15 @@ describe("mail research admission", () => {
       .where(eq(emailTable.orderMailId, mail.id));
     const before = await getDb(ctx.db).select().from(emailTable);
     const retainedBefore = await getDb(ctx.db).select().from(orderMail);
-    const events: PurchaseAgentEvent[] = [];
     await expect(
-      startMailImport(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          mailboxId: mail.mailboxId,
-          messageIds: [mail.id],
-        },
-        {
-          send: async (event: PurchaseAgentEvent) => {
-            events.push(event);
-          },
-        },
-      ),
+      startMailImport(ctx.db, {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        mailboxId: mail.mailboxId,
+        messageIds: [mail.id],
+      }),
     ).rejects.toBeInstanceOf(Error);
-    expect(events).toEqual([]);
+    expect(await dispatches()).toEqual([]);
     expect(await getDb(ctx.db).select().from(run)).toEqual([]);
     expect(await getDb(ctx.db).select().from(runOperation)).toEqual([]);
     expect(await getDb(ctx.db).select().from(emailTable)).toEqual(before);

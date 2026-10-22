@@ -5,10 +5,9 @@ import { wakeJobs } from "./publish";
 describe("Job wake transport", () => {
   it("sends only a versioned wake, with no domain payload", async () => {
     const sendBatch = vi.fn().mockResolvedValue(undefined);
-    const jobId = "00000000-0000-4000-8000-000000000001";
-    await wakeJobs({ source: "synthetic-test", jobId, queue: { sendBatch } });
+    await wakeJobs({ source: "synthetic-test", queue: { sendBatch } });
     expect(sendBatch).toHaveBeenCalledWith([
-      { body: { version: 3, queueType: "background", jobId } },
+      { body: { version: 3, queueType: "background" } },
     ]);
   });
 

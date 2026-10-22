@@ -9,26 +9,7 @@ const unavailable = createDatabase(() => {
 });
 
 describe("Job wake consumption", () => {
-  it("acknowledges a retired task envelope without executing a second scheduler", async () => {
-    const message = {
-      body: {
-        version: 2,
-        queueType: "background",
-        task: { kind: "maintenance.recover" },
-      },
-      ack: vi.fn(),
-      retry: vi.fn(),
-    };
-    expect(
-      await handleBackgroundQueueMessage(unavailable, message, {
-        captureException: vi.fn(),
-      }),
-    ).toBe("unreadable");
-    expect(message.ack).toHaveBeenCalledOnce();
-    expect(message.retry).not.toHaveBeenCalled();
-  });
-
-  it("retries a wake when the authoritative database cannot be reached", async () => {
+  it("acks failed drains; cron owns recovery when the database is unavailable", async () => {
     const message = {
       body: { version: 3, queueType: "background" },
       ack: vi.fn(),
@@ -41,8 +22,8 @@ describe("Job wake consumption", () => {
         handlers: {},
       }),
     ).toBe("failed");
-    expect(message.retry).toHaveBeenCalledOnce();
-    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledOnce();
     expect(captureException).toHaveBeenCalledOnce();
   });
 });

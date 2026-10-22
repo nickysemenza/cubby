@@ -181,7 +181,6 @@ const runDetail = z
     dispatch: z.object({
       eventId: z.string().nullable(),
       state: z.string().min(1),
-      attempts: z.number().int().nonnegative(),
       error: z.string().nullable(),
       coordinatorStartedAt: z.iso.datetime().nullable(),
     }),

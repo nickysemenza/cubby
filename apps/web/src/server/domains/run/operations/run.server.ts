@@ -17,7 +17,6 @@ import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/purchase-import/repo/agent-auth";
-import { dispatchStartedRun } from "~/server/domains/purchase-import/repo/dispatch";
 import { withMailSearchProgress } from "~/server/domains/purchase-import/repo/gmail/search-progress";
 import {
   readMailImportSettings,
@@ -139,17 +138,6 @@ async function controlRunOperation(
     runPublicId: runId,
     ...input,
   });
-  if (
-    "dispatchRunId" in control &&
-    control.dispatchRunId &&
-    control.dispatchEventId
-  ) {
-    await dispatchStartedRun(context.db, {
-      id: control.dispatchRunId,
-      eventId: control.dispatchEventId,
-      purpose: control.dispatchPurpose,
-    });
-  }
   return {
     run: await loadRunDetail(context.db, runId),
     successor:

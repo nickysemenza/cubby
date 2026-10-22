@@ -409,7 +409,11 @@ export async function withAiResponseCache<T>(args: {
  * the error. Either way the raw cause stays on its chain.
  */
 function deferred(message: string, cause?: UnparsedError): JobDeferredError {
-  const error = new JobDeferredError(message, new Date(Date.now() + DEFER_MS));
+  const error = new JobDeferredError(
+    message,
+    new Date(Date.now() + DEFER_MS),
+    "provider_capacity",
+  );
   if (cause !== undefined) error.cause = cause;
   return error;
 }

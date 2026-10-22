@@ -29,6 +29,22 @@ type LocalDevEnv = Env &
     CUBBY_DEV_MIGRATION_HASH: string;
   };
 
+// Offline development must fail before opening a coordinator or provider peer.
+function dispatchEnvironment(env: LocalDevEnv): LocalDevEnv {
+  if (env.CUBBY_DEV_PROFILE !== "offline") return env;
+  return {
+    ...env,
+    PURCHASE_IMPORT_RUN: {
+      ...env.PURCHASE_IMPORT_RUN,
+      getByName: () => {
+        throw new Error(
+          "Purchase agent is unavailable in the offline development profile",
+        );
+      },
+    },
+  };
+}
+
 const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const databaseRow = z.object({ database: z.string() });
 const fixturesRow = z.object({ fixtures_ready: z.boolean() });
@@ -145,6 +161,7 @@ export default {
     env: LocalDevEnv,
     ctx: ExecutionContext,
   ) {
+    env = dispatchEnvironment(env);
     await seedUsda(env);
     // Production handlers discriminate on their deployed queue names. Local
     // queues retain checkout isolation at transport and normalize at delivery.
@@ -160,12 +177,6 @@ export default {
         env,
         ctx,
       );
-    if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-purchase`)
-      return worker.queue(
-        { queue: "cubby-purchase-agent", messages: batch.messages },
-        env,
-        ctx,
-      );
     throw new Error(`Unexpected local queue: ${batch.queue}`);
   },
   async fetch(request: Request, env: LocalDevEnv, ctx: ExecutionContext) {
@@ -177,6 +188,7 @@ export default {
         { status: 403 },
       );
     }
+    env = dispatchEnvironment(env);
     await seedUsda(env);
     const url = new URL(request.url);
     if (url.pathname === "/__dev/health" || url.pathname === "/__dev/ready") {
@@ -293,27 +305,6 @@ export default {
     }
     const storage = await handleLocalStorageRequest(request, env);
     if (storage) return storage;
-    const runtimeEnv =
-      env.CUBBY_DEV_PROFILE === "offline"
-        ? {
-            ...env,
-            // Refuse the producer handoff so the existing dispatch_failed path
-            // records the cause instead of leaving a provider-less run queued.
-            PURCHASE_AGENT_QUEUE: {
-              metrics: () => env.PURCHASE_AGENT_QUEUE.metrics(),
-              send: async () => {
-                throw new Error(
-                  "Purchase agent unavailable in offline development; use pnpm dev integrations",
-                );
-              },
-              sendBatch: async () => {
-                throw new Error(
-                  "Purchase agent unavailable in offline development; use pnpm dev integrations",
-                );
-              },
-            },
-          }
-        : env;
-    return worker.fetch(request, runtimeEnv, ctx);
+    return worker.fetch(request, env, ctx);
   },
 };

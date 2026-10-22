@@ -16,7 +16,6 @@ import { createLogger } from "@cubby/worker-tracing";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
@@ -32,7 +31,6 @@ import {
   readPhotoRunReview,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { findActivePurchaseAgentGrant } from "~/server/domains/purchase-import/repo/agent-auth";
-import { dispatchRunEvent } from "~/server/domains/purchase-import/repo/dispatch";
 import {
   schedulePhotoRunImageProcessing,
   startGuardedPhotoCoordinator,
@@ -275,8 +273,6 @@ async function dispatchPhotoCoordinator(
 ): Promise<string | null> {
   if (!(await findActivePurchaseAgentGrant(db, run.actorUserId)))
     return "Connect the Cubby agent so this Run can group its photos";
-  const queue = getPurchaseAgentQueue();
-  if (!queue) return "Photo import agent queue is unavailable";
   try {
     const started = await startGuardedPhotoCoordinator(db, {
       publicId: run.shortcode,
@@ -286,18 +282,9 @@ async function dispatchPhotoCoordinator(
     // The input changed after it was judged ready; that change ran (or
     // will run) its own advance.
     if (!started) return null;
-    if (started.created)
-      await dispatchRunEvent(db, queue, {
-        version: 1,
-        runId: started.id,
-        eventId: started.eventId,
-        generation: started.eventId,
-        purpose: "photo_inventory",
-        type: "start_or_resume",
-      });
     return null;
   } catch (error) {
-    // `dispatchRunEvent` already recorded a queue failure on its generation.
+    // Admission rolls back if its durable dispatch intent cannot be saved.
     return error instanceof Error ? error.message : String(error);
   }
 }

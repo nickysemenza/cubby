@@ -1,4 +1,4 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-object-parameters, anti-slop/no-unknown-returns -- The scenario adapter forwards queue events and peer fixtures unchanged as JSON. */
+/* eslint-disable anti-slop/no-object-parameters, anti-slop/no-unknown-returns -- The scenario adapter forwards Job wakes and peer fixtures unchanged as JSON. */
 import type { RunPurpose } from "@cubby/schemas/run-fields";
 import type { TestHarness } from "./test-runtime";
 import { z } from "zod";
@@ -38,12 +38,12 @@ type Sender = (
 
 /**
  * Drive a listening purchase-agent harness: load a scenario into its
- * deterministic peers, deliver queue events, and read what the agent did.
+ * deterministic peers, deliver Job wakes, and read what the agent did.
  */
 export function scenarioControls(harness: TestHarness) {
   const model = harness.getWorker("cubby-test-model");
   const gateway = harness.getWorker("cubby-test-gateway");
-  const queue = harness.getWorker("cubby-queue-producer");
+  const queue = harness.getWorker("cubby-job-wake-producer");
   const post = async (send: Sender, path: string, body: object) => {
     const response = await send(path, {
       method: "POST",
@@ -83,9 +83,8 @@ export function scenarioControls(harness: TestHarness) {
     /** Let the model answer past a `{ gate }` step. */
     release: (gate: string) =>
       post(toModel, "https://model.test/release", { gate }),
-    /** Deliver one purchase-agent queue event, as the web Worker would. */
-    dispatch: (event: Record<string, unknown>) =>
-      post(toQueue, "/dispatch", event),
+    /** Wake committed dispatch Jobs through the production background consumer. */
+    wake: () => post(toQueue, "/wake", {}),
     violations: async () =>
       readJson(z.array(z.string()), () =>
         model.fetch("https://model.test/violations"),

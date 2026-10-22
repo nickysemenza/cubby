@@ -119,7 +119,6 @@ export async function workerdDiagnostic(
           status: runTable.status,
           failureCode: runTable.failureCode,
           dispatchError: runTable.dispatchError,
-          dispatchAttempts: runTable.dispatchAttempts,
           coordinatorStartedAt: runTable.coordinatorStartedAt,
         })
         .from(runTable)

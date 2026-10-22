@@ -7,7 +7,6 @@ import {
 import { parseShortcodeFor, runEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
@@ -16,7 +15,6 @@ import {
   orderMail,
   run,
 } from "~/server/db/schema";
-import type { PurchaseAgentQueueProducer } from "~/server/domains/purchase-agent/service/purchase-agent-queue-types";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 
 import { startMailImport } from "./mail-import-run";
@@ -33,7 +31,6 @@ export async function startEmailImport(
   db: Database,
   rawInput: EmailImportInput,
   actor: ActorContext,
-  queue: PurchaseAgentQueueProducer | undefined = getPurchaseAgentQueue(),
   ports: ImportPorts = {},
 ) {
   const input = emailImportInput.parse(rawInput);
@@ -107,21 +104,15 @@ export async function startEmailImport(
   const [head] = sources;
   if (!head) throw new Error("Select at least one Email.");
   const launch = ports.launch ?? startMailImport;
-  if (!ports.launch && !queue)
-    throw new Error("Purchase agent queue is unavailable.");
-  const admitted = await launch(
-    db,
-    {
-      ledgerPartyId: head.ledgerPartyId,
-      userId: actor.userId,
-      messageIds: sources.map((source) => source.orderMailId),
-      expectedChecksums: sources.map(({ orderMailId, checksum }) => ({
-        orderMailId,
-        checksum,
-      })),
-    },
-    queue,
-  );
+  const admitted = await launch(db, {
+    ledgerPartyId: head.ledgerPartyId,
+    userId: actor.userId,
+    messageIds: sources.map((source) => source.orderMailId),
+    expectedChecksums: sources.map(({ orderMailId, checksum }) => ({
+      orderMailId,
+      checksum,
+    })),
+  });
   const runs = admitted.length
     ? await getDb(db)
         .select({ id: run.id, shortcode: run.shortcode })

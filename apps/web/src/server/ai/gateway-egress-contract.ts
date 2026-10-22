@@ -38,8 +38,6 @@ export type CreditRefusal = Omit<
 >;
 export interface AiGatewayEgressRpc {
   currentDeploymentVersion(): Promise<string>;
-  scheduleAiWorkRecovery(runId?: string): Promise<void>;
-  scheduleFundingResume(at: number): Promise<void>;
   fetch(request: Request): Promise<Response>;
   admit(bucket: string, now?: number): Promise<GatewayAdmission>;
   creditRefusal(now?: number): Promise<CreditRefusal | null>;

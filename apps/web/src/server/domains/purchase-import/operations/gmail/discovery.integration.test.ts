@@ -5,7 +5,6 @@
  * targeted search falls through to whole-mailbox history or searches a Vendor
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId } from "@cubby/schemas/identifiers";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { and, asc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -369,12 +368,6 @@ describe("scheduled Gmail discovery", () => {
         data: Buffer.from("pdf").toString("base64url"),
       }),
     });
-    const events: PurchaseAgentEvent[] = [];
-    const queue = {
-      send: async (event: PurchaseAgentEvent) => {
-        events.push(event);
-      },
-    };
     const attachmentBytes = new Map<string, Uint8Array>();
     const seam: DiscoveryPorts = {
       ...ports(provider),
@@ -393,7 +386,7 @@ describe("scheduled Gmail discovery", () => {
       },
       triage: async () => "uncertain",
       relevance: async () => ({ classification: "uncertain" }),
-      research: (db, input) => startMailImport(db, input, queue),
+      research: (db, input) => startMailImport(db, input),
     };
     await listMailDiscovery(ctx.db, state.params, seam);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
@@ -419,7 +412,12 @@ describe("scheduled Gmail discovery", () => {
       executionPolicy: "import",
     });
     expect(message?.runId).not.toBeNull();
-    expect(events).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(1);
     const search = async () =>
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage
         ?.scoped[0];
@@ -432,7 +430,12 @@ describe("scheduled Gmail discovery", () => {
     expect(await search()).not.toHaveProperty("completedAt");
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
-    expect(events).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(1);
     expect((await search())?.emailCount).toBe(1);
   });
 

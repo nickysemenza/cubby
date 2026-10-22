@@ -14,10 +14,11 @@ corpus refresh.
 
 Postgres `Job` is the sole execution owner for background work. An authoritative
 save and its Job intent commit in the same transaction. Queue messages, app-open
-catch-up, Durable Object alarms and cron only wake the same due-Job drain. Lost
+catch-up and cron only wake the same due-Job drain. Lost
 or duplicate wakes affect latency; they do not lose or duplicate intent. The
-queue carries a strict version-3 wake envelope, optionally naming a Job, rather
-than a second serialized work item. Admission stores the JSON wire shape,
+queue carries a strict version-3 wake envelope with no Job identifier. Every
+delivery attempts the drain even when unreadable, and always acknowledges.
+Transport owns no retry budget. Admission stores the JSON wire shape,
 omitting undefined optional properties.
 
 A claim has one generation, token, expiration and finite attempt budget. Claims
@@ -37,8 +38,12 @@ Embedding selection locks its source and identity through commit so it cannot
 insert a selected vector after deletion has already cleaned that source.
 
 Transient errors use bounded Job backoff and preserve credential-scrubbed raw
-diagnostics. A cooperative capacity deferral preserves its checkpoint and does
-not spend the failure budget. Manual pause, cancellation and exhausted failure
+diagnostics. A cooperative deferral preserves its checkpoint and does
+not spend the failure budget. Job `waitReason` is one of `provider_capacity`,
+`ai_funding_window`, `device` or `rate_limit`, paired with `waitUntil`. Claim,
+ordinary publication and failure clear wait metadata. Retry backoff retains
+consecutive failure attempts and the raw error. Single-item Jobs store nullable
+`subjectKind` / `subjectId` so owning records can show their execution. Manual pause, cancellation and exhausted failure
 remain stopped until explicit member action. Ordinary invalidation and alarms
 never revive them. Provider/cache code imports control errors and execution
 context from pure `generic/jobs/errors.ts` and `context.ts` leaves; it must not
@@ -46,7 +51,11 @@ import database runtime merely to read execution context.
 
 Broad family saves record Job intent without sending a wake for each save; the
 minute cron or another due-Job drain picks it up.
-Each drain reselects fair batches of at most 25 due Jobs, with a default cap of
+Each drain selects fair batches in one SQL window query, interleaving kinds
+least recently served first using timestamps from existing Job rows. Priority
+ranks only within each kind; manual `run.execute` Jobs have raised priority.
+Queue position counts due Jobs ranked ahead in the same kind. Each drain
+reselects batches of at most 25 due Jobs, with a default cap of
 256 pages and a 20-second budget between pages. One in-flight provider page may
 outlast that budget. Remaining immediately due work requests another wake; cron
 uses the same drain if that wake is lost. A large corpus, provider capacity or
@@ -110,6 +119,26 @@ streams their actual persisted counters. Disconnecting the stream leaves the
 Jobs durable. Interactive reads, previews, draft decisions and synchronous
 operation composition retain their request runtime.
 
+`purchase.dispatch` is admitted atomically with the import Run or its resumed
+generation. Stable operation identities make retries safe. The Job completes
+when the coordinator accepts; SDK lifecycle alarms and settlement remain
+coordinator-owned. A started coordinator is never resubmitted by a start Job.
+Exhausted dispatch Jobs project raw terminal diagnostics onto the current
+unstarted Run generation. Old dispatch accounting is retained in Run audit
+history before its column is removed.
+
+Funding pauses persist a deferred `run.funding-resume` Job at the funding window
+end. The handler resumes the domain, including dispatch regeneration for
+funding-paused imports. Explicit budget increases still resume immediately;
+manual pauses remain stopped. No funding or generic recovery alarm is retained
+in the gateway DO.
+
+Minute cron admits `ai-refresh.activate` once per observed deployment occurrence,
+fenced to the gateway DO's current version and the transactionally recorded
+occurrence. A → B → A rollback creates a new occurrence while preserving policy
+generations. Per-fetch observation and deployment epoch alarms are removed;
+member automatic-rule switches stay independent.
+
 ## Consequences
 
 The cutover preserves household data, redirects, foreign keys, domain facts,
@@ -118,5 +147,7 @@ Active legacy execution maps to Job input and checkpoints before old fields are
 dropped; terminal diagnostics remain in Job error/result metadata. Old attempts
 must be rejected by the new Job token check. Obsolete Workflow classes/bindings, image cloud
 queue, recovery adapters and layered refresh tables are deleted with their
-replacement paths. Transport queues for background wakes, telemetry and the
-purchase agent retain their separate transport purposes.
+replacement paths. Transport queues remain only for background wakes and telemetry. The purchase
+queue, its consumer and its independent retry loop are removed. Job execution
+logs emit a single structured JSON object so Workers Logs indexes the execution
+identity, attempt and typed wait fields.

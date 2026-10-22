@@ -28,19 +28,13 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
         maxBatchSize: 1,
         maxBatchTimeout: 0,
         maxConcurrency: 1,
-        maxRetries: 3,
+        maxRetries: 0,
       }),
       triggers.queue({
         name: `${name}-telemetry`,
         maxBatchSize: 100,
         maxBatchTimeout: 5,
         maxConcurrency: 1,
-        maxRetries: 3,
-      }),
-      triggers.queue({
-        name: `${name}-purchase`,
-        maxBatchSize: 10,
-        maxBatchTimeout: 0,
         maxRetries: 3,
       }),
     ],
@@ -64,7 +58,6 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
       USDA_RELEASES: bindings.r2({ name: `${name}-usda-releases` }),
       BACKGROUND_QUEUE: bindings.queue({ name: `${name}-background` }),
       TELEMETRY_QUEUE: bindings.queue({ name: `${name}-telemetry` }),
-      PURCHASE_AGENT_QUEUE: bindings.queue({ name: `${name}-purchase` }),
 
       ...(profile.integration && {
         AI: bindings.ai({ dev: { remote: true } }),

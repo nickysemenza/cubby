@@ -8,7 +8,7 @@ import {
   runShortcode,
 } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -35,6 +35,7 @@ import { setCfEnv } from "~/server/cf-env";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
+  job,
   aiUsage,
   expense,
   imageProcessingJob,
@@ -88,7 +89,7 @@ import {
 
 // Built-Worker coverage for the two agent purposes: reviewed photo stock, a
 // partial Mail import retry, and provider discovery feeding Mail import. Only the model is scripted; the agent, its
-// tools, in-process MCP, queue events and writers are production code.
+// tools, in-process MCP, Job handoffs and writers are production code.
 const repoRoot = fileURLToPath(
   new URL("../../../../../../../", import.meta.url),
 );
@@ -339,15 +340,7 @@ describe("current purchase-agent system boundaries", () => {
         }),
       ],
     });
-    await scenario.dispatch({
-      version: 1,
-      type: "start_or_resume",
-      runId: run.id,
-      // The persisted run, not a stale queue hint, selects the agent workflow.
-      purpose: "mail_import",
-      eventId: started.eventId,
-      generation: started.eventId,
-    });
+    await scenario.wake();
     await waitFor(
       async () => {
         const [proposal, progress, startedProgress, usage] = await Promise.all([
@@ -574,22 +567,18 @@ describe("current purchase-agent system boundaries", () => {
       "Synthetic service shop purchase inquiry. Exact order, itemization, date and amount absent.",
     );
     await enableSyntheticMailImport(ctx, mailboxId);
-    const events: PurchaseAgentEvent[] = [];
-    const queue = {
-      send: async (event: PurchaseAgentEvent) => {
-        events.push(event);
-      },
-    };
     const admission = {
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
       messageIds: [supported.id, ambiguous.id],
     };
-    const [started, ...otherRuns] = await startMailImport(
-      ctx.db,
-      admission,
-      queue,
-    );
+    const [started, ...otherRuns] = await startMailImport(ctx.db, admission);
+    const events = (
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch"))
+    ).map((row) => purchaseAgentEvent.parse(row.input));
     if (!started || otherRuns.length || events.length !== 1)
       throw new Error("Synthetic partial admission missing");
     const parent = await runRow(started.runId);
@@ -703,7 +692,7 @@ describe("current purchase-agent system boundaries", () => {
       // (the mail escalation scenario covers holding them).
       { coordinatorModels: { primary: "gpt-6-luna" } },
     );
-    await scenario.dispatch(events[0]!);
+    await scenario.wake();
     await waitForStatus(parent.id, "needs_review");
     expect(await scenario.violations()).toEqual([]);
 
@@ -800,14 +789,7 @@ describe("current purchase-agent system boundaries", () => {
     scenarioRunId = child.id;
     if (!child.dispatchEventId)
       throw new Error("Synthetic retry dispatch generation missing");
-    await scenario.dispatch({
-      version: 1,
-      type: "start_or_resume",
-      runId: child.id,
-      eventId: child.dispatchEventId,
-      generation: child.dispatchEventId,
-      purpose: "mail_import",
-    });
+    await scenario.wake();
     await waitForStatus(child.id, "needs_review");
     expect(await scenario.violations()).toEqual([]);
     expect(await targetsOf(child.id)).toMatchObject([
@@ -836,8 +818,13 @@ describe("current purchase-agent system boundaries", () => {
     if (!("successorRunId" in replay))
       throw new Error("Synthetic partial replay successor missing");
     expect(replay.successorRunId).toBe(child.id);
-    const dispatched = events.length;
-    const readmitted = await startMailImport(ctx.db, admission, queue);
+    const dispatched = (
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch"))
+    ).length;
+    const readmitted = await startMailImport(ctx.db, admission);
     expect(readmitted).toHaveLength(2);
     expect(readmitted).toEqual(
       expect.arrayContaining([
@@ -845,7 +832,12 @@ describe("current purchase-agent system boundaries", () => {
         { runId: child.id, status: "needs_review" },
       ]),
     );
-    expect(events).toHaveLength(dispatched);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(dispatched);
     expect(
       await database
         .select({ id: runTable.id })
@@ -888,20 +880,17 @@ describe("current purchase-agent system boundaries", () => {
       "2026-09-21T12:00:00Z",
     );
     await enableSyntheticMailImport(ctx, mailboxId);
-    const events: PurchaseAgentEvent[] = [];
-    const [started] = await startMailImport(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        messageIds: [first.id, second.id],
-      },
-      {
-        send: async (event: PurchaseAgentEvent) => {
-          events.push(event);
-        },
-      },
-    );
+    const [started] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [first.id, second.id],
+    });
+    const events = (
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch"))
+    ).map((row) => purchaseAgentEvent.parse(row.input));
     if (!started || events.length !== 1)
       throw new Error("Synthetic escalation admission missing");
     scenarioRunId = started.runId;
@@ -945,7 +934,7 @@ describe("current purchase-agent system boundaries", () => {
         },
       },
     );
-    await scenario.dispatch(events[0]!);
+    await scenario.wake();
     await waitForStatus(started.runId, "needs_review");
     expect(await scenario.violations()).toEqual([]);
     const modelAfter = new Map(

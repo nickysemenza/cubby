@@ -1,13 +1,8 @@
 import { imageId, type ImageId } from "@cubby/schemas/identifiers";
 import type { RunStepError, RunStepMeta } from "@cubby/schemas/run-step";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { z } from "zod";
 
-import {
-  getAiGatewayEgress,
-  getAppOrigin,
-  isE2eAuthTestMode,
-} from "~/server/cf-env";
+import { getAppOrigin } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
   backfillImageProcessing,
@@ -247,13 +242,6 @@ function imageBackfillStep(ports: MaintenancePorts): StepDriver {
  */
 export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
   return [
-    onceStep("ai-refresh", "AI refresh observation", async () => {
-      const egress = getAiGatewayEgress(CUBBY_AI_GATEWAY_ID);
-      if (import.meta.env.CUBBY_LOCAL_RUNTIME || isE2eAuthTestMode() || !egress)
-        return { found: 0, meta: detail({ observed: false }) };
-      await egress.observeAiRefresh();
-      return { found: 0, meta: detail({ observed: true }) };
-    }),
     onceStep("image-repair", "Image processing repair", async ({ db }) => {
       const repaired = await repairImageProcessingWork(db);
       const found = repaired.orphans + repaired.executorless;

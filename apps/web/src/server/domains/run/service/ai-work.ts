@@ -214,13 +214,22 @@ export async function executeAiWorkTarget(
       },
     );
     if (paused) throw new JobPausedError("AI work paused by its requester");
-    if (budget) throw new JobDeferredError(message, new Date(budget.resumeAt));
+    if (budget)
+      throw new JobDeferredError(
+        message,
+        new Date(budget.resumeAt),
+        "ai_funding_window",
+      );
     if (unauthorized) {
       await pauseRunForAiWork(db, item.runId, message);
       throw new JobPausedError(message);
     }
     if (message.includes("AI Gateway admission is waiting"))
-      throw new JobDeferredError(message, new Date(Date.now() + 30_000));
+      throw new JobDeferredError(
+        message,
+        new Date(Date.now() + 30_000),
+        "rate_limit",
+      );
     if (!obsolete) throw error;
   }
   const continuations = z

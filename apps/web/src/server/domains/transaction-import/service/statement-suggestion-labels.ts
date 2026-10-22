@@ -9,7 +9,7 @@ import {
   type StatementLabelCheckpoint,
   STATEMENT_LABEL_REVISION,
 } from "@cubby/schemas/statement-suggestion";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
+import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
@@ -65,8 +65,7 @@ import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-export const STATEMENT_LABEL_BATCH =
-  WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage;
+export const STATEMENT_LABEL_BATCH = JOB_PAGE_LIMITS.suggestionsPerPage;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
@@ -536,9 +535,8 @@ async function runStatementLabelBatch(
   };
   const page = rows.slice(0, limit);
   let decisionsLeft = Math.min(
-    input.decisionLimit ??
-      WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
-    WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage,
+    input.decisionLimit ?? JOB_PAGE_LIMITS.maxDecisionQuestionsPerPage,
+    JOB_PAGE_LIMITS.maxDecisionQuestionsPerPage,
   );
   const reserve = (
     questions: readonly DecisionChoiceArgs[],

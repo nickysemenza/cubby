@@ -194,16 +194,12 @@ describe("Gmail final publication concurrency", () => {
       try {
         await entered.promise;
         const queue = { send: vi.fn(async () => undefined) };
-        const admitted = await startMailImport(
-          ctx.db,
-          {
-            ledgerPartyId: f.party.id,
-            userId: ctx.actor.userId,
-            mailboxId: f.mailboxId,
-            messageIds: [f.source.id],
-          },
-          queue,
-        );
+        const admitted = await startMailImport(ctx.db, {
+          ledgerPartyId: f.party.id,
+          userId: ctx.actor.userId,
+          mailboxId: f.mailboxId,
+          messageIds: [f.source.id],
+        });
         expect(admitted).toHaveLength(1);
         const before = await state();
         expect(before.emails[0]).toMatchObject({

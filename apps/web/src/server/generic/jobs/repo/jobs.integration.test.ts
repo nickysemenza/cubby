@@ -15,14 +15,18 @@ import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import { withJobExecution } from "../context";
-import { drainDueJobs } from "../service/jobs";
+import { setJobStepKey, withJobExecution } from "../context";
+import { JobDeferredError } from "../errors";
+import { advanceJob, drainDueJobs } from "../service/jobs";
 import { assertCurrentJob } from "./execution";
 import {
   cancelJob,
   claimJob,
   enqueueJob,
+  dueJobs,
+  dueJobsAhead,
   failJob,
   pauseJob,
   publishJobPage,
@@ -304,6 +308,137 @@ describe("durable jobs", () => {
       (await getDb(ctx.db).select().from(job).where(eq(job.id, paused.id)))[0]
         ?.state,
     ).toBe("paused");
+  });
+
+  it("interleaves kinds and carries least-served fairness across exhausted drain budgets", async () => {
+    const first = await enqueueJob(ctx.db, {
+      key: "synthetic.image.high",
+      kind: "a.image",
+      input: {},
+      priority: 100,
+    });
+    const second = await enqueueJob(ctx.db, {
+      key: "synthetic.image.low",
+      kind: "a.image",
+      input: {},
+      priority: 10,
+    });
+    const sweep = await enqueueJob(ctx.db, {
+      key: "synthetic.sweep",
+      kind: "b.sweep",
+      input: {},
+      priority: 0,
+    });
+    expect((await dueJobs(ctx.db, 3)).map((row) => row.id)).toEqual([
+      first.id,
+      sweep.id,
+      second.id,
+    ]);
+    expect(await dueJobsAhead(ctx.db, second.id)).toBe(1);
+    const visited: string[] = [];
+    const handler = {
+      prepare: async (_db: unknown, claim: { id: string }) => {
+        visited.push(claim.id);
+        return { page: { done: false } };
+      },
+    };
+    const handlers = { "a.image": handler, "b.sweep": handler };
+    await drainDueJobs(ctx.db, handlers, 1);
+    await drainDueJobs(ctx.db, handlers, 1);
+    expect(visited).toEqual([first.id, sweep.id]);
+  });
+
+  it("raises priority when a member resumes an automatically admitted Run", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "scheduled",
+    });
+    await launchWorkflowRun(ctx.db, {
+      runId,
+      purpose: "maintenance",
+      automatic: true,
+    });
+    await launchWorkflowRun(ctx.db, { runId, purpose: "maintenance" });
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.runId, runId));
+    expect(saved).toMatchObject({ kind: "run.execute", priority: 100 });
+  });
+
+  it("persists a typed deferral without spending failures and clears waits on claim, publication and failure", async () => {
+    const emitted = vi.spyOn(console, "info");
+    const saved = await enqueue("synthetic.deferral");
+    const until = new Date(Date.now() + 60_000);
+    const read = async () =>
+      (await getDb(ctx.db).select().from(job).where(eq(job.id, saved.id)))[0]!;
+    expect(
+      await advanceJob(ctx.db, saved.id, {
+        [saved.kind]: {
+          prepare: async () => {
+            setJobStepKey("synthetic-step");
+            throw new JobDeferredError(
+              "Synthetic provider busy",
+              until,
+              "provider_capacity",
+            );
+          },
+        },
+      }),
+    ).toBe("deferred");
+    expect(await read()).toMatchObject({
+      state: "queued",
+      attempts: 0,
+      waitReason: "provider_capacity",
+      waitUntil: until,
+      availableAt: until,
+    });
+    expect(emitted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "[jobs] defer",
+        jobId: saved.id,
+        runId: null,
+        kind: saved.kind,
+        stepKey: "synthetic-step",
+        generation: 1,
+        attempt: 1,
+        waitReason: "provider_capacity",
+      }),
+    );
+    emitted.mockRestore();
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, saved.id));
+    const claimed = await claimJob(ctx.db, saved.id);
+    expect(claimed).toMatchObject({
+      waitReason: null,
+      waitUntil: null,
+      attempts: 1,
+    });
+    if (!claimed) throw new Error("Expected resumed claim");
+    await failJob(ctx.db, claimed, new Error("Synthetic provider failure"));
+    expect(await read()).toMatchObject({
+      state: "retry_wait",
+      attempts: 1,
+      waitReason: null,
+      waitUntil: null,
+      error: expect.stringContaining("Synthetic provider failure"),
+    });
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, saved.id));
+    const retry = await claimJob(ctx.db, saved.id);
+    if (!retry) throw new Error("Expected retry claim");
+    await publishJobPage(ctx.db, retry, { done: true });
+    expect(await read()).toMatchObject({
+      state: "completed",
+      attempts: 0,
+      waitReason: null,
+      waitUntil: null,
+      error: null,
+    });
   });
 
   it("does not revive paused or exhausted work when a new broad capture arrives", async () => {

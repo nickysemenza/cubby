@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
   BACKGROUND_TASK_MESSAGE_VERSION,
   type BackgroundTaskMessage,
@@ -34,16 +33,10 @@ const queues = {
     producer: "TELEMETRY_QUEUE",
     consumerLog: "[telemetry] dropped invalid queue message",
   },
-  "cubby-purchase-agent": {
-    producer: "PURCHASE_AGENT_QUEUE",
-    consumerLog: "[purchase-agent] queue event was not dispatched",
-  },
 } as const;
 /** A queue producer binding, reached from Node through `getEnv()`. */
 type QueueSend = {
-  send(
-    body: { probe: string } | PurchaseAgentEvent | BackgroundTaskMessage,
-  ): Promise<void>;
+  send(body: { probe: string } | BackgroundTaskMessage): Promise<void>;
 };
 
 /**
@@ -64,7 +57,6 @@ async function realConsumers(harness: TestHarness, expected: string[]) {
         ? {
             version: BACKGROUND_TASK_MESSAGE_VERSION,
             queueType: "background",
-            jobId: probe.id,
           }
         : { probe: randomUUID() },
     );
@@ -113,13 +105,8 @@ describe("workerd test runtime profiles", () => {
         await realConsumers(started.harness, [
           "cubby-background",
           "cubby-telemetry",
-          "cubby-purchase-agent",
         ]),
-      ).toEqual([
-        "cubby-background",
-        "cubby-telemetry",
-        "cubby-purchase-agent",
-      ]);
+      ).toEqual(["cubby-background", "cubby-telemetry"]);
     } finally {
       await started.close();
     }

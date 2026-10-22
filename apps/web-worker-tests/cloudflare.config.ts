@@ -38,7 +38,6 @@ export const testWorker = defineWorker({
       worker: "cubby-calendar-test",
       exportName: "PurchaseImportRunAgent",
     }),
-    PURCHASE_AGENT_QUEUE: bindings.queue({ name: "cubby-purchase-agent-test" }),
   },
   exports: {
     AiGatewayEgressDurableObject: { type: "durable-object", storage: "sqlite" },

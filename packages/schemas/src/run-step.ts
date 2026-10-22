@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { runWorkSamples } from "./run-work-progress";
 
 /**
@@ -19,17 +18,9 @@ export const runStepState = z.enum([
 export type RunStepState = z.infer<typeof runStepState>;
 
 export const RUN_STEP_ERROR_SAMPLE = 20;
-export const MAX_STEP_RUN_INSTANCE_PAGES =
-  WORKFLOW_EXECUTION_LIMITS.maxPagesPerInstance;
-
-/** A driver declares its phase budget; the Workflow owns the instance boundary. */
+/** A driver names the phase of its next bounded Job page. */
 export const runStepExecution = z.object({
   phase: z.string(),
-  pagesPerInstance: z
-    .number()
-    .int()
-    .positive()
-    .max(MAX_STEP_RUN_INSTANCE_PAGES),
 });
 export type RunStepExecution = z.infer<typeof runStepExecution>;
 

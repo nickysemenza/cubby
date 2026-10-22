@@ -11,7 +11,6 @@ export const BACKGROUND_TASK_MESSAGE_VERSION = 3;
 export const backgroundTaskMessageSchema = z.strictObject({
   version: z.literal(BACKGROUND_TASK_MESSAGE_VERSION),
   queueType: z.literal("background"),
-  jobId: z.uuid().optional(),
 });
 export type BackgroundTaskMessage = z.infer<typeof backgroundTaskMessageSchema>;
 export type BackgroundTaskMessageInput = z.input<

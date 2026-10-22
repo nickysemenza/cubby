@@ -1,8 +1,6 @@
 import type { DurableObjectState, SqlStorage } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
 
-import { withInvocationTrace } from "~/server/observability/tracing";
-
 import {
   AI_RESPONSE_CACHE_BATCH_SIZE,
   type AiResponseCacheRpc,
@@ -37,6 +35,11 @@ export class AiResponseCacheDurableObject
       "CREATE TABLE IF NOT EXISTS responses (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER, claim_token TEXT, lease_expires_at INTEGER)",
     );
     ctx.storage.sql.exec("DROP INDEX IF EXISTS responses_expires_at_idx");
+    ctx.storage.sql.exec(
+      "DELETE FROM responses WHERE value IS NULL AND lease_expires_at <= ?",
+      Date.now(),
+    );
+    void ctx.blockConcurrencyWhile(() => ctx.storage.deleteAlarm());
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS response_chunks (key TEXT NOT NULL, seq INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY (key, seq))",
     );
@@ -131,24 +134,6 @@ export class AiResponseCacheDurableObject
       "UPDATE responses SET claim_token = NULL, lease_expires_at = NULL WHERE key = ? AND claim_token = ?",
       key,
       token,
-    );
-  }
-
-  /**
-   * Drains alarms the retired expiry scheduled. Completed answers stay;
-   * abandoned first claims are removed, and every other expired lease is
-   * reclaimed by its next lookup.
-   */
-  async alarm(): Promise<void> {
-    return withInvocationTrace(
-      "ai.response-cache.alarm",
-      async () => {
-        this.ctx.storage.sql.exec(
-          "DELETE FROM responses WHERE value IS NULL AND lease_expires_at <= ?",
-          Date.now(),
-        );
-      },
-      { "cubby.workload": "alarm" },
     );
   }
 }

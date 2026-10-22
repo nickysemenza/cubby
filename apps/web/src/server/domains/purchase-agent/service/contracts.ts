@@ -1,33 +1,8 @@
-import {
-  purchaseAgentEvent,
-  type PurchaseAgentEvent,
-} from "@cubby/schemas/purchase-import";
-import { z } from "zod";
+import { type PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 
 export type { PurchaseAgentEvent };
 
-const eventCandidate = z
-  .object({ version: z.literal(1).optional() })
-  .passthrough();
-const queuedEventCandidate = z.union([
-  z.string().transform((encoded) => eventCandidate.parse(JSON.parse(encoded))),
-  eventCandidate,
-]);
-
-/**
- * Versionless queue bodies retain the producer's explicit dispatch generation.
- * Bodies queued before `coordinatorModel` left the event still carry it; the
- * strict event object strips it.
- */
-export function parsePurchaseAgentEvent(input: unknown): PurchaseAgentEvent {
-  const candidate = queuedEventCandidate.parse(input);
-  return purchaseAgentEvent.parse({
-    ...candidate,
-    version: candidate.version ?? 1,
-  });
-}
-
-/** Queue redelivery converges on exactly one agent submission. */
+/** Job retries converges on exactly one agent submission. */
 export function purchaseAgentEventIdempotencyKey(
   event: PurchaseAgentEvent,
 ): string {

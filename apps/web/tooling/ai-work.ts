@@ -102,6 +102,7 @@ export async function driveAiWork(
           throw new JobDeferredError(
             settled.error ?? "Synthetic evidence continuation",
             new Date(Date.now() + 1),
+            "provider_capacity",
           );
         return { page: { done: true } };
       },

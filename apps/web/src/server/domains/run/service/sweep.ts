@@ -11,7 +11,7 @@ import {
   type SweepFamilyScope,
 } from "@cubby/schemas/run-fields";
 import type { RunStepCounts, RunStepError } from "@cubby/schemas/run-step";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
+import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
@@ -168,7 +168,7 @@ export const sweepDrivers: StepRunDrivers = async (_db, owner) =>
                 phase: generating ? "generate" : "label",
                 unit: generating ? "charges" : "suggestions",
                 limit: generating
-                  ? WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage
+                  ? JOB_PAGE_LIMITS.suggestionsPerPage
                   : STATEMENT_LABEL_BATCH,
                 processed: generating
                   ? step.done + step.skipped + step.failed
@@ -226,7 +226,6 @@ async function transferPairPage(
       retryAccounting: "replace",
       execution: {
         phase: "transfer_pair_generate",
-        pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.databasePagesPerInstance,
       },
       found: step.found + page.found,
       delta: {
@@ -262,6 +261,7 @@ async function transferPairPage(
         kind: "paused",
         reason: error.message,
         until: new Date(error.resumeAt),
+        waitReason: "ai_funding_window",
       };
     throw error;
   }
@@ -271,7 +271,6 @@ async function transferPairPage(
     skippedIds: outcome.skippedIds,
     execution: {
       phase: "transfer_pair_label",
-      pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance,
     },
     ...(after === null &&
       outcome.active && {
@@ -349,7 +348,7 @@ async function statementGenerationPage(
       ? await countUnmatchedCharges(db, scope)
       : undefined;
   const generation = generateStatementSuggestionPage(db, {
-    limit: WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+    limit: JOB_PAGE_LIMITS.suggestionsPerPage,
     after: cursor.after,
     runId: run.id,
     scope,
@@ -391,9 +390,6 @@ async function statementGenerationPage(
     retryAccounting: "replace",
     execution: {
       phase: "statement_generate",
-      pagesPerInstance: precompute
-        ? WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance
-        : WORKFLOW_EXECUTION_LIMITS.databasePagesPerInstance,
     },
     work: {
       phase: "statement_generate",
@@ -459,7 +455,7 @@ async function statementPage(
       after: cursor.after,
       runId: run.id,
       scope,
-      limit: WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+      limit: JOB_PAGE_LIMITS.suggestionsPerPage,
     });
     const previous = step.meta?.work?.current;
     return {
@@ -468,7 +464,6 @@ async function statementPage(
       retryAccounting: "replace",
       execution: {
         phase: "statement_holds",
-        pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.databasePagesPerInstance,
       },
       delta: {
         done: Math.max(0, page.processed - page.failed.length),
@@ -514,6 +509,7 @@ async function statementPage(
         kind: "paused",
         reason: error.message,
         until: new Date(error.resumeAt),
+        waitReason: "ai_funding_window",
       };
     throw error;
   }
@@ -555,6 +551,7 @@ async function statementPage(
       kind: "paused",
       reason: outcome.paused.reason,
       until: new Date(outcome.paused.until),
+      waitReason: "ai_funding_window",
       delta: {
         ...checkpoint.delta,
         ...(cursor.after === null && { found: labelsAhead }),
@@ -567,7 +564,6 @@ async function statementPage(
     done: outcome.next === null,
     execution: {
       phase: "statement_label",
-      pagesPerInstance: WORKFLOW_EXECUTION_LIMITS.decisionPagesPerInstance,
     },
     ...(outcome.waitingUntil !== null && {
       waitSeconds: Math.max(
