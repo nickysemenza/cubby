@@ -119,6 +119,20 @@ queue message, and failed or manually paused Jobs remain visible without being
 automatically restarted. The migration runner owns the transaction; do not run
 it alongside Actions or another operator.
 
+On a populated predecessor, the retained-destination checks can choose slow
+nested-loop plans against the newly populated Job table. Use the migration
+connection's planner settings from the populated rehearsal; do not remove the
+checks or change committed migration hashes. With Deploy disabled and every
+Deploy run terminal, the supported runner accepts these session settings:
+
+```sh
+PGOPTIONS='-c enable_nestloop=off -c work_mem=64MB' pnpm --filter @cubby/web db:migrate --target=production --through=0005_thin_blink
+```
+
+Verify the applied prefix and retained data, then re-enable Deploy and dispatch
+the matching Worker. An unsuccessful migration must roll back and release its
+connection before another runner starts.
+
 ## Financial evidence cutover
 
 `0005_thin_blink` follows the unified-Jobs migration and shares its data and
