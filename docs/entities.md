@@ -1684,6 +1684,8 @@ and the payload-keyed fan-out of `entity.mutate`) lives in the matching
 `integrations/tanstack-query/operation-overrides/<domain>.ts`. The generator
 checks the roster through `operation-overrides.ts`, but browser modules import
 the policy directly. Input and output schemas still validate every call.
+Cache-tag rosters read the generated entity keys and image policy directly;
+they do not initialize the full entity manifest to enumerate those keys.
 
 `generated/commands.gen.ts` carries plain workflow-command metadata and lazy
 loaders for the owning domain. Report rendering reads labels, confirmations,

@@ -1,7 +1,5 @@
-import {
-  allEntities,
-  imageDisplayBindings,
-} from "@cubby/schemas/entity-manifest";
+import { entityKeys } from "@cubby/schemas/entity-summary";
+import { imagePolicyCatalog } from "@cubby/schemas/image-policy";
 
 import type { RippleKey } from "~/contracts/cache-policy";
 
@@ -184,7 +182,7 @@ export const ripple = {
   problemsSearch: exactRippleTags([["problems"], ["search"]]),
   recommendations: exactRippleTags([["recommendations"]]),
   connections: exactRippleTags(
-    allEntities.map((entity): OperationCacheTag => [entity]),
+    entityKeys.map((entity): OperationCacheTag => [entity]),
     [
       ["connections"],
       ["recommendations"],
@@ -280,8 +278,8 @@ export const ripple = {
       ["search"],
       ["collection"],
     ],
-    allEntities
-      .filter((entity) => imageDisplayBindings[entity].length > 0)
+    entityKeys
+      .filter((entity) => imagePolicyCatalog[entity].displaySources.length > 0)
       .map((entity): OperationCacheTag => [entity]),
   ),
   /** Culling pending uploads / unreferenced files resolves the Problems

@@ -1,4 +1,4 @@
-import { hasFdcLink } from "@cubby/schemas/product";
+import { hasFdcLink } from "@cubby/schemas/product-fields";
 
 import type { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";

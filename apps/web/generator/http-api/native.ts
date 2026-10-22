@@ -21,6 +21,7 @@ import {
 } from "./document-passes.ts";
 import type { OpenApiDocument } from "./openapi.ts";
 import { renderClientOperations } from "./swift-operations.ts";
+import { renderSwiftClient } from "./swift-client.ts";
 import {
   collectSwiftRoutes,
   operationBodyRef,
@@ -143,7 +144,6 @@ const renderGeneratorConfig = (
 # apps/web/src/contracts, so the generator renders all of it unfiltered.
 generate:
   - types
-  - client
 # These land in the CubbyAPI target; \`public\` lets CubbyKit and the App name them
 # through the generated aliases in CubbyKit/Generated/APITypes.swift.
 accessModifier: public
@@ -319,6 +319,7 @@ export const renderNativeArtifacts = (
   return [
     renderOperationRoutes(swiftRoutes),
     renderGeneratorConfig(components),
+    renderSwiftClient(document, swiftRoutes),
     renderClientOperations(document, swiftRoutes, generatedOperationIds),
     renderApiTypes(components, entityOutputs),
   ];

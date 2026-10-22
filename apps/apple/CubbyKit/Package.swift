@@ -35,9 +35,10 @@ let package = Package(
         // and PlainDate, plus the shared mutation-result codec. Kept apart from CubbyKit
         // so CubbyAPI can depend on it.
         .target(name: "CubbyAPISupport"),
-        // swift-openapi-generator's build plugin generates the typed client from the
+        // swift-openapi-generator's build plugin generates typed models and interfaces from the
         // `openapi.json` and `openapi-generator-config.yaml` that `pnpm generate` writes into
-        // Sources/CubbyAPI (both gitignored). Isolated from the hand-written code so an edit to
+        // Sources/CubbyAPI (both gitignored); pnpm generate owns the compact Client.gen.swift.
+        // Isolated from the hand-written code so an edit to
         // CubbyKit does not recompile the generated client. Generated symbols are
         // `accessModifier: public`, named outside CubbyAPI only through the generated aliases in
         // CubbyKit/Generated/APITypes.swift.
