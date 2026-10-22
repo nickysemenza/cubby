@@ -1,0 +1,99 @@
+apps/web/drizzle/0007_needy_harpoon.sql
+  s_28f9b176f45483::t_b7f64116756def 9-13
+apps/web/drizzle/0008_run_model.sql
+  s_28f9b176f45483::t_3d47e6d4f582c1 3-5,27-28,33-39,53-62
+apps/web/src/entity/suggestions/find-suggestions-dialog.tsx
+  s_28f9b176f45483::t_4008240a99e83d 84,87,89,456
+apps/web/src/server/db/job-schema.ts
+  s_28f9b176f45483::t_e5b50369103b5c 53-54,63
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.integration.test.ts
+  s_28f9b176f45483::t_64fd389119f6d5 17
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.ts
+  s_28f9b176f45483::t_47e5a92d715f19 1153
+apps/web/src/server/domains/image/repo/image.ts
+  s_28f9b176f45483::t_2cbd872429b5b6 65,1726-1727,1729,1737-1742,1746,1753,2677-2683,2689,2703,2718-2721,2725,3258,3260
+apps/web/src/server/domains/maintenance/service/maintenance-run.ts
+  s_28f9b176f45483::t_2f427dcc850cdf 17,115-123,152,258-271,273-278
+apps/web/src/server/domains/product/repo/conversion-coverage.ts
+  s_28f9b176f45483::t_31e74e4f64a821 4,183-194,198,205,212
+apps/web/src/server/domains/purchase-import/operations/gmail/discovery.ts
+  s_28f9b176f45483::t_41ed99c7619ed7 17
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.integration.test.ts
+  s_28f9b176f45483::t_a489e05f36553d 4
+apps/web/src/server/domains/run/repo/ai-refresh-scheduling.integration.test.ts
+  s_28f9b176f45483::t_b01475e6362c30 10
+apps/web/src/server/domains/run/repo/connection-refresh.ts
+  s_28f9b176f45483::t_939303b076d152 222-224
+apps/web/src/server/domains/run/repo/routine-run.ts
+  s_28f9b176f45483::t_46f3fe2db5855a 43-45,48,52,62-65,71-72,87-89,92,101-102,109-116,119-124,151-153,172,174,179,183-187
+apps/web/src/server/domains/run/repo/run-model-migration.integration.test.ts
+  s_28f9b176f45483::t_d9b02813a52c25 7,10-15,30-33,76-121,154-178
+apps/web/src/server/domains/run/repo/run-step.ts
+  s_28f9b176f45483::t_924e379535bd64 346,360
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_28f9b176f45483::t_c6ac0d3bbc0732 15
+apps/web/src/server/domains/run/service/derived-discovery.ts
+  s_28f9b176f45483::t_3280e4ed4e9497 2,7,38,46-49
+apps/web/src/server/domains/run/service/execution-transport.integration.test.ts
+  s_28f9b176f45483::t_5fd7a89bc6a317 543,546-549,574-611
+apps/web/src/server/domains/run/service/run-step-registry.unit.test.ts
+  s_28f9b176f45483::t_43b0fed6023e53 1
+apps/web/src/server/domains/run/service/suggestion-sweep.fixtures.ts
+  s_28f9b176f45483::t_eafb01e8d85c7d 37
+apps/web/src/server/domains/run/service/sweep.integration.test.ts
+  s_28f9b176f45483::t_a0306b65bf3301 1,329-351
+apps/web/src/server/domains/run/service/sweep.ts
+  s_28f9b176f45483::t_dd8b43148e8335 1-4,46,92-95,100,102-105,127-162,202-206,236-237,242,245-249,347,528-533,575-576,618,620-621,624,630-634,637-638,642,654,706-707
+apps/web/src/server/generic/assessment/repo/transfer-pair-queue.integration.test.ts
+  s_28f9b176f45483::t_8f35c74a0127d3 5
+apps/web/src/server/generic/derived-refresh/repo/broad-refresh.integration.test.ts
+  s_28f9b176f45483::t_348f36cc5d512c 13,16,18,20-23,30-32,76-80,85,90-93,102-109,127-177
+apps/web/src/server/generic/derived-refresh/repo/process.ts
+  s_28f9b176f45483::t_a88116546347c0 7,30,57,65-68,71-75,83,87-92,96-99,109-113,119-121,125-129,153,157,160,168,200,204,218-220,224,237,262
+apps/web/src/server/generic/jobs/repo/jobs.integration.test.ts
+  s_28f9b176f45483::t_8d1419451ef746 351-361
+apps/web/src/server/generic/jobs/repo/jobs.ts
+  s_28f9b176f45483::t_61aa03fa8fb752 98-101,105,171
+apps/web/src/server/generic/problems/service/problems.service.ts
+  s_28f9b176f45483::t_7a3643ee90324b 311
+apps/web/src/server/generic/search/repo/search-document.ts
+  s_28f9b176f45483::t_616d70aaa0faf1 210-217,220-221,223,247-250,254,256,268,276,279,282,285,290,298,301,304,308,311,315,326,330,335,338,346,356,374,379,383,417-445,483,499,513,525,601,931-938,953,979,982,991-995,1012
+apps/web/src/server/testing/repo.fixtures.ts
+  s_28f9b176f45483::t_765f760480900c 717-718
+apps/web/src/server/workflows/background-tasks/refresh-families.ts
+  s_28f9b176f45483::t_8a8c675dd61841 32,37
+apps/web/src/server/workflows/catch-up.ts
+  s_28f9b176f45483::t_3971c5ccb46e35 62,64-67,70
+apps/web/src/server/workflows/jobs.ts
+  s_28f9b176f45483::t_6a0f822cad6c29 9,92-104
+docs/adr/0015-unified-durable-work-coordination.md
+  s_28f9b176f45483::t_38fd068409fa55 55-56
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_28f9b176f45483::t_77c6066f5d6bf4 314-318
+docs/entities.md
+  s_28f9b176f45483::t_3a538ac97ebba1 2221-2228
+docs/infrastructure.md
+  s_28f9b176f45483::t_a760996361101b 79
+packages/schemas/src/activity-fields.ts
+  s_28f9b176f45483::t_c2c98d918020a0 228,290-291
+packages/schemas/src/child-tables/run.ts
+  s_28f9b176f45483::t_c4d08388a65596 1078
+packages/schemas/src/run-fields.ts
+  s_28f9b176f45483::t_9e0b7dcd0e2bdd 4,468-475,481
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "936d8af70b6c3e26b587e44164065e4a47115d12",
+  "prompts": {},
+  "sessions": {
+    "s_28f9b176f45483": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "77fffd6f-914e-4d40-b3b6-e4518ede0144",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
