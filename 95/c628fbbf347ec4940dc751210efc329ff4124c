@@ -1,0 +1,23 @@
+apps/web/src/server/generic/audit-log/repo/audit-log.integration.test.ts
+  s_2f5ef323e3bb48::t_fe9aa739b8e877 12,100-122
+apps/web/src/server/generic/audit-log/repo/audit-log.ts
+  s_2f5ef323e3bb48::t_3071124ae192b9 1-7,479-483
+docs/infrastructure.md
+  s_2f5ef323e3bb48::t_910b5f3de73d83 135-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95c628fbbf347ec4940dc751210efc329ff4124c",
+  "prompts": {},
+  "sessions": {
+    "s_2f5ef323e3bb48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "983d1247-580e-4791-a535-3dd4fb15b7d6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
