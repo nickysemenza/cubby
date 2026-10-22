@@ -1,0 +1,161 @@
+.github/workflows/apple-testflight.yaml
+  s_51e123cbeb9183::t_4d9f48f32401ab 73,80
+Cargo.toml
+  s_51e123cbeb9183::t_2bb0229e11c083 6-50
+apps/apple/CubbyKit/Sources/CubbyKit/FFI/IngredientParser.swift
+  s_672268c656ca0c::t_56c60fc2bc3fe7 4-5,27,41-51
+apps/apple/CubbyKit/Sources/CubbyKit/FFI/RecipeScaling.swift
+  s_672268c656ca0c::t_4f3dc94fc68669 36
+apps/web/src/features/recipe/richtext.tsx
+  s_51e123cbeb9183::t_cd5245f4814408 19
+apps/web/src/lib/wasm-runtime.ts
+  s_51e123cbeb9183::t_8f25ad72aeefb9 1-128
+apps/web/src/lib/wasm.ts
+  s_51e123cbeb9183::t_8e4482c5189ff5 1,3,5-6,8
+apps/web/src/server/ai/gateway-forward.ts
+  s_51e123cbeb9183::t_bad9104e86afe6 1,24
+apps/web/src/server/clients/scraper.ts
+  s_51e123cbeb9183::t_2b397fbbb96e8b 1,12
+apps/web/src/server/clients/scraper.unit.test.ts
+  s_51e123cbeb9183::t_de2aea70a07843 1
+apps/web/src/server/domains/image-processing/service/model-image.ts
+  s_51e123cbeb9183::t_ddba6ad12a7912 1
+apps/web/src/server/domains/purchase-import/operations/mail-attachment-purpose.ts
+  s_51e123cbeb9183::t_bb51e968d590ed 21
+apps/web/src/server/domains/purchase-import/repo/gmail/read-content.ts
+  s_51e123cbeb9183::t_9c49df6b942470 19
+apps/web/src/server/domains/purchase-import/repo/mail-financial-event.ts
+  s_51e123cbeb9183::t_a316da0a75909d 28
+apps/web/src/server/domains/purchase-import/service/gmail/email-compaction.workers.test.ts
+  s_51e123cbeb9183::t_98a3b6a888b688 3
+apps/web/src/server/domains/purchase-import/service/gmail/email-html.fixtures.ts
+  s_51e123cbeb9183::t_7f04151db5951f 5
+apps/web/src/server/domains/purchase-import/service/gmail/relevance.ts
+  s_51e123cbeb9183::t_14569f63ce6c37 26
+apps/web/src/server/domains/purchase-import/service/gmail/triage.ts
+  s_51e123cbeb9183::t_d8de1785212899 1,16
+apps/web/src/server/domains/purchase-import/service/gmail/triage.unit.test.ts
+  s_51e123cbeb9183::t_ea01b6b366f2eb 4
+apps/web/src/server/domains/purchase-import/service/mail-import-rule.ts
+  s_51e123cbeb9183::t_e17befa45cf14c 17
+apps/web/src/server/domains/purchase-import/service/mail-source-judgment.ts
+  s_51e123cbeb9183::t_b8f056ea5683d6 21
+apps/web/src/server/wasm.ts
+  s_51e123cbeb9183::t_ae53e224388b15 1-6
+apps/web/tooling/source-fingerprint.ts
+  s_51e123cbeb9183::t_50169365112e8e 38-41
+apps/web/tooling/web-build-provenance.ts
+  s_51e123cbeb9183::t_b488389a0c390a 94,121
+apps/web/tooling/web-build-provenance.unit.test.ts
+  s_51e123cbeb9183::t_21ec550331295d 258,261-264
+cookbook-wasm/Cargo.toml
+  s_672268c656ca0c::t_67e2e0ba213174 2-4,7-8,18-23,25-26
+cubby-ffi/Cargo.toml
+  s_672268c656ca0c::t_a295131aeec518 4-5,12-14,32-37
+cubby-ffi/src/display.rs
+  s_672268c656ca0c::t_dca1229e3b2c38 1-204
+cubby-ffi/src/ingredient.rs
+  s_672268c656ca0c::t_dcf124cdb6118d 1-116
+cubby-ffi/src/isbn.rs
+  s_672268c656ca0c::t_b7c64fa5384d67 1-81
+cubby-ffi/src/lib.rs
+  s_672268c656ca0c::t_9910dbcb7efaa7 1-8,10-15,19-22,24-27
+cubby-ffi/src/scaling.rs
+  s_672268c656ca0c::t_19469bc39819b9 1-72
+docs/development.md
+  s_51e123cbeb9183::t_662789085efa31 47-48,53,56-61,336-341
+knip.json
+  s_51e123cbeb9183::t_c6ee64a9bcd839 118
+nx.json
+  s_51e123cbeb9183::t_4ee7eb5a1eeee4 88
+packages/wasm/.gitignore
+  s_51e123cbeb9183::t_6fb6b06d29894b 1-4
+packages/wasm/package.json
+  s_51e123cbeb9183::t_7df2806794c9c9 7,14,17-22,24
+packages/wasm/workerd.js
+  s_51e123cbeb9183::t_27a1ca1b520fb5 1-4,6-7,9-10,13,15
+recipebridge/project.json
+  s_51e123cbeb9183::t_e5ae19e042a223 6
+recipebridge/src/ai_usage.rs
+  s_672268c656ca0c::t_98ee6a337c5ff7 6,8,12-14,36-38,46
+recipebridge/src/availability.rs
+  s_672268c656ca0c::t_b459bf38dd3d17 23,25,39-41,49-51,60-62,74-76,83-84,86,100-102,107,111-113,120-122,129,132,139,144,149-151,222,415
+recipebridge/src/conversion.rs
+  s_672268c656ca0c::t_e03fff04b53dbd 9-12,14,17,19,22-26,30-32,53-55,58,61,66-69,76,84-86,93,101-103,125,260,274,287-289,295-297,312,345,360,388,393,407,456,489
+recipebridge/src/costing/consumption.rs
+  s_672268c656ca0c::t_adfd89694a3e1b 11,36-37,53-54
+recipebridge/src/costing/mod.rs
+  s_672268c656ca0c::t_3d0fbc2d32186c 18,41
+recipebridge/src/costing/types.rs
+  s_672268c656ca0c::t_317a60c4a01545 9,18-19,27-28,46,49,54,59-60,66,73-74,79,86-87,96-98,114-115,117,122,126-127,129,134-135,154-155,160,168-169,179-180,182,187-188,190,195-196,213-214,216,218,220,226-227,238-239,244,252,266,275,281-282,285,291-292,300-301,308,312,330-332
+recipebridge/src/display_format.rs
+  s_672268c656ca0c::t_d1521cf5ccbd99 9,11,17-18,20,193-194,196,284,290,296,302,312,318
+recipebridge/src/email.rs
+  s_672268c656ca0c::t_f7c3d61e37e360 10,12,29-31,41-43,54-56,64-66,206,700,855
+recipebridge/src/estimates.rs
+  s_672268c656ca0c::t_d950fbc19b9e33 8,10,17-19,24,28-29,38-39,46-47,49,53,59,69,118-120,126-128,134-135,137,140-141,143,146-147,149,328,337,342,351,369
+recipebridge/src/food_calculation.rs
+  s_672268c656ca0c::t_3b11b1ec5bb3a4 10,12,24-25,31-32,41-42,46,49,53-54,60,67,70,80-82,85,91-93,97,438
+recipebridge/src/food_mappings.rs
+  s_672268c656ca0c::t_865bd2b18f381b 17,19,25-27,31,37-39,42,45,48,56-58,65-67,72,81-83,87,92,98-100,112,396,405
+recipebridge/src/isbn.rs
+  s_672268c656ca0c::t_872b1aff0fc11a 7-8,15,17,23-25,30,137,163,184,208,230
+recipebridge/src/lib.rs
+  s_672268c656ca0c::t_e99e3dffff0564 1-7,23-27,36,38,83,128,151,169,206-208,265-267,274,281,293-295,306,314
+recipebridge/src/model_image.rs
+  s_672268c656ca0c::t_73359bc8ca6432 10,137
+recipebridge/src/needs.rs
+  s_672268c656ca0c::t_275fad4e96b4be 19,21,35-36,49-50,57,65-66,73-75,83-84,93-94,101,110-111,130-131,139,144-146,154-156,159,168-170,173,176,454,467
+recipebridge/src/page.rs
+  s_672268c656ca0c::t_a4eb6447ac99b4 9,12,22-24,30-32,45-47,303
+recipebridge/src/parse.rs
+  s_672268c656ca0c::t_a05d78aec3d36a 24,26,37-39,60-62,92-93,109-111,121-122,151-153,197-198,217-219,227-228,251-252,263-265,288,294-296,305-307,314,327,332,340,360,372,382,414,430,436,446,455,464-465,662
+recipebridge/src/scaling.rs
+  s_672268c656ca0c::t_970ff212a93cd3 9,59,64,73,78
+scripts/ensure.test.ts
+  s_51e123cbeb9183::t_fd18d7820ee39b 14-18,69-143
+scripts/ensure.ts
+  s_51e123cbeb9183::t_09355634a09ad1 4,8,64-65,67-68
+scripts/rust-fingerprint.ts
+  s_51e123cbeb9183::t_e84e520f359ca5 14,39-42,55-87,111,113,120-121,132-166,168-193
+scripts/wasm.ts
+  s_2f5ef323e3bb48::t_76704b059d93c5 1-65
+tools/oxlint/cubby/domain-layers.test.ts
+  s_51e123cbeb9183::t_c769aa58bbdcb8 8-25
+tools/oxlint/cubby/rules/domain-layers.ts
+  s_672268c656ca0c::t_6b90ea64a725d5 77,90-91,120,153-154
+.github/workflows/ci.yaml
+  s_51e123cbeb9183::t_599a7d48784d1d 77,92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "91633e0f908693f8a8d53ffc39eb502ae645f3b1",
+  "prompts": {},
+  "sessions": {
+    "s_2f5ef323e3bb48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "983d1247-580e-4791-a535-3dd4fb15b7d6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_51e123cbeb9183": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1650c-f629-7cd2-a585-c1c7808a98d3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_672268c656ca0c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f4d09f1-6d87-4926-aadf-1c07e2b7f1c1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
