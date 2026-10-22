@@ -88,6 +88,7 @@ export const buildTransactionImportWhere = (
 ) => importScaffold.where(filters);
 
 const sourceRead = {
+  media: true,
   references: {
     source: { kind: "public" },
     accountId: { kind: "lookup", name: "accountName", missing: "null" },
@@ -237,6 +238,7 @@ const sourceRead = {
 } satisfies ListReadOptions<SourceRow>;
 
 const importRead = {
+  media: true,
   references: { source: { kind: "public" } },
   bindings: (bind) => {
     const counts = bind.batch(async ({ db, rows }) => {
