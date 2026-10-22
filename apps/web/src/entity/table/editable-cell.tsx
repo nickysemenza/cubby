@@ -143,6 +143,8 @@ interface EditableCellCommonProps<T> {
 
 type EditableTextCellProps = EditableCellCommonProps<string> & {
   config: EditableTextConfig;
+  /** Shared record state owns committed values after an awaited save. */
+  retainCommittedValue?: boolean;
 };
 
 type EditableNumberCellProps = EditableCellCommonProps<number> & {
@@ -239,6 +241,7 @@ export function EditableCell(props: EditableCellProps) {
         onSave={props.onSave}
         config={config}
         parseValue={(value) => value}
+        retainCommittedValue={props.retainCommittedValue}
         renderValue={props.renderValue}
         clipboard={props.clipboard}
         trigger={props.trigger ?? "wrap"}
@@ -382,6 +385,7 @@ function EditableDisplay<TSaved>({
 export function useOptimisticDisplayValue<T>(
   value: T | null,
   isEqual: (a: T | null, b: T | null) => boolean = referenceEquals,
+  retainCommittedValue = true,
 ) {
   const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
     undefined,
@@ -394,7 +398,10 @@ export function useOptimisticDisplayValue<T>(
   }, [value, optimisticValue, isEqual]);
 
   return {
-    displayValue: optimisticValue !== undefined ? optimisticValue : value,
+    displayValue:
+      retainCommittedValue && optimisticValue !== undefined
+        ? optimisticValue
+        : value,
     setOptimisticValue,
   };
 }
@@ -465,6 +472,7 @@ function EditableInputCellInternal<T>({
   clipboard,
   trigger,
   autoOpen,
+  retainCommittedValue = true,
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
@@ -474,8 +482,13 @@ function EditableInputCellInternal<T>({
   clipboard?: CellClipboardSpec<T | null>;
   trigger: EditTriggerMode;
   autoOpen: boolean;
+  retainCommittedValue?: boolean;
 }) {
-  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
+  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(
+    value,
+    referenceEquals,
+    retainCommittedValue,
+  );
   const edit = useCellEditState(clipboard, setOptimisticValue);
 
   useEffect(() => {

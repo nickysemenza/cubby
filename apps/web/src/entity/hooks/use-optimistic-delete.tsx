@@ -150,6 +150,9 @@ export function useOptimisticDelete<
       return {
         ...baseMutationOptions,
         onMutate: async (variables: { ids: string[] }) => {
+          // Task transactions project pending deletes without mutating Query snapshots.
+          if (registeredDelete && deletable.entity === "task" && !commandPort)
+            return { previousData: [] };
           // The NARROW surface: only queries that list this entity's own rows can
           // have a deleted id spliced out of them. A product delete ripples to
           // recipes and dashboards too, but `removeDeletedIdsFromCache` has
@@ -171,7 +174,7 @@ export function useOptimisticDelete<
           onError(error);
         },
       };
-    }, [deleteCommands, deletable, queryClient, registeredDelete]);
+    }, [commandPort, deleteCommands, deletable, queryClient, registeredDelete]);
 
   // Always call useMutation unconditionally (Rules of Hooks).
   // When deletable is not configured, pass a no-op mutation function.

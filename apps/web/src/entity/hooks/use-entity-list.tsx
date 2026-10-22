@@ -40,6 +40,10 @@ import type {
   TableStateReturn,
   useTableState,
 } from "~/entity/table/use-table-state";
+import {
+  useTaskRecordProjection,
+  useTaskRecordProjector,
+} from "~/entity/task-record-transactions";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/number-format";
 import { CurrencyValue } from "~/ui/common/currency-value";
@@ -559,8 +563,8 @@ export function useEntityList<
   });
 
   const {
-    data,
-    totalCount,
+    data: serverData,
+    totalCount: serverTotalCount,
     sums,
     groups,
     isLoading,
@@ -568,6 +572,11 @@ export function useEntityList<
     timing,
     refreshControls,
   } = infiniteResult;
+  const data = useTaskRecordProjection(entity, serverData);
+  const totalCount = Math.max(
+    0,
+    serverTotalCount - (serverData.length - data.length),
+  );
   const { setColumnFilters } = tableState;
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -923,8 +932,10 @@ export function useEntityList<
 
   // A server tree's children arrive per expanded parent under the list's
   // own filters and sort; the loaded root pages are never nested locally.
+  const projectRows = useTaskRecordProjector(entity);
   const treeChildren = useServerTreeChildren<TRow>({
     enabled: serverTree,
+    projectRows,
     scope: infiniteResult.scope,
     planFor: infiniteResult.scopedPlan,
   });

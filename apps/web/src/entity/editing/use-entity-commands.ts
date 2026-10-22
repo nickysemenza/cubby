@@ -1,15 +1,17 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import {
   countPrimaryDeletedReferences,
+  entityMutationScope,
   parseEntityWriteResult,
 } from "~/entity/entity-mutation";
 import {
   executeEntityMutationCommand,
   type EntityMutationTransport,
 } from "~/entity/entity-mutation-command";
+import { runTaskRecordTransaction } from "~/entity/task-record-transactions";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
@@ -264,6 +266,7 @@ export function useEntityCommands<E extends EditableEntity>(
   entity: E,
   options?: EntityCommandsOptions,
 ): EntityCommands<E> {
+  const client = useQueryClient();
   const productionPort = useEntityMutationPort();
   const port = options?.mutationPort ?? productionPort;
   const [issues, setIssues] = useState<readonly EntityEditIssue[]>([]);
@@ -275,14 +278,24 @@ export function useEntityCommands<E extends EditableEntity>(
   // every write in the app rather than per call site.
   const mutation = useMutation({
     ...kernelOptionsFor(entity),
+    scope: entityMutationScope(entity),
     mutationFn: async (command: EntityEditCommand<E>) =>
       await port.execute(command),
   });
 
+  const bulkMutation = useMutation({
+    ...kernelOptionsFor(entity),
+    scope: entityMutationScope(entity),
+    mutationFn: async (command: EntityBulkUpdateCommand<E>) =>
+      await port.executeBulk(command),
+  });
+
   const executeCommand = useCallback(
     async (command: EntityEditCommand<E>) =>
-      await mutation.mutateAsync(command),
-    [mutation],
+      await runTaskRecordTransaction(client, command, () =>
+        mutation.mutateAsync(command),
+      ),
+    [client, mutation],
   );
 
   const submit = useCallback(
@@ -399,7 +412,7 @@ export function useEntityCommands<E extends EditableEntity>(
     ): Promise<EntityBulkUpdateOutcome> => {
       setIssues([]);
       try {
-        const result = await port.executeBulk({
+        const result = await bulkMutation.mutateAsync({
           entity,
           operation: "bulkUpdate",
           intent: "bulkUpdate",
@@ -421,7 +434,7 @@ export function useEntityCommands<E extends EditableEntity>(
         return { ok: false, issues: nextIssues };
       }
     },
-    [entity, port],
+    [bulkMutation, entity],
   );
 
   const create = useCallback(
@@ -539,7 +552,7 @@ export function useEntityCommands<E extends EditableEntity>(
   );
 
   return {
-    isPending: mutation.isPending,
+    isPending: mutation.isPending || bulkMutation.isPending,
     issues,
     commit,
     submit,

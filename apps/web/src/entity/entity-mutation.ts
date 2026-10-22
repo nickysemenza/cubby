@@ -12,6 +12,10 @@ import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
 import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
 
+/** Task optimistic writes and bulk actions share one server submission order. */
+export const entityMutationScope = (entity: string) =>
+  entity === "task" ? { id: "entity:task" } : undefined;
+
 const entityMutationResultInputSchema = z.unknown();
 type EntityMutationResultInput = z.input<
   typeof entityMutationResultInputSchema

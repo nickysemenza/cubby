@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   countPrimaryDeletedReferences,
+  entityMutationScope,
   parseEntityWriteResult,
 } from "~/entity/entity-mutation";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
@@ -84,6 +85,8 @@ function mutationMeta(entity: ShortcodeEntity): CubbyOperationMeta {
     operation: "entity.mutate",
     entity,
     invalidates: entityRipple(entity),
+    invalidationCompletion:
+      entity === "task" ? { removeInactive: true } : undefined,
   };
 }
 
@@ -95,6 +98,7 @@ export function bulkUpdateMutationOptionsFactory(
   return () => ({
     mutationKey: ["operation", "entity.mutate", entity, "bulkUpdate"],
     meta: mutationMeta(entity),
+    scope: entityMutationScope(entity),
     mutationFn: async (variables: { ids: string[]; data: unknown }) => {
       const result = await executeEntityMutationCommand(
         entity,
@@ -118,6 +122,7 @@ function mutationBase<E extends StandardEntity>(
   return {
     mutationKey: ["operation", "entity.mutate", entity, action],
     meta: mutationMeta(entity),
+    scope: entityMutationScope(entity),
   };
 }
 
