@@ -196,18 +196,20 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
   }
 
   async alarm() {
-    (await import("~/server/cf-env")).setCfEnv(this.env);
-    if (isMaintenanceMode(this.env)) {
-      await this.ctx.storage.setAlarm(Date.now() + 5 * 60_000);
-      return;
-    }
-    const results = await Promise.allSettled([
-      this.observeAiRefresh(),
-      this.recoverAiWorkWakes(),
-      this.resumeFundingWaits(),
-    ]);
-    const failed = results.find((result) => result.status === "rejected");
-    if (failed?.status === "rejected") throw failed.reason;
+    const { withCfEnv } = await import("~/server/cf-env");
+    return withCfEnv(this.env, async () => {
+      if (isMaintenanceMode(this.env)) {
+        await this.ctx.storage.setAlarm(Date.now() + 5 * 60_000);
+        return;
+      }
+      const results = await Promise.allSettled([
+        this.observeAiRefresh(),
+        this.recoverAiWorkWakes(),
+        this.resumeFundingWaits(),
+      ]);
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+    });
   }
 
   async scheduleAiWorkRecovery(runId?: string) {

@@ -4,7 +4,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { DurableObject } from "cloudflare:workers";
 
 import { httpRouteTemplate } from "~/lib/http-route-template";
-import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
+import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { withInvocationTrace } from "~/server/observability/tracing";
 import { withTrace } from "~/server/observability/tracing";
@@ -212,13 +212,14 @@ export class CalendarFeedDurableObject
   ) {
     if (!this.env.HYPERDRIVE?.connectionString)
       throw new Error("Calendar PostgreSQL write backend is unavailable");
-    setCfEnv(this.env);
     const { db, withInvocationDb } = await import("~/server/db");
-    return runWithExecutionCtx(
-      { waitUntil: (task) => this.ctx.waitUntil(task) },
-      () =>
-        withInvocationDb(this.env.HYPERDRIVE.connectionString, () => run(db)),
-      origin,
+    return withCfEnv(this.env, () =>
+      runWithExecutionCtx(
+        { waitUntil: (task) => this.ctx.waitUntil(task) },
+        () =>
+          withInvocationDb(this.env.HYPERDRIVE.connectionString, () => run(db)),
+        origin,
+      ),
     );
   }
   private async refresh(origin: string, reason: string) {

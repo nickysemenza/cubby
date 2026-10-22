@@ -3,8 +3,9 @@ import { Client } from "pg";
 import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
-import { setCfEnv } from "../../src/server/cf-env";
+import { withCfEnv } from "../../src/server/cf-env";
 import worker from "../../src/cf-server";
+import { QUEUE_NAMES, localQueueNames } from "../../src/server/worker-identity";
 import { activeUsdaRelease } from "../../src/server/domains/usda-release/service/client";
 import { PREVIEW_DOCUMENT } from "./preview/document";
 import { assertDevDatabaseUrl } from "./state";
@@ -148,21 +149,22 @@ export default {
     await seedUsda(env);
     // Production handlers discriminate on their deployed queue names. Local
     // queues retain checkout isolation at transport and normalize at delivery.
-    if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-telemetry`)
+    const queues = localQueueNames(env.CUBBY_DEV_ID);
+    if (batch.queue === queues.telemetry)
       return worker.queue(
-        { queue: "cubby-telemetry", messages: batch.messages },
+        { queue: QUEUE_NAMES.telemetry, messages: batch.messages },
         env,
         ctx,
       );
-    if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-background`)
+    if (batch.queue === queues.background)
       return worker.queue(
-        { queue: "cubby-background", messages: batch.messages },
+        { queue: QUEUE_NAMES.background, messages: batch.messages },
         env,
         ctx,
       );
-    if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-purchase`)
+    if (batch.queue === queues.purchaseAgent)
       return worker.queue(
-        { queue: "cubby-purchase-agent", messages: batch.messages },
+        { queue: QUEUE_NAMES.purchaseAgent, messages: batch.messages },
         env,
         ctx,
       );
@@ -244,42 +246,43 @@ export default {
       if (request.method !== "POST")
         return new Response(null, { status: 405, headers: { Allow: "POST" } });
       const started = performance.now();
-      setCfEnv(env);
-      try {
-        const { seedCoreFixtures } = await import("./seed-core");
-        await seedCoreFixtures({
-          databaseUrl: env.DATABASE_URL,
-          origin: url.origin,
-          bucket: env.R2_BUCKET_NAME,
-          keyPrefix: env.R2_KEY_PREFIX,
-          // The first auth request also binds the Worker env, which gives the
-          // corpus's writes the local background queue.
-          post: (path, body) =>
-            worker.fetch(
-              new Request(new URL(path, url.origin), {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Origin: url.origin,
-                },
-                body: JSON.stringify(body),
-              }),
-              env,
-              ctx,
-            ),
-        });
-      } catch (error) {
-        return new Response(
-          error instanceof Error
-            ? (error.stack ?? error.message)
-            : String(error),
-          { status: 500, headers: { "Cache-Control": "no-store" } },
+      return withCfEnv(env, async () => {
+        try {
+          const { seedCoreFixtures } = await import("./seed-core");
+          await seedCoreFixtures({
+            databaseUrl: env.DATABASE_URL,
+            origin: url.origin,
+            bucket: env.R2_BUCKET_NAME,
+            keyPrefix: env.R2_KEY_PREFIX,
+            // The first auth request also binds the Worker env, which gives the
+            // corpus's writes the local background queue.
+            post: (path, body) =>
+              worker.fetch(
+                new Request(new URL(path, url.origin), {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Origin: url.origin,
+                  },
+                  body: JSON.stringify(body),
+                }),
+                env,
+                ctx,
+              ),
+          });
+        } catch (error) {
+          return new Response(
+            error instanceof Error
+              ? (error.stack ?? error.message)
+              : String(error),
+            { status: 500, headers: { "Cache-Control": "no-store" } },
+          );
+        }
+        return Response.json(
+          { pack: "core", ms: Math.round(performance.now() - started) },
+          { headers: { "Cache-Control": "no-store" } },
         );
-      }
-      return Response.json(
-        { pack: "core", ms: Math.round(performance.now() - started) },
-        { headers: { "Cache-Control": "no-store" } },
-      );
+      });
     }
     if (url.pathname === "/__dev/preview") {
       if (request.method !== "GET")

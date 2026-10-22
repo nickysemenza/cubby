@@ -40,7 +40,7 @@ domains between `src/app/` and `src/features/` under different names.
   Existing `.server.ts` suffixes stay; nothing keys on them.
 - **Layer direction.** `cubby/domain-layers` (oxlint) allows imports only to the
   same or a lower role — `operations` → `service` → `repo` → `db` — in any
-  domain. The entry points `http/`, `mcp/`, and `workflows/` import like
+  domain. The entry points `http/`, `mcp/`, `worker/`, and `workflows/` import like
   `operations` but are imported as platform infrastructure
   (`workflows/runtime`, `http/request-context`). `ai/repo/` ranks as `repo`.
   `repo` never imports `ai/` except `ai/repo/` and `ai/policy/`: the model-free

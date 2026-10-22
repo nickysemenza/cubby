@@ -1,10 +1,3 @@
-// Access to the CF Workers env (service bindings) outside the fetch handler.
-//
-// Module-level storage is safe here — unlike the per-request pg.Pool in
-// db.ts, `env` is the same object for every request in an isolate. Both local
-// workerd and deployed Workers set it; scripts and isolated tests outside the
-// Worker adapter can leave it undefined.
-
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
@@ -20,8 +13,7 @@ interface WaitUntilContext {
 }
 
 /**
- * AsyncLocalStorage rather than the module-level slot `env` uses above: the
- * execution context is PER REQUEST. A module-level one would be overwritten by
+ * Execution context belongs to one request. A module-level one would be overwritten by
  * whichever request landed last in the isolate, and calling waitUntil on a
  * context whose request already settled throws.
  */
@@ -52,14 +44,25 @@ export const afterResponse = async (task: Promise<void>): Promise<void> => {
   else await task;
 };
 
-let cfEnv: Env | undefined;
+const environmentStore = new AsyncLocalStorage<Env>();
+// Node test adapters can install a fallback. Production events and DO work use
+// withCfEnv so concurrent invocations and binding updates cannot replace it.
+let fallbackEnv: Env | undefined;
+const currentEnv = (): Env | undefined =>
+  environmentStore.getStore() ?? fallbackEnv;
+
+export const withCfEnv = <T>(env: Env, run: () => Promise<T>): Promise<T> =>
+  environmentStore.run(env, run);
+
+/** Authentication reads binding values before constructing its cached instance. */
+export const getAuthBindings = () => currentEnv();
 
 export const setCfEnv = (env?: Env): void => {
-  cfEnv = env;
+  fallbackEnv = env;
 };
 
 /** True after the request has entered the Cloudflare Worker adapter. */
-export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
+export const isCloudflareRuntime = (): boolean => currentEnv() !== undefined;
 
 /**
  * The background queue producer (`env.BACKGROUND_QUEUE`) on local or deployed
@@ -70,14 +73,14 @@ export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
 export const getBackgroundQueue = (): BackgroundQueueProducer | undefined => {
   // SAFETY: native configuration infers Env bindings structurally;
   // this adapter narrows that generated queue binding to Cubby's owned port.
-  return cfEnv?.BACKGROUND_QUEUE as BackgroundQueueProducer | undefined;
+  return currentEnv()?.BACKGROUND_QUEUE as BackgroundQueueProducer | undefined;
 };
 
 /** The low-priority telemetry queue when configured in the Worker environment. */
 export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   // SAFETY: native configuration infers Env bindings structurally;
   // this adapter narrows that generated queue binding to Cubby's owned port.
-  return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
+  return currentEnv()?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
 
 /** Queue producer for the per-run purchase-import agent's events. */
@@ -86,11 +89,14 @@ export const getPurchaseAgentQueue = ():
   | undefined => {
   // SAFETY: cloudflare.config.ts declares this queue binding; this
   // adapter narrows it to the single send method Cubby's producer owns.
-  return cfEnv?.PURCHASE_AGENT_QUEUE as PurchaseAgentQueueProducer | undefined;
+  return currentEnv()?.PURCHASE_AGENT_QUEUE as
+    | PurchaseAgentQueueProducer
+    | undefined;
 };
 
 /** Worker secrets are not part of the generated Wrangler Env type. */
 export const getGmailOAuthCredentials = () => {
+  const cfEnv = currentEnv();
   if (!cfEnv) return undefined;
   // SAFETY: Wrangler secrets are runtime Env fields absent from generated binding types.
   const google = cfEnv as Env & {
@@ -108,6 +114,7 @@ export const getGmailOAuthCredentials = () => {
  * team id, and the `.p8` PKCS8 PEM. Absent outside a configured Worker.
  */
 export const getApnsCredentials = () => {
+  const cfEnv = currentEnv();
   if (!cfEnv) return undefined;
   // SAFETY: Wrangler secrets are runtime Env fields absent from generated binding types.
   const apns = cfEnv as Env & {
@@ -126,30 +133,30 @@ export const getApnsCredentials = () => {
 
 /** Origin-keyed durable calendar publishing state from the Worker environment. */
 export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
-  cfEnv?.CALENDAR_FEED;
+  currentEnv()?.CALENDAR_FEED;
 
 /** The purchase agent's per-Run coordinators (`server/domains/purchase-import/operations/agent-host`). */
 export const getPurchaseImportRunAgentNamespace = () =>
-  cfEnv?.PURCHASE_IMPORT_RUN;
+  currentEnv()?.PURCHASE_IMPORT_RUN;
 
 /** USDA release Durable Objects and the active release name (`server/domains/usda-release`). */
 export const getUsdaReleaseEnv = ():
   | Pick<Env, "USDA_RELEASE" | "USDA_ACTIVE_RELEASE">
-  | undefined => cfEnv;
+  | undefined => currentEnv();
 
 /** Connected native image workers share this transport; job authority stays in Postgres. */
-export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
+export const getImageProcessingNamespace = () => currentEnv()?.IMAGE_PROCESSING;
 
 /**
  * The optional Workers AI binding (`env.AI`) from the Worker environment. The
  * transport shim in `~/server/ai/gateway` runs Workers AI models on it
  * directly and reaches every other provider through `getAiGateway`.
  */
-export const getAi = () => cfEnv?.AI;
+export const getAi = () => currentEnv()?.AI;
 
 /** The binding's Universal endpoint for Cubby's gateway (`env.AI.gateway("cubby")`). */
 export const getAiGateway = (gatewayId: string = CUBBY_AI_GATEWAY_ID) =>
-  cfEnv?.AI?.gateway(gatewayId);
+  currentEnv()?.AI?.gateway(gatewayId);
 
 /**
  * The deterministic gateway peer that exists only in the workerd harness's
@@ -161,7 +168,7 @@ export const getTestAiGateway = (): { fetch: typeof fetch } | undefined =>
   // SAFETY: the optional extension describes only the harness-only service
   // binding; generated production bindings cannot supply it.
   (
-    cfEnv as
+    currentEnv() as
       | (Env & { CUBBY_TEST_AI_GATEWAY?: { fetch: typeof fetch } })
       | undefined
   )?.CUBBY_TEST_AI_GATEWAY;
@@ -174,16 +181,18 @@ export const getTestAiGateway = (): { fetch: typeof fetch } | undefined =>
 export const getVectorIndex = (): VectorizeIndexBinding | undefined => {
   // SAFETY: the generated binding is the v2 Vectorize index at runtime; this
   // adapter narrows it to the methods Cubby calls.
-  return cfEnv?.VECTORIZE as VectorizeIndexBinding | undefined;
+  return currentEnv()?.VECTORIZE as VectorizeIndexBinding | undefined;
 };
 
-export const getDatabaseFreshnessNamespace = () => cfEnv?.DB_FRESHNESS;
+export const getDatabaseFreshnessNamespace = () => currentEnv()?.DB_FRESHNESS;
 
-export const getAiResponseCacheNamespace = () => cfEnv?.AI_RESPONSE_CACHE;
-export const getChatGptPlanNamespace = () => cfEnv?.CHATGPT_PLAN;
+export const getAiResponseCacheNamespace = () =>
+  currentEnv()?.AI_RESPONSE_CACHE;
+export const getChatGptPlanNamespace = () => currentEnv()?.CHATGPT_PLAN;
 
 export const getAiGatewayEgress = (gatewayId: string) =>
-  cfEnv?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
+  currentEnv()?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
 
-export const getAppOrigin = () => cfEnv?.APP_ORIGIN;
-export const isE2eAuthTestMode = () => cfEnv?.E2E_AUTH_TEST_MODE === "true";
+export const getAppOrigin = () => currentEnv()?.APP_ORIGIN;
+export const isE2eAuthTestMode = () =>
+  currentEnv()?.E2E_AUTH_TEST_MODE === "true";

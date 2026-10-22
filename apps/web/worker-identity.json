@@ -1,0 +1,21 @@
+{
+  "queues": {
+    "background": {
+      "cubby-background": "background"
+    },
+    "telemetry": {
+      "cubby-telemetry": "telemetry"
+    },
+    "purchaseAgent": {
+      "cubby-purchase-agent": "purchase"
+    }
+  },
+  "crons": {
+    "backgroundRecovery": {
+      "* * * * *": true
+    },
+    "dailyMaintenance": {
+      "0 12 * * *": true
+    }
+  }
+}

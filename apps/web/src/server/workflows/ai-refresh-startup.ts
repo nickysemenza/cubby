@@ -3,7 +3,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
 import { activateAiRefresh } from "../ai/repo/ai-refresh";
-import { setCfEnv } from "../cf-env";
+import { withCfEnv } from "../cf-env";
 import type { Database } from "../db";
 import { withInvocationDb } from "../db";
 import { launchWorkflowRun } from "./runs/lifecycle";
@@ -13,19 +13,20 @@ export async function observeAiRefreshFeatures(
   env: Env,
   observationEpoch: number,
 ) {
-  setCfEnv(env);
-  return withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
-    const { db } = await import("../db");
-    const activation = await activateAiRefresh(db, __GIT_COMMIT__, {
-      enabled: true,
-      startDiscovery: true,
-      observationEpoch,
-    });
-    if (activation.observationEpoch !== observationEpoch)
+  return withCfEnv(env, () =>
+    withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
+      const { db } = await import("../db");
+      const activation = await activateAiRefresh(db, __GIT_COMMIT__, {
+        enabled: true,
+        startDiscovery: true,
+        observationEpoch,
+      });
+      if (activation.observationEpoch !== observationEpoch)
+        return activation.observationEpoch;
+      await dispatchAiRefreshDiscovery(db, activation);
       return activation.observationEpoch;
-    await dispatchAiRefreshDiscovery(db, activation);
-    return activation.observationEpoch;
-  });
+    }),
+  );
 }
 
 export async function dispatchAiRefreshDiscovery(
