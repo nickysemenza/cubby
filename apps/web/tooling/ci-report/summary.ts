@@ -208,11 +208,12 @@ if (slowest.length > 0) {
   );
 }
 
+// Hosted report roots, or the zipped Actions artifacts when publishing was
+// unavailable (download, unzip, then open index.html through a local server).
 const reports = [
-  env.CUBBY_VITEST_REPORT_URL &&
-    `[Vitest](https://viewer.vitest.dev/?url=${env.CUBBY_VITEST_REPORT_URL})`,
+  env.CUBBY_VITEST_REPORT_URL && `[Vitest](${env.CUBBY_VITEST_REPORT_URL})`,
   env.CUBBY_PLAYWRIGHT_REPORT_URL &&
-    `[Playwright](${env.CUBBY_PLAYWRIGHT_REPORT_URL}) (unzip, then \`pnpm --dir apps/web exec playwright show-report <dir>\`)`,
+    `[Playwright](${env.CUBBY_PLAYWRIGHT_REPORT_URL})`,
 ].filter(Boolean);
 if (reports.length > 0)
   lines.push(`**Merged HTML reports:** ${reports.join(" · ")}`, "");

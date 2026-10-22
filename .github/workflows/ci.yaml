@@ -41,8 +41,10 @@ env:
   # empty local cache retains fresh prerequisites for subsequent Nx calls.
   NX_SKIP_REMOTE_CACHE: ${{ inputs.fresh && 'true' || 'false' }}
   # Read by setup-node-with-deps, which connects Nx to the shared remote cache
-  # only when both are present (a fork PR receives neither) and it responds.
-  NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
+  # only when the token is present (a fork PR receives none) and it responds.
+  # The origin is public, not a secret: Actions withholds step outputs that
+  # contain a secret, which would drop the hosted report links.
+  NX_CACHE_URL: https://cubby-nx-cache.nicky.workers.dev
   NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
 
 # Every Linux lane starts on every run and replays unchanged tasks from the Nx
@@ -428,8 +430,20 @@ jobs:
           PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/results.json
         run: pnpm exec playwright merge-reports --reporter html,json ./all-blob-reports
-      # Vitest Viewer opens the zipped HTML report straight from the artifact
-      # URL (https://vitest.dev/guide/ui#view-reports-from-ci).
+      # The Nx cache Worker serves published reports publicly
+      # (apps/nx-cache); the artifacts remain the fallback.
+      - name: Publish merged Vitest report
+        id: vitest-hosted
+        if: ${{ !cancelled() && hashFiles('apps/web/.vitest/index.html') != '' }}
+        continue-on-error: true
+        working-directory: apps/web
+        run: node tooling/ci-report/publish.ts vitest .vitest blob records.json
+      - name: Publish merged Playwright report
+        id: playwright-hosted
+        if: ${{ !cancelled() && hashFiles('apps/web/playwright-report/index.html') != '' }}
+        continue-on-error: true
+        working-directory: apps/web
+        run: node tooling/ci-report/publish.ts playwright playwright-report
       - name: Upload merged Vitest report
         id: vitest-report
         if: ${{ !cancelled() && hashFiles('apps/web/.vitest/index.html') != '' }}
@@ -454,8 +468,8 @@ jobs:
         working-directory: apps/web
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          CUBBY_VITEST_REPORT_URL: ${{ steps.vitest-report.outputs.artifact-url }}
-          CUBBY_PLAYWRIGHT_REPORT_URL: ${{ steps.playwright-report.outputs.artifact-url }}
+          CUBBY_VITEST_REPORT_URL: ${{ steps.vitest-hosted.outputs.url || steps.vitest-report.outputs.artifact-url }}
+          CUBBY_PLAYWRIGHT_REPORT_URL: ${{ steps.playwright-hosted.outputs.url || steps.playwright-report.outputs.artifact-url }}
         run: node tooling/ci-report/summary.ts .vitest/records.json playwright-report/results.json
 
   # Informative only, outside `CI passed` and allowed to fail: the purchase

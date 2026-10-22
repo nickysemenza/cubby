@@ -18,6 +18,10 @@ function setup() {
         const body = objects.get(key);
         return body === undefined ? null : { body, size: body.length };
       },
+      async head(key) {
+        const body = objects.get(key);
+        return body === undefined ? null : { size: body.length };
+      },
       async put(key, body) {
         if (objects.has(key)) return null;
         const value = await new Response(body).text();
@@ -177,4 +181,66 @@ test("public query strings share one edge snapshot, including partial failures",
   const second = await request("/stats.json?arbitrary=2");
   assert.equal(queries, 2);
   assert.deepEqual(await second.json(), await first.json());
+});
+
+test("reports publish with the cache credential and read publicly within their namespace", async () => {
+  const { env, request, objects } = setup();
+  const anonymous = (path, method = "GET", body) =>
+    worker.fetch(
+      new Request(`https://cache.example${path}`, {
+        method,
+        ...(method === "PUT" ? { body } : {}),
+      }),
+      env,
+    );
+
+  assert.equal(
+    (await anonymous("/v1/reports/7/1/vitest/index.html", "PUT", "<p>x</p>"))
+      .status,
+    401,
+  );
+  assert.equal(
+    (await request("/v1/reports/7/1/vitest/index.html", "PUT", "<p>x</p>"))
+      .status,
+    200,
+  );
+  await request("/v1/reports/7/1/vitest/assets/app.js", "PUT", "run()");
+  assert.deepEqual(
+    [...objects.keys()],
+    ["reports/7/1/vitest/index.html", "reports/7/1/vitest/assets/app.js"],
+  );
+
+  const page = await anonymous("/reports/7/1/vitest/");
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.equal(await page.text(), "<p>x</p>");
+  const script = await anonymous("/reports/7/1/vitest/assets/app.js");
+  assert.equal(
+    script.headers.get("content-type"),
+    "text/javascript; charset=utf-8",
+  );
+  const head = await anonymous("/reports/7/1/vitest/assets/app.js", "HEAD");
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
+  // Relative asset paths need the root's trailing slash.
+  const root = await anonymous("/reports/7/1/vitest?tab=failed");
+  assert.equal(root.status, 308);
+  assert.equal(
+    root.headers.get("location"),
+    "https://cache.example/reports/7/1/vitest/?tab=failed",
+  );
+
+  // Public reads never reach cache archives, other kinds, or dot segments.
+  objects.set("abc123", "archive");
+  for (const path of [
+    "/reports/abc123",
+    "/reports/7/1/other/index.html",
+    "/reports/7/1/vitest/../../abc123",
+    "/reports/7/1/vitest/.hidden",
+  ])
+    assert.equal((await anonymous(path)).status, 404, path);
+  assert.equal(
+    (await anonymous("/reports/7/1/vitest/", "PUT", "x")).status,
+    405,
+  );
 });
