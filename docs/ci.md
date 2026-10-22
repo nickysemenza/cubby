@@ -186,12 +186,13 @@ OpenAPI warning gate; `apple:simulator-build` compiles `Cubby-iOS` for a generic
 simulator. Neither boots a simulator. `apple:lint` runs Swift formatting
 without Xcode. Missing Xcode fails native builds.
 The `rust` target runs fmt/clippy/test per
-crate (`recipebridge/project.json`, `cubby-ffi/project.json`). Clippy and tests
+crate (`recipebridge/project.json`, `cubby-ffi/project.json`, and
+`cookbook-wasm/project.json`; the thin EPUB adapter only needs fmt/clippy). Clippy and tests
 use the root workspace's `ci` profile: no debuginfo, incremental compilation,
 or dependency optimization. These tests run in under a second; the development
 profile's optimized dependencies add compilation work without useful runtime savings.
 Cargo still needs check metadata and linked test artifacts, and the default
-and browser/native feature sets remain separate checks. Both targets share
+and browser/native feature sets remain separate checks. The targets share
 `target/ci` and run sequentially to avoid Cargo's target-directory lock.
 Their `rustGate` inputs include the root profile and workflow; `rustc -V`
 still keys the floating compiler.
