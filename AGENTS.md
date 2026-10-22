@@ -21,9 +21,9 @@
   public links.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
   narration.
-- Write the failure modes and any failing isolated test before the
-  implementation it guards; prefer E2E as the sole automated test when it
-  covers those failures.
+- Retain tests for consequential behavior we own. Before adding a test, apply
+  the [test retention gate](docs/agents/validation.md#test-retention);
+  temporary migration probes are disposable.
 - Bound tool output before returning it: targeted `rg`, file regions, selected
   JSON fields, and failure excerpts. Use `rg --max-columns` when generated
   files may contain large single-line records. Save verbose logs under ignored

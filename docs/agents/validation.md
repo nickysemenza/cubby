@@ -23,6 +23,22 @@ route composition, navigation and persisted outcomes in real E2E/HTTP journeys;
 previews cannot prove server filtering or writes. See the
 [coverage ownership rules](validation-tests.md#required-component-browser-tests).
 
+## Test retention
+
+Adding a committed test requires a specific, plausible failure in behavior we
+own, a gap in existing coverage or compiler/generator guards, and enough impact
+or recurrence risk to justify its maintenance and runtime cost. Establish those
+before writing the test. Straightforward library swaps, renderer migrations,
+and low-risk refactors normally reuse existing coverage.
+
+For new tests, library rendering smoke checks, prop forwarding, SVG node counts,
+exact style attributes, and one-off migration parity checks are disposable
+verification. Use temporary browser probes, screenshots, or scripts for these
+and remove them before committing. Do not turn implementation-time checks into
+permanent tests merely because they passed or caught an issue during development.
+Retained assertions exercise meaningful user or system outcomes through the
+smallest existing test setup that can expose the failure.
+
 Keep an isolated test only when its named failure cannot reasonably be observed
 by the retained flow or an existing compiler/generator guard. Remove tests of
 declarations, constants, source spelling and mocks, repeated cases of the same
@@ -174,8 +190,9 @@ behavior, not merely because generated Swift changed.
 CI selects broad tiers from their declared inputs; avoid repeating the full
 PostgreSQL, fast, lint, Knip, or build suites locally as a gate. While
 iterating, lint the edited paths with `pnpm exec oxlint <paths>` rather than
-`pnpm lint`; the commit hook owns staged lint/format. Run Knip for changed
-entry points/dependencies, generator validation for changed declarations, and
+`pnpm lint`; the commit hook owns staged lint/format. Run the full configured
+Knip check for changed entry points/dependencies or removed consumers; a
+dependency-only check misses orphaned files and exports. Run generator validation for changed declarations and
 `actionlint` for CI workflow changes. CI starts every Linux lane and replays
 unchanged tasks from the Nx cache; that is not an instruction to run those
 lanes locally.

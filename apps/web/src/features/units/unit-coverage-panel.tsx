@@ -14,7 +14,7 @@ import { ServingAliasField } from "./serving-alias-field";
 import { UnitPriceLine } from "./unit-price-line";
 import { UnitMappingsTable } from "./unitmappingstable";
 
-// d3-force is heavy and only matters when the graph is actually expanded, so
+// The network renderer only matters when the graph is actually expanded, so
 // keep it out of the default detail-page bundle — same lazy pattern RecipeDetail
 // uses for its charts.
 const UnitMappingGraph = lazy(() =>
