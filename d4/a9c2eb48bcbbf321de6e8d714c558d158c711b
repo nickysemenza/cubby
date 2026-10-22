@@ -1,0 +1,19 @@
+apps/web/src/entity/entity-list/generic-entity-list.unit.test.tsx
+  s_dfbe2c2db4cd94::t_b49d4dcbcf0fad 227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d4a9c2eb48bcbbf321de6e8d714c558d158c711b",
+  "prompts": {},
+  "sessions": {
+    "s_dfbe2c2db4cd94": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16450-e400-79f2-aa15-d1133d85e069",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
