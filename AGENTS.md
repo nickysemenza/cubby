@@ -44,6 +44,12 @@ follow that workflow for discovery and PR attribution.
 
 Ask before deleting a database or resetting data.
 
+When deployment is authorized, default to a non-graceful cutover: downtime and
+failed old requests are acceptable. Do not require a writer hold, maintenance
+window, or compatibility rollout. Preserve household data and durable work;
+follow the [production migration runbook](docs/runbooks/production-migrations.md)
+for transaction locks, retained queue work, and post-deployment verification.
+
 Change contracts in place and carry stored data through migrations. For API,
 RPC, MCP, manifest, stored-shape, or native wire changes, load
 [breaking changes](docs/agents/domain-rules.md#breaking-changes).

@@ -32,9 +32,10 @@ deployment runner will verify that applied prefix. Keep the barrier until the
 matching deployment and preservation readback succeed. No other release or
 operator may overlap this cutover.
 
-When the member explicitly authorizes a non-graceful cutover with writers
-enabled, the normal Actions migration-before-deploy sequence may apply the
-preserving contraction before the matching Worker deploys. Old requests and
+For authorized household deployments, use a non-graceful cutover with writers
+enabled by default. No writer hold or maintenance window is required. The normal
+Actions migration-before-deploy sequence may apply the preserving contraction
+before the matching Worker deploys. Old requests and
 Workflow attempts may fail during or after that cutover. Lock every retired
 copy source and destination against writes before reading them, hold those
 locks through the copy/drop commit, and refuse contraction unless all retained
@@ -76,30 +77,28 @@ whose journal already contains an undeployed contract.
 
 ## Unified Job cutover
 
-This migration replaces the old job tables and removes business triggers. Pause
-writes from web, native, MCP, cron, queues, and existing Workflows while applying
-it. Keep writes paused until the matching Worker and clients are deployed and
-checks confirm the data was preserved. This PR does not authorize a production
-deploy or Cloudflare configuration changes.
+This migration replaces the old job tables and removes business triggers. Use
+the non-graceful migration-before-deploy sequence above for an authorized
+deployment; old web, native, MCP, cron and Workflow requests may fail during
+the switch. The migration locks retired sources and destinations before copying
+them. Verify retained data after deploying the matching Worker and clients.
 
-Before merging, the production operator must hold the automatic Deploy workflow
-and set `PRODUCTION_MIGRATION_THROUGH=0003_explicit_field_publication`. Otherwise
-the main-push workflow removes tables that live code still uses. The variable
-alone is insufficient: the new Worker also requires the new Job table. With
-writes paused, explicitly migrate through `0004_unified_jobs`, deploy the
-matching Worker and clients, and check the retained data. Only then delete
-`PRODUCTION_MIGRATION_THROUGH` and release automatic deploys.
-These are operator prerequisites, not actions performed by this PR.
+If an earlier operator left the Deploy workflow disabled or pinned
+`PRODUCTION_MIGRATION_THROUGH=0003_explicit_field_publication`, verify no other
+migration owner is active, clear that boundary, and release the matching
+deployment. A boundary at `0003` cannot serve the new Worker, which requires
+the Job table. Do not run a manual migration concurrently with Actions.
 
-Before stopping the old queue consumers, stop new requests and let the old
-Worker finish every legacy queue request. Verify and record that the queue,
-its dead-letter queue, and requests already being processed are empty. This
+Before replacing the old queue consumers, verify and record that legacy messages
+in the queue, its dead-letter queue, and requests already being processed have
+finished or have a verified durable destination in the new model. This
 includes location descriptions and inventory requests: their only durable copy
 may be the old queue message, so the database migration cannot recreate them.
-Resolve failures with the old Worker before proceeding; do not discard messages
-to make the queue empty. Only then stop consumers and apply the migration with
-writes paused. New code accepts only Job wake messages, so this verified drain
-is required before switching versions.
+Resolve failures with the old Worker or preserve their complete work intent
+before proceeding; do not discard messages to make the queue empty. New code
+accepts only Job wake messages, so database preservation alone does not establish
+preservation of legacy queue work. This is a data-preservation check, not a
+requirement to hold household writers.
 
 The migration creates Jobs before removing old scheduling fields. It carries
 pending AI results forward for application without another provider call,
@@ -122,11 +121,11 @@ it alongside Actions or another operator.
 
 ## Financial evidence cutover
 
-`0005_thin_blink` follows the unified-Jobs migration and shares its writer hold
-and queue-drain prerequisites above. Deploy the matching Worker and updated
+`0005_thin_blink` follows the unified-Jobs migration and shares its data and
+legacy-queue preservation requirements above. Deploy the matching Worker and updated
 clients together: financial CSV upload operations are removed. Agents parse
 exports with the `financial-evidence-import` skill and submit normalized rows.
-Keep automatic deployment held until this coordinated cutover is ready.
+Use the authorized non-graceful cutover; no writer hold is required.
 
 Rehearse both migrations on an isolated production copy. Compare complete
 preexisting FinancialTransaction, allocation, Expense, attribution, and external
@@ -156,7 +155,9 @@ After deployment, verify a normalized intake and exact replay, a fresh source
 revision, paused automatic spending, and visible correction review. Confirm
 pending or unknown evidence stays honestly labeled. Withdrawals require a
 completed, all-visibility account window plus persisted source recheck; a limited
-Monarch response cannot authorize them. Resume writers only after these checks.
+Monarch response cannot authorize them. Check ordinary household writes after
+deployment; a temporary failure during the switch does not justify skipping
+these checks.
 
 ## Baseline consolidation
 
