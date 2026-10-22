@@ -1,0 +1,23 @@
+.github/workflows/ci.yaml
+  s_eeef2ac4fa7615::t_ae466c14aa4e7b 439,447
+apps/web/tooling/ci-report/publish.ts
+  s_eeef2ac4fa7615::t_716327ce44cb43 8-11
+docs/ci.md
+  s_eeef2ac4fa7615::t_90d5de03909e6d 423-426
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e61eaf1c2da826bade32d811778343ef36e91b53",
+  "prompts": {},
+  "sessions": {
+    "s_eeef2ac4fa7615": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96cf421e-31d0-4e4a-9fa3-bcaf218e9b61",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
