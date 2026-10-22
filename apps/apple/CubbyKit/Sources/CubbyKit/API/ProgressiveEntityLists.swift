@@ -5,17 +5,14 @@ extension CubbyClient {
     public func progressiveList(
         _ descriptor: EntityDescriptor,
         page: Int = 1, pageSize: Int = 50, sort: String? = nil,
-        filters: EntityFilterState = EntityFilterState(), groupBy: String? = nil,
-        groupLevel: Int? = nil
+        filters: EntityFilterState = EntityFilterState(), groupBy: [ListGroupDimension] = []
     ) async throws -> ListPage<EntityRow> {
         guard descriptor.key.nativeReadKind == .kernel else {
             return try await list(
-                descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy,
-                groupLevel: groupLevel)
+                descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy)
         }
         let input = try descriptor.listInput(
-            page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy,
-            groupLevel: groupLevel)
+            page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy)
         let response = try JSONValue(encoding: try await entityListBase(try input.decoded()))
         guard let wireMeta = response["meta"] else {
             throw EntityOperationError.unsupported(descriptor.key, .list)

@@ -81,8 +81,7 @@ export default defineEntity(
             view: "shelf",
             // Apparel is a taxonomy root, so its clothing types (Tops,
             // Outerwear) are the second level.
-            groupBy: "category",
-            groupLevel: 2,
+            groupBy: [{ key: "category", level: 2 }],
             pin: { surface: "home", order: 0 },
           },
           {

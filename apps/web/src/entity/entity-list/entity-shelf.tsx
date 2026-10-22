@@ -101,6 +101,7 @@ export function EntityShelf<TRow extends { id: string }>({
       infiniteScroll={infiniteScroll}
       compact={compact}
       grouping={groupConfig}
+      getItemId={(record) => record.id}
       onRetry={onRetry}
       emptyState={emptyState ?? <EntityEmptyState entity={entity} />}
       renderCard={(record) => {

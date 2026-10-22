@@ -52,6 +52,9 @@ const decisionScope = (row: DecisionCatalogRow) =>
 
 const ENTITY_CHOICE: GroupConfig["choice"] = {
   key: "entity",
+  multiple: false,
+  dateKind: null,
+  buckets: [],
   label: "Entity",
   noValueLabel: "Feature",
   reason: null,
@@ -583,14 +586,27 @@ export function DecisionsCatalog({
       const label = decisionScope(row);
       const last = groups.at(-1);
       if (last?.label === label) last.count += 1;
-      else groups.push({ key: row.entity ?? "feature", label, count: 1 });
+      else
+        groups.push({
+          key: JSON.stringify([row.entity ?? "feature"]),
+          path: [row.entity ?? "feature"],
+          label,
+          count: 1,
+          parentCount: rows.length,
+          fraction: null,
+          overlapping: false,
+        });
     }
     return {
       choice: ENTITY_CHOICE,
       groups,
+      memberships: rows.map((row) => ({
+        id: row.key,
+        path: [row.entity ?? "feature"],
+      })),
       header: (group) => {
         const entity = rows.find(
-          (row) => (row.entity ?? "feature") === group.key,
+          (row) => (row.entity ?? "feature") === group.path[0],
         )?.entity;
         return entity
           ? {

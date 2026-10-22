@@ -8,6 +8,7 @@ public struct EntityListSection: Identifiable, Sendable, Hashable {
 
     /// The section's value: a related record's public id, an enum value, or `noValueKey`.
     public let id: String
+    public let path: [String]
     public let label: String
     /// The section's rows in the whole filtered set, loaded or not.
     public let count: Int
@@ -16,32 +17,45 @@ public struct EntityListSection: Identifiable, Sendable, Hashable {
     public let subtree: Bool
     public let rows: [EntityRow]
 
-    public init(id: String, label: String, count: Int, subtree: Bool = false, rows: [EntityRow]) {
+    public init(
+        id: String, label: String, count: Int, subtree: Bool = false, path: [String]? = nil, rows: [EntityRow]
+    ) {
         self.id = id
+        self.path = path ?? [id]
         self.label = label
         self.count = count
         self.subtree = subtree
         self.rows = rows
     }
 
-    /// The loaded rows split into the server's sections. The page and summary queries share one
-    /// total order, so loaded rows are a prefix of the sections: each section takes its next
-    /// `count` rows. A section with no loaded row yet is omitted.
+    /// Leaf paths are explicit; roots remain unique while an overlapping row
+    /// appears once in each section that contains its membership.
     public static func sections(
-        rows: [EntityRow], groups: [(key: String, label: String, count: Int, subtree: Bool)]
+        rows: [EntityRow], groups: [(key: String, path: [String], label: String, count: Int, subtree: Bool)],
+        memberships: [(id: String, path: [String])]
     ) -> [EntityListSection] {
-        var sections: [EntityListSection] = []
-        var remaining = rows[...]
-        for group in groups where !remaining.isEmpty {
-            let taken = remaining.prefix(group.count)
-            remaining = remaining.dropFirst(taken.count)
-            sections.append(
-                .init(
-                    id: group.key, label: group.label, count: group.count, subtree: group.subtree,
-                    rows: Array(taken)))
+        let byID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return groups.compactMap { group in
+            guard
+                !groups.contains(where: {
+                    $0.path.count > group.path.count && $0.path.starts(with: group.path)
+                })
+            else { return nil }
+            var seen = Set<String>()
+            let loaded = memberships.filter { $0.path == group.path }.compactMap { membership -> EntityRow? in
+                guard seen.insert(membership.id).inserted else { return nil }
+                return byID[membership.id]
+            }
+            guard !loaded.isEmpty else { return nil }
+            let labels = (1...group.path.count).compactMap { length in
+                groups.first(where: { $0.path == Array(group.path.prefix(length)) })?.label
+            }
+            return .init(
+                id: group.key, label: labels.joined(separator: " / "), count: group.count,
+                subtree: group.subtree, path: group.path, rows: loaded)
         }
-        return sections
     }
+
 }
 
 extension EntityDescriptor {
@@ -63,13 +77,13 @@ extension EntityDescriptor {
             case .param(let name) = filter.wire
         else { return nil }
         var next = state
-        if section.id == EntityListSection.noValueKey {
+        if section.path.last == EntityListSection.noValueKey {
             guard binding.noValue, let presence = filter.presenceParam else { return nil }
             next.remove(name)
             if let subtree = filter.subtreeParam { next.remove(subtree) }
             next.set(["none"], for: presence)
         } else {
-            next.set([section.id], for: name)
+            next.set([section.path.last ?? section.id], for: name)
             if let presence = filter.presenceParam { next.remove(presence) }
             if let subtree = filter.subtreeParam {
                 next.set([section.subtree ? "true" : "false"], for: subtree)
@@ -92,7 +106,7 @@ extension EntityDescriptor {
             case .param(let name) = filter.wire
         else { return nil }
         var next = state
-        if section.id == EntityListSection.noValueKey {
+        if section.path.last == EntityListSection.noValueKey {
             guard binding.noValue, let presence = filter.presenceParam else { return nil }
             if state[name]?.isEmpty == false {
                 next.remove(presence)
@@ -103,7 +117,9 @@ extension EntityDescriptor {
         }
         guard let exclude = filter.excludeParam, filter.excludeReason == nil else { return nil }
         let excluded = state[exclude] ?? []
-        if !excluded.contains(section.id) { next.set(excluded + [section.id], for: exclude) }
+        if !excluded.contains(section.path.last ?? section.id) {
+            next.set(excluded + [section.path.last ?? section.id], for: exclude)
+        }
         if section.subtree, let subtree = filter.subtreeParam { next.remove(subtree) }
         return next
     }

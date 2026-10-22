@@ -301,11 +301,13 @@ export function ShelfGrid<T>({
   infiniteScroll,
   emptyState,
   compact = false,
+  getItemId,
   onRetry,
 }: {
   items: T[];
   /** Must return a keyed element (e.g. a ShelfCard with `key`). */
   renderCard: (item: T) => ReactNode;
+  getItemId?: (item: T) => string;
   grouping?: GroupConfig;
   isLoading?: boolean;
   error?: unknown;
@@ -343,7 +345,13 @@ export function ShelfGrid<T>({
         inert={infiniteScroll?.isTransitioning ? true : undefined}
       >
         {grouping
-          ? groupSections(items, grouping).map((section) => (
+          ? groupSections(items, grouping, (item) => {
+              if (!getItemId)
+                throw new Error(
+                  "Grouped shelves require canonical record identity",
+                );
+              return getItemId(item);
+            }).map((section) => (
               <section
                 key={section.key}
                 aria-label={section.label}
@@ -352,8 +360,13 @@ export function ShelfGrid<T>({
                 <SectionHeader
                   title={section.label}
                   count={section.count}
+                  depth={section.depth}
+                  collapsed={section.collapsed}
+                  onToggle={section.onToggle}
                   onFilter={section.onFilter}
                   onHide={section.onHide}
+                  aside={section.aside}
+                  actions={section.actions}
                   className="sticky top-[var(--app-chrome-top)] z-10 mb-3"
                 />
                 <div className={shelfGridClass(compact)}>

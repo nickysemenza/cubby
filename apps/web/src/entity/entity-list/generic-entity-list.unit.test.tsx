@@ -176,14 +176,21 @@ describe("listPage", () => {
       within(grouping)
         .getAllByRole("menuitem")
         .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["Group by None", "Group by Cookbook", "Group by Tags"]);
+    ).toEqual(
+      expect.arrayContaining([
+        "Group by None",
+        "Group by Cookbook",
+        "Group by Tags",
+      ]),
+    );
     const tags = within(grouping).getByRole("menuitem", {
       name: "Group by Tags",
     });
-    expect(tags).toHaveAttribute("aria-disabled", "true");
-    expect(tags).toHaveTextContent(
-      "A record can have several Tags, so it would appear in more than one group.",
-    );
+    expect(tags).not.toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(tags);
+    expect(
+      await screen.findByRole("button", { name: /Grouped by Tags/ }),
+    ).toBeVisible();
   });
 
   it("offers every declared view and marks the `?view=` one selected", async () => {

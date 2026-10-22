@@ -9,13 +9,13 @@ import {
 
 import { defaultSortDirectionFor, defaultSortFor } from "./entities";
 import { listNested } from "./entity-list/list-nesting";
+import type { ListSearch } from "./entity-list/list-slot-types";
 import { resolveListView } from "./entity-list/resolve-list-view";
 import { getEntityFilters } from "./filter-manifest";
 import {
   decodeFilters,
   encodeFilters,
   filterGetterFromColumnFilters,
-  type FilterPatch,
   resolveOpeningFilters,
 } from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
@@ -24,7 +24,7 @@ const ROOTS_SCOPE = { scope: "roots" } as const;
 
 type EntityListLoaderArgs = {
   context: { queryClient: QueryClient };
-  deps: FilterPatch;
+  deps: ListSearch;
   abortController: AbortController;
 };
 
@@ -54,7 +54,7 @@ export function entityListLoader<E extends ListEntity>(entity: E) {
 export async function ensureEntityListSsr<E extends ListEntity>(options: {
   queryClient: QueryClient;
   entity: E;
-  search: FilterPatch;
+  search: ListSearch;
   active?: boolean;
   defaultSort?: { orderBy: string; direction: "asc" | "desc" };
   nested?: boolean;
@@ -67,7 +67,16 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
     compileEntityListInput(
       options.entity,
       searchWithInitialFilter(options.entity, options.search),
-      { defaultSort, nesting: options.nested ? ROOTS_SCOPE : undefined },
+      {
+        defaultSort,
+        nesting: options.nested ? ROOTS_SCOPE : undefined,
+        // Timeline owns its arrangement; retained URL dimensions must not
+        // preload a grouped query the mounted renderer never consumes.
+        groupBy:
+          resolveListView(options.entity, options.search).view === "timeline"
+            ? []
+            : undefined,
+      },
     ),
   );
   const cancelUnobserved = () => {
@@ -110,8 +119,8 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
  */
 export function searchWithInitialFilter(
   entity: Entity,
-  search: FilterPatch,
-): FilterPatch {
+  search: ListSearch,
+): ListSearch {
   // The summary carries the same initial filter as the inspector metadata,
   // which is ~350 KB the route loaders would otherwise load on every request.
   const initial = entitySummary[entity].list.initialFilter;

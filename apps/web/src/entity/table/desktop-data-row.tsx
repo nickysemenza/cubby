@@ -201,6 +201,7 @@ function DesktopDataCell<TItem extends RowData>({
     <TableCell
       key={cell.id}
       data-column-id={cell.column.id}
+      data-entity-column-role={cell.column.columnDef.meta?.entityColumnRole}
       data-cell-col={selectable ? cell.column.id : undefined}
       data-cell-selected={selected ? "" : undefined}
       data-cell-anchor={anchor ? "" : undefined}
@@ -334,6 +335,17 @@ function DesktopDataRowInner<TItem extends RowData>({
         // disclosure) through the row that opened it; they are not row clicks.
         if (!(e.target instanceof Node) || !e.currentTarget.contains(e.target))
           return;
+        if (
+          row
+            .getVisibleCells()
+            .some(
+              (cell) =>
+                cell.column.columnDef.meta?.entityColumnRole === "identity",
+            ) &&
+          (!(e.target instanceof Element) ||
+            !e.target.closest('td[data-entity-column-role="identity"]'))
+        )
+          return;
 
         // In cell-selection mode a click on an editable cell selects it (via the
         // container's mousedown delegation); don't also navigate/open the row.
@@ -362,6 +374,27 @@ function DesktopDataRowInner<TItem extends RowData>({
         isFocused && "ring-2 ring-primary/30 ring-inset",
       )}
       onClick={handleRowClick}
+      onClickCapture={(event) => {
+        if (
+          !onRowClick ||
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        )
+          return;
+        if (!(event.target instanceof Element)) return;
+        const link = event.target.closest("[data-record-identity-link] a");
+        if (!link || !event.currentTarget.contains(link)) return;
+        event.preventDefault();
+        // A drag-to-copy gesture on the name must not open another surface.
+        if (event.detail > 0 && window.getSelection()?.isCollapsed === false)
+          return;
+        event.stopPropagation();
+        onRowClick(row);
+      }}
       onPointerEnter={(event: PointerEvent<HTMLTableRowElement>) => {
         if (event.pointerType === "touch") return;
         activity.activate();

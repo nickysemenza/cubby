@@ -1,4 +1,4 @@
-import type { ListNesting } from "@cubby/schemas/pagination";
+import type { ListGroupBy, ListNesting } from "@cubby/schemas/pagination";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { z } from "zod";
 
@@ -10,11 +10,12 @@ import {
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { defaultPagination } from "~/ui/data-table/table-utils";
 
+import { listGroupBy } from "./entity-list/list-grouping";
+import type { ListSearch } from "./entity-list/list-slot-types";
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
-  type FilterPatch,
   paramToSort,
 } from "./filters";
 import {
@@ -38,7 +39,7 @@ export type EntityListParams<E extends ListEntity> =
 interface CompileEntityListOptions {
   pageSize?: number;
   defaultSort?: { orderBy: string; direction: "asc" | "desc" };
-  groupBy?: string;
+  groupBy?: ListGroupBy[];
   /** A nested table's root scope (`listNested`). */
   nesting?: ListNesting;
 }
@@ -50,7 +51,7 @@ interface CompileEntityListOptions {
  */
 export function compileEntityListInput<E extends ListEntity>(
   entity: E,
-  validatedSearch: FilterPatch,
+  validatedSearch: ListSearch,
   options: CompileEntityListOptions = {},
 ): EntityListParams<E> {
   const parsedSort = paramToSort(validatedSearch.sort)?.map((term) => ({
@@ -79,7 +80,8 @@ export function compileEntityListInput<E extends ListEntity>(
       options.defaultSort ?? { orderBy: "createdAt", direction: "desc" },
     ];
   }
-  if (options.groupBy) input.groupBy = options.groupBy;
+  const dimensions = options.groupBy ?? listGroupBy(validatedSearch);
+  if (dimensions?.length) input.groupBy = dimensions;
   if (options.nesting) input.nesting = options.nesting;
   return entityListParamsFromParsed(
     entity,

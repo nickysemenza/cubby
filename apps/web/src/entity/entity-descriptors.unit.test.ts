@@ -82,7 +82,7 @@ const KEYS = {
         filters: {},
         sort: [{ orderBy: "transactionDate", direction: "desc" }],
         pagination: { pageIndex: 0, pageSize: 50 },
-        groupBy: "vendor",
+        groupBy: [{ key: "vendor" }],
       },
     },
   ],
@@ -266,7 +266,7 @@ describe("entity list query keys", () => {
         filters: {},
         sort: [{ orderBy: "transactionDate", direction: "desc" }],
         pagination: { pageIndex: 0, pageSize: 50 },
-        groupBy: "vendor",
+        groupBy: [{ key: "vendor" }],
       }).queryKey,
     ).toEqual(KEYS.listGroupBy);
   });

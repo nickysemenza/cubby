@@ -36,6 +36,7 @@ import { Checkbox } from "~/ui/primitives/checkbox";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { DebugDialog } from "../../ui/data-table/debug-dialog";
+import { groupRecordIdentity } from "../../ui/data-table/group-record-identity";
 import { stickyHeaderIndex } from "../../ui/data-table/hooks/use-table-virtualizer";
 import { SectionHeader } from "../../ui/data-table/section-header";
 import type {
@@ -58,6 +59,8 @@ import {
 // A tree's child rows follow their parent without taking a section place.
 const isNestedModel = (model: { row: { depth: number } }) =>
   model.row.depth > 0;
+const modelIdentity = (model: { row: { id: string; original: unknown } }) =>
+  groupRecordIdentity(model.row);
 
 // Absolutely-positioned virtualizer row wrapper — virtualizer mechanics
 // (measureElement ref + data-index + translateY), shared by all 3 render sites.
@@ -758,7 +761,12 @@ export function MobileCardView<TItem extends RowData>({
   // Group the live mobile models themselves. `useTable` keeps its table
   // instance stable while replacing the row model as infinite pages arrive,
   // so deriving from `table` would leave grouped mobile lists on stale data.
-  const groupedItems = useGroupedList(mobileRows, groupConfig, isNestedModel);
+  const groupedItems = useGroupedList(
+    mobileRows,
+    groupConfig,
+    modelIdentity,
+    isNestedModel,
+  );
   const headerIndexes = useMemo(
     () =>
       groupedItems?.flatMap((item, index) =>
@@ -787,7 +795,7 @@ export function MobileCardView<TItem extends RowData>({
       if (groupedItems) {
         const item = groupedItems[index];
         if (!item) return 56;
-        if (item.kind === "header") return 36;
+        if (item.kind === "header") return 44;
         return estimateMobileRowHeight(item.item) + (renderRowFooter ? 52 : 0);
       }
       return (
@@ -807,7 +815,7 @@ export function MobileCardView<TItem extends RowData>({
         if (!item) return `missing:${index}`;
         return item.kind === "header"
           ? `group:${item.section.key}`
-          : `row:${item.item.row.id}`;
+          : `row:${JSON.stringify([item.groupKey, item.item.row.id])}`;
       }
       return `row:${mobileRows[index]?.row.id ?? index}`;
     },
@@ -867,15 +875,23 @@ export function MobileCardView<TItem extends RowData>({
             <SectionHeader
               title={gItem.section.label}
               count={gItem.section.count}
+              depth={gItem.section.depth}
+              collapsed={gItem.section.collapsed}
+              onToggle={gItem.section.onToggle}
               onFilter={gItem.section.onFilter}
               onHide={gItem.section.onHide}
               actions={gItem.section.actions}
+              aside={gItem.section.aside}
             />
           </VirtualRow>
         );
       }
 
-      return renderRowItem(vi, gItem.item);
+      return renderRowItem(
+        vi,
+        gItem.item,
+        JSON.stringify([gItem.groupKey, gItem.item.row.id]),
+      );
     }
 
     const model = mobileRows[vi.index];
@@ -886,13 +902,14 @@ export function MobileCardView<TItem extends RowData>({
   const renderRowItem = (
     vi: (typeof virtualItems)[number],
     model: (typeof mobileRows)[number],
+    occurrenceKey = model.row.id,
   ) => {
     const row = model.row;
     const treeStatus = serverTreeStatusOf(row.original);
     if (treeStatus)
       return (
         <VirtualRow
-          key={row.id}
+          key={occurrenceKey}
           vi={vi}
           virtualizer={virtualizer}
           role="presentation"
@@ -920,7 +937,7 @@ export function MobileCardView<TItem extends RowData>({
     );
 
     return (
-      <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
+      <VirtualRow key={occurrenceKey} vi={vi} virtualizer={virtualizer}>
         {card}
       </VirtualRow>
     );

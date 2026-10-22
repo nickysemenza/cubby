@@ -170,6 +170,9 @@ type CompiledGroupChoice = Readonly<{
   }> | null;
   levels: number;
   levelReason: string | null;
+  multiple: boolean;
+  dateKind: "date" | "timestamp" | null;
+  buckets: readonly ("day" | "week" | "month" | "quarter" | "year")[];
 }>;
 
 /**
@@ -236,6 +239,7 @@ export type CompiledEntityListFields = Readonly<{
   subtree: Readonly<Record<string, string>>;
   /** `model.grouping`, in menu order. */
   grouping: readonly CompiledGroupChoice[];
+  metrics: readonly { key: string; label: string; format: string | null }[];
   /** `presentation.list.scope`: columns pinned to NULL on every list read. */
   scope: readonly string[];
   /** `presentation.list.scopes`, by request key. */
@@ -583,7 +587,10 @@ const compileVia = (
     terminal: resolved,
     many: many !== null,
     sort: reason("sort"),
-    group: reason("group"),
+    group:
+      resolved.kind === "record" && resolved.titleColumn === null
+        ? `${current.inspector.singular} has no stored title to group by.`
+        : null,
   };
 };
 
@@ -1109,9 +1116,8 @@ const enumOptions = (
 /**
  * Compiles one `model.grouping` key. A model field groups by its own column,
  * or by its referenced record; a `model.derived` key groups through its
- * `via` path or the repository's value. A field that holds several values
- * per row, a to-many path, or a filter-only predicate stays a choice with
- * the reason derived from the declaration.
+ * declared SQL path or repository value. Stored arrays and related paths
+ * expand memberships; unsupported row sets and predicates retain their reason.
  */
 const compileGroupChoice = (
   entity: CompiledEntity,
@@ -1202,7 +1208,36 @@ const compileGroupChoice = (
     return {
       key,
       label,
-      noValueLabel: `No ${label.toLowerCase()}`,
+      noValueLabel: "Unassigned",
+      multiple:
+        field?.kind === "text-array" ||
+        field?.reference?.multiple === true ||
+        (bound?.shape === "via" &&
+          (bound.many ||
+            (bound.terminal.kind === "field" &&
+              bound.terminal.fieldKind === "text-array"))),
+      dateKind:
+        field?.kind === "timestamp" ||
+        (bound?.shape === "via" &&
+          bound.terminal.kind === "field" &&
+          bound.terminal.fieldKind === "timestamp")
+          ? "timestamp"
+          : field?.kind === "date" ||
+              (bound?.shape === "value" && bound.type === "date") ||
+              (bound?.shape === "via" &&
+                bound.terminal.kind === "field" &&
+                bound.terminal.fieldKind === "date")
+            ? "date"
+            : null,
+      buckets:
+        field?.kind === "date" ||
+        field?.kind === "timestamp" ||
+        (bound?.shape === "value" && bound.type === "date") ||
+        (bound?.shape === "via" &&
+          bound.terminal.kind === "field" &&
+          ["date", "timestamp"].includes(bound.terminal.fieldKind))
+          ? ["day", "week", "month", "quarter", "year"]
+          : [],
       reason,
       value,
       filter:
@@ -1253,11 +1288,6 @@ const compileGroupChoice = (
       null,
     );
   };
-  if (field?.kind === "text-array" || field?.reference?.multiple)
-    return choice(
-      null,
-      `A record can have several ${field.label}, so it would appear in more than one group.`,
-    );
   if (bound?.shape === "via") return viaValue(bound);
   // A predicate, or a value with no single section key (a date span).
   if (bound !== undefined && bound.group !== null)
@@ -1277,8 +1307,9 @@ const compileGroupChoice = (
         );
       });
       if (relation === undefined)
-        throw new EntityDeclarationError(
-          `${where}: no to-one relation follows ${stored.column}.`,
+        return choice(
+          null,
+          `${label} has no declared relation that SQL can expand.`,
         );
       const via = compileVia(entity, relation.key, byKey, where);
       if (via.shape !== "via")
@@ -1287,7 +1318,11 @@ const compileGroupChoice = (
         );
       return viaValue(via);
     }
-    if (field.kind === "enum" || field.kind === "text")
+    if (
+      ["enum", "text", "text-array", "boolean", "date", "timestamp"].includes(
+        field.kind,
+      )
+    )
       return choice(
         { kind: "column", column: stored.column, options: enumOptions(field) },
         null,
@@ -1295,7 +1330,7 @@ const compileGroupChoice = (
   }
   if (
     bound?.shape === "value" &&
-    (bound.type === "enum" || bound.type === "text")
+    ["enum", "text", "boolean", "date"].includes(bound.type)
   ) {
     // A section reads the label its value filter shows for the same value.
     const labels = descriptors.find(
@@ -1320,32 +1355,35 @@ const compileGroupChoice = (
   );
 };
 
-/**
- * Every saved view's `groupBy` names a choice the list can group by, and its
- * `groupLevel` a level that choice offers.
- */
+/** Supplied views use the same dimensions and applicability as list requests. */
 const validateSavedViewGrouping = (
   entity: CompiledEntity,
   grouping: readonly CompiledGroupChoice[],
   context: string,
 ) => {
   for (const view of entity.inspector.list.savedViews) {
-    if (view.groupBy === null) {
-      if (view.groupLevel !== null)
+    for (const dimension of view.groupBy) {
+      const choice = grouping.find(({ key }) => key === dimension.key);
+      const where = `${context}.presentation.list.savedViews[${view.id}].groupBy ${dimension.key}`;
+      if (choice === undefined || choice.reason !== null)
         throw new EntityDeclarationError(
-          `${context}.presentation.list.savedViews[${view.id}].groupLevel needs a groupBy.`,
+          `${where} cannot group: ${choice?.reason ?? "unknown field"}.`,
         );
-      continue;
+      if (
+        dimension.level !== undefined &&
+        (choice.levelReason !== null || dimension.level > choice.levels)
+      )
+        throw new EntityDeclarationError(
+          `${where}: ${choice.levelReason ?? `offers levels 1–${choice.levels}`}.`,
+        );
+      if (
+        dimension.bucket !== undefined &&
+        !choice.buckets.includes(dimension.bucket)
+      )
+        throw new EntityDeclarationError(
+          `${where} does not support date buckets.`,
+        );
     }
-    const choice = grouping.find(({ key }) => key === view.groupBy);
-    if (choice === undefined || choice.reason !== null)
-      throw new EntityDeclarationError(
-        `${context}.presentation.list.savedViews[${view.id}].groupBy ${view.groupBy} is not a model.grouping choice this list can group by${choice?.reason ? `: ${choice.reason}` : ""}.`,
-      );
-    if (view.groupLevel !== null && view.groupLevel > choice.levels)
-      throw new EntityDeclarationError(
-        `${context}.presentation.list.savedViews[${view.id}].groupLevel ${view.groupLevel}: ${choice.levelReason ?? `${choice.label} offers levels 1–${choice.levels}`}.`,
-      );
   }
 };
 
@@ -1523,16 +1561,83 @@ export const compileListFields = (
       throw new EntityDeclarationError(
         `${context}.model.grouping repeats a field.`,
       );
-    const grouping = entity.fieldModel.grouping.map((key) =>
-      compileGroupChoice(
-        entity,
-        key,
-        derived,
-        filterDescriptors,
-        byKey,
-        context,
-      ),
-    );
+    const inferred = entity.fieldModel.fields
+      .filter(
+        (field) =>
+          field.reference !== null ||
+          ["enum", "boolean", "date", "timestamp"].includes(field.kind),
+      )
+      .filter((field) =>
+        entity.fieldModel.storage.some(({ key }) => key === field.key),
+      )
+      .map(({ key }) => key);
+    const inferredDerived = Object.entries(derived)
+      .filter(([, field]) =>
+        field.shape === "value"
+          ? ["enum", "boolean", "date"].includes(field.type)
+          : field.shape === "via" &&
+            (field.terminal.kind === "record" ||
+              ["enum", "boolean", "date", "timestamp"].includes(
+                field.terminal.fieldKind,
+              )),
+      )
+      .map(([key]) => key);
+    const grouping = [
+      ...new Set([
+        ...entity.fieldModel.grouping,
+        ...inferred,
+        ...inferredDerived,
+      ]),
+    ]
+      .filter((key) => !entity.fieldModel.groupingOmit?.includes(key))
+      .map((key) =>
+        compileGroupChoice(
+          entity,
+          key,
+          derived,
+          filterDescriptors,
+          byKey,
+          context,
+        ),
+      );
+    if (
+      new Set(entity.inspector.list.metrics).size !==
+      entity.inspector.list.metrics.length
+    )
+      throw new EntityDeclarationError(
+        `${context}.presentation.list.metrics repeats a field.`,
+      );
+    const metrics = entity.inspector.list.metrics.map((key) => {
+      const field = entity.fieldModel.fields.find((field) => field.key === key);
+      const value = derived[key];
+      const stored = entity.fieldModel.storage.find(
+        (field) => field.key === key,
+      );
+      if (
+        !(value?.shape === "value" && value.type === "number") &&
+        !(stored && field?.kind === "number")
+      )
+        throw new EntityDeclarationError(
+          `${context}.presentation.list.metrics ${key} needs a scalar numeric SQL field.`,
+        );
+      const format = field?.display.format ?? null;
+      if (format === "amount")
+        throw new EntityDeclarationError(
+          `${context}.presentation.list.metrics ${key} cannot sum quantities with record-specific units.`,
+        );
+      if (
+        (format === "currency" || format === "signedCurrency") &&
+        !(entity.key === "expense" && stored?.column === "cost") &&
+        !(
+          field?.provenance?.kind === "derived" &&
+          field.provenance.sources.some((source) => source.entity === "expense")
+        )
+      )
+        throw new EntityDeclarationError(
+          `${context}.presentation.list.metrics ${key} must use Expense.cost or an Expense-derived SQL value for money.`,
+        );
+      return { key, label: field?.label ?? humanize(key), format };
+    });
     validateSavedViewGrouping(entity, grouping, context);
     const listFields: CompiledEntityListFields = {
       derived,
@@ -1545,6 +1650,7 @@ export const compileListFields = (
           : { ...hierarchy, column: parentColumn },
       subtree,
       grouping,
+      metrics,
       ...compileListScopes(entity, byKey, rows, urlKeys),
     };
     return {

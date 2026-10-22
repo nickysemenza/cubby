@@ -324,7 +324,7 @@ describe("EntityRelationTable", () => {
     expect(input?.filters).toMatchObject({ projectId: "PRJ-TEST" });
     // Project → Tasks declares status grouping and newest-due-first order.
     expect(input?.sort).toEqual([{ orderBy: "dueDate", direction: "desc" }]);
-    expect(input).toMatchObject({ groupBy: "status" });
+    expect(input).toMatchObject({ groupBy: [{ key: "status" }] });
   });
 
   it("hides the column that names the record the section belongs to", () => {

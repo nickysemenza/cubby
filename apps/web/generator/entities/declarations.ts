@@ -372,6 +372,7 @@ export type EntityFieldModel = Readonly<{
   hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;
   /** `model.grouping`: the Group by choices, compiled in `list-fields.ts`. */
   grouping: readonly string[];
+  groupingOmit?: readonly string[];
   intents: EntityEditIntents | null;
 }>;
 /** An operational column the table stores with no model field. */

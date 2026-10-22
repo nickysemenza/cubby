@@ -7,20 +7,25 @@ import Testing
 struct EntityListSectionsTests {
     private let inventory = EntityCatalog[.inventory]
 
-    // The server keeps sections contiguous across pages, so each section takes its next `count`
-    // loaded rows; a section none of whose rows has loaded yet is not shown.
-    @Test func loadedRowsFillTheServerSectionsInOrder() {
+    // Overlapping paths must show the same canonical row in each membership,
+    // even when a page has fewer distinct records than membership slots.
+    @Test func sectionsUseExplicitMembershipPaths() {
+        let alpha = Self.row("Alpha one")
+        let beta = Self.row("Beta one")
         let sections = EntityListSection.sections(
-            rows: ["Alpha one", "Alpha two", "Beta one"].map(Self.row),
+            rows: [alpha, beta],
             groups: [
-                (key: "PCT-ALPHA", label: "Alpha", count: 2, subtree: true),
-                (key: "PCT-BETA", label: "Beta", count: 3, subtree: false),
-                (key: EntityListSection.noValueKey, label: "No category", count: 1, subtree: false),
+                (key: "[\"A\"]", path: ["A"], label: "A", count: 2, subtree: false),
+                (key: "[\"A\",\"x\"]", path: ["A", "x"], label: "X", count: 1, subtree: false),
+                (key: "[\"A\",\"y\"]", path: ["A", "y"], label: "Y", count: 2, subtree: false),
+            ],
+            memberships: [
+                (id: alpha.id, path: ["A", "x"]), (id: alpha.id, path: ["A", "y"]),
+                (id: beta.id, path: ["A", "y"]),
             ])
-        #expect(sections.map(\.id) == ["PCT-ALPHA", "PCT-BETA"])
-        #expect(sections.map { $0.rows.map(\.title) } == [["Alpha one", "Alpha two"], ["Beta one"]])
-        #expect(sections[1].count == 3)
-        #expect(sections.map(\.subtree) == [true, false])
+        #expect(sections.map(\.path) == [["A", "x"], ["A", "y"]])
+        #expect(sections.map { $0.rows.map(\.id) } == [[alpha.id], [alpha.id, beta.id]])
+        #expect(sections.map(\.label) == ["A / X", "A / Y"])
     }
 
     @Test func filteringToASectionIncludesOnlyItsOwnValue() throws {
@@ -99,18 +104,25 @@ struct EntityListSectionsTests {
 
     @Test func listInputCarriesTheGroupByChoice() throws {
         let input = try inventory.listInput(
-            page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: "category")
-        #expect(input["groupBy"] == "category")
+            page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: [.init(key: "category")])
+        #expect(input["groupBy"]?.arrayValue?.first?["key"] == "category")
         #expect(input["groupLevel"] == nil)
         let leveled = try inventory.listInput(
-            page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(), groupBy: "category",
-            groupLevel: 2)
-        #expect(leveled["groupLevel"] == 2)
+            page: 1, pageSize: 20, sort: nil, filters: EntityFilterState(),
+            groupBy: [.init(key: "category", level: 2)])
+        #expect(leveled["groupBy"]?.arrayValue?.first?["level"] == 2)
+
+        let multi = try inventory.listInput(
+            page: 1, pageSize: 20, sort: nil,
+            filters: EntityFilterState(), groupBy: [.init(key: "category", level: 2), .init(key: "location")])
+        #expect(multi["groupBy"]?.arrayValue?.count == 2)
+        #expect(multi["groupBy"]?.arrayValue?.last?["key"] == "location")
 
         // A hidden section reaches the kernel body as the exclude key's value list.
         let hidden = try inventory.listInput(
             page: 1, pageSize: 20, sort: nil,
-            filters: EntityFilterState(["categoryExclude": ["PCT-OUTER", "PCT-SOCKS"]]), groupBy: "category")
+            filters: EntityFilterState(["categoryExclude": ["PCT-OUTER", "PCT-SOCKS"]]),
+            groupBy: [.init(key: "category")])
         #expect(hidden["filters"]?["categoryExclude"] == ["PCT-OUTER", "PCT-SOCKS"])
     }
 
@@ -127,8 +139,8 @@ struct EntityListSectionsTests {
             placement.levelReason
                 == "Placement is a value, not a record with parents, so it has no levels.")
         let wardrobe = try #require(inventory.presentation.savedViews.first { $0.id == "wardrobe" })
-        #expect(wardrobe.groupBy == "category")
-        #expect(wardrobe.groupLevel == 2)
+        #expect(wardrobe.groupBy.map(\.key) == ["category"])
+        #expect(wardrobe.groupBy.first?.level == 2)
     }
 
     private static func row(_ title: String) -> EntityRow {

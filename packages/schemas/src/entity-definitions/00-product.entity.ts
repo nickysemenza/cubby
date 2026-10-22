@@ -610,6 +610,7 @@ export default defineEntity(
             "unitPriceLabel",
           ],
         },
+        metrics: ["expenseTotal"],
         totals: [
           { id: "price", label: "Prices", keys: ["price"], format: "currency" },
           {

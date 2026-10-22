@@ -2,13 +2,16 @@ import type { Entity } from "@cubby/schemas/entity";
 import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import type { ListNesting } from "@cubby/schemas/pagination";
+import type {
+  ListGroupBy,
+  ListGroupSummary,
+  ListNesting,
+} from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
-import { flexRender } from "@tanstack/react-table";
+import { constructRow, flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { browserEntityDefinition, entities } from "~/entity/entities";
@@ -20,11 +23,14 @@ import {
 import {
   buildFiltersFromManifest,
   FILTER_EXACT,
+  FILTER_NONE,
   filterGetterFromColumnFilters,
   hideSectionValues,
   summarizeListState,
 } from "~/entity/filters";
+import { listEntities } from "~/entity/generated/entity-lists.gen";
 import type { ListGroupState } from "~/entity/hooks/progressive-list";
+import { loadSelectionRecords } from "~/entity/hooks/selection-records";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
@@ -34,7 +40,9 @@ import type {
   TableStateReturn,
   useTableState,
 } from "~/entity/table/use-table-state";
+import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/number-format";
+import { CurrencyValue } from "~/ui/common/currency-value";
 import {
   bulkActionPreview,
   type BulkActionsConfig,
@@ -48,6 +56,7 @@ import {
 } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 import { useDocumentTitle } from "~/ui/hooks/use-document-title";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
@@ -213,12 +222,7 @@ export interface UseEntityListOptions<
    * The active `model.grouping` choice. A key with a reason, or none the
    * entity declares, leaves the list flat.
    */
-  groupBy?: string;
-  /**
-   * The hierarchy level (1 = top) `groupBy` groups at; a level the choice
-   * does not offer groups by the exact value.
-   */
-  groupLevel?: number;
+  groupBy?: ListGroupBy[];
   /**
    * Lets column header menus switch `groupBy` (null ungroups). Omit to keep
    * grouping fixed by the caller.
@@ -395,7 +399,6 @@ export function useEntityList<
   namePrefix,
   hiddenFilterColumns,
   groupBy,
-  groupLevel,
   onGroupByChange,
   tree,
   serverTree = false,
@@ -409,7 +412,7 @@ export function useEntityList<
   const routeSearch = routeSearchSchema.parse(useSearch({ strict: false }));
   const groupChoice = groupBy
     ? generatedEntityListFields[entity].grouping.find(
-        (choice) => choice.key === groupBy && choice.reason === null,
+        (choice) => choice.key === groupBy[0]?.key && choice.reason === null,
       )
     : undefined;
   const tableGrouping = useMemo(
@@ -431,10 +434,6 @@ export function useEntityList<
       },
     [entity, groupChoice?.key, onGroupByChange],
   );
-  const level =
-    groupChoice && groupLevel && groupLevel <= groupChoice.levels
-      ? groupLevel
-      : undefined;
   const inspection = useEntityPreview(
     fixedPreviewEntity(entity, previewOptions),
     previewOptions,
@@ -554,8 +553,7 @@ export function useEntityList<
     queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
-    groupBy: groupChoice?.key,
-    groupLevel: level,
+    groupBy,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
     visibleFields: requestedReadFields,
   });
@@ -571,54 +569,166 @@ export function useEntityList<
     refreshControls,
   } = infiniteResult;
   const { setColumnFilters } = tableState;
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const groupConfig = useMemo((): GroupConfig | undefined => {
     if (!groupChoice || !groups) return undefined;
-    const filter = groupChoice.filter;
-    const spec = filter
-      ? getEntityFilters(entity).find(
-          (candidate) => candidate.columnId === filter.columnId,
-        )
-      : undefined;
+    const fields = getEntityFilters(entity);
+    const sectionFilter = (
+      group: ListGroupSummary,
+      depth = group.path.length - 1,
+    ) => {
+      const dimension = groupBy?.[depth];
+      const choice = generatedEntityListFields[entity].grouping.find(
+        (entry) => entry.key === dimension?.key,
+      );
+      const filter = dimension?.bucket ? null : choice?.filter;
+      const spec = filter
+        ? fields.find((entry) => entry.columnId === filter.columnId)
+        : undefined;
+      const key = group.path[depth];
+      return filter &&
+        spec &&
+        key !== undefined &&
+        (key !== FILTER_NONE || filter.noValue)
+        ? { filter, spec, key }
+        : undefined;
+    };
+    const canFilter = (group: ListGroupSummary) =>
+      group.path.every((_, depth) => sectionFilter(group, depth) !== undefined);
     return {
       choice: groupChoice,
       groups,
-      // "Filter to this" keeps one section: "Include sub-…" stays on only for
-      // a level section that holds its key's descendants.
-      onFilter: filter
-        ? ({ key, subtree }) =>
-            setColumnFilters((previous) => [
-              ...previous.filter(({ id }) => id !== filter.columnId),
+      memberships: infiniteResult.memberships ?? [],
+      collapsed: new Set(
+        groups
+          .filter((group) =>
+            collapsedGroups.has(JSON.stringify([entity, groupBy, group.key])),
+          )
+          .map((group) => group.key),
+      ),
+      onToggle: (key) =>
+        setCollapsedGroups((previous) => {
+          const identity = JSON.stringify([entity, groupBy, key]);
+          const next = new Set(previous);
+          if (next.has(identity)) next.delete(identity);
+          else next.add(identity);
+          return next;
+        }),
+      canFilter,
+      onFilter: (group) => {
+        if (!canFilter(group)) return;
+        setColumnFilters((previous) => {
+          let next = previous;
+          group.path.forEach((_, depth) => {
+            const field = sectionFilter(group, depth);
+            if (!field) return;
+            const summary = groups.find(
+              (entry) =>
+                entry.key === JSON.stringify(group.path.slice(0, depth + 1)),
+            );
+            next = [
+              ...next.filter(({ id }) => id !== field.filter.columnId),
               {
-                id: filter.columnId,
-                value: spec?.subtree && !subtree ? [key, FILTER_EXACT] : [key],
+                id: field.filter.columnId,
+                value:
+                  field.spec.subtree && !summary?.subtree
+                    ? [field.key, FILTER_EXACT]
+                    : [field.key],
               },
-            ])
-        : undefined,
-      // "Hide" excludes the section's value and keeps the grouping.
-      hide: spec
-        ? (group) =>
-            hideSectionValues(spec, group, []) === undefined
-              ? undefined
-              : () =>
-                  setColumnFilters((previous) => {
-                    const current = previous.find(
-                      ({ id }) => id === spec.columnId,
-                    )?.value;
-                    const values = hideSectionValues(
-                      spec,
-                      group,
-                      Array.isArray(current) ? current.map(String) : [],
-                    );
-                    return [
-                      ...previous.filter(({ id }) => id !== spec.columnId),
-                      ...(values?.length
-                        ? [{ id: spec.columnId, value: values }]
-                        : []),
-                    ];
-                  })
-        : undefined,
+            ];
+          });
+          return next;
+        });
+      },
+      // Flat Exclude filters cannot hide just one nested path without also
+      // hiding its value under other parents. Keep Hide at the root scope.
+      hide: (group) => {
+        if (group.path.length !== 1) return undefined;
+        const field = sectionFilter(group);
+        if (!field) return undefined;
+        const valueGroup = { ...group, key: field.key };
+        if (hideSectionValues(field.spec, valueGroup, []) === undefined)
+          return undefined;
+        return () =>
+          setColumnFilters((previous) => {
+            const current = previous.find(
+              ({ id }) => id === field.spec.columnId,
+            )?.value;
+            const values = hideSectionValues(
+              field.spec,
+              valueGroup,
+              Array.isArray(current) ? current.map(String) : [],
+            );
+            return [
+              ...previous.filter(({ id }) => id !== field.spec.columnId),
+              ...(values?.length
+                ? [{ id: field.spec.columnId, value: values }]
+                : []),
+            ];
+          });
+      },
+      header: (group) => ({
+        aside: (
+          <>
+            {group.overlapping && (
+              <span
+                className="text-xs text-muted-foreground"
+                title="Records may occur in more than one group. Overall totals count each record once."
+              >
+                Overlapping
+              </span>
+            )}
+            {group.fraction !== null && (
+              <span
+                className="text-xs text-muted-foreground"
+                title={`${group.count} of ${group.parentCount} records ${group.path.length > 1 ? "in the parent group" : "matching the filters"}`}
+              >
+                {Math.round(group.fraction * 100)}% of records
+              </span>
+            )}
+            {generatedEntityListFields[entity].metrics.map((metric) => {
+              const value = group.metrics?.[metric.key];
+              if (!value) return null;
+              return (
+                <span
+                  key={metric.key}
+                  className="inline-flex items-center gap-1 text-xs"
+                  title={`${metric.label}: ${value.presentCount} of ${value.totalCount} records have a value`}
+                >
+                  <span className="text-muted-foreground">{metric.label}</span>
+                  {value.sum === null ? (
+                    "–"
+                  ) : metric.format === "currency" ||
+                    metric.format === "signedCurrency" ? (
+                    <CurrencyValue
+                      value={value.sum}
+                      interactive={false}
+                      tone={false}
+                    />
+                  ) : (
+                    formatCount(value.sum)
+                  )}
+                  {value.coverage !== null && value.coverage < 1 && (
+                    <span className="text-muted-foreground">partial</span>
+                  )}
+                </span>
+              );
+            })}
+          </>
+        ),
+      }),
     };
-  }, [entity, groupChoice, groups, setColumnFilters]);
+  }, [
+    entity,
+    groupChoice,
+    groups,
+    setColumnFilters,
+    collapsedGroups,
+    groupBy,
+    infiniteResult.memberships,
+  ]);
 
   const serverTotals = useMemo(
     () => ({ totalCount, sums }),
@@ -831,8 +941,33 @@ export function useEntityList<
   const getSubRows =
     tree?.getSubRows ?? (serverTree ? serverTreeSubRows<TData> : undefined);
 
+  const selectionScope = JSON.stringify([
+    entity,
+    effectiveBuildFilters(tableState),
+    serverTree,
+  ]);
+  const liveSelectionScope = useRef(selectionScope);
+  liveSelectionScope.current = selectionScope;
+  const liveSelectedIds = useRef("");
+  liveSelectedIds.current = JSON.stringify(
+    Object.keys(presentationState.listBulkActions.state.rowSelection)
+      .filter((id) => presentationState.listBulkActions.state.rowSelection[id])
+      .sort(),
+  );
+  const selectionController = useRef<AbortController | null>(null);
+  const [matchingSelection, setMatchingSelection] = useState<{
+    scope: string;
+    ids: ReadonlySet<string>;
+  } | null>(null);
+  useEffect(() => {
+    setMatchingSelection(null);
+    return () => selectionController.current?.abort();
+  }, [selectionScope]);
   const availableRowIds = useMemo(() => {
     const ids = new Set<string>();
+    if (matchingSelection?.scope === selectionScope) {
+      for (const id of matchingSelection.ids) ids.add(id);
+    }
     const visit = (rows: readonly TData[]) => {
       for (const row of rows) {
         if (!rowActionsGuard || rowActionsGuard(row)) ids.add(getRowId(row));
@@ -842,7 +977,14 @@ export function useEntityList<
     };
     visit(tableData);
     return ids;
-  }, [getRowId, getSubRows, rowActionsGuard, tableData]);
+  }, [
+    getRowId,
+    getSubRows,
+    rowActionsGuard,
+    tableData,
+    matchingSelection,
+    selectionScope,
+  ]);
   useEffect(() => {
     presentationState.listBulkActions.onRowSelectionChange?.((current) =>
       reconcileRowSelection(current, availableRowIds),
@@ -894,47 +1036,123 @@ export function useEntityList<
     grouping: tableGrouping || undefined,
   });
 
-  // "Select all N matching": pull every remaining page into memory (bulk
-  // actions need full rows, not ids), then select all.
   const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const selectionEntity = listEntities.find(
+    (candidate) => candidate === entity,
+  );
   const handleSelectAllMatching = useCallback(async () => {
+    if (!selectionEntity) return;
+    const scope = selectionScope;
+    const selectedAtStart = liveSelectedIds.current;
+    selectionController.current?.abort();
+    const controller = new AbortController();
+    selectionController.current = controller;
     setIsSelectingAll(true);
     try {
-      // Select from the RETURNED items, not table.getRowModel(): the table
-      // still holds the pre-load rows until React re-renders, so a
-      // toggleAllRowsSelected here would only select the previously-loaded set.
-      const allRows = await infiniteResult.infiniteScroll.loadAllPages();
-      table.setRowSelection(
-        Object.fromEntries(allRows.map((row) => [row.id, true])),
-      );
-      // loadAllPages is bounded (its safety cap); if the filtered set is
-      // larger, surface that the selection is partial rather than letting a
-      // bulk action silently miss rows.
-      if (allRows.length < totalCount) {
-        toast.warning(
-          `Selected the first ${formatCount(allRows.length)} of ${formatCount(totalCount)} — too many to select at once. Narrow the filters to cover the rest.`,
+      const ids = new Set<string>();
+      const cursors = new Set<string>();
+      let cursor: string | undefined;
+      let expectedCount: number | undefined;
+      do {
+        const page = await entityList.selectionIds.call(
+          {
+            entity: selectionEntity,
+            filters: z
+              .record(z.string(), z.unknown())
+              .parse(effectiveBuildFilters(tableState)),
+            ...(serverTree ? { nesting: ROOTS_SCOPE } : {}),
+            cursor,
+            limit: 500,
+          },
+          { signal: controller.signal },
         );
-      }
+        if (liveSelectionScope.current !== scope) return;
+        if (expectedCount !== undefined && page.totalCount !== expectedCount)
+          throw new Error(
+            "The matching population changed while selecting records. Select them again.",
+          );
+        expectedCount = page.totalCount;
+        for (const id of page.ids) {
+          if (ids.has(id))
+            throw new Error(
+              "The matching identity pages overlap. Selection was not applied.",
+            );
+          ids.add(id);
+        }
+        if (page.nextCursor && cursors.has(page.nextCursor))
+          throw new Error(
+            "The selection cursor did not advance. Selection was not applied.",
+          );
+        if (page.nextCursor) cursors.add(page.nextCursor);
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      if (liveSelectionScope.current !== scope || controller.signal.aborted)
+        return;
+      if (liveSelectedIds.current !== selectedAtStart)
+        throw new Error(
+          "Selection changed while matching records were loading. Select all matching again to apply it.",
+        );
+      if (ids.size !== expectedCount)
+        throw new Error(
+          "The complete matching selection could not be resolved. Select the records again.",
+        );
+      setMatchingSelection({ scope, ids });
+      table.setRowSelection(
+        Object.fromEntries([...ids].map((id) => [id, true])),
+      );
+    } catch (error) {
+      if (!controller.signal.aborted) showErrorToast(error);
     } finally {
       setIsSelectingAll(false);
     }
-  }, [infiniteResult.infiniteScroll, table, totalCount]);
+  }, [
+    selectionEntity,
+    selectionScope,
+    effectiveBuildFilters,
+    tableState,
+    serverTree,
+    table,
+  ]);
 
-  // In tree mode the two counts below measure different things — `data.length`
-  // is loaded ROWS, `totalCount` is matching ROOTS — so the "select all N
-  // matching" offer simply never fires. That's the honest outcome: it would
-  // otherwise promise a count the selection can't match.
+  const resolveSelectedRows = useCallback(
+    async (ids: string[]) => {
+      const scope = selectionScope;
+      selectionController.current?.abort();
+      const controller = new AbortController();
+      selectionController.current = controller;
+      const records = await loadSelectionRecords({
+        ids,
+        filters: effectiveBuildFilters(tableState),
+        queryOptions,
+        signal: controller.signal,
+      });
+      if (liveSelectionScope.current !== scope)
+        throw new Error(
+          "The list scope changed while checking the action. Select the records again.",
+        );
+      return records.map((record, index) =>
+        constructRow(table, record.id, record, index, 0),
+      );
+    },
+    [selectionScope, effectiveBuildFilters, tableState, queryOptions, table],
+  );
+
   const bulkActionBar = presentationState.listBulkActions.config ? (
     <ListBulkActionBar
       table={table}
       config={presentationState.listBulkActions.config}
       state={presentationState.listBulkActions.state}
-      selectAllMatching={{
-        totalCount,
-        loadedCount: data.length,
-        onSelectAll: handleSelectAllMatching,
-        isSelectingAll,
-      }}
+      resolveSelectedRows={resolveSelectedRows}
+      selectAllMatching={
+        selectionEntity && !tree && !subject && !rowActionsGuard
+          ? {
+              totalCount,
+              loadedCount: data.length,
+              onSelectAll: handleSelectAllMatching,
+              isSelectingAll,
+            }
+          : undefined
+      }
       disabled={infiniteResult.infiniteScroll.isTransitioning}
     />
   ) : null;

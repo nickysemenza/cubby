@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   buildPaginatedResponse,
+  listGroupByDimensionsSchema,
   createPaginatedResponseSchema,
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
@@ -21,8 +22,24 @@ it("carries ordered full-filter group counts in list metadata", () => {
     3,
     {
       groups: [
-        { key: "category-one", label: "Category one", count: 2 },
-        { key: "category-two", label: "Category two", count: 1 },
+        {
+          key: JSON.stringify(["category-one"]),
+          path: ["category-one"],
+          label: "Category one",
+          count: 2,
+          parentCount: 3,
+          fraction: 2 / 3,
+          overlapping: false,
+        },
+        {
+          key: JSON.stringify(["category-two"]),
+          path: ["category-two"],
+          label: "Category two",
+          count: 1,
+          parentCount: 3,
+          fraction: 1 / 3,
+          overlapping: false,
+        },
       ],
     },
   );
@@ -170,4 +187,20 @@ it("preserves paginated transforms once and annotates invalid record errors", ()
     "Invalid input: expected number",
   );
   expect(invalid.error?.issues[0]?.path).toEqual(["items", 0, "value"]);
+});
+
+it("validates ordered dimensions with per-dimension buckets and ancestor levels", () => {
+  expect(
+    listGroupByDimensionsSchema.parse([
+      { key: "category", level: 2 },
+      { key: "date", bucket: "month" },
+    ]),
+  ).toHaveLength(2);
+  for (const input of [
+    "category",
+    [{ key: "category" }, { key: "category" }],
+    ["a", "b", "c", "d"].map((key) => ({ key })),
+    [{ key: "date", bucket: "hour" }],
+  ])
+    expect(listGroupByDimensionsSchema.safeParse(input).success).toBe(false);
 });

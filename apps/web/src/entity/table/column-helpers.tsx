@@ -303,17 +303,19 @@ export function createNameColumn<T extends BaseRow>(
       // unlinked branch keeps the truncation and the full-name tooltip.
       const linkName = (label: ReactNode) =>
         link ? (
-          <EntityRefLink
-            variant="table"
-            to={link.to}
-            params={link.params}
-            tone="identity"
-            className={
-              caption == null ? undefined : "block truncate leading-[15px]"
-            }
-          >
-            {label}
-          </EntityRefLink>
+          <span data-record-identity-link className="contents">
+            <EntityRefLink
+              variant="table"
+              to={link.to}
+              params={link.params}
+              tone="identity"
+              className={
+                caption == null ? undefined : "block truncate leading-[15px]"
+              }
+            >
+              {label}
+            </EntityRefLink>
+          </span>
         ) : (
           label
         );

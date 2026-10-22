@@ -26,7 +26,9 @@ public struct ListPage<T: Sendable>: Sendable {
         while items.count < limit {
             let result = try await fetch(page, pageSize)
             items += result.items
-            if result.items.count < pageSize || page * pageSize >= result.meta.totalCount { break }
+            let population = result.meta.membershipCount ?? result.meta.totalCount
+            let slots = result.meta.memberships?.count ?? result.items.count
+            if slots < pageSize || page * pageSize >= population { break }
             page += 1
         }
         return Array(items.prefix(limit))

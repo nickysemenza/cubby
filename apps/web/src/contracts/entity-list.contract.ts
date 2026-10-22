@@ -1,3 +1,4 @@
+import { listNestingSchema } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
@@ -75,7 +76,30 @@ const entityViewCountsOutputSchema = z.object({
   ),
 });
 
+export const entitySelectionIdsInputSchema = z.object({
+  entity: z.enum(listEntities),
+  filters: z.record(z.string(), z.unknown()).default({}),
+  nesting: listNestingSchema.optional(),
+  cursor: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Opaque continuation; refuses population changes between pages"),
+  limit: z.number().int().min(1).max(500).default(500),
+});
+export const entitySelectionIdsOutputSchema = z.object({
+  ids: z.array(z.string().min(1)),
+  totalCount: z.number().int().nonnegative(),
+  nextCursor: z.string().min(1).nullable(),
+});
+
 export const entityListContract = defineContract("entity", {
+  selectionIds: query({
+    mcp: { omit: "client_view" },
+    input: entitySelectionIdsInputSchema,
+    output: entitySelectionIdsOutputSchema,
+    observability: { entities: listEntities },
+  }),
   listBase: query({
     mcp: {
       omit: "kernel_alternative",

@@ -13,7 +13,9 @@ import {
   buildPaginatedResponse,
   DEFAULT_PAGE_SIZE,
   listGroupSummarySchema,
+  listGroupMembershipSchema,
   type ListGroupSummary,
+  type ListGroupBy,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
 import { getErrorMessage } from "@cubby/shared";
@@ -92,8 +94,7 @@ type EntityListInput<TFilters = unknown> = {
   filters: TFilters;
   sort?: { orderBy: string; direction: "asc" | "desc" }[];
   pagination?: PaginationParams;
-  groupBy?: string;
-  groupLevel?: number;
+  groupBy?: ListGroupBy[];
   nesting?: unknown;
 };
 
@@ -499,7 +500,7 @@ const buildEntityOperations = <
             ids,
             pagination: input.pagination ?? DEFAULT_PAGINATION,
             sorts: parseSorts(binding, input.sort, Boolean(searchQuery)),
-            groupBy: parseGroupBy(binding, input.groupBy, input.groupLevel),
+            groupBy: parseGroupBy(binding, input.groupBy),
             nesting: parseNesting(binding, input.nesting),
           };
         })
@@ -538,21 +539,39 @@ const buildEntityOperations = <
                 mediaPage.data,
               ),
               mediaPage.count,
-              aggregates(
-                binding.entity,
-                "sums" in mediaPage
-                  ? z
-                      .record(z.string(), z.number())
-                      .optional()
-                      .parse(mediaPage.sums)
-                  : undefined,
-                "groups" in mediaPage
-                  ? z
-                      .array(listGroupSummarySchema)
-                      .optional()
-                      .parse(mediaPage.groups)
-                  : undefined,
-              ),
+              {
+                ...aggregates(
+                  binding.entity,
+                  "sums" in mediaPage
+                    ? z
+                        .record(z.string(), z.number())
+                        .optional()
+                        .parse(mediaPage.sums)
+                    : undefined,
+                  "groups" in mediaPage
+                    ? z
+                        .array(listGroupSummarySchema)
+                        .optional()
+                        .parse(mediaPage.groups)
+                    : undefined,
+                ),
+                memberships:
+                  "memberships" in mediaPage
+                    ? z
+                        .array(listGroupMembershipSchema)
+                        .optional()
+                        .parse(mediaPage.memberships)
+                    : undefined,
+                membershipCount:
+                  "membershipCount" in mediaPage
+                    ? z
+                        .number()
+                        .int()
+                        .nonnegative()
+                        .optional()
+                        .parse(mediaPage.membershipCount)
+                    : undefined,
+              },
             ),
           }),
         ),

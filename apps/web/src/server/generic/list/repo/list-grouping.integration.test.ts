@@ -1,14 +1,19 @@
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { ledgerParty, productCategory } from "~/server/db/schema";
+import {
+  ledgerParty,
+  productCategory,
+  product as productTable,
+} from "~/server/db/schema";
 import {
   createLedgerParty,
   listLedgerParties,
@@ -27,21 +32,30 @@ import {
   createProductFixture,
   makeLocationInput,
   makeProductInput,
+  makeExpenseInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
+import { groupSql, ListContext } from "./field-compiler";
+import { readGroupedQuery } from "./grouped-query";
+
 const ctx = withTestDb();
 const groups = (result: {
-  count: number;
-  groups?: { key: string; label: string; count: number }[];
-}) => result.groups;
+  groups?: { key: string; label: string; count: number; subtree?: boolean }[];
+}) =>
+  result.groups?.map((group) => ({
+    key: z.array(z.string()).parse(JSON.parse(group.key)).at(-1),
+    label: group.label,
+    count: group.count,
+    subtree: group.subtree,
+  }));
 // The kernel carries a validated `groupBy` beside the filters, like `nesting`.
 const groupedProducts = (
   sort: Parameters<typeof productList>[2],
   pageIndex: number,
   pageSize: number,
 ) =>
-  productList(ctx.db, withListGroupBy({}, { key: "categoryId" }), sort, {
+  productList(ctx.db, withListGroupBy({}, [{ key: "categoryId" }]), sort, {
     pageIndex,
     pageSize,
   });
@@ -124,13 +138,13 @@ describe("server list grouping", () => {
         entity: "inventory",
         filters: { ids: entries.map((entry) => entry.id) },
         sort: [{ orderBy: "product", direction: "asc" }],
-        groupBy: "category",
+        groupBy: [{ key: "category" }],
         pagination: { pageIndex, pageSize },
       });
     const sections = [
       { key: alpha.output.id, label: "Alpha shelf group", count: 2 },
       { key: beta.output.id, label: "Beta shelf group", count: 1 },
-      { key: FILTER_NONE, label: "No category", count: 1 },
+      { key: FILTER_NONE, label: "Unassigned", count: 1 },
     ];
     // A page boundary inside the Alpha section, then one before No category.
     for (const pageSize of [1, 3]) {
@@ -139,14 +153,15 @@ describe("server list grouping", () => {
           read(index, pageSize),
         ),
       );
-      for (const page of pages) expect(page.meta.groups).toEqual(sections);
+      for (const page of pages)
+        expect(groups(page.meta)).toMatchObject(sections);
       const names = pages.flatMap((page) =>
         page.items.map(
           (item) =>
             z.object({ displayName: z.string() }).parse(item).displayName,
         ),
       );
-      expect(names.map((name) => name.split(" · ")[0])).toEqual([
+      expect(names.map((name) => name.split(" · ")[0])).toMatchObject([
         "Alpha one",
         "Alpha two",
         "Beta one",
@@ -199,8 +214,7 @@ describe("server list grouping", () => {
         entity: "inventory",
         filters: { ids, ...filters },
         sort: [{ orderBy: "product", direction: "asc" }],
-        groupBy: "category",
-        groupLevel: 2,
+        groupBy: [{ key: "category", level: 2 }],
         pagination: { pageIndex, pageSize },
       });
     const sections = [
@@ -222,7 +236,7 @@ describe("server list grouping", () => {
         count: 1,
         subtree: false,
       },
-      { key: FILTER_NONE, label: "No category", count: 1, subtree: false },
+      { key: FILTER_NONE, label: "Unassigned", count: 1, subtree: false },
     ];
     const displayNames = (items: readonly unknown[]) =>
       items.map(
@@ -239,8 +253,9 @@ describe("server list grouping", () => {
           read(index, pageSize),
         ),
       );
-      for (const page of pages) expect(page.meta.groups).toEqual(sections);
-      expect(pages.flatMap((page) => displayNames(page.items))).toEqual([
+      for (const page of pages)
+        expect(groups(page.meta)).toMatchObject(sections);
+      expect(pages.flatMap((page) => displayNames(page.items))).toMatchObject([
         "Alpha direct",
         "Alpha leaf one",
         "Beta one",
@@ -255,7 +270,7 @@ describe("server list grouping", () => {
         categoryFilter: [section.key],
         includeSubProductCategories: section.subtree,
       });
-      expect(filtered.meta.groups).toEqual([section]);
+      expect(groups(filtered.meta)).toMatchObject([section]);
       expect(filtered.meta.totalCount).toBe(section.count);
     }
   });
@@ -297,11 +312,10 @@ describe("server list grouping", () => {
       action: "list",
       entity: "inventory",
       filters: { ids },
-      groupBy: "location",
-      groupLevel: 2,
+      groupBy: [{ key: "location", level: 2 }],
       pagination: { pageIndex: 0, pageSize: 10 },
     });
-    expect(result.meta.groups).toEqual([
+    expect(groups(result.meta)).toMatchObject([
       { key: root.id, label: "Deep root", count: 2, subtree: true },
     ]);
     // Its header filter reaches both rows, however deep.
@@ -314,25 +328,20 @@ describe("server list grouping", () => {
     expect(filtered.meta.totalCount).toBe(2);
   });
 
-  it("rejects a level on a field with no hierarchy, without a groupBy, or past its levels", async () => {
-    const list = (groupBy: string | undefined, groupLevel: number) =>
-      executeEntity(kernel(), {
-        action: "list",
-        entity: "inventory",
-        filters: {},
-        ...(groupBy === undefined ? {} : { groupBy }),
-        groupLevel,
-        pagination: { pageIndex: 0, pageSize: 1 },
-      });
-    await expect(list("placement", 1)).rejects.toThrow(
-      'Cannot group inventory by "placement" at a level: Placement is a value, not a record with parents, so it has no levels.',
-    );
-    await expect(list(undefined, 1)).rejects.toThrow(
-      "groupLevel 1 needs a groupBy for inventory",
-    );
-    await expect(list("category", 4)).rejects.toThrow(
-      'Cannot group inventory by "category" at level 4: Category offers levels 1–3',
-    );
+  it("rejects ancestor levels on values and beyond the declared hierarchy", async () => {
+    for (const dimension of [
+      { key: "placement", level: 1 },
+      { key: "category", level: 4 },
+    ])
+      await expect(
+        executeEntity(kernel(), {
+          action: "list",
+          entity: "inventory",
+          filters: {},
+          groupBy: [dimension],
+          pagination: { pageIndex: 0, pageSize: 1 },
+        }),
+      ).rejects.toThrow("Cannot group inventory");
   });
 
   it("orders Product categories before pagination and reports their names and counts", async () => {
@@ -352,10 +361,10 @@ describe("server list grouping", () => {
       "Beta item",
       "Unclassified item",
     ]);
-    expect(groups(pages[0]!)).toEqual([
+    expect(groups(pages[0]!)).toMatchObject([
       { key: alpha.output.id, count: 1, label: "Alpha group" },
       { key: beta.output.id, count: 1, label: "Beta group" },
-      { key: FILTER_NONE, label: "No category", count: 1 },
+      { key: FILTER_NONE, label: "Unassigned", count: 1 },
     ]);
 
     // Sections keep label order whatever the row sort says.
@@ -367,7 +376,7 @@ describe("server list grouping", () => {
       0,
       3,
     );
-    expect(groups(result)?.map((group) => group.key)).toEqual([
+    expect(groups(result)?.map((group) => group.key)).toMatchObject([
       alpha.output.id,
       beta.output.id,
       FILTER_NONE,
@@ -383,18 +392,18 @@ describe("server list grouping", () => {
       action: "list",
       entity: "product",
       filters: {},
-      groupBy: "categoryId",
+      groupBy: [{ key: "categoryId" }],
       pagination: { pageIndex: 0, pageSize: 1 },
     });
-    expect(grouped.meta.groups).toEqual(groups(pages[0]!));
+    expect(groups(grouped.meta)).toEqual(groups(pages[0]!));
     const restricted = await executeEntity(kernelContext, {
       action: "list",
       entity: "product",
       filters: { ids: [betaProduct.id] },
-      groupBy: "categoryId",
+      groupBy: [{ key: "categoryId" }],
       pagination: { pageIndex: 0, pageSize: 1 },
     });
-    expect(restricted.meta.groups).toEqual([
+    expect(groups(restricted.meta)).toMatchObject([
       { key: beta.output.id, count: 1, label: "Beta group" },
     ]);
     expect(restricted.meta.totalCount).toBe(1);
@@ -425,8 +434,8 @@ describe("server list grouping", () => {
       0,
       10,
     );
-    expect(groups(result)).toEqual([
-      { key: FILTER_NONE, label: "No category", count: 2 },
+    expect(groups(result)).toMatchObject([
+      { key: FILTER_NONE, label: "Unassigned", count: 2 },
     ]);
     expect(result.data.map((row) => row.name)).toEqual([
       "No category item",
@@ -454,7 +463,7 @@ describe("server list grouping", () => {
     const grouped = (pageIndex: number, readIntent?: "count") =>
       locationList(
         ctx.db,
-        withListGroupBy({ itemTypeFilter: ["box", "room"] }, { key: "type" }),
+        withListGroupBy({ itemTypeFilter: ["box", "room"] }, [{ key: "type" }]),
         [
           { orderBy: "name", direction: "asc" },
           { orderBy: "type", direction: "desc" },
@@ -469,7 +478,7 @@ describe("server list grouping", () => {
       "Box one",
     ]);
     expect(pages.map((result) => result.count)).toEqual([3, 3, 3]);
-    expect(groups(pages[0]!)).toEqual([
+    expect(groups(pages[0]!)).toMatchObject([
       { key: "room", label: "room", count: 2 },
       { key: "box", label: "box", count: 1 },
     ]);
@@ -527,5 +536,223 @@ describe("server list grouping", () => {
       newer.output.id,
       older.output.id,
     ]);
+  });
+});
+
+// Memberships must be paginated before hydration: overlaps must never consume
+// canonical row slots, duplicate a row within a path, or corrupt prefix totals.
+describe("expanded grouped list memberships", () => {
+  it("pages distinct text-array memberships and keeps full distinct prefix counts", async () => {
+    const first = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Membership alpha",
+        tags: ["A", "A", "B"],
+        kind: "durable",
+      }),
+      ctx.actor,
+    );
+    const second = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Membership beta",
+        tags: [],
+        kind: "durable",
+      }),
+      ctx.actor,
+    );
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Grouping basis",
+        productId: first.id,
+        cost: 10,
+        date: "2026-01-01",
+      }),
+    );
+    const pages = [];
+    for (const pageIndex of [0, 1, 2]) {
+      const page = await executeEntity(kernel(), {
+        action: "list",
+        entity: "product",
+        filters: { ids: [first.id, second.id] },
+        groupBy: [{ key: "kind" }, { key: "tags" }],
+        sort: [{ orderBy: "name", direction: "asc" }],
+        pagination: { pageIndex, pageSize: 1 },
+      });
+      if (page.action !== "list") throw new Error("expected list");
+      expect(page.items).toHaveLength(1);
+      expect(page.meta.totalCount).toBe(2);
+      expect(page.meta.membershipCount).toBe(3);
+      expect(page.meta.memberships).toHaveLength(1);
+      expect(page.meta.groups).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: JSON.stringify(["durable"]),
+            path: ["durable"],
+            count: 2,
+            parentCount: 2,
+            metrics: {
+              expenseTotal: {
+                sum: 10,
+                presentCount: 2,
+                totalCount: 2,
+                coverage: 1,
+              },
+            },
+          }),
+          expect.objectContaining({
+            path: ["durable", "A"],
+            count: 1,
+            parentCount: 2,
+            overlapping: true,
+          }),
+          expect.objectContaining({ path: ["durable", FILTER_NONE], count: 1 }),
+        ]),
+      );
+      pages.push(...(page.meta.memberships ?? []));
+    }
+    expect(pages).toEqual([
+      { id: first.id, path: ["durable", "A"] },
+      { id: first.id, path: ["durable", "B"] },
+      { id: second.id, path: ["durable", FILTER_NONE] },
+    ]);
+  });
+
+  it("expands multiple references in SQL and preserves unassigned records", async () => {
+    const first = await product("Reference memberships", null);
+    const unassigned = await product("Unassigned reference", null);
+    const alpha = await location("Reference alpha", "box");
+    const beta = await location("Reference beta", "box");
+    for (const place of [alpha, beta])
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: first.id,
+          locationId: place.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    const result = await executeEntity(kernel(), {
+      action: "list",
+      entity: "product",
+      filters: { ids: [first.id, unassigned.id] },
+      groupBy: [{ key: "stockLocation" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (result.action !== "list") throw new Error("expected list");
+    expect(result.items).toHaveLength(2);
+    expect(result.meta.totalCount).toBe(2);
+    expect(result.meta.membershipCount).toBe(3);
+    expect(result.meta.memberships).toEqual([
+      { id: first.id, path: [alpha.id] },
+      { id: first.id, path: [beta.id] },
+      { id: unassigned.id, path: [FILTER_NONE] },
+    ]);
+  });
+
+  it("rejects duplicate dimensions, excess dimensions, and buckets on non-dates", async () => {
+    for (const groupBy of [
+      [{ key: "kind" }, { key: "kind" }],
+      ["kind", "tags", "categoryId", "stockTracked"].map((key) => ({ key })),
+      [{ key: "kind", bucket: "month" as const }],
+    ]) {
+      await expect(
+        executeEntity(kernel(), {
+          action: "list",
+          entity: "product",
+          filters: {},
+          groupBy,
+        }),
+      ).rejects.toThrow(/groupBy|Cannot group/);
+    }
+  });
+});
+
+// Missing scalar values are unknown contributors; an observed zero remains
+// present. Metrics deduplicate a canonical record before every prefix sum.
+describe("grouped SQL metric coverage and calendar boundaries", () => {
+  it("keeps unknown sums null and counts an observed zero in coverage", async () => {
+    const known = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Known observation", stockTracked: true }),
+      ctx.actor,
+    );
+    const unknown = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Unknown observation", stockTracked: false }),
+      ctx.actor,
+    );
+    const group = groupSql(
+      "product",
+      { key: "stockTracked" },
+      {},
+      productTable,
+      ListContext.empty,
+    );
+    const result = await readGroupedQuery({
+      db: ctx.db,
+      source: productTable,
+      id: sql`${productTable.id}`,
+      code: sql`${productTable.shortcode}`,
+      where: inArray(productTable.shortcode, [known.id, unknown.id]),
+      groups: [group],
+      metrics: [
+        {
+          key: "observed",
+          value: sql`CASE WHEN ${productTable.stockTracked} THEN 0 ELSE null END`,
+        },
+      ],
+      order: [sql`${group.key} asc nulls last`, sql`${productTable.id} asc`],
+      limit: 1,
+      offset: 0,
+    });
+    expect(result.groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ["true"],
+          metrics: {
+            observed: { sum: 0, presentCount: 1, totalCount: 1, coverage: 1 },
+          },
+        }),
+        expect.objectContaining({
+          path: ["false"],
+          metrics: {
+            observed: {
+              sum: null,
+              presentCount: 0,
+              totalCount: 1,
+              coverage: 0,
+            },
+          },
+        }),
+      ]),
+    );
+  });
+
+  it("uses household-local timestamp days before month/week/quarter/year bucketing", async () => {
+    const item = await product("Calendar edge", null);
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ createdAt: new Date("2026-04-01T00:30:00.000Z") })
+      .where(eq(productTable.shortcode, item.id));
+    for (const [bucket, day] of [
+      ["day", "2026-03-31"],
+      ["week", "2026-03-30"],
+      ["month", "2026-03-01"],
+      ["quarter", "2026-01-01"],
+      ["year", "2026-01-01"],
+    ] as const) {
+      const result = await executeEntity(kernel(), {
+        action: "list",
+        entity: "product",
+        filters: { ids: [item.id] },
+        groupBy: [{ key: "createdAt", bucket }],
+      });
+      if (result.action !== "list") throw new Error("expected list");
+      expect(result.meta.memberships).toEqual([{ id: item.id, path: [day] }]);
+    }
   });
 });

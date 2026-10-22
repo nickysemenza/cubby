@@ -166,7 +166,7 @@ const MAIL_IMPORT_ENTITY_READ = {
       "modelFilter",
     ],
   },
-  omit: ["groupBy", "groupLevel", "nesting"],
+  omit: ["groupBy", "nesting"],
 } as const satisfies EntityReadView;
 
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */

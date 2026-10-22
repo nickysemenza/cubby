@@ -1,4 +1,7 @@
-import { sortDirection } from "@cubby/schemas/pagination";
+import {
+  listGroupByDimensionsSchema,
+  sortDirection,
+} from "@cubby/schemas/pagination";
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
@@ -58,8 +61,7 @@ const inputSchema = z.object({
   sort: z
     .array(z.object({ orderBy: z.string(), direction: sortDirection }))
     .optional(),
-  groupBy: z.string().optional(),
-  groupLevel: z.number().optional(),
+  groupBy: listGroupByDimensionsSchema.optional(),
   nesting: z.unknown().optional(),
 });
 
@@ -96,7 +98,7 @@ export function defineProgressiveListOperations<
       Object.assign(await filtersFor(context, input.filters), {
         nesting: parseNesting(binding, input.nesting),
       }),
-      parseGroupBy(binding, input.groupBy, input.groupLevel),
+      parseGroupBy(binding, input.groupBy),
     );
   const reader = () => {
     if (!binding.repository.listRead)
@@ -190,6 +192,8 @@ export function defineProgressiveListOperations<
         data: await withRecordEmoji(context.db, binding.entity, result.data),
         meta: buildPaginatedResponse(pagination, [], result.count, {
           groups: result.groups,
+          memberships: result.memberships,
+          membershipCount: result.membershipCount,
         }).meta,
         groups: (["media", "quality", "relations", "derived"] as const)
           .filter((group) => fields[group].length > 0)
@@ -252,6 +256,8 @@ export function defineProgressiveListOperations<
             sums,
             totalLabels: listTotalLabels(binding.entity, sums),
             groups: result.groups,
+            memberships: result.memberships,
+            membershipCount: result.membershipCount,
           },
         ),
       };

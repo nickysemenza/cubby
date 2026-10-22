@@ -7,7 +7,12 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, location, purchase, run } from "~/server/db/schema";
 import { renderWhereSql } from "~/server/testing/mock-db";
 
-import { listPrepare, rowSetSql } from "./field-compiler";
+import {
+  listPrepare,
+  rowSetSql,
+  groupSql,
+  ListContext,
+} from "./field-compiler";
 import { listScaffold } from "./list";
 
 /**
@@ -273,5 +278,47 @@ describe("list field compiler", () => {
       );
     expect(column("status")).toBe('rs1."status"');
     expect(column("projectId")).not.toBe('rs1."projectId"');
+  });
+});
+
+// Calendar dates must never acquire a timezone shift. UTC wall timestamps
+// require the existing household conversion before the calendar bucket.
+describe("group dimensions", () => {
+  it("infers bounded choices without inferring free text or numbers", () => {
+    const keys = generatedEntityListFields.product.grouping.map(
+      ({ key }) => key,
+    );
+    expect(keys).toContain("stockTracked");
+    expect(keys).toContain("createdAt");
+    expect(keys).not.toContain("name");
+    expect(keys).not.toContain("price");
+  });
+  it("buckets plain dates directly and timestamps in the household calendar", () => {
+    const plain = groupSql(
+      "purchase",
+      { key: "date", bucket: "week" },
+      {},
+      purchase,
+      ListContext.empty,
+    );
+    const timestamp = groupSql(
+      "purchase",
+      { key: "createdAt", bucket: "day" },
+      {},
+      purchase,
+      ListContext.empty,
+    );
+    expect(renderWhereSql(plain.key)).toContain("date_trunc");
+    expect(renderWhereSql(plain.key)).not.toContain("AT TIME ZONE");
+    expect(renderWhereSql(timestamp.key)).toContain("AT TIME ZONE");
+    expect(() =>
+      groupSql(
+        "purchase",
+        { key: "status", bucket: "day" },
+        {},
+        purchase,
+        ListContext.empty,
+      ),
+    ).toThrow("does not support day buckets");
   });
 });

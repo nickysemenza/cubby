@@ -228,6 +228,7 @@ const effectiveOwners = listPrepare((db, filters) =>
 );
 
 const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
+  population: liveProductAndLocation,
   derived: {
     effectiveOwner: effectiveOwners.predicate((ids) =>
       ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids),
@@ -298,10 +299,7 @@ export const buildInventoryWhere = async (
   const context =
     prepared ??
     (await inventoryScaffold.context(db, { filters, readIntent: "count" }));
-  return and(
-    inventoryScaffold.where(filters, { context }),
-    liveProductAndLocation(),
-  );
+  return inventoryScaffold.where(filters, { context });
 };
 
 export const inventoryentryListRead = async (

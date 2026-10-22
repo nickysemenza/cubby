@@ -158,11 +158,13 @@ describe("state predicates re-declared as values", () => {
     );
     const grouped = await inventoryentryList(
       ctx.db,
-      withListGroupBy(fromAny({ ids: fixture }), { key: "valuationStatus" }),
+      withListGroupBy(fromAny({ ids: fixture }), [{ key: "valuationStatus" }]),
       [{ orderBy: "valuationStatus", direction: "asc" }],
       page,
     );
-    expect(grouped.groups?.map(({ key, count }) => [key, count])).toEqual([
+    expect(
+      grouped.groups?.map(({ path, count }) => [path.at(-1), count]),
+    ).toEqual([
       ["valued", 1],
       ["priceable", 1],
       ["unpriceable", 1],
@@ -499,8 +501,8 @@ describe("state predicates re-declared as values", () => {
     ).toBe(rows[0]!.shortcode);
     expect(
       (
-        await listed(withListGroupBy({}, { key: "completionYear" }))
-      ).groups?.map(({ key, count }) => [key, count]),
+        await listed(withListGroupBy({}, [{ key: "completionYear" }]))
+      ).groups?.map(({ path, count }) => [path.at(-1), count]),
     ).toEqual([
       ["2024", 1],
       ["2025", 2],

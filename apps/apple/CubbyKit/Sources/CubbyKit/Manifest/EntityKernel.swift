@@ -70,10 +70,10 @@ extension EntityDescriptor {
     /// The kernel list body (`entity.list`, `entity.listBase`, `entity.listSummary`): flat
     /// filter names re-nested and typed from the catalog, a 1-based page as the 0-based
     /// `pageIndex`, `sort` (`name,-createdAt`) as `[{orderBy, direction}]`, and the
-    /// `model.grouping` choice as `groupBy`, at its hierarchy `groupLevel` (1 = top) if any.
+    /// ordered `groupBy` dimensions, each with its own ancestor level or calendar bucket.
     func listInput(
-        page: Int, pageSize: Int, sort: String?, filters: EntityFilterState, groupBy: String? = nil,
-        groupLevel: Int? = nil
+        page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
+        groupBy: [ListGroupDimension] = []
     ) throws -> JSONValue {
         var input: [String: JSONValue] = [
             "entity": .string(key.rawValue),
@@ -91,10 +91,7 @@ extension EntityDescriptor {
                     ])
                 })
         }
-        if let groupBy {
-            input["groupBy"] = .string(groupBy)
-            if let groupLevel { input["groupLevel"] = .number(Double(groupLevel)) }
-        }
+        if !groupBy.isEmpty { input["groupBy"] = try JSONValue(encoding: groupBy) }
         return .object(input)
     }
 
@@ -107,12 +104,11 @@ extension EntityDescriptor {
     /// One page of rows as the dynamic projection `EntityRow` reads.
     func listPage(
         client: Client, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
-        groupBy: String? = nil, groupLevel: Int? = nil
+        groupBy: [ListGroupDimension] = []
     ) async throws -> ListPage<JSONValue> {
         try require(.list)
         let body = try listInput(
-            page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy,
-            groupLevel: groupLevel)
+            page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy)
         let response = try JSONValue(
             encoding: try await client.entity_list(body: .json(body.decoded())).ok.body.json)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }

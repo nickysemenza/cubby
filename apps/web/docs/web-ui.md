@@ -87,6 +87,10 @@ missing records and failed reads remain explicit, with raw error diagnostics.
 Inventory and cookbook shortcodes retain their individual detail destinations;
 legacy UUID audit references keep their unlinked/index fallback.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
+Record picker builders add up to two declared metadata values as a searchable
+secondary line. The check and name weight indicate selection; the row fill
+indicates pointer or keyboard highlight. Desktop record popups show keyboard
+hints when a caller has not supplied a footer.
 The picker's frame owns its focus ring. Its nested search input suppresses
 the standalone input shadow and border so focus never stacks two outlines.
 On phones, inline suggestion marks reserve their 44px target in layout.

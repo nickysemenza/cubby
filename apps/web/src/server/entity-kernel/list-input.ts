@@ -2,6 +2,7 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   type ListGroupBy,
+  listGroupByDimensionsSchema,
   type ListNesting,
   listNestingSchema,
   normalizeSorts,
@@ -66,55 +67,35 @@ export const parseGroupBy = <
   S extends EntityBindingSchemas,
 >(
   binding: EntityKernelCoreBinding<E, S>,
-  groupBy: string | undefined,
-  groupLevel?: number,
-): ListGroupBy | undefined => {
-  if (groupBy === undefined) {
-    if (groupLevel !== undefined)
+  value: unknown,
+): ListGroupBy[] => {
+  const dimensions = listGroupByDimensionsSchema.optional().parse(value) ?? [];
+  const choices = generatedEntityListFields[binding.entity].grouping;
+  for (const dimension of dimensions) {
+    const choice = choices.find(({ key }) => key === dimension.key);
+    const fail = (reason: string): never => {
       throw createAppError(
         "LIST_GROUP_BY_FIELD_UNSUPPORTED",
-        `groupLevel ${groupLevel} needs a groupBy for ${binding.entity}`,
+        `Cannot group ${binding.entity} by "${dimension.key}": ${reason}`,
       );
-    return undefined;
+    };
+    if (choice === undefined) return fail("unknown grouping field");
+    if (choice.reason !== null) fail(choice.reason);
+    if (
+      dimension.level !== undefined &&
+      (choice.levelReason !== null || dimension.level > choice.levels)
+    )
+      fail(
+        choice.levelReason ??
+          `${choice.label} offers levels 1–${choice.levels}`,
+      );
+    if (
+      dimension.bucket !== undefined &&
+      !choice.buckets.some((bucket) => bucket === dimension.bucket)
+    )
+      fail(`${choice.label} does not support ${dimension.bucket} buckets`);
   }
-  const choices = generatedEntityListFields[binding.entity].grouping;
-  const choice = choices.find(({ key }) => key === groupBy);
-  // A declared choice the compiler cannot group by (several values per row,
-  // a to-many path, a filter-only predicate) is rejected with the reason its
-  // declaration derives, the same text the Group by menus show.
-  if (choice?.reason)
-    throw createAppError(
-      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
-      `Cannot group ${binding.entity} by "${groupBy}": ${choice.reason}`,
-    );
-  if (choice === undefined)
-    throw createAppError(
-      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
-      `Unsupported groupBy field "${groupBy}" for ${binding.entity}; expected one of ${
-        choices
-          .filter(({ reason }) => reason === null)
-          .map(({ key }) => key)
-          .join(", ") || "none (the list declares no model.grouping)"
-      }`,
-    );
-  if (groupLevel === undefined) return { key: choice.key };
-  // A level groups each row under its ancestor; a field with no hierarchy is
-  // rejected with the reason the Group by menus show beside its levels.
-  if (choice.levelReason)
-    throw createAppError(
-      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
-      `Cannot group ${binding.entity} by "${groupBy}" at a level: ${choice.levelReason}`,
-    );
-  if (
-    !Number.isInteger(groupLevel) ||
-    groupLevel < 1 ||
-    groupLevel > choice.levels
-  )
-    throw createAppError(
-      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
-      `Cannot group ${binding.entity} by "${groupBy}" at level ${groupLevel}: ${choice.label} offers levels 1–${choice.levels}`,
-    );
-  return { key: choice.key, level: groupLevel };
+  return dimensions;
 };
 
 /**
@@ -122,11 +103,8 @@ export const parseGroupBy = <
  * `list.tree` accepts `roots`/`children`; a child scope's parent is the
  * entity's own public id.
  */
-export const parseNesting = <
-  E extends EntityKernelEntity,
-  S extends EntityBindingSchemas,
->(
-  binding: EntityKernelCoreBinding<E, S>,
+export const parseNesting = (
+  binding: { entity: EntityKernelEntity; schemas: { id: z.ZodType } },
   value: unknown,
 ): ListNesting => {
   const nesting = listNestingSchema.optional().parse(value) ?? {

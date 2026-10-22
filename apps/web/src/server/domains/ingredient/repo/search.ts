@@ -668,8 +668,8 @@ export const ingredientListRead = async (
   );
   if (!("count" in page)) throw new Error("Wrong ingredient list read intent");
   return {
+    ...page,
     data: page.data.map((row) => listReadRowSchema.parse(row)),
-    count: page.count,
   };
 };
 

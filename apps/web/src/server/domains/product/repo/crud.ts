@@ -805,7 +805,13 @@ const readProductListPage = async (
   // gates select optional extras and joins, which Drizzle loses when `with`
   // is conditional; stored Product columns are always selected.
   const results = page.data as ProductSelectedPageRow[];
-  return { results, totalCount: page.count, groups: page.groups };
+  return {
+    results,
+    totalCount: page.count,
+    groups: page.groups,
+    memberships: page.memberships,
+    membershipCount: page.membershipCount,
+  };
 };
 
 /** Narrow root-table projection for relation paging; the scaffold owns the count. */
@@ -1156,25 +1162,26 @@ export const listProductsRead = async (
     },
   });
   const filtered = await productWhere(db, filters);
-  const [{ results, totalCount, groups }, sums] = await Promise.all([
-    readProductListPage(
-      db,
-      filtered,
-      filters,
-      sorts,
-      pagination,
-      readIntent,
-      projection,
-    ),
-    projection.kind === "full" && readIntent === "page"
-      ? loadProductListSums(db, filtered.where)
-      : undefined,
-  ]);
+  const [{ results, totalCount, groups, memberships, membershipCount }, sums] =
+    await Promise.all([
+      readProductListPage(
+        db,
+        filtered,
+        filters,
+        sorts,
+        pagination,
+        readIntent,
+        projection,
+      ),
+      projection.kind === "full" && readIntent === "page"
+        ? loadProductListSums(db, filtered.where)
+        : undefined,
+    ]);
 
   return {
     count: totalCount,
     ...(sums ? { sums } : {}),
-    ...(groups ? { groups } : {}),
+    ...(groups ? { groups, memberships, membershipCount } : {}),
     data: await plan.read(db, results, projection, filtered.context),
   };
 };

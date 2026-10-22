@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
+import type { ListGroupBy } from "@cubby/schemas/pagination";
 import type { ProblemKey } from "@cubby/schemas/problems";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { z } from "zod";
@@ -88,9 +89,7 @@ export interface ViewDefinition {
   /** The list view (`?view=`) the saved view opens in. */
   view?: string;
   /** The `model.grouping` choice (`?groupBy=`) the saved view opens with. */
-  groupBy?: string;
-  /** The hierarchy level (`?groupLevel=`, 1 = top) `groupBy` groups at. */
-  groupLevel?: number;
+  groupBy?: ListGroupBy[];
   /** A shortcut on another surface (the home "Your views" row). */
   pin?: { surface: "home"; order: number };
 }
@@ -134,7 +133,6 @@ const toViewDefinition = (view: DeclaredView): ViewDefinition => {
   }
   if (view.view) definition.view = view.view;
   if (view.groupBy) definition.groupBy = view.groupBy;
-  if (view.groupLevel) definition.groupLevel = view.groupLevel;
   if (view.pin) definition.pin = { ...view.pin };
   return definition;
 };

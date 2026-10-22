@@ -1,4 +1,5 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import type { ListGroupBy } from "@cubby/schemas/pagination";
 
 import { entities } from "~/entity/entities";
 import { getEntityFilters } from "~/entity/filter-manifest";
@@ -9,8 +10,7 @@ type ListState = {
   filters: readonly ViewDefinition["filters"][number][];
   sort?: readonly { id: string; desc: boolean }[];
   view?: string;
-  groupBy?: string;
-  groupLevel?: number;
+  groupBy?: ListGroupBy[];
 };
 
 /**
@@ -38,10 +38,7 @@ export const entityListSearch = (
   const sort = state.sort && sortToParam([...state.sort]);
   if (sort) search.sort = sort;
   if (state.view) search.view = state.view;
-  if (state.groupBy) search.groupBy = state.groupBy;
-  // The router reads each search value as JSON, so this arrives a number.
-  if (state.groupBy && state.groupLevel)
-    search.groupLevel = String(state.groupLevel);
+  if (state.groupBy?.length) search.groupBy = JSON.stringify(state.groupBy);
   return search;
 };
 

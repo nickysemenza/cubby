@@ -1,4 +1,9 @@
-import type { ListGroupSummary, ListNesting } from "@cubby/schemas/pagination";
+import type {
+  ListGroupBy,
+  ListGroupMembership,
+  ListGroupSummary,
+  ListNesting,
+} from "@cubby/schemas/pagination";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
@@ -34,10 +39,8 @@ interface UseInfiniteTableListOptions<
   buildFilters: (tableState: TableStateReturn) => TFilters;
   /** Shared table state, owned by the caller (one instance per page). */
   tableState: TableStateReturn;
-  /** DB column name to group by (prepends primary ORDER BY on server) */
-  groupBy?: string;
-  /** The hierarchy level (1 = top) `groupBy` groups at. */
-  groupLevel?: number;
+  /** Ordered declared dimensions; membership order precedes record sorting. */
+  groupBy?: ListGroupBy[];
   /** A declared tree's scope for the paged rows (`roots` when nested). */
   nesting?: ListNesting;
   visibleFields?: readonly string[];
@@ -80,6 +83,7 @@ interface UseInfiniteTableListReturn<
   retrySummary: () => void;
   enrichmentState: (id: string, field: string) => ListGroupState | undefined;
   groups?: ListGroupSummary[];
+  memberships?: ListGroupMembership[];
   isLoading: boolean;
   error: Error | null;
   tableState: TableStateReturn;
@@ -111,7 +115,6 @@ function useInfiniteTableListPlan<
   buildFilters,
   tableState,
   groupBy,
-  groupLevel,
   nesting,
 }: UseInfiniteTableListOptions<TFilters, TData, TPage>) {
   const { filters, sortParams, pagination, queryParams } =
@@ -120,7 +123,6 @@ function useInfiniteTableListPlan<
       buildFilters,
       tableState,
       groupBy,
-      groupLevel,
     });
 
   const pageInputFor = useCallback(
@@ -134,14 +136,12 @@ function useInfiniteTableListPlan<
         };
       if (queryParams.sort !== undefined) params.sort = sortParams;
       if (groupBy) params.groupBy = groupBy;
-      if (groupBy && groupLevel) params.groupLevel = groupLevel;
       if (nesting) params.nesting = nesting;
       return params;
     },
     [
       filters,
       groupBy,
-      groupLevel,
       nesting,
       pagination.pageSize,
       queryParams.sort,
@@ -208,7 +208,6 @@ export function useInfiniteTableList<
   buildFilters,
   tableState,
   groupBy,
-  groupLevel,
   nesting,
   visibleFields,
 }: UseInfiniteTableListOptions<
@@ -222,7 +221,6 @@ export function useInfiniteTableList<
       buildFilters,
       tableState,
       groupBy,
-      groupLevel,
       nesting,
     });
 
@@ -256,10 +254,11 @@ export function useInfiniteTableList<
     initialPageParam: 0,
     getNextPageParam: (lastPage: TPage) => {
       const meta = lastPage.meta;
-      if (!meta.totalCount || !meta.pageSize) return undefined;
+      const count = meta.membershipCount ?? meta.totalCount;
+      if (!count || !meta.pageSize) return undefined;
       const pageIndex = meta.pageIndex;
       const loaded = (pageIndex + 1) * meta.pageSize;
-      return loaded < meta.totalCount ? pageIndex + 1 : undefined;
+      return loaded < count ? pageIndex + 1 : undefined;
     },
   });
 
@@ -275,6 +274,21 @@ export function useInfiniteTableList<
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
   const lastMeta = infiniteData?.pages.at(-1)?.meta;
   const groups = infiniteData?.pages[0]?.meta?.groups;
+  const memberships = useMemo(() => {
+    if (
+      !infiniteData?.pages.some((page) => page.meta.memberships !== undefined)
+    )
+      return undefined;
+    const seen = new Set<string>();
+    return infiniteData.pages.flatMap((page) =>
+      (page.meta.memberships ?? []).filter((membership) => {
+        const key = JSON.stringify([membership.id, membership.path]);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+    );
+  }, [infiniteData]);
   const progressive = useProgressiveList({
     pages: infiniteData?.pages,
     scope,
@@ -402,6 +416,7 @@ export function useInfiniteTableList<
     deferredFields: progressive.deferredFields,
     enrichmentVersion: progressive.renderVersion,
     groups,
+    memberships,
     isLoading,
     error: error instanceof Error ? error : null,
     tableState,

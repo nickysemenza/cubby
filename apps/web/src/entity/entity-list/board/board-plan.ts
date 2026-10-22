@@ -8,6 +8,8 @@ import type {
 } from "~/entity/generated/entity-lists.gen";
 
 export type BoardFilters = EntityBoardListView["filters"];
+/** Board columns use scalar field values, independently of list path identities. */
+export type BoardGroup = Pick<ListGroupSummary, "key" | "label" | "count">;
 type ListRow = EntityListResultByEntity[ListEntity]["items"][number];
 type RowValues<Row> = Row extends object ? Row[keyof Row] : never;
 /** Dynamic declared fields retain the generated row values, including dates and enrichments. */
@@ -17,10 +19,17 @@ export type BoardRow = { id: string } & Partial<
 
 /** Clearing a nullable grouping remains possible even when its no-value group is empty. */
 export function boardGroups(
-  summaries: ListGroupSummary[],
+  pathSummaries: ListGroupSummary[],
   roster: readonly { value: string; label: string }[] | null,
   choice: { noValue: boolean; noValueLabel: string },
-): ListGroupSummary[] {
+): BoardGroup[] {
+  const summaries: BoardGroup[] = pathSummaries
+    .filter((group) => group.path.length === 1)
+    .map((group) => ({
+      key: group.path[0]!,
+      label: group.label,
+      count: group.count,
+    }));
   const groups = roster
     ? [
         ...roster.map(

@@ -40,11 +40,12 @@ describe("entity cards", () => {
     expect(screen.getByText("Synthetic media failure")).toBeVisible();
   });
 
-  it("sections loaded cards by position and filters to a section", () => {
+  it("sections cards by explicit membership and filters to a section", () => {
     const onFilter = vi.fn();
     render(
       <ShelfGrid
         items={["Alpha one", "Alpha two", "Beta one", "No value one"]}
+        getItemId={(item) => item}
         renderCard={(item) => <div key={item}>{item}</div>}
         grouping={{
           choice: {
@@ -52,6 +53,9 @@ describe("entity cards", () => {
             label: "Category",
             noValueLabel: "No category",
             reason: null,
+            multiple: false,
+            dateKind: null,
+            buckets: [],
             value: { kind: "derived", options: null },
             filter: {
               columnId: "category",
@@ -62,10 +66,24 @@ describe("entity cards", () => {
             levelReason: "Category has no levels.",
           },
           groups: [
-            { key: "alpha", label: "Alpha", count: 2 },
-            { key: "beta", label: "Beta", count: 1 },
-            { key: FILTER_NONE, label: "No category", count: 1 },
-            { key: "gamma", label: "Gamma", count: 3 },
+            { value: "alpha", label: "Alpha", count: 2 },
+            { value: "beta", label: "Beta", count: 1 },
+            { value: FILTER_NONE, label: "No category", count: 1 },
+            { value: "gamma", label: "Gamma", count: 3 },
+          ].map(({ value, label, count }) => ({
+            key: JSON.stringify([value]),
+            path: [value],
+            label,
+            count,
+            parentCount: 7,
+            fraction: count / 7,
+            overlapping: false,
+          })),
+          memberships: [
+            { id: "Alpha one", path: ["alpha"] },
+            { id: "Alpha two", path: ["alpha"] },
+            { id: "Beta one", path: ["beta"] },
+            { id: "No value one", path: [FILTER_NONE] },
           ],
           onFilter,
         }}
@@ -84,11 +102,13 @@ describe("entity cards", () => {
     fireEvent.click(
       within(sections[1]!).getByRole("button", { name: /Filter to this/ }),
     );
-    expect(onFilter).toHaveBeenCalledWith({
-      key: "beta",
-      label: "Beta",
-      count: 1,
-    });
+    expect(onFilter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: ["beta"],
+        label: "Beta",
+        count: 1,
+      }),
+    );
   });
 
   it("uses uploaded image records directly and keeps unfinished uploads as icon tiles", () => {
@@ -132,6 +152,7 @@ describe("entity cards", () => {
     render(
       <ShelfGrid
         items={["Loaded record"]}
+        getItemId={(item) => item}
         renderCard={(item) => <div key={item}>{item}</div>}
         error={new Error("Page unavailable")}
         onRetry={retry}

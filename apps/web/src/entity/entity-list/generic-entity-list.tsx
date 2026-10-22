@@ -74,7 +74,9 @@ import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";
+import { listGroupBy } from "./list-grouping";
 import { listNested, nestSearchValue } from "./list-nesting";
+export { listGroupBy } from "./list-grouping";
 import {
   type ListNavigate,
   type ListSearch,
@@ -340,8 +342,7 @@ function ServerListBody({
     [entity, navigate, nested, parts.tree],
   );
   const onGroupByChange = useCallback(
-    (key: string | null) =>
-      navigate({ groupBy: key ?? undefined, groupLevel: undefined }),
+    (key: string | null) => navigate({ groupBy: key ? [{ key }] : undefined }),
     [navigate],
   );
   const filterOptions = useFilterOptions({ ...parts.list?.filterOptions });
@@ -402,7 +403,6 @@ function ServerListBody({
     nestToggle,
     // Timeline is already arranged by date, so it reads the list flat.
     groupBy: view === "timeline" ? undefined : listGroupBy(context.search),
-    groupLevel: listGroupLevel(context.search),
     onGroupByChange: view === "timeline" ? undefined : onGroupByChange,
   });
   usePageCount(list.totalCount);
@@ -633,17 +633,6 @@ function ServerListBody({
     </>
   );
 }
-
-const groupBySearchSchema = z.object({
-  groupBy: z.string().optional(),
-  groupLevel: z.number().int().positive().optional(),
-});
-/** The URL's Group by choice; the generated search schema validates it. */
-export const listGroupBy = (search: unknown): string | undefined =>
-  groupBySearchSchema.safeParse(search).data?.groupBy;
-/** The URL's Group by level (1 = top), when its choice nests. */
-export const listGroupLevel = (search: unknown): number | undefined =>
-  groupBySearchSchema.safeParse(search).data?.groupLevel;
 
 /** The Timeline view: the entity's timeline over the current filters, window in the search keys. */
 function ListTimeline({

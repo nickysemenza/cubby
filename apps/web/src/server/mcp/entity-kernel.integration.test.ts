@@ -198,13 +198,12 @@ describe("MCP entity kernel boundary", () => {
         action: "list",
         entity: "recipe",
         filters: {},
-        groupBy: "name",
+        groupBy: [{ key: "name" }],
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       reason: "LIST_GROUP_BY_FIELD_UNSUPPORTED",
-      message:
-        'Unsupported groupBy field "name" for recipe; expected one of cookbook',
+      message: 'Cannot group recipe by "name": unknown grouping field',
     });
   });
 
@@ -276,14 +275,14 @@ describe("MCP entity kernel boundary", () => {
       message: reason,
     });
 
-    // A declared Group by choice whose field holds several values per row.
+    // A declared text-array choice refuses an inapplicable calendar bucket.
     const groupReason =
-      'Cannot group product by "tags": A record can have several Tags, so it would appear in more than one group.';
+      'Cannot group product by "tags": Tags does not support month buckets';
     const grouped = {
       action: "list" as const,
       entity: "product" as const,
       filters: {},
-      groupBy: "tags",
+      groupBy: [{ key: "tags", bucket: "month" as const }],
     };
     await expect(executeEntity(entityKernel, grouped)).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -292,14 +291,14 @@ describe("MCP entity kernel boundary", () => {
     });
     expect(
       JSON.stringify((await callKernel(grouped, entityKernel)).content),
-    ).toContain("A record can have several Tags");
+    ).toContain("Tags does not support month buckets");
     const groupedViaHttp = await http(
       new Request("https://cubby.example/api/v1/entity/list", {
         method: "POST",
         body: JSON.stringify({
           entity: "product",
           filters: {},
-          groupBy: "tags",
+          groupBy: [{ key: "tags", bucket: "month" as const }],
         }),
         headers: {
           "content-type": "application/json",

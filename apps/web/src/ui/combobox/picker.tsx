@@ -13,6 +13,7 @@ import * as React from "react";
 import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { EnumPill } from "~/ui/primitives/enum-pill";
+import { Kbd } from "~/ui/primitives/kbd";
 import { popoverElevationClassName } from "~/ui/primitives/popover-elevation";
 import { Spinner } from "~/ui/primitives/spinner";
 import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
@@ -405,7 +406,9 @@ const listClass =
 const rowClass = (meta: boolean, custom: boolean) =>
   cn(
     "relative flex min-h-7.5 cursor-default items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-sm outline-none select-none max-sm:min-h-11",
-    "data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[selected]:bg-accent/60",
+    // Highlight (pointer or arrow keys) owns the fill; selection is the check
+    // and a heavier name, so the two never read alike on the same row.
+    "data-highlighted:bg-accent data-highlighted:text-accent-foreground [&[data-selected]_[data-picker-name]]:font-medium",
     "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground",
     meta &&
       "min-h-7.5 text-xs font-medium text-muted-foreground max-sm:min-h-11",
@@ -453,7 +456,10 @@ function PickerRowContent<TId extends string>({
       style={style}
     >
       <span className="flex min-w-0 flex-col">
-        <span className="min-w-0 break-words whitespace-normal">
+        <span
+          data-picker-name=""
+          className="min-w-0 break-words whitespace-normal"
+        >
           {presentation?.rowLabel ?? item.name}
         </span>
         {item.detail ? (
@@ -556,6 +562,32 @@ function CaretGlyph({ open }: { open: boolean }) {
   );
 }
 
+/** A record popup's keyboard contract, for pointer users learning it.
+ * Decorative: the combobox roles already announce it. */
+function PickerKeyHints({ multiple }: { multiple: boolean }) {
+  const key = "h-4 min-w-4 rounded-[4px] px-1 font-mono";
+  return (
+    <div
+      aria-hidden
+      className="flex shrink-0 items-center gap-3 border-t border-[var(--border)] px-2.5 py-1 text-2xs text-muted-foreground max-sm:hidden"
+    >
+      <span className="inline-flex items-center gap-1">
+        <Kbd className={key}>↑</Kbd>
+        <Kbd className={key}>↓</Kbd>
+        move
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <Kbd className={key}>↵</Kbd>
+        {multiple ? "toggle" : "select"}
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <Kbd className={key}>Esc</Kbd>
+        close
+      </span>
+    </div>
+  );
+}
+
 /** The closed field's leading visual, or a spinner while the stored value is
  * still resolving to its record. */
 function SelectedLead({ value }: { value: ComboboxItem | undefined }) {
@@ -600,6 +632,7 @@ function SearchPickerPopup<TId extends string>({
   anchorRef,
   orderedItems,
   records,
+  multiple,
   open,
   query,
   selectedId,
@@ -622,6 +655,7 @@ function SearchPickerPopup<TId extends string>({
   anchorRef: React.RefObject<HTMLDivElement | null>;
   orderedItems: ComboboxItem<TId>[];
   records: boolean;
+  multiple: boolean;
   open: boolean;
   query: string;
   selectedId?: TId;
@@ -798,6 +832,8 @@ function SearchPickerPopup<TId extends string>({
             <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[var(--border)] px-1.5 py-1">
               {footer}
             </div>
+          ) : records && orderedItems.length > 0 ? (
+            <PickerKeyHints multiple={multiple} />
           ) : null}
         </ComboboxPrimitive.Popup>
       </ComboboxPrimitive.Positioner>
@@ -1034,6 +1070,7 @@ function SearchPicker<TId extends string>({
       anchorRef={anchorRef}
       orderedItems={orderedItems}
       records={records != null}
+      multiple={multiple}
       open={open}
       query={query}
       selectedId={values[0]?.id}

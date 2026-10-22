@@ -26,6 +26,7 @@ import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { numberCellData, specFromCellData } from "~/ui/data-table/cell-data";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
+import { countedGroupPage } from "~/ui/data-table/counted-group-page";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
@@ -46,6 +47,9 @@ import {
 
 const DOMAIN_GROUP_CHOICE: GroupConfig["choice"] = {
   key: "domain",
+  multiple: false,
+  dateKind: null,
+  buckets: [],
   label: "Domain",
   noValueLabel: "No domain",
   reason: null,
@@ -66,7 +70,18 @@ function domainSections(rows: readonly DemoProduct[]) {
     else
       groups.push({ key: row.domain, label: capitalize(row.domain), count: 1 });
   }
-  return { sorted, groupConfig: { choice: DOMAIN_GROUP_CHOICE, groups } };
+  return {
+    sorted,
+    groupConfig: {
+      choice: DOMAIN_GROUP_CHOICE,
+      ...countedGroupPage({
+        groups,
+        ids: sorted.map((row) => row.id),
+        offset: 0,
+        totalCount: sorted.length,
+      }),
+    },
+  };
 }
 
 // Memoized table rows retain their cell closures; context updates presentation

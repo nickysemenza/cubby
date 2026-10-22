@@ -1,6 +1,7 @@
 import type { RowData } from "@tanstack/react-table";
 import { useMemo, type ReactNode } from "react";
 
+import { groupRecordIdentity } from "./group-record-identity";
 import type { CubbyRow as Row } from "./table-features";
 import { type GroupConfig, groupSections } from "./use-grouped-list";
 
@@ -10,6 +11,9 @@ type DesktopGroupItem =
       key: string;
       title: string;
       count: number;
+      depth: number;
+      collapsed: boolean;
+      onToggle?: () => void;
       onFilter?: () => void;
       onHide?: () => void;
       aside?: ReactNode;
@@ -17,9 +21,14 @@ type DesktopGroupItem =
     }
   /** groupRowIndex: position within the row's group, so zebra striping can
    *  restart at each section header instead of running through it. */
-  | { kind: "row"; rowIndex: number; groupRowIndex: number }
+  | {
+      kind: "row";
+      rowIndex: number;
+      groupRowIndex: number;
+      occurrenceKey?: string;
+    }
   /** An expanded row's full-width detail (`RTable`'s `renderRowDetail`). */
-  | { kind: "detail"; rowIndex: number };
+  | { kind: "detail"; rowIndex: number; occurrenceKey?: string };
 
 /**
  * The table's rows interleaved with section headers and expanded row details
@@ -39,6 +48,7 @@ export function useDesktopGroupedRows<TItem extends RowData>(
       ? groupSections(
           rows.map((row, rowIndex) => ({ row, rowIndex })),
           groupConfig,
+          ({ row }) => groupRecordIdentity(row),
           ({ row }) => row.depth > 0,
         ).flatMap((section): DesktopGroupItem[] => [
           {
@@ -46,6 +56,9 @@ export function useDesktopGroupedRows<TItem extends RowData>(
             key: section.key,
             title: section.label,
             count: section.count,
+            depth: section.depth,
+            collapsed: section.collapsed,
+            onToggle: section.onToggle,
             onFilter: section.onFilter,
             onHide: section.onHide,
             aside: section.aside,
@@ -55,6 +68,7 @@ export function useDesktopGroupedRows<TItem extends RowData>(
             kind: "row" as const,
             rowIndex,
             groupRowIndex,
+            occurrenceKey: JSON.stringify([section.key, rows[rowIndex]?.id]),
           })),
         ])
       : rows.map((_, rowIndex) => ({
@@ -65,7 +79,14 @@ export function useDesktopGroupedRows<TItem extends RowData>(
     if (!detailed) return items;
     return items.flatMap((item): DesktopGroupItem[] =>
       item.kind === "row" && detailRowIds?.has(rows[item.rowIndex]?.id ?? "")
-        ? [item, { kind: "detail", rowIndex: item.rowIndex }]
+        ? [
+            item,
+            {
+              kind: "detail",
+              rowIndex: item.rowIndex,
+              occurrenceKey: item.occurrenceKey,
+            },
+          ]
         : [item],
     );
   }, [rows, groupConfig, detailRowIds]);

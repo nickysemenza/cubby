@@ -7,6 +7,7 @@
  * read.
  */
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type GeneratedDerivedPredicateKey,
   type GeneratedDerivedValueKey,
@@ -30,6 +31,7 @@ import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
+import { householdDaySql } from "~/server/db/helpers/query";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
@@ -697,6 +699,8 @@ export interface ListGroupSql {
   readonly label: SQL | null;
   readonly order: readonly (SQL | "key" | "label")[];
   readonly subtree: SQL | null;
+  /** Correlated SQL expansion; the caller LEFT JOINs it once per dimension. */
+  readonly members?: SQL;
 }
 
 const optionOrder = (
@@ -721,7 +725,7 @@ const optionOrder = (
  */
 export const groupSql = (
   entity: Entity,
-  { key, level }: ListGroupBy,
+  { key, level, bucket }: ListGroupBy,
   derived: AnyDerivedSql,
   table: PgTable,
   context: ListContext,
@@ -739,6 +743,11 @@ export const groupSql = (
       "LIST_GROUP_BY_FIELD_UNSUPPORTED",
       choice.reason ?? `Cannot group ${entity} by "${key}"`,
     );
+  if (bucket !== undefined && !choice.buckets.includes(bucket))
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      `${choice.label} does not support ${bucket} buckets`,
+    );
   const value = choice.value;
   if (level !== undefined && (value.kind !== "record" || level > choice.levels))
     throw createAppError(
@@ -748,6 +757,34 @@ export const groupSql = (
     );
   switch (value.kind) {
     case "record": {
+      if (choice.multiple) {
+        const traversal = compileTraversal(entity, value.steps, "lg", {
+          to: value.target,
+          root: `"${getTableName(table)}"`,
+        });
+        const [first, ...rest] = traversal.hops;
+        if (first === undefined)
+          throw new Error(`${entity}.${key} has no relation step`);
+        const leafId = sql`${sql.raw(traversal.leafAlias)}."id"`;
+        const id =
+          level === undefined
+            ? leafId
+            : hierarchyAncestorSql(value.target, leafId, level);
+        const dbTable = entityManifest[value.target].dbTable;
+        if (dbTable === null) throw new Error(`${value.target} has no table`);
+        const at = (column: string) =>
+          level === undefined
+            ? sql`${sql.raw(traversal.leafAlias)}.${sql.identifier(column)}`
+            : sql`(SELECT a.${sql.identifier(column)} FROM ${sql.identifier(dbTable)} a WHERE a."id" = ${id})`;
+        return {
+          choice,
+          key: sql`null::text`,
+          label: sql`null::text`,
+          order: ["label", "key"],
+          subtree: null,
+          members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${at(value.titleColumn)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })} WHERE (${first.condition})${first.softDelete ? sql` AND ${sql.raw(first.alias)}."deletedAt" IS NULL` : sql``}`,
+        };
+      }
       if (level === undefined)
         return {
           choice,
@@ -774,12 +811,70 @@ export const groupSql = (
     case "column":
     case "field":
     case "derived": {
+      if (value.kind === "field" && choice.multiple) {
+        const traversal = compileTraversal(entity, value.steps, "lg", {
+          to: value.target,
+          root: `"${getTableName(table)}"`,
+        });
+        const [first, ...rest] = traversal.hops;
+        if (first === undefined)
+          throw new Error(`${entity}.${key} has no relation step`);
+        const raw = terminalSql(
+          value.target,
+          traversal.leafAlias,
+          value.column,
+        );
+        const array = entityFieldModels[value.target].storage.some(
+          (column) =>
+            column.column === value.column && column.kind === "text-array",
+        );
+        const leaf = array ? sql`group_value` : raw;
+        const day =
+          choice.dateKind === "timestamp"
+            ? householdDaySql(leaf)
+            : sql`${leaf}::date`;
+        const text =
+          choice.dateKind === null
+            ? sql`NULLIF(btrim(${leaf}::text), '')`
+            : sql`date_trunc(${bucket ?? "day"}::text, ${day}::timestamp)::date::text`;
+        return {
+          choice,
+          key: sql`null::text`,
+          label: null,
+          order: ["key"],
+          subtree: null,
+          members: sql`SELECT DISTINCT ${text} AS "key", null::text AS "label", false AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })}${array ? sql` CROSS JOIN LATERAL unnest(${raw}) group_value` : sql``} WHERE (${first.condition})${first.softDelete ? sql` AND ${sql.raw(first.alias)}."deletedAt" IS NULL` : sql``} AND ${text} IS NOT NULL`,
+        };
+      }
       const raw =
         value.kind === "column"
           ? terminalSql(entity, `"${getTableName(table)}"`, value.column)
           : value.kind === "field"
             ? relatedColumnSql(entity, value, table, value.column)
             : derivedValueSql(entity, derived, key, context);
+      if (choice.multiple)
+        return {
+          choice,
+          key: sql`null::text`,
+          label: null,
+          order: ["key"],
+          subtree: null,
+          members: sql`SELECT DISTINCT NULLIF(btrim(v::text), '') AS "key", null::text AS "label", false AS "subtree" FROM unnest(${raw}) AS v WHERE NULLIF(btrim(v::text), '') IS NOT NULL`,
+        };
+      if (choice.dateKind !== null) {
+        const day =
+          choice.dateKind === "timestamp"
+            ? householdDaySql(raw)
+            : sql`${raw}::date`;
+        const date = sql`date_trunc(${bucket ?? "day"}::text, ${day}::timestamp)::date::text`;
+        return {
+          choice,
+          key: date,
+          label: null,
+          order: ["key"],
+          subtree: null,
+        };
+      }
       // Blank text reads as no value, like an absent one.
       const text = sql`NULLIF(btrim(${raw}::text), '')`;
       return {
@@ -791,4 +886,25 @@ export const groupSql = (
       };
     }
   }
+};
+
+/** Only explicitly admitted scalar numeric fields can contribute a metric. */
+export const listMetricSql = (
+  entity: Entity,
+  key: string,
+  derived: AnyDerivedSql,
+  table: PgTable,
+  context: ListContext,
+): SQL => {
+  const fields: Readonly<Record<string, GeneratedListField>> =
+    generatedEntityListFields[entity].derived;
+  const value = fields[key];
+  if (value?.shape === "value" && value.type === "number")
+    return derivedValueSql(entity, derived, key, context);
+  const model = entityFieldModels[entity];
+  const field = model.fields.find((field) => field.key === key);
+  const stored = model.storage.find((column) => column.key === key);
+  if (field?.kind !== "number" || stored === undefined)
+    throw new Error(`${entity}.${key} has no additive scalar SQL expression`);
+  return terminalSql(entity, `"${getTableName(table)}"`, stored.column);
 };
