@@ -6,7 +6,7 @@ import {
   entityListEnrichmentOutputSchema,
   entityListSummaryOutputSchema,
 } from "~/entity/generated/entity-lists.gen";
-import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
+import { executeEntitySelectionIds } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
