@@ -1,0 +1,25 @@
+apps/web/src/server/domains/financial-transaction/repo/financial-spending.ts
+  s_28f9b176f45483::t_87e36ae4921aba 15,124-135,137,141-185,189-202,685,688
+apps/web/src/server/domains/transaction-import/repo/statement-spending.ts
+  s_28f9b176f45483::t_b3c9e89ddf47ee 6,10-14,22,25-27,29-30,32-43,58,60-74,76-108
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts
+  s_28f9b176f45483::t_7ac9d3d2606ee7 36,88-91,94,874-879,1056-1063,1065-1066,1070-1073,1761,1772,1774,1807,1823-1833
+docs/import-evidence-convergence.md
+  s_28f9b176f45483::t_969dfd65403fdc 303-310
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "062c4ab10ddf6486d0331c7e6b44a347c4493c45",
+  "prompts": {},
+  "sessions": {
+    "s_28f9b176f45483": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "77fffd6f-914e-4d40-b3b6-e4518ede0144",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
