@@ -330,7 +330,7 @@ describe("entity kernel search projections", () => {
           rename(category.id, "Projected awnings"),
         ).resolves.toMatchObject({ action: "update" });
         await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toThrow(
-          "Synthetic search publication failed",
+          "synthetic projection failure",
         );
         const [failed] = await db
           .select({ error: job.error })

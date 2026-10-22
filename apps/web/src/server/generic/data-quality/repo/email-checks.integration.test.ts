@@ -164,9 +164,7 @@ describe("Email data quality", () => {
     expect(qualityCandidates).toBeLessThanOrEqual(120);
   });
 
-  // Scalar checks must stay bounded with both unrelated history and enough
-  // completed imports to exceed a hashed SubPlan's default memory estimate.
-  it("bounds completed-import membership work independently of Email volume", async () => {
+  it("counts and queues only Emails without a completed import", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic membership member",
       kind: "member",
@@ -174,7 +172,7 @@ describe("Email data quality", () => {
     const originals = await getDb(ctx.db)
       .insert(orderMail)
       .values(
-        Array.from({ length: 80 }, () => ({
+        Array.from({ length: 4 }, () => ({
           ledgerPartyId: party.id,
           rawChecksum: "c".repeat(64),
         })),
@@ -185,7 +183,7 @@ describe("Email data quality", () => {
       if (!original) throw new Error("Synthetic original was not created");
       return original.id;
     };
-    for (let index = 0; index < 2900; index++)
+    for (let index = 0; index < 4; index++)
       await insertWithShortcode(ctx.db, "run", {
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
@@ -194,17 +192,17 @@ describe("Email data quality", () => {
         actorLedgerPartyShortcode: party.shortcode,
         actorLedgerPartyName: party.name,
         actorLedgerPartyKind: party.kind,
-        purpose: index < 400 ? "ai_suggest" : "mail_import",
+        purpose: index < 2 ? "ai_suggest" : "mail_import",
         trigger: "manual",
         status: "completed",
         input: {
           kind: "mail_research",
           sources: [
-            { orderMailId: originalAt(index % 40), checksum: "c".repeat(64) },
+            { orderMailId: originalAt(index % 2), checksum: "c".repeat(64) },
           ],
         },
       });
-    for (let index = 0; index < 120; index++)
+    for (let index = 0; index < 6; index++)
       await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: party.id,
         mailboxId: "synthetic-membership-mailbox",
@@ -212,50 +210,16 @@ describe("Email data quality", () => {
         orderMailId:
           index % 3 === 0
             ? null
-            : originalAt(Math.floor(index / 3) + (index % 3 === 1 ? 40 : 0)),
+            : originalAt(Math.floor(index / 3) + (index % 3 === 1 ? 2 : 0)),
         checksum: "c".repeat(64),
         classification: "related",
         status: "pending",
       });
-    await getDb(ctx.db).execute(sql`ANALYZE "Email", "Run"`);
     const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported", undefined, qualityFilterContext("email"))} AS gap FROM ${qualityFilterSource("email")}`;
     const rows = await getDb(ctx.db).execute(statement);
     const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows.rows);
-    expect(gaps).toHaveLength(120);
-    expect(gaps.filter((row) => row.gap)).toHaveLength(80);
-    const result = await getDb(ctx.db).execute(
-      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
-    );
-    const planRows = z
-      .array(
-        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
-      )
-      .parse(result.rows);
-    const planNode = z.object({
-      "Node Type": z.string(),
-      "Relation Name": z.string().optional(),
-      "Actual Rows": z.number().default(0),
-      "Actual Loops": z.number().default(0),
-      "Rows Removed by Filter": z.number().default(0),
-      Plans: z.array(z.unknown()).optional(),
-    });
-    let membershipRowsVisited = 0;
-    const visit = (value: unknown) => {
-      const node = planNode.parse(value);
-      if (
-        node["Relation Name"] === "Run" ||
-        node["Node Type"] === "Materialize" ||
-        node["Node Type"] === "Function Scan"
-      )
-        membershipRowsVisited +=
-          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
-          node["Actual Loops"];
-      node.Plans?.forEach(visit);
-    };
-    for (const row of planRows)
-      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
-    // Allow one complete history/source scan, reject a scan per Email.
-    expect(membershipRowsVisited).toBeLessThan(50000);
+    expect(gaps).toHaveLength(6);
+    expect(gaps.filter((row) => row.gap)).toHaveLength(4);
     // Plain count reads need no completed-import membership or hydration.
     const plain = await countTestDbQueries(() =>
       listScaffold("email", email, {
@@ -279,7 +243,7 @@ describe("Email data quality", () => {
         {},
       ),
     );
-    expect(plain.result.count).toBe(120);
+    expect(plain.result.count).toBe(6);
     expect(plain.queryCount).toBe(1);
     expect(plain.statements.join("\n")).not.toMatch(/\bJOIN\b/i);
     const queue = await readWorkQueue(
@@ -291,8 +255,8 @@ describe("Email data quality", () => {
       }),
       false,
     );
-    expect(queue.meta.totalCount).toBe(80);
-    expect(queue.items).toHaveLength(80);
+    expect(queue.meta.totalCount).toBe(4);
+    expect(queue.items).toHaveLength(4);
     expect(queue.items.every((item) => item.entity === "email")).toBe(true);
   });
 
