@@ -13,7 +13,11 @@ import {
 import { createEntityFixture, seedConcurrently } from "./fixtures/core";
 import { defaultPagination } from "~/ui/data-table/table-utils";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import {
+  dispatchesOperation,
+  operationResult,
+  unbatchFor,
+} from "./support/dispatch-wire";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -146,7 +150,12 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
     releaseNextPage();
     await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
     await page.getByRole("option", { name: "Done", exact: true }).click();
+    const saved = page.waitForResponse(
+      (response) => dispatchesOperation(response.request(), "entity.mutate"),
+      { timeout: 30000 },
+    );
     await dialog.getByRole("button", { name: "Update", exact: true }).click();
+    await operationResult(await saved, "entity.mutate", z.unknown());
     await expect(dialog).not.toBeVisible();
     const response = await entityApi(page.request).list("task", {
       filters: { ids: selected.map(({ id }) => id) },
