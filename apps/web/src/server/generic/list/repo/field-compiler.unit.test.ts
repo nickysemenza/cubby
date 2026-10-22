@@ -314,7 +314,7 @@ describe("group dimensions", () => {
     expect(() =>
       groupSql(
         "purchase",
-        { key: "status", bucket: "day" },
+        { key: "reconciliation", bucket: "day" },
         {},
         purchase,
         ListContext.empty,
