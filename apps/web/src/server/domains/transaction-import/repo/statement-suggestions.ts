@@ -1433,7 +1433,15 @@ export async function publishChargeProposal(
         // Replaying that exact charge must finish the effect, not leave stale advice.
         await transitionAssessmentStates(
           tx,
-          sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}`,
+          sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}
+            AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
+            AND EXISTS (
+              SELECT 1 FROM ${chargeStateOf(
+                sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
+              )} cs
+              WHERE cs.ignored OR cs.superseded OR
+                (cs.shortcode IS NOT NULL AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.book})
+            )`,
           { active: false, status: "superseded" },
           { kind: "statement_settled_elsewhere" },
         );
