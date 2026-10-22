@@ -4,7 +4,7 @@ import {
   searchableEntities,
   searchableEntitySchema,
 } from "@cubby/schemas/search";
-import { and, asc, count, gt, isNull } from "drizzle-orm";
+import { and, asc, count, gt, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -27,6 +27,7 @@ import {
 import { retireStillOrphanedSearchArtifacts } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
 import type { JobHandler } from "~/server/generic/jobs/types";
 import {
+  countSearchDocumentSources,
   getSearchDocumentSourceRepairPage,
   getSearchDocumentOrphanPage,
   prepareSearchDocuments,
@@ -53,7 +54,7 @@ export type RefreshFamilyPreparation = {
   prepareRecipe: RecipePreparation;
   prepareConversions: (
     db: Database,
-    options: { after?: string; limit: number },
+    options: { after?: string; limit: number; createdBefore: string },
   ) => Promise<{
     nextCursor: string | null;
     scanned: number;
@@ -61,10 +62,17 @@ export type RefreshFamilyPreparation = {
     publish: (tx: Database) => Promise<void>;
   }>;
   /** Null when embeddings are not configured. */
-  countEmbeddings: (db: Database) => Promise<number | null>;
+  countEmbeddings: (
+    db: Database,
+    updatedBefore: string,
+  ) => Promise<number | null>;
   prepareEmbeddings: (
     db: Database,
-    options: { cursor?: SearchDocumentCursor; pageSize: number },
+    options: {
+      cursor?: SearchDocumentCursor;
+      pageSize: number;
+      updatedBefore: string;
+    },
   ) => Promise<{
     nextCursor: SearchDocumentCursor | null;
     pending: number;
@@ -72,13 +80,22 @@ export type RefreshFamilyPreparation = {
   } | null>;
 };
 
-const countSearchDocuments = async (db: Database) => {
+const countSearchDocuments = async (db: Database, createdBefore: string) => {
   const [row] = await getDb(db)
     .select({ n: count() })
     .from(searchDocument)
-    .where(isNull(searchDocument.deletedAt));
+    .where(
+      and(
+        isNull(searchDocument.deletedAt),
+        lte(searchDocument.createdAt, new Date(createdBefore)),
+      ),
+    );
   return row?.n ?? 0;
 };
+
+/** Live recipes created by a pass's frozen cutoff; its COUNT and pager share it. */
+const recipeSourceWhere = (createdBefore: string) =>
+  and(notDeleted(recipe), lte(recipe.createdAt, new Date(createdBefore)));
 
 const VECTOR_PHASE = { phase: "vectors" };
 
@@ -89,18 +106,27 @@ const searchCursorOf = (at: Record<string, string> | null) => {
     : undefined;
 };
 
-/** Each family is a bounded corpus pass over current source data. */
+/**
+ * Each family is a bounded corpus pass over current source data. Its COUNT
+ * and every page apply the pass's frozen cutoff, so records created after
+ * the count wait for the next pass.
+ */
 function refreshFamilyDrivers(
   ports: RefreshFamilyPreparation,
 ): RoutineStepDriversFor<"derived_refresh"> {
   return {
     search: {
-      count: countSearchDocuments,
-      page: async (db, at) => {
+      count: (db, boundary) =>
+        countSearchDocumentSources(db, [...searchableEntities], boundary),
+      page: async (db, at, boundary) => {
         const page = await getSearchDocumentSourceRepairPage(
           db,
           [...searchableEntities],
-          { cursor: searchCursorOf(at), pageSize: REFRESH_PAGE_SIZE },
+          {
+            cursor: searchCursorOf(at),
+            pageSize: REFRESH_PAGE_SIZE,
+            createdBefore: boundary,
+          },
         );
         const prepared = await prepareSearchDocuments(db, page.refs);
         return {
@@ -124,14 +150,14 @@ function refreshFamilyDrivers(
       },
     },
     recipes: {
-      count: async (db) => {
+      count: async (db, boundary) => {
         const [row] = await getDb(db)
           .select({ n: count() })
           .from(recipe)
-          .where(notDeleted(recipe));
+          .where(recipeSourceWhere(boundary));
         return row?.n ?? 0;
       },
-      page: async (db, at) => {
+      page: async (db, at, boundary) => {
         const { after } = cursorSchema.parse(at ?? {});
         // A recipe's authoritative closure can be large; one owner bounds each provider preparation.
         const rows = await getDb(db)
@@ -139,7 +165,7 @@ function refreshFamilyDrivers(
           .from(recipe)
           .where(
             and(
-              isNull(recipe.deletedAt),
+              recipeSourceWhere(boundary),
               after ? gt(recipe.id, parseEntityId("recipe", after)) : undefined,
             ),
           )
@@ -171,10 +197,11 @@ function refreshFamilyDrivers(
     },
     conversions: {
       count: countProductCoverageSources,
-      page: async (db, at) => {
+      page: async (db, at, boundary) => {
         const prepared = await ports.prepareConversions(db, {
           after: cursorSchema.parse(at ?? {}).after,
           limit: REFRESH_PAGE_SIZE,
+          createdBefore: boundary,
         });
         return {
           next: prepared.nextCursor ? { after: prepared.nextCursor } : null,
@@ -188,11 +215,13 @@ function refreshFamilyDrivers(
       },
     },
     embeddings: {
-      count: async (db) => (await ports.countEmbeddings(db)) ?? 0,
-      page: async (db, at) => {
+      count: async (db, boundary) =>
+        (await ports.countEmbeddings(db, boundary)) ?? 0,
+      page: async (db, at, boundary) => {
         const prepared = await ports.prepareEmbeddings(db, {
           cursor: searchCursorOf(at),
           pageSize: REFRESH_PAGE_SIZE,
+          updatedBefore: boundary,
         });
         if (!prepared) return null;
         return {
@@ -205,7 +234,7 @@ function refreshFamilyDrivers(
     },
     orphans: {
       count: countSearchDocuments,
-      page: async (db, at) => {
+      page: async (db, at, boundary) => {
         const cursor = cursorSchema.parse(at ?? {});
         if (cursor.phase === "vectors") {
           const { prepareEmbeddingCleanupPage } =
@@ -230,6 +259,7 @@ function refreshFamilyDrivers(
         const page = await getSearchDocumentOrphanPage(db, {
           cursor: searchCursorOf(at),
           pageSize: REFRESH_PAGE_SIZE,
+          createdBefore: boundary,
         });
         return {
           next: page.nextCursor ?? VECTOR_PHASE,

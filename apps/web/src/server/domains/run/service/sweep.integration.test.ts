@@ -1,3 +1,4 @@
+import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
@@ -324,6 +325,29 @@ describe("Sweeps", () => {
         },
       ],
     });
+
+  // Review finding: the evaluate step counted a completed evaluation as both
+  // done and skipped, so a finished step overstated its inputs.
+  it("counts each settled field evaluation once", async () => {
+    await createRepoEntity(ctx, "project", { name: "Synthetic porch repair" });
+    const runId = await fieldSweep();
+    expect(await drive(runId)).toBe("wait");
+    const requested = await evaluationsOf(runId);
+    await getDb(ctx.db).execute(
+      sql`UPDATE "AiEvaluation" SET state = ${aiEvaluationState.enum.completed} WHERE id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "RunStep" SET meta = meta - 'capacityUntil' WHERE "runId" = ${runId}::uuid`,
+    );
+    expect(await drive(runId)).toBe("finished");
+    const [, evaluate] = await readRunSteps(ctx.db, runId);
+    expect(evaluate).toMatchObject({
+      key: "field_evaluate",
+      state: "done",
+      done: requested.length,
+      skipped: 0,
+    });
+  });
 
   // Failure modes: a field Sweep step finishes before its evaluations do, or
   // fans out a child Run instead of requesting evaluations itself; cancelling

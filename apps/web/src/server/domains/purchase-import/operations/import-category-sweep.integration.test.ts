@@ -14,7 +14,6 @@ import {
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { sweepImportedProductCategories } from "../service/import-category-sweep";
@@ -56,7 +55,6 @@ describe("post-commit category suggestions", () => {
   };
 
   it("sweeps exactly the created Products and settles the arrival prompt once they are untracked", async () => {
-    await createSystemUserFixture(ctx.db);
     await activateAiRefresh(ctx.db, "synthetic-release", {
       enabled: true,
       startDiscovery: false,

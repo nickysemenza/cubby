@@ -52,7 +52,8 @@ import database runtime merely to read execution context.
 Broad family saves record Job intent without sending a wake for each save; the
 minute cron or another due-Job drain picks it up.
 Each drain selects fair batches in one SQL window query, interleaving kinds
-least recently served first using timestamps from existing Job rows. Priority
+least recently claimed first by each Job's `lastClaimedAt`; enqueues and
+invalidations are not service. Priority
 ranks only within each kind; manual `run.execute` Jobs have raised priority.
 Queue position counts due Jobs ranked ahead in the same kind. Each drain
 reselects batches of at most 25 due Jobs, with a default cap of

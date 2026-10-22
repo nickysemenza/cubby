@@ -6,6 +6,11 @@ ALTER TABLE "Job" ADD COLUMN "subjectId" text;--> statement-breakpoint
 ALTER TABLE "Job" ADD COLUMN "waitReason" text;--> statement-breakpoint
 ALTER TABLE "Job" ADD COLUMN "waitUntil" timestamp;--> statement-breakpoint
 CREATE INDEX "Job_subject_idx" ON "Job" USING btree ("subjectKind","subjectId");--> statement-breakpoint
+ALTER TABLE "Job" ADD COLUMN "lastClaimedAt" timestamp;--> statement-breakpoint
+CREATE INDEX "Job_kind_claimed_idx" ON "Job" USING btree ("kind","lastClaimedAt");--> statement-breakpoint
+-- Seed fair-drain service history from the last claim-shaped write.
+UPDATE "Job" SET "lastClaimedAt" = "updatedAt" WHERE state IN ('running', 'completed', 'retry_wait', 'failed');
+--> statement-breakpoint
 INSERT INTO "AuditLog" ("entityId", "entityKind", action, changes, "userId", channel, "runId")
 SELECT id, 'run', 'update', jsonb_build_object('dispatchAttempts', jsonb_build_object('from', "dispatchAttempts", 'to', NULL)), "actorUserId", 'system', id
 FROM "Run";

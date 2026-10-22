@@ -1150,7 +1150,7 @@ type TransferPairStateData = z.infer<typeof transferPairStateData>;
  * and an apply that could proceed. A cross-owner, distant or competing pair
  * is labelled too, as review evidence; its other blockers remain.
  */
-export const transferPairNeedsLabels = (judgment: TransferPairJudgment) =>
+const transferPairNeedsLabels = (judgment: TransferPairJudgment) =>
   judgment.apply.available &&
   judgment.inflow.origin !== "cash" &&
   (judgment.outflow.movementLabel === null ||

@@ -50,6 +50,8 @@ export const job = pgTable(
       .defaultNow(),
     leaseToken: uuid("leaseToken"),
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
+    /** Set by each claim; the fair drain serves the least recently claimed kind first. */
+    lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
     error: text("error"),
     ...baseTimestamps(),
   },
@@ -58,6 +60,7 @@ export const job = pgTable(
     index("Job_due_idx").on(table.state, table.availableAt, table.priority),
     index("Job_run_idx").on(table.runId),
     index("Job_subject_idx").on(table.subjectKind, table.subjectId),
+    index("Job_kind_claimed_idx").on(table.kind, table.lastClaimedAt),
     check(
       "Job_waitReason_check",
       sql`${table.waitReason} IN (${sql.join(

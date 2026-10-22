@@ -16,7 +16,6 @@ const step = (fields: Partial<Step> & Pick<Step, "key" | "label">): Step => ({
   skipped: 0,
   pages: 1,
   left: 0,
-  childRunId: null,
   cursor: null,
   pausedReason: null,
   pausedUntil: null,

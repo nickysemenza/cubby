@@ -348,7 +348,17 @@ describe("durable jobs", () => {
     const handlers = { "a.image": handler, "b.sweep": handler };
     await drainDueJobs(ctx.db, handlers, 1);
     await drainDueJobs(ctx.db, handlers, 1);
-    expect(visited).toEqual([first.id, sweep.id]);
+    // An invalidation between wakes is new intent, not service: the image
+    // kind was still claimed least recently.
+    await enqueueJob(ctx.db, {
+      key: "synthetic.image.low",
+      kind: "a.image",
+      input: { revision: 2 },
+      priority: 10,
+      invalidate: true,
+    });
+    await drainDueJobs(ctx.db, handlers, 1);
+    expect(visited).toEqual([first.id, sweep.id, first.id]);
   });
 
   it("raises priority when a member resumes an automatically admitted Run", async () => {

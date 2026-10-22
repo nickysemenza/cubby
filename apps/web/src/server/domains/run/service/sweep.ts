@@ -1,4 +1,7 @@
-import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
+import {
+  aiEvaluationState,
+  aiEvaluationTarget,
+} from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import { suggestFieldKeys } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
@@ -24,11 +27,9 @@ import {
   countTransferPairSeeds,
   countTransferPairStates,
   countTransferPairsNeedingLabels,
-  discoverTransferPairs,
   generateTransferPairSuggestionsPage,
   retryTransferPairRefs,
   transferPairGenerationCursor,
-  transferPairNeedsLabels,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   countStatementPendingHolds,
@@ -42,6 +43,7 @@ import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import { aiEvaluationsForRun } from "../repo/ai-work-state";
 import {
+  CONNECTION_ROSTER_PAGE,
   countConnectionSweepSources,
   prepareConnectionSweepPage,
 } from "../repo/connection-refresh";
@@ -87,50 +89,20 @@ export async function startRoutineSweep(
   });
 }
 
-/** What a Sweep would look at, from stored state; nothing runs. */
+/**
+ * What a Sweep would look at: each family's first counted step, the same
+ * COUNT that step freezes when it starts. Nothing runs.
+ */
 export async function estimateSweep(
   db: Database,
   families: readonly SweepFamilyScope[],
 ) {
+  const boundary = new Date().toISOString();
   return Promise.all(
-    families.map(async (entry) => {
-      switch (entry.family) {
-        case "transfer_pair": {
-          const pairs = await discoverTransferPairs(db, entry.scope);
-          return {
-            family: entry.family,
-            records: pairs.length,
-            decisions: pairs.filter(transferPairNeedsLabels).length * 2,
-          };
-        }
-        case "statement_transaction": {
-          const charges = await countUnmatchedCharges(db, entry.scope);
-          return {
-            family: entry.family,
-            records: charges,
-            // Every charge is matched by rule; labels ask the decision model.
-            decisions: await countSuggestionsNeedingLabels(
-              db,
-              entry.scope.importId ?? null,
-            ),
-          };
-        }
-        case "recommendation": {
-          const sources = await countConnectionSweepSources(
-            db,
-            entry.scope.entityKinds,
-          );
-          return { family: entry.family, records: sources, decisions: sources };
-        }
-        case "field": {
-          const fields = fieldTargets(entry.scope.targets).reduce(
-            (total, target) => total + target.fields.length,
-            0,
-          );
-          return { family: entry.family, records: fields, decisions: fields };
-        }
-      }
-    }),
+    families.map(async (entry) => ({
+      family: entry.family,
+      records: await countFamilyInput(db, entry, boundary),
+    })),
   );
 }
 
@@ -151,6 +123,42 @@ function scopeOf<F extends SweepFamily>(
   // SAFETY: the discriminant matched, so the scope is this family's.
   return entry.scope as FamilyScope<F>;
 }
+
+/** Each family's first counted step: its frozen COUNT and the Sweep estimate. */
+const familyInputCount = {
+  transfer_pair: (db, scope, boundary) =>
+    countTransferPairSeeds(db, {
+      since: scope.since ?? null,
+      createdBefore: boundary,
+    }),
+  // Charges are derived from current statement rows, so no cutoff bounds
+  // them: a charge that stops qualifying mid-step is tallied `removed`.
+  statement_transaction: (db, scope) => countUnmatchedCharges(db, scope),
+  recommendation: (db, scope, boundary) =>
+    countConnectionSweepSources(db, scope.entityKinds, new Date(boundary)),
+  // Targets come from the Sweep's own input, a closed population.
+  field: async (_db, scope) => fieldTargets(scope.targets).length,
+} satisfies {
+  [F in SweepFamily]: (
+    db: Database,
+    scope: FamilyScope<F>,
+    boundary: string,
+  ) => Promise<number>;
+};
+
+const countFamilyInput = (
+  db: Database,
+  entry: SweepFamilyScope,
+  boundary: string,
+) =>
+  // SAFETY: the entry's discriminant selects the counter for its own scope.
+  (
+    familyInputCount[entry.family] as (
+      db: Database,
+      scope: SweepFamilyScope["scope"],
+      boundary: string,
+    ) => Promise<number>
+  )(db, entry.scope, boundary);
 
 /** A frozen boundary is the instant the step counted its population. */
 const cutoff = (context: StepContext) =>
@@ -191,10 +199,11 @@ const labelCursor = z
 
 const transferPairScan: StepDriversFor<"sweep">["transfer_pair_scan"] = {
   count: countedNow((context, boundary) =>
-    countTransferPairSeeds(context.db, {
-      since: scopeOf(context.run, "transfer_pair").since ?? null,
-      createdBefore: boundary,
-    }),
+    familyInputCount.transfer_pair(
+      context.db,
+      scopeOf(context.run, "transfer_pair"),
+      boundary,
+    ),
   ),
   page: async (context) => {
     const { db, run, step } = context;
@@ -224,14 +233,20 @@ const transferPairScan: StepDriversFor<"sweep">["transfer_pair_scan"] = {
     ).length;
     // A scan ends where the retire step's population begins.
     const done = page.next === null || page.next.kind === "retire";
+    // Counts are movements; a pair that failed to publish is not a failed
+    // movement, so it is a tally beside the published ones.
     return {
       kind: "progress",
       delta: {
         done: page.seeds - seedFailures,
-        failed: page.failed.length,
+        failed: seedFailures,
       },
       errors: page.failed,
-      tallies: { pairs: page.found, published: page.published },
+      tallies: {
+        pairs: page.found,
+        published: page.published,
+        publishFailed: page.failed.length - seedFailures,
+      },
       reasons: page.reasons,
       cursor: done ? null : page.next,
       done,
@@ -328,10 +343,8 @@ const statementCursor = z
   .nullable();
 
 const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
-  // Charges are derived from current statement rows, so no cutoff bounds
-  // them: a charge that stops qualifying mid-step is tallied `removed`.
   count: async ({ db, run }) => ({
-    total: await countUnmatchedCharges(
+    total: await familyInputCount.statement_transaction(
       db,
       scopeOf(run, "statement_transaction"),
     ),
@@ -512,6 +525,12 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
 // ---- AI evaluations a Sweep step fans out to per-item Jobs and waits on. ----
 
 const EVALUATION_WAIT_SECONDS = 30;
+/** Terminal evaluations that produced no result and no failure. */
+const SKIPPED_AI_STATES: readonly string[] = [
+  aiEvaluationState.enum.blocked,
+  aiEvaluationState.enum.obsolete,
+  aiEvaluationState.enum.cancelled,
+];
 
 /** The Sweep's current (unretried) evaluations of one family. */
 async function sweepEvaluations(
@@ -553,7 +572,8 @@ function evaluationPage(
   const counts = {
     done: items.filter((item) => item.state === "completed").length,
     failed: failed.length,
-    skipped: items.length - pending - failed.length,
+    skipped: items.filter((item) => SKIPPED_AI_STATES.includes(item.state))
+      .length,
   };
   const errors: RunStepError[] = failed.map((item) => ({
     at: item.updatedAt.toISOString(),
@@ -593,28 +613,33 @@ async function readmitFailures(context: StepContext, owned: boolean) {
 
 // ---- Connections: roster records as owned evaluations, then wait. ----
 
-const ROSTER_PAGE = 25;
-
 const connectionRoster: StepDriversFor<"sweep">["connection_roster"] = {
   count: countedNow((context, boundary) =>
-    countConnectionSweepSources(
+    familyInputCount.recommendation(
       context.db,
-      scopeOf(context.run, "recommendation").entityKinds,
-      new Date(boundary),
+      scopeOf(context.run, "recommendation"),
+      boundary,
     ),
   ),
-  page: async (context) => {
+  page: async (context): Promise<StepPage> => {
     const { db, run, step } = context;
     const activation = await readAiRefreshActivation(db);
     if (!activation?.enabled || !activation.manifest["entity-connections"]) {
       // An unattended pass with AI refresh off has nothing to evaluate; a
       // member's Sweep reports why instead of finishing quietly.
-      if (run.trigger === "scheduled")
+      if (run.trigger === "scheduled") {
+        const remaining = Math.max(
+          0,
+          step.found - step.done - step.skipped - step.failed,
+        );
         return {
           kind: "progress",
+          delta: { skipped: remaining },
+          reasons: { ai_refresh_inactive: remaining },
           meta: { detail: { skipped: "AI refresh is not active" } },
           done: true,
         };
+      }
       throw new Error(
         "Connection discovery requires an active AI refresh generation",
       );
@@ -626,7 +651,7 @@ const connectionRoster: StepDriversFor<"sweep">["connection_roster"] = {
         .string()
         .nullable()
         .parse(step.cursor ?? null),
-      limit: ROSTER_PAGE,
+      limit: CONNECTION_ROSTER_PAGE,
       entityKinds: scopeOf(run, "recommendation").entityKinds,
       createdBefore: boundary ? new Date(boundary) : null,
     });
@@ -678,9 +703,8 @@ function fieldTargets(
 }
 
 const fieldRoster: StepDriversFor<"sweep">["field_roster"] = {
-  // Targets come from the Sweep's own input, a closed population.
-  count: async ({ run }) => ({
-    total: fieldTargets(scopeOf(run, "field").targets).length,
+  count: async ({ db, run }) => ({
+    total: await familyInputCount.field(db, scopeOf(run, "field")),
     boundary: null,
   }),
   page: async ({ db, run, step }) => {

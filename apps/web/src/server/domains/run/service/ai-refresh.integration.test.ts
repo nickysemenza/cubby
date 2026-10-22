@@ -12,7 +12,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import {
@@ -72,7 +72,6 @@ import {
 import {
   createProductIdentityFixture,
   makeProductInput,
-  createSystemUserFixture,
   insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
@@ -193,7 +192,6 @@ describe("targeted prompt refresh", () => {
   const emailTarget = aiEvaluationTarget.options.find(
     (target) => target.shape.kind.value === "email",
   )!;
-  beforeEach(() => createSystemUserFixture(ctx.db));
   const fieldTarget = aiEvaluationTarget.options.find(
     (target) => target.shape.kind.value === "field",
   )!;

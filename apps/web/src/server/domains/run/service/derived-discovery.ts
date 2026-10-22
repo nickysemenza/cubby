@@ -1,9 +1,10 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { connectionDiscoveryRunInput } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import { CONNECTION_ROSTER_PAGE } from "~/server/domains/run/repo/connection-refresh";
 import {
   claimDerivedDiscovery,
   prepareConnectionDiscoveryPage,
@@ -34,7 +35,7 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
     const page = await prepareConnectionDiscoveryPage(db, {
       runId: previous.runId,
       after: previous.after,
-      limit: 25,
+      limit: CONNECTION_ROSTER_PAGE,
       createRun: (tx) =>
         ensureRun(tx, systemActor(), {
           purpose: "connection_discovery",
@@ -42,7 +43,10 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
           status: "running",
           execution: false,
           clientKey: `connection-discovery:${claim.id}:${claim.generation}`,
-          input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+          input: connectionDiscoveryRunInput.parse({
+            kind: "connection_discovery",
+            activation,
+          }),
         }),
     });
     return {

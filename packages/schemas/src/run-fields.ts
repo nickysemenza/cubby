@@ -1,6 +1,7 @@
 import type { RunWorkSamples } from "./run-work-progress";
 import {
   type AiRefreshRunInput,
+  aiRefreshActivation,
   aiRefreshProgress,
   aiRefreshRunInput,
 } from "./ai-evaluation";
@@ -464,11 +465,20 @@ export const derivedRefreshRunInput = z.strictObject({
   family: derivedRefreshFamily,
 });
 export type DerivedRefreshRunInput = z.infer<typeof derivedRefreshRunInput>;
+/** The routine connection discovery pass, under the AI refresh generation it ran for. */
+export const connectionDiscoveryRunInput = z.strictObject({
+  kind: z.literal("connection_discovery"),
+  activation: aiRefreshActivation,
+});
+export type ConnectionDiscoveryRunInput = z.infer<
+  typeof connectionDiscoveryRunInput
+>;
 
 export type RunInput =
   | SweepRunInput
   | MaintenanceRunInput
   | DerivedRefreshRunInput
+  | ConnectionDiscoveryRunInput
   | MailReclassifyRunInput
   | ResearchObjectivesRunInput
   | MailResearchRunInput

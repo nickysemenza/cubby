@@ -48,7 +48,6 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import {
   getSourceTransactionRecordSummary,
@@ -283,7 +282,6 @@ const label = async (ctx: Ctx, port: DecisionPort) =>
 
 /** A member switch enables the real automatic attach path. */
 async function enableStatementAttach(ctx: Ctx) {
-  await createSystemUserFixture(ctx.db);
   await setAutomaticRule(ctx.db, ctx.actor, {
     ruleKey: "statement_transaction.attach",
     enabled: true,

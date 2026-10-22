@@ -219,6 +219,9 @@ export async function prepareConnectionDiscoveryRoster(
   return { scanned: page.scanned, inserted, next: page.next, runId };
 }
 
+/** Records one connection roster page queues, for Sweeps and routine discovery alike. */
+export const CONNECTION_ROSTER_PAGE = 25;
+
 /** How many sources a connection Sweep's scope covers; the roster pages the same predicate. */
 export async function countConnectionSweepSources(
   db: Database,

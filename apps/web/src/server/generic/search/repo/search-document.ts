@@ -207,14 +207,20 @@ const textArray = (values: string[]): SQL =>
  * the existing canonical embedding-text builders below; this keeps the two
  * indexes searchable by exactly the same relationship-derived language.
  */
-async function getSearchDocumentSources(
-  db: Database | DrizzleTransaction,
+type SearchSourcePage = {
+  cursor?: SearchDocumentCursor;
+  pageSize?: number;
+  /** A refresh pass's frozen cutoff: only sources created by then. */
+  createdBefore?: string;
+};
+
+function searchDocumentSourceSql(
   entityKinds: SearchableEntity[],
   entityIds?: readonly string[],
-  page?: { cursor?: SearchDocumentCursor; pageSize?: number },
-): Promise<SearchDocumentSource[]> {
+  page?: SearchSourcePage,
+) {
   const selectedKinds = [...new Set(entityKinds)];
-  if (selectedKinds.length === 0) return [];
+  if (selectedKinds.length === 0) return null;
 
   const types = sql.join(
     entityKinds.map((entityKind) => sql`${entityKind}`),
@@ -238,12 +244,16 @@ async function getSearchDocumentSources(
    */
   const requested = (column: SQL) =>
     hasIds ? sql`${column} = ANY(${uuidArrayParam(entityIds)})` : sql`TRUE`;
+  const createdBefore = page?.createdBefore;
+  /** The same cutoff gates the paged rows and the pass's frozen COUNT. */
+  const bounded = (column: SQL) =>
+    createdBefore ? sql`${column} <= ${createdBefore}::timestamp` : sql`TRUE`;
 
   const expenseNameIds = entityIds
     ? uuidArrayParam(entityIds)
-    : page
+    : page?.pageSize
       ? sql`ARRAY(SELECT name_source.id FROM "Expense" name_source
-      WHERE name_source."deletedAt" IS NULL
+      WHERE name_source."deletedAt" IS NULL AND ${bounded(sql`name_source."createdAt"`)}
       ${page.cursor ? sql`AND (${entitySchema.enum.expense}::text, name_source.id) > (${page.cursor.entityKind}, ${page.cursor.entityId}::uuid)` : sql``}
       ORDER BY name_source.id LIMIT ${page.pageSize})`
       : undefined;
@@ -255,7 +265,7 @@ async function getSearchDocumentSources(
       SELECT 'image'::text AS "entityKind", i."id"::text AS "entityId", i."shortcode",
         i.filename AS title, NULL::text AS subtitle, 'image'::text AS "typeHint",
         ARRAY[]::text[] AS aliases, ARRAY[i."contentType"]::text[] AS keywords
-      FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)}`,
+      FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)} AND ${bounded(sql`i."createdAt"`)}`,
     product: () => sql`
       SELECT 'product'::text AS "entityKind", p."id"::text AS "entityId", p."shortcode",
         p."name" AS title, p."manufacturer" AS subtitle, ${categorySummarySql(sql`p."categoryId"`)}->>'name' AS "typeHint",
@@ -263,21 +273,21 @@ async function getSearchDocumentSources(
         COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
                   WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
                  ARRAY[]::text[]) || ARRAY[p."model", p."manufacturer"]::text[] AS keywords
-      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)}`,
+      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
     recipe: () => sql`
       SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
-      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND ${requested(sql`r."id"`)}`,
+      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND ${requested(sql`r."id"`)} AND ${bounded(sql`r."createdAt"`)}`,
     ingredient: () => sql`
       SELECT 'ingredient', i."id"::text, i."shortcode", i."name", NULL, NULL, i."aliases", ARRAY[]::text[]
-      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND ${requested(sql`i."id"`)}`,
+      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND ${requested(sql`i."id"`)} AND ${bounded(sql`i."createdAt"`)}`,
     cookbook: () => sql`
       SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
-      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND ${requested(sql`c."id"`)}`,
+      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND ${requested(sql`c."id"`)} AND ${bounded(sql`c."createdAt"`)}`,
     location: () => sql`
       SELECT 'location', l."id"::text, l."shortcode", l."name",
         (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
         l."type", l."aliases", ARRAY[l."type"]::text[]
-      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)}`,
+      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)} AND ${bounded(sql`l."createdAt"`)}`,
     inventory: () => sql`
       SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", ${categorySummarySql(sql`p."categoryId"`)}->>'name', p."aliases",
         ARRAY[l."name", l."type", p."manufacturer"]::text[] ||
@@ -285,24 +295,24 @@ async function getSearchDocumentSources(
                   WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
                  ARRAY[]::text[])
       FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
-      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND ${requested(sql`ie."id"`)}`,
+      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND ${requested(sql`ie."id"`)} AND ${bounded(sql`ie."createdAt"`)}`,
     meal: () => sql`
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
-      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)}`,
+      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)} AND ${bounded(sql`m."createdAt"`)}`,
     project: () => sql`
       SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."emoji", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveFieldSql("project", "locations", "p")}
-      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)}`,
+      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
     task: () => sql`
       SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", ${effectiveFieldSql("task", "trade", "t")}, ARRAY[]::text[], ARRAY[${effectiveFieldSql("task", "trade", "t")}, sp."name"]::text[]
       FROM "Task" t LEFT JOIN "Project" p ON p."id" = ${effectiveFieldSql("task", "projectId", "t")} AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = ${effectiveFieldSql("task", "subjectProductId", "t")} AND sp."deletedAt" IS NULL
-      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND ${requested(sql`t."id"`)}`,
+      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND ${requested(sql`t."id"`)} AND ${bounded(sql`t."createdAt"`)}`,
     vendor: () => sql`
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
-      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND ${requested(sql`v."id"`)}`,
+      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND ${requested(sql`v."id"`)} AND ${bounded(sql`v."createdAt"`)}`,
     purchase: () => sql`
       SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", pu."notes", v."name", v."website", pu."date"::text]::text[]
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
-      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)}`,
+      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)} AND ${bounded(sql`pu."createdAt"`)}`,
     financialAccount: () => sql`
       SELECT ${"financialAccount"}::text, fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
         ARRAY(
@@ -313,19 +323,19 @@ async function getSearchDocumentSources(
         ) || ARRAY(
           SELECT card->>'last4' FROM jsonb_array_elements(fa."cardNumbers") card
         )
-      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND ${"financialAccount"}::text IN (${types}) AND ${requested(sql`fa."id"`)}`,
+      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND ${"financialAccount"}::text IN (${types}) AND ${requested(sql`fa."id"`)} AND ${bounded(sql`fa."createdAt"`)}`,
     financialTransaction: () => sql`
       SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
-      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)}`,
+      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)} AND ${bounded(sql`ft."createdAt"`)}`,
     expense: () => sql`
       SELECT 'expense', e."id"::text, e."shortcode", e."name", names."projectNames", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType", e."notes"]::text[]
       FROM "Expense" e
       LEFT JOIN (${expenseDerivedReadSql("names", { expenseIds: expenseNameIds })}) names ON names."expenseId" = e."id"
-      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)}`,
+      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)} AND ${bounded(sql`e."createdAt"`)}`,
     wish: () => sql`
       SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
-      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND ${requested(sql`w."id"`)}`,
+      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND ${requested(sql`w."id"`)} AND ${bounded(sql`w."createdAt"`)}`,
     // The crop label lives in static data, not SQL, so the title is the plant
     // name and the crop key rides along as a search term.
     plant: () => sql`
@@ -333,7 +343,7 @@ async function getSearchDocumentSources(
         concat_ws(' · ', p."gardenGuideKey", p."verdict"), p."verdict",
         ARRAY[]::text[], ARRAY[p."gardenGuideKey", p."latinName"]::text[]
       FROM "Plant" p
-      WHERE p."deletedAt" IS NULL AND 'plant' IN (${types}) AND ${requested(sql`p."id"`)}`,
+      WHERE p."deletedAt" IS NULL AND 'plant' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
     // Title is the plant name (see `plant` above for why not its crop label).
     planting: () => sql`
       SELECT 'planting', pl."id"::text, pl."shortcode",
@@ -343,7 +353,7 @@ async function getSearchDocumentSources(
       FROM "Planting" pl
       LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND p."deletedAt" IS NULL
       LEFT JOIN "Location" l ON l."id" = pl."locationId" AND l."deletedAt" IS NULL
-      WHERE pl."deletedAt" IS NULL AND 'planting' IN (${types}) AND ${requested(sql`pl."id"`)}`,
+      WHERE pl."deletedAt" IS NULL AND 'planting' IN (${types}) AND ${requested(sql`pl."id"`)} AND ${bounded(sql`pl."createdAt"`)}`,
     // Title mirrors `gardenEntryDisplayName` (garden/index.ts): kind label ·
     // observed date · location name. Subtitle is the comma-separated set of
     // live linked planting display names.  The correlated aggregate keeps the
@@ -361,16 +371,16 @@ async function getSearchDocumentSources(
         ge."kind", ARRAY[]::text[], ARRAY[l."name", ge."harvestAmount"]::text[]
       FROM "GardenEntry" ge
       JOIN "Location" l ON l."id" = ge."locationId" AND l."deletedAt" IS NULL
-      WHERE ge."deletedAt" IS NULL AND 'gardenEntry' IN (${types}) AND ${requested(sql`ge."id"`)}`,
+      WHERE ge."deletedAt" IS NULL AND 'gardenEntry' IN (${types}) AND ${requested(sql`ge."id"`)} AND ${bounded(sql`ge."createdAt"`)}`,
     sourceTransactionRecord: () => sql`
       SELECT 'sourceTransactionRecord', r.id::text, r.shortcode,
         COALESCE(NULLIF(r."rawDescription", ''), r.merchant, r."accountDescriptor"), r."accountDescriptor",
         r.source, ARRAY[r."externalId"]::text[], ARRAY[r.merchant, r."sourceCategory", r.notes]::text[]
-      FROM "SourceTransactionRecord" r WHERE r."deletedAt" IS NULL AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)}`,
+      FROM "SourceTransactionRecord" r WHERE r."deletedAt" IS NULL AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)} AND ${bounded(sql`r."createdAt"`)}`,
     transactionImport: () => sql`
       SELECT 'transactionImport', i.id::text, i.shortcode, i.label, i.fingerprint,
         i.source, ARRAY[]::text[], ARRAY[i.notes]::text[]
-      FROM "TransactionImport" i WHERE i."deletedAt" IS NULL AND 'transactionImport' IN (${types}) AND ${requested(sql`i.id`)}`,
+      FROM "TransactionImport" i WHERE i."deletedAt" IS NULL AND 'transactionImport' IN (${types}) AND ${requested(sql`i.id`)} AND ${bounded(sql`i."createdAt"`)}`,
   } satisfies Record<SearchableEntity, () => SQL>;
 
   // An empty typed arm owns the shared columns independently of the first
@@ -404,6 +414,35 @@ async function getSearchDocumentSources(
     )
   `
     : sql``;
+  return { locationPath, union, cursor, limit };
+}
+
+/** One COUNT over the sources a repair pass pages, under the same cutoff. */
+export async function countSearchDocumentSources(
+  db: Database | DrizzleTransaction,
+  entityKinds: SearchableEntity[],
+  createdBefore: string,
+): Promise<number> {
+  const query = searchDocumentSourceSql(entityKinds, undefined, {
+    createdBefore,
+  });
+  if (!query) return 0;
+  const result = await unwrapDb(db).execute<{ count: number }>(sql`
+    ${query.locationPath}
+    SELECT count(*)::int AS count FROM (${query.union}) source
+  `);
+  return result.rows[0]?.count ?? 0;
+}
+
+async function getSearchDocumentSources(
+  db: Database | DrizzleTransaction,
+  entityKinds: SearchableEntity[],
+  entityIds?: readonly string[],
+  page?: SearchSourcePage,
+): Promise<SearchDocumentSource[]> {
+  const query = searchDocumentSourceSql(entityKinds, entityIds, page);
+  if (!query) return [];
+  const { locationPath, union, cursor, limit } = query;
   const result = await unwrapDb(db).execute<{
     entityKind: SearchableEntity;
     entityId: string;
@@ -441,7 +480,7 @@ async function getSearchDocumentSources(
 
 async function getSearchDocumentPage(
   db: Database | DrizzleTransaction,
-  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+  options: SearchSourcePage = {},
 ): Promise<{
   refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
@@ -457,6 +496,7 @@ async function getSearchDocumentPage(
     SELECT "entityKind", "entityId"::text AS "entityId"
     FROM "SearchDocument"
     WHERE "deletedAt" IS NULL ${cursor}
+      ${options.createdBefore ? sql`AND "createdAt" <= ${options.createdBefore}::timestamp` : sql``}
     ORDER BY "entityKind", "entityId"
     LIMIT ${pageSize}
   `);
@@ -470,7 +510,7 @@ async function getSearchDocumentPage(
 export async function getSearchDocumentSourceRepairPage(
   db: Database | DrizzleTransaction,
   entityKinds: SearchableEntity[],
-  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+  options: SearchSourcePage = {},
 ): Promise<{
   refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
@@ -482,6 +522,7 @@ export async function getSearchDocumentSourceRepairPage(
   const sources = await getSearchDocumentSources(db, entityKinds, undefined, {
     cursor: options.cursor,
     pageSize,
+    createdBefore: options.createdBefore,
   });
   const idsByType = new Map<SearchableEntity, string[]>();
   for (const source of sources) {
@@ -557,7 +598,7 @@ export async function getSearchDocumentSourceRepairPage(
 
 export async function getSearchDocumentOrphanPage(
   db: Database | DrizzleTransaction,
-  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+  options: SearchSourcePage = {},
 ): Promise<{
   refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
@@ -887,7 +928,14 @@ const embeddableEntityKindsSql = sql.join(
  * the Maintenance Run's embedding step, and the cron assertion so they
  * cannot disagree.
  */
-const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
+/**
+ * `updatedBefore` is a refresh pass's frozen cutoff: a document whose text
+ * changed after the count waits for the next pass.
+ */
+const unembeddedDocumentsSql = (
+  config: SemanticEmbeddingConfig,
+  updatedBefore?: string,
+): SQL => sql`
   FROM "SearchDocument" sd
   LEFT JOIN "EntityEmbedding" ee
     ON ee."entityKind" = sd."entityKind"
@@ -902,6 +950,7 @@ const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
     AND sd."entityKind" IN (${embeddableEntityKindsSql})
     AND (ee.id IS NULL
       OR ${normalizedTextSql(sql`ee."embeddingText"`)} <> ${normalizedTextSql(sql`sd."semanticText"`)})
+    ${updatedBefore ? sql`AND sd."updatedAt" <= ${updatedBefore}::timestamp` : sql``}
 `;
 
 /** Eligibility witness only: ANN recall is not an exhaustive similarity proof. */
@@ -927,9 +976,10 @@ export async function hasUnembeddedSearchDocuments(
 export async function countUnembeddedSearchDocuments(
   db: Database | DrizzleTransaction,
   config: SemanticEmbeddingConfig,
+  updatedBefore?: string,
 ): Promise<number> {
   const result = await unwrapDb(db).execute<{ count: number }>(sql`
-    SELECT count(*)::int AS count ${unembeddedDocumentsSql(config)}
+    SELECT count(*)::int AS count ${unembeddedDocumentsSql(config, updatedBefore)}
   `);
   return result.rows[0]?.count ?? 0;
 }
@@ -938,7 +988,11 @@ export async function countUnembeddedSearchDocuments(
 export async function selectUnembeddedSearchDocumentRefs(
   db: Database | DrizzleTransaction,
   config: SemanticEmbeddingConfig,
-  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+  options: {
+    cursor?: SearchDocumentCursor;
+    pageSize?: number;
+    updatedBefore?: string;
+  } = {},
 ): Promise<{
   refs: Array<{ entityKind: SearchableEntity; entityId: string }>;
   nextCursor: SearchDocumentCursor | null;
@@ -955,7 +1009,7 @@ export async function selectUnembeddedSearchDocumentRefs(
     entityId: string;
   }>(sql`
     SELECT sd."entityKind", sd."entityId"::text AS "entityId"
-    ${unembeddedDocumentsSql(config)}
+    ${unembeddedDocumentsSql(config, options.updatedBefore)}
     ${cursor}
     ORDER BY sd."entityKind", sd."entityId"
     LIMIT ${pageSize}

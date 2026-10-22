@@ -308,7 +308,7 @@ const findProductCoverageProblems = async (
 /** Provider work runs before the Job publication transaction. */
 export async function prepareProductConversionCoveragePage(
   db: Database,
-  options: { after?: string; limit: number },
+  options: { after?: string; limit: number; createdBefore?: string },
   usdaClient: UsdaFoodBatchPort,
 ) {
   const ids = await selectProductCoverageIdsPage(db, options);

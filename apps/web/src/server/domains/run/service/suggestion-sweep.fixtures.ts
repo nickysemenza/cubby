@@ -34,10 +34,7 @@ import {
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import {
-  createSystemUserFixture,
-  makeProductInput,
-} from "~/server/testing/repo.fixtures";
+import { makeProductInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { ensureRun } from "../repo/ensure-run";
@@ -68,8 +65,6 @@ export const startSuggestionSweep = async (
   ports: SweepPorts,
 ) => {
   const options = { ...sweepDefaults, ...ports };
-  // Automatic rule applications write as the system actor.
-  await createSystemUserFixture(db);
   const started = await startSweep(db, input, options);
   await driveAiWork(db, started.id, { sweep: options });
   return started;
@@ -80,7 +75,6 @@ export const resumeSuggestionSweep = async (
   ports: SweepPorts,
 ) => {
   const options = { ...sweepDefaults, ...ports };
-  await createSystemUserFixture(db);
   await resumeSweep(db, runId);
   await driveAiWork(db, runId, { sweep: options });
 };

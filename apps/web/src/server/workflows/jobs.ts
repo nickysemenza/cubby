@@ -6,6 +6,7 @@ import {
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
 } from "@cubby/schemas/background-tasks";
+import { jobWaitReason } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
@@ -88,7 +89,19 @@ export const productionJobHandlers: JobHandlers = {
   ),
   "run.funding-resume": defineJobHandler(
     z.object({ runId: z.uuid(), until: z.iso.datetime() }),
-    async (db) => {
+    async (db, _claim, { until }) => {
+      // A budget raise brings every queued Job forward and resumes paused
+      // work itself. This timer keeps its window end, so a re-exhaustion in
+      // the same window still has a pending resume under this key.
+      const deadline = new Date(until);
+      if (deadline.getTime() > Date.now())
+        return {
+          page: {
+            done: false,
+            waitUntil: deadline,
+            waitReason: jobWaitReason.enum.ai_funding_window,
+          },
+        };
       await (
         await import("~/server/domains/run/service/ai-work")
       ).resumeFundingPausedRuns(db);

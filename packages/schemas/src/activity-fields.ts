@@ -225,7 +225,7 @@ export const RUN_KINDS = {
       },
       {
         key: "runs",
-        label: "Stale and routine Runs",
+        label: "Stale Runs",
         purpose: "Moves stale Runs to review and reconciles Run history.",
         action: "Reconciling Runs",
         unit: "Runs",
@@ -287,9 +287,8 @@ export const RUN_KINDS = {
         purpose: "Rebuilds search documents whose sources changed.",
         action: "Checking search sources",
         unit: "sources",
-        // Sources span every searchable table; the live document count is
-        // the cheap "about N" until the pass reaches its end.
-        input: { mode: "estimate" },
+        // One COUNT over every searchable table under the pass's cutoff.
+        input: counted,
         family: "search",
       },
       {

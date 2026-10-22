@@ -2411,6 +2411,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "lastClaimedAt": {
+          "name": "lastClaimedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "error": {
           "name": "error",
           "type": "text",
@@ -2501,6 +2507,27 @@
             },
             {
               "expression": "subjectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Job_kind_claimed_idx": {
+          "name": "Job_kind_claimed_idx",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lastClaimedAt",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -18715,12 +18742,6 @@
           "notNull": true,
           "default": 0
         },
-        "childRunId": {
-          "name": "childRunId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "cursor": {
           "name": "cursor",
           "type": "jsonb",
@@ -18800,22 +18821,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "RunStep_child_idx": {
-          "name": "RunStep_child_idx",
-          "columns": [
-            {
-              "expression": "childRunId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"RunStep\".\"childRunId\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -18830,19 +18835,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "RunStep_childRunId_Run_id_fk": {
-          "name": "RunStep_childRunId_Run_id_fk",
-          "tableFrom": "RunStep",
-          "tableTo": "Run",
-          "columnsFrom": [
-            "childRunId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

@@ -95,14 +95,14 @@ const due = (now: Date) =>
     and(eq(job.state, "running"), lte(job.leaseExpiresAt, now)),
   );
 
-/** Interleave kinds; a short drain starts with the kind served least recently. */
+/**
+ * Interleave kinds; a short drain starts with the kind claimed least recently.
+ * Only a claim is service: invalidations and enqueues leave `lastClaimedAt`.
+ */
 export async function dueJobs(db: Database, limit = 25) {
   const result = await getDb(db).execute<{ id: string; kind: string }>(sql`
     WITH served AS (
-      SELECT kind, max("updatedAt") FILTER (
-        WHERE state IN (${jobState.enum.running}, ${jobState.enum.completed}, ${jobState.enum.retry_wait}, ${jobState.enum.failed})
-          OR "updatedAt" > "createdAt"
-      ) AS last_served FROM "Job" GROUP BY kind
+      SELECT kind, max("lastClaimedAt") AS last_served FROM "Job" GROUP BY kind
     ), ranked AS (
       SELECT id, kind, row_number() OVER (
         PARTITION BY kind ORDER BY priority DESC, "updatedAt", "availableAt", id
@@ -168,6 +168,7 @@ export async function claimJob(
         leaseToken: token,
         leaseExpiresAt: expires,
         attempts: available.attempts + 1,
+        lastClaimedAt: now,
         updatedAt: now,
       })
       .where(eq(job.id, id))

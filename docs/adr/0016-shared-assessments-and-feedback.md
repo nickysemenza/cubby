@@ -311,9 +311,11 @@ Every actionable proposal family reports to one Suggestions page; discovery
 families report to one Sweep. Automatic decisions have a separate audit view,
 as described in [the entity review contract](../entities.md#shared-proposal-queue-and-automatic-decisions).
 Stored pending status alone does not imply a proposal. A
-member's Sweep is a parent Run with one child Run per family; automatic passes
-are routine Sweeps. Family registry entries still own candidate matching,
-stale-evidence rechecks, apply authority and identity or financial safeguards.
+member's Sweep is one Run whose declared RunSteps cover each chosen family;
+steps that need the model fan out to per-item AI evaluation Jobs and wait on
+them, with no child Runs. Automatic passes are routine Sweeps. Family
+registry entries still own candidate matching, stale-evidence rechecks, apply
+authority and identity or financial safeguards.
 The shared layer adds listing, Strength, Impact, the clean flag and bulk
 actions. It never adds a generic confirmation: connections keep their
 per-integration review paths and stay individually reviewed.

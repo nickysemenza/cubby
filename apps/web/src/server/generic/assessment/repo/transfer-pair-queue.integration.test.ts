@@ -2,7 +2,7 @@ import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-trans
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { dismissItem } from "~/entity/suggestions/queue/suggestion-review";
@@ -33,7 +33,6 @@ import { answering } from "~/server/domains/transaction-import/repo/statement-de
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { reviewAssessment } from "./assessment-review";
 import { readAssessmentRecordRefs } from "./review-families";
@@ -41,9 +40,6 @@ import { acceptCleanSuggestions, listSuggestionPage } from "./suggestion-list";
 
 describe("transfer pairs in the global queue", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await createSystemUserFixture(ctx.db);
-  });
 
   const seed = async (
     kind: "account_transfer" | "credit_card_payment" = "account_transfer",

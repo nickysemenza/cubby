@@ -23,7 +23,6 @@ import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
-import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 import {
   launchWorkflowRun,
   reconcileWorkflowRuns,
@@ -38,7 +37,6 @@ import {
   saveMailDiscoveryBatch as saveMailDiscoveryBatchImplementation,
   finishMailDiscovery as finishMailDiscoveryImplementation,
   continueMailDiscovery as continueMailDiscoveryImplementation,
-  pruneRoutineRuns,
   failMailDiscovery as failMailDiscoveryImplementation,
   type DiscoveryPorts,
 } from "./discovery";
@@ -698,32 +696,4 @@ describe("scheduled Gmail discovery", () => {
       ).toEqual(scanPending ? [(await readRun(state.params.runId)).input] : []);
     },
   );
-  it("keeps a month-old routine pass that holds a finding", async () => {
-    const state = await seed();
-    const quiet = gmail({ listMessages: async () => ({}) });
-    await listMailDiscovery(ctx.db, state.params, ports(quiet));
-    await saveMailDiscoveryBatch(ctx.db, state.params, 0, ports(quiet));
-    await finishMailDiscovery(ctx.db, state.params, new Date("2026-01-01"));
-    const [quietPass] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, runEntityId.parse(state.params.runId)));
-    // A finding is retained review history: it keeps its Run.
-    await seedRunFinding(ctx.db, {
-      runId: runEntityId.parse(state.params.runId),
-      ledgerPartyId: state.party.id,
-      entityKind: "run",
-      entityId: runEntityId.parse(state.params.runId),
-      kind: "unknown_mail_sender",
-      summary: "Synthetic historical finding",
-      evidenceFingerprint: "synthetic",
-    });
-    expect(await pruneRoutineRuns(ctx.db, new Date("2026-03-01"))).toBe(0);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.id, runEntityId.parse(state.params.runId))),
-    ).toEqual([quietPass]);
-  });
 });

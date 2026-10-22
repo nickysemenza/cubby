@@ -1,5 +1,8 @@
 ALTER TABLE "Run" DROP CONSTRAINT "Run_purpose_check";--> statement-breakpoint
 DROP INDEX "Run_one_active_derived_refresh";--> statement-breakpoint
+ALTER TABLE "RunStep" DROP CONSTRAINT "RunStep_childRunId_Run_id_fk";--> statement-breakpoint
+DROP INDEX "RunStep_child_idx";--> statement-breakpoint
+ALTER TABLE "RunStep" DROP COLUMN "childRunId";--> statement-breakpoint
 ALTER TABLE "Run" ADD CONSTRAINT "Run_purpose_check" CHECK ("Run"."purpose" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'suggestion_sweep', 'ai_refresh', 'background', 'file_import', 'mail_search', 'mail_discovery', 'mail_reclassify', 'connection_discovery', 'maintenance', 'derived_refresh', 'sweep'));--> statement-breakpoint
 -- R1: Sweeps no longer fan out child Runs. Child ai_refresh / suggestion_sweep
 -- Runs still open under a Sweep end here, releasing the AI refresh capacity
@@ -21,19 +24,19 @@ CREATE TEMP TABLE "_superseded_run" ON COMMIT DROP AS
 UPDATE "AiEvaluationRequest" SET "cancelledAt" = now()
   WHERE "runId" IN (SELECT id FROM "_superseded_run")
     AND "cancelledAt" IS NULL AND receipt IS NULL;--> statement-breakpoint
+-- An evaluation stops only when no surviving Run still wants it, whichever
+-- requester currently owns it; shared work and paid results stay with them.
 UPDATE "AiEvaluation" e SET state = 'cancelled', error = 'Superseded by deployment', "updatedAt" = now()
   WHERE e.state IN ('queued', 'running', 'result_ready', 'retry_wait')
     AND (
       e."runId" IN (SELECT id FROM "_superseded_run")
-      OR (
-        EXISTS (SELECT 1 FROM "AiEvaluationRequest" own WHERE own."evaluationId" = e.id AND own."runId" IN (SELECT id FROM "_superseded_run"))
-        AND NOT EXISTS (
-          SELECT 1 FROM "AiEvaluationRequest" demand JOIN "Run" requester ON requester.id = demand."runId"
-          WHERE demand."evaluationId" = e.id AND demand."cancelledAt" IS NULL
-            AND requester.id NOT IN (SELECT id FROM "_superseded_run")
-            AND requester.status IN ('running', 'paused', 'paused_auth') AND requester."deletedAt" IS NULL
-        )
-      )
+      OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" own WHERE own."evaluationId" = e.id AND own."runId" IN (SELECT id FROM "_superseded_run"))
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM "AiEvaluationRequest" demand JOIN "Run" requester ON requester.id = demand."runId"
+      WHERE demand."evaluationId" = e.id AND demand."cancelledAt" IS NULL
+        AND requester.id NOT IN (SELECT id FROM "_superseded_run")
+        AND requester.status IN ('running', 'paused', 'paused_auth') AND requester."deletedAt" IS NULL
     );--> statement-breakpoint
 UPDATE "Job" SET state = 'cancelled', generation = generation + 1, "leaseToken" = NULL, "leaseExpiresAt" = NULL,
     error = 'Superseded by deployment', "updatedAt" = now()
@@ -47,4 +50,13 @@ UPDATE "RunStep" SET state = 'paused', "pausedReason" = 'Superseded by deploymen
     AND state IN ('queued', 'running', 'waiting', 'paused');--> statement-breakpoint
 UPDATE "Run" SET status = 'failed', "endedAt" = now(), "failureCode" = 'superseded_by_deployment',
     "dispatchError" = 'Superseded by deployment'
-  WHERE id IN (SELECT id FROM "_superseded_run");
+  WHERE id IN (SELECT id FROM "_superseded_run");--> statement-breakpoint
+-- Refresh passes now keep {runId, at, boundary, scanned} cursors. Retained flat
+-- cursors restart from the beginning; the generation bump fences any claim
+-- still paging the old shape.
+UPDATE "Job" SET cursor = NULL, generation = generation + 1, "updatedAt" = now()
+  WHERE kind = 'refresh.family' AND cursor IS NOT NULL
+    AND state IN ('queued', 'running', 'retry_wait', 'paused');--> statement-breakpoint
+-- Connection discovery Runs record their own input kind.
+UPDATE "Run" SET input = jsonb_set(input, '{kind}', '"connection_discovery"')
+  WHERE purpose = 'connection_discovery' AND input->>'kind' = 'ai_refresh';

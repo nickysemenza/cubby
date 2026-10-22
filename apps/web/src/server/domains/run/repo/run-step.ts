@@ -343,7 +343,7 @@ export async function activeSweepFor(db: Database, family: string) {
  */
 export async function endSupersededRoutineRuns(
   db: Database,
-  pass: { purpose: string; input: unknown; keep: RunId },
+  pass: { purpose: string; input: unknown; keep: RunId | null },
 ) {
   const ended = await getDb(db)
     .update(run)
@@ -357,7 +357,7 @@ export async function endSupersededRoutineRuns(
         eq(run.purpose, pass.purpose),
         eq(run.status, "running"),
         sql`${run.input} = ${JSON.stringify(pass.input)}::jsonb`,
-        sql`${run.id} <> ${pass.keep}`,
+        pass.keep ? sql`${run.id} <> ${pass.keep}` : undefined,
       ),
     )
     .returning({ id: run.id });

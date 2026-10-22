@@ -29,11 +29,12 @@ export const createProductionRefreshFamilyHandler = (
         options,
         new USDAClient(requestUsdaRelease()),
       ),
-    countEmbeddings: async (db) =>
+    countEmbeddings: async (db, updatedBefore) =>
       productionEmbeddingRefreshPort.configured()
         ? countUnembeddedSearchDocuments(
             db,
             productionEmbeddingRefreshPort.config(),
+            updatedBefore,
           )
         : null,
     prepareEmbeddings: async (db, options) => {

@@ -76,8 +76,7 @@ windows, device availability and rate limiting from retry backoff. Claim,
 successful ordinary publication and failure clear waits. Single-item Jobs
 retain `subjectKind` / `subjectId` for diagnostics on their owning record.
 `retry_wait` retains the raw scrubbed error and consecutive failure attempt of
-`maxAttempts`. Application page sizes live in `JOB_PAGE_LIMITS`, independent of
-Cloudflare Workflow instance limits.
+`maxAttempts`. Application page sizes live in `JOB_PAGE_LIMITS`.
 
 The minute cron publishes `ai-refresh.activate`, keyed by deployment version
 and its observed occurrence. A transaction serializes occurrence admission,

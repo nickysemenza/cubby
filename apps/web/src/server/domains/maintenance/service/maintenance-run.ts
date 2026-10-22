@@ -14,6 +14,7 @@ import {
   countImagesStaleMetadata,
   cullPendingImageStorage,
   markImageMetadataOutcome,
+  pendingCullCutoff,
   selectImagesForMetadataExtraction,
 } from "~/server/domains/image/repo/image";
 import {
@@ -111,11 +112,15 @@ function exifStep(
 ): StepDriversFor<"maintenance">["exif"] {
   const pageSize = ports.pageSize?.exif ?? 50;
   return {
-    count: async ({ db }) => ({
-      total: await countImagesStaleMetadata(db),
-      // The keyset cursor walks the backlog once; rows that leave it end `removed`.
-      boundary: null,
-    }),
+    count: async ({ db }) => {
+      // The keyset cursor walks the backlog once under this cutoff; rows
+      // that leave it end `removed`, later uploads wait for the next pass.
+      const boundary = new Date().toISOString();
+      return {
+        total: await countImagesStaleMetadata(db, boundary),
+        boundary,
+      };
+    },
     page: async (context) => {
       const { db, step } = context;
       const retried = retryRefs(context, "image:").map((id) =>
@@ -144,6 +149,7 @@ function exifStep(
         db,
         pageSize,
         cursor,
+        z.iso.datetime().nullable().parse(context.boundary),
       );
       const counts = await extractImages(
         db,
@@ -249,13 +255,27 @@ export function maintenanceStepDrivers(
     }),
     exif: exifStep(ports),
     "pending-uploads": {
-      count: async ({ db }) => ({
-        total: await countCullablePendingImages(db, PENDING_UPLOAD_HOURS),
-        boundary: null,
-      }),
-      page: async ({ db, step }) => {
+      // The age cutoff is fixed when the step counts, so the cull removes the
+      // counted uploads rather than ones that aged past it since.
+      count: async ({ db }) => {
+        const before = pendingCullCutoff(PENDING_UPLOAD_HOURS);
+        return {
+          total: await countCullablePendingImages(
+            db,
+            PENDING_UPLOAD_HOURS,
+            before,
+          ),
+          boundary: before.toISOString(),
+        };
+      },
+      page: async ({ db, step, boundary }) => {
         if (!step.found) return { kind: "progress", done: true };
-        const culled = await cullPendingImageStorage(db, PENDING_UPLOAD_HOURS);
+        const before = z.iso.datetime().nullable().parse(boundary);
+        const culled = await cullPendingImageStorage(
+          db,
+          PENDING_UPLOAD_HOURS,
+          before ? new Date(before) : undefined,
+        );
         return {
           kind: "progress",
           delta: { done: culled.count },
@@ -282,8 +302,6 @@ export function maintenanceStepDrivers(
         await import("~/server/workflows/catch-up");
       const history = await maintainRunHistory(db);
       return {
-        // Pruned history is not backlog: counting it would keep every pass
-        // that prunes from ever being routine itself.
         done: history.expired + history.reconciled,
         errors: history.failures.map((entry) =>
           failure(
@@ -294,7 +312,6 @@ export function maintenanceStepDrivers(
         meta: detail({
           expired: history.expired,
           reconciled: history.reconciled,
-          pruned: history.pruned,
         }),
       };
     }),

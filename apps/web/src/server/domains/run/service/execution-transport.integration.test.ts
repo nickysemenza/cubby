@@ -540,9 +540,13 @@ describe("household AI funding at the paid transport boundary", () => {
       waitUntil: expect.any(Date),
     });
     if (!resume) throw new Error("Expected durable funding resume");
+    // The window ends: the timer's own deadline has passed.
     await getDb(ctx.db)
       .update(job)
-      .set({ availableAt: new Date(0) })
+      .set({
+        availableAt: new Date(0),
+        input: { runId, until: new Date(0).toISOString() },
+      })
       .where(eq(job.id, resume.id));
     expect(await advanceJob(ctx.db, resume.id, productionJobHandlers)).toBe(
       "succeeded",
@@ -565,6 +569,44 @@ describe("household AI funding at the paid transport boundary", () => {
           .where(eq(job.kind, "purchase.dispatch"))
       ).map((item) => item.runId),
     ).toEqual([runId]);
+  });
+
+  // Review finding: a budget raise brought the funding timer forward and it
+  // completed early, so a re-exhaustion in the same window reused the
+  // completed key and nothing resumed the Run.
+  it("keeps the funding timer's window end through a budget raise", async () => {
+    const runId = await setup("mail_import");
+    await spend(runId, AI_BUDGET_LIMIT_USD);
+    await expect(
+      paidRunPreflight(ctx.db, runId)(chatRequest()),
+    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+    const timer = async () =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.kind, "run.funding-resume"))
+      )[0];
+    const armed = await timer();
+    if (!armed) throw new Error("Expected durable funding resume");
+    await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
+    expect(await advanceJob(ctx.db, armed.id, productionJobHandlers)).toBe(
+      "succeeded",
+    );
+    expect(await timer()).toMatchObject({
+      state: "queued",
+      availableAt: armed.waitUntil,
+      waitReason: "ai_funding_window",
+    });
+    await expect(
+      paidRunPreflight(ctx.db, runId)(chatRequest()),
+    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+    expect(await status(runId)).toMatchObject({ status: "paused_auth" });
+    expect(await timer()).toMatchObject({
+      id: armed.id,
+      state: "queued",
+      availableAt: armed.waitUntil,
+    });
   });
 
   it("lets only one of two concurrent recoveries send a resumed import", async () => {

@@ -11,7 +11,6 @@ import {
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import {
   createProductIdentityFixture,
-  createSystemUserFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -47,7 +46,6 @@ describe("advanceProductUsdaLinks", () => {
   const ctx = withTestDb();
 
   it("moves superseded links to the current revision and leaves the rest", async () => {
-    await createSystemUserFixture(ctx.db);
     const superseded = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Sample granola", fdc_id: 9900101 }),
@@ -87,7 +85,6 @@ describe("advanceProductUsdaLinks", () => {
   });
 
   it("leaves a link the household changed while the run was looking it up", async () => {
-    await createSystemUserFixture(ctx.db);
     const edited = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Sample granola", fdc_id: 9900101 }),

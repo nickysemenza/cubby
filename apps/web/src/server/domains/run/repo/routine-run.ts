@@ -40,14 +40,16 @@ type RoutinePage = {
 
 /**
  * A routine pass's step. Its own Job pages it; the Run appears only when a
- * page has pending writes, and `count` (the estimate, for an `estimate` step)
- * freezes the population then. A null page means the pass cannot run.
+ * page has pending writes. `count` and every `page` apply the boundary the
+ * pass froze at its first page, so the count is the population the pager
+ * walks. A null page means the pass cannot run.
  */
 type RoutineStepDriver = {
-  count(db: Database): Promise<number>;
+  count(db: Database, boundary: string): Promise<number>;
   page(
     db: Database,
     cursor: Record<string, string> | null,
+    boundary: string,
   ): Promise<RoutinePage | null>;
 };
 export type RoutineStepDriversFor<P extends RoutineStepPurpose> = {
@@ -57,13 +59,17 @@ export type RoutineStepDriversFor<P extends RoutineStepPurpose> = {
 const routineCursor = z.object({
   runId: runEntityId.nullable().optional(),
   at: z.record(z.string(), z.string()).nullable().optional(),
+  /** The population cutoff frozen by this generation's first page. */
+  boundary: z.iso.datetime().optional(),
+  /** Records scanned so far, including pages before the Run existed. */
+  scanned: z.number().int().nonnegative().optional(),
 });
 
 /**
  * The Job owns a routine pass (refresh families). Its Run is created by the
  * first page with pending writes and rides in the Job cursor; an idle pass
- * leaves no Run. Invalidation restarts the pass, so a new Run ends the one the
- * abandoned generation opened.
+ * leaves no Run. Invalidation restarts the pass, and its first page ends any
+ * Run an abandoned generation opened, whether or not this pass opens one.
  */
 export function routineStepHandler<P extends RoutineStepPurpose>(
   purpose: P,
@@ -78,9 +84,12 @@ export function routineStepHandler<P extends RoutineStepPurpose>(
       const key = pass.key(claim);
       const driver: RoutineStepDriver = pass.drivers[key];
       const cursor = routineCursor.parse(claim.cursor ?? {});
-      const page = await driver.page(db, cursor.at ?? null);
+      const first = !cursor.boundary;
+      const boundary = cursor.boundary ?? new Date().toISOString();
+      const page = await driver.page(db, cursor.at ?? null, boundary);
       if (!page)
         return { page: { done: true, result: { outcome: "unavailable" } } };
+      const scanned = cursor.scanned ?? 0;
       const runId =
         cursor.runId ??
         (page.pending > 0
@@ -89,15 +98,30 @@ export function routineStepHandler<P extends RoutineStepPurpose>(
               key,
               input: pass.input(key),
               driver,
+              boundary,
+              scanned,
             })
           : null);
       const done = page.next === null;
       return {
         page: {
           done,
-          ...(page.next && { cursor: { runId, at: page.next } }),
+          ...(page.next && {
+            cursor: {
+              runId,
+              at: page.next,
+              boundary,
+              scanned: scanned + page.scanned,
+            },
+          }),
         },
         publish: async (tx) => {
+          if (first)
+            await endSupersededRoutineRuns(tx, {
+              purpose,
+              input: pass.input(key),
+              keep: runId,
+            });
           const tallies = (await page.publish?.(tx)) ?? {};
           if (runId)
             await recordRoutinePage(tx, runId, {
@@ -124,6 +148,9 @@ async function openRoutineRun<P extends RoutineStepPurpose>(
     key: RunStepKey<P>;
     input: RunInput;
     driver: RoutineStepDriver;
+    boundary: string;
+    /** Records earlier pages of this pass scanned before any had work. */
+    scanned: number;
   },
 ): Promise<RunId> {
   return withTransactionDatabase(db, async (tx) => {
@@ -136,28 +163,28 @@ async function openRoutineRun<P extends RoutineStepPurpose>(
       clientKey: `${pass.purpose}:${pass.key}:${claim.id}:${claim.generation}`,
       input: pass.input,
     });
-    await endSupersededRoutineRuns(tx, {
-      purpose: pass.purpose,
-      input: pass.input,
-      keep: runId,
-    });
     const declaration = runStepDeclaration(pass.purpose, pass.key);
     if (!declaration)
       throw new Error(`${pass.purpose} declares no ${pass.key} step`);
     await ensureRunSteps(tx, runId, [
       { key: pass.key, label: declaration.label },
     ]);
-    const total = await pass.driver.count(tx);
+    const total = await pass.driver.count(tx, pass.boundary);
     const { mode } = declaration.input;
-    await startRunStep(tx, runId, pass.key, {
+    const started = await startRunStep(tx, runId, pass.key, {
       found: mode === "count" ? total : 0,
       input: {
         mode,
         total: mode === "tally" ? null : total,
-        boundary: null,
+        boundary: pass.boundary,
         countedAt: new Date().toISOString(),
       },
     });
+    // Pages before the Run existed were walked under the same boundary.
+    if (started && pass.scanned > 0)
+      await recordRunStepPage(tx, runId, pass.key, {
+        delta: { done: pass.scanned },
+      });
     return runId;
   });
 }
