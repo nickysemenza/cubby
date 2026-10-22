@@ -5,10 +5,10 @@
  *   node tooling/ci-report/publish.ts <vitest|playwright> <dir> [exclude...]
  *
  * Uploads go to the secret NX_CACHE_URL; links use CUBBY_REPORTS_URL, the same
- * Worker's public origin as a plain variable, because Actions withholds step
- * outputs that contain a secret. Writes `url=` to GITHUB_OUTPUT. Without
- * either (fork PRs, unset variable) it publishes nothing and exits
- * successfully; the artifact remains.
+ * Worker's public origin set in the workflow, because Actions withholds step
+ * outputs that contain a secret. Writes `url=` to GITHUB_OUTPUT. Without the
+ * credentials (fork PRs) it publishes nothing and exits successfully; the
+ * artifact remains.
  */
 import { appendFileSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, sep } from "node:path";

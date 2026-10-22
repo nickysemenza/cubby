@@ -436,7 +436,7 @@ jobs:
         continue-on-error: true
         working-directory: apps/web
         env:
-          CUBBY_REPORTS_URL: ${{ vars.CUBBY_REPORTS_URL }}
+          CUBBY_REPORTS_URL: https://cubby-nx-cache.nicky.workers.dev
         run: node tooling/ci-report/publish.ts vitest .vitest blob records.json
       - name: Publish merged Playwright report
         id: playwright-hosted
@@ -444,7 +444,7 @@ jobs:
         continue-on-error: true
         working-directory: apps/web
         env:
-          CUBBY_REPORTS_URL: ${{ vars.CUBBY_REPORTS_URL }}
+          CUBBY_REPORTS_URL: https://cubby-nx-cache.nicky.workers.dev
         run: node tooling/ci-report/publish.ts playwright playwright-report
       - name: Upload merged Vitest report
         id: vitest-report
