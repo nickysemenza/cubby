@@ -28,7 +28,15 @@ import {
   type ScriptStep,
 } from "tooling/purchase-agent-script";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { setCfEnv } from "~/server/cf-env";
@@ -118,19 +126,45 @@ describe("current purchase-agent system boundaries", () => {
     backgroundQueue.restore();
   });
 
-  beforeEach(() => {
+  const outputDir = path.join(
+    repoRoot,
+    "artifacts/purchase-agent-scenarios",
+    new Date().toISOString().replaceAll(":", "-"),
+  );
+  const cases: Array<{ name: string; status: string; durationMs: number }> = [];
+  beforeAll(() => {
     identity = captureE2ERunIdentity(repoRoot);
+  });
+  afterAll(() => {
+    writeE2ERunBundle({
+      repoRoot,
+      outputDir,
+      started: identity,
+      evidence: [outputDir],
+      kind: "browser",
+      status: cases.some((test) => test.status === "failed")
+        ? "failed"
+        : "passed",
+      profile: "purchase-agent",
+      phase: "completed",
+      command: [
+        "pnpm",
+        "--dir",
+        "apps/web",
+        "test:postgres",
+        "src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts",
+      ],
+      cases,
+    });
+  });
+  beforeEach(() => {
     began = Date.now();
     diagnostic = undefined;
     photoApproval = undefined;
   });
   afterEach(async ({ task }) => {
-    const outputDir = path.join(
-      repoRoot,
-      "artifacts/purchase-agent-scenarios",
-      new Date().toISOString().replaceAll(":", "-"),
-    );
-    mkdirSync(outputDir, { recursive: true });
+    const caseDir = path.join(outputDir, String(cases.length + 1));
+    mkdirSync(caseDir, { recursive: true });
     let cleanupError: unknown;
     let observations:
       | Awaited<ReturnType<typeof readScenarioEvidence>>
@@ -155,7 +189,7 @@ describe("current purchase-agent system boundaries", () => {
       scenarioRunId = undefined;
       const failed = task.result?.state === "fail" || Boolean(cleanupError);
       writeFileSync(
-        path.join(outputDir, "report.json"),
+        path.join(caseDir, "report.json"),
         JSON.stringify(
           {
             synthetic: true,
@@ -178,34 +212,10 @@ describe("current purchase-agent system boundaries", () => {
           2,
         ),
       );
-      writeE2ERunBundle({
-        repoRoot,
-        outputDir,
-        started: identity,
-        evidence: [outputDir],
-        kind: "browser",
+      cases.push({
+        name: task.name,
         status: failed ? "failed" : "passed",
-        profile: "purchase-agent",
-        scenario: task.name,
-        phase: "completed",
-        command: [
-          "pnpm",
-          "--dir",
-          "apps/web",
-          "test:postgres",
-          "src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts",
-          "--project",
-          "integration-workerd",
-          "-t",
-          task.name,
-        ],
-        cases: [
-          {
-            name: task.name,
-            status: failed ? "failed" : "passed",
-            durationMs: Date.now() - began,
-          },
-        ],
+        durationMs: Date.now() - began,
       });
     }
     if (cleanupError) throw cleanupError;
@@ -690,7 +700,10 @@ describe("current purchase-agent system boundaries", () => {
       "purchase-agent",
       // Escalation off: the primary's unresolved resolutions settle directly
       // (the mail escalation scenario covers holding them).
-      { coordinatorModels: { primary: "gpt-6-luna" } },
+      {
+        objectStorage: undefined,
+        coordinatorModels: { primary: "gpt-6-luna" },
+      },
     );
     await scenario.wake();
     await waitForStatus(parent.id, "needs_review");
@@ -928,6 +941,7 @@ describe("current purchase-agent system boundaries", () => {
       },
       "purchase-agent",
       {
+        objectStorage: undefined,
         coordinatorModels: {
           primary: "gpt-6-luna",
           escalation: "claude-opus-5-5",
@@ -1111,6 +1125,7 @@ describe("current purchase-agent system boundaries", () => {
         ],
       },
       "gmail-research",
+      { objectStorage: undefined },
     );
     const google = scenario.googleProvider;
     if (!google) throw new Error("Gmail profile has no external provider.");

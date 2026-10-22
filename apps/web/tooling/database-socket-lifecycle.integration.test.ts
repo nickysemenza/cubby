@@ -33,7 +33,7 @@ const censusGroup = z.object({
 // close at scope completion: repeated freshness writes must not accumulate
 // old idle sockets indefinitely. Each quiet window outlasts the
 // pool's idle timeout, so only a socket nothing will ever close remains.
-const POOL_IDLE_TIMEOUT_MS = 500;
+const POOL_IDLE_TIMEOUT_MS = 100;
 const QUIET_MS = 3 * POOL_IDLE_TIMEOUT_MS;
 it("real Worker reads and freshness writes release database sockets after quiet", async () => {
   await withWorkerdRuntime(
