@@ -72,8 +72,9 @@ for the same outcome first and update the existing issue when it matches.
 ## Roadmap
 
 Horizon sequences outcomes without promising dates. Now holds 1–3 current
-focus outcomes; Next holds 3–5 ordered candidates after Now; Later preserves
-wanted but deferred work. Leave Horizon unset for the rest of the backlog.
+focus outcomes; Next holds ordered candidates after Now without a numeric limit;
+Later preserves wanted but deferred work. Do not remove wanted Next candidates
+solely to shorten the column. Leave Horizon unset for the rest of the backlog.
 Priority describes impact; a Ready issue can still be Later, and a Now outcome
 can need a decision. Keep its actual Readiness and Status accurate.
 
