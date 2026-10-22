@@ -1,0 +1,195 @@
+apps/web/cloudflare.config.ts
+  s_35f188e8d8b6cb::t_0210293ddce519 27,64,113
+apps/web/drizzle/0007_needy_harpoon.sql
+  s_35f188e8d8b6cb::t_a3b6039dba647d 1-68
+apps/web/drizzle/meta/_journal.json
+  s_35f188e8d8b6cb::t_57c09fb0064162 53-59
+apps/web/src/cf-server.ts
+  s_35f188e8d8b6cb::t_1d1c1e193c268a 5,7-8,545-546,548,550,619-625,636
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_35f188e8d8b6cb::t_3faa7ce7917824 55
+apps/web/src/server/ai/repo/ai-refresh-observation.integration.test.ts
+  s_35f188e8d8b6cb::t_b98642b0618f54 17-19,38-109
+apps/web/src/server/ai/repo/ai-refresh.ts
+  s_35f188e8d8b6cb::t_f40207bd722cf1 16,194-273
+apps/web/src/server/ai/response-cache-durable-object.ts
+  s_35f188e8d8b6cb::t_954dd604d16145 38-42
+apps/web/src/server/ai/response-cache.ts
+  s_35f188e8d8b6cb::t_6123bb9413fe25 412-416
+apps/web/src/server/cf-env.ts
+  s_35f188e8d8b6cb::t_cc41a92a31ae01 179-181
+apps/web/src/server/db/job-schema.ts
+  s_35f188e8d8b6cb::t_73fcdbaeb0b76c 2-8,36-39,60-73
+apps/web/src/server/domains/financial-transaction/service/transfer-pair-labels.ts
+  s_35f188e8d8b6cb::t_423d6eb1d313f5 4,37-38
+apps/web/src/server/domains/image-processing/repo/image-processing-waiting.integration.test.ts
+  s_35f188e8d8b6cb::t_ac2ad272807ec2 83-95
+apps/web/src/server/domains/image-processing/repo/image-processing.ts
+  s_35f188e8d8b6cb::t_56c1496fe7451f 311-312,729-730
+apps/web/src/server/domains/maintenance/service/maintenance-run.ts
+  s_35f188e8d8b6cb::t_747bdeb27b8759 5
+apps/web/src/server/domains/photo-import/repo/run/lifecycle.ts
+  s_35f188e8d8b6cb::t_d69b6c9c5b3556 287
+apps/web/src/server/domains/purchase-agent/service/contracts.ts
+  s_35f188e8d8b6cb::t_cd40b93a849b76 1,5
+apps/web/src/server/domains/purchase-agent/service/contracts.unit.test.ts
+  s_35f188e8d8b6cb::t_132135169c9a11 5,8,14-15
+apps/web/src/server/domains/purchase-agent/service/dispatch-input.ts
+  s_35f188e8d8b6cb::t_03fa86fe254f49 8,20
+apps/web/src/server/domains/purchase-agent/service/dispatch-input.unit.test.ts
+  s_35f188e8d8b6cb::t_710282ce68146b 1,4,8,10-11
+apps/web/src/server/domains/purchase-agent/service/dispatch.ts
+  s_35f188e8d8b6cb::t_32969410c13483 3-5,7,9-10,41-42
+apps/web/src/server/domains/purchase-agent/service/environment.ts
+  s_35f188e8d8b6cb::t_57ce8c96d0926a 39,159-160
+apps/web/src/server/domains/purchase-import/operations/agent-host.ts
+  s_35f188e8d8b6cb::t_cf0c513e7985cf 29,111-112,115
+apps/web/src/server/domains/purchase-import/operations/gmail/discovery.integration.test.ts
+  s_35f188e8d8b6cb::t_9bd89338216aa5 389,415-420,433-438
+apps/web/src/server/domains/purchase-import/repo/agent-model-eval.live-eval.ts
+  s_35f188e8d8b6cb::t_1fd9ea74a5dfc3 124-125,189,199-203
+apps/web/src/server/domains/purchase-import/repo/dispatch.ts
+  s_35f188e8d8b6cb::t_9858b59b05d23c 2-8,12-15,17,19-20,22-25,27,29-30,34,36-55
+apps/web/src/server/domains/purchase-import/repo/email-actions.ts
+  s_35f188e8d8b6cb::t_d54d2c1ba60d9e 107-115
+apps/web/src/server/domains/purchase-import/repo/email-import.integration.test.ts
+  s_35f188e8d8b6cb::t_44dfe75dd55b8c 90,110-112,121
+apps/web/src/server/domains/purchase-import/repo/gmail/publication-concurrency.integration.test.ts
+  s_35f188e8d8b6cb::t_60c790d091e31a 197-202
+apps/web/src/server/domains/purchase-import/repo/mail-import-run.integration.test.ts
+  s_35f188e8d8b6cb::t_48f26e01d7be94 17,53-54,89-93,133,144,153,203,249,271-275,369-373,433-437,487-491,514-518,560,566,577-581,681-686,688,698-703,766-773,870-877,945-950,952,959,969-975,979,982-988,990,1000,1002,1005,1037-1043,1064-1067,1070,1093,1095-1098,1101,1113,1123-1128,1130
+apps/web/src/server/domains/purchase-import/repo/mail-import-run.ts
+  s_35f188e8d8b6cb::t_00a16531142b8a 48,285-289,294,298-301,306,358-363
+apps/web/src/server/domains/purchase-import/repo/mail-outcome/replay.live-eval.ts
+  s_35f188e8d8b6cb::t_a518922c553337 5,23,275-286,410,464-465,468
+apps/web/src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts
+  s_35f188e8d8b6cb::t_b3a210c58a5178 11,38,92,343,575-581,695,792,821-827,835-840,883-893,937
+apps/web/src/server/domains/purchase-import/repo/run-service.integration.test.ts
+  s_b4e929edffc890::t_07733dfb258577 3,5-6,9,12-17,34,37-38,104-154,387-391,399-402,404-406,420-421,423-424
+apps/web/src/server/domains/purchase-import/repo/run-service.ts
+  s_b4e929edffc890::t_1a7ff79ebe7aea 145,509-531,534-544,986-988,1009-1011,1017-1019,1024,1030-1049,1051-1061,1979-1983,2029-2033,2169-2173,2259-2263
+apps/web/src/server/domains/purchase-import/service/README.md
+  s_35f188e8d8b6cb::t_c309ccf2ca4cf2 87
+apps/web/src/server/domains/run/operations/gateway-egress-durable-object.ts
+  s_35f188e8d8b6cb::t_96d911f7f7a109 69-70
+apps/web/src/server/domains/run/repo/execution-context.ts
+  s_35f188e8d8b6cb::t_e9416fd0d57759 4,14-18,20,76,103-118
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_35f188e8d8b6cb::t_3183d30cd1e212 1093-1097
+apps/web/src/server/domains/run/service/ai-work.ts
+  s_35f188e8d8b6cb::t_cb7a605b9a23b1 217-222,228-232
+apps/web/src/server/domains/run/service/execution-transport.integration.test.ts
+  s_35f188e8d8b6cb::t_4ee62c68a6db8a 26,28,533-549,560-567,585-590
+apps/web/src/server/domains/run/service/step-run.ts
+  s_35f188e8d8b6cb::t_dc180434fb6222 3,15,92,160,296,366-370,399-403
+apps/web/src/server/domains/run/service/sweep.ts
+  s_35f188e8d8b6cb::t_e47fa0dfbd56b2 14,171,264,351,458,512,554
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts
+  s_35f188e8d8b6cb::t_d53e39ed4bbe11 34,1738,1825
+apps/web/src/server/domains/transaction-import/service/statement-suggestion-labels.ts
+  s_35f188e8d8b6cb::t_a7b1273f16da67 12,68,538-539
+apps/web/src/server/generic/embedding/repo/embedding-cleanup.ts
+  s_35f188e8d8b6cb::t_4438be3780e641 16-21,27-28,41-42
+apps/web/src/server/generic/jobs/context.ts
+  s_35f188e8d8b6cb::t_c02e3327563a26 7-18,25-26
+apps/web/src/server/generic/jobs/errors.ts
+  s_35f188e8d8b6cb::t_3aef3726e15d50 1-2,9
+apps/web/src/server/generic/jobs/repo/jobs.integration.test.ts
+  s_35f188e8d8b6cb::t_e989cdb237f32c 18,20-22,28-29,313-443
+apps/web/src/server/generic/jobs/repo/jobs.ts
+  s_35f188e8d8b6cb::t_b10a7f8fca641b 9,42-43,62-63,98,100-109,111-126,150-151,166-167,230-231,266-267,290-292,320-321,340-341,380-381,393-394,423-424,475-476,512-513,554-555,572
+apps/web/src/server/generic/jobs/service/jobs.ts
+  s_35f188e8d8b6cb::t_cf90734b0c1ac8 5-8,55-66,73,84-88,90-93,95-108,129-134,143
+apps/web/src/server/generic/problems/operations/database-freshness-durable-object.workers.test.ts
+  s_35f188e8d8b6cb::t_33d9928e73f451 1
+apps/web/src/server/http/routes/api/import/agent/oauth.callback.impl.ts
+  s_35f188e8d8b6cb::t_6a5f210a27038e 36,135-136
+apps/web/src/server/http/routes/api/import/agent/oauth.callback.impl.unit.test.ts
+  s_35f188e8d8b6cb::t_88d5a819ef6c8c 116,118-119,124,128
+apps/web/src/server/mcp/run-lifecycle.integration.test.ts
+  s_35f188e8d8b6cb::t_f42288796649cb 40
+apps/web/src/server/workflows/ai-refresh-startup.ts
+  s_35f188e8d8b6cb::t_420c3176b82bf8 3,6-11,13,16-44
+apps/web/src/server/workflows/background-tasks/consume.ts
+  s_35f188e8d8b6cb::t_149d5993ef0999 24,37,41-42,54,59
+apps/web/src/server/workflows/background-tasks/consume.unit.test.ts
+  s_35f188e8d8b6cb::t_d847b275031f3e 12,25-26
+apps/web/src/server/workflows/background-tasks/durable.integration.test.ts
+  s_35f188e8d8b6cb::t_1d43cbba6b90d8 3,8,30-34,39-62
+apps/web/src/server/workflows/background-tasks/embedding.ts
+  s_35f188e8d8b6cb::t_8ac32dca249a86 122-123
+apps/web/src/server/workflows/background-tasks/publish.ts
+  s_35f188e8d8b6cb::t_c24f962e623baa 8,14,16,28,78-82,86-87,108-114
+apps/web/src/server/workflows/background-tasks/publish.unit.test.ts
+  s_35f188e8d8b6cb::t_8767d9d54b1cd3 8,10
+apps/web/src/server/workflows/jobs.ts
+  s_35f188e8d8b6cb::t_b50c5335b08098 9,12,15,31-32,67-97,99-105
+apps/web/src/server/workflows/runs/job-execution.ts
+  s_35f188e8d8b6cb::t_d23899ddfd09a5 3,63,75,79-85,148-151,155-161,212
+apps/web/src/server/workflows/runs/lifecycle.ts
+  s_35f188e8d8b6cb::t_4bba8acec6695f 101,124,130-135,155
+apps/web/tests/e2e/harness-services/job-wake-producer.ts
+  s_35f188e8d8b6cb::t_449c67791608c0 5,12,19-20
+apps/web/tooling/ai-work.ts
+  s_35f188e8d8b6cb::t_f6379b9e246fe2 105
+apps/web/tooling/dev/config-runtime-boundary.test.ts
+  s_35f188e8d8b6cb::t_1eb16320c54731 8-9,33,40
+apps/web/tooling/dev/config.ts
+  s_35f188e8d8b6cb::t_65ef09b5c4d109 31
+apps/web/tooling/dev/worker.ts
+  s_35f188e8d8b6cb::t_2a9ed46ffaa8ce 32-47,164,191,308
+apps/web/tooling/job-dispatch-cutover.integration.test.ts
+  s_35f188e8d8b6cb::t_d8e103b483e347 1-120
+apps/web/tooling/purchase-agent-workerd-harness.ts
+  s_35f188e8d8b6cb::t_169064946ad064 1,41,46,86-87
+apps/web/tooling/workerd-harness.ts
+  s_35f188e8d8b6cb::t_6abfdeb0275daf 37,45,50-51,88,102,112,116,262-263,268-269
+apps/web/tooling/workerd-runtime-profiles.integration.test.ts
+  s_35f188e8d8b6cb::t_af6f25eb4f4839 39,109
+docs/adr/0015-unified-durable-work-coordination.md
+  s_35f188e8d8b6cb::t_8af2bb28cdd0e3 17,19-21,41-46,54-58,122-141,150-153
+docs/infrastructure.md
+  s_35f188e8d8b6cb::t_7a8447aadf8c06 19,45,52-101,116,132-137,193,237-238,285-286,307-310,327-329,578-581,655,727,738-745,752,755,795,797,801,904
+docs/local-development.md
+  s_35f188e8d8b6cb::t_8c75a7dc6440f7 318-321
+docs/runbooks/ai-refresh.md
+  s_35f188e8d8b6cb::t_97b60a0d072634 5,28-35,76,90,95-98,111,113-114,129-132
+packages/schemas/src/job.ts
+  s_35f188e8d8b6cb::t_37d2b877451c1d 14-22,31-32,46-47
+packages/schemas/src/run-step.ts
+  s_35f188e8d8b6cb::t_1560c9b5bd3ec2 21
+packages/shared/package.json
+  s_35f188e8d8b6cb::t_a57a2aaba83698 27
+packages/shared/src/apple-client-version.ts
+  s_35f188e8d8b6cb::t_218b46bb41a5ab 8
+packages/shared/src/job-page-limits.ts
+  s_35f188e8d8b6cb::t_1f569d2dbd6018 1-3
+packages/worker-tracing/src/log.ts
+  s_35f188e8d8b6cb::t_e34ff5ef48b2f3 3-4,42
+packages/worker-tracing/src/log.unit.test.ts
+  s_35f188e8d8b6cb::t_a58a81019cd246 13,16-19,27-31,38-41,57-58,84,96-100,110-111,133-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2b078d188aaba0b5a660a59bc88f083a1ab9eed2",
+  "prompts": {},
+  "sessions": {
+    "s_35f188e8d8b6cb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a164e8-c97f-7ca0-bb5a-5a215c002623",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_b4e929edffc890": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd075498-64fe-4cf1-853f-6eeb4d454fc7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
