@@ -1074,16 +1074,18 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
-  // A pending hold needs kind/counterparty labels, never a spending decision.
+  // A non-spending transfer needs labels, never a spending decision.
   it("finishes settlement-only labels without reserving spending allowance", async () => {
     const queue = captureBackgroundQueue();
     try {
       await card(ctx);
-      await record(ctx, [rowInput({ providerStatus: "pending" })]);
+      await record(ctx, [
+        rowInput({ providerStatus: "pending", sourceCategory: "Transfer" }),
+      ]);
       await generate(ctx);
       const result = await runStatementLabels(ctx.db, {
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-        port: answering({ kind: "purchase", counterparty: "business" }),
+        port: answering({ kind: "account_transfer", counterparty: "business" }),
         spendingAdvice: async () => {
           throw new Error(
             "Settlement-only evidence cannot request spending advice",

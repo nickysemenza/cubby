@@ -5,7 +5,10 @@ imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
 Clean purchases and fees book spending automatically; uncertain work
 remains in the shared Suggestions queue. Pending or unknown provider status
-does not prevent an otherwise supported booking. Unknown status is retained
+does not prevent an otherwise supported booking. Spending advice is generated
+for pending and observed spending under the same eligibility as posted spending.
+Label-policy revisions invalidate checkpoints when advice eligibility changes.
+Unknown status is retained
 as null on evidence and observed on the FinancialTransaction, never fabricated
 as posted. Transfers, card payments and ordinary income remain settlement-only.
 Booking links recorded Expenses or creates one bare Purchase and one lump

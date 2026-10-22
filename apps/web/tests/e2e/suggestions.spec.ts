@@ -505,6 +505,15 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
   });
+  const accountId = await resolveOrThrow(db, "financialAccount", account.id);
+  const spendingTotal = async () => {
+    const spent = await getDb(db).execute<{ total: number }>(sql`
+      SELECT coalesce(sum(e.cost),0)::float8 AS total FROM "Expense" e WHERE e."deletedAt" IS NULL
+        AND e."purchaseId" IN (SELECT a."purchaseId" FROM "FinancialTransactionAllocation" a
+          JOIN "FinancialTransaction" f ON f.id=a."transactionId" WHERE f."accountId"=${accountId} AND a."deletedAt" IS NULL)
+    `);
+    return spent.rows[0]?.total;
+  };
   const recorded = await createEntityFixture(page, "financialTransaction", {
     accountId: account.id,
     amount: 61.07,
@@ -525,11 +534,11 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
       sourceCategory: "Shopping",
     },
     {
-      // Uncategorized, so its create is never clean (with or without
-      // decision labels): it is reviewed on its own.
+      // Category evidence makes pending spending bookable after labeling.
       statementDate: "2026-05-04",
       providerAmount: -42.5,
       rawDescription: hold,
+      sourceCategory: "Groceries",
       providerStatus: "pending",
     },
     {
@@ -572,11 +581,13 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await expect(
     page.getByRole("list", { name: "Candidate transactions" }),
   ).toContainText("61.07");
-  // A deferred pending candidate becomes bookable after applying status. Its
-  // controls must retain focus across the next authoritative draft replan.
-  await expect(
-    page.getByText("Spending preview unavailable", { exact: true }),
-  ).toBeVisible();
+  // Pending evidence already supports booking. Applying attested posted status
+  // remains a reviewed choice and must preserve the ready graph and draft.
+  const result = page.getByRole("region", {
+    name: "Proposed result",
+    exact: true,
+  });
+  await expect(result).toContainText("One Purchase and one lump Expense");
   await expect(
     page.getByText("Updating spending preview…", { exact: true }),
   ).toHaveCount(0);
@@ -584,10 +595,6 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     .getByRole("checkbox", { name: "Apply status", exact: true })
     .check();
   // Preview the graph, including auto-created identity and no vendor account.
-  const result = page.getByRole("region", {
-    name: "Proposed result",
-    exact: true,
-  });
   await expect(result).toContainText("One Purchase and one lump Expense");
   await expect(result).toContainText("Create vendor");
   await expect(result).toContainText("Unassigned");
@@ -647,6 +654,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     .getByRole("button", { name: "Accept", exact: true })
     .click();
   await expect(rowFor(hold)).toHaveCount(0);
+  expect(await spendingTotal()).toBe(103.57);
 
   // Publish manual review work without scheduling import-clean execution,
   // which would legitimately finish the same booking before the bulk click.
@@ -673,7 +681,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     }),
     actor,
   );
-  // Posting the hold books spending only after current category and identity advice.
+  // Reviewed supersession must preserve the already-booked pending spending.
   if (!posted.batchId)
     throw new Error("Synthetic posted statement import was not saved");
   await generateStatementSuggestions(db, posted.batchId);
@@ -689,13 +697,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     page.getByRole("list", { name: "Failed suggestions" }),
   ).toHaveCount(0);
 
-  const accountId = await resolveOrThrow(db, "financialAccount", account.id);
-  const spent = await getDb(db).execute<{ total: number }>(sql`
-    SELECT coalesce(sum(e.cost),0)::float8 AS total FROM "Expense" e WHERE e."deletedAt" IS NULL
-      AND e."purchaseId" IN (SELECT a."purchaseId" FROM "FinancialTransactionAllocation" a
-        JOIN "FinancialTransaction" f ON f.id=a."transactionId" WHERE f."accountId"=${accountId} AND a."deletedAt" IS NULL)
-  `);
-  expect(spent.rows[0]?.total).toBe(103.57);
+  expect(await spendingTotal()).toBe(103.57);
 
   await rowFor(cafe)
     .getByRole("button", { name: "Dismiss", exact: true })
