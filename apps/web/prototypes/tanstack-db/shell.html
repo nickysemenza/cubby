@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Cubby · TanStack DB experiment</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font:
+        14px/1.5 system-ui,
+        sans-serif;
+      color: #202020;
+      background: #fafafa;
+      margin: 0;
+    }
+    main {
+      max-width: 1120px;
+      margin: auto;
+      padding: 28px;
+    }
+    h1 {
+      font-size: 26px;
+      margin: 4px 0;
+    }
+    h2 {
+      font-size: 16px;
+      margin: 0 0 10px;
+    }
+    p {
+      max-width: 85ch;
+      margin: 8px 0 16px;
+    }
+    .label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    section {
+      background: white;
+      border: 1px solid #ddd;
+      padding: 16px;
+      margin: 14px 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .grid section {
+      margin: 0;
+    }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      background: white;
+      padding: 7px 11px;
+      margin: 3px;
+    }
+    button:hover,
+    button[aria-selected="true"] {
+      background: #e9f2ff;
+      border-color: #0077e6;
+    }
+    button:focus-visible {
+      outline: 2px solid #0077e6;
+      outline-offset: 2px;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      text-align: left;
+    }
+    th,
+    td {
+      padding: 7px;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+      vertical-align: top;
+    }
+    th {
+      color: #666;
+      font-weight: 500;
+    }
+    pre {
+      font:
+        12px/1.6 ui-monospace,
+        monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 250px;
+      overflow: auto;
+    }
+    .pending {
+      border-bottom: 1px solid #eee;
+      padding: 8px 0;
+    }
+    .pending span {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    #metrics {
+      font-variant-numeric: tabular-nums;
+      color: #444;
+    }
+    #error {
+      color: #a12121;
+      white-space: pre-wrap;
+    }
+    a {
+      color: #0064bc;
+    }
+    @media (max-width: 700px) {
+      main {
+        padding: 15px;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      td,
+      th {
+        padding: 5px;
+      }
+    }
+  </style>
+  <main>
+    <div class="label">
+      Disposable experiment · synthetic data only · real TanStack DB 0.15.2
+    </div>
+    <h1>Can shared records replace cache choreography?</h1>
+    <p>
+      Change one Task and watch its loaded list, detail, and Project
+      relationship together. This file embeds the real Query Collection adapter.
+      Its server is an in-memory simulation: it never contacts Cubby or stores
+      household data.
+    </p>
+    <p>
+      <strong>Scope:</strong> one bounded server page, two Project records, and
+      optimistic writes. This proves collection behavior, not a production
+      migration. The separate on-demand loading probe requested an unbounded
+      fallback and was rejected.
+    </p>
+    <section>
+      <h2>Guided walkthroughs</h2>
+      <div id="tabs" role="tablist" aria-label="Walkthroughs"></div>
+      <p id="description"></p>
+      <div id="steps"></div>
+    </section>
+    <section>
+      <h2>Free play</h2>
+      <button data-action="rename">Rename first Task</button
+      ><button data-action="move">Move first Task to repairs</button
+      ><button data-action="delete">Delete first Task</button
+      ><button data-action="sibling">Edit second Task</button
+      ><button data-action="background">Change server Task</button
+      ><button data-action="refresh">Refresh bounded page</button
+      ><button data-action="reset">Reset synthetic state</button>
+      <p id="error" role="alert"></p>
+      <p id="metrics"></p>
+    </section>
+    <div class="grid">
+      <section>
+        <h2>Loaded Task list</h2>
+        <div id="list"></div>
+      </section>
+      <section>
+        <h2>Selected Task detail</h2>
+        <div id="detail"></div>
+      </section>
+      <section>
+        <h2>Project relationships · loaded rows only</h2>
+        <div id="relationships"></div>
+      </section>
+      <section>
+        <h2>Server sample · first three rows</h2>
+        <div id="server"></div>
+      </section>
+    </div>
+    <section>
+      <h2>Writes awaiting a server response</h2>
+      <div id="pending"></div>
+      <pre id="outcomes" aria-live="polite"></pre>
+    </section>
+    <section>
+      <h2>What this does and does not replace</h2>
+      <p>
+        Shared optimistic names and rollback need no manual list snapshots here.
+        A limited page still needs a server refill after deletion, and
+        background/native writes still need a freshness signal. Overlapping
+        writes to the same Task can temporarily show an older pending name after
+        a newer write succeeds.
+      </p>
+      <details>
+        <summary>Simulated Task read requests</summary>
+        <pre id="requests"></pre>
+      </details>
+    </section>
+  </main>
+  <script>
+    window.addEventListener("error", (event) => {
+      document.getElementById("error").textContent = event.message;
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      document.getElementById("error").textContent = String(event.reason);
+    });
+  </script>
+  <script type="module">
+    /*PROTOTYPE_SCRIPT*/
+  </script>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "cubby-tanstack-db-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "probe": "node probe.mjs",
+    "on-demand": "node on-demand.mjs"
+  },
+  "dependencies": {
+    "@tanstack/db": "0.15.2",
+    "@tanstack/query-core": "5.90.15",
+    "@tanstack/query-db-collection": "1.4.8",
+    "esbuild": "0.28.2",
+    "zod": "4.6.7"
+  },
+  "packageManager": "pnpm@12.12.1"
+}

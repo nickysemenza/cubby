@@ -1,0 +1,189 @@
+[
+  {
+    "case": "bounded page",
+    "loaded": 2,
+    "server": 50,
+    "reads": [
+      {
+        "filters": [],
+        "limit": 2,
+        "offset": 0,
+        "total": 50,
+        "returned": 2,
+        "bytes": 169
+      }
+    ]
+  },
+  {
+    "case": "optimistic rename",
+    "list": "  Inspect canonical sample filter  ",
+    "detail": "  Inspect canonical sample filter  ",
+    "relationship": "  Inspect canonical sample filter  "
+  },
+  {
+    "case": "canonical receipt",
+    "row": {
+      "id": "TSK-AAAA",
+      "name": "Inspect canonical sample filter",
+      "projectId": "PRJ-AAAA",
+      "revision": 1
+    },
+    "reads": 1
+  },
+  {
+    "case": "failed delete after sibling success",
+    "rows": [
+      {
+        "id": "TSK-AAAA",
+        "name": "Inspect sample filter",
+        "projectId": "PRJ-AAAA",
+        "revision": 0
+      },
+      {
+        "id": "TSK-BBBB",
+        "name": "Successful sibling edit",
+        "projectId": "PRJ-BBBB",
+        "revision": 1
+      }
+    ],
+    "outcomes": [
+      "Write accepted",
+      "Synthetic write refused: SQLSTATE 23514; constraint sample_task_name"
+    ]
+  },
+  {
+    "case": "same-row overlap before failed predecessor",
+    "rows": [
+      {
+        "id": "TSK-AAAA",
+        "name": "First edit fails",
+        "projectId": "PRJ-AAAA",
+        "revision": 0
+      },
+      {
+        "id": "TSK-BBBB",
+        "name": "Replace sample seal",
+        "projectId": "PRJ-BBBB",
+        "revision": 0
+      }
+    ],
+    "server": {
+      "id": "TSK-AAAA",
+      "name": "Second edit succeeds",
+      "projectId": "PRJ-AAAA",
+      "revision": 1
+    }
+  },
+  {
+    "case": "same-row overlap after failed predecessor",
+    "row": {
+      "id": "TSK-AAAA",
+      "name": "Second edit succeeds",
+      "projectId": "PRJ-AAAA",
+      "revision": 1
+    },
+    "server": {
+      "id": "TSK-AAAA",
+      "name": "Second edit succeeds",
+      "projectId": "PRJ-AAAA",
+      "revision": 1
+    }
+  },
+  {
+    "case": "move loaded relationship",
+    "related": [
+      {
+        "id": "TSK-AAAA",
+        "name": "Inspect sample filter",
+        "project": "Sample repairs",
+        "projectId": "PRJ-BBBB"
+      },
+      {
+        "id": "TSK-BBBB",
+        "name": "Replace sample seal",
+        "project": "Sample repairs",
+        "projectId": "PRJ-BBBB"
+      }
+    ]
+  },
+  {
+    "case": "accepted delete before refill",
+    "list": [
+      {
+        "id": "TSK-BBBB",
+        "name": "Replace sample seal",
+        "projectId": "PRJ-BBBB",
+        "revision": 0
+      }
+    ],
+    "reads": 1
+  },
+  {
+    "case": "accepted delete after bounded refill",
+    "list": [
+      {
+        "id": "TSK-BBBB",
+        "name": "Replace sample seal",
+        "projectId": "PRJ-BBBB",
+        "revision": 0
+      },
+      {
+        "id": "TSK-SYNTHETIC-02",
+        "name": "Synthetic task 2",
+        "projectId": "PRJ-AAAA",
+        "revision": 0
+      }
+    ],
+    "reads": [
+      {
+        "filters": [],
+        "limit": 2,
+        "offset": 0,
+        "total": 50,
+        "returned": 2,
+        "bytes": 169
+      },
+      {
+        "filters": [],
+        "limit": 2,
+        "offset": 0,
+        "total": 49,
+        "returned": 2,
+        "bytes": 172
+      }
+    ]
+  },
+  {
+    "case": "external write before refresh",
+    "browser": "Replace sample seal",
+    "server": "Changed by synthetic background job"
+  },
+  {
+    "case": "external write after refresh",
+    "browser": "Changed by synthetic background job",
+    "reads": 2
+  },
+  {
+    "case": "Query cache hydration",
+    "rows": [
+      {
+        "id": "TSK-AAAA",
+        "name": "Inspect sample filter",
+        "projectId": "PRJ-AAAA",
+        "revision": 0
+      },
+      {
+        "id": "TSK-BBBB",
+        "name": "Changed by synthetic background job",
+        "projectId": "PRJ-BBBB",
+        "revision": 1
+      }
+    ],
+    "reads": 0
+  },
+  {
+    "case": "request-scoped instances",
+    "first": "Private pending value",
+    "second": "Inspect sample filter"
+  }
+]
