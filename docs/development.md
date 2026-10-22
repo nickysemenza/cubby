@@ -358,8 +358,8 @@ native PostgreSQL installation remain owned by their existing runners.
     terminal `Image.metadataOutcome` with its raw error, leaves the backlog
     and is listed on Problems; a step's Retry failed re-admits its failed refs.
     Failed image jobs are never re-queued silently.
-  - App-open recovery (`requestCatchUp`) only resumes paused or lost Runs and
-    starts mail discovery; it does not drain backlogs.
+  - App-open recovery (`requestCatchUp`) admits mail discovery and wakes due
+    durable Jobs. Stopped work still requires explicit retry.
   - Image processing always accepts uploads and queued work; historical
     enabled/paused settings are ignored. Device availability and capability
     still determine which companion work can execute. Exceptional repair tools

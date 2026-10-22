@@ -18,9 +18,19 @@ export async function requestCatchUp(
   const claimedAt = new Date();
   if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
   try {
+    // A wake alone cannot discover new mail without a durable admission task.
     await (
       await import("~/server/workflows/background-tasks/publish")
-    ).wakeJobs({ source: "app-open" });
+    ).publishBackgroundTasks(
+      db,
+      [
+        {
+          kind: "maintenance.purchase-discovery",
+          requestedAt: claimedAt.toISOString(),
+        },
+      ],
+      { source: "app-open" },
+    );
   } catch (error) {
     await releaseCatchUpClaim(db, claimedAt);
     throw error;

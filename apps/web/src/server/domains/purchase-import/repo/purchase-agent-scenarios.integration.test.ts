@@ -1134,7 +1134,7 @@ describe("current purchase-agent system boundaries", () => {
         messages: [unrelated, original],
         pages: [[unrelated.id], [unrelated.id, original.id]],
         history: [],
-        query: '("maker.example.test") -in:spam -in:trash',
+        query: '("example.test") -in:spam -in:trash',
       },
     });
 
