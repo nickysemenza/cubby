@@ -671,8 +671,6 @@ describe("MCP catalog schemas", () => {
       // not Cubby entity ids.
       "entity_read.lines[].externalIds[].id",
       "recipe_import.lineId",
-      "source_transaction_records.selector.externalIds",
-      "source_transaction_records.data.supersededByExternalId",
       // Stable source/workflow identifiers are opaque import evidence keys,
       // not Cubby entity UUIDs or public shortcodes.
       "purchase_import.orders[].stableOrderId",

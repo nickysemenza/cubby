@@ -28,7 +28,8 @@ export interface ActionInputSchema {
 
 // Repeated workflow fields also need sharing: keeping only large entity
 // subtrees shared made a reviewed import action exceed the catalog budget.
-const HOIST_MIN_CHARS = 100;
+// Short wire-only definition names keep sharing smaller constrained leaves profitable.
+const HOIST_MIN_CHARS = 64;
 const ROOT_KEYS = new Set(["action", "_runExecution"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {
@@ -239,7 +240,7 @@ function hoistRepeats(root: JsonObject): JsonObject {
     walk(definition, "schema", countSchema);
   const chosen = new Map<string, string>();
   for (const [text, entry] of counts)
-    if (entry.count > 1) chosen.set(text, `shared${chosen.size}`);
+    if (entry.count > 1) chosen.set(text, `s${chosen.size.toString(36)}`);
   if (chosen.size === 0) return root;
   const replace = (
     value: JSONType,

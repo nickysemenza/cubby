@@ -88,13 +88,13 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     },
   );
 
-  it("documents finance_read.source_transaction_records' nested createdAt as date-time", () => {
-    const action = requireAction("finance_read.source_transaction_records");
+  it("documents activity.recent's nested createdAt as date-time", () => {
+    const action = requireAction("activity.recent");
     const schema = advertisedJsonSchema(action.name, action.output, "output");
     const createdAt = jsonAt(
       schema,
       "properties",
-      "data",
+      "entries",
       "items",
       "properties",
       "createdAt",
