@@ -20,16 +20,14 @@ const MAX_JSON_LD_BYTES: usize = 512 * 1024;
 const MAX_VARIANT_MARKERS: usize = 50;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WPageLink {
     pub href: String,
     pub text: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WPageImage {
     pub src: String,
     pub alt: String,
@@ -43,8 +41,7 @@ pub struct WPageImage {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WCompactPage {
     pub title: String,
     pub text: String,

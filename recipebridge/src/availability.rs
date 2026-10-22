@@ -37,8 +37,7 @@ const COVERAGE_EPSILON: f64 = 1e-6;
 /// One need: an authored amount plus the index of the line that needs it, echoed
 /// back in `sources` so the caller can attribute each contribution to its meal.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WAvailabilityNeed {
     pub amount: WAmount,
     pub line_index: u32,
@@ -47,8 +46,7 @@ pub struct WAvailabilityNeed {
 /// One product backing an ingredient: its synthesis input (mappings derived
 /// Rust-side) plus the on-hand inventory entries for that product.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WAvailabilityProduct {
     pub product: WProductInput,
     pub on_hand: Vec<WAmount>,
@@ -58,8 +56,7 @@ pub struct WAvailabilityProduct {
 /// the caller can zip results onto its own rows (a row index for recipe
 /// availability, an ingredient id for the aggregated shopping list).
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WAvailabilityGroup {
     pub key: String,
     /// Household planning metadata. This never changes the inventory verdict:
@@ -72,8 +69,7 @@ pub struct WAvailabilityGroup {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WAvailabilityInput {
     pub groups: Vec<WAvailabilityGroup>,
 }
@@ -98,8 +94,7 @@ pub enum WAvailabilityStatus {
 
 /// One need's contribution, in the basis unit, tagged with its line index.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WAvailabilitySource {
     pub line_index: u32,
     /// Null when the group needs cannot be expressed in one comparable unit.
@@ -109,8 +104,7 @@ pub struct WAvailabilitySource {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(rename_all = "lowercase")]
 pub enum WAvailabilitySourceKind {
     Inventory,
@@ -118,8 +112,7 @@ pub enum WAvailabilitySourceKind {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WAvailabilityGroupResult {
     pub key: String,
     pub basis_unit: String,
@@ -147,8 +140,7 @@ pub struct WAvailabilityGroupResult {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WAvailabilityResult {
     pub groups: Vec<WAvailabilityGroupResult>,
 }

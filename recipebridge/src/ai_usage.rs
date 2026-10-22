@@ -10,8 +10,7 @@ use wasm_bindgen::prelude::*;
 
 /// Token counts for one model call (mirrors `cookbook::Usage`).
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
@@ -34,8 +33,7 @@ impl From<cookbook::Usage> for WUsage {
 
 /// What a host records per gateway call: the provider and the token usage.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WGatewayCallUsage {
     pub provider: String,
     pub usage: WUsage,

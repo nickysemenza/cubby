@@ -28,8 +28,7 @@ use crate::{from_js, to_js};
 /// One hop of an explained conversion path (mirrors `ConversionStep`). Units are
 /// the normalized graph nodes (cup amounts enter at `tsp`, money at `cent`).
 #[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WConversionStep {
     pub from_unit: String,
     pub to_unit: String,
@@ -51,8 +50,7 @@ impl From<ConversionStep> for WConversionStep {
 /// work" — a bogus route (e.g. grams reaching money via a serving-count `whole`
 /// edge) reads right off the steps.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WAmountExplained {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "wasm", tsify(optional))]
@@ -82,8 +80,7 @@ type AmountKind = "weight" | "volume" | "money" | "calories" | "time" | "tempera
 /// Disconnected components (islands) of a unit-mapping graph: a list of groups,
 /// each a list of unit strings. `transparent` → `type WUnitIslands = string[][]`.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WUnitIslands(pub Vec<Vec<String>>);
 
@@ -99,8 +96,7 @@ pub fn detect_unit_mapping_islands(mappings: WUnitMappings) -> WUnitIslands {
 /// `[unitA, unitB]` pairs in the caller's ORIGINAL unit strings. `transparent` →
 /// `type WUnitBridges = [string, string][]`.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WUnitBridges(pub Vec<(String, String)>);
 
@@ -285,16 +281,14 @@ pub fn conv_amount_to_kind(
 /// `WAmount[]` (`transparent` → `type WAmounts = WAmount[]`), the batched input
 /// for `conv_amounts_to_kind`.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(transparent)]
 pub struct WAmounts(pub Vec<WAmount>);
 
 /// `WMeasureResult[]` (`transparent` → `type WMeasureResults = WMeasureResult[]`),
 /// the batched output of `conv_amounts_to_kind`.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WMeasureResults(pub Vec<WMeasureResult>);
 

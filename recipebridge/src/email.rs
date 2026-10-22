@@ -27,8 +27,7 @@ const MAX_CUES: usize = 200;
 const MAX_PREHEADER_BYTES: usize = 1024;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WEmailLink {
     pub href: String,
     pub text: String,
@@ -39,8 +38,7 @@ pub struct WEmailLink {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WEmailImage {
     pub src: String,
     pub alt: String,
@@ -52,8 +50,7 @@ pub struct WEmailImage {
 
 /// Purchase cues and how many distinct ones fell past the cue bound.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WPurchaseCues {
     pub cues: Vec<String>,
     /// Distinct cues past the bound. A caller cannot check these against its
@@ -62,8 +59,7 @@ pub struct WPurchaseCues {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WCompactEmail {
     /// Readable body: data tables as `cell | cell` rows, layout tables
     /// flattened, footer and unsubscribe lines last.

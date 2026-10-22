@@ -21,8 +21,7 @@ use wasm_bindgen::prelude::*;
 /// `NormalizedIsbn`). `isbn10` exists only for the original 978 registration
 /// group — ISBN-13s outside it (979-*) have no ISBN-10 equivalent.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedIsbn {
     pub isbn13: String,

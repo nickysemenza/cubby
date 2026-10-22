@@ -78,8 +78,7 @@ pub enum WFoodAmountSource {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WFoodAmountInput {
     #[serde(default)]
     #[cfg_attr(feature = "wasm", tsify(type = "WAmount | null"))]
@@ -89,8 +88,7 @@ pub struct WFoodAmountInput {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WFoodAmountResult {
     pub totals: WNutritionTotals,
     #[serde(default)]

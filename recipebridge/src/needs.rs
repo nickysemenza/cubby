@@ -71,8 +71,7 @@ pub struct WNeedsLine {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WNeedsInput {
     pub lines: Vec<WNeedsLine>,
     /// Every root in `lines`, plus every transitively reachable sub-recipe.
@@ -142,8 +141,7 @@ pub struct WBlockedSubRecipe {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WNeedsResult {
     pub needs: Vec<WExpandedNeed>,
     pub blocked: Vec<WBlockedSubRecipe>,
@@ -152,8 +150,7 @@ pub struct WNeedsResult {
 /// One sub-recipe reference: the sub's declared yield, and the parent's written
 /// amounts for the row referencing it.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WYieldFractionInput {
     #[serde(default)]
     #[cfg_attr(feature = "wasm", tsify(optional, type = "WAmount | null"))]
@@ -166,8 +163,7 @@ pub struct WYieldFractionInput {
 /// sub-recipe; `reason` is the same verdict the shopping list discloses, so the
 /// two surfaces can never disagree about what is knowable.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WYieldFraction {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "wasm", tsify(optional))]

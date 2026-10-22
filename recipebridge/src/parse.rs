@@ -35,8 +35,7 @@ use crate::WAmount;
 /// than a `confidence` threshold. Booleans are always emitted (no skip) so the
 /// TS shape is a definite `{ confidence, fell_back, unparsed_digit }`.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WParseNotes {
     /// Convenience rollup of the booleans below.
     pub confidence: Confidence,
@@ -58,8 +57,7 @@ impl From<ParseNotes> for WParseNotes {
 
 /// A parsed ingredient (mirrors `Ingredient`).
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WIngredient {
     pub name: String,
     pub amounts: Vec<WAmount>,
@@ -107,8 +105,7 @@ impl From<RecipeYield> for WRecipeYield {
 
 /// Result of parsing a freeform yield string into structured yield + servings.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WYieldResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipe_yield: Option<WRecipeYield>,
@@ -149,8 +146,7 @@ impl From<RecipeSection> for WRecipeSection {
 /// A scraped recipe (the cubby-facing subset of `ScrapedRecipe`); the TS side
 /// converts it to the shared `ImportRecipe` carrier.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WScrapedRecipe {
     /// Recipe components; most recipes have a single unnamed section.
     pub sections: Vec<WRecipeSection>,
@@ -215,8 +211,7 @@ impl From<Chunk> for WRichItem {
 
 /// `WRichItem[]` (`transparent` → `type WRichItems = WRichItem[]`).
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WRichItems(pub Vec<WRichItem>);
 
@@ -261,8 +256,7 @@ pub struct WSegment {
 /// labeled entries when a whole-line recognizer or the name-only fallback
 /// produced the result (then it's a single unlabeled segment = the whole line).
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WDecomposition {
     pub source: String,
     pub segments: Vec<WSegment>,
@@ -303,8 +297,7 @@ pub fn parse_and_format_ingredient(input: &str) -> (WIngredient, String) {
 
 /// `WIngredient[]` (`transparent` → `type WParsedLines = WIngredient[]`).
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WParsedLines(pub Vec<WIngredient>);
 

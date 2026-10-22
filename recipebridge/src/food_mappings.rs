@@ -23,8 +23,7 @@ use crate::{WAmount, WUnitMapping, WUnitMappings};
 
 /// One USDA food portion row (the mapping-relevant subset of `FoodPortion`).
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WFoodPortion {
     pub amount: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -35,8 +34,7 @@ pub struct WFoodPortion {
 
 /// Branded-food serving metadata, nullable fields straight off the USDA row.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WFoodServing {
     #[serde(default)]
     #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
@@ -54,8 +52,7 @@ pub struct WFoodServing {
 /// pre-labeled by TS — `unit` is the conversion target string ("g protein",
 /// "mg sodium", "kcal"), keeping `TIER1_NUTRIENTS` TS-owned.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WNutrientPer100 {
     pub unit: String,
     pub amount: f64,
@@ -63,8 +60,7 @@ pub struct WNutrientPer100 {
 
 /// The mapping-relevant subset of a USDA `FoodSummary`.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WFoodInput {
     pub fdc_id: u32,
     pub portions: Vec<WFoodPortion>,
@@ -79,8 +75,7 @@ pub struct WFoodInput {
 /// TS `getAllUnitMappingsFromProduct` contract): omitting one would silently
 /// drop a synthesized edge.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WProductInput {
     pub id: String,
     #[serde(default)]
@@ -96,8 +91,7 @@ pub struct WProductInput {
 /// Provenance of a mapping (mirrors the TS `sourceMetadata` discriminated union
 /// in `@cubby/schemas/unitmapping` — same tag + field names).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum WSourceMetadata {
     Product {

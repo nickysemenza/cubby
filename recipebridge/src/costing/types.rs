@@ -94,8 +94,7 @@ pub struct WNutrientTarget {
 /// Everything one `cost_recipes` call needs: the recipe closure, the deduped
 /// ingredient map, the nutrient targets, and the explain flag.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WCostingInput {
     /// Recipes to produce results for (each must appear in `recipes`).
     pub root_ids: Vec<String>,
@@ -328,8 +327,7 @@ pub struct WRecipeCosting {
 
 /// The `cost_recipes` result: one entry per `root_ids` element, in order.
 #[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WCostingResult {
     pub recipes: Vec<WRecipeCosting>,
 }

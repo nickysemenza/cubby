@@ -204,8 +204,7 @@ pub(crate) type UnitMappingPairs = Vec<(Measure, Measure)>;
 
 /// A measurement value + unit (mirrors `Measure`).
 #[derive(Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WAmount {
     pub unit: String,
     pub value: f64,
@@ -263,8 +262,7 @@ impl From<Measure> for WAmount {
 /// carry `sourceMetadata`; plain conversion inputs don't need it (serde ignores
 /// it on the way in, skips it when absent).
 #[derive(Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WUnitMapping {
     pub a: WAmount,
     pub b: WAmount,
@@ -291,8 +289,7 @@ impl WUnitMapping {
 /// `WUnitMapping[]` as a single wasm arg/return (wasm-bindgen can't take a bare
 /// `Vec<TsifyStruct>` parameter); `transparent` → `type WUnitMappings = WUnitMapping[]`.
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(transparent)]
 pub struct WUnitMappings(pub Vec<WUnitMapping>);
 
