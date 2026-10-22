@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { insertAndReturn, withTransaction } from "~/server/db/helpers";
 import { auditLog, product } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { listAuditLog } from "~/server/generic/audit-log/operations/audit-log";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -94,6 +95,29 @@ describe("getAuditLog — channel + time window", () => {
     expect(entries).toHaveLength(2);
     const returnedTimes = entries.map((e) => e.createdAt.toISOString()).sort();
     expect(returnedTimes).toEqual([day1.toISOString(), day2.toISOString()]);
+  });
+
+  it("omits rows whose subject is not an audit entity", async () => {
+    const at = new Date("2026-07-22T00:00:00.000Z");
+    await makeEntry({ createdAt: at });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await insertAndReturn(ctx.db, auditLog, {
+      // SAFETY: migration 0007 wrote Run dispatch history under this kind.
+      entityKind: "run" as AuditEntityKind,
+      entityId: runId,
+      action: "update",
+      userId: ctx.actor.userId,
+      channel: "system",
+      createdAt: at,
+    });
+
+    const { entries } = await getAuditLog(ctx.db, {
+      limit: 50,
+      createdAtFrom: at.toISOString(),
+      createdAtTo: at.toISOString(),
+    });
+
+    expect(entries.map((entry) => entry.entityKind)).toEqual(["product"]);
   });
 
   it("paginates identical timestamps without repeating or skipping entries", async () => {
