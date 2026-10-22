@@ -1,0 +1,101 @@
+Cargo.toml
+  s_51e123cbeb9183::t_daf695063e6b7e 86-88
+apps/apple/AGENTS.md
+  s_5f0a6414ade862::t_832c0d0b7d0a56 206-207
+apps/apple/CubbyKit/Tests/CubbyKitTests/Format/DisplayFormatTests.swift
+  s_884d78341d7781::t_675c153db6b530 93-94,97-112,115
+apps/web/src/server/clients/scraper.ts
+  s_884d78341d7781::t_3b68edcb48590c 68
+apps/web/src/ui/text/format-amount.tsx
+  s_884d78341d7781::t_56cd7b323beb79 75,103-104
+apps/web/src/ui/text/format-amount.unit.test.ts
+  s_884d78341d7781::t_5eb1fc952255af 1,6-20
+apps/web/tooling/checks/check-client-bundle.ts
+  s_51e123cbeb9183::t_349b36f8a162d6 54
+apps/web/tooling/checks/check-client-bundle.unit.test.ts
+  s_51e123cbeb9183::t_48c5a5cad2c3d1 56,68,70
+apps/web/tooling/ui-test-setup.ts
+  s_51e123cbeb9183::t_fe051cce546b97 4,44-46
+cubby-ffi/src/display.rs
+  s_884d78341d7781::t_357d011d35dae6 101,115,121,127,137
+cubby-ffi/src/scaling.rs
+  s_884d78341d7781::t_552d3885d5fe5a 14,21,34,40
+docs/agents/generic-paths.md
+  s_5f0a6414ade862::t_bf88ad3a84bfb2 245-246
+docs/agents/validation-tests.md
+  s_51e123cbeb9183::t_976dda7a5e0e22 5-8
+docs/development.md
+  s_5f0a6414ade862::t_e1bc8bde15b899 49-56,61
+packages/shared/golden-vectors/display-format.json
+  s_884d78341d7781::t_94d2b349ea8b9d 2,533-592
+recipebridge/Cargo.toml
+  s_51e123cbeb9183::t_a7187c5481c3e4 27-28,49-50
+recipebridge/src/availability.rs
+  s_5f0a6414ade862::t_3863946d457780 5,18,26,28,79,242-245,252,295,299,309-311,681,688,695-727,847-852
+recipebridge/src/costing/engine.rs
+  s_51e123cbeb9183::t_31a21e012a46a2 16-18,20-23,31,35,39,46,109,112-114,119,135,147,185,191-203,284,287,290,292,300-307,316,321-322,324-328,331-338,341,390-391,504,508-512,528,545,551,555,573-576,580,619-621,914-920,968,970-971,1212-1225,1358,1441,1444
+recipebridge/src/costing/graphs.rs
+  s_51e123cbeb9183::t_2391d222b5ea8f 1-193
+recipebridge/src/display_format.rs
+  s_884d78341d7781::t_b5a7623485973d 5-7,19,87-90,131-132,151,156,168-175,181,196,207-209,211,224,229,241,253-254,260-262,265,303-310,323,342,349,356,358,360,368,370,372,380,387-400,407-411,416-422,427-428
+recipebridge/src/email.rs
+  s_51e123cbeb9183::t_6544734997ce9c 15
+recipebridge/src/estimates.rs
+  s_884d78341d7781::t_73b977f01a7e5b 46,131,136,141
+recipebridge/src/food_calculation.rs
+  s_51e123cbeb9183::t_fc8f7e66bb1af5 4,8,17,190-191
+recipebridge/src/food_mappings.rs
+  s_51e123cbeb9183::t_7e52e8939cfedd 310-311
+recipebridge/src/html.rs
+  s_51e123cbeb9183::t_c715d3bcbf1983 1
+recipebridge/src/isbn.rs
+  s_884d78341d7781::t_2789568b3aa1fb 138-142,153,158-159,213-214,235-236
+recipebridge/src/lib.rs
+  s_51e123cbeb9183::t_261ea17a865c96 18,52-53
+recipebridge/src/model_image.rs
+  s_884d78341d7781::t_8a2f695bb6efb8 57,62,66,77-79,85,108
+recipebridge/src/needs.rs
+  s_51e123cbeb9183::t_ac9ffb2273fd47 177,197-202,209,219,221
+recipebridge/src/parse.rs
+  s_884d78341d7781::t_0af93324465ce4 20,154-155,179-180,329-345,352-359,361-362,371,509,668-669
+recipebridge/src/reconcile.rs
+  s_51e123cbeb9183::t_df434b6322a709 1
+recipebridge/src/scaling.rs
+  s_884d78341d7781::t_ce02c315314b8a 18-19,31-32,39,47-48,50,60,69-70,76,84,89-91,96,98,103-105,110-113
+recipebridge/tests/costing.rs
+  s_5f0a6414ade862::t_67dcdb5863d4b8 490,494-497,507-510,518-527,882,886,891,914,918,922-963,1015-1063
+recipebridge/src/costing/mod.rs
+  s_51e123cbeb9183::t_2065a217ccd6bc 9,17,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "947950008fdb0dfde53d982190cc7b2943bd40fa",
+  "prompts": {},
+  "sessions": {
+    "s_51e123cbeb9183": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1650c-f629-7cd2-a585-c1c7808a98d3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_5f0a6414ade862": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1654d-5750-7901-827f-966729447f5a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_884d78341d7781": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66ac77ca-c2b3-4094-886b-57ce508bb64b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
