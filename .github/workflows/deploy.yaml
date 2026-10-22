@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 15
     env:
       # Reuse the same content-verified WASM artifacts as required PR CI.
-      NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
+      NX_CACHE_URL: https://cubby-nx-cache.nicky.workers.dev
       NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
     concurrency:
       group: deploy-cubby-production

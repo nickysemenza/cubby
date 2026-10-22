@@ -18,6 +18,10 @@ function setup() {
         const body = objects.get(key);
         return body === undefined ? null : { body, size: body.length };
       },
+      async head(key) {
+        const body = objects.get(key);
+        return body === undefined ? null : { size: body.length };
+      },
       async put(key, body) {
         if (objects.has(key)) return null;
         const value = await new Response(body).text();
@@ -215,12 +219,15 @@ test("reports publish with the cache credential and read publicly within their n
     script.headers.get("content-type"),
     "text/javascript; charset=utf-8",
   );
+  const head = await anonymous("/reports/7/1/vitest/assets/app.js", "HEAD");
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
   // Relative asset paths need the root's trailing slash.
-  const root = await anonymous("/reports/7/1/vitest");
+  const root = await anonymous("/reports/7/1/vitest?tab=failed");
   assert.equal(root.status, 308);
   assert.equal(
     root.headers.get("location"),
-    "https://cache.example/reports/7/1/vitest/",
+    "https://cache.example/reports/7/1/vitest/?tab=failed",
   );
 
   // Public reads never reach cache archives, other kinds, or dot segments.

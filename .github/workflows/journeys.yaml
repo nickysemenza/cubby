@@ -22,7 +22,7 @@ permissions:
   actions: read
 
 env:
-  NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
+  NX_CACHE_URL: https://cubby-nx-cache.nicky.workers.dev
   NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
   REF: ${{ github.event.pull_request.head.sha || github.sha }}
 

@@ -127,7 +127,10 @@ const reportTypes = new Map([
   ["webp", "image/webp"],
   ["ico", "image/x-icon"],
   ["webm", "video/webm"],
+  ["woff", "font/woff"],
   ["woff2", "font/woff2"],
+  ["ttf", "font/ttf"],
+  ["webmanifest", "application/manifest+json"],
   ["zip", "application/zip"],
   ["gz", "application/gzip"],
   ["txt", "text/plain; charset=utf-8"],
@@ -145,8 +148,11 @@ async function report(
   if (!match) return new Response("not found", { status: 404 });
   // A report root serves its index. The root needs a trailing slash so the
   // reports' relative asset paths resolve inside it.
-  if (!write && !match[2] && !root)
-    return Response.redirect(`${request.url}/`, 308);
+  if (!write && !match[2] && !root) {
+    const location = new URL(request.url);
+    location.pathname += "/";
+    return Response.redirect(location.href, 308);
+  }
   const objectKey = `reports/${match[1]}${match[2] || "/index.html"}`;
   if (write) {
     if (!authorized(request, env.CACHE_TOKEN))
@@ -166,16 +172,24 @@ async function report(
       status: 405,
       headers: { allow: "GET, HEAD" },
     });
-  const object = await env.CACHE.get(objectKey);
-  if (!object) return new Response("not found", { status: 404 });
+  let body: ReadableStream | null = null;
+  if (request.method === "HEAD") {
+    if (!(await env.CACHE.head(objectKey)))
+      return new Response("not found", { status: 404 });
+  } else {
+    const object = await env.CACHE.get(objectKey);
+    if (!object) return new Response("not found", { status: 404 });
+    body = object.body;
+  }
   const extension = objectKey.slice(objectKey.lastIndexOf(".") + 1);
-  return new Response(request.method === "HEAD" ? null : object.body, {
+  return new Response(body, {
     headers: {
       "content-type":
         reportTypes.get(extension.toLowerCase()) ?? "application/octet-stream",
       "cache-control": "public, max-age=300",
       "x-content-type-options": "nosniff",
-      // Playwright's hosted trace viewer fetches trace archives cross-origin.
+      // The bundled trace viewer fetches same-origin; this lets
+      // trace.playwright.dev open a pasted trace URL.
       "access-control-allow-origin": "*",
     },
   });

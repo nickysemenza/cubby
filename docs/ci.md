@@ -420,10 +420,10 @@ downloads the Vitest and Playwright blobs,
 and merges each runner's shards into one HTML report (`vitest --merge-reports`,
 `playwright merge-reports`). It publishes both to the Nx cache Worker, which
 serves them publicly at `/reports/{run}/{attempt}/{vitest|playwright}/`, and
-also uploads them as 14-day artifacts. Uploads use the cache credentials; links
-use the Worker's public origin, hardcoded in the workflow as `CUBBY_REPORTS_URL`,
-because Actions withholds step outputs containing the secret `NX_CACHE_URL`.
-Fork PRs, which lack the credentials, fall back to the artifacts.
+also uploads them as 14-day artifacts. The workflows set `NX_CACHE_URL`, the
+Worker's public origin, as a plain value rather than a secret: Actions withholds
+step outputs containing a secret, which would drop the report links. Only
+`NX_CACHE_TOKEN` is secret; fork PRs lack it and fall back to the artifacts.
 (Vitest Viewer cannot open Actions artifact URLs: they require a signed-in
 browser and block cross-origin reads.) The job
 summary (`apps/web/tooling/ci-report/summary.ts`) lists each Linux test lane's
