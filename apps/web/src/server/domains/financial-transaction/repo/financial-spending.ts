@@ -12,7 +12,7 @@ import {
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -121,29 +121,85 @@ function spendingBlocker(input: {
   return null;
 }
 
-async function spendingFacts(db: Database, request: Request) {
-  const row = request.transactionId
-    ? await getDb(db).query.financialTransaction.findFirst({
+/** Read-only metadata for one synchronous proposal page; never reuse at commit or across model work. */
+export async function prepareFinancialSpendingPage(
+  db: Database,
+  input: {
+    accountIds: ReadonlyArray<(typeof financialAccount.$inferSelect)["id"]>;
+    transactionIds: ReadonlyArray<
+      (typeof financialTransaction.$inferSelect)["id"]
+    >;
+  },
+) {
+  const transactions = input.transactionIds.length
+    ? await getDb(db).query.financialTransaction.findMany({
         where: and(
-          eq(financialTransaction.shortcode, request.transactionId),
+          inArray(financialTransaction.id, [...new Set(input.transactionIds)]),
           notDeleted(financialTransaction),
         ),
       })
+    : [];
+  const accountIds = [
+    ...new Set([
+      ...input.accountIds,
+      ...transactions.map((row) => row.accountId),
+    ]),
+  ];
+  const accounts = accountIds.length
+    ? await getDb(db).query.financialAccount.findMany({
+        where: and(
+          inArray(financialAccount.id, accountIds),
+          notDeleted(financialAccount),
+        ),
+        with: { ledgerParty: true },
+      })
+    : [];
+  const accountsById = new Map<string, (typeof accounts)[number]>(
+    accounts.map((row) => [row.id, row]),
+  );
+  for (const account of accounts) accountsById.set(account.shortcode, account);
+  const transactionsById = new Map<string, (typeof transactions)[number]>(
+    transactions.map((row) => [row.id, row]),
+  );
+  for (const transaction of transactions)
+    transactionsById.set(transaction.shortcode, transaction);
+  return { accounts: accountsById, transactions: transactionsById };
+}
+export type FinancialSpendingPage = Awaited<
+  ReturnType<typeof prepareFinancialSpendingPage>
+>;
+
+async function spendingFacts(
+  db: Database,
+  request: Request,
+  page?: FinancialSpendingPage,
+) {
+  const row = request.transactionId
+    ? page
+      ? page.transactions.get(request.transactionId)
+      : await getDb(db).query.financialTransaction.findFirst({
+          where: and(
+            eq(financialTransaction.shortcode, request.transactionId),
+            notDeleted(financialTransaction),
+          ),
+        })
     : undefined;
   if (request.transactionId && !row)
     refuse("The spending transaction is no longer live.");
-  const account = await getDb(db).query.financialAccount.findFirst({
-    where: row
-      ? and(
-          eq(financialAccount.id, row.accountId),
-          notDeleted(financialAccount),
-        )
-      : and(
-          eq(financialAccount.shortcode, request.source?.accountId ?? ""),
-          notDeleted(financialAccount),
-        ),
-    with: { ledgerParty: true },
-  });
+  const account = page
+    ? page.accounts.get(row?.accountId ?? request.source?.accountId ?? "")
+    : await getDb(db).query.financialAccount.findFirst({
+        where: row
+          ? and(
+              eq(financialAccount.id, row.accountId),
+              notDeleted(financialAccount),
+            )
+          : and(
+              eq(financialAccount.shortcode, request.source?.accountId ?? ""),
+              notDeleted(financialAccount),
+            ),
+        with: { ledgerParty: true },
+      });
   if (!account) refuse("The spending account is no longer live.");
   const source = row
     ? financialSpendingSource.parse({
@@ -626,9 +682,10 @@ export async function previewFinancialSpending(
       >
     >;
   },
+  page?: FinancialSpendingPage,
 ): Promise<FinancialSpendingPlan> {
   const request = spendingRequestBoundary.parse(raw);
-  const facts = await spendingFacts(db, request);
+  const facts = await spendingFacts(db, request, page);
   // Preview an impending reference attachment without duplicating its charge.
   // Commit still requires that reference to exist in retained evidence.
   if (attachment && facts.row) {
