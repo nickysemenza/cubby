@@ -132,7 +132,8 @@ Its checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   fences duplicate and late starts with the Run's dispatch generation and
   `coordinatorStartedAt`; stable operation IDs survive lost replies. Job owns
   bounded retries and raw terminal errors; the coordinator owns settlement.
-  Cutover preserves `dispatchAttempts` in Run audit history before dropping it,
+  Cutover preserves `dispatchAttempts` as `run` AuditLog rows before dropping
+  it (SQL-only: audit reads list auditable kinds),
   backfills unacknowledged dispatch intent and preserves stopped failures;
 - every model call through AI Gateway `cubby` on the Worker's `AI` binding,
   by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The gateway

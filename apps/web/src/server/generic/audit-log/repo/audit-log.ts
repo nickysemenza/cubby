@@ -1,9 +1,10 @@
-import type {
-  AuditEntityKind,
-  AuditFieldChange,
-  AuditJsonValue,
-  AuditLogListOut,
-  AuditStoredChanges,
+import {
+  auditEntitySchema,
+  type AuditEntityKind,
+  type AuditFieldChange,
+  type AuditJsonValue,
+  type AuditLogListOut,
+  type AuditStoredChanges,
 } from "@cubby/schemas/audit";
 import {
   auditChannelSchema,
@@ -475,7 +476,11 @@ export async function getAuditLog(
     cursor?: string; // Opaque composite cursor from `encodeAuditCursor`
   },
 ): Promise<AuditLogListOut> {
-  const conditions: SQL[] = [];
+  // Migration 0007 kept each Run's retired dispatch counter as a `run` row.
+  // Run is not an audit subject, so reads expose only auditable kinds.
+  const conditions: SQL[] = [
+    inArray(auditLog.entityKind, auditEntitySchema.options),
+  ];
 
   if (params.entityKind) {
     conditions.push(eq(auditLog.entityKind, params.entityKind));
