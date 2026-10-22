@@ -43,7 +43,7 @@ struct EntityFilterStateTests {
     @Test func savedViewFiltersAreListsWithoutIsList() throws {
         let json = #"""
             {"id": "synthetic", "label": "Synthetic", "description": "", "sort": [],
-             "columnVisibility": {},
+             "columnVisibility": {}, "groupBy": [],
              "filters": [{"id": "placementFilter", "values": ["stock"]},
                          {"id": "dataStatus", "values": ["needs_data", "defect"]}]}
             """#
