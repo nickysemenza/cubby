@@ -634,7 +634,7 @@ describe("stored suggestions in generic list cells", () => {
 
     expect(await screen.findByText("Replacement product")).toBeInTheDocument();
     expect(screen.getAllByText("Synthetic product").length).toBeGreaterThan(1);
-    expect(screen.getByLabelText("suggested replacement")).toBeInTheDocument();
+    expect(screen.getByText("Proposed")).toBeInTheDocument();
     harness.dispose();
   });
 
