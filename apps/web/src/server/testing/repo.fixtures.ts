@@ -714,8 +714,9 @@ export const insertEntityAttachments = async (
 
 /**
  * The reserved system user exists in production; crons and Automatic rule
- * applications write as it. Test databases seed it on every reset
- * (`tooling/test-setup.ts`); this seeds dev and scenario databases. Idempotent.
+ * applications write as it. `seedBaseWorld` seeds it everywhere; this seeds
+ * it earlier for dev and corpus setup that drains Jobs before the base world.
+ * Idempotent.
  */
 export const createSystemUserFixture = async (db: Database): Promise<void> => {
   await getDb(db)
