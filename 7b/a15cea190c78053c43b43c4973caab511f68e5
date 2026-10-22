@@ -1,0 +1,19 @@
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_dfbe2c2db4cd94::t_0e7153d1b196b5 710-711
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7ba15cea190c78053c43b43c4973caab511f68e5",
+  "prompts": {},
+  "sessions": {
+    "s_dfbe2c2db4cd94": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16450-e400-79f2-aa15-d1133d85e069",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
