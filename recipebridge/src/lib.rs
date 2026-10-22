@@ -15,7 +15,7 @@
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
 //! - [`scaling`] — scale-factor anchors and scaled-count rounding shared with native
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
-//! - [`page`] — captured browser page compaction (`html`)
+//! - [`email`] — email HTML compaction (`html`); private `html` helpers own traversal
 //! - [`ai_usage`] — gateway-call token usage and catalog cost (`ai-usage`)
 //! - [`display_format`] — currency, bare-number, and compact nutrition cell text shared with native
 //! - [`isbn`] — ISBN-10/ISBN-13 validation and GTIN-14 normalization
@@ -49,12 +49,12 @@ mod email;
 mod estimates;
 mod food_calculation;
 mod food_mappings;
+#[cfg(feature = "html")]
+mod html;
 mod isbn;
 #[cfg(feature = "model-images")]
 mod model_image;
 mod needs;
-#[cfg(feature = "html")]
-mod page;
 mod parse;
 mod reconcile;
 mod scaling;
@@ -74,8 +74,6 @@ pub use isbn::*;
 #[cfg(feature = "model-images")]
 pub use model_image::*;
 pub use needs::*;
-#[cfg(feature = "html")]
-pub use page::*;
 pub use parse::*;
 pub use scaling::*;
 

@@ -98,18 +98,9 @@ impl From<EstimateMeasure> for recipebridge::WEstimateMeasure {
 }
 
 /// A `{ value, unit }` amount as the web renders it (`2 cup`, `3 each`,
-/// `2 - 3 tsp`), through the same Rust the web calls as WASM. An empty unit is a
-/// bare count: a plain number (`1.5`, not the unit formatter's `1½`).
+/// `2 - 3 tsp`, a bare count `1.5`), through the same Rust the web calls as WASM.
 #[uniffi::export]
 pub fn format_amount(unit: String, value: f64, upper_value: Option<f64>) -> String {
-    if unit.is_empty() && upper_value.is_none() {
-        return recipebridge::format_number_plain(value);
-    }
-    let unit = if unit.is_empty() {
-        "whole".to_string()
-    } else {
-        unit
-    };
     recipebridge::format_amount_labeled(recipebridge::WAmount {
         unit,
         value,
@@ -121,19 +112,19 @@ pub fn format_amount(unit: String, value: f64, upper_value: Option<f64>) -> Stri
 /// zero); `-$5.00` for a negative, never `+`.
 #[uniffi::export]
 pub fn format_currency(value: f64, min_fraction_digits: u32, max_fraction_digits: u32) -> String {
-    recipebridge::format_currency_usd(value, min_fraction_digits, max_fraction_digits)
+    recipebridge::format_currency(value, min_fraction_digits, max_fraction_digits)
 }
 
 /// A bare numeric field: the shortest round-trip decimal, no grouping.
 #[uniffi::export]
 pub fn format_number(value: f64) -> String {
-    recipebridge::format_number_plain(value)
+    recipebridge::format_number(value)
 }
 
 /// The one-line macro/cost cell: a partial figure ends in `+`, unknown is `—`.
 #[uniffi::export]
 pub fn format_compact_estimate(figure: EstimateFigure, unit: CompactUnit) -> String {
-    recipebridge::compact_estimate_text(&figure.into(), unit.into())
+    recipebridge::format_compact_estimate(figure.into(), unit.into())
 }
 
 /// The long-form estimate label (`420 kcal known · partial`, `Pending`, `N/A`).
@@ -143,7 +134,7 @@ pub fn format_estimate(
     measure: EstimateMeasure,
     unit: Option<String>,
 ) -> String {
-    recipebridge::estimate_label_text(&figure.into(), measure.into(), unit.as_deref())
+    recipebridge::format_estimate(figure.into(), measure.into(), unit)
 }
 
 #[cfg(test)]
@@ -157,8 +148,6 @@ mod tests {
         assert_eq!(format_currency(-2.675, 2, 2), "-$2.68");
         assert_eq!(format_number(1234.5678), "1234.5678");
         assert_eq!(format_amount("each".to_string(), 3.0, None), "3 each");
-        // A bare count stays a plain number rather than a unit-formatted fraction.
-        assert_eq!(format_amount(String::new(), 1.5, None), "1.5");
         assert_eq!(
             format_compact_estimate(
                 EstimateFigure::Partial {

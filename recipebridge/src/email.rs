@@ -12,7 +12,7 @@ use tsify_next::Tsify;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
-use crate::page::{
+use crate::html::{
     collapse, image_source, is_block, is_visually_hidden, link_label, resolve, select,
     truncate_utf8, visible_text_with_visibility,
 };

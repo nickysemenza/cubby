@@ -53,7 +53,7 @@ describe("client bundle boundary", () => {
       await write(
         server,
         "recipebridge_bg-a.wasm",
-        "parse_ingredient compact_browser_page",
+        "parse_ingredient compact_email_html",
       );
       await write(client, "recipebridge_bg-b.wasm", "parse_ingredient");
       await write(client, "recipebridge_cookbook_bg-c.wasm", "open_book");
@@ -65,9 +65,9 @@ describe("client bundle boundary", () => {
       );
       await rm(path.join(server, "recipebridge_cookbook_bg-c.wasm"));
 
-      await write(client, "recipebridge_bg-d.wasm", "compact_browser_page");
+      await write(client, "recipebridge_bg-d.wasm", "compact_email_html");
       await expect(assertWasmSplit(client, server)).rejects.toThrow(
-        /compact_browser_page/,
+        /compact_email_html/,
       );
     } finally {
       await rm(root, { recursive: true, force: true });

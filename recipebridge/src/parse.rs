@@ -17,6 +17,7 @@ use ingredient::{
     from_str as parse_ingredient_str,
     ingredient::Ingredient,
     rich_text::{Chunk, RichParser},
+    unit::Measure,
     usage::IngredientUsage,
 };
 use recipe_scraper::{RecipeSection, RecipeTimes, RecipeYield, ScrapedRecipe};
@@ -150,10 +151,8 @@ impl From<RecipeSection> for WRecipeSection {
 pub struct WScrapedRecipe {
     /// Recipe components; most recipes have a single unnamed section.
     pub sections: Vec<WRecipeSection>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub name: String,
+    pub url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
     /// Headnote / intro blurb (schema.org `description`).
@@ -177,8 +176,8 @@ impl From<ScrapedRecipe> for WScrapedRecipe {
     fn from(r: ScrapedRecipe) -> Self {
         Self {
             sections: r.sections.into_iter().map(WRecipeSection::from).collect(),
-            name: Some(r.name),
-            url: Some(r.url),
+            name: r.name,
+            url: r.url,
             image: r.image,
             description: r.description,
             recipe_yield: r.recipe_yield.map(WRecipeYield::from),
@@ -327,32 +326,49 @@ pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
-/// [`format_amount`] for display: `each` parses to `Unit::Whole`, which renders
-/// unit-less (`3`, `2 - 4`), so the caller's `each` is re-attached to stay
-/// visible (`3 each`). Web and native amount cells both render through this.
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn format_amount_labeled(amount: WAmount) -> String {
-    let is_each = amount.unit == "each";
-    let text = amount.to_measure().to_string();
-    if is_each {
+/// The display rules every amount cell shares, around a `render` of the measure:
+/// an empty unit is a bare count (a plain number, `1.5` rather than the unit
+/// formatter's `1½`; a ranged one renders as `whole`), and `each`, which parses to
+/// `Unit::Whole` and renders unit-less (`3`, `2 - 4`), is re-attached to stay
+/// visible (`3 each`).
+fn format_amount_for_display(
+    mut amount: WAmount,
+    render: impl FnOnce(Measure) -> String,
+) -> String {
+    if amount.unit.is_empty() {
+        if amount.upper_value.is_none() {
+            return crate::format_number(amount.value);
+        }
+        amount.unit = "whole".to_string();
+    }
+    let text = render(amount.to_measure());
+    if amount.unit == "each" {
         format!("{text} each")
     } else {
         text
     }
 }
 
+/// [`format_amount`] for display, with the shared bare-count and `each` rules.
+/// Web and native amount cells both render through this; pinned by the `amount`
+/// cases in `packages/shared/golden-vectors/display-format.json`.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_amount_labeled(amount: WAmount) -> String {
+    format_amount_for_display(amount, |measure| measure.to_string())
+}
+
 /// Format an amount the way it would be read off a shopping list rather than
-/// out of the conversion graph.
+/// out of the conversion graph, with the same display rules as
+/// [`format_amount_labeled`].
 ///
 /// `format_amount` renders the measure as stored, and `Measure::denormalize`
 /// (which it does not call) ladders teaspoons and cents but deliberately leaves
 /// `Gram` and `Milliliter` untouched. That is exactly the pair the shopping
 /// list produces, which is why a flour shortfall prints as "1360 g" instead of
 /// "3 lb".
-///
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_amount_shopper(amount: WAmount) -> String {
-    amount.to_measure().format_shopper()
+    format_amount_for_display(amount, |measure| measure.format_shopper())
 }
 
 /// Render a quantity float as an *editable* ASCII fraction for the recipe editor's
@@ -472,15 +488,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn labeled_amount_keeps_each_visible() {
-        assert_eq!(format_amount_labeled(amount("each", 3.0)), "3 each");
-        assert_eq!(
-            format_amount_labeled(amount("cup", 2.0)),
-            format_amount(amount("cup", 2.0))
-        );
-    }
-
     /// The shopping-list ladder. `format_amount` renders the base unit the
     /// availability engine reconciles in, which is why a flour shortfall used
     /// to read "1360 g" on a surface meant to be carried to a shop.
@@ -499,6 +506,7 @@ mod tests {
     #[case("tsp", 48.0, "1 cup")]
     // Non-weight, non-volume units pass through untouched.
     #[case("whole", 3.0, "3")]
+    #[case("each", 3.0, "3 each")]
     fn shopper_amounts(#[case] unit: &str, #[case] value: f64, #[case] expected: &str) {
         assert_eq!(format_amount_shopper(amount(unit, value)), expected);
     }
@@ -657,8 +665,8 @@ mod tests {
     fn parse_scraped_recipe_reshapes_jsonld() {
         let html = r#"<html><head><script type="application/ld+json">{"name":"Test Cake","recipeIngredient":["2 cups flour","1 cup sugar"],"recipeInstructions":"Mix. Bake.","recipeYield":"8 servings"}</script></head><body></body></html>"#;
         let r = parse_scraped_recipe(html, "https://example.com/cake").expect("scrapes");
-        assert_eq!(r.name.as_deref(), Some("Test Cake"));
-        assert_eq!(r.url.as_deref(), Some("https://example.com/cake"));
+        assert_eq!(r.name, "Test Cake");
+        assert_eq!(r.url, "https://example.com/cake");
         assert!(
             r.sections
                 .iter()

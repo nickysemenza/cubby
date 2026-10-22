@@ -299,27 +299,6 @@ pub fn product_mappings(product: &WProductInput) -> Vec<WUnitMapping> {
         .collect()
 }
 
-/// One product's conversion-graph edges as `(Measure, Measure)` pairs — what the
-/// costing + availability engines actually consume. Unlike `product_mappings`
-/// (which clones the stored rows to return owned `WUnitMapping`s for the public
-/// export), the stored rows are borrowed straight to pairs; only the food + price
-/// edges are synthesized. Same edges, same order as `product_mappings`.
-pub(crate) fn product_mapping_pairs(product: &WProductInput) -> Vec<(Measure, Measure)> {
-    let food = product
-        .food
-        .as_ref()
-        .map(mappings_from_food)
-        .unwrap_or_default();
-    let price = price_mapping(product.price, &product.id);
-    product
-        .unit_mappings
-        .iter()
-        .chain(food.iter())
-        .chain(price.iter())
-        .map(WUnitMapping::to_pair)
-        .collect()
-}
-
 /// One product's non-price conversion edges, split by what they describe.
 ///
 /// Costing merges these across every product linked to an ingredient so
@@ -328,8 +307,8 @@ pub(crate) fn product_mapping_pairs(product: &WProductInput) -> Vec<(Measure, Me
 /// node. The split exists because `each` is *also* where package sizes
 /// collide: every product's `1 each = <size>` normalizes onto the one
 /// `whole ↔ g` edge, and the graph keeps only the last one written. So
-/// `package` edges are per-product when a product's price is resolved (see
-/// `IngredientCtx::cheapest_price`), while `shared` edges are ingredient-level
+/// `package` edges stay per-product for price and physical conversion, while
+/// `shared` edges are ingredient-level
 /// and always merged.
 pub(crate) struct ProductPairs {
     /// Stored rows that mention a bare count (`each`/`whole`): the product's

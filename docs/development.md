@@ -46,12 +46,19 @@ Start streams   →  cancellable workflow streams
   [ingredient-parser](https://github.com/nickysemenza/ingredient-parser). Call
   `wasm` from `~/lib/wasm` for common synchronous compute. Worker-only
   capabilities use `wasm` from `~/server/wasm`. Conversions chain through a product's unit mappings, e.g.
-  `2 cups → $5.00 → 333g`.
+  `2 cups → $5.00 → 333g`. Amount display rules also live in Rust; web and
+  UniFFI adapters forward to the same functions, with cross-client cases in
+  `packages/shared/golden-vectors/display-format.json`.
+  Physical conversions share density and nutrition mappings, but use one
+  product's package mappings per route. Conflicting package interpretations
+  remain unknown. Costing keeps the selected conversion path with its result;
+  recipe recursion marks the root before expanding sub-recipes. Needs and meal
+  calculations share the same validated yield-ratio conversion.
 - `pnpm wasm` prepares three packages through the shared
   [artifact preparation entrypoint](../scripts/ensure.ts) into
   `packages/wasm`. The Worker and Vitest load the full build, `worker/`. The browser
   loads `browser/`, built with only the `wasm` feature, without Worker-only `html`, `ai-usage`, and `model-images`
-  features (`compact_browser_page`, `parse_scraped_recipe`,
+  features (`compact_email_html`, `parse_scraped_recipe`,
   `gateway_call_usage`). Only the cookbook import loads
   `@cubby/recipebridge/cookbook` (the sibling `cookbook-wasm` crate). Put a new
   Worker-only export behind one of those features. The package root's types

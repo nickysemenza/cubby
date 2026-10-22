@@ -2,8 +2,9 @@
 //! shapes, independent of any device locale and free of `Intl`/`NumberFormatter`.
 //!
 //! Pinned by `packages/shared/golden-vectors/display-format.json`, which the
-//! tests below read directly; the web and Swift suites read the same file as
-//! binding checks. Dates stay platform code (no timezone database here).
+//! tests below read directly (its amounts render through
+//! [`crate::format_amount_labeled`]); the web and Swift suites read the same file
+//! as binding checks. Dates stay platform code (no timezone database here).
 
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "wasm")]
@@ -15,9 +16,8 @@ use crate::{WMeasureEstimate, WUnavailableReason};
 
 /// Which rounding convention a compact nutrition figure uses.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 #[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub enum WCompactUnit {
     /// A whole number, halves rounding up.
     Kcal,
@@ -84,12 +84,10 @@ fn round_half_away(abs: f64, max: usize) -> (String, String) {
 /// USD text: grouping, `min..=max` fraction digits (half away from zero), a
 /// leading `-` for a negative value (`-$5.00`; the sign is never spelled `+`).
 /// Nonzero amounts below display precision use a signed threshold; only exact
-/// zero prints as zero. Non-finite values print as `$NaN` / `$∞`.
-pub fn format_currency_usd(
-    value: f64,
-    min_fraction_digits: u32,
-    max_fraction_digits: u32,
-) -> String {
+/// zero prints as zero. Non-finite values print as `$NaN` / `$∞`. Callers pass
+/// `Intl`'s USD defaults (2 and 2) unless a surface needs other precision.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_currency(value: f64, min_fraction_digits: u32, max_fraction_digits: u32) -> String {
     if value.is_nan() {
         return "$NaN".to_string();
     }
@@ -130,7 +128,8 @@ pub fn format_currency_usd(
 
 /// A bare numeric field: the shortest round-trip decimal, no grouping and no
 /// rounding (`0.1` -> `0.1`, `1234567` -> `1234567`, `-0` -> `0`).
-pub fn format_number_plain(value: f64) -> String {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_number(value: f64) -> String {
     if value.is_nan() {
         "NaN".to_string()
     } else if value.is_infinite() {
@@ -149,12 +148,12 @@ fn compact_number_text(value: f64, unit: WCompactUnit) -> String {
         // over the line, matching the web's `roundTo(value, 1)`.
         WCompactUnit::Macro => ((value + f64::EPSILON) * 10.0 + 0.5).floor() / 10.0,
     };
-    group_thousands(&format_number_plain(rounded))
+    group_thousands(&format_number(rounded))
 }
 
 /// One compact nutrition figure or range: a range joins with an en dash, and a
 /// degenerate one (`upper == lower`) prints once.
-pub fn compact_range_text(lower: f64, upper: Option<f64>, unit: WCompactUnit) -> String {
+fn compact_range_text(lower: f64, upper: Option<f64>, unit: WCompactUnit) -> String {
     let lower_text = compact_number_text(lower, unit);
     match upper {
         Some(upper) if upper != lower => {
@@ -164,36 +163,23 @@ pub fn compact_range_text(lower: f64, upper: Option<f64>, unit: WCompactUnit) ->
     }
 }
 
-/// The figure of a complete or partial estimate, without the partial marker;
-/// `None` when nothing is known.
-pub fn known_estimate_range_text(
-    estimate: &WMeasureEstimate,
-    unit: WCompactUnit,
-) -> Option<String> {
-    match estimate {
-        WMeasureEstimate::Complete { lower, upper, .. }
-        | WMeasureEstimate::Partial { lower, upper, .. } => {
-            Some(compact_range_text(*lower, *upper, unit))
-        }
-        WMeasureEstimate::Unavailable { .. } | WMeasureEstimate::Pending { .. } => None,
-    }
-}
-
 /// The one-line macro/cost cell: a partial estimate ends in `+`, and anything
 /// unavailable or pending is `—`.
-pub fn compact_estimate_text(estimate: &WMeasureEstimate, unit: WCompactUnit) -> String {
-    match known_estimate_range_text(estimate, unit) {
-        Some(text) if matches!(estimate, WMeasureEstimate::Partial { .. }) => format!("{text}+"),
-        Some(text) => text,
-        None => "—".to_string(),
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_compact_estimate(estimate: WMeasureEstimate, unit: WCompactUnit) -> String {
+    match estimate {
+        WMeasureEstimate::Complete { lower, upper, .. } => compact_range_text(lower, upper, unit),
+        WMeasureEstimate::Partial { lower, upper, .. } => {
+            format!("{}+", compact_range_text(lower, upper, unit))
+        }
+        WMeasureEstimate::Unavailable { .. } | WMeasureEstimate::Pending { .. } => "—".to_string(),
     }
 }
 
 /// Which number rule a long-form estimate label uses.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 #[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub enum WEstimateMeasure {
     /// USD with cents.
     Cost,
@@ -207,7 +193,7 @@ pub enum WEstimateMeasure {
 
 fn measure_number_text(value: f64, measure: WEstimateMeasure) -> String {
     match measure {
-        WEstimateMeasure::Cost => format_currency_usd(value, 2, 2),
+        WEstimateMeasure::Cost => format_currency(value, 2, 2),
         WEstimateMeasure::Kcal => compact_number_text(value, WCompactUnit::Kcal),
         WEstimateMeasure::Macro => compact_number_text(value, WCompactUnit::Macro),
         WEstimateMeasure::Share => compact_number_text(value * 100.0, WCompactUnit::Macro),
@@ -218,10 +204,11 @@ fn measure_number_text(value: f64, measure: WEstimateMeasure) -> String {
 /// range, then `unit` once (`1,500–2,250 kcal`), then the confidence language
 /// (` known · partial`, ` · includes inferred zero`). Pending is `Pending`,
 /// not-applicable `N/A`, and anything else unavailable `—`.
-pub fn estimate_label_text(
-    estimate: &WMeasureEstimate,
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_estimate(
+    estimate: WMeasureEstimate,
     measure: WEstimateMeasure,
-    unit: Option<&str>,
+    unit: Option<String>,
 ) -> String {
     let (lower, upper, coverage, partial) = match estimate {
         WMeasureEstimate::Pending { .. } => return "Pending".to_string(),
@@ -234,12 +221,12 @@ pub fn estimate_label_text(
             lower,
             upper,
             coverage,
-        } => (*lower, *upper, coverage, false),
+        } => (lower, upper, coverage, false),
         WMeasureEstimate::Partial {
             lower,
             upper,
             coverage,
-        } => (*lower, *upper, coverage, true),
+        } => (lower, upper, coverage, true),
     };
     let mut text = measure_number_text(lower, measure);
     if let Some(upper) = upper.filter(|upper| *upper != lower) {
@@ -251,7 +238,7 @@ pub fn estimate_label_text(
     }
     if let Some(unit) = unit.filter(|unit| !unit.is_empty()) {
         text.push(' ');
-        text.push_str(unit);
+        text.push_str(&unit);
     }
     if partial {
         text.push_str(" known · partial");
@@ -263,61 +250,22 @@ pub fn estimate_label_text(
 }
 
 /// A bare calorie figure: whole, grouped, `kcal` (`1,234 kcal`).
-pub fn kcal_text(value: f64) -> String {
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_kcal(value: f64) -> String {
     format!("{} kcal", compact_number_text(value, WCompactUnit::Kcal))
 }
 
 /// Two USD values joined by an en dash (`$2.00–$3.00`); a missing or equal
 /// upper prints once.
-pub fn currency_range_text(lower: f64, upper: Option<f64>) -> String {
-    let lower_text = format_currency_usd(lower, 2, 2);
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_currency_range(lower: f64, upper: Option<f64>) -> String {
+    let lower_text = format_currency(lower, 2, 2);
     match upper {
         Some(upper) if upper != lower => {
-            format!("{lower_text}–{}", format_currency_usd(upper, 2, 2))
+            format!("{lower_text}–{}", format_currency(upper, 2, 2))
         }
         _ => lower_text,
     }
-}
-
-/// USD currency text. `min_fraction_digits`/`max_fraction_digits` default the
-/// way `Intl` does for USD at the call site (2 and 2).
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn format_currency(value: f64, min_fraction_digits: u32, max_fraction_digits: u32) -> String {
-    format_currency_usd(value, min_fraction_digits, max_fraction_digits)
-}
-
-/// A bare numeric field; see [`format_number_plain`].
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn format_number(value: f64) -> String {
-    format_number_plain(value)
-}
-
-/// The one-line macro/cost cell; see [`compact_estimate_text`].
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn format_compact_estimate(estimate: WMeasureEstimate, unit: WCompactUnit) -> String {
-    compact_estimate_text(&estimate, unit)
-}
-
-/// The long-form estimate label; see [`estimate_label_text`].
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn format_estimate(
-    estimate: WMeasureEstimate,
-    measure: WEstimateMeasure,
-    unit: Option<String>,
-) -> String {
-    estimate_label_text(&estimate, measure, unit.as_deref())
-}
-
-/// A bare calorie figure; see [`kcal_text`].
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn format_kcal(value: f64) -> String {
-    kcal_text(value)
-}
-
-/// A USD range; see [`currency_range_text`].
-#[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn format_currency_range(lower: f64, upper: Option<f64>) -> String {
-    currency_range_text(lower, upper)
 }
 
 #[cfg(test)]
@@ -353,6 +301,14 @@ mod tests {
     }
 
     #[derive(Deserialize)]
+    struct AmountVector {
+        unit: String,
+        value: f64,
+        upper: Option<f64>,
+        out: String,
+    }
+
+    #[derive(Deserialize)]
     struct Vectors {
         currency: Vec<ValueVector>,
         #[serde(rename = "signedCurrency")]
@@ -364,6 +320,7 @@ mod tests {
         kcal: Vec<ValueVector>,
         #[serde(rename = "currencyRange")]
         currency_range: Vec<RangeVector>,
+        amount: Vec<AmountVector>,
     }
 
     fn vectors() -> Vectors {
@@ -382,30 +339,25 @@ mod tests {
             .into_iter()
             .chain(vectors().signed_currency)
         {
-            assert_eq!(
-                format_currency_usd(v.value, 2, 2),
-                v.out,
-                "value {}",
-                v.value
-            );
+            assert_eq!(format_currency(v.value, 2, 2), v.out, "value {}", v.value);
         }
     }
 
     #[test]
     fn number_matches_the_shared_vectors() {
         for v in vectors().number {
-            assert_eq!(format_number_plain(v.value), v.out, "value {}", v.value);
+            assert_eq!(format_number(v.value), v.out, "value {}", v.value);
         }
     }
 
     #[test]
     fn compact_estimate_matches_the_shared_vectors() {
         for v in vectors().compact_estimate {
+            let label = format!("{:?}", v.estimate);
             assert_eq!(
-                compact_estimate_text(&v.estimate, v.unit),
+                format_compact_estimate(v.estimate, v.unit),
                 v.out,
-                "{:?}",
-                v.estimate
+                "{label}"
             );
         }
     }
@@ -413,11 +365,11 @@ mod tests {
     #[test]
     fn estimate_label_matches_the_shared_vectors() {
         for v in vectors().estimate {
+            let label = format!("{:?}", v.estimate);
             assert_eq!(
-                estimate_label_text(&v.estimate, v.measure, v.unit.as_deref()),
+                format_estimate(v.estimate, v.measure, v.unit),
                 v.out,
-                "{:?}",
-                v.estimate
+                "{label}"
             );
         }
     }
@@ -425,41 +377,54 @@ mod tests {
     #[test]
     fn kcal_matches_the_shared_vectors() {
         for v in vectors().kcal {
-            assert_eq!(kcal_text(v.value), v.out, "value {}", v.value);
+            assert_eq!(format_kcal(v.value), v.out, "value {}", v.value);
         }
     }
 
     #[test]
     fn currency_range_matches_the_shared_vectors() {
         for v in vectors().currency_range {
-            assert_eq!(currency_range_text(v.lower, v.upper), v.out);
+            assert_eq!(format_currency_range(v.lower, v.upper), v.out);
+        }
+    }
+
+    #[test]
+    fn amount_matches_the_shared_vectors() {
+        for v in vectors().amount {
+            let label = format!("{:?} {} {:?}", v.unit, v.value, v.upper);
+            let amount = crate::WAmount {
+                unit: v.unit,
+                value: v.value,
+                upper_value: v.upper,
+            };
+            assert_eq!(crate::format_amount_labeled(amount), v.out, "{label}");
         }
     }
 
     #[test]
     fn currency_honours_custom_fraction_digits() {
         // Sub-cent AI usage costs ask for more precision; whole-dollar surfaces for none.
-        assert_eq!(format_currency_usd(0.00123, 2, 4), "$0.0012");
-        assert_eq!(format_currency_usd(0.5, 2, 4), "$0.50");
-        assert_eq!(format_currency_usd(1234.567, 0, 0), "$1,235");
-        assert_eq!(format_currency_usd(999.999, 2, 2), "$1,000.00");
-        assert_eq!(format_currency_usd(f64::NAN, 2, 2), "$NaN");
+        assert_eq!(format_currency(0.00123, 2, 4), "$0.0012");
+        assert_eq!(format_currency(0.5, 2, 4), "$0.50");
+        assert_eq!(format_currency(1234.567, 0, 0), "$1,235");
+        assert_eq!(format_currency(999.999, 2, 2), "$1,000.00");
+        assert_eq!(format_currency(f64::NAN, 2, 2), "$NaN");
     }
 
     #[test]
     fn nonzero_money_never_displays_as_zero() {
-        assert_eq!(format_currency_usd(0.004, 2, 2), "<$0.01");
-        assert_eq!(format_currency_usd(-0.004, 2, 2), "-<$0.01");
-        assert_eq!(format_currency_usd(0.00000001, 4, 6), "<$0.000001");
-        assert_eq!(format_currency_usd(-0.00000001, 4, 6), "-<$0.000001");
-        assert_eq!(format_currency_usd(f64::MIN_POSITIVE, 2, 2), "<$0.01");
-        assert_eq!(format_currency_usd(0.25, 0, 0), "<$1");
-        assert_eq!(format_currency_usd(-0.0, 2, 2), "$0.00");
+        assert_eq!(format_currency(0.004, 2, 2), "<$0.01");
+        assert_eq!(format_currency(-0.004, 2, 2), "-<$0.01");
+        assert_eq!(format_currency(0.00000001, 4, 6), "<$0.000001");
+        assert_eq!(format_currency(-0.00000001, 4, 6), "-<$0.000001");
+        assert_eq!(format_currency(f64::MIN_POSITIVE, 2, 2), "<$0.01");
+        assert_eq!(format_currency(0.25, 0, 0), "<$1");
+        assert_eq!(format_currency(-0.0, 2, 2), "$0.00");
     }
 
     #[test]
     fn plain_number_never_uses_an_exponent() {
-        assert_eq!(format_number_plain(-0.0), "0");
-        assert_eq!(format_number_plain(1e21), "1000000000000000000000");
+        assert_eq!(format_number(-0.0), "0");
+        assert_eq!(format_number(1e21), "1000000000000000000000");
     }
 }

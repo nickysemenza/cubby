@@ -24,8 +24,8 @@ recipe-types.workspace = true
 recipe-scraper.workspace = true
 serde.workspace = true
 serde_json = "1.0"
-# The same HTML parser recipe-scraper already compiles in; `page.rs` walks a
-# captured browser DOM with it. Behind `html` (see [features]).
+# The same HTML parser recipe-scraper already compiles in; `email.rs` walks
+# email HTML with it. Behind `html` (see [features]).
 scraper = { version = "0.27.0", optional = true }
 url = { version = "2", optional = true }
 tracing = "0.1.44"
@@ -46,8 +46,8 @@ wasm-tracing = { version = "2.1.0", optional = true }
 console_error_panic_hook = { workspace = true, optional = true }
 
 [features]
-# Worker-only capabilities. HTML parsing (`compact_browser_page`,
-# `parse_scraped_recipe`) is ~0.8 MB of the wasm binary; `gateway_call_usage`
+# Worker-only capabilities. HTML parsing (`compact_email_html`,
+# `parse_scraped_recipe`) stays out of the browser; `gateway_call_usage`
 # needs the cookbook model catalog. The Worker wasm build is
 # `--features wasm`; the browser build is `--no-default-features --features
 # wasm`; cubby-ffi takes `default-features = false` and never `wasm`. Native

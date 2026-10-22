@@ -2,8 +2,7 @@
 //!
 //! The shared engine behind "what can I make?", the `find_cookable_recipes`
 //! agent tool, and the meal-planning shopping list. Reconciliation runs on the
-//! same kernel the costing engine uses (`reconcile::product_mapping_pairs` +
-//! `ingredient`'s graph conversion), so the gram-first basis rule has one home
+//! same product graph kernel as costing, so package isolation has one home
 //! instead of a parallel TS copy.
 //!
 //! A group is one ingredient's needs (one need for recipe availability, many for
@@ -16,9 +15,7 @@
 //! instead of silently summing into a meaningless total, and non-finite values
 //! are dropped before they can poison a sum.
 
-use ingredient::unit::{
-    Measure, MeasureGraph, MeasureKind, convert_measure_with_graph, make_graph,
-};
+use ingredient::unit::Measure;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "wasm")]
 use tsify_next::Tsify;
@@ -26,8 +23,9 @@ use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::WAmount;
+use crate::costing::ProductGraphs;
 use crate::food_mappings::WProductInput;
-use crate::reconcile::{finite, product_mapping_pairs};
+use crate::reconcile::finite;
 
 /// Tiny tolerance so float rounding doesn't flip an exact match to "short".
 /// The only copy: the shopping list re-verdicts through
@@ -77,9 +75,8 @@ pub struct WAvailabilityInput {
 /// Status verdict. Mirrors the zod `ingredientAvailabilityStatus` minus
 /// `subrecipe` (sub-recipes never reach the evaluator — the caller handles them).
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
 // `from_wasm_abi` too: `availability_status_for` takes a prior verdict back in.
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(rename_all = "lowercase")]
 pub enum WAvailabilityStatus {
     /// Enough on hand.
@@ -242,39 +239,17 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
         };
     }
 
-    // Per-product graphs (for on-hand, converted via the matching product's
-    // mappings) plus the merged graph (for needs, which may bridge across
-    // products) — the same split the TS service used.
-    let product_pairs: Vec<Vec<(Measure, Measure)>> = group
-        .products
-        .iter()
-        .map(|p| product_mapping_pairs(&p.product))
-        .collect();
-    let product_graphs: Vec<MeasureGraph> = product_pairs.iter().map(|p| make_graph(p)).collect();
-    // Needs may bridge across products, so they resolve on the union of all edges.
-    // With exactly one product that union *is* its graph — reuse it instead of
-    // rebuilding a second graph and re-cloning every pair (the common case: most
-    // ingredients have a single product).
-    let mut merged_graph: Option<MeasureGraph> = None;
-    let all_graph: &MeasureGraph = match product_graphs.as_slice() {
-        // Single product: its graph already is the union — reuse it (the common
-        // case), no rebuild or pair re-clone.
-        [single] => single,
-        // 0 or ≥2 products: resolve needs on the union of all edges. With zero
-        // products the union is empty, so nothing converts.
-        _ => {
-            let all_pairs: Vec<(Measure, Measure)> =
-                product_pairs.iter().flatten().cloned().collect();
-            merged_graph.insert(make_graph(&all_pairs))
-        }
-    };
+    // Needs may use shared density/food edges, but may not stitch together
+    // package edges belonging to different products. Inventory retains its
+    // known product identity through the same graph owner.
+    let graphs = ProductGraphs::new(group.products.iter().map(|product| &product.product));
 
     // Convert each need to weight. Gram basis only when EVERY need converts, so
     // contributions are summable in one unit (the gram-first rule).
     let weights: Vec<Option<Measure>> = group
         .needs
         .iter()
-        .map(|n| convert_measure_with_graph(&n.amount.to_measure(), MeasureKind::Weight, all_graph))
+        .map(|n| graphs.weight(&n.amount.to_measure()))
         .collect();
     let all_weight = !weights.is_empty() && weights.iter().all(Option::is_some);
 
@@ -317,14 +292,11 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
             };
             WAvailabilitySource {
                 line_index: n.line_index,
-                need_value: Some(need_value),
+                need_value: finite(need_value),
             }
         })
         .collect();
-    let need_total: f64 = sources
-        .iter()
-        .filter_map(|s| s.need_value.and_then(finite))
-        .sum();
+    let need_total: f64 = sources.iter().filter_map(|s| s.need_value).sum();
 
     // On-hand total, counted ONCE per group (across all its products) — summing
     // per-line would multiply inventory by the number of needs.
@@ -334,12 +306,9 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
     for (i, p) in group.products.iter().enumerate() {
         for on_hand in &p.on_hand {
             let value = match &basis {
-                Basis::Weight(_) => convert_measure_with_graph(
-                    &on_hand.to_measure(),
-                    MeasureKind::Weight,
-                    &product_graphs[i],
-                )
-                .map(|g| g.value()),
+                Basis::Weight(_) => graphs
+                    .product_weight(i, &on_hand.to_measure())
+                    .map(|g| g.value()),
                 Basis::Unit(unit) => (on_hand.unit == *unit).then_some(on_hand.value),
                 Basis::Incoherent => None,
             };
@@ -709,24 +678,51 @@ mod tests {
 
     #[test]
     fn multi_product_completes_the_weight_path() {
-        // need grams; product A supplies cup→g, on-hand lives on product B in cups.
-        // The merged graph converts the need; B's own graph must also reach grams,
-        // so both products carry the mapping here (mirrors the shared-graph need).
+        // A's density also completes B's inventory conversion.
         let g = eval(WAvailabilityGroup {
             key: "ing".into(),
             usually_on_hand: false,
             needs: vec![need(100.0, "g", 0)],
             products: vec![
                 product("a", vec![mapping(1.0, "cup", 120.0, "g")], vec![]),
-                product(
-                    "b",
-                    vec![mapping(1.0, "cup", 120.0, "g")],
-                    vec![amt(1.0, "cup")],
-                ),
+                product("b", vec![], vec![amt(1.0, "cup")]),
             ],
         });
         assert_eq!(g.have_value, Some(120.0));
         assert_eq!(g.status, WAvailabilityStatus::Ok);
+    }
+
+    #[test]
+    fn product_package_routes_do_not_cross_and_ambiguous_counts_stay_unconvertible() {
+        let a = || {
+            product(
+                "a",
+                vec![
+                    mapping(1.0, "cup", 1.0, "each"),
+                    mapping(1.0, "each", 100.0, "g"),
+                ],
+                vec![amt(1.0, "cup")],
+            )
+        };
+        let b = || product("b", vec![mapping(1.0, "each", 200.0, "g")], vec![]);
+        for products in [vec![a(), b()], vec![b(), a()]] {
+            let mut group = WAvailabilityGroup {
+                key: "food".into(),
+                usually_on_hand: false,
+                needs: vec![need(1.0, "cup", 0)],
+                products,
+            };
+            let result = evaluate_group(&group);
+            assert_eq!(result.need_value, Some(100.0));
+            assert_eq!(result.have_value, Some(100.0));
+            assert_eq!(result.status, WAvailabilityStatus::Ok);
+
+            // No ingredient-level interpretation of one package is justified.
+            group.needs = vec![need(1.0, "each", 0), need(100.0, "g", 1)];
+            let result = evaluate_group(&group);
+            assert_eq!(result.need_value, None);
+            assert_eq!(result.status, WAvailabilityStatus::Unconvertible);
+        }
     }
 
     /// Status monotonicity: across a grid of (need, have), status is never `Ok`
@@ -848,5 +844,11 @@ mod tests {
         assert!(g.need_value.is_some_and(f64::is_finite));
         assert_eq!(g.need_value, Some(50.0)); // infinite need contribution dropped
         assert_eq!(g.have_value, Some(10.0)); // infinite on-hand dropped
+        assert_eq!(g.sources[0].need_value, Some(50.0));
+        assert_eq!(g.sources[1].need_value, None);
+        assert_eq!(
+            serde_json::to_value(&g).unwrap()["sources"][1]["need_value"],
+            serde_json::Value::Null
+        );
     }
 }

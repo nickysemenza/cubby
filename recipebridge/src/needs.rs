@@ -174,7 +174,7 @@ pub struct WYieldFraction {
 }
 
 /// Whether a declared yield can denominate anything at all. See the saturation
-/// note in [`yield_fraction`] for why a zero is a hazard and not just a no-op.
+/// note in [`yield_ratio_measure`] for why a zero is a hazard and not just a no-op.
 fn usable_yield(recipe_yield: &WAmount) -> bool {
     recipe_yield.value.is_finite() && recipe_yield.value > 0.0
 }
@@ -194,13 +194,19 @@ fn usable_yield(recipe_yield: &WAmount) -> bool {
 /// This is the single implementation of yield scaling. The tree UI reaches it
 /// through the [`recipe_yield_fraction`] export rather than approximating it.
 pub(crate) fn yield_fraction(recipe_yield: &WAmount, amounts: &[WAmount]) -> Option<f64> {
+    yield_ratio_measure(recipe_yield, amounts).map(|fraction| fraction.value())
+}
+
+/// The validated batch conversion shared with meal food calculation. Returning
+/// the measure preserves range bounds; each caller owns its disclosure policy.
+pub(crate) fn yield_ratio_measure(recipe_yield: &WAmount, amounts: &[WAmount]) -> Option<Measure> {
     // A zero/negative/non-finite yield is not merely useless, it's dangerous:
     // `make_graph` divides by the mapping's value, and the rational conversion
     // SATURATES rather than going infinite, so `finite()` can't reject the
     // result. A "1 batch = 0 g" edge silently yields a ~9.2e16 factor that
     // multiplies every descendant need while still reading as real data. The
     // costing engine gates its weight edge on `> 0.0` for exactly this reason.
-    if !(recipe_yield.value.is_finite() && recipe_yield.value > 0.0) {
+    if !usable_yield(recipe_yield) {
         return None;
     }
     let pairs = [(recipe_yield.to_measure(), Measure::new(BATCH_UNIT, 1.0))];
@@ -210,10 +216,9 @@ pub(crate) fn yield_fraction(recipe_yield: &WAmount, amounts: &[WAmount]) -> Opt
         &measures,
         &graph,
         MeasureKind::Other(BATCH_UNIT.to_string()),
-    )?
-    .value();
+    )?;
     // Belt and braces against a saturated rational or a non-positive amount.
-    (fraction.is_finite() && fraction > 0.0).then_some(fraction)
+    (fraction.value().is_finite() && fraction.value() > 0.0).then_some(fraction)
 }
 
 /// The batch fraction a parent's written amounts represent, or the reason the

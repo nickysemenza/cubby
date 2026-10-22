@@ -13,20 +13,14 @@
 //!   recomputes. Only cycle-free computations are cached: a result produced
 //!   under a fired cycle guard depends on the visited set, not just the id.
 //!
-//! - Products complete each other's non-price conversion, food, and nutrition
-//!   edges in one merged graph, which resolves weight and nutrition. Do not
-//!   isolate whole graphs per product — that breaks cross-product completion.
+//! - Products share density, food, and nutrition edges. Package edges stay
+//!   product-specific for physical conversion as well as price; conflicting
+//!   package interpretations are unavailable rather than order-dependent.
 //!
-//!   Price is different. `each` is a different package on every product, and
-//!   every `1 each = <size>` mapping normalizes onto the one `whole ↔ g` edge —
-//!   the merged graph keeps only the last product's factor, so resolving a row
-//!   to `each` there and multiplying by a *different* product's `$/each` mixed
-//!   one product's package with another's price (36 g of Thai basil priced as
-//!   0.16 of a 0.5 lb bag × the 0.5 oz pack's price). So the price leg resolves
-//!   `each` per priced product through a graph holding only that product's
-//!   package edges plus every shared edge, and the cheapest product wins
-//!   deterministically. A priced product with no package of its own borrows
-//!   the merged graph (branded eggs price only via the generic shell's bridge).
+//!   Scalar price resolves `each` through the priced product's own package
+//!   plus shared edges, then chooses the cheapest product. A price-only
+//!   product can borrow an unambiguous sibling package (branded eggs price via
+//!   the generic shell's bridge).
 //!
 //!   That `each` is fractional — 825 g of a 5 lb bag is 0.363763 bags. It relies
 //!   on `ingredient` NOT rounding a conversion to a whole count; when it did, every
@@ -34,24 +28,22 @@
 //!   `fractional_count_target_keeps_its_fraction` upstream pins that, and
 //!   `scalar_priced_product_costs_a_fraction_of_a_package` below pins this end.
 
-use std::cell::{OnceCell, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use ingredient::classify_usage;
-use ingredient::unit::{
-    Measure, MeasureGraph, MeasureKind, canonical_amount, convert_measure_with_graph_explained,
-    convert_with_fallback, make_graph,
-};
+use ingredient::unit::{ConversionStep, Measure, MeasureKind, make_graph};
 use ingredient::usage::IngredientUsage;
 
 use super::consumption::{ComponentSource, PlanTrio, plan_for};
+use super::graphs::{ProductGraphs, ResolvedConversion, resolve_on_graph};
 use super::types::{
     WBakerPct, WCostingInput, WCostingRecipe, WCostingRow, WMeasureOk, WMeasureResult,
     WMissingByType, WNutrientAmount, WNutrientCoverage, WNutrientTarget, WNutrientsOk,
     WNutrientsResult, WRecipeCosting, WRowKind, WRowMissing, WRowPaths, WRowResult,
 };
 use crate::WConversionStep;
-use crate::food_mappings::{ProductPairs, WProductInput, product_non_price_mapping_pairs};
+use crate::food_mappings::WProductInput;
 use crate::reconcile::finite;
 use crate::{
     WAmount, WMeasureEstimate, WNamedEstimate, WNutritionTotals, WUnavailableReason,
@@ -114,14 +106,17 @@ struct MeasureVal {
     value: f64,
     unit: String,
     upper: Option<f64>,
+    steps: Vec<ConversionStep>,
 }
 
-impl From<Measure> for MeasureVal {
-    fn from(m: Measure) -> Self {
+impl From<ResolvedConversion> for MeasureVal {
+    fn from(resolved: ResolvedConversion) -> Self {
+        let m = resolved.measure;
         Self {
             value: m.value(),
             unit: m.unit().to_str().into_owned(),
             upper: m.upper_value(),
+            steps: resolved.steps,
         }
     }
 }
@@ -137,6 +132,7 @@ struct Trio {
     price: MeasureRes,
     gram: MeasureRes,
     nutrients: NutrientsRes,
+    calorie_steps: Option<Vec<ConversionStep>>,
     inferred_nutrient_codes: HashSet<String>,
     opted_out_nutrient_codes: HashSet<String>,
 }
@@ -148,6 +144,7 @@ impl Trio {
             price: Err(e.clone()),
             gram: Err(e.clone()),
             nutrients: Err(e),
+            calorie_steps: None,
             inferred_nutrient_codes: HashSet::new(),
             opted_out_nutrient_codes: HashSet::new(),
         }
@@ -185,9 +182,23 @@ fn scale_measure(r: &MeasureRes, fraction: f64) -> MeasureRes {
             value: v.value * fraction,
             unit: v.unit.clone(),
             upper: v.upper.map(|u| u * fraction),
+            steps: scaled_steps(&v.steps, &v.unit, fraction),
         }),
         Err(e) => Err(e.clone()),
     }
+}
+
+fn scaled_steps(steps: &[ConversionStep], unit: &str, fraction: f64) -> Vec<ConversionStep> {
+    let mut steps = steps.to_vec();
+    if fraction != 1.0 {
+        let unit = ingredient::unit::mapping_graph_unit(unit);
+        steps.push(ConversionStep {
+            from_unit: unit.clone(),
+            to_unit: unit,
+            factor: fraction,
+        });
+    }
+    steps
 }
 
 fn scale_nutrients(r: &NutrientsRes, fraction: f64) -> NutrientsRes {
@@ -270,128 +281,64 @@ fn targets_from(inputs: &[WNutrientTarget]) -> Vec<Target> {
         .collect()
 }
 
-/// One linked product with a scalar price: its own package edges and the
-/// graph the price leg resolves `each` on (shared edges + those package edges).
+/// One linked product with a scalar price and its package graph index.
 struct PricedProduct {
     price: f64,
-    package_pairs: Vec<(Measure, Measure)>,
-    graph: OnceCell<MeasureGraph>,
+    index: usize,
 }
 
-/// Per-ingredient context: non-price mapping pairs synthesized once. `pairs`
-/// is every product's edges merged (weight, nutrition, stored money edges,
-/// explain); `shared_pairs` is the same minus package edges, the base each
-/// priced product's own price graph is built on.
+/// Per-ingredient mappings synthesized once, plus linked scalar prices.
 struct IngredientCtx {
-    pairs: Vec<(Measure, Measure)>,
-    shared_pairs: Vec<(Measure, Measure)>,
+    graphs: ProductGraphs,
     priced: Vec<PricedProduct>,
-    graph: OnceCell<MeasureGraph>,
-    inferred_units: HashSet<String>,
     opted_out_nutrient_codes: HashSet<String>,
-}
-
-fn nutrient_units(pair: &(Measure, Measure)) -> impl Iterator<Item = String> + '_ {
-    [&pair.0, &pair.1]
-        .into_iter()
-        .filter(|measure| {
-            matches!(
-                measure.kind(),
-                MeasureKind::Nutrient(_) | MeasureKind::Calories
-            )
-        })
-        .map(|measure| measure.unit().to_str().into_owned())
 }
 
 impl IngredientCtx {
     fn new(products: &[WProductInput]) -> Self {
-        let mut shared_pairs = Vec::new();
-        let mut inferred_pairs = Vec::new();
-        let mut package_pairs = Vec::new();
-        let mut priced = Vec::new();
-        for product in products {
-            let ProductPairs {
-                package,
-                shared,
-                inferred,
-            } = product_non_price_mapping_pairs(product);
-            shared_pairs.extend(shared);
-            inferred_pairs.extend(inferred);
-            if let Some(price) = product.price {
-                priced.push(PricedProduct {
-                    price,
-                    package_pairs: package.clone(),
-                    graph: OnceCell::new(),
-                });
-            }
-            package_pairs.extend(package);
-        }
-        // Shared-then-package ordering builds the same merged graph as the
-        // per-product input order did: a package edge (touches `whole`) and a
-        // shared edge never define the same unit pair, so `make_graph`'s
-        // last-mapping-wins only ever arbitrates within one class, whose
-        // relative order is preserved.
-        let measured_units: HashSet<String> =
-            shared_pairs.iter().flat_map(nutrient_units).collect();
-        inferred_pairs
-            .retain(|pair| !nutrient_units(pair).any(|unit| measured_units.contains(&unit)));
-        let inferred_units = inferred_pairs.iter().flat_map(nutrient_units).collect();
-        shared_pairs.splice(0..0, inferred_pairs);
-        let mut pairs = shared_pairs.clone();
-        pairs.extend(package_pairs);
         Self {
-            pairs,
-            shared_pairs,
-            priced,
-            graph: OnceCell::new(),
-            inferred_units,
+            graphs: ProductGraphs::new(products),
+            priced: products
+                .iter()
+                .enumerate()
+                .filter_map(|(index, product)| {
+                    product.price.map(|price| PricedProduct { price, index })
+                })
+                .collect(),
             opted_out_nutrient_codes: HashSet::new(),
         }
-    }
-
-    fn graph(&self) -> &MeasureGraph {
-        self.graph.get_or_init(|| make_graph(&self.pairs))
-    }
-
-    /// The graph a product's price leg resolves `each` on. A product that
-    /// declares its own package is isolated to it; one without any borrows the
-    /// merged graph exactly as before (that is how a priced branded product
-    /// with no mappings reaches `each` through a generic sibling's bridge).
-    fn price_graph<'p>(&'p self, product: &'p PricedProduct) -> &'p MeasureGraph {
-        if product.package_pairs.is_empty() {
-            return self.graph();
-        }
-        product.graph.get_or_init(|| {
-            let mut pairs = self.shared_pairs.clone();
-            pairs.extend(product.package_pairs.iter().cloned());
-            make_graph(&pairs)
-        })
     }
 
     /// Resolve the written amount to `each` through each priced product's own
     /// price graph, multiply by that product's price, and take the cheapest.
     /// A product whose graph can't reach `each` contributes nothing. Ranges
     /// are preserved by scaling both bounds.
-    fn cheapest_price(&self, amounts: &[Measure]) -> Option<Measure> {
+    fn cheapest_price(&self, amounts: &[Measure]) -> Option<ResolvedConversion> {
         self.priced
             .iter()
             .filter(|product| product.price.is_finite())
             .filter_map(|product| {
-                let each = convert_with_fallback(
-                    amounts,
-                    self.price_graph(product),
-                    MeasureKind::Other("each".to_string()),
-                )?;
-                let value = each.value() * product.price;
+                let each = self.graphs.priced_each(product.index, amounts)?;
+                let value = each.measure.value() * product.price;
                 value.is_finite().then(|| {
-                    let upper = each.upper_value().map(|bound| bound * product.price);
-                    match upper {
+                    let upper = each
+                        .measure
+                        .upper_value()
+                        .map(|bound| bound * product.price);
+                    let measure = match upper {
                         Some(bound) if bound > value => Measure::with_range("dollar", value, bound),
                         _ => Measure::new("dollar", value),
-                    }
+                    };
+                    let mut steps = each.steps;
+                    steps.push(ConversionStep {
+                        from_unit: ingredient::unit::Unit::Whole,
+                        to_unit: ingredient::unit::Unit::Cent,
+                        factor: product.price * 100.0,
+                    });
+                    ResolvedConversion { measure, steps }
                 })
             })
-            .min_by(|left, right| left.value().total_cmp(&right.value()))
+            .min_by(|left, right| left.measure.value().total_cmp(&right.measure.value()))
     }
 }
 
@@ -440,15 +387,8 @@ impl<'a> Engine<'a> {
             ingredients: input
                 .ingredients
                 .iter()
-                // Every product's non-price mappings merge into one graph. This is
-                // intentional and load-bearing: products complete each other
-                // (e.g. branded "Pete & Gerry's" eggs has no mappings and
-                // reaches its price only via the generic shell's
-                // `large → whole → each` bridge; branded olive oil supplies
-                // price+package but its nutrition comes from the shell's USDA
-                // food). Synthetic price edges stay out, and each product's own
-                // package edges are re-isolated for its price leg — see
-                // `IngredientCtx::cheapest_price`.
+                // Products complete each other's shared mappings while package
+                // identities remain separate — see `ProductGraphs`.
                 .map(|i| {
                     let mut ctx = IngredientCtx::new(&i.products);
                     ctx.opted_out_nutrient_codes
@@ -561,18 +501,21 @@ impl<'a> Engine<'a> {
             .collect()
     }
 
-    /// Convert one amount to every costing measure off a single graph — the old
+    /// Convert one amount to every costing measure through one resolver — the old
     /// `conv_amount_all` + `measuresFromMappings` reshaping, inline. kcal rides
     /// the dedicated Calories conversion and is appended last (TS insertion
     /// order); per-target failures simply drop that nutrient.
-    fn measures(&self, amounts: &[Measure], graph: &MeasureGraph, price: Option<Measure>) -> Trio {
+    fn measures(
+        &self,
+        conv: impl Fn(MeasureKind) -> Option<ResolvedConversion>,
+        price: Option<ResolvedConversion>,
+    ) -> Trio {
         // Resolve every measure from ONE canonical amount, so a row's weight,
         // cost, and nutrients share a single basis (a row is one physical
         // quantity). Prefer a mass amount — the stated weight, resolved exactly
         // via the unit engine's mass identity — over a volume that needs a
         // density. Only fall back to another amount for a measure the canonical
         // one genuinely can't reach.
-        let conv = |kind: MeasureKind| convert_with_fallback(amounts, graph, kind);
         // Two independent ways to reach a cost: a linked product's scalar price
         // (resolved via `each`) and a stored money edge in the graph
         // ("499.79 ml = $7.79"). Take the cheaper, extending the same
@@ -582,7 +525,7 @@ impl<'a> Engine<'a> {
         // per-ml price in favor of a whole-bottle one. Both sides denormalize
         // to `Unit::Dollar`, so the bare value comparison is sound.
         let money = match (price, conv(MeasureKind::Money)) {
-            (Some(scalar), Some(edge)) => Some(if edge.value() < scalar.value() {
+            (Some(scalar), Some(edge)) => Some(if edge.measure.value() < scalar.measure.value() {
                 edge
             } else {
                 scalar
@@ -599,16 +542,17 @@ impl<'a> Engine<'a> {
                 MeasureKind::Calories => kcal_code = Some(&t.code),
                 kind => {
                     if let Some(c) = conv(kind.clone()) {
-                        entries.push((t.code.clone(), c.value(), c.upper_value()));
+                        entries.push((t.code.clone(), c.measure.value(), c.measure.upper_value()));
                     }
                 }
             }
         }
         if let (Some(code), Some(c)) = (kcal_code, &calories) {
-            entries.push((code.to_string(), c.value(), c.upper_value()));
+            entries.push((code.to_string(), c.measure.value(), c.measure.upper_value()));
         }
 
         Trio {
+            calorie_steps: calories.map(|resolved| resolved.steps),
             price: money
                 .map(MeasureVal::from)
                 .ok_or_else(|| "Error converting to money".to_string()),
@@ -626,11 +570,14 @@ impl<'a> Engine<'a> {
     }
 
     fn ingredient_measures(&self, amounts: &[Measure], ctx: &IngredientCtx) -> Trio {
-        let mut trio = self.measures(amounts, ctx.graph(), ctx.cheapest_price(amounts));
+        let mut trio = self.measures(
+            |kind| ctx.graphs.resolve(amounts, kind),
+            ctx.cheapest_price(amounts),
+        );
         trio.inferred_nutrient_codes = self
             .targets
             .iter()
-            .filter(|target| ctx.inferred_units.contains(&target.unit))
+            .filter(|target| ctx.graphs.inferred_units.contains(&target.unit))
             .map(|target| target.code.clone())
             .collect();
         trio.opted_out_nutrient_codes = ctx.opted_out_nutrient_codes.clone();
@@ -669,7 +616,9 @@ impl<'a> Engine<'a> {
         let (trio, propagated, propagated_nutrient_codes) = match row.kind {
             WRowKind::Recipe => match self.sub_recipe_pairs(&row.target_id, visited, taint) {
                 Some(sub) => {
-                    let mut trio = self.measures(&measures, &make_graph(&sub.pairs), None);
+                    let graph = make_graph(&sub.pairs);
+                    let mut trio =
+                        self.measures(|kind| resolve_on_graph(&measures, &graph, kind), None);
                     trio.inferred_nutrient_codes = sub.inferred_nutrient_codes;
                     trio.opted_out_nutrient_codes = sub.opted_out_nutrient_codes;
                     (trio, sub.missing, sub.missing_nutrient_codes)
@@ -962,6 +911,13 @@ impl<'a> Engine<'a> {
             Missing => None,
         };
         let mut trio = Trio {
+            calorie_steps: nutrition_source.and_then(|trio| {
+                let steps = trio.calorie_steps.as_ref()?;
+                Some(match plan.nutrients {
+                    OwnFraction { fraction } => scaled_steps(steps, "kcal", fraction),
+                    _ => steps.clone(),
+                })
+            }),
             inferred_nutrient_codes: nutrition_source
                 .map(|trio| trio.inferred_nutrient_codes.clone())
                 .unwrap_or_default(),
@@ -1004,59 +960,15 @@ impl<'a> Engine<'a> {
         (trio, own.map(|o| o.trio), missing, missing_nutrient_codes)
     }
 
-    /// Unit-graph routes for a root row's driving amount (explain mode): its
-    /// own written amount, or the estimated grams the weight plan substituted.
-    /// None when there's nothing to trace (recipe rows, no amount, no mappings).
-    fn paths_for(
-        &self,
-        row: &WCostingRow,
-        plan: &PlanTrio,
-        basis_grams: Option<f64>,
-    ) -> Option<WRowPaths> {
-        if row.kind != WRowKind::Ingredient {
-            return None;
-        }
-        let ctx = self.ctx_for(&row.target_id);
-        if ctx.pairs.is_empty() {
-            return None;
-        }
-        let graph = ctx.graph();
-        let measures: Vec<Measure> = row.amounts.iter().map(|a| a.to_measure()).collect();
-        // The estimated-grams stand-in for amount-less rows (frying oil, to-taste).
-        let estimated = match plan.weight {
-            ComponentSource::BasisFraction { fraction } => {
-                basis_grams.map(|b| Measure::new("g", fraction * b))
-            }
-            ComponentSource::FlatGrams { grams } => Some(Measure::new("g", grams)),
-            _ => None,
-        };
-        // Trace the canonical amount the measure resolution drives off (mass
-        // amount preferred), or the estimated grams when the row has none.
-        let measure = canonical_amount(&measures).cloned().or(estimated)?;
-        let explain = |kind: MeasureKind| {
-            convert_measure_with_graph_explained(&measure, kind, graph)
-                .map(|(_, steps)| steps.into_iter().map(WConversionStep::from).collect())
-        };
-        Some(WRowPaths {
-            money: explain(MeasureKind::Money),
-            weight: explain(MeasureKind::Weight),
-            calories: explain(MeasureKind::Calories),
-        })
-    }
-
     /// Two-pass totals for one recipe (the old `calculateTotals`): pass 1
     /// resolves own-amount rows and accumulates the basis weight from own-full
     /// rows only — a deferred row (incl. a MEASURED frying medium, whose
     /// written amount is the pot volume) never feeds the basis, so pass 2 is
     /// order-independent.
-    pub fn cost_recipe(
-        &self,
-        recipe: &WCostingRecipe,
-        visited: &HashSet<String>,
-        explain: bool,
-    ) -> WRecipeCosting {
+    pub fn cost_recipe(&self, recipe: &WCostingRecipe, explain: bool) -> WRecipeCosting {
         let mut taint = false;
-        self.cost_recipe_inner(recipe, visited, explain, &mut taint)
+        let visited = HashSet::from([recipe.id.clone()]);
+        self.cost_recipe_inner(recipe, &visited, explain, &mut taint)
     }
 
     /// `cost_recipe` with cycle-taint propagation (`taint` flips to true when
@@ -1297,8 +1209,20 @@ impl<'a> Engine<'a> {
                 own_gram,
                 estimated: p.plan.is_estimated(),
                 is_flour: p.is_flour,
-                paths: if explain {
-                    self.paths_for(p.row, &p.plan, basis)
+                paths: if explain
+                    && p.row.kind == WRowKind::Ingredient
+                    && (self.ctx_for(&p.row.target_id).graphs.has_mappings()
+                        || !self.ctx_for(&p.row.target_id).priced.is_empty())
+                    && (!p.row.amounts.is_empty() || p.plan.is_estimated())
+                {
+                    let path = |steps: &[ConversionStep]| {
+                        steps.iter().cloned().map(WConversionStep::from).collect()
+                    };
+                    Some(WRowPaths {
+                        money: trio.price.as_ref().ok().map(|value| path(&value.steps)),
+                        weight: trio.gram.as_ref().ok().map(|value| path(&value.steps)),
+                        calories: trio.calorie_steps.as_deref().map(path),
+                    })
                 } else {
                     None
                 },
@@ -1431,7 +1355,7 @@ mod tests {
         let ctx = engine.ctx_for("ingredient");
         let amounts = [Measure::new("each", 3.0)];
         let price = ctx.cheapest_price(&amounts).expect("priced each amount");
-        assert_eq!(price.value(), 6.0);
+        assert_eq!(price.measure.value(), 6.0);
     }
     #[test]
     fn mapped_label_inferred_zero_retains_provenance() {
@@ -1514,18 +1438,10 @@ mod tests {
             ]
         })).unwrap();
         let engine = Engine::new(&input);
-        let sub = engine.cost_recipe(
-            engine.recipe("sub").unwrap(),
-            &HashSet::from(["sub".into()]),
-            false,
-        );
+        let sub = engine.cost_recipe(engine.recipe("sub").unwrap(), false);
         let opt_out = serde_json::to_value(&sub.rows[1].nutrition[0].estimate).unwrap();
         assert_eq!(opt_out["reason"], "not_applicable");
-        let result = engine.cost_recipe(
-            engine.recipe("parent").unwrap(),
-            &HashSet::from(["parent".into()]),
-            false,
-        );
+        let result = engine.cost_recipe(engine.recipe("parent").unwrap(), false);
         let value = serde_json::to_value(&result.estimates.nutrition[0].estimate).unwrap();
         assert_eq!(value["status"], "complete");
         assert_eq!(value["coverage"]["inferredZero"], 1);

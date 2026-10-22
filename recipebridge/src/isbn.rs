@@ -135,7 +135,11 @@ fn from_isbn13(isbn13: &str) -> NormalizedIsbn {
 /// because two callers used different printed encodings.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn normalize_isbn(value: &str) -> Option<NormalizedIsbn> {
-    let compact = compact_isbn(value);
+    normalize_compact_isbn(&compact_isbn(value))
+}
+
+/// [`normalize_isbn`] over an already-[`compact_isbn`]ed value.
+fn normalize_compact_isbn(compact: &str) -> Option<NormalizedIsbn> {
     // Every subsequent branch slices `compact` at byte offsets computed from
     // ASCII-only lengths (9, 12, 13, 14) -- safe only because `compact` is
     // confirmed pure ASCII first, so no slice can land mid-codepoint even for
@@ -146,13 +150,13 @@ pub fn normalize_isbn(value: &str) -> Option<NormalizedIsbn> {
     if compact.len() == 14 && compact.starts_with('0') && is_valid_isbn13(&compact[1..]) {
         return Some(from_isbn13(&compact[1..]));
     }
-    if is_valid_isbn10(&compact) {
+    if is_valid_isbn10(compact) {
         let first_twelve = format!("978{}", &compact[..9]);
         let check_digit = gs1_check_digit(&first_twelve);
         return Some(from_isbn13(&format!("{first_twelve}{check_digit}")));
     }
-    if is_valid_isbn13(&compact) {
-        return Some(from_isbn13(&compact));
+    if is_valid_isbn13(compact) {
+        return Some(from_isbn13(compact));
     }
     None
 }
@@ -206,8 +210,8 @@ fn strip_isbn_scheme(raw: &str) -> String {
 /// behavior.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn product_code_search_terms(value: &str) -> Vec<String> {
-    let normalized = isbn_from_gtin(value).or_else(|| normalize_isbn(value));
-    match normalized {
+    // A stored `0` + ISBN-13 GTIN is one of the shapes `normalize_isbn` accepts.
+    match normalize_isbn(value) {
         None => vec![value.to_string()],
         Some(n) => {
             let mut terms = vec![n.gtin14, n.isbn13];
@@ -228,10 +232,10 @@ pub fn product_code_search_terms(value: &str) -> Vec<String> {
 /// (`@cubby/shared/upc`) applies the same check digit.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scan_code_gtin14(raw: &str) -> Option<String> {
-    if let Some(normalized) = normalize_isbn(raw) {
+    let compact = compact_isbn(raw);
+    if let Some(normalized) = normalize_compact_isbn(&compact) {
         return Some(normalized.gtin14);
     }
-    let compact = compact_isbn(raw);
     is_valid_gtin(&compact).then(|| format!("{compact:0>14}"))
 }
 

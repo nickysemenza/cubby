@@ -65,7 +65,7 @@ export const htmlToImportRecipe = (html: string, url: string): ImportRecipe => {
 export const scrapedToImportRecipe = (w: WScrapedRecipe): ImportRecipe => {
   return {
     meta: {
-      title: w.name ?? "",
+      title: w.name,
       description: w.description,
       recipe_yield: w.recipe_yield,
       // JSON-LD durations are ISO-8601, so the scraper always fills a count

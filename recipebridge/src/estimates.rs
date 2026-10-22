@@ -43,9 +43,8 @@ pub enum WPendingReason {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "status", rename_all = "lowercase")]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum WMeasureEstimate {
     Complete {
         lower: f64,
@@ -129,21 +128,18 @@ pub struct WNutritionTotals {
 }
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 #[serde(transparent)]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WMeasureEstimates(pub Vec<WMeasureEstimate>);
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(transparent)]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WNamedEstimates(pub Vec<WNamedEstimate>);
 
 #[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 #[serde(transparent)]
-#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WNutritionTotalsList(pub Vec<WNutritionTotals>);
 
 fn add_count(total: &mut u32, value: u32) {

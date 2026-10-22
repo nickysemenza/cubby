@@ -83,9 +83,9 @@ opt-level = 0
 # is a partial recompile per target instead of a full one.
 #
 # The wasm build overrides this through CARGO_PROFILE_RELEASE_* in the root
-# `wasm` script and the CI wasm step (wasm-pack only takes --release, and
-# member profiles are ignored): opt-level z, lto, one codegen unit,
-# panic = abort, no incremental. Keep those lists in sync.
+# builder (`scripts/wasm.ts`; wasm-pack only takes --release, and member
+# profiles are ignored): opt-level z, lto, one codegen unit, panic = abort,
+# no incremental. Local preparation and CI use that same builder.
 [profile.release]
 strip = "debuginfo"
 incremental = true

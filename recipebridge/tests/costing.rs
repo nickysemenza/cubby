@@ -487,11 +487,14 @@ fn diamond_sub_recipe_dependencies_resolve_consistently() {
 
 #[test]
 fn guards_against_cycles_without_hanging() {
-    // A uses B, B uses A.
+    // A uses B, B uses A. A's known ingredient must be counted only once.
     let recipe_a = WCostingRecipe {
         id: "recA".to_string(),
         recipe_yield: Some(amount(1.0, "batch")),
-        rows: vec![sub_recipe_row("recB", (1.0, "batch"))],
+        rows: vec![
+            row("known", "known ingredient", Some((100.0, "g")), None, None),
+            sub_recipe_row("recB", (1.0, "batch")),
+        ],
     };
     let recipe_b = WCostingRecipe {
         id: "recB".to_string(),
@@ -501,7 +504,10 @@ fn guards_against_cycles_without_hanging() {
     let input = WCostingInput {
         root_ids: vec!["recA".to_string()],
         recipes: vec![recipe_a, recipe_b],
-        ingredients: vec![],
+        ingredients: vec![ingredient(
+            "known",
+            vec![mapping((100.0, "g"), (2.0, "dollar"))],
+        )],
         nutrient_targets: targets(),
         explain: false,
     };
@@ -509,13 +515,16 @@ fn guards_against_cycles_without_hanging() {
     // Should terminate (visited-set cycle guard), not hang.
     let result = cost_recipes_impl(&input).expect("terminates");
     let rec_a = &result.recipes[0];
-    // The cycle resolves to a *missing* contribution, not just "finite": A's only
-    // row (sub-recipe B) can't be costed because B re-enters A, so A's total is
-    // exactly 0 — a regression that terminated but produced a bogus non-zero
-    // number would pass an is_finite()-only check.
-    assert!(rec_a.price.is_finite());
-    assert_eq!(rec_a.price, 0.0, "cycle → missing contribution, total 0");
-    assert_eq!(rec_a.weight, 0.0, "cycle → missing contribution, weight 0");
+    assert_eq!(rec_a.price, 2.0, "root ingredient counted once");
+    assert_eq!(rec_a.weight, 100.0, "root ingredient weight counted once");
+    assert_eq!(rec_a.missing_by_type.price, vec!["sub-recipe"]);
+
+    // The root guard also owns a direct self-reference.
+    let mut input = input;
+    input.recipes[0].rows[1] = sub_recipe_row("recA", (1.0, "batch"));
+    let result = cost_recipes_impl(&input).expect("self-reference terminates");
+    assert_eq!(result.recipes[0].price, 2.0);
+    assert_eq!(result.recipes[0].weight, 100.0);
 }
 
 #[test]
@@ -870,14 +879,16 @@ fn stored_money_edge_wins_when_cheaper_than_the_scalar_price() {
             },
         ],
     };
-    let r = cost(
+    let r = cost_with(
         vec![row("olive-oil", "olive oil", Some((30.0, "g")), None, None)],
         vec![olive_oil],
         vec![],
+        true,
     );
 
     // 30 g ÷ 0.92 g/ml = 32.6087 ml × $0.0155864/ml = $0.5083
     assert_close(r.price, 0.5083, 1e-3, "price");
+    assert_money_path(&r, 30.0);
 }
 
 /// The other side of that comparison: when the scalar price is the cheaper of
@@ -900,13 +911,56 @@ fn scalar_price_wins_when_cheaper_than_the_stored_money_edge() {
             food: None,
         }],
     };
-    let r = cost(
+    let r = cost_with(
         vec![row("both", "both", Some((100.0, "g")), None, None)],
         vec![both],
         vec![],
+        true,
     );
 
     assert_close(r.price, 0.1, 1e-9, "price");
+    assert_money_path(&r, 100.0);
+}
+
+/// These cases enter money paths at grams and leave at the normalized cent.
+fn assert_money_path(result: &WRecipeCosting, grams: f64) {
+    let path = result.rows[0]
+        .paths
+        .as_ref()
+        .expect("row paths")
+        .money
+        .as_ref()
+        .expect("winning money path");
+    assert_eq!(path.first().expect("money hop").from_unit, "g");
+    assert_eq!(path.last().expect("money hop").to_unit, "cent");
+    let cents = path.iter().fold(grams, |value, step| value * step.factor);
+    assert_close(cents / 100.0, result.price, 1e-5, "explained price");
+}
+
+#[test]
+fn explain_uses_the_reachable_fallback_amount() {
+    let mut food_row = row("food", "food", Some((100.0, "g")), None, None);
+    food_row.amounts.push(amount(2.0, "scoop"));
+    let result = cost_with(
+        vec![food_row],
+        vec![ingredient(
+            "food",
+            vec![mapping((1.0, "scoop"), (3.0, "dollar"))],
+        )],
+        vec![],
+        true,
+    );
+    assert_close(result.price, 6.0, 1e-9, "fallback price");
+    let path = result.rows[0]
+        .paths
+        .as_ref()
+        .unwrap()
+        .money
+        .as_ref()
+        .unwrap();
+    assert_eq!(path.first().unwrap().from_unit, "scoop");
+    let cents = path.iter().fold(2.0, |value, step| value * step.factor);
+    assert_close(cents / 100.0, 6.0, 1e-9, "fallback explained price");
 }
 
 /// A product with a scalar price and its own package edges (`unit_mappings`),
@@ -955,6 +1009,55 @@ fn each_resolves_through_the_priced_products_own_package() {
         // min(36/14 × $1 = $2.5714, 36/226 × $3.59 = $0.5719)
         assert_close(r.price, 36.0 / 226.0 * 3.59, 1e-6, "price");
         assert!(r.missing_by_type.price.is_empty());
+    }
+}
+
+#[test]
+fn physical_routes_keep_package_identities_and_disclose_ambiguity() {
+    let cup_pack = || {
+        packaged(
+            "cup-pack",
+            Some(2.0),
+            vec![
+                mapping((1.0, "cup"), (1.0, "each")),
+                mapping((1.0, "each"), (100.0, "g")),
+            ],
+        )
+    };
+    let large_pack = || {
+        packaged(
+            "large-pack",
+            None,
+            vec![mapping((1.0, "each"), (200.0, "g"))],
+        )
+    };
+    let nutrition = || {
+        packaged(
+            "nutrition",
+            None,
+            vec![mapping((100.0, "g"), (10.0, "g protein"))],
+        )
+    };
+    for products in [
+        vec![cup_pack(), large_pack(), nutrition()],
+        vec![nutrition(), large_pack(), cup_pack()],
+    ] {
+        let r = cost_with(
+            vec![
+                row("food", "food", Some((1.0, "cup")), None, None),
+                row("food", "food", Some((1.0, "each")), None, None),
+            ],
+            vec![multi_product("food", products)],
+            vec![],
+            true,
+        );
+        assert_measure_close(&r.rows[0].gram, 100.0, 1e-9, "cup package weight");
+        assert_close(nutrient(&r, "203"), 10.0, 1e-9, "shared nutrition");
+        assert!(matches!(r.rows[1].gram, WMeasureResult::Err(_)));
+        assert!(r.rows[1].missing.nutrients);
+        let path = r.rows[0].paths.as_ref().unwrap().weight.as_ref().unwrap();
+        let grams = path.iter().fold(48.0, |value, step| value * step.factor);
+        assert_close(grams, 100.0, 1e-4, "isolated physical path");
     }
 }
 

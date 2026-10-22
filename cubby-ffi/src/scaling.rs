@@ -11,14 +11,14 @@ pub fn scale_amount(amount: Amount, factor: f64) -> Amount {
 /// A usable scale factor: finite, positive, floored at 0.01; anything else is 1 (unscaled).
 #[uniffi::export]
 pub fn clamp_scale_factor(factor: f64) -> f64 {
-    recipebridge::clamp_scale_factor_value(factor)
+    recipebridge::clamp_scale_factor(factor)
 }
 
 /// The factor that makes an ingredient's primary amount `new_value` when its unscaled amount is
 /// `original_value` (the "make this much of it" anchor).
 #[uniffi::export]
 pub fn scale_factor_for_ingredient(original_value: f64, new_value: f64) -> f64 {
-    recipebridge::scale_factor_for_ingredient_value(original_value, new_value)
+    recipebridge::scale_factor_for_ingredient(original_value, new_value)
 }
 
 /// The factor that makes the recipe's total weigh `target_grams` (the "make this much" anchor).
@@ -31,13 +31,13 @@ pub fn scale_factor_for_total_weight(
     scaled_weight: f64,
     current_factor: f64,
 ) -> f64 {
-    recipebridge::scale_factor_for_total_weight_value(target_grams, scaled_weight, current_factor)
+    recipebridge::scale_factor_for_total_weight(target_grams, scaled_weight, current_factor)
 }
 
 /// A yield or serving count at `factor`, rounded to two decimals as web does.
 #[uniffi::export]
 pub fn scale_display_count(value: f64, factor: f64) -> f64 {
-    recipebridge::scale_display_count_value(value, factor)
+    recipebridge::scale_display_count(value, factor)
 }
 
 #[cfg(test)]

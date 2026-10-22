@@ -90,17 +90,29 @@ struct DisplayFormatTests {
     }
 }
 
-/// Amounts are formatted by the same Rust the web calls (`wasm.format_amount_labeled`).
+/// Amounts are formatted by the same Rust the web calls (`wasm.format_amount_labeled`), pinned by the
+/// `amount` cases in `display-format.json`.
 @Suite("ValueFormat")
 struct ValueFormatTests {
-    @Test func amountMatchesTheWebUnitFormatter() {
-        #expect(ValueFormat.amount(unit: "each", value: 3) == "3 each")
-        #expect(ValueFormat.amount(unit: "cup", value: 2.5) == "2½ cups")
-        #expect(ValueFormat.amount(unit: "cup", value: 2, upperValue: 3) == "2 - 3 cups")
+    private struct AmountVector: Decodable {
+        let unit: String
+        let value: Double
+        let upper: Double?
+        let out: String
+    }
+    private struct File: Decodable {
+        let amount: [AmountVector]
     }
 
-    @Test func aBareCountIsAPlainNumber() {
+    @Test func amountMatchesTheSharedVectors() throws {
+        for vector in try GoldenVectors.decode(File.self, named: "display-format").amount {
+            #expect(
+                ValueFormat.amount(unit: vector.unit, value: vector.value, upperValue: vector.upper) == vector.out,
+                "\(vector.unit) \(vector.value)")
+        }
+    }
+
+    @Test func aMissingUnitIsABareCount() {
         #expect(ValueFormat.amount(unit: nil, value: 1.5) == "1.5")
-        #expect(ValueFormat.amount(unit: "", value: 12) == "12")
     }
 }
