@@ -36,7 +36,10 @@ test("Runs list in the generic table, filter to attention, and open the record i
     `/runs?vendorId=${sample.vendorId}&status=failed`,
   );
   await expect(status("Completed")).toHaveCount(0);
-  await status("Failed").click();
+  await status("Failed")
+    .locator("..")
+    .locator("[data-record-identity-link] a")
+    .click();
   const inspector = page.getByRole("complementary", { name: "Run inspector" });
   await expect(inspector).toContainText(sample.childId);
   await expect(

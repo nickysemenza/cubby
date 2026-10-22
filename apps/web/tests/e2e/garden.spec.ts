@@ -87,6 +87,10 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   // Edit `status` on the seeded planting through the generic edit dialog —
   // it is an ordinary editable field now, not a lifecycle verb.
   await page.locator(`a[href="/plantings/${existingPlanting.id}"]`).click();
+  await page
+    .getByRole("complementary", { name: "Planting inspector" })
+    .getByRole("button", { name: "Open full planting details" })
+    .click();
   await expect(page).toHaveURL(
     new RegExp(`/plantings/${existingPlanting.id}$`),
   );
