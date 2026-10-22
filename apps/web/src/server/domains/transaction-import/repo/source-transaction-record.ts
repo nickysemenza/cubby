@@ -792,7 +792,7 @@ export async function recordSourceTransactionRecords(
             "An observation identity cannot change its original evidence.",
           );
       }
-      const heads = rows.length
+      const retainedHeads = rows.length
         ? await unwrapDb(tx)
             .select()
             .from(sourceTransactionRecord)
@@ -808,6 +808,7 @@ export async function recordSourceTransactionRecords(
               ),
             )
         : [];
+      const heads = retainedHeads.filter((head) => head.deletedAt === null);
       const novel = rows.filter(
         (row) => !stored.some((saved) => saved.externalId === row.externalId),
       );
@@ -899,10 +900,13 @@ export async function recordSourceTransactionRecords(
           "Failed to record financial evidence collection.",
         );
       for (const row of rows) {
-        const newer = heads.some(
+        const newer = retainedHeads.some(
           (head) =>
             head.chargeKey === row.chargeKey &&
             (head.lastObservedAt > observedAt ||
+              (head.deletedAt !== null &&
+                head.externalId !== row.externalId &&
+                head.lastObservedAt >= observedAt) ||
               (head.withdrawnAt !== null && head.withdrawnAt >= observedAt)),
         );
         if (newer) row.current = false;

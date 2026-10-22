@@ -958,7 +958,7 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
       ? [
           sql`SELECT 'stmt:' || r.source || ':' || r."chargeKey" AS key,
           -r."providerAmount" AS amount, NULL::text AS "recordedKind", r."sourceCategory"
-        FROM "StatementRow" r
+        FROM "SourceTransactionRecord" r
         WHERE r.current AND r."deletedAt" IS NULL
           AND (r.source, r."chargeKey") IN (${sql.join(
             charges.map(

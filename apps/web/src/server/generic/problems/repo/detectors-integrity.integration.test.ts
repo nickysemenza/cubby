@@ -52,6 +52,7 @@ import {
   runOperation,
   runStep,
   sourceTransactionRecord,
+  transactionImport,
   user,
 } from "~/server/db/schema";
 import {
@@ -493,8 +494,26 @@ const mkRecipeSection = async (db: Database) => {
 const TARGET_FACTORIES = {
   sourceTransactionRecord: async (db: Database) =>
     (await createFinancialEvidenceFixture(db)).record,
-  transactionImport: async (db: Database) =>
-    (await createFinancialEvidenceFixture(db)).collection,
+  transactionImport: async (db: Database) => {
+    const receipt = await recordSourceTransactionRecords(
+      db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "synthetic-liveness",
+          label: "Synthetic empty import",
+          fingerprint: crypto.randomUUID(),
+        },
+        rows: [],
+      }),
+      TEST_ACTOR,
+    );
+    if (!receipt.batchId) throw new Error("Synthetic import missing");
+    const collection = await getDb(db).query.transactionImport.findFirst({
+      where: eq(transactionImport.id, receipt.batchId),
+    });
+    if (!collection) throw new Error("Synthetic import missing");
+    return collection;
+  },
   spendingCategory: (db: Database) =>
     insertWithShortcode(db, "spendingCategory", {
       name: uniq("Spending category"),
