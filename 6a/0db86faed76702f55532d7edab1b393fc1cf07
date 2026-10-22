@@ -1,0 +1,23 @@
+docs/development.md
+  s_51e123cbeb9183::t_a7fe1bcb568168 54-55
+recipebridge/src/availability.rs
+  s_51e123cbeb9183::t_4f50adecb5c452 249,254-259,262-264,729-733
+recipebridge/src/costing/graphs.rs
+  s_51e123cbeb9183::t_255d306ffa5554 50-51,145-160,162-169,171,173,175-176,179-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6a0db86faed76702f55532d7edab1b393fc1cf07",
+  "prompts": {},
+  "sessions": {
+    "s_51e123cbeb9183": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1650c-f629-7cd2-a585-c1c7808a98d3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
