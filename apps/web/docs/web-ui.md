@@ -138,6 +138,9 @@ tech read them.
 Table identity captions omit fields with dedicated list columns. Shelf subtitles
 must name the canonical field (`categoryId`, for example), rather than its hydrated
 object (`category`), so the shared exclusion recognizes the same value.
+Suggestions financial rows use the charge description as their single linked
+record label; do not append the account pill beneath every charge. Account
+context remains in the review evidence and dedicated account columns.
 
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column
