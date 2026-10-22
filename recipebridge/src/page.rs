@@ -6,8 +6,10 @@
 
 use scraper::{ElementRef, Html, Node, Selector};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
 use url::Url;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 const MAX_TEXT_BYTES: usize = 200 * 1024;
@@ -17,15 +19,17 @@ const MAX_JSON_LD_BLOCKS: usize = 20;
 const MAX_JSON_LD_BYTES: usize = 512 * 1024;
 const MAX_VARIANT_MARKERS: usize = 50;
 
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WPageLink {
     pub href: String,
     pub text: String,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WPageImage {
     pub src: String,
     pub alt: String,
@@ -38,8 +42,9 @@ pub struct WPageImage {
     pub high_resolution: Option<String>,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WCompactPage {
     pub title: String,
     pub text: String,
@@ -295,7 +300,7 @@ pub(crate) fn image_source<'a>(element: &'a ElementRef<'a>) -> Option<&'a str> {
         })
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn compact_browser_page(html: &str, url: &str) -> WCompactPage {
     let document = Html::parse_document(html);
     let base = Url::parse(url).ok();

@@ -15,6 +15,7 @@ use std::collections::HashSet;
 
 use engine::Engine;
 pub(crate) use engine::resolve_mapped_food;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 /// Cost every root recipe in the input: one `WRecipeCosting` per `root_ids`
@@ -37,7 +38,7 @@ pub fn cost_recipes_impl(input: &WCostingInput) -> Result<WCostingResult, String
 /// `input.explain`, unit-graph conversion paths). The whole two-pass
 /// consumption-model engine runs in Rust — the TS `computeRecipeCosting` is a
 /// thin wrapper that assembles the input and reshapes the result.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn cost_recipes(input: WCostingInput) -> Result<WCostingResult, String> {
     cost_recipes_impl(&input)
 }

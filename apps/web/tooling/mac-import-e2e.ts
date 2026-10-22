@@ -34,7 +34,7 @@ import {
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
-import { rustFingerprint } from "../../../scripts/rust-fingerprint";
+import { appleFfiFingerprint } from "../../../scripts/apple-ffi";
 import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 const webRoot = path.resolve(
@@ -200,12 +200,7 @@ function nativeSourceFingerprint(): string {
       "Cubby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
     ].map((file) => path.join(appleRoot, file)),
   ];
-  const rust = rustFingerprint(path.join(repoRoot, "Cargo.toml"), [
-    execFileSync("xcodebuild", ["-version"], { encoding: "utf8" }),
-    process.arch,
-    `profile=${process.env.CUBBY_FFI_PROFILE ?? "release"}`,
-    `targets=${process.env.CUBBY_FFI_TARGETS ?? "all"}`,
-  ]);
+  const rust = appleFfiFingerprint();
   return digestFiles(appleRoot, files, {
     seed: `native-inputs-v3\0fixture-build:ENABLE_DEBUG_DYLIB=NO\0${rust}`,
   });

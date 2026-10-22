@@ -7,7 +7,6 @@
  */
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 
-import { wasm } from "~/lib/wasm";
 import {
   decisionChoiceFitsContext,
   runDecisionChoices,
@@ -19,6 +18,7 @@ import {
 } from "~/server/ai/policy/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { wasm } from "~/server/wasm";
 
 import { isOwnMail, type MailOwnerContext } from "./mail-owner";
 

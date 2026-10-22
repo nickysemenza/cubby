@@ -16,7 +16,9 @@ use std::collections::{HashMap, HashSet};
 
 use ingredient::unit::{Measure, MeasureKind, convert_with_fallback, make_graph};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 use crate::WAmount;
@@ -30,7 +32,8 @@ const BATCH_UNIT: &str = "cubbybatch";
 
 /// One flattened section-ingredient row. Sections carry no meaning here, so the
 /// caller flattens them away.
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNeedsRow {
     pub kind: WRowKind,
     /// Ingredient id or sub-recipe id, per `kind`.
@@ -43,14 +46,15 @@ pub struct WNeedsRow {
 }
 
 /// One recipe in the closure — a planned root, or a transitively reached sub.
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNeedsRecipe {
     pub id: String,
     pub name: String,
     /// Required for this recipe to be usable *as* a sub-recipe: without it
     /// there's no way to know how much of a batch the parent is asking for.
     #[serde(default)]
-    #[tsify(optional, type = "WAmount | null")]
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "WAmount | null"))]
     pub recipe_yield: Option<WAmount>,
     pub rows: Vec<WNeedsRow>,
 }
@@ -58,15 +62,17 @@ pub struct WNeedsRecipe {
 /// One planned line: make `recipe_id` at `scale`. `line_index` is opaque and
 /// echoed onto every need the line produces, so the caller can attribute a
 /// need back to its meal without this module knowing what a meal is.
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNeedsLine {
     pub recipe_id: String,
     pub scale: f64,
     pub line_index: u32,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WNeedsInput {
     pub lines: Vec<WNeedsLine>,
     /// Every root in `lines`, plus every transitively reachable sub-recipe.
@@ -74,7 +80,8 @@ pub struct WNeedsInput {
 }
 
 /// One hop of the sub-recipe chain a need was reached through, outermost first.
-#[derive(Tsify, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNeedsVia {
     pub recipe_id: String,
     pub name: String,
@@ -83,14 +90,15 @@ pub struct WNeedsVia {
 /// One ingredient need, already scaled by `line.scale × Π(yield fractions)`.
 /// The unit is the authored one — picking a gram-first basis is the
 /// availability evaluator's job, not this module's.
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WExpandedNeed {
     pub ingredient_id: String,
     pub name: String,
     /// `None` when the line names an ingredient but no amount ("to taste").
     /// Reported rather than dropped, so the caller can still surface the row.
     #[serde(default)]
-    #[tsify(optional, type = "WAmount | null")]
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "WAmount | null"))]
     pub amount: Option<WAmount>,
     pub line_index: u32,
     /// Empty for a row written directly on the planned recipe.
@@ -99,7 +107,8 @@ pub struct WExpandedNeed {
 
 /// Why a sub-recipe's needs are absent. Values match the zod
 /// `subRecipeBlockReason` literals.
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "camelCase")]
 pub enum WNeedsBlockReason {
     /// The reference re-enters a recipe already on the current path.
@@ -118,7 +127,8 @@ pub enum WNeedsBlockReason {
 /// A sub-recipe reference whose ingredients are NOT in `needs`. This is the
 /// disclosure record: an omission the caller is obliged to surface, never a
 /// silent zero.
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WBlockedSubRecipe {
     pub recipe_id: String,
     pub name: String,
@@ -126,13 +136,14 @@ pub struct WBlockedSubRecipe {
     pub reason: WNeedsBlockReason,
     /// The parent's written amount, for display ("2 cup of Pizza dough").
     #[serde(default)]
-    #[tsify(optional, type = "WAmount | null")]
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "WAmount | null"))]
     pub amount: Option<WAmount>,
     pub via: Vec<WNeedsVia>,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WNeedsResult {
     pub needs: Vec<WExpandedNeed>,
     pub blocked: Vec<WBlockedSubRecipe>,
@@ -140,11 +151,12 @@ pub struct WNeedsResult {
 
 /// One sub-recipe reference: the sub's declared yield, and the parent's written
 /// amounts for the row referencing it.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WYieldFractionInput {
     #[serde(default)]
-    #[tsify(optional, type = "WAmount | null")]
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "WAmount | null"))]
     pub recipe_yield: Option<WAmount>,
     #[serde(default)]
     pub amounts: Vec<WAmount>,
@@ -153,14 +165,15 @@ pub struct WYieldFractionInput {
 /// Exactly one of `fraction` / `reason` is present. `fraction` is batches of the
 /// sub-recipe; `reason` is the same verdict the shopping list discloses, so the
 /// two surfaces can never disagree about what is knowable.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WYieldFraction {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub fraction: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub reason: Option<WNeedsBlockReason>,
 }
 
@@ -438,7 +451,7 @@ pub fn expand_recipe_needs_impl(input: &WNeedsInput) -> Result<WNeedsResult, Str
     Ok(WNeedsResult { needs, blocked })
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn expand_recipe_needs(input: WNeedsInput) -> Result<WNeedsResult, String> {
     expand_recipe_needs_impl(&input)
 }
@@ -451,7 +464,7 @@ pub fn expand_recipe_needs(input: WNeedsInput) -> Result<WNeedsResult, String> {
 /// sheet falls back to the costing engine's own batch weight and flags the row.
 /// That fallback can't live here: its denominator is a costing total, and this
 /// module deliberately knows nothing about costing.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn recipe_yield_fraction(input: WYieldFractionInput) -> WYieldFraction {
     match yield_verdict(input.recipe_yield.as_ref(), &input.amounts) {
         Ok(fraction) => WYieldFraction {

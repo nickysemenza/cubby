@@ -6,6 +6,7 @@
 //! "double it" anchor, a "make 600 g" anchor and a "this much butter" anchor
 //! land on the same factor everywhere.
 
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 /// Below this the recipe is effectively zeroed out; a stray `0` or blank input must
@@ -55,12 +56,12 @@ pub fn scale_display_count_value(value: f64, factor: f64) -> f64 {
     (value * factor * 100.0 + 0.5).floor() / 100.0
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn clamp_scale_factor(factor: f64) -> f64 {
     clamp_scale_factor_value(factor)
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scale_factor_for_total_weight(
     target_grams: f64,
     scaled_weight: f64,
@@ -69,12 +70,12 @@ pub fn scale_factor_for_total_weight(
     scale_factor_for_total_weight_value(target_grams, scaled_weight, current_factor)
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scale_factor_for_ingredient(original_value: f64, new_value: f64) -> f64 {
     scale_factor_for_ingredient_value(original_value, new_value)
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scale_display_count(value: f64, factor: f64) -> f64 {
     scale_display_count_value(value, factor)
 }

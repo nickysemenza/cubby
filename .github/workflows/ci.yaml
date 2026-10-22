@@ -74,6 +74,7 @@ jobs:
           filters: |
             rust: &rust
               - 'recipebridge/**'
+              - 'cookbook-wasm/**'
               - 'cubby-ffi/**'
               - 'Cargo.{toml,lock}'
               - 'rust-toolchain.toml'
@@ -88,7 +89,7 @@ jobs:
               - 'apps/apple/**'
               - '.xcode-version'
               - '.github/actions/setup-apple/**'
-              - 'scripts/{ensure,rust-fingerprint}.ts'
+              - 'scripts/{ensure,rust-fingerprint,apple-ffi}.ts'
               - 'scripts/lib/**'
               # File inputs of appleCommon in apps/apple/project.json.
               - 'apps/web/tooling/{simulator-inventory-schema,mac-fixture-identity}.ts'

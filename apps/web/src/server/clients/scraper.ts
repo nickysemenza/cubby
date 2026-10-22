@@ -1,4 +1,4 @@
-import type { WScrapedRecipe } from "@cubby/recipebridge";
+import type { WScrapedRecipe } from "@cubby/recipebridge/worker";
 import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import {
@@ -9,7 +9,7 @@ import {
   validateExternalHttpUrl,
 } from "@cubby/shared/external-fetch";
 
-import { wasm } from "~/lib/wasm";
+import { wasm } from "~/server/wasm";
 
 const isChefStepsHost = (url: string): boolean => {
   try {

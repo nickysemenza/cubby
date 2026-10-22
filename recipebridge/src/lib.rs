@@ -1,4 +1,10 @@
-//! recipebridge: cubby's wasm boundary over the ingredient-parser crates.
+//! recipebridge: cubby's shared Rust over the ingredient-parser crates, built as
+//! the Worker and browser wasm packages and linked natively by `cubby-ffi`.
+//!
+//! The `wasm` feature owns the whole JavaScript boundary: `#[wasm_bindgen]`
+//! exports, Tsify derives, the `AmountKind` extern, and the wasm init below.
+//! Without it the same `pub fn`s and structs compile as plain Rust, so native
+//! builds and tests never link wasm-bindgen, js-sys, or tsify.
 //!
 //! This file holds the wasm init and the shared boundary primitives (`WAmount`,
 //! `WUnitMapping`); the exports live in focused modules:
@@ -14,10 +20,11 @@
 //! - [`display_format`] — currency, bare-number, and compact nutrition cell text shared with native
 //! - [`isbn`] — ISBN-10/ISBN-13 validation and GTIN-14 normalization
 //!
-//! Boundary types: `#[derive(Tsify)]` generates the `.d.ts` from the Rust
-//! structs (no hand-written `typescript_custom_section` except `AmountKind`),
-//! and the `From<upstream>` impls are the compile-time drift check against
-//! ingredient-parser.
+//! Boundary types: `#[derive(Tsify)]` (under `wasm`) generates the `.d.ts` from
+//! the Rust structs (no hand-written `typescript_custom_section` except
+//! `AmountKind`), and the `From<upstream>` impls are the compile-time drift check
+//! against ingredient-parser. The `W` prefix is the generated TypeScript name
+//! the web imports, so it stays even though native callers share the types.
 
 // Production code is held to the `[lints.clippy]` gate in Cargo.toml (no
 // unwrap/expect/panic — a panic here is a hard browser crash). Tests legitimately
@@ -26,7 +33,9 @@
 
 use ingredient::unit::Measure;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "ai-usage")]
@@ -71,6 +80,7 @@ pub use parse::*;
 pub use scaling::*;
 
 // WASM initialization - called automatically when module loads
+#[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
 pub fn init() {
     console_error_panic_hook::set_once();
@@ -115,6 +125,7 @@ pub fn init() {
 /// (browsers, Node) rather than workerd's bare now()/timeOrigin stub. Any
 /// Reflect failure (missing global, a throwing getter) folds to `false` — the
 /// safe "don't emit timings" path — so detection never panics init.
+#[cfg(feature = "wasm")]
 fn performance_supports_user_timing() -> bool {
     js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("performance"))
         .ok()
@@ -137,6 +148,7 @@ fn performance_supports_user_timing() -> bool {
 /// missing `navigator`, a throwing getter, or a non-string `userAgent` all fold
 /// to `true` rather than to the dangerous path. Reflect errors are still
 /// swallowed rather than unwrapped, so detection never panics init.
+#[cfg(feature = "wasm")]
 fn is_workerd() -> bool {
     let user_agent = js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("navigator"))
         .ok()
@@ -154,6 +166,7 @@ fn is_workerd() -> bool {
 /// symmetric: guessing "browser" on workerd re-arms the INFO-level subscriber
 /// on the hot path, whose per-call cost grows until it trips `cpu_ms`, while
 /// guessing "workerd" in a browser only costs devtools spans and `%c` colors.
+#[cfg(any(feature = "wasm", test))]
 fn workerd_from_user_agent(user_agent: Option<&str>) -> bool {
     match user_agent {
         Some(ua) => ua == "Cloudflare-Workers",
@@ -190,8 +203,9 @@ mod workerd_detection_tests {
 pub(crate) type UnitMappingPairs = Vec<(Measure, Measure)>;
 
 /// A measurement value + unit (mirrors `Measure`).
-#[derive(Tsify, Serialize, Deserialize, Clone)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WAmount {
     pub unit: String,
     pub value: f64,
@@ -248,22 +262,23 @@ impl From<Measure> for WAmount {
 /// for the TS `UnitMapping`. Stored DB rows and synthesized food/price edges
 /// carry `sourceMetadata`; plain conversion inputs don't need it (serde ignores
 /// it on the way in, skips it when absent).
-#[derive(Tsify, Serialize, Deserialize, Clone)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WUnitMapping {
     pub a: WAmount,
     pub b: WAmount,
     // `string | null`, not `string`: callers pass DB rows with a nullable
     // `source` column (serde maps a JSON `null` to `None`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional, type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "string | null"))]
     pub source: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         rename = "sourceMetadata"
     )]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub source_metadata: Option<WSourceMetadata>,
 }
 
@@ -275,8 +290,9 @@ impl WUnitMapping {
 
 /// `WUnitMapping[]` as a single wasm arg/return (wasm-bindgen can't take a bare
 /// `Vec<TsifyStruct>` parameter); `transparent` → `type WUnitMappings = WUnitMapping[]`.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(transparent)]
 pub struct WUnitMappings(pub Vec<WUnitMapping>);
 
@@ -287,6 +303,7 @@ impl WUnitMappings {
 }
 
 // serde boundary helpers shared by the export modules.
+#[cfg(feature = "wasm")]
 pub(crate) fn from_js<T: for<'de> Deserialize<'de>>(
     v: impl Into<JsValue>,
     ctx: &str,
@@ -294,6 +311,7 @@ pub(crate) fn from_js<T: for<'de> Deserialize<'de>>(
     serde_wasm_bindgen::from_value(v.into()).map_err(|e| format!("Failed to parse {ctx}: {e}"))
 }
 
+#[cfg(feature = "wasm")]
 pub(crate) fn to_js<T: Serialize>(v: &T, ctx: &str) -> Result<JsValue, String> {
     serde_wasm_bindgen::to_value(v).map_err(|e| format!("Failed to serialize {ctx}: {e}"))
 }

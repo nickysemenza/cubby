@@ -9,7 +9,6 @@ import type { FinancialMailEvent } from "@cubby/schemas/financial-mail-event";
 import type { EmailId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { wasm } from "~/lib/wasm";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
@@ -26,6 +25,7 @@ import {
   retainedMailProjection,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
+import { wasm } from "~/server/wasm";
 
 export type PreparedMailFinancialEvent = Readonly<{
   event: FinancialMailEvent;

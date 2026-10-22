@@ -6,15 +6,18 @@
 //! binding checks. Dates stay platform code (no timezone database here).
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 use crate::{WMeasureEstimate, WUnavailableReason};
 
 /// Which rounding convention a compact nutrition figure uses.
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "lowercase")]
-#[tsify(from_wasm_abi)]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub enum WCompactUnit {
     /// A whole number, halves rounding up.
     Kcal,
@@ -187,9 +190,10 @@ pub fn compact_estimate_text(estimate: &WMeasureEstimate, unit: WCompactUnit) ->
 }
 
 /// Which number rule a long-form estimate label uses.
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "lowercase")]
-#[tsify(from_wasm_abi)]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub enum WEstimateMeasure {
     /// USD with cents.
     Cost,
@@ -277,25 +281,25 @@ pub fn currency_range_text(lower: f64, upper: Option<f64>) -> String {
 
 /// USD currency text. `min_fraction_digits`/`max_fraction_digits` default the
 /// way `Intl` does for USD at the call site (2 and 2).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_currency(value: f64, min_fraction_digits: u32, max_fraction_digits: u32) -> String {
     format_currency_usd(value, min_fraction_digits, max_fraction_digits)
 }
 
 /// A bare numeric field; see [`format_number_plain`].
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_number(value: f64) -> String {
     format_number_plain(value)
 }
 
 /// The one-line macro/cost cell; see [`compact_estimate_text`].
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_compact_estimate(estimate: WMeasureEstimate, unit: WCompactUnit) -> String {
     compact_estimate_text(&estimate, unit)
 }
 
 /// The long-form estimate label; see [`estimate_label_text`].
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_estimate(
     estimate: WMeasureEstimate,
     measure: WEstimateMeasure,
@@ -305,13 +309,13 @@ pub fn format_estimate(
 }
 
 /// A bare calorie figure; see [`kcal_text`].
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_kcal(value: f64) -> String {
     kcal_text(value)
 }
 
 /// A USD range; see [`currency_range_text`].
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_currency_range(lower: f64, upper: Option<f64>) -> String {
     currency_range_text(lower, upper)
 }

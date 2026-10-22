@@ -85,6 +85,7 @@
     // channel, so the compiler version is keyed too.
     "rustGate": [
       "{workspaceRoot}/recipebridge/**/*",
+      "{workspaceRoot}/cookbook-wasm/**/*",
       "{workspaceRoot}/cubby-ffi/**/*",
       "{workspaceRoot}/Cargo.{toml,lock}",
       "{workspaceRoot}/rust-toolchain.toml",

@@ -14,7 +14,7 @@ import type {
   MailEvent,
 } from "@cubby/schemas/mailbox-research";
 
-import { wasm } from "~/lib/wasm";
+import { wasm } from "~/server/wasm";
 
 import type { MailRuleCandidate } from "../repo/mail-rule-evidence";
 

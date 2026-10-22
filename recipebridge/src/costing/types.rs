@@ -6,6 +6,7 @@
 //! undefined/null distinction (serde-wasm-bindgen emits `undefined` for None).
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
 
 use super::consumption::PlanTrio;
@@ -14,7 +15,8 @@ use ingredient::usage::IngredientUsage;
 use crate::{WAmount, WConversionStep, WNamedEstimate, WNutritionTotals, WProductInput};
 
 /// Row kind (the zod `kind: "ingredient" | "recipe"`).
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "lowercase")]
 pub enum WRowKind {
     Ingredient,
@@ -22,7 +24,8 @@ pub enum WRowKind {
 }
 
 /// One flattened section-ingredient row, as the engine consumes it.
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WCostingRow {
     /// The section-ingredient row id (diagnostics key).
     pub id: String,
@@ -40,45 +43,48 @@ pub struct WCostingRow {
     #[serde(default)]
     pub amounts: Vec<WAmount>,
     #[serde(default)]
-    #[tsify(type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "string | null"))]
     pub modifier: Option<String>,
     #[serde(default)]
-    #[tsify(type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "string | null"))]
     pub raw_line: Option<String>,
     /// The enclosing section's name — some usage classifications are
     /// section-level ("For the marinade", "Brine"), not line-level.
     #[serde(default)]
-    #[tsify(type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "string | null"))]
     pub section_name: Option<String>,
 }
 
 /// One recipe in the costing closure (a root or a transitively-reached sub).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WCostingRecipe {
     pub id: String,
     /// Structured yield — required for this recipe to be costable as a
     /// sub-recipe of another.
     #[serde(default)]
-    #[tsify(type = "WAmount | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WAmount | null"))]
     pub recipe_yield: Option<WAmount>,
     pub rows: Vec<WCostingRow>,
 }
 
 /// An ingredient with its linked products (each serialized ONCE per call,
 /// however many rows reference it).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WCostingIngredient {
     pub id: String,
     pub products: Vec<WProductInput>,
     #[serde(default)]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub nutrient_opt_out_codes: Vec<String>,
 }
 
 /// One nutrient conversion target. TS stays the source of truth for the tier-1
 /// list; `unit` is the target string ("g protein") — `"kcal"` is special-cased
 /// to `MeasureKind::Calories` (Unit::KCal ≠ Unit::Other("kcal") in the graph).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNutrientTarget {
     /// USDA nutrient code ("203", "208", …) — keys the output entries.
     pub code: String,
@@ -87,8 +93,9 @@ pub struct WNutrientTarget {
 
 /// Everything one `cost_recipes` call needs: the recipe closure, the deduped
 /// ingredient map, the nutrient targets, and the explain flag.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WCostingInput {
     /// Recipes to produce results for (each must appear in `recipes`).
     pub root_ids: Vec<String>,
@@ -104,25 +111,28 @@ pub struct WCostingInput {
 
 /// One resolved measure: the zod `measureDiagnostic` union,
 /// `{ok:true,value,unit} | {ok:false,error}`.
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WMeasureOk {
-    #[tsify(type = "true")]
+    #[cfg_attr(feature = "wasm", tsify(type = "true"))]
     pub ok: bool,
     pub value: f64,
     pub unit: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub upper_value: Option<f64>,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WMeasureErr {
-    #[tsify(type = "false")]
+    #[cfg_attr(feature = "wasm", tsify(type = "false"))]
     pub ok: bool,
     pub error: String,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(untagged)]
 pub enum WMeasureResult {
     Ok(WMeasureOk),
@@ -141,12 +151,13 @@ impl WMeasureResult {
 /// One converted nutrient (`code` is the USDA nutrient code from the target).
 /// `upper_value` is the range upper bound when the amount was a range (e.g.
 /// "2–3 cups") or a ranged sub-recipe rolled up; absent for point amounts.
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNutrientAmount {
     pub code: String,
     pub value: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub upper_value: Option<f64>,
 }
 
@@ -154,7 +165,8 @@ pub struct WNutrientAmount {
 /// rows that can fully provide this exact target; it deliberately does not
 /// reuse the broader `missing_by_type.nutrients`, since a row can resolve (say)
 /// sodium while still lacking kcal or protein.
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNutrientCoverage {
     /// USDA nutrient code from `WCostingInput.nutrient_targets`.
     pub code: String,
@@ -164,21 +176,24 @@ pub struct WNutrientCoverage {
 /// All of a row's resolved nutrients, or the error every code shares. The TS
 /// wrapper derives the zod `nutrientDiagnostic` summary ({kcal, nutrientCount})
 /// from the entries.
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNutrientsOk {
-    #[tsify(type = "true")]
+    #[cfg_attr(feature = "wasm", tsify(type = "true"))]
     pub ok: bool,
     pub entries: Vec<WNutrientAmount>,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WNutrientsErr {
-    #[tsify(type = "false")]
+    #[cfg_attr(feature = "wasm", tsify(type = "false"))]
     pub ok: bool,
     pub error: String,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(untagged)]
 pub enum WNutrientsResult {
     Ok(WNutrientsOk),
@@ -195,19 +210,21 @@ impl WNutrientsResult {
 }
 
 /// Unit-graph routes per measure (explain mode only; None = no path).
-#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WRowPaths {
-    #[tsify(type = "WConversionStep[] | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WConversionStep[] | null"))]
     pub money: Option<Vec<WConversionStep>>,
-    #[tsify(type = "WConversionStep[] | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WConversionStep[] | null"))]
     pub weight: Option<Vec<WConversionStep>>,
-    #[tsify(type = "WConversionStep[] | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WConversionStep[] | null"))]
     pub calories: Option<Vec<WConversionStep>>,
 }
 
 /// Per-row totals completeness. A measure can carry a numeric value and still be
 /// incomplete when it comes from a sub-recipe whose own totals are partial.
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WRowMissing {
     pub price: bool,
     pub weight: bool,
@@ -218,12 +235,13 @@ pub struct WRowMissing {
 /// fields serialize to the zod `rowDiagnostic` shape; `own_gram`/`estimated`
 /// are the extra per-row data the table view consumes (display trio = the
 /// resolved trio; baker % uses the pre-estimate own gram).
-#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WRowResult {
     pub id: String,
     pub name: String,
     #[serde(rename = "sectionName")]
-    #[tsify(type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "string | null"))]
     pub section_name: Option<String>,
     pub kind: WRowKind,
     pub usage: IngredientUsage,
@@ -231,7 +249,7 @@ pub struct WRowResult {
     pub plan: PlanTrio,
     /// Basis weight (g) deferred rows estimated from; None for pass-1 rows.
     #[serde(rename = "basisGrams")]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub basis_grams: Option<f64>,
     pub price: WMeasureResult,
     pub gram: WMeasureResult,
@@ -245,7 +263,7 @@ pub struct WRowResult {
     /// The row's own-amount gram weight, pre-estimate — baker's percentage
     /// parity with the old `createIngredientData` trio. None when the row has
     /// no own amount or no weight path.
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub own_gram: Option<f64>,
     /// True when any measure was adjusted away from the written amount
     /// (the "est."/"absorbed" markers).
@@ -254,22 +272,24 @@ pub struct WRowResult {
     /// base) — computed from the row name, not caller-provided.
     pub is_flour: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub paths: Option<WRowPaths>,
 }
 
 /// Baker's percentage per row: own grams ÷ total flour grams × 100. None when
 /// the row has no gram weight or no flour was detected.
-#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WBakerPct {
     pub row_id: String,
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub pct: Option<f64>,
 }
 
 /// Names of rows whose measure couldn't resolve, per measure (display names,
 /// in resolution order — pass-1 rows then pass-2 rows).
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WMissingByType {
     pub price: Vec<String>,
     pub weight: Vec<String>,
@@ -277,18 +297,19 @@ pub struct WMissingByType {
 }
 
 /// One recipe's full costing result.
-#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WRecipeCosting {
     pub recipe_id: String,
     pub price: f64,
     /// Upper bound of the total cost when any contributing row was ranged;
     /// absent when the recipe has no ranged amounts (so it renders as one number).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub price_upper: Option<f64>,
     pub weight: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub weight_upper: Option<f64>,
     /// Summed nutrients, first-appearance order.
     pub nutrients: Vec<WNutrientAmount>,
@@ -306,8 +327,9 @@ pub struct WRecipeCosting {
 }
 
 /// The `cost_recipes` result: one entry per `root_ids` element, in order.
-#[derive(Tsify, Serialize, Deserialize, Debug)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WCostingResult {
     pub recipes: Vec<WRecipeCosting>,
 }

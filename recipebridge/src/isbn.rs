@@ -4,27 +4,30 @@
 //! Ported from the deleted `packages/schemas/src/isbn.ts` (see
 //! `packages/schemas/src/isbn.unit.test.ts`'s former golden cases, now inline
 //! below) so both the web (via wasm) and the native app (via `cubby-ffi`,
-//! which calls these `pub fn`s directly — a `#[wasm_bindgen]` function stays
-//! a plain callable Rust item off wasm32) read the exact same check-digit
+//! which calls these `pub fn`s directly; without the `wasm` feature they are
+//! plain Rust items) read the exact same check-digit
 //! logic. `packages/schemas` cannot depend on this crate (no WASM in that
 //! package), so callers there now validate at the repository boundary
 //! instead — see `apps/web/src/server/domains/product/repo/update-helpers.ts`'s
 //! `requireCanonicalIsbn`.
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 /// The single ISBN identity Cubby stores (mirrors the deleted TS
 /// `NormalizedIsbn`). `isbn10` exists only for the original 978 registration
 /// group — ISBN-13s outside it (979-*) have no ISBN-10 equivalent.
-#[derive(Tsify, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedIsbn {
     pub isbn13: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional, type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "string | null"))]
     pub isbn10: Option<String>,
     pub gtin14: String,
 }
@@ -131,7 +134,7 @@ fn from_isbn13(isbn13: &str) -> NormalizedIsbn {
 /// ISBN-13 is an EAN/GTIN. ISBN-10 is converted to its ISBN-13 equivalent
 /// before storage, so a title cannot acquire two external-id rows merely
 /// because two callers used different printed encodings.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn normalize_isbn(value: &str) -> Option<NormalizedIsbn> {
     let compact = compact_isbn(value);
     // Every subsequent branch slices `compact` at byte offsets computed from
@@ -157,7 +160,7 @@ pub fn normalize_isbn(value: &str) -> Option<NormalizedIsbn> {
 
 /// Derive the ISBN identity from a stored GTIN-14 (the `0` + ISBN-13 shape
 /// every ISBN is persisted as).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn isbn_from_gtin(value: &str) -> Option<NormalizedIsbn> {
     if value.len() != 14 || !value.starts_with('0') || !value.chars().all(|c| c.is_ascii_digit()) {
         return None;
@@ -178,7 +181,7 @@ pub fn isbn_from_gtin(value: &str) -> Option<NormalizedIsbn> {
 /// Returns the canonical GTIN-14, matching how barcodes are stored, or `None`
 /// when the book declares no ISBN at all (common for EPUBs built from web
 /// sources).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn isbn_from_epub_identifiers(identifiers: Vec<String>) -> Option<String> {
     identifiers
         .iter()
@@ -202,7 +205,7 @@ fn strip_isbn_scheme(raw: &str) -> String {
 /// Search spellings for a stored book barcode. The canonical GTIN remains
 /// first so callers that do not care about books preserve their existing
 /// behavior.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn product_code_search_terms(value: &str) -> Vec<String> {
     let normalized = isbn_from_gtin(value).or_else(|| normalize_isbn(value));
     match normalized {
@@ -224,7 +227,7 @@ pub fn product_code_search_terms(value: &str) -> Vec<String> {
 /// zero-padded to 14. Anything else -- letters, the wrong digit count, a bad
 /// check digit, empty input -- is `None`. The pure-TS `normalizeGtin`
 /// (`@cubby/shared/upc`) applies the same check digit.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scan_code_gtin14(raw: &str) -> Option<String> {
     if let Some(normalized) = normalize_isbn(raw) {
         return Some(normalized.gtin14);

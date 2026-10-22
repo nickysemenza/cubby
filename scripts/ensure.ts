@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // One artifact entrypoint; Nx owns cached generation/builds and restoration.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ROOT, command, rustFingerprint } from "./rust-fingerprint.ts";
+import { ROOT } from "./rust-fingerprint.ts";
 
 const usage =
   "Usage: ensure.ts generate [--force|--postinstall] | wasm [--build|--fingerprint] | apple-ffi [--build|--fingerprint]";
@@ -62,82 +61,9 @@ if (target === "generate") {
     }
   }
 } else if (target === "wasm") {
-  // wasm-pack accepts only --release; workspace member profiles are ignored.
-  // Fingerprinting and building use these same settings.
-  process.env.CARGO_TARGET_DIR ??= join(homedir(), ".cache/cubby/cargo-target");
-  Object.assign(process.env, {
-    CARGO_PROFILE_RELEASE_OPT_LEVEL: "z",
-    CARGO_PROFILE_RELEASE_LTO: "true",
-    CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1",
-    CARGO_PROFILE_RELEASE_PANIC: "abort",
-    CARGO_PROFILE_RELEASE_INCREMENTAL: "false",
-  });
-  const fingerprint = () => {
-    const tools = [
-      command("wasm-pack", ["--version"]),
-      readFileSync(fileURLToPath(import.meta.url), "utf8"),
-    ];
-    try {
-      tools.push(command("wasm-opt", ["--version"]));
-    } catch {
-      tools.push("wasm-pack-managed optimizer");
-    }
-    return rustFingerprint(join(ROOT, "Cargo.toml"), tools);
-  };
-  if (mode === "--fingerprint") console.log(fingerprint());
-  else if (mode === "--build") {
-    for (const [output, source, flags] of [
-      ["worker", "recipebridge", []],
-      ["browser", "recipebridge", ["--", "--no-default-features"]],
-      ["cookbook", "recipebridge/cookbook", []],
-    ] as const) {
-      execFileSync(
-        "wasm-pack",
-        [
-          "build",
-          "--no-pack",
-          "--out-dir",
-          join(ROOT, "packages/wasm", output),
-          join(ROOT, source),
-          ...flags,
-        ],
-        { cwd: ROOT, stdio: "inherit" },
-      );
-    }
-  } else runNxTarget("wasm");
+  const { prepareWasm } = await import("./wasm.ts");
+  prepareWasm(mode, () => runNxTarget("wasm"));
 } else {
-  const profile = process.env.CUBBY_FFI_PROFILE ?? "release";
-  const targets = process.env.CUBBY_FFI_TARGETS ?? "all";
-  if (!["all", "sim", "device", "mac"].includes(targets))
-    throw new Error(
-      `CUBBY_FFI_TARGETS must be one of all|sim|device|mac, got ${targets}`,
-    );
-  const key = rustFingerprint(join(ROOT, "Cargo.toml"), [
-    command("xcodebuild", ["-version"]),
-    command("uname", ["-m"]),
-    `profile=${profile}`,
-    `targets=${targets}`,
-  ]);
-  const marker = join(
-    ROOT,
-    "apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework/.fingerprint",
-  );
-  if (mode === "--fingerprint") console.log(key);
-  else if (mode === "--build") {
-    execFileSync(
-      join(ROOT, "apps/apple/scripts/build-rust.sh"),
-      ["--profile", profile, "--targets", targets],
-      { cwd: ROOT, stdio: "inherit" },
-    );
-    writeFileSync(marker, `${key}\n`);
-  } else if (
-    existsSync(
-      join(ROOT, "apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift"),
-    ) &&
-    existsSync(marker) &&
-    readFileSync(marker, "utf8").trim() === key
-  ) {
-    // Avoid touching shim mtimes and triggering native recompilation on replay.
-    console.log("apple-ffi: CubbyFFI.xcframework is current");
-  } else runNxTarget("apple-ffi");
+  const { prepareAppleFfi } = await import("./apple-ffi.ts");
+  prepareAppleFfi(mode, () => runNxTarget("apple-ffi"));
 }

@@ -7,6 +7,7 @@ use image::{
     codecs::{gif::GifDecoder, jpeg::JpegDecoder, png::PngDecoder},
     metadata::Orientation,
 };
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 const MAX_SOURCE: usize = 3 * 1024 * 1024;
@@ -133,7 +134,7 @@ fn finish_image(decoded: DynamicImage, orientation: Orientation) -> DynamicImage
 }
 
 /// Private byte-in/byte-out Worker export. Refusals are missing evidence, never negatives.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn prepare_model_image(bytes: &[u8], detail: bool) -> Result<Vec<u8>, String> {
     if bytes.len() > MAX_SOURCE {
         return Err("Image exceeds source byte budget".into());

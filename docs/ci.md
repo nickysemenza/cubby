@@ -210,10 +210,24 @@ later compilation speed, not the validity of Nx's cached pass.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is
-the separate wasm-only `recipebridge/cookbook` crate, and `cubby-ffi` turns off
-`recipebridge`'s Worker-only default features (`html`, `ai-usage`), so Apple
-targets compile neither the cookbook crate nor `page.rs`. The `rust` target
-also lints `recipebridge --no-default-features`, the browser build.
+the separate wasm-only sibling `cookbook-wasm` crate. `cubby-ffi` turns off
+`recipebridge`'s default features and never enables `wasm`, so Apple targets
+compile neither Worker-only capabilities nor WASM binding dependencies.
+The browser uses `--no-default-features --features wasm`; the Worker enables
+`wasm` alongside the default capabilities. The Rust gate checks both WASM
+bindings and the plain native core; `cookbook-wasm:rust` owns the EPUB adapter's
+formatting and Clippy checks.
+
+`scripts/ensure.ts` dispatches to `scripts/wasm.ts` and `scripts/apple-ffi.ts`.
+Their artifact keys hash reachable normal/build dependencies from Cargo's
+resolved graph, local dependency contents, root workspace profiles and inherited package/lint settings,
+Cargo configuration, compiler/tool versions, and build-affecting environment.
+Development-only dependencies and unrelated workspace crates do not enter an
+artifact's graph. All target conditions remain included so cross-compilation
+retains host build-script and proc-macro dependencies. Resolved features are
+conservatively unified by Cargo metadata across the workspace. Nx uses this
+same fingerprint instead of independently hashing the entire lockfile or
+workspace; the Apple marker fast path includes those same profile settings.
 The unused local Rust model-pricing export is removed; Cubby usage pricing
 reads `models.dev` in TypeScript. Cookbook's upstream pricing table remains
 transitive until the [pricing consolidation](https://github.com/nickysemenza/cubby/issues/2297) is completed.

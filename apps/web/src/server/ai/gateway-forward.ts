@@ -1,4 +1,4 @@
-import type { WGatewayCallUsage } from "@cubby/recipebridge";
+import type { WGatewayCallUsage } from "@cubby/recipebridge/worker";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   gatewayForwardInput,
@@ -17,11 +17,11 @@ import { createParser } from "eventsource-parser";
 import { z } from "zod";
 
 import { type UnparsedError } from "~/lib/error-utils";
-import { wasm } from "~/lib/wasm";
 import { withAiBudget } from "~/server/ai/budget";
 import { gatewayFetch, type GatewayTransport } from "~/server/ai/gateway";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
+import { wasm } from "~/server/wasm";
 
 const REQUEST_TIMEOUT_MS = 120_000;
 

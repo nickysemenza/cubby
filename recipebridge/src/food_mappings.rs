@@ -14,34 +14,38 @@ use ingredient::{
     unit::{Measure, Unit, singular},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 use crate::{WAmount, WUnitMapping, WUnitMappings};
 
 /// One USDA food portion row (the mapping-relevant subset of `FoodPortion`).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WFoodPortion {
     pub amount: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional, type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(optional, type = "string | null"))]
     pub modifier: Option<String>,
     pub gram_weight: f64,
 }
 
 /// Branded-food serving metadata, nullable fields straight off the USDA row.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WFoodServing {
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub serving_size: Option<f64>,
     #[serde(default)]
-    #[tsify(type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "string | null"))]
     pub serving_size_unit: Option<String>,
     #[serde(default)]
-    #[tsify(type = "string | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "string | null"))]
     pub household_serving_fulltext: Option<String>,
 }
 
@@ -49,21 +53,23 @@ pub struct WFoodServing {
 /// USDA reports in the label's unit. Pre-filtered (tier-1 only) and
 /// pre-labeled by TS — `unit` is the conversion target string ("g protein",
 /// "mg sodium", "kcal"), keeping `TIER1_NUTRIENTS` TS-owned.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WNutrientPer100 {
     pub unit: String,
     pub amount: f64,
 }
 
 /// The mapping-relevant subset of a USDA `FoodSummary`.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WFoodInput {
     pub fdc_id: u32,
     pub portions: Vec<WFoodPortion>,
     #[serde(default)]
-    #[tsify(type = "WFoodServing | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WFoodServing | null"))]
     pub serving: Option<WFoodServing>,
     pub nutrients_per_100: Vec<WNutrientPer100>,
 }
@@ -72,24 +78,26 @@ pub struct WFoodInput {
 /// synthesized edges derive from. All fields required on purpose (mirrors the
 /// TS `getAllUnitMappingsFromProduct` contract): omitting one would silently
 /// drop a synthesized edge.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WProductInput {
     pub id: String,
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub price: Option<f64>,
     /// Stored DB rows — pass through verbatim, keeping their own metadata.
     pub unit_mappings: Vec<WUnitMapping>,
     #[serde(default)]
-    #[tsify(type = "WFoodInput | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WFoodInput | null"))]
     pub food: Option<WFoodInput>,
 }
 
 /// Provenance of a mapping (mirrors the TS `sourceMetadata` discriminated union
 /// in `@cubby/schemas/unitmapping` — same tag + field names).
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum WSourceMetadata {
     Product {
@@ -101,7 +109,7 @@ pub enum WSourceMetadata {
             skip_serializing_if = "is_false",
             deserialize_with = "deserialize_inferred_zero"
         )]
-        #[tsify(optional)]
+        #[cfg_attr(feature = "wasm", tsify(optional))]
         inferred_zero: bool,
     },
     Food {
@@ -385,7 +393,7 @@ pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> Produc
 /// All unit mappings derivable from one USDA food: portion edges, the
 /// (bare-count-guarded) branded serving edge, and per-nutrient `100 g = X`
 /// edges. The TS `unitMappingsFromFood` is a thin wrapper over this.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn unit_mappings_from_food(food: WFoodInput) -> WUnitMappings {
     WUnitMappings(mappings_from_food(&food))
 }
@@ -394,7 +402,7 @@ pub fn unit_mappings_from_food(food: WFoodInput) -> WUnitMappings {
 /// and the synthesized `1 each = $price` edge. The TS
 /// `getAllUnitMappingsFromProduct` is a thin wrapper over this; the costing
 /// engine consumes the same synthesis internally.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn product_unit_mappings(product: WProductInput) -> WUnitMappings {
     WUnitMappings(product_mappings(&product))
 }

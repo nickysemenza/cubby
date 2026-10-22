@@ -1,7 +1,7 @@
 /** Failures: missing originals classify negatively; completeness diagnostics override a definite model
  * decision or hide omitted evidence; HTML alone forces `uncertain`; escaping, Unicode or
  * transport headers push the view past the decision model's request gate. */
-import * as recipebridge from "@cubby/recipebridge";
+import * as recipebridge from "@cubby/recipebridge/worker";
 import { describe, expect, it, vi } from "vitest";
 
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";

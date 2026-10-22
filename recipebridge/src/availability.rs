@@ -20,7 +20,9 @@ use ingredient::unit::{
     Measure, MeasureGraph, MeasureKind, convert_measure_with_graph, make_graph,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 use crate::WAmount;
@@ -34,8 +36,9 @@ const COVERAGE_EPSILON: f64 = 1e-6;
 
 /// One need: an authored amount plus the index of the line that needs it, echoed
 /// back in `sources` so the caller can attribute each contribution to its meal.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WAvailabilityNeed {
     pub amount: WAmount,
     pub line_index: u32,
@@ -43,8 +46,9 @@ pub struct WAvailabilityNeed {
 
 /// One product backing an ingredient: its synthesis input (mappings derived
 /// Rust-side) plus the on-hand inventory entries for that product.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WAvailabilityProduct {
     pub product: WProductInput,
     pub on_hand: Vec<WAmount>,
@@ -53,8 +57,9 @@ pub struct WAvailabilityProduct {
 /// One ingredient's needs against its inventory. `key` is opaque — echoed back so
 /// the caller can zip results onto its own rows (a row index for recipe
 /// availability, an ingredient id for the aggregated shopping list).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WAvailabilityGroup {
     pub key: String,
     /// Household planning metadata. This never changes the inventory verdict:
@@ -66,17 +71,19 @@ pub struct WAvailabilityGroup {
     pub products: Vec<WAvailabilityProduct>,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
 pub struct WAvailabilityInput {
     pub groups: Vec<WAvailabilityGroup>,
 }
 
 /// Status verdict. Mirrors the zod `ingredientAvailabilityStatus` minus
 /// `subrecipe` (sub-recipes never reach the evaluator — the caller handles them).
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 // `from_wasm_abi` too: `availability_status_for` takes a prior verdict back in.
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(rename_all = "lowercase")]
 pub enum WAvailabilityStatus {
     /// Enough on hand.
@@ -90,54 +97,58 @@ pub enum WAvailabilityStatus {
 }
 
 /// One need's contribution, in the basis unit, tagged with its line index.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WAvailabilitySource {
     pub line_index: u32,
     /// Null when the group needs cannot be expressed in one comparable unit.
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub need_value: Option<f64>,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[serde(rename_all = "lowercase")]
 pub enum WAvailabilitySourceKind {
     Inventory,
     Assumed,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WAvailabilityGroupResult {
     pub key: String,
     pub basis_unit: String,
     /// Null when authored needs use incompatible units. This is deliberately
     /// distinct from `have_value: null`, which means stock cannot be compared.
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub need_value: Option<f64>,
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub have_value: Option<f64>,
     pub status: WAvailabilityStatus,
     /// Planning coverage, which may be satisfied by `usually_on_hand` while
     /// `status` still records missing or uncertain actual stock.
     pub covered: bool,
     #[serde(default)]
-    #[tsify(type = "WAvailabilitySourceKind | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WAvailabilitySourceKind | null"))]
     pub availability_source: Option<WAvailabilitySourceKind>,
     /// `need - have`, floored at zero. `None` when on-hand isn't known — see
     /// `shortfall_for`.
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub shortfall: Option<f64>,
     pub sources: Vec<WAvailabilitySource>,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WAvailabilityResult {
     pub groups: Vec<WAvailabilityGroupResult>,
 }
@@ -208,7 +219,7 @@ fn shortfall_for(
 /// A `None` on-hand means either "no inventory" or "units don't reconcile", and
 /// only the original evaluation knows which, so `prior` stands. Everything else
 /// goes through the same comparison the evaluator uses.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn availability_status_for(
     need_value: f64,
     have_value: Option<f64>,
@@ -401,7 +412,7 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
 /// Evaluate availability for a batch of ingredient groups in one call. Each
 /// group is resolved independently; the caller shapes the results into
 /// `IngredientAvailability` / `AggregatedNeed`.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn evaluate_availability(input: WAvailabilityInput) -> WAvailabilityResult {
     WAvailabilityResult {
         groups: input.groups.iter().map(evaluate_group).collect(),

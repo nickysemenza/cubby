@@ -6,20 +6,30 @@ use std::{
     str::FromStr,
 };
 
+#[cfg(any(feature = "wasm", test))]
+use ingredient::unit::convert_measure_with_graph;
+#[cfg(feature = "wasm")]
+use ingredient::unit::convert_measure_with_graph_explained;
 use ingredient::unit::{
-    ConversionStep, Measure, MeasureKind, Unit, convert_measure_with_graph,
-    convert_measure_with_graph_explained, find_connected_components, is_valid, make_graph,
+    ConversionStep, Measure, MeasureKind, Unit, find_connected_components, is_valid, make_graph,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
-use crate::{WAmount, WMeasureOk, WMeasureResult, WUnitMappings, from_js, to_js};
+#[cfg(any(feature = "wasm", test))]
+use crate::WMeasureOk;
+use crate::{WAmount, WMeasureResult, WUnitMappings};
+#[cfg(feature = "wasm")]
+use crate::{from_js, to_js};
 
 /// One hop of an explained conversion path (mirrors `ConversionStep`). Units are
 /// the normalized graph nodes (cup amounts enter at `tsp`, money at `cent`).
-#[derive(Tsify, Serialize, Deserialize, Debug)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WConversionStep {
     pub from_unit: String,
     pub to_unit: String,
@@ -40,25 +50,30 @@ impl From<ConversionStep> for WConversionStep {
 /// produced it (both null when no path exists). The conversion's "show your
 /// work" — a bogus route (e.g. grams reaching money via a serving-count `whole`
 /// edge) reads right off the steps.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 pub struct WAmountExplained {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub result: Option<WAmount>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub path: Option<Vec<WConversionStep>>,
 }
 
 // Hand-authored boundary type that can't be derived: `AmountKind`, a
-// `nutrient:${string}` template-literal union.
+// `nutrient:${string}` template-literal union. Only the wasm build has a JS
+// value to carry it, so the exports that take or return it are wasm-only; their
+// native cores below take the kind as a string.
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "AmountKind")]
     pub type WAmountKind;
 }
 
+#[cfg(feature = "wasm")]
 #[wasm_bindgen(typescript_custom_section)]
 const HAND_AUTHORED_TS: &str = r#"
 type AmountKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other" | `nutrient:${string}`;
@@ -66,15 +81,16 @@ type AmountKind = "weight" | "volume" | "money" | "calories" | "time" | "tempera
 
 /// Disconnected components (islands) of a unit-mapping graph: a list of groups,
 /// each a list of unit strings. `transparent` → `type WUnitIslands = string[][]`.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WUnitIslands(pub Vec<Vec<String>>);
 
 /// Detect disconnected components (islands) in the unit-mapping graph. Infallible
 /// — `find_connected_components` always returns (an empty list when the graph is
 /// fully connected or has <2 nodes).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn detect_unit_mapping_islands(mappings: WUnitMappings) -> WUnitIslands {
     WUnitIslands(find_connected_components(&make_graph(&mappings.to_pairs())))
 }
@@ -82,8 +98,9 @@ pub fn detect_unit_mapping_islands(mappings: WUnitMappings) -> WUnitIslands {
 /// The built-in "native" bridge edges the unit-graph viz should draw, as
 /// `[unitA, unitB]` pairs in the caller's ORIGINAL unit strings. `transparent` →
 /// `type WUnitBridges = [string, string][]`.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WUnitBridges(pub Vec<(String, String)>);
 
@@ -105,7 +122,7 @@ pub struct WUnitBridges(pub Vec<(String, String)>);
 /// split across more than one piece, one edge per extra piece (preferring a
 /// same-kind endpoint pair so the bridge reads as a real conversion). A
 /// genuinely-disconnected unit — its own island — gets no edge.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn unit_graph_bridges(mappings: WUnitMappings) -> WUnitBridges {
     // Distinct original units in first-seen order (stable bridge endpoints).
     let mut units: Vec<String> = Vec::new();
@@ -240,6 +257,7 @@ fn pick_endpoints(a: &[usize], b: &[usize], kind_of: &impl Fn(usize) -> String) 
 /// the `map_err` is dead today — but keep it: it returns an error rather than
 /// panicking if upstream ever makes the parse fallible. `measure_kind_from_str_contract`
 /// pins the current behavior and would flag that change.
+#[cfg(any(feature = "wasm", test))]
 fn conv_to_kind_core(
     pairs: &[(Measure, Measure)],
     kind_str: &str,
@@ -253,6 +271,7 @@ fn conv_to_kind_core(
         .map(WAmount::from)
 }
 
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn conv_amount_to_kind(
     mappings: WUnitMappings,
@@ -265,15 +284,17 @@ pub fn conv_amount_to_kind(
 
 /// `WAmount[]` (`transparent` → `type WAmounts = WAmount[]`), the batched input
 /// for `conv_amounts_to_kind`.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(transparent)]
 pub struct WAmounts(pub Vec<WAmount>);
 
 /// `WMeasureResult[]` (`transparent` → `type WMeasureResults = WMeasureResult[]`),
 /// the batched output of `conv_amounts_to_kind`.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WMeasureResults(pub Vec<WMeasureResult>);
 
@@ -288,6 +309,7 @@ pub struct WMeasureResults(pub Vec<WMeasureResult>);
 /// A single unconvertible measure becomes an error result at its index (the same
 /// message `conv_to_kind_core` would return for it alone) rather than aborting
 /// the batch — one bad row must not blank out every other row's valuation.
+#[cfg(any(feature = "wasm", test))]
 fn conv_to_kind_core_batch(
     pairs: &[(Measure, Measure)],
     kind_str: &str,
@@ -320,6 +342,7 @@ fn conv_to_kind_core_batch(
 /// `conv_to_kind_core_batch` for the per-amount error semantics. The outer
 /// `Result` is only for whole-call failures (an invalid `target_kind_w`) — a
 /// per-amount miss is carried in-band as an `Err` element instead.
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn conv_amounts_to_kind(
     mappings: WUnitMappings,
@@ -334,6 +357,7 @@ pub fn conv_amounts_to_kind(
 /// Convert an amount to a target kind AND return the conversion path traversed
 /// (which unit-mapping edges, with their factors). Result/path are null when no
 /// path exists. Powers the costing debug/explain surfaces.
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn conv_amount_explain(
     mappings: WUnitMappings,
@@ -361,11 +385,12 @@ pub fn conv_amount_explain(
     )
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn is_valid_unit(unit: &str, extra_units: Vec<String>) -> bool {
     is_valid(&HashSet::from_iter(extra_units), unit)
 }
 
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
     let kind = amount.to_measure().kind();
@@ -379,7 +404,7 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
 /// TS calls this instead of multiplying `value` itself: the scalable-kind rule
 /// lives upstream in `Measure::scale`, and a second copy in TS is exactly the
 /// layering violation AGENTS.md forbids.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scale_amount(amount: WAmount, factor: f64) -> WAmount {
     amount.scale(factor)
 }
@@ -428,7 +453,7 @@ const SIZE_ALIAS_CANDIDATES: &[&str] = &[
 /// Longest-first ordering lets a caller `join("|")` straight into an
 /// alternation and get longest-match ("fl oz" beating "oz") without knowing to
 /// sort; ties break alphabetically so the output is stable across builds.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn size_unit_aliases() -> Vec<String> {
     let sized = |s: &str| {
         Unit::from_str(s)
@@ -461,7 +486,7 @@ pub fn size_unit_aliases() -> Vec<String> {
 // surface (pinned by exact git rev). `detect_unit_mapping_islands` and
 // `is_valid_unit` take native types and run
 // directly. `amount_kind` / `conv_amount_*` round-trip through `WAmountKind` (a
-// JsValue extern type) and so can't run natively — instead we pin the upstream
+// JsValue extern type, `wasm` only) and so can't run natively — instead we pin the upstream
 // engine they wrap (`Measure::kind`, `MeasureKind::from_str`,
 // `convert_measure_with_graph_explained`), which is the actual drift surface.
 // Complementary to the food_mappings.rs graph tests, not duplicative.

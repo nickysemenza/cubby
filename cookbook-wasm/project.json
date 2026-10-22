@@ -1,0 +1,12 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "cookbook-wasm",
+  "targets": {
+    "rust": {
+      "command": "cargo fmt --check && cargo clippy --locked --profile ci --all-targets -- -D warnings",
+      "options": { "cwd": "{projectRoot}" },
+      "cache": true,
+      "inputs": ["rustGate"]
+    }
+  }
+}

@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { digestTree } from "./lib/tree-digest.ts";
+import { digestFiles, walkFiles } from "./lib/tree-digest.ts";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Cargo.lock is skipped: the resolved graph it encodes is already hashed via
@@ -36,7 +36,10 @@ const PRUNE = new Set([
 export const sourceDigest = (directory: string): string => {
   if (!existsSync(directory))
     throw new Error(`Rust source directory not found: ${directory}`);
-  return digestTree(directory, { skip: (name) => PRUNE.has(name) });
+  return digestFiles(
+    directory,
+    walkFiles(directory, { skip: (name) => PRUNE.has(name) }),
+  );
 };
 
 export const sourceInputs = (roots: string[], workspace: string): string =>
@@ -49,8 +52,39 @@ export const sourceInputs = (roots: string[], workspace: string): string =>
       .sort(([left], [right]) => left.localeCompare(right)),
   );
 
-type CargoPackage = { manifest_path: string; source: string | null };
-type CargoMetadata = { packages: CargoPackage[] };
+type CargoPackage = {
+  id: string;
+  name: string;
+  manifest_path: string;
+  source: string | null;
+};
+type CargoDependency = {
+  pkg: string;
+  dep_kinds: { kind: string | null; target: string | null }[];
+};
+type CargoNode = { id: string; deps: CargoDependency[]; features: string[] };
+type CargoMetadata = {
+  packages: CargoPackage[];
+  workspace_root: string;
+  resolve: { nodes: CargoNode[] };
+};
+
+// Cargo metadata omits profiles and inherited lints in a virtual workspace.
+// Include shared package settings too: member manifests only name inheritance.
+// These settings participate in the marker fast path as well as Nx's key.
+const workspaceBuildSettings = (manifest: string): string =>
+  [
+    ...manifest.matchAll(
+      /^[\t ]*\[([^\n]+)\][^\n]*\n([\s\S]*?)(?=^[\t ]*\[|(?![\s\S]))/gm,
+    ),
+  ]
+    .filter((section) =>
+      /^(?:profile\.|workspace\.(?:package|lints)(?:\.|$))/u.test(
+        section[1] ?? "",
+      ),
+    )
+    .map((section) => section[0])
+    .join("");
 
 // This runs before workspace dependencies are installed in the native CI jobs.
 // SAFETY: Cargo owns the `--format-version=1` output contract and its command
@@ -74,13 +108,17 @@ export const command = (program: string, args: string[]) =>
 // hashed here.
 export const rustFingerprint = (
   manifestPath: string,
+  packageNames: string[],
   extra: string[],
+  features: string[] = [],
 ): string => {
   const metadataArgs = [
     "metadata",
     "--format-version=1",
     "--manifest-path",
     manifestPath,
+    "--no-default-features",
+    ...(features.length ? ["--features", features.join(",")] : []),
   ];
   let metadata: string;
   try {
@@ -91,16 +129,68 @@ export const rustFingerprint = (
   } catch {
     metadata = command("cargo", metadataArgs);
   }
-  const roots = new Set(
-    parseCargoMetadata(metadata)
-      .packages.filter((pkg) => pkg.source === null)
-      .map((pkg) => dirname(pkg.manifest_path)),
-  );
+  const graph = parseCargoMetadata(metadata);
+  const nodes = new Map(graph.resolve.nodes.map((node) => [node.id, node]));
+  const reachable = new Set<string>();
+  const visit = (id: string) => {
+    if (reachable.has(id)) return;
+    reachable.add(id);
+    const node = nodes.get(id);
+    if (!node) throw new Error(`Cargo resolution is missing ${id}`);
+    for (const dependency of node.deps) {
+      // Keep all target conditions: build scripts and proc macros execute on
+      // the host, even when the library is cross-compiled.
+      if (dependency.dep_kinds.some(({ kind }) => kind !== "dev"))
+        visit(dependency.pkg);
+    }
+  };
+  for (const name of packageNames) {
+    const pkg = graph.packages.find(
+      (pkg) => pkg.name === name && pkg.source === null,
+    );
+    if (!pkg) throw new Error(`Cargo artifact root not found: ${name}`);
+    visit(pkg.id);
+  }
+  const packages = graph.packages.filter((pkg) => reachable.has(pkg.id));
+  const roots = packages
+    .filter((pkg) => pkg.source === null)
+    .map((pkg) => dirname(pkg.manifest_path));
+  const localPaths = packages
+    .filter((pkg) => pkg.source === null)
+    .map((pkg) => [dirname(pkg.manifest_path), `<local:${pkg.name}>`] as const)
+    .sort(([left], [right]) => right.length - left.length);
+  const normalize = (value: string) => {
+    for (const [path, replacement] of localPaths)
+      value = value.replaceAll(path, replacement);
+    return value.replaceAll(ROOT, "<workspace>");
+  };
   const hash = createHash("sha256");
-  const add = (value: string) =>
-    hash.update(value.replaceAll(ROOT, "<workspace>"));
-  add(metadata);
-  add(sourceInputs([...roots], ROOT));
+  const add = (value: string) => hash.update(normalize(value)).update("\0");
+  add(readFileSync(fileURLToPath(import.meta.url), "utf8"));
+  add(readFileSync(join(ROOT, "scripts/lib/tree-digest.ts"), "utf8"));
+  add(JSON.stringify(packages.map(({ id }) => id).sort()));
+  add(
+    JSON.stringify(
+      graph.resolve.nodes
+        .filter((node) => reachable.has(node.id))
+        .map(({ id, features, deps }) => ({
+          id,
+          features,
+          deps: deps.filter(
+            (dep) =>
+              reachable.has(dep.pkg) &&
+              dep.dep_kinds.some(({ kind }) => kind !== "dev"),
+          ),
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id)),
+    ),
+  );
+  add(sourceInputs(roots, graph.workspace_root));
+  add(
+    workspaceBuildSettings(
+      readFileSync(join(graph.workspace_root, "Cargo.toml"), "utf8"),
+    ),
+  );
   // Cargo reads configuration from the invocation directory's ancestors and
   // CARGO_HOME. Preserve that behavior, including explicit local dev overrides.
   const configDirectories = new Set([

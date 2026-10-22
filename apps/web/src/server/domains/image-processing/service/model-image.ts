@@ -1,4 +1,4 @@
-import { wasm } from "~/lib/wasm";
+import { wasm } from "~/server/wasm";
 
 /** An unsupported, invalid or oversized input leaves purchase evidence missing. */
 export class ModelImageInputError extends Error {}
