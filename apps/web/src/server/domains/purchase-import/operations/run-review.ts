@@ -43,7 +43,7 @@ import {
   auditLog,
   photoGroupProposal,
   run as runTable,
-  runFinding,
+  assessmentState,
   runOperation,
   photoRunImage,
 } from "~/server/db/schema";
@@ -52,10 +52,12 @@ import {
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
 import { resolveRunFinding } from "../repo/findings";
+import { publishRunFinding, runFindingData } from "../repo/run-finding";
 import {
   loadRunScope,
   STALE_RUN_MS,
@@ -481,22 +483,18 @@ export async function auditImportBatch(
     )
       continue;
     const evidenceFingerprint = await sha256Hex(JSON.stringify(finding));
-    const [inserted] = await getDb(db)
-      .insert(runFinding)
-      .values({
-        runId: runId,
-        ledgerPartyId: scope.ledgerPartyId,
-        entityKind: relinkExpenseId ? "expense" : "purchase",
-        entityId: relinkExpenseId ?? finding.targetPurchaseId,
-        kind: finding.kind,
-        summary: finding.summary,
-        proposedFix: proposedFix,
-        evidenceFingerprint,
-        probability: finding.probability,
-      })
-      .onConflictDoNothing()
-      .returning({ id: runFinding.id });
-    if (!inserted) continue;
+    const inserted = await publishRunFinding(db, {
+      runId: runId,
+      ledgerPartyId: scope.ledgerPartyId,
+      entityKind: relinkExpenseId ? "expense" : "purchase",
+      entityId: relinkExpenseId ?? finding.targetPurchaseId,
+      kind: finding.kind,
+      summary: finding.summary,
+      proposedFix: proposedFix,
+      evidenceFingerprint,
+      probability: finding.probability,
+    });
+    if (!inserted.created) continue;
     stored += 1;
     if (finding.probability >= 0.95 && proposedFix?.kind === "relink_product") {
       try {
@@ -508,17 +506,21 @@ export async function auditImportBatch(
       } catch (error) {
         const detail =
           error instanceof Error ? error.message : "Automated fix was refused";
-        await getDb(db)
-          .update(runFinding)
-          .set({
-            summary: `${finding.summary} Auto-fix refused: ${detail}`.slice(
-              0,
-              1_000,
-            ),
-            proposedFix: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(runFinding.id, inserted.id));
+        await transitionAssessmentStates(
+          db,
+          eq(assessmentState.id, inserted.id),
+          (row) => ({
+            data: {
+              ...runFindingData.parse(row.data),
+              summary: `${finding.summary} Auto-fix refused: ${detail}`.slice(
+                0,
+                1_000,
+              ),
+              proposedFix: null,
+            },
+          }),
+          { kind: "run_finding_auto_fix_refused" },
+        );
       }
     }
   }
@@ -651,35 +653,16 @@ async function stopRunForReviewOnce(
       !(await staleRunStillEligible(tx, runId, input.staleBefore))
     )
       return { findingId: null };
-    const [finding] = await tx
-      .insert(runFinding)
-      .values({
-        runId: runId,
-        ledgerPartyId: scope.ledgerPartyId,
-        entityKind: "run",
-        entityId: runId,
-        kind,
-        summary,
-        evidenceFingerprint: fingerprint,
-      })
-      .onConflictDoNothing()
-      .returning({ id: runFinding.id });
-    const [existingFinding] = finding
-      ? []
-      : await tx
-          .select({ id: runFinding.id })
-          .from(runFinding)
-          .where(
-            and(
-              eq(runFinding.runId, runId),
-              eq(runFinding.entityKind, "run"),
-              eq(runFinding.entityId, runId),
-              eq(runFinding.kind, kind),
-              eq(runFinding.evidenceFingerprint, fingerprint),
-              eq(runFinding.status, "open"),
-            ),
-          )
-          .limit(1);
+    const finding = await publishRunFinding(tx, {
+      runId: runId,
+      ledgerPartyId: scope.ledgerPartyId,
+      entityKind: "run",
+      entityId: runId,
+      kind,
+      summary,
+      proposedFix: null,
+      evidenceFingerprint: fingerprint,
+    });
     await tx
       .update(photoRunImage)
       .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
@@ -712,7 +695,7 @@ async function stopRunForReviewOnce(
     // Email to return, and stopping it for review must never fail on parsing one.
     if (stopped?.purpose === "mail_import" && stopped.input !== null)
       await releaseUnsettledMailRunSources(tx, runId);
-    return { findingId: finding?.id ?? existingFinding?.id ?? null };
+    return { findingId: finding.open ? finding.id : null };
   });
 }
 

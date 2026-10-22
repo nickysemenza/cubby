@@ -6,12 +6,12 @@ import { describe, expect, it } from "vitest";
 
 import { parseEntityTimelineInput } from "~/entity/generated/entity-timelines.gen";
 import { householdLocalDate } from "~/lib/household-date";
-import { getDb } from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { defaultTimeline } from "./default-timeline";
@@ -276,17 +276,18 @@ describe("default entity timeline", () => {
     const codes = Array.from({ length: 5 }, (_, index) =>
       testShortcode("task", `page-${index}`),
     );
-    await getDb(ctx.db)
-      .insert(task)
-      .values(
-        codes.map((shortcode, index) => ({
-          shortcode,
-          name: `Paged ${index}`,
-          status: "not_started" as const,
-          trade: "other" as const,
-          createdAt: new Date(Date.UTC(2026, 0, 1 + index)),
-        })),
-      );
+    await insertEntityFixtures(
+      ctx.db,
+      task,
+      "task",
+      codes.map((shortcode, index) => ({
+        shortcode,
+        name: `Paged ${index}`,
+        status: "not_started" as const,
+        trade: "other" as const,
+        createdAt: new Date(Date.UTC(2026, 0, 1 + index)),
+      })),
+    );
     const page = async (pageIndex: number) => {
       const out = await timeline({ order: "desc" }, { pageIndex, pageSize: 2 });
       return { out, ids: (out.rows ?? []).map((row) => row.id) };

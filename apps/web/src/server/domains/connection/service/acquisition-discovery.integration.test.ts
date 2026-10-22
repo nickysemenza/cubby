@@ -6,8 +6,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
-import { getDb } from "~/server/db/helpers";
-import { derivedRefreshWork } from "~/server/db/schema";
 import {
   discoverAcquisitionCandidates,
   discoverAcquisitionCandidateScan,
@@ -116,9 +114,6 @@ describe("acquisition Expense discovery gating", () => {
     );
     await refreshSearchDocument(ctx.db, "product", runner.entityId);
     await refreshSearchDocument(ctx.db, "product", missing.entityId);
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: false });
     expect(semanticEmbeddingsConfigured()).toBe(true);
     expect(
       await hasUnembeddedSearchDocuments(ctx.db, getSemanticEmbeddingConfig(), [
@@ -170,9 +165,6 @@ describe("acquisition Expense discovery gating", () => {
     const lexical = await charge(index, "Acme Trail Runner shoe", 0.95);
     const semantic = await charge(index, "Acme running sneaker", 0.85);
 
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: false });
     const targets = (
       await discoverAcquisitionCandidates(ctx.db, {
         entityKind: "product",
@@ -195,9 +187,6 @@ describe("acquisition Expense discovery gating", () => {
       }),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: false });
     expect(
       (
         await discoverAcquisitionCandidates(ctx.db, {

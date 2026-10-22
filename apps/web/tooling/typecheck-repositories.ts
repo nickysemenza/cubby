@@ -14,6 +14,21 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/db/job-schema.ts",
+  "src/server/lib/canonical-json.ts",
+  "src/server/db/computed/product-classification-evidence.ts",
+  "src/server/generated/shortcode-tables.gen.ts",
+  "src/server/generic/audit-log/repo/field-write.ts",
+  "src/server/generic/assessment/repo/field-input-fence.ts",
+  "src/server/generic/jobs/errors.ts",
+  "src/server/generic/jobs/repo/jobs.ts",
+  "src/server/entity-kernel/repo/entity-identity-writer.ts",
+  "src/server/generic/jobs/context.ts",
+  "src/server/generic/jobs/repo/execution.ts",
+  "src/server/generic/derived-refresh/repo/families.ts",
+  "src/server/errors/db-errors.ts",
+  "src/server/operation-runtime/start-operation.contract.ts",
+
   "src/server/generic/entity-links/repo/entity-external-ids.ts",
   "src/server/domains/product/repo/gtin.ts",
   "src/server/domains/product/repo/find-by-external-ids.ts",
@@ -37,8 +52,6 @@ export const repositoryOwners = [
   "src/server/generic/list/repo/label-canonical.ts",
   "src/server/generic/work-queue/repo/catch-up-claim.ts",
   "src/server/generic/assessment/repo/assessment-image.ts",
-  "src/server/generic/derived-refresh/repo/revisions.ts",
-  "src/server/generic/derived-refresh/repo/publication.ts",
   "src/server/generic/assessment/repo/assessment-state.ts",
   "src/server/generic/assessment/repo/assessment.ts",
   "src/server/generic/problems/repo/detectors-vendor.ts",
@@ -50,7 +63,6 @@ export const repositoryOwners = [
   "src/server/entity-kernel/repo/singular-attachment.ts",
   "src/server/domains/email/repo/email-financial-associations.ts",
   "src/server/domains/ledger-party/repo/current-member-party.ts",
-  "src/server/domains/run/repo/reclassification-recovery-state.ts",
   "src/server/domains/device/repo/device-participation.ts",
   "src/server/domains/spending-category/repo/spending-classification-review-authorization.ts",
   "src/server/domains/inventory/repo/stock-tracking.ts",

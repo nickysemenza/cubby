@@ -10,15 +10,12 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { job } from "~/server/db/retained-tables";
 import {
   entityEmbedding,
   entityIdentity,
   searchDocument,
 } from "~/server/db/schema";
-import {
-  hasUnmaterializedInputs,
-  refreshInputKinds,
-} from "~/server/generic/derived-refresh/repo/freshness";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -166,11 +163,22 @@ async function validatedScan(
       similarity: match.similarity,
     });
   }
-  const pending = await hasUnmaterializedInputs(
-    db,
-    [...new Set(kinds.flatMap(refreshInputKinds))],
-    { includePublishing: true },
-  );
+  const [pending] = await getDb(db)
+    .select({ id: job.id })
+    .from(job)
+    .where(
+      and(
+        inArray(job.key, ["refresh:search", "refresh:embeddings"]),
+        inArray(job.state, [
+          "queued",
+          "running",
+          "retry_wait",
+          "paused",
+          "failed",
+        ]),
+      ),
+    )
+    .limit(1);
   const missing = await hasUnembeddedSearchDocuments(db, config, kinds);
   return {
     candidates: candidates.slice(0, limit),

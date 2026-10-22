@@ -3,6 +3,7 @@ import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
 import {
   type CoverEntity,
   entityManifest,
+  imageIngressRouteById,
   isGalleryEntity,
   type GalleryEntity,
   type LogoEntity,
@@ -39,6 +40,7 @@ import {
   aiAnalysis,
   cookbook,
   image,
+  location,
   photoRunImage,
   vendor,
 } from "~/server/db/schema";
@@ -183,6 +185,34 @@ export async function getImportImageRows(
     .where(and(inArray(image.shortcode, [...shortcodes]), notDeleted(image)));
 }
 
+/** Lock existing location destinations before Images, matching attachment writers. */
+export async function lockPhotoImportLocationDestinations(
+  db: Database,
+  input: PhotoImportCommitInput,
+) {
+  const routes = new Map(
+    Object.values(imageIngressRouteById).map((route) => [route.routeId, route]),
+  );
+  const codes = [
+    ...new Set(
+      input.images.flatMap((item) =>
+        item.destination.kind === "existing" &&
+        routes.get(item.routeId)?.targetEntity === "location"
+          ? [item.destination.candidateId]
+          : [],
+      ),
+    ),
+  ];
+  if (!codes.length) return;
+  const ids = await resolveAllOrThrow(db, "location", codes);
+  await getDb(db)
+    .select({ id: location.id })
+    .from(location)
+    .where(and(inArray(location.id, ids), notDeleted(location)))
+    .orderBy(location.id)
+    .for("update");
+}
+
 /** Lock every selected image row for the duration of the import transaction. */
 export async function lockImportImageRows(
   db: Database,
@@ -206,6 +236,7 @@ export async function lockImportImageRows(
     })
     .from(image)
     .where(and(inArray(image.shortcode, [...shortcodes]), notDeleted(image)))
+    .orderBy(image.id)
     .for("update");
 }
 

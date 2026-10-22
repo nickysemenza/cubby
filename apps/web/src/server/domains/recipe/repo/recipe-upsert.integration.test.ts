@@ -9,6 +9,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
 import {
   createIngredients,
   ingredientRef,
@@ -91,19 +92,16 @@ describe("upsertRecipe", () => {
     const { winner: winnerId, loser: result } = await raceUniqueInsert(ctx, {
       winner: ({ releaseSignal, markWinnerReady }) =>
         getDb(ctx.db).transaction(async (tx) => {
-          const [row] = await tx
-            .insert(recipe)
-            .values({
-              name,
-              shortcode: "RCP-7K9M",
-              sourceType: "Website",
-              sourceUrl: "https://example.com/winner",
-              sourceLabel: null,
-            })
-            .returning();
+          const row = await insertPayloadWithIdentity(tx, recipe, "recipe", {
+            name,
+            shortcode: "RCP-7K9M",
+            sourceType: "Website",
+            sourceUrl: "https://example.com/winner",
+            sourceLabel: null,
+          });
           markWinnerReady();
           await releaseSignal; // hold the txn (and its lock) open
-          return row!.id;
+          return row.id;
         }),
       loser: () =>
         upsertRecipe(

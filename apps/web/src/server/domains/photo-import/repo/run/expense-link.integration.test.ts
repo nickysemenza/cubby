@@ -11,7 +11,6 @@ import {
   photoGroupProposal,
   inventoryEntry,
   purchasePaymentEvidence,
-  runFinding,
 } from "~/server/db/schema";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import {
@@ -23,6 +22,7 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { linkablePhotoGroupExpenses } from "./expense-link";
 

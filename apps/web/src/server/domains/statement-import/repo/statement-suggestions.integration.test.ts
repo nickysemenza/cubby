@@ -1,4 +1,3 @@
-import { AUTOMATIC_RULE_MIN_REVIEWS } from "@cubby/schemas/automatic-rule";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
@@ -12,10 +11,7 @@ import {
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
-import {
-  DECISION_MODEL,
-  supportedDecisionModelSchema,
-} from "@cubby/shared/ai/models";
+import { DECISION_MODEL } from "@cubby/shared/ai/models";
 import { and, eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -29,12 +25,7 @@ import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import {
-  assessment,
-  assessmentState,
-  feedback,
-  spendingCategory,
-} from "~/server/db/schema";
+import { assessmentState, spendingCategory } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
@@ -45,12 +36,10 @@ import {
 } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/assessment/repo/suggestion-list";
-import { processStatementRetirementPage } from "~/server/generic/derived-refresh/repo/statement-retirement";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
@@ -286,58 +275,9 @@ const label = async (ctx: Ctx, port: DecisionPort) =>
     runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
   });
 
-/** Reviewed synthetic history enables the real automatic attach path for either sampled model. */
+/** A member switch enables the real automatic attach path. */
 async function enableStatementAttach(ctx: Ctx) {
   await createSystemUserFixture(ctx.db);
-  const reviews = supportedDecisionModelSchema.options.flatMap((model) =>
-    Array.from({ length: AUTOMATIC_RULE_MIN_REVIEWS }, () => ({
-      id: crypto.randomUUID(),
-      recordId: crypto.randomUUID(),
-      stamp: `${ruleBase("statement_transaction.attach")}@${model}`,
-    })),
-  );
-  const client = getDb(ctx.db);
-  await client.insert(assessment).values(
-    reviews.map((row) => ({
-      id: row.id,
-      publicationKey: `synthetic-ordered-attach-review:${row.id}`,
-      family: "statement_transaction" as const,
-      subject: {
-        kind: "statement_transaction" as const,
-        entity: "statementRow" as const,
-        recordId: row.recordId,
-        source: "synthetic",
-        chargeKey: `synthetic-${row.id}`,
-      },
-      judgment: {
-        recommended: "attach",
-        candidates: [{ transactionId: crypto.randomUUID() }],
-      },
-      fingerprint: "synthetic-reviewed-attach",
-    })),
-  );
-  await client.insert(assessmentState).values(
-    reviews.map((row) => ({
-      id: row.id,
-      family: "statement_transaction" as const,
-      entity: "statementRow",
-      recordId: row.recordId,
-      status: "resolved",
-      active: false,
-      data: { matchedRules: [row.stamp] },
-    })),
-  );
-  await client.insert(feedback).values(
-    reviews.map((row) => ({
-      assessmentId: row.id,
-      operationId: "synthetic-ordered-attach-review",
-      verdict: "correct" as const,
-      correction: { present: false as const },
-      intent: "history" as const,
-      authority: "member" as const,
-      actorUserId: ctx.actor.userId,
-    })),
-  );
   await setAutomaticRule(ctx.db, ctx.actor, {
     ruleKey: "statement_transaction.attach",
     enabled: true,
@@ -548,15 +488,14 @@ describe("statement Transaction suggestions", () => {
         (row) => row.matchState,
       ),
     ).toEqual(["ignored", "ignored"]);
-    // Retirement follows the authoritative ignore through the background cursor.
-    await processStatementRetirementPage(ctx.db);
-    expect(await stateOf(ctx, first!.assessmentId)).toMatchObject({
-      status: "superseded",
-      active: false,
-    });
+    // Reads follow the authoritative ignore; they never retire the advice.
     expect((await suggestions(ctx)).map((row) => row.merchant)).toEqual([
       "Example Grocer",
     ]);
+    expect(await stateOf(ctx, first!.assessmentId)).toMatchObject({
+      status: "pending",
+      active: true,
+    });
   });
 
   // Failure modes: the settlement-ref trigger supersedes the suggestion being
@@ -977,7 +916,6 @@ describe("statement Transaction suggestions", () => {
       (row) => row.recommended === "void",
     );
     expect(voids).toHaveLength(1);
-    await processStatementRetirementPage(ctx.db);
     expect(await stateOf(ctx, voids[0]!.assessmentId)).toMatchObject({
       status: "pending",
       active: true,
@@ -2264,7 +2202,7 @@ describe("statement Transaction suggestions", () => {
   // Failure modes: a ref attached on another path (the import page, an
   // agent's entity.update) leaves the suggestion live, and accepting it
   // records the charge twice.
-  it("defers retirement but refuses stale evidence when its charge is attached elsewhere", async () => {
+  it("hides and refuses stale evidence when its charge is attached elsewhere", async () => {
     const account = (await card(ctx)).output;
     await record(ctx, [rowInput()]);
     await generate(ctx);
@@ -2284,15 +2222,16 @@ describe("statement Transaction suggestions", () => {
       status: "pending",
       active: true,
     });
+    expect(await suggestions(ctx)).toEqual([]);
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
       /evidence changed|stale/,
     );
-    await processStatementRetirementPage(ctx.db);
+    // Republication, not a scanner, replaces the stale advice.
+    expect(await generate(ctx)).toBe(1);
     expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
       status: "superseded",
       active: false,
     });
-    expect(await generate(ctx)).toBe(1);
     expect((await suggestions(ctx))[0]).toMatchObject({
       recommended: "book",
       clean: false,

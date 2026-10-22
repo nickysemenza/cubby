@@ -9,7 +9,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { job as durableJob } from "~/server/db/retained-tables";
 import {
   aiAnalysis,
   image,
@@ -142,9 +143,9 @@ describe("independent durable image identification", () => {
         attemptId: claimed.attemptId,
       });
       await getDb(ctx.db)
-        .update(imageProcessingJob)
-        .set({ nextAttemptAt: sql`now()` })
-        .where(eq(imageProcessingJob.id, apple.id));
+        .update(durableJob)
+        .set({ availableAt: sql`now()` })
+        .where(eq(durableJob.key, `image-processing:${apple.id}`));
     }
     const claimed = await lease(identification.id);
     expect(
@@ -300,6 +301,73 @@ describe("independent durable image identification", () => {
     });
   });
 
+  // Waiting for the Image row must not let an expired result become an accepted observation.
+  it("rejects an identification receipt that expires while waiting for the Image", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    let release = () => {};
+    let holder: Promise<void> | undefined;
+    try {
+      const { row, identification } = await setup();
+      const claimed = await lease(identification.id);
+      let locked = () => {};
+      const ready = new Promise<void>((resolve) => {
+        locked = resolve;
+      });
+      const unlocked = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      holder = withTransactionDatabase(ctx.db, async (tx) => {
+        await getDb(tx)
+          .select({ id: image.id })
+          .from(image)
+          .where(eq(image.id, row.id))
+          .for("update");
+        locked();
+        await unlocked;
+      });
+      await ready;
+      const receipt = completeImageProcessingJob(
+        ctx.db,
+        completion(identification.id, claimed.attemptId),
+      );
+      const settled = receipt.then(
+        (result) => ({ result, error: null }),
+        (error: Error) => ({ result: null, error }),
+      );
+      await expect
+        .poll(async () => {
+          const blocked = await getDb(ctx.db).execute<{ blocked: boolean }>(
+            sql`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query ILIKE '%ImageProcessingJob%') AS blocked`,
+          );
+          return blocked.rows[0]?.blocked;
+        })
+        .toBe(true);
+      vi.setSystemTime(Date.now() + 120_000);
+      release();
+      await holder;
+      const outcome = await settled;
+      expect(outcome.error !== null || outcome.result?.adopted === false).toBe(
+        true,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(aiAnalysis)
+          .where(eq(aiAnalysis.entityId, row.id)),
+      ).toEqual([]);
+      const [attempt] = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingAttempt)
+        .where(eq(imageProcessingAttempt.id, claimed.attemptId));
+      expect(attempt?.completedAt).toBeNull();
+      expect(attempt?.result).toBeNull();
+    } finally {
+      release();
+      await holder;
+      vi.useRealTimers();
+    }
+  });
+
   it.each(["source", "lease", "revision", "upload-status"] as const)(
     "rejects a stale %s without storing an observation",
     async (stale) => {
@@ -317,9 +385,9 @@ describe("independent durable image identification", () => {
           .where(eq(image.id, row.id));
       if (stale === "lease")
         await getDb(ctx.db)
-          .update(imageProcessingJob)
+          .update(durableJob)
           .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
-          .where(eq(imageProcessingJob.id, identification.id));
+          .where(eq(durableJob.key, `image-processing:${identification.id}`));
       if (stale === "revision")
         await getDb(ctx.db)
           .update(imageProcessingJob)

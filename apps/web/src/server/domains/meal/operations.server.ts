@@ -327,12 +327,7 @@ export async function getShoppingListWorkflow(
 
 export const mealHandlers = implementOperationDomain(mealContract, {
   getNutrition: (context, input) =>
-    getMealNutrition(
-      context.db,
-      input,
-      context.usdaClient,
-      context.services.recipeCosting,
-    ),
+    getMealNutrition(context.db, input, context.usdaClient),
   saveFood: (context, input) =>
     saveMealFood(context.db, input, context.actorContext),
   removeFood: (context, input) =>
@@ -341,8 +336,7 @@ export const mealHandlers = implementOperationDomain(mealContract, {
     getMealsByDateRange(context.db, input.from, input.to),
   upcomingSummary: (context, input) =>
     getUpcomingMealSummary(context.db, input.from, input.to),
-  getPreparations: (context, input) =>
-    getMealPreparations(context.db, input, context.services.recipeCosting),
+  getPreparations: (context, input) => getMealPreparations(context.db, input),
   getShoppingList: (context, input) =>
     getShoppingListWorkflow(context.db, input, context.services.availability),
   addRecipe: async (context, input) =>
@@ -371,17 +365,12 @@ export const mealHandlers = implementOperationDomain(mealContract, {
         context.db,
         { date: input.date },
         context.usdaClient,
-        context.services.recipeCosting,
       ),
       input,
     ),
   preparationsDetail: async (context, input) =>
     mealPreparations(
-      await getMealPreparations(
-        context.db,
-        { mealId: input.mealId },
-        context.services.recipeCosting,
-      ),
+      await getMealPreparations(context.db, { mealId: input.mealId }),
       input.nutrition,
     ),
   planRecipe: async (context, input) =>

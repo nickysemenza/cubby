@@ -12,7 +12,6 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import {
   auditLog,
-  derivedRefreshWork,
   entityExternalId,
   externalSource,
   importSourceClaim,
@@ -207,12 +206,6 @@ export async function importedPurchaseFixture(
   });
   let association: typeof importSourceOrder.$inferSelect | null = null;
   if (options.auditLogged) {
-    // This fixture replaces history to model an imported predecessor. Its
-    // derived work must not retain the audit row being replaced.
-    await getDb(db)
-      .update(derivedRefreshWork)
-      .set({ auditId: null })
-      .where(eq(derivedRefreshWork.entityId, item.entityId));
     await getDb(db)
       .delete(auditLog)
       .where(

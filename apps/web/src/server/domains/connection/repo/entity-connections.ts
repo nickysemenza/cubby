@@ -34,6 +34,7 @@ import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { assessmentCandidateKey } from "~/server/generic/assessment/repo/assessment-state";
 import {
   lookupEntityLabels,
@@ -143,20 +144,20 @@ async function publishPreparedEntityConnection(
       },
       { data: { connection: true } },
     );
-    await getDb(db)
-      .update(assessmentState)
-      .set({ active: false, status: "superseded" })
-      .where(
-        and(
-          eq(assessmentState.family, "recommendation"),
-          eq(assessmentState.entity, entity),
-          eq(assessmentState.recordId, recordId),
-          eq(assessmentState.active, true),
-          sql`${assessmentState.suppression} IS NULL`,
-          sql`${assessmentState.id} <> ${prediction.id}`,
-          sql`${assessmentState.id} IN (SELECT prior.id FROM "Assessment" prior WHERE prior.subject->>'scope'=${scope} AND prior.subject->>'candidateKey'=${candidateKey})`,
-        ),
-      );
+    await transitionAssessmentStates(
+      db,
+      and(
+        eq(assessmentState.family, "recommendation"),
+        eq(assessmentState.entity, entity),
+        eq(assessmentState.recordId, recordId),
+        eq(assessmentState.active, true),
+        sql`${assessmentState.suppression} IS NULL`,
+        sql`${assessmentState.id} <> ${prediction.id}`,
+        sql`${assessmentState.id} IN (SELECT prior.id FROM "Assessment" prior WHERE prior.subject->>'scope'=${scope} AND prior.subject->>'candidateKey'=${candidateKey})`,
+      ),
+      { active: false, status: "superseded" },
+      { kind: "superseded_by_publication" },
+    );
     return connectionProposal.parse({
       ...candidate,
       fingerprint,

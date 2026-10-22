@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { searchDocument, derivedRefreshCaptureInbox } from "~/server/db/schema";
+import { searchDocument, job } from "~/server/db/schema";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
@@ -41,12 +41,12 @@ describe("image create paths project and enqueue embedding", () => {
         )
     ).length;
 
-  const refreshQueuedFor = async (imageId: string) =>
+  const searchRefreshQueued = async () =>
     (
       await getDb(ctx.db)
         .select()
-        .from(derivedRefreshCaptureInbox)
-        .where(eq(derivedRefreshCaptureInbox.entityId, imageId))
+        .from(job)
+        .where(and(eq(job.key, "refresh:search"), eq(job.state, "queued")))
         .limit(1)
     ).length > 0;
 
@@ -58,7 +58,7 @@ describe("image create paths project and enqueue embedding", () => {
       size: 1024,
     });
     expect(await liveDocumentFor(row.id)).toBe(0);
-    expect(await refreshQueuedFor(row.id)).toBe(true);
+    expect(await searchRefreshQueued()).toBe(true);
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
   });
@@ -71,7 +71,7 @@ describe("image create paths project and enqueue embedding", () => {
       size: 1024,
     });
     expect(await liveDocumentFor(row.id)).toBe(0);
-    expect(await refreshQueuedFor(row.id)).toBe(true);
+    expect(await searchRefreshQueued()).toBe(true);
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
   });
@@ -91,7 +91,7 @@ describe("image create paths project and enqueue embedding", () => {
       { entity: "project", id: projectId },
     );
     expect(await liveDocumentFor(row.id)).toBe(0);
-    expect(await refreshQueuedFor(row.id)).toBe(true);
+    expect(await searchRefreshQueued()).toBe(true);
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
   });

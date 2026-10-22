@@ -5,7 +5,6 @@ import {
   suggestionAcceptanceReceipt,
 } from "@cubby/schemas/ai-evaluation";
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -22,9 +21,9 @@ import {
   compiledRefreshManifest,
 } from "~/server/ai/policy/refresh-manifest";
 import {
-  claimAiEvaluation,
-  guardAiEvaluation,
-  publishAiEvaluation,
+  claimAiEvaluation as claimAiEvaluationImplementation,
+  guardAiEvaluation as guardAiEvaluationImplementation,
+  publishAiEvaluation as publishAiEvaluationImplementation,
 } from "~/server/ai/repo/ai-evaluation";
 import {
   producingAiManifest,
@@ -34,6 +33,7 @@ import {
 } from "~/server/ai/repo/ai-refresh";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { getDb } from "~/server/db/helpers";
+import { job } from "~/server/db/retained-tables";
 import {
   aiEvaluation,
   assessmentState as suggestion,
@@ -45,28 +45,47 @@ import {
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
-import { writeRunningAttemptProgress } from "~/server/domains/run/repo/ai-work-state";
+import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { rebuildAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   acceptSuggestion,
   canAutomaticallyFillField,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import { reconcileDerivedRefreshPage } from "~/server/generic/derived-refresh/repo/reconcile";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  enqueueJob,
+  externalJobClaim,
+  claimJob,
+} from "~/server/generic/jobs/repo/jobs";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { settleDerivedRefreshForDiscovery } from "~/server/testing/background-queue";
+import {
+  settleDerivedRefreshForDiscovery,
+  withJobFixtureExecution,
+  reconcileDerivedRefreshInputs,
+} from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   makeProductInput,
   createSystemUserFixture,
+  insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
-import { aiRefreshRelaunchCandidates } from "../repo/ai-refresh-state";
+import {
+  recordAiRefreshAttemptFailure,
+  settleAppliedFieldRefresh,
+} from "../repo/ai-refresh-state";
 import { scheduleConnectionRefresh } from "../repo/connection-refresh";
-import { discoverAiRefresh, executeAiRefreshTarget } from "./ai-refresh";
+import {
+  discoverAiRefresh,
+  executeAiRefreshTarget as executeAiRefreshTargetImplementation,
+} from "./ai-refresh";
 import {
   categoryPorts,
   PRIMARY_MODEL,
@@ -78,7 +97,97 @@ import {
   startSuggestionSweep,
 } from "./suggestion-sweep.fixtures";
 
+const evaluationExecution = <T>(
+  db: import("~/server/db").Database,
+  id: string,
+  work: () => Promise<T>,
+) =>
+  withJobFixtureExecution(
+    db,
+    {
+      key: `ai-evaluation:${id}`,
+      kind: "ai.evaluation",
+      input: { evaluationId: id },
+    },
+    work,
+  );
+const claimAiEvaluation = (
+  ...args: Parameters<typeof claimAiEvaluationImplementation>
+) =>
+  evaluationExecution(args[0], args[1], () =>
+    claimAiEvaluationImplementation(...args),
+  );
+const guardAiEvaluation = (
+  ...args: Parameters<typeof guardAiEvaluationImplementation>
+) =>
+  evaluationExecution(args[0], args[1], () =>
+    guardAiEvaluationImplementation(...args),
+  );
+const publishAiEvaluation: typeof publishAiEvaluationImplementation = (
+  db,
+  id,
+  token,
+  work,
+  settlement,
+) =>
+  evaluationExecution(db, id, () =>
+    publishAiEvaluationImplementation(db, id, token, work, settlement),
+  );
+const executeAiRefreshTarget = async (
+  ...args: Parameters<typeof executeAiRefreshTargetImplementation>
+) => {
+  const [db, id] = args;
+  const saved = await enqueueJob(db, {
+    key: `ai-evaluation:${id}`,
+    kind: "ai.evaluation",
+    input: { evaluationId: id },
+  });
+  await getDb(db)
+    .update(job)
+    .set({ availableAt: new Date(0) })
+    .where(
+      and(eq(job.id, saved.id), inArray(job.state, ["queued", "retry_wait"])),
+    );
+  let executed = false;
+  await advanceJob(db, saved.id, {
+    "ai.evaluation": {
+      prepare: async () => {
+        executed = true;
+        await executeAiRefreshTargetImplementation(...args);
+        const [settled] = await getDb(db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, id));
+        return {
+          page: {
+            done:
+              !settled ||
+              !["queued", "running", "retry_wait", "result_ready"].includes(
+                settled.state,
+              ),
+          },
+        };
+      },
+    },
+  });
+  return executed;
+};
+
 // Real database/publication boundaries; only the external decision model is scripted.
+const writeRunningAttemptProgress = (
+  ...args: Parameters<typeof writeRunningAttemptProgressImplementation>
+) =>
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1]}`,
+      kind: "run.execute",
+      input: { runId: args[1], purpose: "ai_refresh" },
+      runId: args[1],
+    },
+    () => writeRunningAttemptProgressImplementation(...args),
+  );
+
 describe("targeted prompt refresh", () => {
   const ctx = withTestDb();
   const emailTarget = aiEvaluationTarget.options.find(
@@ -245,7 +354,6 @@ describe("targeted prompt refresh", () => {
       const ports = {
         context: kernelCtx(ctx),
         suggestPorts: categoryPorts(0.97).suggestPorts,
-        auditSample: () => false,
       };
       await discoverAiRefresh(ctx.db, ports);
       expect(await productCategoryId(ctx.db, item.id)).toBeNull();
@@ -279,7 +387,6 @@ describe("targeted prompt refresh", () => {
     const ports = {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts(0.97).suggestPorts,
-      auditSample: () => false,
     };
     const draft = {
       entity: "product" as const,
@@ -458,98 +565,6 @@ describe("targeted prompt refresh", () => {
     ).toBe(stored!.id);
   });
 
-  it("spends its relaunch budget on failed or unstarted Runs instead of healthy instances", async () => {
-    const item = await productFixture(ctx, "Synthetic recovery backlog");
-    await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { ids: [item.id] },
-      },
-      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
-    );
-    await activateAiRefresh(ctx.db, "synthetic-recovery-backlog", {
-      enabled: true,
-    });
-    await discoverAiRefresh(ctx.db, {
-      context: kernelCtx(ctx),
-      suggestPorts: categoryPorts(0.6).suggestPorts,
-    });
-    const [evaluation] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(fieldRefreshTarget);
-    const [owner] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, evaluation!.runId));
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        progress: {
-          attempt: 1,
-          selected: 1,
-          completed: 0,
-          blocked: 0,
-          failed: 0,
-        },
-      })
-      .where(eq(run.purpose, "ai_refresh"));
-    const siblings = Array.from({ length: 30 }, () => ({
-      ...owner!,
-      id: runEntityId.parse(crypto.randomUUID()),
-      shortcode: generateShortcode("run"),
-      clientKey: null,
-      progress: {
-        attempt: 1,
-        selected: 1,
-        completed: 0,
-        blocked: 0,
-        failed: 0,
-      },
-    }));
-    await getDb(ctx.db).insert(run).values(siblings);
-    await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values(
-        siblings.map((row) => ({
-          ...evaluation!,
-          id: crypto.randomUUID(),
-          runId: row.id,
-          workKey: `synthetic-backlog:${row.id}`,
-        })),
-      );
-    const failedStatus: typeof run.$inferInsert.status = "failed";
-    const failed = {
-      ...owner!,
-      id: runEntityId.parse(crypto.randomUUID()),
-      shortcode: generateShortcode("run"),
-      clientKey: null,
-      status: failedStatus,
-      progress: {
-        attempt: 1,
-        selected: 1,
-        completed: 0,
-        blocked: 0,
-        failed: 0,
-      },
-      updatedAt: new Date(),
-    };
-    await getDb(ctx.db).insert(run).values(failed);
-    await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values({
-        ...evaluation!,
-        id: crypto.randomUUID(),
-        runId: failed.id,
-        workKey: `synthetic-recovery:${failed.id}`,
-      });
-    expect(
-      (await aiRefreshRelaunchCandidates(ctx.db)).map((row) => row.id),
-    ).toEqual([failed.id]);
-  });
-
   it("advances discovery past a broken roster and schedules another eligible target", async () => {
     const broken = await productFixture(ctx, "Synthetic broken roster");
     const healthy = await productFixture(ctx, "Synthetic healthy roster");
@@ -662,8 +677,6 @@ describe("targeted prompt refresh", () => {
     const ports = {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts(0.95).suggestPorts,
-      // The default sampler holds a deterministic 5% of random record ids for review.
-      auditSample: () => false,
     };
     await discoverAiRefresh(ctx.db, ports);
     const [evaluation] = await getDb(ctx.db)
@@ -683,6 +696,59 @@ describe("targeted prompt refresh", () => {
       runId: evaluation!.runId,
     });
     expect(applied.acceptanceReceipt!.auditIds.length).toBeGreaterThan(0);
+    // Refresh updates preserve the full receipt and rebuild from ledger events.
+    const refreshedProvenance = aiProvenance.parse(applied.provenance);
+    await withTransactionDatabase(ctx.db, async (tx) => {
+      const refreshedFingerprint = await fieldInputFingerprint(
+        tx,
+        "product",
+        applied.recordId!,
+        "categoryId",
+      );
+      await settleAppliedFieldRefresh(
+        tx,
+        applied.id,
+        refreshedFingerprint,
+        refreshedProvenance,
+      );
+      const before = await getDb(tx)
+        .select()
+        .from(suggestion)
+        .where(
+          inArray(
+            suggestion.id,
+            history.map((row) => row.id),
+          ),
+        );
+      await rebuildAssessmentStates(
+        tx,
+        history.map((row) => row.id),
+      );
+      const rebuilt = await getDb(tx)
+        .select()
+        .from(suggestion)
+        .where(
+          inArray(
+            suggestion.id,
+            history.map((row) => row.id),
+          ),
+        );
+      for (const row of before)
+        expect(rebuilt.find((entry) => entry.id === row.id)).toMatchObject({
+          status: row.status,
+          acceptanceReceipt: row.acceptanceReceipt,
+          supersessionReceipt: row.supersessionReceipt,
+        });
+      expect(
+        rebuilt.find((row) => row.id === applied.id)?.acceptanceReceipt,
+      ).toEqual({
+        ...applied.acceptanceReceipt,
+        evaluatedInput: {
+          fingerprint: refreshedFingerprint,
+          provenance: refreshedProvenance,
+        },
+      });
+    });
     expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
     expect(await discoverFieldRefresh(ports)).toEqual([]);
     expect(
@@ -767,7 +833,6 @@ describe("targeted prompt refresh", () => {
       const ordinary = categoryPorts(0.95).suggestPorts;
       const ports = {
         context: kernelCtx(ctx),
-        auditSample: () => false,
         suggestPorts: {
           ...ordinary,
           decisionModel: PRIMARY_MODEL,
@@ -861,10 +926,10 @@ describe("targeted prompt refresh", () => {
     }
   });
 
-  // Reconciliation can advance revisions after an application. An agreeing
-  // evaluation must settle that basis rather than re-prepare it every cycle.
+  // Unchanged authoritative inputs must not spend another paid call. A legacy
+  // receipt missing its input fingerprint is repaired once, then stays current.
   it.each([false, true])(
-    "settles an agreeing applied-field refresh after reconciliation without repeating evidence preparation (legacy receipt: %s)",
+    "keeps applied evidence current and repairs its legacy receipt once (legacy receipt: %s)",
     async (legacy) => {
       const item = await productFixture(ctx, "Synthetic reconciled assignment");
       await activateAiRefresh(ctx.db, "synthetic-reconciled-assignment", {
@@ -891,28 +956,26 @@ describe("targeted prompt refresh", () => {
           })
           .where(eq(suggestion.id, applied!.id));
       }
-      let complete = false;
-      for (let page = 0; page < 2_000; page++) {
-        if ((await reconcileDerivedRefreshPage(ctx.db)).done) {
-          complete = true;
-          break;
-        }
-      }
-      expect(complete).toBe(true);
+      await reconcileDerivedRefreshInputs(ctx.db);
       await settleDerivedRefreshForDiscovery(ctx.db);
-      const ports = { context: kernelCtx(ctx), ...categoryPorts(0.95) };
+      const ordinary = categoryPorts(0.95);
+      const decisionPort = vi.fn(ordinary.suggestPorts.decisionPort);
+      const ports = {
+        context: kernelCtx(ctx),
+        ...ordinary,
+        suggestPorts: { ...ordinary.suggestPorts, decisionPort },
+      };
       await discoverFieldRefresh(ports);
       const [evaluation] = await getDb(ctx.db)
         .select()
         .from(aiEvaluation)
         .where(fieldRefreshTarget);
-      expect(evaluation).toBeDefined();
-      await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
-      const measured = await countTestDbQueries(async () => {
-        for (let pass = 0; pass < 3; pass++)
-          expect(await discoverFieldRefresh(ports)).toEqual([]);
-      });
-      expect(measured.tables).not.toContain("AuditLog");
+      expect(Boolean(evaluation)).toBe(legacy);
+      if (evaluation)
+        await executeAiRefreshTarget(ctx.db, evaluation.id, ports);
+      for (let pass = 0; pass < 3; pass++)
+        expect(await discoverFieldRefresh(ports)).toEqual([]);
+      expect(decisionPort).toHaveBeenCalledTimes(legacy ? 1 : 0);
       expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
     },
   );
@@ -983,7 +1046,6 @@ describe("targeted prompt refresh", () => {
     const decisionPort = vi.fn(ordinary.decisionPort);
     const ports = {
       context: kernelCtx(ctx),
-      auditSample: () => false,
       suggestPorts: {
         ...ordinary,
         decisionModel: "@cf/cloudflare/clef" as const,
@@ -1028,14 +1090,29 @@ describe("targeted prompt refresh", () => {
         },
       },
     });
+    const recordedFeedback = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .orderBy(feedback.id);
+    const historicalIds = new Set(historicalFeedback.map((entry) => entry.id));
     expect(
-      await getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
+      recordedFeedback.filter((entry) => historicalIds.has(entry.id)),
     ).toEqual(historicalFeedback);
-    const measured = await countTestDbQueries(async () => {
-      for (let pass = 0; pass < 3; pass++)
-        expect(await discoverFieldRefresh(ports)).toEqual([]);
-    });
-    expect(measured.tables).not.toContain("AuditLog");
+    expect(
+      recordedFeedback.filter((entry) => !historicalIds.has(entry.id)),
+    ).toEqual([
+      expect.objectContaining({
+        assessmentId: applied!.id,
+        intent: "projection",
+        authority: "system",
+        projection: {
+          acceptanceReceipt: rows.find((row) => row.id === applied!.id)!
+            .acceptanceReceipt,
+        },
+      }),
+    ]);
+    for (let pass = 0; pass < 3; pass++)
+      expect(await discoverFieldRefresh(ports)).toEqual([]);
     expect(decisionPort).toHaveBeenCalledTimes(1);
   });
 
@@ -1078,7 +1155,9 @@ describe("targeted prompt refresh", () => {
             }),
           );
       }),
-    ).rejects.toThrow("Derived inputs changed later in the same transaction");
+    ).rejects.toThrow(
+      "Suggestion inputs changed later in the same transaction",
+    );
     expect(await productCategoryId(ctx.db, item.id)).toBeNull();
     expect(
       (
@@ -1195,7 +1274,21 @@ describe("targeted prompt refresh", () => {
       .select()
       .from(aiEvaluation)
       .where(fieldRefreshTarget);
+    // A cutover preserves the domain's in-flight state; its queued Job must
+    // claim it afresh, and a pre-cutover receipt has no publication authority.
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "running" })
+      .where(eq(aiEvaluation.id, evaluation!.id));
+    const legacyToken = crypto.randomUUID();
+    await expect(
+      withTransactionDatabase(ctx.db, (tx) =>
+        guardAiEvaluationImplementation(tx, evaluation!.id, legacyToken),
+      ),
+    ).rejects.toThrow("AI evaluation attempt is obsolete");
     const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
+    expect(claimed?.state).toBe("running");
+    expect(claimed?.attemptToken).not.toBe(legacyToken);
     const changed = {
       ...manifest,
       "field-suggestion": {
@@ -1225,6 +1318,37 @@ describe("targeted prompt refresh", () => {
     expect((await getDb(ctx.db).select().from(suggestion))[0]?.status).toBe(
       "pending",
     );
+    // Even when invalidation retains the old token until its worker exits,
+    // that worker cannot publish a terminal failure into the new generation.
+    const oldExecution = await externalJobClaim(
+      ctx.db,
+      `ai-evaluation:${evaluation!.id}`,
+    );
+    if (!oldExecution) throw new Error("Expected live evaluation Job");
+    await enqueueJob(ctx.db, {
+      key: oldExecution.key,
+      kind: oldExecution.kind,
+      input: oldExecution.input,
+      invalidate: true,
+    });
+    await expect(
+      withJobExecution(ctx.db, oldExecution, () =>
+        recordAiRefreshAttemptFailure(
+          ctx.db,
+          evaluation!.id,
+          claimed!.attemptToken!,
+          { state: "failed", error: "Synthetic late failure" },
+        ),
+      ),
+    ).rejects.toThrow("Job generation or lease is obsolete");
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, evaluation!.id))
+      )[0]?.state,
+    ).toBe("running");
   });
 
   it("publishes catalog pairs in bounded transactions with snapshot preparation outside them", async () => {
@@ -1460,7 +1584,7 @@ describe("targeted prompt refresh", () => {
     ).toBe(true);
   });
 
-  it("defers a busy admission claim without occupying a waiting connection or changing queued work", async () => {
+  it("defers a locked Job without occupying a waiting connection or changing queued work", async () => {
     const item = await productFixture(ctx, "Synthetic contended refresh");
     await startSuggestionSweep(
       ctx.db,
@@ -1482,96 +1606,48 @@ describe("targeted prompt refresh", () => {
       .select()
       .from(aiEvaluation)
       .where(fieldRefreshTarget);
-    expect(evaluation).toBeDefined();
+    if (!evaluation) throw new Error("Expected synthetic queued evaluation");
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, `ai-evaluation:${evaluation.id}`));
+    if (!execution) throw new Error("Expected synthetic evaluation Job");
     await withTransactionDatabase(ctx.db, async (holder) => {
-      await getDb(holder).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext('cubby-ai-admission'))`,
-      );
+      await getDb(holder)
+        .select({ id: job.id })
+        .from(job)
+        .where(eq(job.id, execution.id))
+        .for("update");
       await withTransactionDatabase(ctx.db, async (contender) => {
-        // A blocking claim fails at the database boundary while the owner still
-        // holds admission; a deferred claim returns without spending an attempt.
+        // This timeout makes any wait behind the other connection fail here.
         await getDb(contender).execute(sql`SET LOCAL lock_timeout = '100ms'`);
-        expect(await claimAiEvaluation(contender, evaluation!.id)).toBeNull();
+        expect(await claimJob(contender, execution.id)).toBeNull();
+        expect(
+          (
+            await getDb(contender)
+              .select()
+              .from(job)
+              .where(eq(job.id, execution.id))
+          )[0],
+        ).toEqual(execution);
         expect(
           (
             await getDb(contender)
               .select()
               .from(aiEvaluation)
-              .where(eq(aiEvaluation.id, evaluation!.id))
+              .where(eq(aiEvaluation.id, evaluation.id))
           )[0],
         ).toEqual(evaluation);
       });
     });
-    expect(await claimAiEvaluation(ctx.db, evaluation!.id)).not.toBeNull();
-  });
-
-  it("resumes a saved result with a new attempt token without reinference and caps global active targets at two", async () => {
-    const item = await productFixture(ctx, "Synthetic resume product");
-    await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { ids: [item.id] },
-      },
-      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
-    );
-    await activateAiRefresh(ctx.db, "synthetic-resume", { enabled: true });
-    const ports = {
-      context: kernelCtx(ctx),
-      suggestPorts: categoryPorts(0.6).suggestPorts,
-    };
-    await discoverAiRefresh(ctx.db, ports);
-    const [evaluation] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(fieldRefreshTarget);
-    const otherIds = [crypto.randomUUID(), crypto.randomUUID()];
-    for (const id of otherIds)
-      await getDb(ctx.db)
-        .insert(aiEvaluation)
-        .values({
-          id,
-          runId: evaluation!.runId,
-          workKey: `synthetic:${id}`,
-          feature: evaluation!.feature,
-          target: evaluation!.target,
-          provenance: evaluation!.provenance,
-          snapshot: evaluation!.snapshot,
-        });
-    const first = await claimAiEvaluation(ctx.db, evaluation!.id);
-    expect(await claimAiEvaluation(ctx.db, otherIds[0]!)).not.toBeNull();
-    expect(await claimAiEvaluation(ctx.db, otherIds[1]!)).toBeNull();
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({
-        state: "result_ready",
-        result: { saved: true },
-        deadlineAt: new Date(0),
-      })
-      .where(eq(aiEvaluation.id, evaluation!.id));
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        progress: {
-          attempt: 2,
-          selected: 3,
-          completed: 0,
-          blocked: 0,
-          failed: 0,
-        },
-      })
-      .where(eq(run.id, evaluation!.runId));
-    const resumed = await claimAiEvaluation(ctx.db, evaluation!.id);
-    expect(resumed?.attemptToken).not.toBe(first!.attemptToken);
-    expect(resumed?.runAttempt).toBe(2);
-    expect(resumed?.attempts).toBe(1);
-    expect(resumed?.result).toEqual({ saved: true });
-    await expect(
-      withTransactionDatabase(ctx.db, (tx) =>
-        guardAiEvaluation(tx, evaluation!.id, first!.attemptToken!),
+    const claimed = await claimJob(ctx.db, execution.id);
+    if (!claimed) throw new Error("Expected unlocked evaluation claim");
+    expect(
+      await withJobExecution(ctx.db, claimed, () =>
+        claimAiEvaluationImplementation(ctx.db, evaluation.id),
       ),
-    ).rejects.toThrow("obsolete");
+    ).toMatchObject({ state: "running" });
+    expect(await claimJob(ctx.db, execution.id)).toBeNull();
   });
 
   it("freezes 201 eligible Emails into 200-item Runs, reports missing authorization and leaves confident decisions alone", async () => {
@@ -1580,21 +1656,22 @@ describe("targeted prompt refresh", () => {
       kind: "member",
       userId: ctx.actor.userId,
     });
-    await getDb(ctx.db)
-      .insert(email)
-      .values(
-        Array.from({ length: 201 }, (_, i) => ({
-          shortcode: generateShortcode("email"),
-          ledgerPartyId: party.id,
-          mailboxId: "synthetic-refresh-mailbox",
-          messageId: `synthetic-message-${i}`,
-          checksum: `synthetic-checksum-${i}`,
-          classification: "uncertain",
-          classificationStage: "decision",
-          classificationReason: "Synthetic ambiguity",
-          status: "pending",
-        })),
-      );
+    await insertEntityFixtures(
+      ctx.db,
+      email,
+      "email",
+      Array.from({ length: 201 }, (_, i) => ({
+        shortcode: generateShortcode("email"),
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-refresh-mailbox",
+        messageId: `synthetic-message-${i}`,
+        checksum: `synthetic-checksum-${i}`,
+        classification: "uncertain",
+        classificationStage: "decision",
+        classificationReason: "Synthetic ambiguity",
+        status: "pending",
+      })),
+    );
     const confident = await insertWithShortcode(ctx.db, "email", {
       ledgerPartyId: party.id,
       mailboxId: "synthetic-refresh-mailbox",
@@ -1893,9 +1970,7 @@ describe("targeted prompt refresh", () => {
       },
     };
     for (let attempt = 0; attempt < 3; attempt++) {
-      await getDb(ctx.db)
-        .update(aiEvaluation)
-        .set({ nextAttemptAt: new Date(0) });
+      await getDb(ctx.db).update(aiEvaluation).set({ updatedAt: new Date() });
       await executeAiRefreshTarget(ctx.db, first!.id, failing);
     }
     expect(physicalCalls).toBe(3);
@@ -1931,11 +2006,6 @@ describe("targeted prompt refresh", () => {
       ctx.actor,
       { runPublicId: await runCode(ctx.db, first!.runId), action: "retry" },
       "ai_refresh",
-      {
-        create: async () => undefined,
-        terminate: async () => undefined,
-        status: async () => ({ state: "running", error: null }),
-      },
     );
     const replacement = (
       await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget)

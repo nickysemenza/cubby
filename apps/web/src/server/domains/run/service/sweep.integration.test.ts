@@ -14,19 +14,15 @@ import { run, runStep } from "~/server/db/schema";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { settleDerivedRefreshForDiscovery } from "~/server/testing/background-queue";
-import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
+import {
+  settleDerivedRefreshForDiscovery,
+  withJobFixtureExecution,
+} from "~/server/testing/background-queue";
 
 import { ensureRun } from "../repo/ensure-run";
 import { readRunSteps } from "../repo/run-step";
 import { advanceStepRun } from "./step-run";
 import { estimateSweep, startSweep } from "./sweep";
-
-const launcher: WorkflowLauncher = {
-  create: async () => {},
-  terminate: async () => {},
-  status: async () => ({ state: "running", error: null }),
-};
 
 let position = 0;
 const row = (
@@ -99,11 +95,15 @@ describe("Sweeps", () => {
       .object({ attempt: z.number() })
       .parse(owner?.progress).attempt;
     for (let page = 0; page < 50; page++) {
-      const advance = await advanceStepRun(
+      const advance = await withJobFixtureExecution(
         ctx.db,
-        { runId, attempt },
-        undefined,
-        launcher,
+        {
+          key: `run:${runId}`,
+          kind: "run.execute",
+          input: { runId, purpose: "sweep" },
+          runId,
+        },
+        () => advanceStepRun(ctx.db, { runId, attempt }),
       );
       if (advance.kind !== "continue") return advance.kind;
     }
@@ -135,12 +135,10 @@ describe("Sweeps", () => {
     expect(await estimateSweep(ctx.db, families)).toEqual([
       expect.objectContaining({ family: "statement_transaction", records: 4 }),
     ]);
-    const runId = await startSweep(
-      ctx.db,
-      ctx.actor,
-      { trigger: "manual", families },
-      launcher,
-    );
+    const runId = await startSweep(ctx.db, ctx.actor, {
+      trigger: "manual",
+      families,
+    });
     expect(await drive(runId)).toBe("finished");
     const [step] = await readRunSteps(ctx.db, runId);
     expect(step).toMatchObject({
@@ -172,15 +170,10 @@ describe("Sweeps", () => {
       ],
       "fp-sweep-labels",
     );
-    const runId = await startSweep(
-      ctx.db,
-      ctx.actor,
-      {
-        trigger: "manual",
-        families: [{ family: "statement_transaction", scope: {} }],
-      },
-      launcher,
-    );
+    const runId = await startSweep(ctx.db, ctx.actor, {
+      trigger: "manual",
+      families: [{ family: "statement_transaction", scope: {} }],
+    });
     await drive(runId);
     const { rows: waiting } = await getDb(ctx.db).execute<{ id: string }>(
       sql`SELECT id FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active AND (data->>'needsLabel')::boolean ORDER BY "createdAt", id`,
@@ -243,23 +236,19 @@ describe("Sweeps", () => {
         scope: { entityKinds: ["project"] },
       },
     ];
-    const first = await startSweep(
-      ctx.db,
-      ctx.actor,
-      { trigger: "manual", families },
-      launcher,
-    );
+    const first = await startSweep(ctx.db, ctx.actor, {
+      trigger: "manual",
+      families,
+    });
     // The roster queues both sources on one child Run, then waits on it.
     expect(await drive(first)).toBe("wait");
     const [queued] = await readRunSteps(ctx.db, first);
     expect(queued).toMatchObject({ state: "waiting", found: 2, skipped: 0 });
     expect(queued?.childRunId).not.toBeNull();
-    const second = await startSweep(
-      ctx.db,
-      ctx.actor,
-      { trigger: "manual", families },
-      launcher,
-    );
+    const second = await startSweep(ctx.db, ctx.actor, {
+      trigger: "manual",
+      families,
+    });
     expect(await drive(second)).toBe("finished");
     const [repeat] = await readRunSteps(ctx.db, second);
     expect(repeat).toMatchObject({
@@ -271,22 +260,17 @@ describe("Sweeps", () => {
   });
 
   const fieldSweep = () =>
-    startSweep(
-      ctx.db,
-      ctx.actor,
-      {
-        trigger: "manual",
-        families: [
-          {
-            family: "field",
-            scope: {
-              targets: [{ entity: "project", fields: ["kind"], filters: {} }],
-            },
+    startSweep(ctx.db, ctx.actor, {
+      trigger: "manual",
+      families: [
+        {
+          family: "field",
+          scope: {
+            targets: [{ entity: "project", fields: ["kind"], filters: {} }],
           },
-        ],
-      },
-      launcher,
-    );
+        },
+      ],
+    });
 
   const childOf = async (runId: string) => {
     const [step] = await readRunSteps(ctx.db, runId as never);
@@ -326,17 +310,12 @@ describe("Sweeps", () => {
     });
     await createRepoEntity(ctx, "project", { name: "Synthetic gutter repair" });
     await settleDerivedRefreshForDiscovery(ctx.db);
-    const runId = await startSweep(
-      ctx.db,
-      ctx.actor,
-      {
-        trigger: "scheduled",
-        families: [
-          { family: "recommendation", scope: { entityKinds: ["project"] } },
-        ],
-      },
-      launcher,
-    );
+    const runId = await startSweep(ctx.db, ctx.actor, {
+      trigger: "scheduled",
+      families: [
+        { family: "recommendation", scope: { entityKinds: ["project"] } },
+      ],
+    });
     expect(await drive(runId)).toBe("wait");
     const childRunId = await childOf(runId);
     const { isBackgroundRun } = await import("~/server/ai/funding");
@@ -381,7 +360,7 @@ describe("Sweeps", () => {
     expect(step?.errors[0]?.message).toContain("Synthetic Workflow crash");
     // Retry failed relaunches the crashed child instead of rereading it.
     const { retryRunStep } = await import("./step-run");
-    await retryRunStep(ctx.db, crashed as never, "field", launcher);
+    await retryRunStep(ctx.db, crashed as never, "field");
     expect(await drive(crashed)).toBe("wait");
     const [relaunched] = await getDb(ctx.db)
       .select({ status: run.status })
@@ -411,7 +390,6 @@ describe("Sweeps", () => {
       ctx.actor,
       { runPublicId: shortcode, action: "cancel" },
       "sweep",
-      launcher,
     );
     const [child] = await getDb(ctx.db)
       .select({ status: run.status, failureCode: run.failureCode })

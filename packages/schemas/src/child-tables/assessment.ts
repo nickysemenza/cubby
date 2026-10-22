@@ -28,6 +28,7 @@ export const assessmentChildren = [
         type: "AssessmentSubject",
       },
       { key: "judgment", kind: "jsonb", notNull: true },
+      { key: "projection", kind: "jsonb" },
       { key: "fingerprint", kind: "text" },
       { key: "producer", kind: "jsonb", type: "AssessmentProducer" },
       { key: "evidence", kind: "jsonb" },
@@ -91,6 +92,7 @@ export const assessmentChildren = [
       { key: "suppression", kind: "jsonb", type: "AssessmentSuppression" },
       { key: "receipt", kind: "jsonb" },
       { key: "metadata", kind: "jsonb" },
+      { key: "projection", kind: "jsonb" },
       {
         key: "createdAt",
         kind: "timestamp",
@@ -119,7 +121,11 @@ export const assessmentChildren = [
       },
       {
         name: "Feedback_authority_check",
-        sql: "{authority} IN ('member', 'evaluation', 'automatic', 'unknown')",
+        sql: "{authority} IN ('member', 'evaluation', 'automatic', 'unknown', 'system')",
+      },
+      {
+        name: "Feedback_system_check",
+        sql: "{authority} <> 'system' OR ({actorUserId} IS NULL AND {verdict} = 'ungraded' AND {suppression} IS NULL)",
       },
     ],
   }),
@@ -137,6 +143,11 @@ export const assessmentChildren = [
         key: "runId",
         kind: "uuid",
         reference: { table: "run", column: "id", onDelete: "set null" },
+      },
+      {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        reference: { table: "ledgerParty", column: "id" },
       },
       { key: "entity", kind: "text", notNull: true },
       { key: "recordId", kind: "uuid", notNull: true },
@@ -169,7 +180,6 @@ export const assessmentChildren = [
       { key: "runnerUpValue", kind: "jsonb" },
       { key: "runnerUpConfidence", kind: "real" },
       { key: "model", kind: "text", notNull: true, default: "unknown" },
-      { key: "pairKey", kind: "uuid" },
       { key: "kind", kind: "text", notNull: true, default: "addition" },
       {
         key: "status",
@@ -241,6 +251,10 @@ export const assessmentChildren = [
         on: ["family", "active", "status"],
       },
       { name: "AssessmentState_run_status_idx", on: ["runId", "status"] },
+      {
+        name: "AssessmentState_ledger_party_idx",
+        on: ["ledgerPartyId", "family", "status"],
+      },
       { name: "AssessmentState_evaluation_idx", on: ["evaluationId"] },
       {
         name: "AssessmentState_entity_field_status_idx",

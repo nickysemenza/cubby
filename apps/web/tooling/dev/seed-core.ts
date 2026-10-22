@@ -1,8 +1,4 @@
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
-import {
-  planSendBatches,
-  MAX_TASKS_PER_SEND,
-} from "../../src/server/workflows/background-tasks/publish";
 import { getBackgroundQueue } from "../../src/server/cf-env";
 import { createPostgresPool } from "../postgres-pool";
 import { buildScenarioDatabase } from "../scenarios/context";
@@ -54,17 +50,11 @@ export async function seedCoreFixtures(options: {
           "SELECT id, body FROM cubby_dev_background_task ORDER BY id LIMIT 100",
         );
         if (rows.rows.length === 0) break;
-        for (const batch of planSendBatches(
-          rows.rows.map(
-            (row) => backgroundTaskMessageSchema.parse(row.body).task,
-          ),
-          {
-            maxTasks: MAX_TASKS_PER_SEND,
-            maxMessageBytes: 120_000,
-            maxSendBytes: 240_000,
-          },
-        ))
-          await queue.sendBatch(batch.map((body) => ({ body })));
+        await queue.sendBatch(
+          rows.rows.map((row) => ({
+            body: backgroundTaskMessageSchema.parse(row.body),
+          })),
+        );
         await pool.query(
           "DELETE FROM cubby_dev_background_task WHERE id = ANY($1::bigint[])",
           [rows.rows.map((row) => row.id)],

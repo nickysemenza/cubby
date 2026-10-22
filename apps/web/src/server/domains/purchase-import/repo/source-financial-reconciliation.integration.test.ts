@@ -18,7 +18,6 @@ import {
   importSourceOrder,
   purchase,
   purchasePaymentEvidence,
-  runFinding,
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
@@ -27,6 +26,10 @@ import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import {
+  patchRunFindingData,
+  runFinding,
+} from "~/server/testing/run-finding.fixtures";
 
 import {
   memberImport,
@@ -297,12 +300,9 @@ describe("accepted source financial reconciliation", () => {
           },
           reviewedFingerprint: fingerprint,
         });
-        await w.database
-          .update(runFinding)
-          .set({
-            proposedFix: { ...fix, reviewedFingerprint: fingerprint, review },
-          })
-          .where(eq(runFinding.id, finding.id));
+        await patchRunFindingData(ctx.db, finding.id, {
+          proposedFix: { ...fix, reviewedFingerprint: fingerprint, review },
+        });
       }
       const before = {
         accepted: await w.state(),
@@ -577,10 +577,9 @@ describe("accepted source financial reconciliation", () => {
     expect(after.payments).toEqual(initial.payments);
     expect(after.allocations).toEqual(initial.allocations);
     // Expiry prevents a new application, not replay of an applied receipt.
-    await database
-      .update(runFinding)
-      .set({ expiresAt: new Date("2000-01-01T00:00:00.000Z") })
-      .where(eq(runFinding.id, finding!.id));
+    await patchRunFindingData(ctx.db, finding!.id, {
+      expiresAt: new Date("2000-01-01T00:00:00.000Z"),
+    });
     expect(await resolveRunFinding(ctx.db, input, ctx.actor)).toMatchObject({
       status: "applied",
     });

@@ -3,7 +3,7 @@ import {
   aiProvenance,
   aiEvaluationTarget,
 } from "@cubby/schemas/ai-evaluation";
-import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
@@ -14,155 +14,68 @@ import {
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
+import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
+import { aiEvaluationJobInput } from "~/server/generic/jobs/inputs";
+import {
+  assertCurrentJob,
+  currentJobExecution,
+} from "~/server/generic/jobs/repo/execution";
 
 import { readAiRefreshActivation } from "./ai-refresh";
 
+/** The universal Job is the only inference/apply owner. Domain rows retain evidence. */
 export async function claimAiEvaluation(
   db: Database,
   id: string,
   requestingRunId?: string,
 ) {
+  const execution = currentJobExecution();
+  if (
+    !execution ||
+    execution.claim.kind !== "ai.evaluation" ||
+    aiEvaluationJobInput.parse(execution.claim.input).evaluationId !== id
+  )
+    throw new Error("AI evaluation execution requires its universal Job claim");
+  await assertCurrentJob(db);
   return withTransactionDatabase(db, async (tx) => {
-    const now = new Date();
-    // Busy claims defer to the existing Workflow retry without consuming an
-    // origin connection waiting behind admission. Activation remains policy,
-    // not a prerequisite for member-requested execution.
-    const admission = z
-      .object({ rows: z.tuple([z.object({ admitted: z.boolean() })]) })
-      .parse(
-        await getDb(tx).execute(
-          sql`SELECT pg_try_advisory_xact_lock(hashtext('cubby-ai-admission')) AS admitted`,
-        ),
-      );
-    if (!admission.rows[0].admitted) return null;
     const [existing] = await getDb(tx)
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, id));
-    if (!existing) return null;
-    if (existing.executionKind === "ai_refresh") {
-      const activation = await readAiRefreshActivation(tx, "share");
-      if (!activation?.enabled) return null;
-    }
-    const owner = await aiExecutionOwner(tx, existing, requestingRunId);
-    if (owner?.status !== "running" || owner.deletedAt || owner.retiredAt)
-      return null;
-    if (requestingRunId && owner.id !== requestingRunId) return null;
-    const [active] = await getDb(tx)
-      .select({ count: sql<number>`count(*)::int` })
-      .from(aiEvaluation)
-      .where(
-        and(
-          inArray(aiEvaluation.state, ["running", "result_ready"]),
-          sql`${aiEvaluation.deadlineAt} > ${now}`,
-          existing.executionKind === "ai_refresh"
-            ? eq(aiEvaluation.executionKind, "ai_refresh")
-            : inArray(aiEvaluation.executionKind, [
-                "mail_reclassify",
-                "suggestion_sweep",
-              ]),
-        ),
-      );
-    const [memberDue] =
-      existing.executionKind === "ai_refresh"
-        ? await getDb(tx)
-            .select({ id: aiEvaluation.id })
-            .from(aiEvaluation)
-            .innerJoin(run, eq(run.id, aiEvaluation.runId))
-            .where(
-              and(
-                inArray(aiEvaluation.executionKind, [
-                  "mail_reclassify",
-                  "suggestion_sweep",
-                ]),
-                eq(run.status, "running"),
-                or(
-                  eq(aiEvaluation.state, "queued"),
-                  and(
-                    eq(aiEvaluation.state, "retry_wait"),
-                    lt(aiEvaluation.nextAttemptAt, now),
-                  ),
-                ),
-              ),
-            )
-            .limit(1)
-        : [];
-    // Reserve priority for member work while retaining one automatic slot.
-    const limit = memberDue ? 1 : 2;
-    if (existing.state !== "result_ready" && (active?.count ?? 0) >= limit)
+    if (
+      !existing ||
+      !["queued", "running", "retry_wait", "result_ready"].includes(
+        existing.state,
+      )
+    )
       return null;
     if (
-      existing.attempts >= 3 &&
-      existing.deadlineAt &&
-      existing.deadlineAt <= now &&
-      existing.state === "running"
-    ) {
-      await getDb(tx)
-        .update(aiEvaluation)
-        .set({
-          state: "failed",
-          error: "AI evaluation exhausted interrupted inference attempts",
-        })
-        .where(eq(aiEvaluation.id, id));
-      return null;
-    }
-    const token = crypto.randomUUID();
-    const progress = z
-      .object({ attempt: z.number().default(0) })
-      .passthrough()
-      .parse(owner.progress ?? {});
-    if (existing.state === "result_ready") {
-      if (
-        existing.deadlineAt &&
-        existing.deadlineAt > now &&
-        existing.runAttempt === progress.attempt &&
-        existing.runId === owner.id
-      )
-        return null;
-      const [ready] = await getDb(tx)
-        .update(aiEvaluation)
-        .set({
-          attemptToken: token,
-          runId: owner.id,
-          runAttempt: progress.attempt,
-          deadlineAt: new Date(now.getTime() + 10 * 60_000),
-          updatedAt: now,
-        })
-        .where(eq(aiEvaluation.id, id))
-        .returning();
-      return ready ?? null;
-    }
+      existing.executionKind === "ai_refresh" &&
+      !(await readAiRefreshActivation(tx))?.enabled
+    )
+      throw new JobDeferredError(
+        "Automatic AI refresh is disabled",
+        new Date(Date.now() + 120_000),
+      );
+    const owner = await aiExecutionOwner(tx, existing, requestingRunId);
+    if (!owner)
+      throw new JobPausedError("No live requester authorizes AI evaluation");
     const [row] = await getDb(tx)
       .update(aiEvaluation)
       .set({
-        state: "running",
+        state: existing.result ? "result_ready" : "running",
         runId: owner.id,
-        runAttempt: progress.attempt,
-        attemptToken: token,
-        attempts: sql`${aiEvaluation.attempts} + 1`,
-        deadlineAt: new Date(now.getTime() + 10 * 60_000),
-        updatedAt: now,
+        updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(aiEvaluation.id, id),
-          lt(aiEvaluation.attempts, 3),
-          or(
-            eq(aiEvaluation.state, "queued"),
-            and(
-              eq(aiEvaluation.state, "retry_wait"),
-              lt(aiEvaluation.nextAttemptAt, now),
-            ),
-            and(
-              eq(aiEvaluation.state, "running"),
-              lt(aiEvaluation.deadlineAt, now),
-            ),
-          ),
-        ),
-      )
+      .where(eq(aiEvaluation.id, id))
       .returning();
-    if (row) return row;
-    return null;
+    return row
+      ? {
+          ...row,
+          attemptToken: execution.claim.leaseToken,
+          attempts: execution.claim.attempts,
+        }
+      : null;
   });
 }
 
@@ -175,6 +88,13 @@ export async function guardAiEvaluation(
   await (
     await import("~/server/workflows/runs/execution")
   ).assertWorkflowEffect(tx);
+  const execution = currentJobExecution();
+  if (
+    !execution ||
+    execution.claim.leaseToken !== token ||
+    aiEvaluationJobInput.parse(execution.claim.input).evaluationId !== id
+  )
+    throw new Error("AI evaluation attempt is obsolete");
   const [read] = await getDb(tx)
     .select()
     .from(aiEvaluation)
@@ -202,24 +122,18 @@ export async function guardAiEvaluation(
     .where(
       and(
         eq(aiEvaluation.id, id),
-        eq(aiEvaluation.attemptToken, token),
         inArray(aiEvaluation.state, ["running", "result_ready"]),
       ),
     )
     .for("update");
   if (!row) throw new Error("AI evaluation attempt is obsolete");
   const owner = owners.find((entry) => entry.id === row.runId);
-  const progress = z
-    .object({ attempt: z.number().default(0) })
-    .passthrough()
-    .parse(owner?.progress ?? {});
   if (
     !owner ||
     !owners.some(
       (entry) =>
         entry.status === "running" && !entry.deletedAt && !entry.retiredAt,
     ) ||
-    row.runAttempt !== progress.attempt ||
     (row.executionKind === "ai_refresh" &&
       (!activation?.enabled ||
         !dependenciesCurrent(
@@ -255,16 +169,16 @@ export async function completeAiEvaluation(
   receipt: unknown,
   state: "completed" | "blocked" | "obsolete" = "completed",
 ) {
+  await guardAiEvaluation(tx, id, token);
   const [row] = await getDb(tx)
     .update(aiEvaluation)
     .set({
       state,
       receipt: z.json().parse(receipt),
       error: null,
-      deadlineAt: null,
       updatedAt: new Date(),
     })
-    .where(and(eq(aiEvaluation.id, id), eq(aiEvaluation.attemptToken, token)))
+    .where(eq(aiEvaluation.id, id))
     .returning({
       executionKind: aiEvaluation.executionKind,
       provenance: aiEvaluation.provenance,

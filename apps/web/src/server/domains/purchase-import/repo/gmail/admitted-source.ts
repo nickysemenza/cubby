@@ -1,7 +1,8 @@
 import type { EmailExecutionPolicy } from "@cubby/schemas/email-fields";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
+import { jobState } from "@cubby/schemas/job";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -173,17 +174,14 @@ export async function publishGmailEvidence<T>(
             .set({
               state: "retry_wait",
               restarts: guarded.row.restarts + 1,
-              attempts: guarded.row.attempts - 1,
               result: null,
-              deadlineAt: null,
-              nextAttemptAt: new Date(Date.now() + 1_000),
               error:
                 "Email evidence changed; continuing with its latest evidence",
             })
             .where(
               and(
                 eq(aiEvaluation.id, evaluation.id),
-                eq(aiEvaluation.attemptToken, evaluation.token),
+                sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='ai-evaluation:' || ${aiEvaluation.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${evaluation.token}::uuid AND j."leaseExpiresAt">now())`,
               ),
             );
         } else {

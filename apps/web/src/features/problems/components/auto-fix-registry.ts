@@ -13,10 +13,7 @@ import {
   ripple,
   type InvalidationTagSet,
 } from "~/integrations/tanstack-query/cache-tags";
-import {
-  imageUpload,
-  maintenance,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
 import { collectBulkStream } from "~/lib/bulk-progress";
 
@@ -119,26 +116,9 @@ const AUTO_FIX_TASKS = [
     },
   },
   {
-    key: "missingEmbeddings",
-    label: "Backfill search embeddings",
-    problemKey: "entitiesMissingEmbeddings",
-    invalidateTags: ripple.search,
-    // Embeddings drain as a step of the maintenance pass, so this starts (or
-    // joins) that pass rather than a per-kind enqueue.
-    run: async () => {
-      const r = await maintenance.run.call();
-      return {
-        summary: r.existing
-          ? `maintenance ${r.runId} already running`
-          : `started maintenance ${r.runId}`,
-      };
-    },
-  },
-  {
     key: "staleRecipeTotals",
     label: "Recompute stale recipe totals",
-    // `staleRecipeTotals` is maintenance with no Problems section
-    // (`staleParentRecipes` is a different, unrelated detector).
+    // `staleRecipeTotals` is maintenance with no Problems section.
     count: (counts) => counts?.staleRecipeTotals ?? null,
     invalidateTags: ripple.recipeList,
     run: async () => {

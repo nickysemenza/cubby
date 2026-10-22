@@ -38,6 +38,7 @@ import {
   makeLocationInput,
   makeProductInput,
   insertEntityAttachments,
+  insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 
 import { getEntityGraph, readEntityGraph } from "./entity-graph";
@@ -451,38 +452,42 @@ describe("entity graph repository", () => {
   it("batches a capped 25-root graph without per-record queries", async () => {
     // Graph batching is measured below; seed the population in batches so
     // fixture hydration does not consume the query contract's time budget.
-    const products = await getDb(ctx.db)
-      .insert(product)
-      .values(
+    const products = (
+      await insertEntityFixtures(
+        ctx.db,
+        product,
+        "product",
         Array.from({ length: 25 }, (_, index) => ({
           shortcode: testShortcode("product", `graph-${index}`),
           name: `Batched graph product ${index}`,
           manufacturer: "Fixture manufacturer",
         })),
       )
-      .returning({ entityId: product.id, id: product.shortcode });
-    const locations = await getDb(ctx.db)
-      .insert(location)
-      .values(
+    ).map((row) => ({ entityId: row.id, id: row.shortcode }));
+    const locations = (
+      await insertEntityFixtures(
+        ctx.db,
+        location,
+        "location",
         Array.from({ length: 20 }, (_, index) => ({
           shortcode: testShortcode("location", `graph-${index}`),
           name: `Batched graph location ${index}`,
           type: "area" as const,
         })),
       )
-      .returning({ entityId: location.id });
+    ).map((row) => ({ entityId: row.id }));
     const vendorId = await findOrCreateVendor(ctx.db, "Batched graph vendor");
-    const purchases = await getDb(ctx.db)
-      .insert(purchase)
-      .values(
-        Array.from({ length: 20 }, (_, index) => ({
-          shortcode: testShortcode("purchase", `PUR-BATCH-${index}`),
-          vendorId,
-          date: "2026-09-08",
-          displayLabel: `Batched graph purchase ${index}`,
-        })),
-      )
-      .returning({ id: purchase.id });
+    const purchases = await insertEntityFixtures(
+      ctx.db,
+      purchase,
+      "purchase",
+      Array.from({ length: 20 }, (_, index) => ({
+        shortcode: testShortcode("purchase", `PUR-BATCH-${index}`),
+        vendorId,
+        date: "2026-09-08",
+        displayLabel: `Batched graph purchase ${index}`,
+      })),
+    );
     const fixturePairs = products.flatMap((productFixture, productIndex) =>
       purchases.map((purchaseRow, purchaseIndex) => ({
         productId: productFixture.entityId,
@@ -491,22 +496,23 @@ describe("entity graph repository", () => {
       })),
     );
     await Promise.all([
-      getDb(ctx.db)
-        .insert(inventoryEntry)
-        .values(
-          products.flatMap((productFixture, productIndex) =>
-            locations.map((location, locationIndex) => ({
-              shortcode: testShortcode(
-                "inventory",
-                `INV-BATCH-${productIndex}-${locationIndex}`,
-              ),
-              productId: productFixture.entityId,
-              locationId: location.entityId,
-              amountValue: 1,
-              amountUnit: "each",
-            })),
-          ),
+      insertEntityFixtures(
+        ctx.db,
+        inventoryEntry,
+        "inventory",
+        products.flatMap((productFixture, productIndex) =>
+          locations.map((location, locationIndex) => ({
+            shortcode: testShortcode(
+              "inventory",
+              `INV-BATCH-${productIndex}-${locationIndex}`,
+            ),
+            productId: productFixture.entityId,
+            locationId: location.entityId,
+            amountValue: 1,
+            amountUnit: "each",
+          })),
         ),
+      ),
       getDb(ctx.db)
         .insert(entityLink)
         .values(
@@ -514,25 +520,26 @@ describe("entity graph repository", () => {
             linkValues("purchaseProduct", purchaseId, productId),
           ),
         ),
-      getDb(ctx.db)
-        .insert(expense)
-        .values(
-          fixturePairs.map<typeof expense.$inferInsert>(
-            ({ productId, purchaseId, index }) => ({
-              shortcode: testShortcode("expense", `EXP-BATCH-${index}`),
-              name: `Batched graph expense ${index}`,
-              cost: 1,
-              date: "2026-09-08",
-              lineKind: "principal",
-              lineBasis: "item_line",
-              costType: "materials",
-              trade: "other",
-              future: false,
-              productId,
-              purchaseId,
-            }),
-          ),
+      insertEntityFixtures(
+        ctx.db,
+        expense,
+        "expense",
+        fixturePairs.map<typeof expense.$inferInsert>(
+          ({ productId, purchaseId, index }) => ({
+            shortcode: testShortcode("expense", `EXP-BATCH-${index}`),
+            name: `Batched graph expense ${index}`,
+            cost: 1,
+            date: "2026-09-08",
+            lineKind: "principal",
+            lineBasis: "item_line",
+            costType: "materials",
+            trade: "other",
+            future: false,
+            productId,
+            purchaseId,
+          }),
         ),
+      ),
     ]);
     const measured = await countTestDbQueries(() =>
       getEntityGraph(ctx.db, {

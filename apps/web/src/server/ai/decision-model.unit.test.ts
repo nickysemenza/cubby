@@ -1,4 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -9,6 +10,7 @@ import {
   runDecisionChoice,
 } from "~/server/ai/decision-model";
 import { type DecisionImage } from "~/server/ai/policy/decision-choice";
+import * as cfEnv from "~/server/cf-env";
 
 import { FIELD_SUGGESTION_FEATURE } from "./policy/features";
 
@@ -653,6 +655,35 @@ describe("runDecisionChoice", () => {
     for (let call = 0; call < 6; call += 1)
       expect((await request(input)).selectedIndex).toBe(0);
     expect(sent).toHaveLength(1);
+  });
+
+  // Regression: retained entries replayed the confidence buckets of the
+  // code that stored them.
+  it("derives a cached choice's confidence from its probability", async () => {
+    const stored = {
+      selectedIndex: 0,
+      confidence: "high",
+      probability: 0.01,
+      ranked: [{ index: 0, probability: 0.01 }],
+    };
+    vi.spyOn(cfEnv, "getAiResponseCacheNamespace").mockReturnValue(
+      fromPartial({
+        getByName: () =>
+          fromPartial({
+            readOrClaim: () => ({
+              kind: "hit",
+              value: JSON.stringify(stored),
+            }),
+          }),
+      }),
+    );
+    expect(
+      await runDecisionChoice({
+        ...base,
+        feature: FIELD_SUGGESTION_FEATURE,
+        choices: ["red", "blue"],
+      }),
+    ).toMatchObject({ selectedIndex: 0, confidence: "low" });
   });
 
   it("isolates and reuses each model's cached choice for the same input", async () => {

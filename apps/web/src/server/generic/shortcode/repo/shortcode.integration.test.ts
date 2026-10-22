@@ -13,6 +13,7 @@ import type {
   ProductId,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
 import {
   PUBLIC_SHORTCODE_PREFIXES,
   generateShortcode,
@@ -20,11 +21,12 @@ import {
   SHORTCODE_PREFIX,
 } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import { databaseForTransaction, getDb } from "~/server/db/helpers";
-import { location, product } from "~/server/db/schema";
+import { entityIdentity, location, product } from "~/server/db/schema";
+import { findPgError } from "~/server/errors/db-errors";
 import {
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
@@ -40,6 +42,7 @@ import {
 } from "./shortcode-resolver";
 import {
   generateUniqueShortcode,
+  findOrCreateWithShortcode,
   insertWithShortcode,
   type ShortcodeGeneratorPort,
 } from "./shortcode-utils";
@@ -123,6 +126,27 @@ describe("uniqueness spans soft-deleted rows", () => {
 describe("insertWithShortcode", () => {
   const ctx = withTestDb();
 
+  // With identity triggers absent, a payload must never precede its identity;
+  // rejected payloads and losing find-or-create attempts must not reserve codes.
+  it("commits the matching identity before the payload FK is checked", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Transactional identity" }),
+      ctx.actor,
+    );
+    const [identity] = await getDb(ctx.db)
+      .select()
+      .from(entityIdentity)
+      .where(eq(entityIdentity.id, created.entityId));
+    expect(identity).toMatchObject({
+      id: created.entityId,
+      kind: "product",
+      shortcode: created.id,
+      deletedAt: null,
+      mergedIntoId: null,
+    });
+  });
+
   it.each(["transaction", "facade"])(
     "survives a collision inside an open %s via its savepoint",
     async (mode) => {
@@ -130,27 +154,36 @@ describe("insertWithShortcode", () => {
       // later statement in it fails with "current transaction is aborted" — the
       // retry would be strictly worse than no retry at all. So: force a collision
       // inside a transaction, then keep using that same transaction.
-      const contested = `${SHORTCODE_PREFIX.product}YYYY`;
+      const squatter = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Squatter" }),
+        ctx.actor,
+      );
+      const contested = squatter.id;
+      const id = testEntityId("product", `collision-${mode}`);
 
       await getDb(ctx.db).transaction(async (tx) => {
-        await tx.insert(product).values({
-          name: "Squatter",
-          manufacturer: "ACME",
-          shortcode: contested,
-        });
-
         const generator = createPinnedShortcodeGenerator();
         generator.pin(contested);
         const created = await insertWithShortcode(
           mode === "facade" ? databaseForTransaction(tx) : tx,
           "product",
           {
+            id,
             name: "Retried",
             manufacturer: "ACME",
           },
           generator.port,
         );
         expect(created.shortcode).not.toBe(contested);
+        expect(
+          await tx
+            .select()
+            .from(entityIdentity)
+            .where(eq(entityIdentity.id, id)),
+        ).toMatchObject([
+          { id, kind: "product", shortcode: created.shortcode },
+        ]);
 
         // The caller's transaction is still alive — this is the assertion that
         // fails loudly if the savepoint is ever removed.
@@ -161,6 +194,125 @@ describe("insertWithShortcode", () => {
       });
     },
   );
+
+  it("rolls back the identity on a rejected payload and preserves the SQL error without retrying", async () => {
+    const id = testEntityId("location", "rejected-payload");
+    let generated = 0;
+    const generator: ShortcodeGeneratorPort = {
+      generate(entity) {
+        generated++;
+        return generateShortcode(entity);
+      },
+    };
+    await getDb(ctx.db).transaction(async (tx) => {
+      const error = await insertWithShortcode(
+        tx,
+        "location",
+        {
+          id,
+          name: "Invalid parent",
+          type: "shelf",
+          parentId: testEntityId("location", "missing-parent"),
+        },
+        generator,
+      ).catch((cause: unknown) => cause);
+      expect(findPgError(error)).toMatchObject({ code: "23503" });
+      expect(generated).toBe(1);
+      expect(
+        await tx.select().from(entityIdentity).where(eq(entityIdentity.id, id)),
+      ).toEqual([]);
+      expect(
+        await tx.select().from(location).where(eq(location.id, id)),
+      ).toEqual([]);
+    });
+  });
+
+  it("finds an existing payload without leaving a second identity", async () => {
+    const values = { name: "Find or create identity", type: "shelf" as const };
+    const first = await findOrCreateWithShortcode(ctx.db, "location", {
+      where: eq(location.name, values.name),
+      values: () => values,
+    });
+    const valuesAgain = vi.fn(() => values);
+    const second = await findOrCreateWithShortcode(ctx.db, "location", {
+      where: eq(location.name, values.name),
+      values: valuesAgain,
+    });
+    expect(first.created).toBe(true);
+    expect(second).toMatchObject({ created: false, row: { id: first.row.id } });
+    expect(valuesAgain).not.toHaveBeenCalled();
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityIdentity)
+        .where(eq(entityIdentity.id, first.row.id)),
+    ).toMatchObject([{ kind: "location", shortcode: first.row.shortcode }]);
+  });
+
+  it("rolls back a losing find-or-create identity before returning the concurrent winner", async () => {
+    const loserId = testEntityId("location", "merged-identity");
+    const values = { name: "Concurrent identity", type: "shelf" as const };
+    const result = await raceUniqueInsert(ctx, {
+      winner: ({ markWinnerReady, releaseSignal }) =>
+        getDb(ctx.db).transaction(async (tx) => {
+          const row = await insertWithShortcode(tx, "location", values);
+          markWinnerReady();
+          await releaseSignal;
+          return row;
+        }),
+      loser: () =>
+        findOrCreateWithShortcode(ctx.db, "location", {
+          where: eq(location.name, values.name),
+          values: () => ({ ...values, id: loserId }),
+        }),
+    });
+    expect(result.loser).toMatchObject({
+      created: false,
+      row: { id: result.winner.id },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityIdentity)
+        .where(eq(entityIdentity.id, loserId)),
+    ).toEqual([]);
+  });
+
+  it("preserves an unrelated unique violation rather than retrying or reserving its code", async () => {
+    await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Occupied identity name" }),
+      ctx.actor,
+    );
+    const id = testEntityId("location", "deleted-identity");
+    let generated = 0;
+    const generator: ShortcodeGeneratorPort = {
+      generate(entity) {
+        generated++;
+        return generateShortcode(entity);
+      },
+    };
+    const error = await findOrCreateWithShortcode(
+      ctx.db,
+      "location",
+      {
+        where: eq(location.id, id),
+        values: () => ({ id, name: "Occupied identity name", type: "shelf" }),
+      },
+      generator,
+    ).catch((cause: unknown) => cause);
+    expect(findPgError(error)).toMatchObject({
+      code: "23505",
+      constraint: "Location_name_key",
+    });
+    expect(generated).toBe(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityIdentity)
+        .where(eq(entityIdentity.id, id)),
+    ).toEqual([]);
+  });
 });
 
 describe("resolution", () => {

@@ -1,10 +1,20 @@
 import type { ImageId } from "@cubby/schemas/identifiers";
 import type { StoredImageEmbeddedMetadata } from "@cubby/schemas/image";
+import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { withTransaction } from "~/server/db/helpers";
-import { setImageEmbeddedMetadata } from "~/server/domains/image/repo/image";
+import {
+  getDb,
+  withTransactionDatabase,
+  withTransaction,
+} from "~/server/db/helpers";
+import { image } from "~/server/db/schema";
+import {
+  setImageEmbeddedMetadata,
+  type ImageMetadataExtractionRow,
+} from "~/server/domains/image/repo/image";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
+import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 
 /**
  * Writes extracted EXIF and re-derives the image's capture fields in one
@@ -23,5 +33,34 @@ export async function applyImageMetadataExtraction(
   await withTransaction(db, async (tx) => {
     await setImageEmbeddedMetadata(tx, imageId, embeddedMetadata);
     await deriveAndStoreImageCapture(tx, imageId);
+  });
+}
+
+/** Publish extracted metadata only while this Job and the original bytes remain current. */
+export async function publishExtractedImageMetadata(
+  db: Database,
+  imageId: ImageId,
+  source: ImageMetadataExtractionRow,
+  read: (
+    tx: Database,
+    id: ImageId,
+  ) => Promise<ImageMetadataExtractionRow | undefined>,
+  write: (tx: Database) => Promise<void>,
+) {
+  await withTransactionDatabase(db, async (tx) => {
+    await assertCurrentJob(tx);
+    await getDb(tx)
+      .select({ id: image.id })
+      .from(image)
+      .where(eq(image.id, imageId))
+      .for("update");
+    const current = await read(tx, imageId);
+    if (
+      !current ||
+      current.key !== source.key ||
+      current.contentType !== source.contentType
+    )
+      throw new Error("Image metadata source changed during extraction");
+    await write(tx);
   });
 }

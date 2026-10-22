@@ -1,6 +1,6 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ProblemItem } from "@cubby/schemas/problems";
+import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,16 +11,17 @@ import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   createRecipe,
-  deleteRecipes,
   getRecipeByID,
   upsertCookbookRecipe,
 } from "~/server/domains/recipe/repo/crud";
 import { getRecipeTotalsState } from "~/server/domains/recipe/repo/totals";
 import { executeEntity } from "~/server/entity-kernel";
-import { findParentRecipesWithDeletedSubRecipes } from "~/server/generic/problems/repo/detectors-recipe";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
-import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  drainRecipeRefreshJobs,
+} from "~/server/testing/background-queue";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import {
   ingredientRef,
@@ -39,8 +40,11 @@ describe("recipe deletion cost-staleness workflows", () => {
         auth: { userId: ctx.actor.userId },
       }),
     );
-  const recompute = (ids: RecipeId[]) =>
-    workflowContext().services.recipeCosting.recompute(ids);
+  const recompute = async (ids: RecipeId[]) => {
+    const costing = workflowContext().services.recipeCosting;
+    await costing.recompute(ids);
+    await drainRecipeRefreshJobs(ctx.db, costing);
+  };
   /** A queue that records the kind of every task published to it. */
   const installFakeQueue = () => {
     const published: string[] = [];
@@ -49,10 +53,10 @@ describe("recipe deletion cost-staleness workflows", () => {
         BACKGROUND_QUEUE: {
           send: async () => {},
           sendBatch: async (
-            messages: Iterable<{ body: { task: { kind: string } } }>,
+            messages: Iterable<{ body: BackgroundTaskMessage }>,
           ) => {
             for (const message of messages)
-              published.push(message.body.task.kind);
+              published.push(message.body.queueType);
           },
         },
       }),
@@ -122,10 +126,12 @@ describe("recipe deletion cost-staleness workflows", () => {
     };
   };
 
-  it("marks the parent stale when its sub-recipe is deleted", async () => {
+  it("refreshes the parent after its sub-recipe is deleted", async () => {
     const { child, childCode, parent } = await seedParentWithSubRecipe();
     await drainDerivedRefreshFrontier(ctx.db);
     await recompute([parent, child]);
+    const computedBefore = (await getRecipeTotalsState(ctx.db, parent))
+      ?.totalsComputedAt;
     expect(
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
     ).not.toBeNull();
@@ -137,31 +143,33 @@ describe("recipe deletion cost-staleness workflows", () => {
       ids: [childCode],
     });
     await drainDerivedRefreshFrontier(ctx.db);
+    await drainRecipeRefreshJobs(
+      ctx.db,
+      workflowContext().services.recipeCosting,
+    );
 
     expect(
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
-    ).toBeNull();
-    expect(published).toContain("derived-refresh.wakeup");
-    expect(await findParentRecipesWithDeletedSubRecipes(ctx.db)).toHaveLength(
-      0,
-    );
+    ).toBeInstanceOf(Date);
+    expect(
+      (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
+    ).not.toEqual(computedBefore);
+    expect(published).toContain("background");
   });
 
   it(
-    "marks a parent stale that is also a fork of the deleted sub-recipe",
+    "refreshes a parent that was a fork of the deleted sub-recipe",
     { timeout: 10_000 },
     async () => {
-      // deleteRecipes nulls the fork pointer on P inside the delete
-      // transaction, so P's row is locked when the parent stale mark is
-      // written: a service still bound to the request pool would wait on
-      // that lock forever (an application-level deadlock Postgres cannot
-      // detect), so the mark must go through the transaction and the
-      // wakeup must be published only after it commits.
+      // Clearing the fork pointer and recording refresh intent share the
+      // delete transaction; a second connection must not lock that same row.
       const { child, childCode, parent } = await seedParentWithSubRecipe({
         parentIsFork: true,
       });
       await drainDerivedRefreshFrontier(ctx.db);
       await recompute([parent, child]);
+      const computedBefore = (await getRecipeTotalsState(ctx.db, parent))
+        ?.totalsComputedAt;
 
       const published = installFakeQueue();
       await executeEntity(workflowContext(), {
@@ -170,18 +178,25 @@ describe("recipe deletion cost-staleness workflows", () => {
         ids: [childCode],
       });
       await drainDerivedRefreshFrontier(ctx.db);
+      await drainRecipeRefreshJobs(
+        ctx.db,
+        workflowContext().services.recipeCosting,
+      );
 
       expect(
         (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
-      ).toBeNull();
+      ).toBeInstanceOf(Date);
+      expect(
+        (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
+      ).not.toEqual(computedBefore);
       expect(
         (await getRecipeByID(ctx.db, parent))?.forkedFromRecipeId,
       ).toBeNull();
-      expect(published).toContain("derived-refresh.wakeup");
+      expect(published).toContain("background");
     },
   );
 
-  it("marks external parents stale when a cookbook deletes their sub-recipe", async () => {
+  it("refreshes external parents after a cookbook deletes their sub-recipe", async () => {
     const bookName = "Doomed Book";
     const { output: cookbook, entityId: cookbookId } = await upsertCookbook(
       ctx.db,
@@ -239,6 +254,9 @@ describe("recipe deletion cost-staleness workflows", () => {
     if (!parentEntityId) throw new Error("seed failed");
     const resolvedParentId = parseEntityId("recipe", parentEntityId);
     await recompute([resolvedParentId, child.id]);
+    const computedBefore = (
+      await getRecipeTotalsState(ctx.db, resolvedParentId)
+    )?.totalsComputedAt;
     expect(
       (await getRecipeTotalsState(ctx.db, resolvedParentId))?.totalsComputedAt,
     ).not.toBeNull();
@@ -247,60 +265,16 @@ describe("recipe deletion cost-staleness workflows", () => {
     await deleteCookbookWorkflow(workflowContext(), {
       cookbookId: cookbook.id,
     });
+    await drainRecipeRefreshJobs(
+      ctx.db,
+      workflowContext().services.recipeCosting,
+    );
 
     expect(
       (await getRecipeTotalsState(ctx.db, resolvedParentId))?.totalsComputedAt,
-    ).toBeNull();
-    expect(await findParentRecipesWithDeletedSubRecipes(ctx.db)).toHaveLength(
-      0,
-    );
-  });
-
-  const seedDetectorPair = async () => {
-    const child = await createRecipe(
-      ctx.db,
-      makeRecipeInput({ name: "Detector Sub" }),
-      ctx.actor,
-    );
-    const parent = await createRecipe(
-      ctx.db,
-      makeRecipeInput({
-        name: "Detector Parent",
-        sections: [
-          {
-            instructions: [{ instruction: "Use sub" }],
-            ingredients: [
-              {
-                type: "recipe",
-                recipeId: child.id,
-                ingredientId: null,
-                amounts: [{ value: 1, unit: "each" }],
-              },
-            ],
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-    const [childId, parentId] = await Promise.all([
-      resolveLiveShortcode(ctx.db, child.id, "recipe"),
-      resolveLiveShortcode(ctx.db, parent.id, "recipe"),
-    ]);
-    if (!childId || !parentId) throw new Error("seed failed");
-    return {
-      child: parseEntityId("recipe", childId),
-      parent: parseEntityId("recipe", parentId),
-      parentCode: parent.id,
-    };
-  };
-
-  it("detects a fresh parent left pointing at a deleted sub-recipe", async () => {
-    const { child, parent, parentCode } = await seedDetectorPair();
-    await recompute([parent]);
-    await deleteRecipes(ctx.db, [child], ctx.actor);
-
-    const flagged: ProblemItem<"staleParentRecipes">[] =
-      await findParentRecipesWithDeletedSubRecipes(ctx.db);
-    expect(flagged.map((recipe) => recipe.id)).toContain(parentCode);
+    ).toBeInstanceOf(Date);
+    expect(
+      (await getRecipeTotalsState(ctx.db, resolvedParentId))?.totalsComputedAt,
+    ).not.toEqual(computedBefore);
   });
 });

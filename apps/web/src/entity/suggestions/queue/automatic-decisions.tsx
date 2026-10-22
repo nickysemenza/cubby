@@ -1,5 +1,5 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
+import { automaticDecisionFamily } from "@cubby/schemas/automatic-decision";
 import type { AutomaticDecisionRow } from "@cubby/schemas/automatic-decision";
 import { humanize } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,7 +26,7 @@ import { RecordLink } from "./suggestion-values";
 
 const FAMILY_OPTIONS = [
   { value: "all", label: "All families" },
-  ...assessmentFamily.options.map((family) => ({
+  ...automaticDecisionFamily.options.map((family) => ({
     value: family,
     label: assessmentReviewFamilies[family].label,
   })),
@@ -52,7 +52,7 @@ export function AutomaticDecisions({
   const [offset, setOffset] = useState(0);
   const query = useQuery(
     suggestions.automaticDecisions.queryOptions({
-      family: assessmentFamily.safeParse(family).data,
+      family: automaticDecisionFamily.safeParse(family).data,
       recordIds: id ? [id] : undefined,
       reviewStatus,
       offset,

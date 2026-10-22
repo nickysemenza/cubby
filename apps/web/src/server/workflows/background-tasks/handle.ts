@@ -1,19 +1,7 @@
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
-import { entityRefKey } from "@cubby/schemas/entity";
 import { runEntityId, type ImageId } from "@cubby/schemas/identifiers";
-import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
-import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
-
-import {
-  type EmbeddingRefreshPort,
-  productionEmbeddingRefreshPort,
-  refreshEntityEmbeddings,
-} from "./embedding";
-
-const log = createLogger("background-tasks");
-
 export type BackgroundTaskOutcome = "succeeded" | "skipped";
 
 type ExtractImageMetadataPort = (
@@ -50,22 +38,11 @@ const productionMarkCalendarFeedDirty: MarkCalendarFeedDirtyPort = async (
 };
 
 export interface BackgroundTaskPorts {
-  readonly continueWorkflow: (
-    db: Database,
-    params: WorkflowRunParams,
-  ) => Promise<void>;
-  readonly embedding: EmbeddingRefreshPort;
   readonly extractImageMetadata: ExtractImageMetadataPort;
   readonly markCalendarFeedDirty: MarkCalendarFeedDirtyPort;
 }
 
 export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
-  continueWorkflow: async (db, params) =>
-    (await import("~/server/workflows/runs/continuation")).continueWorkflowRun(
-      db,
-      params,
-    ),
-  embedding: productionEmbeddingRefreshPort,
   extractImageMetadata: productionExtractImageMetadata,
   markCalendarFeedDirty: productionMarkCalendarFeedDirty,
 };
@@ -82,53 +59,10 @@ export const productionBackgroundTaskPorts: BackgroundTaskPorts = {
  */
 export async function handleBackgroundTask(
   db: Database,
-  task: BackgroundTask,
+  task: ExecutableBackgroundTask,
   ports: BackgroundTaskPorts = productionBackgroundTaskPorts,
 ): Promise<BackgroundTaskOutcome> {
   switch (task.kind) {
-    case "workflow.continue": {
-      await ports.continueWorkflow(db, {
-        runId: task.runId,
-        attempt: task.attempt,
-      });
-      return "succeeded";
-    }
-    case "derived-refresh.wakeup": {
-      const { wakeDerivedRefresh } =
-        await import("~/server/domains/run/service/derived-refresh");
-      await wakeDerivedRefresh(db);
-      return "succeeded";
-    }
-    case "recipe-totals.recompute": {
-      const { captureDerivedRefresh } =
-        await import("~/server/generic/derived-refresh/repo/capture");
-      const { wakeDerivedRefresh } =
-        await import("~/server/domains/run/service/derived-refresh");
-      await captureDerivedRefresh(
-        db,
-        task.recipeIds.map((entityId) => ({ entityKind: "recipe", entityId })),
-        { invalidate: false },
-      );
-      await wakeDerivedRefresh(db);
-      return "succeeded";
-    }
-    case "entity-embedding.refresh": {
-      const ref = { entityKind: task.entityKind, entityId: task.entityId };
-      const result = (
-        await refreshEntityEmbeddings(db, [ref], ports.embedding)
-      ).get(entityRefKey(ref.entityKind, ref.entityId));
-      if (!result) {
-        throw new Error(
-          `[background-tasks] missing embedding refresh result for ${task.entityKind}:${task.entityId}`,
-        );
-      }
-      if ("error" in result) throw result.error;
-      const { outcome } = result;
-      if (outcome === "obsolete" || outcome === "unconfigured") {
-        log.warn(`embedding ${outcome} ${task.entityKind}:${task.entityId}`);
-      }
-      return outcome === "written" ? "succeeded" : "skipped";
-    }
     case "location-ai.description.refresh": {
       const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/ai/enrichment/location-vision");
@@ -168,19 +102,7 @@ export async function handleBackgroundTask(
       }
       return "succeeded";
     }
-    case "image-processing.wakeup": {
-      const { handoffCloudImageTask } =
-        await import("~/server/domains/image-processing/service/cloud-queue");
-      if (await handoffCloudImageTask(db, task)) return "succeeded";
-      const { dispatchImageProcessingWakeup } =
-        await import("~/server/domains/image-processing/service/dispatch");
-      const outcome = await dispatchImageProcessingWakeup(db, task.jobId);
-      return outcome === "skipped" ? "skipped" : "succeeded";
-    }
     case "image-processing.result": {
-      const { handoffCloudImageTask } =
-        await import("~/server/domains/image-processing/service/cloud-queue");
-      if (await handoffCloudImageTask(db, task)) return "succeeded";
       const { completeCompanionImageProcessingResult } =
         await import("~/server/domains/image-processing/service/image-processing.service");
       const completion = await completeCompanionImageProcessingResult(
@@ -191,16 +113,6 @@ export async function handleBackgroundTask(
     }
     case "image-metadata.extract":
       return ports.extractImageMetadata(db, task.imageId);
-    case "maintenance.recover": {
-      const { recoverMissedWork } = await import("~/server/workflows/catch-up");
-      await recoverMissedWork(
-        db,
-        task.coordinatorRetireBefore === undefined
-          ? undefined
-          : new Date(task.coordinatorRetireBefore),
-      );
-      return "succeeded";
-    }
     case "maintenance.purchase-discovery": {
       const { discoverPurchases } = await import("~/server/workflows/catch-up");
       await discoverPurchases(db);
@@ -214,3 +126,8 @@ export async function handleBackgroundTask(
     }
   }
 }
+
+export type ExecutableBackgroundTask = Exclude<
+  BackgroundTask,
+  { kind: "entity-embedding.refresh" | "image-processing.wakeup" }
+>;

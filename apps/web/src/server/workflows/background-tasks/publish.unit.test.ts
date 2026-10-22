@@ -1,187 +1,27 @@
-import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
-import { testEntityId } from "@cubby/schemas/testing";
-import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
-import { createDatabase } from "~/server/db/database-runtime";
+import { wakeJobs } from "./publish";
 
-import {
-  enqueueBackgroundTask,
-  MAX_TASKS_PER_SEND,
-  planSendBatches,
-  publishBackgroundTasks,
-  publishInBackground,
-} from "./publish";
-
-const requestedAt = "2026-09-12T12:00:00.000Z";
-const recipeTask = (seed: string): BackgroundTaskInput => ({
-  kind: "recipe-totals.recompute",
-  requestedAt,
-  recipeIds: [testEntityId("recipe", seed)],
-});
-
-const db = createDatabase(() => {
-  throw new Error("publishing never touches the database");
-});
-
-describe("planSendBatches", () => {
-  it("splits by message count", () => {
-    const tasks = Array.from({ length: 205 }, (_, i) => recipeTask(`r${i}`));
-    const batches = planSendBatches(tasks, {
-      maxTasks: MAX_TASKS_PER_SEND,
-      maxMessageBytes: 120_000,
-      maxSendBytes: 240_000,
-    });
-    expect(batches.map((batch) => batch.length)).toEqual([100, 100, 5]);
-    expect(batches[0]?.[0]).toMatchObject({
-      version: 2,
-      queueType: "background",
-      task: { kind: "recipe-totals.recompute" },
-    });
+describe("Job wake transport", () => {
+  it("sends only a versioned wake, with no domain payload", async () => {
+    const sendBatch = vi.fn().mockResolvedValue(undefined);
+    const jobId = "00000000-0000-4000-8000-000000000001";
+    await wakeJobs({ source: "synthetic-test", jobId, queue: { sendBatch } });
+    expect(sendBatch).toHaveBeenCalledWith([
+      { body: { version: 3, queueType: "background", jobId } },
+    ]);
   });
 
-  it("splits by serialized bytes before the count limit", () => {
-    const tasks = Array.from({ length: 10 }, (_, i) => recipeTask(`r${i}`));
-    const oneMessage = new TextEncoder().encode(
-      JSON.stringify({ version: 2, queueType: "background", task: tasks[0] }),
-    ).byteLength;
-    const batches = planSendBatches(tasks, {
-      maxTasks: 100,
-      maxMessageBytes: 120_000,
-      maxSendBytes: oneMessage * 3 + 1,
-    });
-    expect(batches.map((batch) => batch.length)).toEqual([3, 3, 3, 1]);
-  });
-
-  it("refuses a single task above the per-message limit", () => {
-    expect(() =>
-      planSendBatches([recipeTask("big")], {
-        maxTasks: 100,
-        maxMessageBytes: 10,
-        maxSendBytes: 240_000,
-      }),
-    ).toThrow(/above the 10-byte message limit/);
-  });
-});
-
-describe("publishBackgroundTasks", () => {
-  afterEach(() => setCfEnv(undefined));
-
-  it("rejects work without a queue instead of executing it in Node", async () => {
-    setCfEnv(undefined);
+  it("leaves committed intent recoverable when a queue send rejects", async () => {
     await expect(
-      publishBackgroundTasks(db, [recipeTask("missing")], { source: "test" }),
-    ).rejects.toThrow("BACKGROUND_QUEUE binding is required");
-  });
-
-  it("rejects a database-free enqueue without a binding instead of dropping it", async () => {
-    setCfEnv(undefined);
-    await expect(
-      enqueueBackgroundTask(recipeTask("missing"), { source: "test" }),
-    ).rejects.toThrow("BACKGROUND_QUEUE binding is required");
-  });
-
-  it("awaits queue acceptance and reports the queue transport", async () => {
-    const sent: unknown[][] = [];
-    setCfEnv(
-      fromPartial<Env>({
-        BACKGROUND_QUEUE: {
-          sendBatch: async (messages: Iterable<{ body: unknown }>) => {
-            sent.push([...messages].map((m) => m.body));
-          },
-        },
-      }),
-    );
-    const receipt = await publishBackgroundTasks(
-      db,
-      [recipeTask("a"), recipeTask("b")],
-      { source: "test" },
-    );
-    expect(receipt).toEqual({ count: 2 });
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toHaveLength(2);
-  });
-
-  it("reports zero without touching the queue", async () => {
-    setCfEnv(
-      fromPartial<Env>({
-        BACKGROUND_QUEUE: {
+      wakeJobs({
+        source: "synthetic-test",
+        queue: {
           sendBatch: async () => {
-            throw new Error("must not be called");
+            throw new Error("Synthetic unavailable queue");
           },
         },
       }),
-    );
-    await expect(
-      publishBackgroundTasks(db, [], { source: "test" }),
-    ).resolves.toEqual({ count: 0 });
-  });
-
-  it("propagates a rejected send so an explicit action sees the failure", async () => {
-    setCfEnv(
-      fromPartial<Env>({
-        BACKGROUND_QUEUE: {
-          sendBatch: async () => {
-            throw new Error("queue down");
-          },
-        },
-      }),
-    );
-    await expect(
-      publishBackgroundTasks(db, [recipeTask("a")], { source: "test" }),
-    ).rejects.toThrow("queue down");
-  });
-});
-
-describe("publishInBackground", () => {
-  afterEach(() => {
-    setCfEnv(undefined);
-    vi.restoreAllMocks();
-  });
-
-  it("hands the publication to waitUntil inside a request", async () => {
-    const waited: Promise<unknown>[] = [];
-    let sends = 0;
-    setCfEnv(
-      fromPartial<Env>({
-        BACKGROUND_QUEUE: {
-          sendBatch: async () => {
-            sends += 1;
-          },
-        },
-      }),
-    );
-    await runWithExecutionCtx(
-      { waitUntil: (promise) => waited.push(promise) },
-      async () => {
-        await publishInBackground(db, [recipeTask("a")], { source: "test" });
-      },
-    );
-    expect(waited).toHaveLength(1);
-    await Promise.all(waited);
-    expect(sends).toBe(1);
-  });
-
-  it("reports but never rejects when the queue refuses", async () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    setCfEnv(
-      fromPartial<Env>({
-        BACKGROUND_QUEUE: {
-          sendBatch: async () => {
-            throw new Error("queue down");
-          },
-        },
-      }),
-    );
-    await expect(
-      publishInBackground(db, [recipeTask("a")], { source: "test" }),
     ).resolves.toBeUndefined();
-    expect(consoleError).toHaveBeenCalledWith(
-      "[background-tasks] publication failed",
-      expect.objectContaining({ source: "test", count: 1 }),
-    );
   });
 });

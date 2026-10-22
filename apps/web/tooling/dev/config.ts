@@ -1,10 +1,4 @@
-import {
-  bindings,
-  defineWorker,
-  exports,
-  triggers,
-  type WorkerConfig,
-} from "cf/config";
+import { bindings, defineWorker, triggers, type WorkerConfig } from "cf/config";
 import type { DevProfile } from "../dev-services/dev-profile.ts";
 
 /** Reuse binding declarations, with checkout-local targets and no production triggers. */
@@ -27,22 +21,8 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
     observability: { enabled: true },
     exports: {
       ...production.exports,
-      AiRefreshWorkflow: exports.workflow({ name: `${name}-ai-refresh` }),
-      SearchIndexRepairWorkflow: exports.workflow({
-        name: `${name}-search-index-repair`,
-      }),
-      MailDiscoveryWorkflow: exports.workflow({
-        name: `${name}-mail-discovery`,
-      }),
     },
     triggers: [
-      triggers.queue({
-        name: `${name}-image-cloud`,
-        maxBatchSize: 1,
-        maxBatchTimeout: 0,
-        maxConcurrency: 4,
-        maxRetries: 3,
-      }),
       triggers.queue({
         name: `${name}-background`,
         maxBatchSize: 1,
@@ -83,29 +63,9 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
       LOCAL_DEV_STORAGE: bindings.r2({ name: `${name}-storage` }),
       USDA_RELEASES: bindings.r2({ name: `${name}-usda-releases` }),
       BACKGROUND_QUEUE: bindings.queue({ name: `${name}-background` }),
-      IMAGE_CLOUD_QUEUE: bindings.queue({ name: `${name}-image-cloud` }),
       TELEMETRY_QUEUE: bindings.queue({ name: `${name}-telemetry` }),
       PURCHASE_AGENT_QUEUE: bindings.queue({ name: `${name}-purchase` }),
-      AI_REFRESH: bindings.workflow({
-        name: `${name}-ai-refresh`,
-        worker: name,
-        exportName: "AiRefreshWorkflow",
-      }),
-      SEARCH_INDEX_REPAIR: bindings.workflow({
-        name: `${name}-search-index-repair`,
-        worker: name,
-        exportName: "SearchIndexRepairWorkflow",
-      }),
-      MAIL_DISCOVERY: bindings.workflow({
-        name: `${name}-mail-discovery`,
-        worker: name,
-        exportName: "MailDiscoveryWorkflow",
-      }),
-      STEP_RUN: bindings.workflow({
-        name: `${name}-step-run`,
-        worker: name,
-        exportName: "StepRunWorkflow",
-      }),
+
       ...(profile.integration && {
         AI: bindings.ai({ dev: { remote: true } }),
         VECTORIZE: bindings.vectorize({

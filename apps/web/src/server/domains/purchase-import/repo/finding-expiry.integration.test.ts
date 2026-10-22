@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,7 +7,8 @@ import {
   getDb,
   withTransaction,
 } from "~/server/db/helpers";
-import { auditLog, expense, runFinding } from "~/server/db/schema";
+import { assessmentState, auditLog, expense } from "~/server/db/schema";
+import { rebuildAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -15,9 +16,14 @@ import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import {
+  runFinding,
+  seedRunFinding,
+  seedRunFindings,
+} from "~/server/testing/run-finding.fixtures";
 
-import { activeFindingSql } from "./finding-expiry";
 import { resolveRunFinding } from "./findings";
+import { publishRunFinding } from "./run-finding";
 
 const now = new Date("2026-09-20T12:00:00.000Z");
 
@@ -39,57 +45,33 @@ describe("finding expiry", () => {
       name: "Synthetic finding owner",
     });
 
-  it("keeps SQL expiry independent of the session time zone at the deadline", async () => {
-    const open = "open";
-    const dismissed = "dismissed";
-    const rows = await withTransaction(ctx.db, async (tx) => {
-      await tx.execute(sql`SET TRANSACTION READ ONLY`);
-      await tx.execute(sql`SET LOCAL TIME ZONE 'America/Los_Angeles'`);
-      return (
-        await tx.execute(sql`
-        SELECT label FROM (VALUES
-          (${"past"}, ${open}, (now() AT TIME ZONE 'UTC') - interval '1 minute'),
-          (${"deadline"}, ${open}, now() AT TIME ZONE 'UTC'),
-          (${"future"}, ${open}, (now() AT TIME ZONE 'UTC') + interval '1 minute'),
-          (${"none"}, ${open}, NULL::timestamp),
-          (${"resolved"}, ${dismissed}, NULL::timestamp)
-        ) finding(label, status, "expiresAt")
-        WHERE ${activeFindingSql("finding")} ORDER BY label
-      `)
-      ).rows;
-    });
-    expect(rows).toEqual([{ label: "future" }, { label: "none" }]);
-  });
-
-  it("reads exact active findings in a read-only transaction without changing history", async () => {
+  it("reads exact active findings in a read-only transaction and any session time zone without changing history", async () => {
     const party = await owner();
     const target = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic expiry target" }),
       ctx.actor,
     );
-    const rows = await getDb(ctx.db)
-      .insert(runFinding)
-      .values(
-        [
-          new Date(now.getTime() - 1),
-          now,
-          new Date(now.getTime() + 60_000),
-          null,
-        ].map((expiresAt, index) => ({
-          ledgerPartyId: party.id,
-          entityKind: "product" as const,
-          entityId: target.entityId,
-          kind: "other" as const,
-          summary: "Synthetic retained finding",
-          evidenceFingerprint: `synthetic-expiry-${index}`,
-          expiresAt,
-          createdAt: new Date(now.getTime() - 60_000 + index * 1000),
-        })),
-      )
-      .returning();
+    const rows = await seedRunFindings(
+      ctx.db,
+      [
+        new Date(now.getTime() - 1),
+        now,
+        new Date(now.getTime() + 60_000),
+        null,
+      ].map((expiresAt, index) => ({
+        ledgerPartyId: party.id,
+        entityKind: "product" as const,
+        entityId: target.entityId,
+        kind: "other" as const,
+        summary: "Synthetic retained finding",
+        evidenceFingerprint: `synthetic-expiry-${index}`,
+        expiresAt,
+      })),
+    );
     const result = await withTransaction(ctx.db, async (tx) => {
       await tx.execute(sql`SET TRANSACTION READ ONLY`);
+      await tx.execute(sql`SET LOCAL TIME ZONE 'America/Los_Angeles'`);
       const db = databaseForTransaction(tx);
       return {
         findings: await findOpenRunFindings(db),
@@ -148,23 +130,20 @@ describe("finding expiry", () => {
       costType: "materials",
       trade: "other",
     });
-    const [finding] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        ledgerPartyId: party.id,
-        entityKind: "expense",
-        entityId: line.id,
-        kind: "wrong_product",
-        summary: "Synthetic expired Product correction",
-        evidenceFingerprint: "synthetic-expired-apply",
-        expiresAt: now,
-        proposedFix: {
-          kind: "relink_product",
-          expenseId: line.id,
-          productId: target.entityId,
-        },
-      })
-      .returning();
+    const finding = await seedRunFinding(ctx.db, {
+      ledgerPartyId: party.id,
+      entityKind: "expense",
+      entityId: line.id,
+      kind: "wrong_product",
+      summary: "Synthetic expired Product correction",
+      evidenceFingerprint: "synthetic-expired-apply",
+      expiresAt: now,
+      proposedFix: {
+        kind: "relink_product",
+        expenseId: line.id,
+        productId: target.entityId,
+      },
+    });
     if (!finding) throw new Error("Missing synthetic finding");
     const audit = () =>
       getDb(ctx.db)
@@ -200,5 +179,81 @@ describe("finding expiry", () => {
         ctx.actor,
       ),
     ).resolves.toEqual({ id: finding.id, status: "dismissed" });
+  });
+
+  // Failure modes: the same evidence opens a second finding, reopens a
+  // dismissed one, or extends a deadline that a rebuild then loses.
+  it("keeps one finding per evidence: extends an open deadline and leaves a dismissal alone", async () => {
+    const party = await owner();
+    const target = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic found-again Product" }),
+      ctx.actor,
+    );
+    const publication = (evidenceFingerprint: string, expiresAt: Date) => ({
+      runId: null,
+      ledgerPartyId: party.id,
+      entityKind: "product" as const,
+      entityId: target.entityId,
+      kind: "other",
+      summary: "Synthetic found-again finding",
+      proposedFix: null,
+      evidenceFingerprint,
+      expiresAt,
+    });
+    const soon = new Date(now.getTime() + 60_000);
+    const later = new Date(now.getTime() + 3_600_000);
+    const open = await publishRunFinding(
+      ctx.db,
+      publication("synthetic-open", soon),
+    );
+    await expect(
+      publishRunFinding(ctx.db, publication("synthetic-open", later)),
+    ).resolves.toEqual({ id: open.id, created: false, open: true });
+    // An earlier deadline never shortens the open finding.
+    await publishRunFinding(ctx.db, publication("synthetic-open", soon));
+
+    const dismissed = await publishRunFinding(
+      ctx.db,
+      publication("synthetic-dismissed", soon),
+    );
+    await resolveRunFinding(
+      ctx.db,
+      { id: dismissed.id, action: "dismiss" },
+      ctx.actor,
+    );
+    await expect(
+      publishRunFinding(ctx.db, publication("synthetic-dismissed", later)),
+    ).resolves.toEqual({ id: dismissed.id, created: false, open: false });
+
+    const read = () =>
+      getDb(ctx.db)
+        .select()
+        .from(runFinding)
+        .where(eq(runFinding.entityId, target.entityId))
+        .orderBy(runFinding.createdAt);
+    const live = await read();
+    expect(
+      live.map(({ id, status, expiresAt, resolvedByUserId }) => ({
+        id,
+        status,
+        expiresAt,
+        resolvedByUserId,
+      })),
+    ).toEqual([
+      { id: open.id, status: "open", expiresAt: later, resolvedByUserId: null },
+      {
+        id: dismissed.id,
+        status: "dismissed",
+        expiresAt: soon,
+        resolvedByUserId: ctx.actor.userId,
+      },
+    ]);
+    const ids = [open.id, dismissed.id];
+    await getDb(ctx.db)
+      .delete(assessmentState)
+      .where(inArray(assessmentState.id, ids));
+    await rebuildAssessmentStates(ctx.db, ids);
+    expect(await read()).toEqual(live);
   });
 });

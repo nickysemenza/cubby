@@ -55,12 +55,7 @@ Mailbox discovery is a Workflow-backed Run. Its page/retention/admission
 contract lives in the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end).
 Workflow instances are attempts, not the durable record; retries must resume
 persisted progress without depending on provider retention. Instance diagnostics
-expire independently of Run history. The Run's Cloudflare dashboard link requires
-provider sign-in and can outlive the instance.
-
-Deployment configuration, dispatch and Run dashboard links use the shared
-Workflow declarations in `lib/workflows/run-workflows.ts`; a purpose
-selects its binding there, including every purpose sharing the step runtime.
+expire independently of Run history.
 
 The step runtime memoizes a checkpoint inspection before naming each page.
 Names show its declared phase and scope, for example `generate p4 · charges

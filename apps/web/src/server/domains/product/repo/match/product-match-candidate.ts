@@ -37,9 +37,17 @@ import {
 import { assessment, assessmentState } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import {
+  transitionAssessmentState,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
 
 import { productIdentityEvidenceFence } from "./product-identity-fence";
-import { prepareProductIdentityPair } from "./product-identity-snapshot";
+import {
+  pairFingerprint,
+  prepareProductIdentityPair,
+  productIdentitySnapshots,
+} from "./product-identity-snapshot";
 
 const pairProjection = z.object({
   otherId: productId,
@@ -264,23 +272,26 @@ async function publishProductPairWithGuard(
       { data, ...(distinct ? { status: "resolved" } : {}) },
     );
     // A re-proposal replaces the earlier row; leaving it pending strands it.
-    await client
-      .update(assessmentState)
-      .set({
+    await transitionAssessmentStates(
+      transactionDb,
+      and(
+        eq(assessmentState.family, "product_pair"),
+        eq(assessmentState.recordId, pair.productAId),
+        sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
+        sql`${assessmentState.id} <> ${prediction.id}`,
+      ),
+      (row) => ({
         active: false,
-        status: sql`CASE WHEN ${assessmentState.status} = ${suggestionStatus.enum.pending} THEN ${suggestionStatus.enum.superseded} ELSE ${assessmentState.status} END`,
-      })
-      .where(
-        and(
-          eq(assessmentState.family, "product_pair"),
-          eq(assessmentState.recordId, pair.productAId),
-          sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
-          sql`${assessmentState.id} <> ${prediction.id}`,
-        ),
-      );
-    await client
-      .update(assessmentState)
-      .set({
+        ...(row.status === suggestionStatus.enum.pending && {
+          status: suggestionStatus.enum.superseded,
+        }),
+      }),
+      { kind: "superseded_by_publication" },
+    );
+    await transitionAssessmentState(
+      transactionDb,
+      prediction.id,
+      {
         active: true,
         ...(old?.state === "dismissed"
           ? {
@@ -292,8 +303,9 @@ async function publishProductPairWithGuard(
               status: "resolved",
             }
           : {}),
-      })
-      .where(eq(assessmentState.id, prediction.id));
+      },
+      { kind: "product_pair_republished" },
+    );
     return {
       ...pair,
       id: prediction.id,
@@ -418,12 +430,36 @@ export async function listProductMatchRows(
       assessmentState.id,
     )
     .limit(options.limit ?? 2147483647);
-  return Promise.all(
-    rows.map(async (row) => {
-      const data = pairProjection.parse(row.data);
-      return pairRow.parse({
+  // Open detector advice is hidden once either snapshot moved; agent rows
+  // fingerprint live. One set-based snapshot read serves every pair.
+  const pairs = rows.map((row) => {
+    const data = pairProjection.parse(row.data);
+    const ids = [parseEntityId("product", row.recordId), data.otherId] as const;
+    const live =
+      data.source === "agent" || (row.status === "pending" && !row.suppression);
+    return { row, data, ids, live };
+  });
+  const snapshots = await productIdentitySnapshots(
+    db,
+    pairs.flatMap((pair) => (pair.live ? pair.ids : [])),
+  );
+  const current = (ids: readonly [ProductId, ProductId]) => {
+    const [first, second] = ids.map((id) => snapshots.get(id)?.fingerprint);
+    return first && second ? pairFingerprint([first, second]) : null;
+  };
+  const listed: ProductMatchCandidateRow[] = [];
+  for (const { row, data, ids, live } of pairs) {
+    const fingerprint = live ? await current(ids) : row.fingerprint;
+    if (
+      data.source !== "agent" &&
+      live &&
+      (fingerprint === null || fingerprint !== row.fingerprint)
+    )
+      continue;
+    listed.push(
+      pairRow.parse({
         ...row,
-        fingerprint: await reviewedProductPairFingerprint(db, row),
+        fingerprint: data.source === "agent" ? fingerprint : row.fingerprint,
         productAId: row.recordId,
         productBId: data.otherId,
         source: data.source,
@@ -437,9 +473,10 @@ export async function listProductMatchRows(
             .object({ verification: variantVerification.optional() })
             .safeParse(data.signals).data?.verification ?? "unknown",
         signals: data.signals,
-      });
-    }),
-  );
+      }),
+    );
+  }
+  return listed;
 }
 /** Repoint only current projections. Self-pair actions retire; original subjects never change. */
 export async function repointProductMatchCandidatesTx(
@@ -467,22 +504,19 @@ export async function repointProductMatchCandidatesTx(
       ? keepId
       : parseEntityId("product", row.recordId);
     const b = loserIds.includes(data.otherId) ? keepId : data.otherId;
-    if (a === b)
-      await tx
-        .update(assessmentState)
-        .set({ active: false, status: "superseded", suppression: null })
-        .where(eq(assessmentState.id, row.id));
-    else {
-      const pair = canonicalProductPair(a, b);
-      await tx
-        .update(assessmentState)
-        .set({
-          recordId: pair.productAId,
-          data: { ...data, otherId: pair.productBId },
-          status: "superseded",
-          fingerprint: null,
-        })
-        .where(eq(assessmentState.id, row.id));
-    }
+    const pair = a === b ? null : canonicalProductPair(a, b);
+    await transitionAssessmentState(
+      tx,
+      row.id,
+      pair
+        ? {
+            recordId: pair.productAId,
+            data: { ...data, otherId: pair.productBId },
+            status: "superseded",
+            fingerprint: null,
+          }
+        : { active: false, status: "superseded", suppression: null },
+      { kind: "target_merged" },
+    );
   }
 }

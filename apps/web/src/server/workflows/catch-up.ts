@@ -9,7 +9,6 @@ import {
   claimCatchUp,
   releaseCatchUpClaim,
 } from "~/server/generic/work-queue/repo/catch-up-claim";
-import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
 const log = createLogger("catch-up");
 
@@ -19,17 +18,9 @@ export async function requestCatchUp(
   const claimedAt = new Date();
   if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
   try {
-    await publishBackgroundTasks(
-      db,
-      [
-        { kind: "maintenance.recover", requestedAt: claimedAt.toISOString() },
-        {
-          kind: "maintenance.purchase-discovery",
-          requestedAt: claimedAt.toISOString(),
-        },
-      ],
-      { source: "maintenance.app-open" },
-    );
+    await (
+      await import("~/server/workflows/background-tasks/publish")
+    ).wakeJobs({ source: "app-open" });
   } catch (error) {
     await releaseCatchUpClaim(db, claimedAt);
     throw error;
@@ -37,34 +28,28 @@ export async function requestCatchUp(
   return { status: "queued" };
 }
 
-/**
- * Resumes paused or lost Runs (AI work, step-ledger maintenance and Sweeps,
- * budget-paused imports). The backlog drains themselves belong
- * to the `maintenance` Run (`domains/maintenance/service/maintenance-run`), so
- * app open and the cron never run them twice.
- */
+/** Admit periodic families and drain due Jobs; stopped work needs explicit retry. */
 export async function recoverMissedWork(
   db: Database,
   coordinatorRetireBefore?: Date,
 ) {
-  // Ended instances are marked failed before recovery, never only by the
-  // maintenance Run, which may itself be the Run whose instance died.
+  await (
+    await import("~/server/generic/derived-refresh/repo/families")
+  ).scheduleRefreshFamilies(db, { invalidate: false });
+  await (
+    await import("~/server/domains/run/service/derived-discovery")
+  ).scheduleDerivedDiscovery(db);
+  await (await import("~/server/workflows/jobs")).drainProductionJobs(db);
   await (
     await import("~/server/workflows/runs/lifecycle")
   ).reconcileWorkflowRuns(db);
-  await (
-    await import("~/server/domains/run/service/ai-refresh")
-  ).recoverAiRefresh(db);
-  const aiWork = await import("~/server/domains/run/service/ai-work");
-  await aiWork.recoverManualAiWork(db);
-  await aiWork.resumeFundingPausedRuns(db);
   // Operator recovery with its own fixed cutoff; the nightly retirement is
   // a maintenance step.
   if (coordinatorRetireBefore)
     await retireCoordinators(db, coordinatorRetireBefore);
 }
 
-/** Expires stale import Runs, fails Workflow Runs whose instance ended, prunes routine history. */
+/** Expires stale import Runs, projects terminal Job outcomes, and prunes routine history. */
 export async function maintainRunHistory(db: Database) {
   const [{ expireStaleRuns }, { reconcileWorkflowRuns }, { pruneRoutineRuns }] =
     await Promise.all([
@@ -99,7 +84,7 @@ export async function retireCoordinators(db: Database, before: Date) {
 }
 
 /**
- * Start one Gmail discovery Workflow per connected mailbox; Mail import Runs
+ * Admit one Gmail discovery Job per connected mailbox; Mail import Runs
  * follow from discovery. Product research is never started here: it is a
  * member's Burn-down (ADR 0010).
  */
@@ -117,9 +102,7 @@ export async function discoverPurchases(db: Database) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
     return { mail: null };
   }
-  // Fail a stranded pass first: recovery runs concurrently, and a stranded
-  // `running` Run would otherwise hold its mailbox's slot until the next
-  // trigger.
+  // Project terminal execution before checking the mailbox admission slot.
   await reconcileWorkflowRuns(db);
   const pending = await (
     await import("~/server/domains/purchase-import/repo/mail-import-run")

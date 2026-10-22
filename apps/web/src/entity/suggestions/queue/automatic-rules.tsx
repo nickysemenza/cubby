@@ -1,15 +1,12 @@
-import {
-  AUTOMATIC_RULE_MIN_PRECISION,
-  AUTOMATIC_RULE_MIN_REVIEWS,
-  type AutomaticRuleKey,
-  type AutomaticRuleOut,
+import type {
+  AutomaticRuleKey,
+  AutomaticRuleOut,
 } from "@cubby/schemas/automatic-rule";
 import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCount } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { Section } from "~/ui/layout/section";
@@ -32,25 +29,6 @@ const RULE_NAME = {
   "statement_transaction.book_spending": "Statement spending",
 } satisfies Record<AutomaticRuleKey, string>;
 
-/** Floored to a tenth so a rule just under the bar never reads as at it. */
-const formatPrecision = (precision: number) =>
-  `${Math.floor(Math.round(precision * 1e6) / 1e3) / 10}%`;
-
-/** The measured numbers, e.g. "98.6% precision over 140 reviewed · 2 corrected automatic". */
-function ruleNumbers(
-  rule: Pick<AutomaticRuleOut, "n" | "precision" | "correctedAutomatic">,
-) {
-  const measured =
-    rule.n && rule.precision !== null
-      ? `${formatPrecision(rule.precision)} precision over ${formatCount(rule.n)} reviewed`
-      : "No reviewed matches yet";
-  return rule.correctedAutomatic
-    ? `${measured} · ${formatCount(rule.correctedAutomatic)} corrected automatic`
-    : measured;
-}
-
-const BAR = `${formatPrecision(AUTOMATIC_RULE_MIN_PRECISION)} over at least ${AUTOMATIC_RULE_MIN_REVIEWS} reviewed`;
-
 export type AutomaticRuleOperations = {
   rules: typeof suggestions.rules;
   setRule: typeof suggestions.setRule;
@@ -61,9 +39,8 @@ const CATALOG_OPERATIONS: AutomaticRuleOperations = {
 };
 
 /**
- * Each Automatic rule with its measured precision and the member's switch.
- * On is offered only when eligible; the server still decides, and its refusal
- * shows raw. Off is always allowed, after a confirm.
+ * Each Automatic rule and the member's switch. The server still decides, and
+ * its refusal shows raw. Off asks for a confirm.
  */
 export function AutomaticRulesSection({
   operations = CATALOG_OPERATIONS,
@@ -137,14 +114,10 @@ function RuleRow({
         ) : (
           <Badge variant="outline">Off</Badge>
         )}
-        <span className="text-xs text-muted-foreground">
-          {rule.eligible ? "Eligible" : "Not yet eligible"}
-        </span>
         <Switch
           aria-label={`${name} automatic rule`}
           checked={rule.enabled}
-          // On is offered only when eligible; off is always allowed.
-          disabled={set.isPending || (!rule.enabled && !rule.eligible)}
+          disabled={set.isPending}
           onCheckedChange={(checked) =>
             checked ? change(true) : setConfirmingOff(true)
           }
@@ -153,12 +126,11 @@ function RuleRow({
       </LedgerCell>
       <LedgerCell slot="secondary" className="flex flex-col gap-0.5 text-xs">
         <span>{rule.description}</span>
-        <span className="text-muted-foreground tabular-nums">
-          {importPolicy
-            ? "Clean import policy · on by default · no measured threshold"
-            : ruleNumbers(rule)}
-          {rule.eligible ? null : ` · eligible at ${BAR}`}
-        </span>
+        {importPolicy ? (
+          <span className="text-muted-foreground">
+            Clean import policy · on by default
+          </span>
+        ) : null}
         {rule.enabled && rule.enabledAt ? (
           <span className="text-muted-foreground">
             On since <DateDisplay timestamp={rule.enabledAt} />
@@ -188,7 +160,7 @@ function RuleRow({
               Future matches wait for review. Changes it already applied stay.
               {importPolicy
                 ? " You can resume this policy at any time; resuming does not immediately apply the backlog."
-                : ` Turning it back on needs it to be eligible (${BAR}).`}
+                : " You can turn it back on at any time."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

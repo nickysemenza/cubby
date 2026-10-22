@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import * as cfEnv from "~/server/cf-env";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
-import { AiWorkDeferredError, withCooperativeAiWork } from "./cooperative-work";
 import {
   AiResponseCacheBatch,
   aiResponseCacheKey,
@@ -70,24 +71,18 @@ describe("AI response cache", () => {
     }
   });
 
-  // Repeated invalidation races must not turn a bounded Workflow page into
-  // an unbounded stream of cache RPCs before the model can answer.
-  it("bounds recovery from repeatedly replaced invalid cache entries", async () => {
+  // An entry this code rejects is replaced through the claim protocol, so
+  // concurrent readers wait for the replacement instead of racing deletes.
+  it("replaces an invalid entry through one forced claim", async () => {
     const read = vi
       .fn()
+      .mockResolvedValueOnce({ kind: "hit", value: "{}" })
       .mockResolvedValue({ kind: "claimed", token: "synthetic-claim" });
-    for (let index = 0; index < 4; index++)
-      read.mockResolvedValueOnce({ kind: "hit", value: "{}" });
-    const invalidate = vi.fn().mockResolvedValue(false);
+    const publish = vi.fn(async () => true);
     const namespace = fromPartial<
       NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
     >({
-      getByName: () =>
-        fromPartial({
-          readOrClaim: read,
-          invalidate,
-          publish: async () => true,
-        }),
+      getByName: () => fromPartial({ readOrClaim: read, publish }),
     });
     const mock = vi
       .spyOn(cfEnv, "getAiResponseCacheNamespace")
@@ -95,24 +90,88 @@ describe("AI response cache", () => {
     const compute = vi.fn(async () => ({ choice: "one" }));
     try {
       expect(
-        await withCooperativeAiWork(() =>
-          withAiResponseCache({
-            enabled: true,
-            keyInput: input("synthetic-invalid-race"),
-            validate,
-            compute,
-          }),
-        ),
+        await withAiResponseCache({
+          enabled: true,
+          keyInput: input("synthetic-invalid-entry"),
+          validate,
+          compute,
+        }),
       ).toEqual({ choice: "one" });
-      expect(read.mock.calls.length).toBeLessThanOrEqual(3);
+      expect(read.mock.calls.map(([, force]) => force)).toEqual([false, true]);
       expect(compute).toHaveBeenCalledOnce();
+      expect(publish).toHaveBeenCalledOnce();
     } finally {
       mock.mockRestore();
     }
   });
 
-  // A contended cache lease must become durable Workflow waiting, not a polling loop.
-  it("yields a Workflow on its first contended cache lookup", async () => {
+  // Regression: an unreachable cache fell through to an uncached paid call.
+  it("never places an uncached provider call when the cache is unreachable", async () => {
+    const outage = new Error("synthetic cache outage");
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () =>
+        fromPartial({ readOrClaim: vi.fn().mockRejectedValue(outage) }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    const compute = vi.fn();
+    const run = () =>
+      withAiResponseCache({
+        enabled: true,
+        keyInput: input("synthetic-cache-outage"),
+        validate,
+        compute,
+      });
+    try {
+      await expect(run()).rejects.toSatisfy(
+        (error: unknown) =>
+          error instanceof JobDeferredError && error.cause === outage,
+      );
+      expect(compute).not.toHaveBeenCalled();
+    } finally {
+      mock.mockRestore();
+    }
+  });
+
+  // Regression: an interactive wait that outlived its deadline paid for an
+  // uncached duplicate of the in-flight answer.
+  it("fails an interactive wait at its deadline without an uncached call", async () => {
+    vi.useFakeTimers();
+    const read = vi.fn(() => ({ kind: "busy" }));
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () => fromPartial({ readOrClaim: read }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    const compute = vi.fn();
+    try {
+      const result = withAiResponseCache({
+        enabled: true,
+        keyInput: input("synthetic-busy-deadline"),
+        validate,
+        compute,
+      });
+      // Observed below; this only keeps the pending rejection handled.
+      result.catch(() => undefined);
+      // WebCrypto hashing finishes on the real event loop before the wait starts.
+      await vi.waitFor(() => expect(read).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(6 * 60_000);
+      await expect(result).rejects.toThrow("still computing");
+      expect(compute).not.toHaveBeenCalled();
+    } finally {
+      mock.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  // A contended cache lease defers a job page instead of polling inside it.
+  it("defers a job page on its first contended cache lookup", async () => {
     const read = vi
       .fn()
       .mockReturnValueOnce({ kind: "busy" })
@@ -128,18 +187,18 @@ describe("AI response cache", () => {
     const compute = vi.fn();
     try {
       await expect(
-        withCooperativeAiWork(() =>
+        withJobExecution(fromPartial({}), fromPartial({}), () =>
           withAiResponseCache({
             enabled: true,
-            keyInput: input("synthetic-workflow-contention"),
+            keyInput: input("synthetic-job-contention"),
             validate,
             compute,
           }),
         ),
       ).rejects.toSatisfy(
         (error: unknown) =>
-          error instanceof AiWorkDeferredError &&
-          error.until - Date.now() >= 14_000,
+          error instanceof JobDeferredError &&
+          error.until.getTime() - Date.now() >= 14_000,
       );
       expect(read).toHaveBeenCalledOnce();
       expect(compute).not.toHaveBeenCalled();
@@ -288,6 +347,29 @@ describe("AI response cache", () => {
     expect(await withAiResponseCache(args)).toEqual({ choice: "two" });
   });
 
+  it("keeps the previous answer when a forced regeneration fails", async () => {
+    const keyInput = input(crypto.randomUUID());
+    const args = { enabled: true, keyInput, validate };
+    await withAiResponseCache({
+      ...args,
+      compute: async () => ({ choice: "one" }),
+    });
+    await expect(
+      withAiResponseCache({
+        ...args,
+        force: true,
+        compute: async () => {
+          throw new Error("429");
+        },
+      }),
+    ).rejects.toThrow("429");
+    const compute = vi.fn();
+    expect(await withAiResponseCache({ ...args, compute })).toEqual({
+      choice: "one",
+    });
+    expect(compute).not.toHaveBeenCalled();
+  });
+
   // A hit's standard comparison prices the inference its entry avoided, so
   // every call that produced the answer travels with the entry.
   it("hands a hit the usage of every call that produced its entry", async () => {
@@ -314,7 +396,7 @@ describe("AI response cache", () => {
     });
   });
 
-  // Entries published before usage retention stay valid answers until expiry.
+  // Entries published before usage retention stay valid answers.
   it("replays a bare legacy entry with unknown avoided usage", async () => {
     const namespace = fromPartial<
       NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
@@ -374,30 +456,74 @@ describe("AI response cache", () => {
     ).toEqual({ choice: "one" });
   });
 
-  it("releases an oversized result so the next call can proceed", async () => {
+  // Regression: answers above one storage row were released uncached and
+  // every identical call paid again.
+  it("replays an answer larger than one storage row", async () => {
     const keyInput = input(crypto.randomUUID());
     const huge = "x".repeat(1_000_001);
-    expect(
-      await withAiResponseCache({
-        enabled: true,
-        keyInput,
-        validate,
-        compute: async () => ({ choice: huge }),
-      }),
-    ).toEqual({ choice: huge });
-    expect(
-      await withAiResponseCache({
-        enabled: true,
-        keyInput,
-        validate,
-        compute: async () => ({ choice: "fresh" }),
-      }),
-    ).toEqual({ choice: "fresh" });
+    const args = { enabled: true, keyInput, validate };
+    await withAiResponseCache({
+      ...args,
+      compute: async () => ({ choice: huge }),
+    });
+    const compute = vi.fn();
+    expect(await withAiResponseCache({ ...args, compute })).toEqual({
+      choice: huge,
+    });
+    expect(compute).not.toHaveBeenCalled();
   });
 
-  // Regression: the cache write sat between the model answer and the response.
-  it("answers before its cache write lands inside a Worker request", async () => {
-    const publish = vi.fn(() => new Promise<boolean>(() => {}));
+  // A paid answer whose write fails is not reported as success, and its
+  // retry writes the kept answer instead of paying for it again.
+  it("keeps an unwritten answer for a retry without another model call", async () => {
+    const outage = new Error("synthetic write outage");
+    const publish = vi
+      .fn()
+      .mockRejectedValueOnce(outage)
+      .mockRejectedValueOnce(outage)
+      .mockRejectedValueOnce(outage)
+      .mockResolvedValue(true);
+    const namespace = fromPartial<
+      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+    >({
+      getByName: () =>
+        fromPartial({
+          readOrClaim: () => ({ kind: "claimed" as const, token: "lease" }),
+          publish,
+        }),
+    });
+    const mock = vi
+      .spyOn(cfEnv, "getAiResponseCacheNamespace")
+      .mockReturnValue(namespace);
+    const compute = vi.fn(async () => ({ choice: "one" }));
+    const args = {
+      enabled: true,
+      keyInput: input(`unwritten-${crypto.randomUUID()}`),
+      validate,
+      compute,
+    };
+    try {
+      await expect(withAiResponseCache(args)).rejects.toSatisfy(
+        (error: unknown) => error instanceof Error && error.cause === outage,
+      );
+      expect(await withAiResponseCache(args)).toEqual({ choice: "one" });
+      expect(compute).toHaveBeenCalledOnce();
+      expect(publish).toHaveBeenCalledTimes(4);
+    } finally {
+      mock.mockRestore();
+    }
+  });
+
+  // A reported answer is reusable: its cache write lands before the caller
+  // sees success instead of trailing the response.
+  it("persists a new answer before reporting it", async () => {
+    let land!: (written: boolean) => void;
+    const publish = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          land = resolve;
+        }),
+    );
     const namespace = fromPartial<
       NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
     >({
@@ -411,21 +537,26 @@ describe("AI response cache", () => {
       .spyOn(cfEnv, "getAiResponseCacheNamespace")
       .mockReturnValue(namespace);
     const deferred: Promise<unknown>[] = [];
+    let answered = false;
     try {
-      await expect(
-        cfEnv.runWithExecutionCtx(
-          { waitUntil: (task) => deferred.push(task) },
-          () =>
-            withAiResponseCache({
-              enabled: true,
-              keyInput: input(`deferred-${crypto.randomUUID()}`),
-              validate,
-              compute: async () => ({ choice: "one" }),
-            }),
-        ),
-      ).resolves.toEqual({ choice: "one" });
-      expect(deferred).toHaveLength(1);
+      const result = cfEnv
+        .runWithExecutionCtx({ waitUntil: (task) => deferred.push(task) }, () =>
+          withAiResponseCache({
+            enabled: true,
+            keyInput: input(`persisted-${crypto.randomUUID()}`),
+            validate,
+            compute: async () => ({ choice: "one" }),
+          }),
+        )
+        .then((value) => {
+          answered = true;
+          return value;
+        });
       await vi.waitFor(() => expect(publish).toHaveBeenCalledOnce());
+      expect(answered).toBe(false);
+      land(true);
+      expect(await result).toEqual({ choice: "one" });
+      expect(deferred).toEqual([]);
     } finally {
       mock.mockRestore();
     }

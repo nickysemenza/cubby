@@ -1,11 +1,11 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { generateShortcode } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import * as storage from "~/server/clients/s3";
 import { getDb } from "~/server/db/helpers";
+import { job as durableJob } from "~/server/db/retained-tables";
 import {
   aiAnalysis,
   image,
@@ -37,12 +37,8 @@ import {
 import {
   claimImageProcessingJob,
   completeImageProcessingJob,
-  findImageProcessingDispatchRepairs,
   getLeasedImageProcessingJobContext,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   markImageProcessingWaitingForDevice,
-  reclaimExpiredImageProcessingLeases,
   retryFailedImageProcessingJobs,
 } from "./image-processing";
 import {
@@ -95,6 +91,31 @@ describe("image execution history conservation", () => {
         osVersion: null,
       },
     });
+
+  // Both native pulls and queue dispatch must claim the same execution row;
+  // history/processing payloads cannot retain an independent retry owner.
+  it("uses the committed universal Job lease for native capabilities", async () => {
+    const { jobId } = await setup();
+    const [intent] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    expect(intent?.kind).toBe("image.processing");
+    const lease = await claim(jobId);
+    const [running] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.id, intent!.id));
+    expect(running?.leaseToken).toBe(lease.attemptId);
+    expect(running?.leaseExpiresAt).toEqual(lease.leaseExpiresAt);
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        jobId,
+        kinds: ["describe_image"],
+        leaseMs: 60_000,
+      }),
+    ).toBeNull();
+  });
   it("preserves a device's edited name across hello and records it on new activity", async () => {
     const installationId = crypto.randomUUID();
     const created = await createDevice(
@@ -206,7 +227,7 @@ describe("image execution history conservation", () => {
     expect(attempts[1]?.submissionId).toBe(submission.id);
     expect(attempts[0]?.submissionId).not.toBe(submission.id);
   });
-  it("records waiting without a device call, binds assignments, preserves expiry and rejects stale delivery once", async () => {
+  it("records waiting without a device call, preserves assignments and rejects stale delivery once", async () => {
     const { jobId } = await setup();
     const waiting = await claim(jobId);
     await markImageProcessingWaitingForDevice(ctx.db, {
@@ -221,9 +242,9 @@ describe("image execution history conservation", () => {
         .where(eq(imageProcessingAttempt.jobId, jobId)),
     ).toHaveLength(0);
     await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ nextAttemptAt: sql`now()` })
-      .where(eq(imageProcessingJob.id, jobId));
+      .update(durableJob)
+      .set({ availableAt: sql`now()` })
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
     const lease = await claim(jobId);
     const deviceId = crypto.randomUUID();
     const assignment = {
@@ -250,10 +271,10 @@ describe("image execution history conservation", () => {
         deviceId,
       }),
     ).toBeNull();
-    await reclaimExpiredImageProcessingLeases(
-      ctx.db,
-      new Date(Date.now() + 120_000),
-    );
+    await getDb(ctx.db)
+      .update(durableJob)
+      .set({ leaseExpiresAt: new Date(0) })
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
     const result = {
       jobId,
       attemptId: lease.attemptId,
@@ -270,12 +291,12 @@ describe("image execution history conservation", () => {
     expect((await completeImageProcessingJob(ctx.db, { result })).adopted).toBe(
       false,
     );
-    const [expired] = await getDb(ctx.db)
+    const [recorded] = await getDb(ctx.db)
       .select()
       .from(imageProcessingAttempt)
       .where(eq(imageProcessingAttempt.id, lease.attemptId));
-    expect(expired?.state).toBe("expired");
-    expect(expired?.executor?.deviceId).toBe(deviceId);
+    expect(recorded?.executor?.deviceId).toBe(deviceId);
+    expect(recorded?.completedAt).toBeNull();
     const events = await getDb(ctx.db)
       .select()
       .from(imageProcessingEvent)
@@ -379,7 +400,7 @@ describe("image execution history conservation", () => {
   });
   // A companion can return after its signed PUT or lease expires, or after the source changes.
   // Neither a new reservation nor retaining uploaded input may revive that stale attempt.
-  it.each(["expired", "replaced", "deleted"])(
+  it.each(["expired", "stopped", "replaced", "deleted"])(
     "fences analysis input after the source is %s",
     async (change) => {
       const { source, jobId } = await setup();
@@ -391,9 +412,14 @@ describe("image execution history conservation", () => {
       ).toBe(true);
       if (change === "expired") {
         await getDb(ctx.db)
-          .update(imageProcessingJob)
+          .update(durableJob)
           .set({ leaseExpiresAt: new Date(0) })
-          .where(eq(imageProcessingJob.id, jobId));
+          .where(eq(durableJob.key, `image-processing:${jobId}`));
+      } else if (change === "stopped") {
+        await getDb(ctx.db)
+          .update(durableJob)
+          .set({ state: "paused" })
+          .where(eq(durableJob.key, `image-processing:${jobId}`));
       } else if (change === "replaced") {
         await getDb(ctx.db)
           .update(image)
@@ -569,131 +595,17 @@ describe("image execution history conservation", () => {
       .where(eq(imageProcessingJob.id, jobId));
     expect(await retryFailedImageProcessingJobs(ctx.db, 25)).toEqual([]);
   });
-  it("repairs a live wakeup past more obsolete rows than its batch limit", async () => {
-    const { source, scheduled } = await setup();
-    const sourceId = parseEntityId("image", source.id);
-    await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values(
-        Array.from({ length: 101 }, (_, index) => ({
-          shortcode: generateShortcode("imageJob"),
-          imageId: sourceId,
-          kind: "describe_image" as const,
-          state: "pending" as const,
-          sourceContentHash: index.toString(16).padStart(64, "0"),
-          processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-          nextAttemptAt: new Date(0),
-        })),
-      );
-
-    expect(
-      new Set(await findImageProcessingDispatchRepairs(ctx.db, 100)),
-    ).toEqual(new Set(scheduled.jobIds));
-
-    const obsolete = await getDb(ctx.db)
-      .select({ state: imageProcessingJob.state })
-      .from(imageProcessingJob)
-      .where(eq(imageProcessingJob.imageId, sourceId));
-    expect(obsolete.filter((row) => row.state === "skipped")).toHaveLength(100);
-  });
-  it("retires obsolete processor wakeups without executing them or changing completed history", async () => {
-    const { source, scheduled, jobId } = await setup();
-    const sourceId = parseEntityId("image", source.id);
-    const revisions = Array.from(
-      { length: 104 },
-      (_, index) => index + 1,
-    ).filter(
-      (revision) =>
-        ![
-          IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-        ].includes(revision),
-    );
-    const obsolete = await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values(
-        revisions.slice(0, 101).map((processorRevision) => ({
-          shortcode: generateShortcode("imageJob"),
-          imageId: sourceId,
-          kind: "describe_image" as const,
-          state: "pending" as const,
-          sourceContentHash: "a".repeat(64),
-          processorRevision,
-          nextAttemptAt: new Date(0),
-        })),
-      )
-      .returning({ id: imageProcessingJob.id });
-    const historyResult = {
-      kind: "describe_image",
-      status: "completed",
-      description: {
-        description: "Synthetic old analysis",
-        claims: [],
-        cutoutEligibility: "review",
-      },
-    };
-    const [history] = await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values({
-        shortcode: generateShortcode("imageJob"),
-        imageId: sourceId,
-        kind: "describe_image",
-        state: "ready",
-        sourceContentHash: "a".repeat(64),
-        processorRevision: revisions[101]!,
-        result: historyResult,
-        completedAt: new Date("2026-01-01T00:00:00Z"),
-      })
-      .returning();
-    expect(
-      await claimImageProcessingJob(ctx.db, {
-        jobId: obsolete[0]!.id,
-        kinds: ["describe_image"],
-        leaseMs: 60_000,
-      }),
-    ).toBeNull();
-    expect(
-      new Set(await findImageProcessingDispatchRepairs(ctx.db, 100)),
-    ).toEqual(new Set(scheduled.jobIds));
-    const retired = await getDb(ctx.db)
-      .select()
-      .from(imageProcessingJob)
-      .where(eq(imageProcessingJob.imageId, sourceId));
-    const obsoleteRows = retired.filter((row) =>
-      obsolete.some((entry) => entry.id === row.id),
-    );
-    expect(obsoleteRows.filter((row) => row.state === "skipped")).toHaveLength(
-      100,
-    );
-    expect(
-      obsoleteRows.filter(
-        (row) =>
-          row.lastError === "Image processor revision is no longer current",
-      ),
-    ).toHaveLength(100);
-    expect(obsoleteRows.every((row) => row.attempts === 0)).toBe(true);
-    expect(retired.find((row) => row.id === history!.id)).toEqual(history);
-    expect(
-      await claimImageProcessingJob(ctx.db, {
-        jobId,
-        kinds: ["describe_image"],
-        leaseMs: 60_000,
-      }),
-    ).toMatchObject({
-      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-    });
-  });
   it("adopts cloud analysis only with its live lease and keeps rejected output in attempt history", async () => {
     const { source, jobId } = await setup();
     const old = await claim(jobId);
-    await reclaimExpiredImageProcessingLeases(
-      ctx.db,
-      new Date(Date.now() + 120_000),
-    );
     await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ nextAttemptAt: sql`now()` })
-      .where(eq(imageProcessingJob.id, jobId));
+      .update(durableJob)
+      .set({ leaseExpiresAt: new Date(0) })
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    await getDb(ctx.db)
+      .update(durableJob)
+      .set({ availableAt: sql`now()` })
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
     const current = await claim(jobId);
     const cloudAnalysis = {
       provider: "test",

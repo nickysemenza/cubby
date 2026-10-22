@@ -13,6 +13,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
   appSettings,
+  job,
   runApproval,
   runControlEvent,
   run as runTable,
@@ -24,7 +25,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 
 import { callMcpTool } from "../testing/mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
@@ -245,14 +245,12 @@ describe("Run lifecycle through MCP", () => {
 describe("Mail import switch and discovery through MCP", () => {
   const ctx = withTestDb("mcp");
   const mailboxId = "synthetic-mcp-approval-mailbox";
-  const launched: WorkflowRunParams[] = [];
   const CONSOLE_LIMIT =
     '{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2099-11-01 at 00:00 UTC."}}';
   // The egress Durable Object's credit refusal, as funding reads see it.
   let creditRefusal: { until: number; reason: string } | null = null;
 
   beforeEach(() => {
-    launched.length = 0;
     creditRefusal = null;
     setCfEnv(
       fromPartial<Env>({
@@ -265,19 +263,6 @@ describe("Mail import switch and discovery through MCP", () => {
             scheduleFundingResume: async () => undefined,
             scheduleAiWorkRecovery: async () => undefined,
           }),
-        },
-        MAIL_DISCOVERY: {
-          create: async (options: {
-            id?: string;
-            params?: WorkflowRunParams;
-          }) => {
-            if (!options?.id || !options.params)
-              throw new Error("Synthetic Workflow launch needs id and params");
-            launched.push(options.params);
-            return fromPartial<
-              Awaited<ReturnType<Env["MAIL_DISCOVERY"]["create"]>>
-            >({ id: options.id });
-          },
         },
       }),
     );
@@ -348,7 +333,6 @@ describe("Mail import switch and discovery through MCP", () => {
     });
     expect(discovered.isError).not.toBe(true);
     expect(discovered.structuredContent).toEqual({ started: 1, running: 0 });
-    expect(launched).toHaveLength(1);
     const [discovery] = await getDb(ctx.db)
       .select()
       .from(runTable)
@@ -357,6 +341,18 @@ describe("Mail import switch and discovery through MCP", () => {
       mailboxId,
       executionPolicy: "import",
     });
+    if (!discovery) throw new Error("Expected discovery Run");
+    expect(
+      await getDb(ctx.db)
+        .select({ state: job.state, input: job.input })
+        .from(job)
+        .where(eq(job.key, `run:${discovery.id}`)),
+    ).toEqual([
+      {
+        state: "queued",
+        input: { runId: discovery.id, purpose: "mail_discovery" },
+      },
+    ]);
   });
 
   // Failure modes: household funding (budgets, a recorded credit refusal with
@@ -453,7 +449,9 @@ describe("Mail import switch and discovery through MCP", () => {
       ).isError,
     ).toBe(true);
     expect(await getDb(ctx.db).select().from(runTable)).toEqual([]);
-    expect(launched).toEqual([]);
+    expect(
+      await getDb(ctx.db).select().from(job).where(eq(job.kind, "run.execute")),
+    ).toEqual([]);
   });
 
   const agentRun = async (purpose?: "mail_import") => {

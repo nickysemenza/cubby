@@ -85,8 +85,8 @@ export function semanticEmbeddingsConfigured(
 }
 
 /**
- * One provider request for the whole array — the adapter batches natively, so
- * `texts.length` vectors come back from a single call regardless of size.
+ * One provider request for the array's uncached texts — the adapter batches
+ * natively, so every miss comes back from a single call regardless of size.
  */
 export async function embedTexts(
   texts: string[],
@@ -134,10 +134,13 @@ export async function embedTexts(
           clientKey: `embeddings:${new Date().toISOString().slice(0, 10)}`,
         })))
       : undefined;
-    const result = await runEmbeddingFeature(
+    return runEmbeddingFeature(
       { feature, model: config.model },
       {
-        embed: async (observers) => {
+        texts,
+        dimensions: config.dimensions,
+        cache: ports === productionEmbeddingPorts,
+        embed: async (batch, observers) => {
           const fetchThroughGateway = ports.fetchFor(metadata, observers);
           const response = await fetchThroughGateway(
             `${gatewayBaseURL("openai")}/embeddings`,
@@ -146,7 +149,7 @@ export async function embedTexts(
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 model: config.model,
-                input: texts,
+                input: batch,
                 dimensions: config.dimensions,
               }),
             },
@@ -171,27 +174,6 @@ export async function embedTexts(
       },
       { db: opts?.db, runId, operation, entity: opts?.entity },
     );
-
-    // Ordered by the reported input position, not by arrival. A batch caller
-    // zips these against its own refs, so a reordered response would write
-    // every vector onto the wrong entity — silently, and only detectably as
-    // bad search results months later.
-    const embeddings = [...result.embeddings]
-      .sort((left, right) => left.index - right.index)
-      .map((item) => item.vector);
-    if (embeddings.length !== texts.length) {
-      throw new Error(
-        `Embedding response returned ${embeddings.length} vectors for ${texts.length} inputs`,
-      );
-    }
-    for (const embedding of embeddings) {
-      if (embedding.length !== config.dimensions) {
-        throw new Error(
-          `Embedding dimension mismatch: expected ${config.dimensions}, got ${embedding.length}`,
-        );
-      }
-    }
-    return embeddings;
   });
 }
 

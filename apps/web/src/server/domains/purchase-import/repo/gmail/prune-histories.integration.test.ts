@@ -14,9 +14,9 @@ import {
   run,
   runOperation,
   aiUsage,
-  runFinding,
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { pruneRoutineRuns } from "../../operations/gmail/discovery";
 import { selectEmailEvidenceCandidate } from "../../service/gmail/candidate-extraction";

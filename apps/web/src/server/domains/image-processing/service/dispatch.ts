@@ -6,7 +6,9 @@ import {
 } from "@cubby/schemas/image-processing";
 import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
 import { providerFor } from "@cubby/shared/ai/models";
+import { z } from "zod";
 
+import { findErrorCause } from "~/lib/error-diagnostics";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { getImageProcessingNamespace } from "~/server/cf-env";
@@ -22,7 +24,6 @@ import {
   completeImageProcessingJob,
   markImageProcessingWaitingForDevice,
   SERVER_FAILURE_RETRYABLE,
-  reclaimExpiredImageProcessingLeases,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
   assignImageProcessingExecutor,
@@ -30,6 +31,8 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing-history";
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 
 import { completeCloudImageDescription } from "./cloud-description";
 import { completeCloudImageIdentification } from "./cloud-identification";
@@ -60,7 +63,6 @@ export async function dispatchImageProcessingWakeup(
   jobId: string,
   options: CloudImageDispatchOptions = {},
 ): Promise<"dispatched" | "completed" | "waiting" | "deferred" | "skipped"> {
-  await reclaimExpiredImageProcessingLeases(db);
   const claimed = await claimImageProcessingJob(db, {
     jobId,
     kinds: ["identify_image", "describe_image", "subject_lift"],
@@ -155,6 +157,19 @@ export async function dispatchImageProcessingWakeup(
     }
     return "dispatched";
   } catch (error) {
+    const deferred = findErrorCause(
+      error,
+      (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+    );
+    if (deferred) {
+      await deferImageProcessingJob(db, {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        until: deferred.until,
+        reason: deferred.message,
+      });
+      return "deferred";
+    }
     if (error instanceof AiBudgetExhaustedError) {
       await deferImageProcessingJob(db, {
         jobId: claimed.id,
@@ -262,3 +277,15 @@ export async function reserveCompanionAnalysisOutput(
     ))
   );
 }
+
+/** Both companion pull and queue dispatch claim the same universal execution row. */
+export const imageProcessingJobHandler = defineJobHandler(
+  z.object({ processingId: z.uuid() }),
+  async (db, _claim, input) => {
+    const outcome = await dispatchImageProcessingWakeup(db, input.processingId);
+    return {
+      page: { done: true, result: { outcome } },
+      ...(outcome === "dispatched" ? { awaitExternal: true as const } : {}),
+    };
+  },
+);

@@ -3,7 +3,6 @@ import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
-import { generateShortcode } from "@cubby/shared";
 import { eq, getTableColumns, getTableName, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -22,7 +21,6 @@ import {
   externalSource,
   financialTransactionAllocation,
   imageDerivative,
-  imageProcessingJob,
   imageSighting,
   importPreparedOrder,
   importSourceClaim,
@@ -49,7 +47,6 @@ import {
   run as runTable,
   runApproval,
   runControlEvent,
-  runFinding,
   runOperation,
   runStep,
   statementImport,
@@ -65,6 +62,7 @@ import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
   countDependencyCycles,
@@ -309,8 +307,7 @@ const mkRun = async (
     mkUser(db),
   ]);
   if (!partySnapshot) throw new Error("Import run party fixture was not found");
-  return insertAndReturn(db, runTable, {
-    shortcode: generateShortcode("run"),
+  return insertWithShortcode(db, "run", {
     ledgerPartyId: party,
     actorUserId: userId.parse(actor.id),
     actorName: actor.name,
@@ -616,8 +613,7 @@ const SOURCE_FACTORIES = {
     }),
 
   "ImageProcessingJob.imageId": (db, targetId) =>
-    insertAndReturn(db, imageProcessingJob, {
-      shortcode: generateShortcode("imageJob"),
+    insertWithShortcode(db, "imageJob", {
       imageId: parseEntityId("image", targetId),
       kind: "subject_lift",
       state: "pending",
@@ -671,10 +667,10 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
 
-  "RunFinding.ledgerPartyId": async (db, targetId) => {
+  "AssessmentState.ledgerPartyId": async (db, targetId) => {
     // A finding's target is anchored on Entity, so it must name a real run.
     const run = await mkRun(db);
-    return insertAndReturn(db, runFinding, {
+    return seedRunFinding(db, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
       entityKind: "run",
       entityId: run.id,
@@ -1669,19 +1665,6 @@ const SOURCE_FACTORIES = {
       lastRunId: parseEntityId("run", targetId),
     }),
 
-  "RunFinding.runId": async (db, targetId) => {
-    const party = await mkLedgerParty(db);
-    return insertAndReturn(db, runFinding, {
-      runId: parseEntityId("run", targetId),
-      ledgerPartyId: party.id,
-      entityKind: "run",
-      entityId: targetId,
-      kind: "liveness-fixture",
-      summary: "Liveness fixture",
-      evidenceFingerprint: uniq("finding"),
-    });
-  },
-
   "Device.ledgerPartyId": (db, targetId) =>
     insertWithShortcode(db, "device", {
       installationId: uniq("installation"),
@@ -1863,17 +1846,6 @@ describe("findReferentialLivenessViolations", () => {
   });
 
   it("reports every derived edge when a live source points at a soft-deleted target", async () => {
-    // The real persisted matrix also owns exact fixture coverage, so a new
-    // live edge cannot disappear behind a declaration-only test.
-    expect(Object.keys(SOURCE_FACTORIES).sort()).toEqual(
-      [...new Set(derivedMustTargetLiveEdges.map((s) => s.edgeKey))].sort(),
-    );
-    for (const spec of derivedMustTargetLiveEdges) {
-      expect(
-        Object.keys(TARGET_FACTORIES).includes(spec.targetEntity),
-        `no TARGET_FACTORIES entry for "${spec.targetEntity}" (edge "${spec.edgeKey}")`,
-      ).toBe(true);
-    }
     // Authoritative owner for the old per-edge "reports exactly one" cases:
     // make one violation for every derived edge, then prove the detector returns
     // that complete edge/source/target map in one scan. This retains complete

@@ -33,6 +33,7 @@ import {
   getErrorMessage,
 } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   buildLocationAnalysisFingerprint,
@@ -46,6 +47,16 @@ import {
 import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
+import {
+  getDb,
+  withTransactionDatabase,
+  runBeforeCommitDatabase,
+} from "~/server/db/helpers";
+import {
+  entityAttachment,
+  image as imageTable,
+  location as locationTable,
+} from "~/server/db/schema";
 import {
   getInventoryByLocationIds,
   insertInventoryEntry,
@@ -63,6 +74,7 @@ import { findProductByNameFuzzyManufacturer } from "~/server/domains/product/rep
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
+import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
@@ -260,6 +272,60 @@ export interface LocationDescriptionResult extends LocationDescription {
   previousDescription: string | null;
 }
 
+/** Provider work finishes before this transaction; only current inputs may publish. */
+async function publishLocationAnalysis(
+  db: Database,
+  locationId: LocationId,
+  imageCodes: readonly string[],
+  currentFingerprint: (tx: Database) => Promise<string>,
+  expected: string,
+  write: (tx: Database) => Promise<void>,
+) {
+  await withTransactionDatabase(db, async (tx) => {
+    await assertCurrentJob(tx);
+    await getDb(tx)
+      .select({ id: locationTable.id })
+      .from(locationTable)
+      .where(eq(locationTable.id, locationId))
+      .for("share");
+    // Attachment writers lock the owner first. Image removals lock images
+    // before attachments; keep that same order while publishing analysis.
+    const images = await getDb(tx)
+      .select({ id: imageTable.id })
+      .from(imageTable)
+      .where(
+        and(
+          inArray(imageTable.shortcode, [...imageCodes]),
+          isNull(imageTable.deletedAt),
+        ),
+      )
+      .orderBy(imageTable.id)
+      .for("share");
+    if (images.length)
+      await getDb(tx)
+        .select({ id: entityAttachment.id })
+        .from(entityAttachment)
+        .where(
+          and(
+            eq(entityAttachment.entityId, locationId),
+            inArray(
+              entityAttachment.imageId,
+              images.map((image) => image.id),
+            ),
+          ),
+        )
+        .orderBy(entityAttachment.id)
+        .for("share");
+    const checkInputs = async (database: Database) => {
+      if ((await currentFingerprint(database)) !== expected)
+        throw new Error("Location inputs changed during analysis");
+    };
+    await checkInputs(tx);
+    await write(tx);
+    await runBeforeCommitDatabase(tx, checkInputs, "fence");
+  });
+}
+
 /**
  * Analyze location photos and generate a description of contents.
  * Persists the description to the location record.
@@ -327,7 +393,27 @@ export async function describeLocation(
       entity: { entityKind: "location", entityId: locationId },
     },
   );
-  await upsertAiAnalysis(db, analysisKey, result);
+  await publishLocationAnalysis(
+    db,
+    locationId,
+    images.map((image) => image.id),
+    async (tx) => {
+      const current = await getLocationById(tx, locationId);
+      return buildLocationAnalysisFingerprint(LOCATION_DESCRIPTION_FEATURE, {
+        locationName: current.name,
+        images: (current.images ?? []).slice(0, MAX_ANALYSIS_IMAGES),
+      });
+    },
+    inputFingerprint,
+    async (tx) => {
+      await upsertAiAnalysis(tx, analysisKey, result);
+      await runMutationSideEffects(tx, {
+        action: "updated",
+        entity: { entity: "location", id: locationId },
+        source: "location-ai.description",
+      });
+    },
+  );
   const missMetadata = cacheMetadata(
     "miss",
     LOCATION_DESCRIPTION_FEATURE,
@@ -337,12 +423,6 @@ export async function describeLocation(
     ...missMetadata,
     entityKind: "location",
     entityId: locationId,
-  });
-
-  await runMutationSideEffects(db, {
-    action: "updated",
-    entity: { entity: "location", id: locationId },
-    source: "location-ai.description",
   });
 
   return {
@@ -554,7 +634,25 @@ export async function detectInventoryItems(
         entity: { entityKind: "location", entityId: locationId },
       },
     );
-    await upsertAiAnalysis(db, analysisKey, raw);
+    await publishLocationAnalysis(
+      db,
+      locationId,
+      images.map((image) => image.id),
+      async (tx) => {
+        const current = await getLocationById(tx, locationId);
+        return buildLocationAnalysisFingerprint(
+          LOCATION_INVENTORY_DETECTION_FEATURE,
+          {
+            locationName: current.name,
+            images: selectDetectionImages(current.images ?? [], imageIds),
+          },
+        );
+      },
+      inputFingerprint,
+      async (tx) => {
+        await upsertAiAnalysis(tx, analysisKey, raw);
+      },
+    );
   }
 
   const cache = detectionCacheMetadata(cacheStatus, inputFingerprint);

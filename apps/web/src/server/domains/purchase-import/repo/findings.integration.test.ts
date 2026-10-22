@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import {
   product as productTable,
-  runFinding,
   orderMailEvent,
   user,
 } from "~/server/db/schema";
@@ -23,6 +22,10 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import {
+  runFinding,
+  seedRunFinding,
+} from "~/server/testing/run-finding.fixtures";
 
 import {
   retainedMailFixture,
@@ -48,19 +51,16 @@ describe("resolveArrivedFindingsForPurchase", () => {
     purchaseId: string,
     fingerprint: string,
   ) => {
-    const [row] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
-        entityKind: "purchase",
-        entityId: purchaseId,
-        kind: "arrived",
-        summary:
-          "All shipments are marked delivered. Review and receive this purchase.",
-        proposedFix: { kind: "receive_purchase", purchaseId },
-        evidenceFingerprint: fingerprint,
-      })
-      .returning({ id: runFinding.id });
+    const row = await seedRunFinding(ctx.db, {
+      ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
+      entityKind: "purchase",
+      entityId: purchaseId,
+      kind: "arrived",
+      summary:
+        "All shipments are marked delivered. Review and receive this purchase.",
+      proposedFix: { kind: "receive_purchase", purchaseId },
+      evidenceFingerprint: fingerprint,
+    });
     if (!row) throw new Error("test setup: finding not inserted");
     return row.id;
   };
@@ -673,25 +673,21 @@ describe("create_refund findings", () => {
       occurredAt: new Date("2026-09-05T12:00:00.000Z"),
       sourceKey,
     });
-    const [finding] = await database
-      .insert(runFinding)
-      .values({
-        ledgerPartyId: fixture.party.id,
-        entityKind: "purchase",
-        entityId: input.purchaseId,
-        kind: "refund_unbooked",
-        summary:
-          "Vendor mail reports a refund that is not yet booked in the expense ledger.",
-        proposedFix: {
-          kind: "create_refund",
-          purchaseId: input.purchaseId,
-          amount: -10,
-          title: `Refund for order ${input.orderId}`,
-        },
-        evidenceFingerprint: sourceKey,
-      })
-      .returning({ id: runFinding.id });
-    if (!finding) throw new Error("test setup: refund finding not inserted");
+    const finding = await seedRunFinding(ctx.db, {
+      ledgerPartyId: fixture.party.id,
+      entityKind: "purchase",
+      entityId: input.purchaseId,
+      kind: "refund_unbooked",
+      summary:
+        "Vendor mail reports a refund that is not yet booked in the expense ledger.",
+      proposedFix: {
+        kind: "create_refund",
+        purchaseId: input.purchaseId,
+        amount: -10,
+        title: `Refund for order ${input.orderId}`,
+      },
+      evidenceFingerprint: sourceKey,
+    });
     return finding.id;
   }
 

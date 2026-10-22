@@ -56,10 +56,6 @@ import {
   plantingDisplayName,
 } from "~/server/domains/plant/repo/windows";
 import { loadAllGtins } from "~/server/domains/product/repo/gtin";
-import {
-  assertInputRevision,
-  currentInputRevision,
-} from "~/server/generic/derived-refresh/repo/freshness";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import {
   buildCookbookEmbeddingText,
@@ -160,17 +156,6 @@ export async function getStoredEmbeddingHashes(
   );
 }
 
-export interface EntityEmbeddingUpsert extends SearchableEntityText {
-  inputRevision: number;
-  /**
-   * The hash the caller already compared against the stored one. Passed in
-   * rather than recomputed so the value that decided to pay for the vector is
-   * the value stored beside it.
-   */
-  embeddingHash: string;
-  config: SemanticEmbeddingConfig;
-}
-
 /** Test fixture for a selected artifact; production selection requires observed remote storage. */
 export async function seedEntityEmbedding(
   db: Database | DrizzleTransaction,
@@ -184,7 +169,6 @@ export async function seedEntityEmbedding(
     ...input.config,
     text: normalizeSearchText(input.embeddingText),
   });
-  const revision = await currentInputRevision(db);
   const { entityEmbedding } = await import("~/server/db/schema");
   const { vectorPayloadHash } = await import("./embedding-artifact");
   return withTransactionDatabase(
@@ -193,7 +177,7 @@ export async function seedEntityEmbedding(
       const live = await unwrapDb(tx)
         .execute(sql`SELECT id FROM "SearchDocument"
       WHERE "entityKind"=${input.entityKind} AND "entityId"=${input.entityId}::uuid
-        AND "semanticText"=${input.embeddingText} AND "deletedAt" IS NULL LIMIT 1`);
+        AND "semanticText"=${input.embeddingText} AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`);
       if (!live.rows.length)
         throw new Error(
           "Synthetic embedding needs a matching live search document",
@@ -225,7 +209,6 @@ export async function seedEntityEmbedding(
             : null,
         })
         .returning({ id: entityEmbedding.id });
-      await assertInputRevision(tx, revision);
       if (!artifact) throw new Error("Synthetic embedding was not stored");
       return artifact.id;
     },

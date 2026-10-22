@@ -362,9 +362,6 @@ const slotsFrom =
       ),
     );
 
-const emailList = slotsFrom(() =>
-  import("~/features/email/list-slots").then((m) => m.emailListSlots),
-);
 const expenseList = slotsFrom(() =>
   import("~/features/expense/list-slots").then((m) => m.expenseListSlots),
 );
@@ -391,7 +388,6 @@ const taskList = slotsFrom(() =>
 
 /** `ListSlotTable`: every declared list view's lazy fill. */
 const listSlots = {
-  email: { accuracy: emailList("accuracy") },
   expense: { analytics: expenseList("analytics") },
   location: {
     gallery: locationList("gallery"),

@@ -163,7 +163,10 @@ callback, and runtime resolution occurs on each use. Query-only repos
 use `repositoryQueries` and the repository transaction ports, which project
 native Drizzle builders without exposing
 the global relational schema; full relational repos retain `getDb`. Both return
-the actual selected client/transaction, preserving transaction identity. A service earns existence for
+the actual selected client/transaction, preserving transaction identity. When adding
+query-only repository or schema modules, register their strict-program ownership
+and check imports across that boundary; see [compiler boundaries](../development.md#typechecking).
+A service earns existence for
 cross-cutting enrichment/compute/rollups, not pass-throughs. Cubby domain
 compute belongs in recipebridge/WASM; TypeScript assembles inputs and reshapes
 outputs instead of recreating it.

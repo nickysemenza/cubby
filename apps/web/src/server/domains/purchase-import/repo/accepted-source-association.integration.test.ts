@@ -30,7 +30,6 @@ import {
   product,
   vendor as vendorTable,
   vendorAccount,
-  runFinding,
   run as runTable,
   sourceOrderObservation,
 } from "~/server/db/schema";
@@ -47,6 +46,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
   mailSource,

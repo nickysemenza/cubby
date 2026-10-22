@@ -29,7 +29,10 @@ import {
 } from "~/server/domains/purchase-import/repo/run-service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import { createImageFixture } from "~/server/testing/repo.fixtures";
+import {
+  createImageFixture,
+  insertEntityFixtures,
+} from "~/server/testing/repo.fixtures";
 
 import { startPhotoGroupingForActor } from "./grouping";
 import {
@@ -185,9 +188,8 @@ describe("photo run lifecycle", () => {
           .update(image)
           .set({ sha256 })
           .where(eq(image.id, parseEntityId("image", entry.id)));
-        await getDb(ctx.db)
-          .insert(imageProcessingJob)
-          .values({
+        await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
+          {
             shortcode: generateShortcode("imageJob"),
             imageId: parseEntityId("image", entry.id),
             kind: "describe_image",
@@ -196,7 +198,8 @@ describe("photo run lifecycle", () => {
             processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
             runId: run.id,
             lastError: describe === "failed" ? "synthetic failure" : null,
-          });
+          },
+        ]);
       }
     return {
       run,

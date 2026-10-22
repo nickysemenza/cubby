@@ -45,7 +45,6 @@ import {
   purchase,
   purchasePaymentEvidence,
   run,
-  runFinding,
   runOperation,
   sourceOrderObservation,
 } from "~/server/db/schema";
@@ -58,8 +57,13 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   createProductFixture,
   createProductIdentityFixture,
+  insertEntityFixtures,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import {
+  patchRunFindingData,
+  runFinding,
+} from "~/server/testing/run-finding.fixtures";
 
 import { resolveRunFinding } from "../repo/findings";
 import { prepareSourceOrderReconciliation } from "../repo/reconciliation";
@@ -707,13 +711,13 @@ describe("caller-driven purchase import writes", () => {
 
   it("fills unassigned imported lines after resolving Product purpose inheritance", async () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
-    await getDb(ctx.db)
-      .insert(project)
-      .values({
+    await insertEntityFixtures(ctx.db, project, "project", [
+      {
         shortcode: testShortcode("project", "PRJ-HSHD"),
         name: "Synthetic household purpose",
         defaultTrade: "building",
-      });
+      },
+    ]);
     const [food] = await getDb(ctx.db)
       .select()
       .from(productCategory)
@@ -2765,24 +2769,21 @@ describe("shared purchase-import prepare and commit", () => {
           !fix.proposedExtraction.candidate
         )
           throw new Error("Expected reconciliation proposal");
-        await getDb(ctx.db)
-          .update(runFinding)
-          .set({
-            proposedFix: {
-              ...fix,
-              proposedExtraction: {
-                ...fix.proposedExtraction,
-                candidate: {
-                  ...fix.proposedExtraction.candidate,
-                  lines: fix.proposedExtraction.candidate.lines.map((line) => ({
-                    ...line,
-                    title: "Different unreviewed item",
-                  })),
-                },
+        await patchRunFindingData(ctx.db, finding.id, {
+          proposedFix: {
+            ...fix,
+            proposedExtraction: {
+              ...fix.proposedExtraction,
+              candidate: {
+                ...fix.proposedExtraction.candidate,
+                lines: fix.proposedExtraction.candidate.lines.map((line) => ({
+                  ...line,
+                  title: "Different unreviewed item",
+                })),
               },
             },
-          })
-          .where(eq(runFinding.id, finding.id));
+          },
+        });
       }
       const changed = editAfterPreview || editProposal;
       const input = {

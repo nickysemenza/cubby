@@ -79,7 +79,6 @@ import {
   findFastProblems,
   findTrackerProblems,
 } from "../service/problems.service";
-import { findEntitiesMissingEmbeddings } from "./detectors-embedding";
 
 /**
  * The ledger repos hand back `{ output, entityId }` — the uuid is for audit and
@@ -565,73 +564,6 @@ describe("problems — orphaned products", () => {
     expect(ids).not.toContain(kit.id);
     expect(ids).not.toContain(component.id);
     expect(ids).toContain(orphan.id);
-  });
-});
-
-describe("problems — missing embeddings", () => {
-  const ctx = withTestDb();
-
-  it("excludes recipe-backed ingredient proxies that cannot be embedded", async () => {
-    const realIngredient = await createIngredientFixture(
-      ctx.db,
-      { name: "Example real ingredient", aliases: [] },
-      ctx.actor,
-    );
-    const recipeRow = await insertWithShortcode(ctx.db, "recipe", {
-      name: "Example proxy recipe",
-    });
-    const proxy = await insertWithShortcode(ctx.db, "ingredient", {
-      name: "Recipe: Example proxy recipe",
-      aliases: [],
-      recipeId: recipeRow.id,
-    });
-
-    const missing = await findEntitiesMissingEmbeddings(
-      ctx.db,
-      {
-        provider: "openai",
-        model: "text-embedding-3-small",
-        dimensions: 1536,
-      },
-      { limit: 1_000 },
-    );
-    const ingredientIds = missing
-      .filter((row) => row.entityKind === "ingredient")
-      .map((row) => row.entityId);
-
-    expect(ingredientIds).toContain(realIngredient.id);
-    expect(ingredientIds).not.toContain(
-      parseShortcodeFor("ingredient", proxy.shortcode),
-    );
-  });
-
-  // Expense is searchable (lexical search must still find it) but not
-  // embeddable (`entity-manifest.ts` `embeddableEntities` — see
-  // `16-expense.entity.ts` `search: "lexical"`),
-  // so it must never appear here even though it has no `EntityEmbedding` row
-  // at all. The other two financial entities (purchase,
-  // financialTransaction) share the same declaration shape and the same
-  // `embeddingSources` roster in `detectors-embedding.ts`, so this exercises
-  // the shared mechanism rather than a per-entity special case.
-  it("never reports a financial (searchable-but-not-embeddable) entity as missing", async () => {
-    const { output: expense } = await createRepoEntity(
-      ctx,
-      "expense",
-      makeExpenseInput({ name: "Example financial-only expense" }),
-    );
-
-    const missing = await findEntitiesMissingEmbeddings(
-      ctx.db,
-      {
-        provider: "openai",
-        model: "text-embedding-3-small",
-        dimensions: 1536,
-      },
-      { limit: 1_000 },
-    );
-
-    expect(missing.some((row) => row.entityKind === "expense")).toBe(false);
-    expect(missing.some((row) => row.entityId === expense.id)).toBe(false);
   });
 });
 

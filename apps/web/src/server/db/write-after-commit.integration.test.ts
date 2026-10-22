@@ -1,12 +1,13 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { derivedRefreshCaptureInbox } from "~/server/db/schema";
+import { job } from "~/server/db/schema";
 import {
   createLocation,
   getLocationById,
@@ -25,8 +26,6 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-type PublishedTask = { kind: string; entityId?: string; locationId?: string };
-
 /**
  * Writers the kernel does not wrap in its own write transaction — plant bulk
  * patches and the location adapter (`sideEffects: false`) — own their
@@ -43,20 +42,18 @@ describe("repository writes publish after their commit", () => {
 
   afterEach(() => setCfEnv(undefined));
 
-  const recordingQueue = (
-    observe: (task: PublishedTask) => Promise<void> = async () => {},
-  ) => {
-    const published: PublishedTask[] = [];
+  const recordingQueue = (observe: () => Promise<void> = async () => {}) => {
+    const published: BackgroundTaskMessage[] = [];
     setCfEnv(
       fromPartial<Env>({
         BACKGROUND_QUEUE: {
           send: async () => {},
           sendBatch: async (
-            messages: Iterable<{ body: { task: PublishedTask } }>,
+            messages: Iterable<{ body: BackgroundTaskMessage }>,
           ) => {
             for (const { body } of messages) {
-              published.push(body.task);
-              await observe(body.task);
+              published.push(body);
+              await observe();
             }
           },
         },
@@ -76,16 +73,8 @@ describe("repository writes publish after their commit", () => {
       { name: "Bulk verdict pepper" },
       TEST_ACTOR,
     );
-    const ids = await Promise.all(
-      [first, second].map(async (plant) => {
-        const id = await resolveLiveShortcode(ctx.db, plant.id, "plant");
-        if (!id) throw new Error("plant fixture did not resolve");
-        return id;
-      }),
-    );
     const verdictsAtPublish: (string | null | undefined)[][] = [];
-    const published = recordingQueue(async (task) => {
-      if (task.kind !== "derived-refresh.wakeup") return;
+    const published = recordingQueue(async () => {
       verdictsAtPublish.push(
         await Promise.all(
           [first, second].map(
@@ -104,7 +93,7 @@ describe("repository writes publish after their commit", () => {
     });
 
     expect(published).toContainEqual(
-      expect.objectContaining({ kind: "derived-refresh.wakeup" }),
+      expect.objectContaining({ queueType: "background" }),
     );
     expect(verdictsAtPublish).toEqual(expect.arrayContaining([["no", "no"]]));
     expect(
@@ -112,22 +101,12 @@ describe("repository writes publish after their commit", () => {
         values.every((value) => value === "no"),
       ),
     ).toBe(true);
-    const captures = await getDb(ctx.db)
-      .select({
-        entityId: derivedRefreshCaptureInbox.entityId,
-        change: derivedRefreshCaptureInbox.change,
-      })
-      .from(derivedRefreshCaptureInbox)
-      .where(inArray(derivedRefreshCaptureInbox.entityId, ids));
     expect(
-      [
-        ...new Set(
-          captures
-            .filter((row) => row.change.changedFields?.includes("verdict"))
-            .map((row) => row.entityId),
-        ),
-      ].sort(),
-    ).toEqual([...ids].sort());
+      await getDb(ctx.db)
+        .select({ state: job.state })
+        .from(job)
+        .where(eq(job.key, "refresh:search")),
+    ).toEqual([{ state: "queued" }]);
   });
 
   it("clears a location's AI description with its last image before the vision refresh is published", async () => {
@@ -150,8 +129,7 @@ describe("repository writes publish after their commit", () => {
     await updateLocationAiDescription(ctx.db, locationId, "A synthetic shelf");
     const seenAtRefresh: { images: number; aiDescription: string | null }[] =
       [];
-    recordingQueue(async (task) => {
-      if (task.kind !== "location-ai.description.refresh") return;
+    recordingQueue(async () => {
       const location = await getLocationById(ctx.db, locationId);
       seenAtRefresh.push({
         images: location.images.length,
@@ -172,6 +150,11 @@ describe("repository writes publish after their commit", () => {
       aiDescription: null,
       images: [],
     });
-    expect(seenAtRefresh).toEqual([{ images: 0, aiDescription: null }]);
+    expect(seenAtRefresh).toContainEqual({ images: 0, aiDescription: null });
+    expect(
+      seenAtRefresh.every(
+        (value) => value.images === 0 && value.aiDescription === null,
+      ),
+    ).toBe(true);
   });
 });

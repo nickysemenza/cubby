@@ -21,6 +21,12 @@ import {
   feedback,
 } from "~/server/db/retained-tables";
 
+import {
+  assessmentProjectionSnapshot,
+  insertPublishedAssessmentState,
+} from "./assessment-state";
+import { fieldInputFingerprint } from "./field-input-fence";
+
 /** A matching operation ID alone never proves that a domain mutation committed. */
 export function assertApplicationReceipt(
   receipt: typeof feedback.$inferSelect,
@@ -73,6 +79,28 @@ export async function publishAssessment(
     projection.suggestedValue === undefined
       ? input.judgment
       : projection.suggestedValue;
+  const target =
+    input.subject.kind === "evaluation_sample"
+      ? null
+      : input.subject.kind === "email_link" && input.subject.recordId === null
+        ? { entity: "orderMailEvent", recordId: input.subject.eventId }
+        : input.subject.recordId === null
+          ? null
+          : { entity: input.subject.entity, recordId: input.subject.recordId };
+  // The creation snapshot is the row's first state; rebuild replays it.
+  const state = target && {
+    ...assessmentProjectionTargets[input.family].parse({
+      ...target,
+      ...projection,
+    }),
+    field: input.subject.kind === "field" ? input.subject.field : "",
+    fingerprint: input.fingerprint,
+    ...(input.subject.kind === "run_finding" && {
+      ledgerPartyId: input.subject.ledgerPartyId,
+    }),
+    ...projection,
+    suggestedValue,
+  };
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
     const [inserted] = await client
@@ -80,6 +108,7 @@ export async function publishAssessment(
       .values({
         ...input,
         judgment: input.judgment === null ? sql`'null'::jsonb` : input.judgment,
+        projection: state && assessmentProjectionSnapshot(state),
       })
       .onConflictDoNothing({ target: assessment.publicationKey })
       .returning();
@@ -97,38 +126,36 @@ export async function publishAssessment(
       throw new Error(
         "Assessment publication retry changed immutable evidence",
       );
-    const target =
-      input.subject.kind === "email_link" && input.subject.recordId === null
-        ? { entity: "orderMailEvent", recordId: input.subject.eventId }
-        : { entity: input.subject.entity, recordId: input.subject.recordId };
-    if (inserted && target.recordId !== null) {
-      const currentTarget = assessmentProjectionTargets[input.family].parse({
-        ...target,
-        ...projection,
-      });
-      await client.insert(assessmentState).values({
+    if (inserted && state)
+      await insertPublishedAssessmentState(transactionDb, {
+        ...state,
         id: row.id,
         family: input.family,
-        ...currentTarget,
-        field: input.subject.kind === "field" ? input.subject.field : "",
-        fingerprint: input.fingerprint,
-        ...projection,
-        suggestedValue:
-          suggestedValue === null ? sql`'null'::jsonb` : suggestedValue,
+        suggestedValue,
       });
-    }
     return row;
   });
 }
 
 /** Field producers publish evidence before its live projection; serving is a producer decision. */
-export function publishFieldAssessment(
+export async function publishFieldAssessment(
   db: Database,
   projection: Omit<typeof assessmentState.$inferInsert, "id" | "family"> & {
     field: string;
   },
   served: boolean,
 ) {
+  const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
+  if (projection.status === undefined || projection.status === "pending") {
+    if (!("connectionEvidence" in data) && !("liveInputFingerprint" in data)) {
+      data.liveInputFingerprint = await fieldInputFingerprint(
+        db,
+        projection.entity,
+        projection.recordId,
+        projection.field,
+      );
+    }
+  }
   const model = projection.model ?? "unknown";
   return publishAssessment(
     db,
@@ -168,7 +195,7 @@ export function publishFieldAssessment(
       },
       served,
     },
-    projection,
+    { ...projection, data },
   );
 }
 

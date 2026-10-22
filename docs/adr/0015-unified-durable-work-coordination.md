@@ -1,99 +1,122 @@
-# ADR 0015: Shared durable execution for member-requested AI work
+# ADR 0015: Unified durable execution and broad refresh
 
 Status: Accepted.
 
 ## Context
 
-Manual Email Reclassify and Suggestion Sweep record Runs but execute within
-requests, so a request timeout or disconnect can strand authorized work.
-Automatic AI refresh already has durable target claims, retry state and atomic
-publication receipts. Reusing that machinery and the Run lifecycle gives manual
-work automatic continuation and recovery with a bounded migration. Remaining
-work lives in [GitHub Issues](https://github.com/nickysemenza/cubby/issues).
+Several independent schedulers owned leases, retries and recovery for the same
+work. A saved mutation could lose its follow-up work between database commit and
+queue delivery. Dependency frontiers, revision clocks and retirement scans also
+made a small household's derived data harder to reason about than a bounded
+corpus refresh.
 
 ## Decision
 
-This change moves Reclassify and Suggestion Sweep onto shared
-durable execution, including the infrastructure improvements those callers need.
-**Cloudflare Workflows is only for background work.** Interactive reads, searches
-and previews retain the existing request runtime and synchronous results.
+Postgres `Job` is the sole execution owner for background work. An authoritative
+save and its Job intent commit in the same transaction. Queue messages, app-open
+catch-up, Durable Object alarms and cron only wake the same due-Job drain. Lost
+or duplicate wakes affect latency; they do not lose or duplicate intent. The
+queue carries a strict version-3 wake envelope, optionally naming a Job, rather
+than a second serialized work item. Admission stores the JSON wire shape,
+omitting undefined optional properties.
 
-For background execution, the engine owns durable intent, scheduling, admission,
-attempt fencing, cancellation, retry and recovery. Cloudflare Workflows drives
-background execution; Postgres retains work state and publication receipts.
-Generalize the existing AI evaluation ledger and Run lifecycle rather than adding
-competing ledgers. Reuse atomic replay/publication patterns where useful; merging
-the purchase operation ledger is not required for this change.
-Workload declarations retain eligibility, mailbox authority, model choice and
-publication rules. Automatic prompt refresh retains its narrower eligibility
-and its own admission policy; its activation cannot gate manual work.
+A claim has one generation, token, expiration and finite attempt budget. Claims
+are renewed during provider preparation. Native pulls use their requested
+bounded duration on that same Job lease. Successful bounded pages commit their
+output and cursor together and reset the consecutive failure budget. The drain
+continues immediately runnable pages and sends another wake if its budget runs out. Publication locks the Job and checks
+its current generation, token, running state and live lease. A stopped,
+superseded or pre-cutover worker cannot publish using its former domain token.
+Expensive preparation, paid calls and remote mutations happen outside that
+transaction; the publication callback performs database work only. Specific
+captured authoritative inputs are rechecked before prepared results publish.
+The Job remains running until these before-commit checks finish; output and its
+completed Job then commit together. Location analysis and image metadata hold
+their source rows and reject results if the source changed during preparation.
+Embedding selection locks its source and identity through commit so it cannot
+insert a selected vector after deletion has already cleaned that source.
 
-UPC image and mechanical backfills are follow-on migrations. Existing agent,
-device, queue and telemetry execution owners remain in place. Extend common
-contracts to them when doing so deletes meaningful duplication or fixes a
-demonstrated recovery gap. A universal scheduler is not required for authorized
-work to become automatic and self-healing.
+Transient errors use bounded Job backoff and preserve credential-scrubbed raw
+diagnostics. A cooperative capacity deferral preserves its checkpoint and does
+not spend the failure budget. Manual pause, cancellation and exhausted failure
+remain stopped until explicit member action. Ordinary invalidation and alarms
+never revive them. Provider/cache code imports control errors and execution
+context from pure `generic/jobs/errors.ts` and `context.ts` leaves; it must not
+import database runtime merely to read execution context.
 
-Identical pending requests share execution when target, model, policy and
-evidence agree, while each requesting Run retains its own receipt. Request
-receipts are history references that retain their Run identity through archival
-and deletion, rather than navigable entity relationships. Cancelling
-one request leaves work requested by another intact; a later deliberate rerun
-creates fresh execution. Member work has priority with background fairness.
-Suggestion Sweep fixes roster membership at launch and rechecks current values
-before execution and publication.
+Broad family saves record Job intent without sending a wake for each save; the
+minute cron or another due-Job drain picks it up.
+Each drain reselects fair batches of at most 25 due Jobs, with a default cap of
+256 pages and a 20-second budget between pages. One in-flight provider page may
+outlast that budget. Remaining immediately due work requests another wake; cron
+uses the same drain if that wake is lost. A large corpus, provider capacity or
+continuous edits can exceed the healthy roughly two-minute staleness target.
+Every authoritative invalidation restarts the broad cursor, so convergence is
+promised after edits quiet, not during an endless stream of writes.
 
-Reclassify returns Run references promptly. It follows current Email evidence
-with bounded restarts and automatic later continuation, preserves member
-resolutions and history, and never admits import. Historical deferred and
-missing outcomes are reconciled, then eligible unknown work permits bounded
-reinference under usable current authority, with no arbitrary historical age
-cutoff. Cancelled, already fulfilled and known permanently failed work is not
-automatically revived. Recovery retains a bound approval while it remains usable
-under current authorization rules, otherwise rebinds to the newest applicable
-approval. A transport budget refusal persists `paused_auth` before throwing, so
-interruption before driver error handling cannot strand the Run.
-Authority replacement is audited; authorization and spending
-constraints continue to apply. Transient failures
-have bounded retries; terminal failures stay visible. Deliberate cancellation
-and member decisions remain binding.
+## Workload contracts
 
-Recovery creates linked continuation Runs while preserving
-completed historical Runs and their receipts. Publication and its receipt commit
-together behind an attempt and evidence fence. Wakes follow durable events and
-due-time alarms, with nightly reconciliation as a backstop; no frequent database
-polling cron is introduced. Durable dispatch must survive a crash between saving
-intent and delivering its wake.
+Broad `refresh.family` Jobs use the keys `refresh:search`, `refresh:recipes`,
+`refresh:conversions`, `refresh:embeddings` and `refresh:orphans`. They page through
+current authoritative sources and directly clean orphaned projections. Search,
+conversion and embedding scheduling pages contain at most 25 sources. Recipe
+preparation processes one owner and its authoritative closure per page. That
+closure can be large. No dependency traversal, capture inbox, input epoch,
+publication ledger, observed-input snapshot or assessment retirement scanner
+owns scheduling. Periodically scheduling completed families covers exceptional drift.
+Ordinary reads serve stored projections and never repair them.
 
-One layer owns retry of each effect; outer transports re-admit or reconcile
-recorded outcomes rather than independently replaying writes. Ambiguous
-non-idempotent writes require reconciliation, not guessed replay. Permission for
-bounded reinference of unknown AI outcomes does not authorize replay of unknown
-financial or import writes. Cancellation preserves committed outcomes and their
-required effects. Durable progress uses the existing Run read/subscription
-surface, while request execution retains its response and streaming contracts.
+Pending review evidence is filtered against current family-specific inputs and
+revalidated at apply. Field, connection, Product and statement evidence retain
+their own checks of current inputs when reading and applying. Broad refresh neither guesses
+corrections nor changes member decisions, financial facts or import claims.
 
-Retain replay evidence and member-visible outcomes, including cancelled and
-obsolete history. Temporary leases, tokens and wake bookkeeping can be pruned
-after settlement without deleting their retained evidence.
+`run.execute` owns execution for supported background Run purposes. Run and
+RunStep retain grouping, provenance, frozen populations, progress, checkpoints,
+receipts and typed domain outcomes. They own no independent lease, retry budget,
+Workflow instance or automatic recovery counter. Automatic discovery pages
+continue through their Job, waiting between complete passes. Historical
+`derived_refresh` Runs remain history after replacement by broad families.
+
+`ai.evaluation` owns the shared evaluation claim. Domain evidence, successful
+results, publication receipts, requester attribution and historical evaluation
+IDs remain intact. A `result_ready` evaluation resumes from its paid result.
+Failure diagnostics require the same live Job token even when a funding
+stop has paused the requester; publishing a result still rechecks requester
+authority.
+Cancelling one requester does not cancel another live requester's work. Manual
+work retains its own authority; automatic work still requires the enabled
+policy. Unknown irreversible outcomes require reconciliation, never guessed
+replay.
+
+Image processing uses the same Job lease for cloud dispatch and native pull.
+Attempt IDs retain the Job token for completion adoption. Processing attempts,
+executor attribution, output reservations and receipts remain domain history.
+A late device or pre-deployment completion cannot adopt an output after its
+Job ownership expires. Waiting for a device reschedules the same Job rather
+than creating a second scheduler.
+
+`embedding.refresh` uses immutable `Job.id` as the remote physical vector ID.
+Its committed upload hash and mutation receipt survive visibility polling and
+restart, avoiding repeated upload after retained success. `embedding.cleanup`
+deletes only an unselected, stopped physical artifact and retains its remote
+delete receipt. Explicit retry of stopped embedding execution allocates a fresh
+physical Job ID and retires the old key. A delayed cleanup can therefore never
+delete the replacement upload. Failed and retired artifacts retain diagnostics
+in terminal Jobs without automatic resurrection.
+
+Explicit search repair schedules the same search, embedding and orphan Jobs and
+streams their actual persisted counters. Disconnecting the stream leaves the
+Jobs durable. Interactive reads, previews, draft decisions and synchronous
+operation composition retain their request runtime.
 
 ## Consequences
 
-Breaking contracts are allowed, but household data, approvals, observations,
-receipts and completed work must be transformed and retained. Each migrated
-workload deletes its replaced execution path in the same change. Broad runtime
-replacement would add replay, device-availability and observability migration
-risks without evidence that it improves the requested behavior; follow-on scope
-is selected from concrete failures and duplication.
-
-## Amendment: maintenance passes are Runs (2026-10)
-
-Nightly maintenance and its "Run now" pass are one `maintenance` Run, backed by
-a Workflow that drains each backlog page by page, with one active pass at a
-time. This reverses the earlier rule that maintenance kept no history and its
-counts were the only record. Counts alone could not show a stalled or failing
-drain: items that could never succeed sat at the head of a queue, retried for
-ever. Each step records found, done, failed, skipped and left. An item that can
-never succeed gets a terminal outcome and leaves its backlog, keeping its raw
-error. A pass that found nothing is routine and is pruned like other routine
-Runs.
+The cutover preserves household data, redirects, foreign keys, domain facts,
+paid results, approvals, observations, receipts and historical provenance.
+Active legacy execution maps to Job input and checkpoints before old fields are
+dropped; terminal diagnostics remain in Job error/result metadata. Old attempts
+must be rejected by the new Job token check. Obsolete Workflow classes/bindings, image cloud
+queue, recovery adapters and layered refresh tables are deleted with their
+replacement paths. Transport queues for background wakes, telemetry and the
+purchase agent retain their separate transport purposes.

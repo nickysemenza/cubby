@@ -17,9 +17,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 
-// The homepage counts read normally ends at the Durable Object. Keep the
-// detector graph out of its cold path: every module below is imported only by
-// the operations that need it.
+// Load detector groups only for the operations that need them.
 const problemWorkflows = () =>
   import("~/server/generic/problems/operations/problem-workflows.server");
 const problemDetectors = () =>

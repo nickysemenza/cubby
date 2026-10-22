@@ -4,12 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  expense,
-  productCategory,
-  purchase,
-  runFinding,
-} from "~/server/db/schema";
+import { expense, productCategory, purchase } from "~/server/db/schema";
 import { discardProductUnits } from "~/server/domains/product/repo/discard";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import {
@@ -20,6 +15,7 @@ import { withReviewedSpendingClassification } from "~/server/domains/spending-ca
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { updateThroughKernel } from "~/server/testing/entity-kernel";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 // A spending category with productExpectation "not_allowed" (a restaurant
 // meal) neither expects nor accepts a Product. Failure modes: a Product is
@@ -238,22 +234,19 @@ describe("not_allowed product expectation", () => {
       kind: "member",
       userId: ctx.actor.userId,
     });
-    const [finding] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        ledgerPartyId: party.id,
-        entityKind: "expense",
-        entityId: lunch.id,
-        kind: "wrong_product",
-        summary: "The line names a pantry Product.",
-        proposedFix: {
-          kind: "relink_product",
-          expenseId: lunch.id,
-          productId: product.id,
-        },
-        evidenceFingerprint: crypto.randomUUID(),
-      })
-      .returning({ id: runFinding.id });
+    const finding = await seedRunFinding(ctx.db, {
+      ledgerPartyId: party.id,
+      entityKind: "expense",
+      entityId: lunch.id,
+      kind: "wrong_product",
+      summary: "The line names a pantry Product.",
+      proposedFix: {
+        kind: "relink_product",
+        expenseId: lunch.id,
+        productId: product.id,
+      },
+      evidenceFingerprint: crypto.randomUUID(),
+    });
     if (!finding) throw new Error("test setup: finding not inserted");
     await expect(
       resolveRunFinding(ctx.db, { id: finding.id, action: "apply" }, ctx.actor),

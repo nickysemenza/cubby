@@ -11,6 +11,7 @@ import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { workRunReviewOwners, workRunReviewRead } from "./work-queue-routing";
 
@@ -83,17 +84,17 @@ describe("Run review authority query work", () => {
       { ledgerPartyId: deletedMember.id, actorUserId: otherUserId },
       { deletedAt: new Date() },
     ];
-    const retained = await getDb(ctx.db)
-      .insert(run)
-      .values(
-        variants.map((variant) => ({
-          ...first,
-          id: runEntityId.parse(crypto.randomUUID()),
-          shortcode: generateShortcode("run"),
-          ...variant,
-        })),
-      )
-      .returning();
+    const retained = await insertEntityFixtures(
+      ctx.db,
+      run,
+      "run",
+      variants.map((variant) => ({
+        ...first,
+        id: runEntityId.parse(crypto.randomUUID()),
+        shortcode: generateShortcode("run"),
+        ...variant,
+      })),
+    );
     const ids = [first.id, ...retained.map((row) => row.id)];
     const expected = [
       [member.id],
@@ -174,15 +175,16 @@ describe("Run review authority query work", () => {
       actorLedgerPartyKind: member.kind,
     });
     const additionalRuns = 128;
-    await getDb(ctx.db)
-      .insert(run)
-      .values(
-        Array.from({ length: additionalRuns }, () => ({
-          ...first,
-          id: runEntityId.parse(crypto.randomUUID()),
-          shortcode: generateShortcode("run"),
-        })),
-      );
+    await insertEntityFixtures(
+      ctx.db,
+      run,
+      "run",
+      Array.from({ length: additionalRuns }, () => ({
+        ...first,
+        id: runEntityId.parse(crypto.randomUUID()),
+        shortcode: generateShortcode("run"),
+      })),
+    );
     const statement = sql`SELECT ${workRunReviewOwners(sql`candidate.id`)} AS owners
       FROM "Run" candidate WHERE candidate."ledgerPartyId" = ${member.id}`;
     const rows = await getDb(ctx.db).execute(statement);

@@ -12,14 +12,15 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import { assessment, feedback } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
   assertApplicationReceipt,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
+import { openAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Saving a draft is a separate fact. Verify stored value; never rewrite a later edit. */
@@ -114,7 +115,7 @@ export async function acknowledgeSavedField(
       confidence: null,
       threshold: null,
     });
-    await recordFeedback(transactionDb, {
+    const accepted = await recordFeedback(transactionDb, {
       assessmentId: prediction.id,
       operationId: `receipt:${input.operationId}`,
       verdict: input.correction.present ? "wrong" : "correct",
@@ -131,24 +132,25 @@ export async function acknowledgeSavedField(
         field: subject.field,
       },
     });
-    await getDb(transactionDb)
-      .insert(assessmentState)
-      .values({
-        id: prediction.id,
-        family: "field",
-        entity,
-        recordId: id,
-        field: subject.field,
-        status: "applied",
-        active: false,
-        acceptanceReceipt: receipt,
-        suggestedValue: proposed,
-        runId: prediction.producer?.runId ?? null,
-      })
-      .onConflictDoUpdate({
-        target: assessmentState.id,
-        set: { status: "applied", acceptanceReceipt: receipt },
-      });
+    await openAssessmentState(
+      transactionDb,
+      {
+        values: {
+          id: prediction.id,
+          family: "field",
+          entity,
+          recordId: id,
+          field: subject.field,
+          status: "applied",
+          active: false,
+          acceptanceReceipt: receipt,
+          suggestedValue: proposed,
+          runId: prediction.producer?.runId ?? null,
+        },
+        patch: { status: "applied", acceptanceReceipt: receipt },
+      },
+      { kind: "member_review", feedbackId: accepted.id },
+    );
     return receipt;
   });
 }

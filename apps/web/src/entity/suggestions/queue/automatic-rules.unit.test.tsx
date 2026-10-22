@@ -32,32 +32,19 @@ const rule = (patch: Partial<AutomaticRuleOut>): AutomaticRuleOut =>
     enabledReason: null,
     disabledAt: null,
     disabledReason: null,
-    eligible: false,
-    n: 0,
-    hits: 0,
-    precision: null,
-    correctedAutomatic: 0,
-    windows: [],
     ...patch,
   });
 
 const FIELD_ON = rule({
   enabled: true,
   enabledAt: "2026-10-02T12:00:00.000Z",
-  n: 140,
-  hits: 138,
-  precision: 138 / 140,
-  correctedAutomatic: 2,
-  eligible: true,
+  enabledReason: "Turned on by a member for field.addition@2026-10-01.1",
 });
 const ATTACH_OFF = rule({
   family: "statement_transaction",
   ruleKey: "statement_transaction.attach",
   revision: "v1/p1",
-  n: 12,
-  hits: 12,
-  precision: 1,
-  disabledReason: "Turned itself off: synthetic window n=50, hits=48",
+  disabledReason: "Turned off by a member",
 });
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -84,9 +71,9 @@ function operations(
 const row = (name: string) => screen.getByRole("listitem", { name });
 
 describe("AutomaticRulesSection", () => {
-  // Failure modes: a not-yet-eligible rule offers On; the numbers or the raw
-  // disabled reason go missing.
-  it("offers On only to an eligible rule and shows its measured numbers", async () => {
+  // Failure modes: an off rule cannot be turned on, or the switch reasons go
+  // missing.
+  it("offers both switches and shows each switch reason", async () => {
     render(
       <AutomaticRulesSection
         operations={operations([FIELD_ON, ATTACH_OFF], async () => FIELD_ON)}
@@ -95,43 +82,31 @@ describe("AutomaticRulesSection", () => {
     );
     await screen.findByRole("listitem", { name: "Field assignment" });
     const field = row("Field assignment");
-    expect(field).toHaveTextContent(
-      "98.5% precision over 140 reviewed · 2 corrected automatic",
-    );
     expect(within(field).getByText("On")).toBeVisible();
-    expect(
-      within(field).getByRole("switch", {
-        name: "Field assignment automatic rule",
-      }),
-    ).not.toHaveAttribute("aria-disabled", "true");
-
+    expect(field).toHaveTextContent(
+      "Turned on by a member for field.addition@2026-10-01.1",
+    );
     const attach = row("Statement attach");
-    expect(within(attach).getByText("Not yet eligible")).toBeVisible();
     expect(
       within(attach).getByRole("switch", {
         name: "Statement attach automatic rule",
       }),
-    ).toHaveAttribute("aria-disabled", "true");
-    expect(attach).toHaveTextContent(
-      "Turned itself off: synthetic window n=50, hits=48",
-    );
+    ).not.toHaveAttribute("aria-disabled", "true");
+    expect(attach).toHaveTextContent("Turned off by a member");
     expect(screen.getByText("1 of 2 on")).toBeVisible();
   });
 
   // Failure mode: the server's refusal is swallowed or softened.
-  it("shows the server's raw refusal when turning an eligible rule on", async () => {
+  it("shows the server's raw refusal when turning a rule on", async () => {
     const refusal =
-      "CONSTRAINT_VIOLATION: statement_transaction.attach@v1/p1 is not eligible: n=49, hits=49";
+      "CONSTRAINT_VIOLATION: Only a member turns an Automatic rule on or off";
     const calls: unknown[] = [];
     render(
       <AutomaticRulesSection
-        operations={operations(
-          [{ ...ATTACH_OFF, eligible: true }],
-          async (input) => {
-            calls.push(input);
-            throw new Error(refusal);
-          },
-        )}
+        operations={operations([ATTACH_OFF], async (input) => {
+          calls.push(input);
+          throw new Error(refusal);
+        })}
       />,
       { wrapper: harness.wrapper },
     );

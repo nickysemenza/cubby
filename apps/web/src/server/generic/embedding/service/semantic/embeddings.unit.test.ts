@@ -1,5 +1,6 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 
@@ -108,6 +109,24 @@ describe("embedTexts over the AI Gateway", () => {
       operation: "entityEmbeddingRefreshBatch",
       environment: "development",
     });
+  });
+
+  // Regression: entity refreshes paid to re-embed texts they had embedded.
+  it("embeds only the texts missing from the response cache", async () => {
+    const { embedTexts } = await embedTextsOverFakeGateway(
+      openAiEmbeddingsResponse(1),
+    );
+    const inputs: string[][] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const { input } = z
+        .object({ input: z.array(z.string()) })
+        .parse(JSON.parse(String(init?.body)));
+      inputs.push(input);
+      return Response.json(openAiEmbeddingsResponse(input.length));
+    });
+    await embedTexts(["eggs", "flour"]);
+    expect(await embedTexts(["flour", "butter", "flour"])).toHaveLength(3);
+    expect(inputs).toEqual([["eggs", "flour"], ["butter"]]);
   });
 
   it("returns vectors in input order even when the provider reorders them", async () => {

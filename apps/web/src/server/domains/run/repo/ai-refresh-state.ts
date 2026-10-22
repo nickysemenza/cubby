@@ -1,5 +1,4 @@
 import {
-  aiEvaluationState,
   aiRefreshActivation,
   aiRefreshRunInput,
   suggestionSupersessionReceipt,
@@ -12,8 +11,6 @@ import {
   runEntityId,
   type RunId,
 } from "@cubby/schemas/identifiers";
-import { runStatus } from "@cubby/schemas/run-fields";
-import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -30,12 +27,12 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   getDb,
   notDeleted,
   withTransactionDatabase,
+  runBeforeCommitDatabase,
 } from "~/server/db/helpers";
 import {
   aiEvaluation,
@@ -47,6 +44,10 @@ import {
   assessmentState as suggestion,
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 import {
   hasAiRefreshRunCapacity,
@@ -160,32 +161,42 @@ async function insertTarget(
   const { target, provenance, blockedReason } = item;
   const workKey = await targetWorkKey(item);
   const insert = (key: string, client: Database) =>
-    getDb(client)
-      .insert(aiEvaluation)
-      .values({
-        runId: runEntityId.parse(runId),
-        feature:
-          target.kind === "connection"
-            ? "entity-connections"
-            : target.kind === "field"
-              ? "field-suggestion"
-              : target.kind === "product"
-                ? "product-identity"
-                : "mailbox-triage",
-        workKey: key,
-        target,
-        provenance,
-        snapshot: jsonSnapshot(item.snapshot),
-        ...(blockedReason
-          ? {
-              state: "blocked" as const,
-              error: blockedReason,
-              receipt: { reason: "mailbox_authorization_unavailable" },
-            }
-          : {}),
-      })
-      .onConflictDoNothing()
-      .returning({ id: aiEvaluation.id });
+    withTransactionDatabase(client, async (tx) => {
+      const rows = await getDb(tx)
+        .insert(aiEvaluation)
+        .values({
+          runId: runEntityId.parse(runId),
+          feature:
+            target.kind === "connection"
+              ? "entity-connections"
+              : target.kind === "field"
+                ? "field-suggestion"
+                : target.kind === "product"
+                  ? "product-identity"
+                  : "mailbox-triage",
+          workKey: key,
+          target,
+          provenance,
+          snapshot: jsonSnapshot(item.snapshot),
+          ...(blockedReason
+            ? {
+                state: "blocked" as const,
+                error: blockedReason,
+                receipt: { reason: "mailbox_authorization_unavailable" },
+              }
+            : {}),
+        })
+        .onConflictDoNothing()
+        .returning({ id: aiEvaluation.id });
+      if (!blockedReason)
+        for (const row of rows)
+          await enqueueJob(tx, {
+            key: `ai-evaluation:${row.id}`,
+            kind: "ai.evaluation",
+            input: { evaluationId: row.id },
+          });
+      return rows;
+    });
   if ((await insert(workKey, db)).length) return 1;
   if (blockedReason) return 0;
   // The replacement and its link commit together (connection sweeps pass a plain pool).
@@ -363,24 +374,23 @@ export async function settleAppliedFieldRefresh(
   fingerprint: string,
   provenance: AiProvenance,
 ) {
-  const [row] = await getDb(db)
-    .select({ receipt: suggestion.acceptanceReceipt })
-    .from(suggestion)
-    .where(and(eq(suggestion.id, id), eq(suggestion.family, "field")))
-    .for("update");
-  const receipt = suggestionAcceptanceReceipt
-    .nullable()
-    .parse(row?.receipt ?? null);
-  if (!receipt) return;
-  await getDb(db)
-    .update(suggestion)
-    .set({
-      acceptanceReceipt: {
-        ...receipt,
-        evaluatedInput: { fingerprint, provenance },
-      },
-    })
-    .where(eq(suggestion.id, id));
+  await transitionAssessmentStates(
+    db,
+    and(eq(suggestion.id, id), eq(suggestion.family, "field")),
+    (row) => {
+      const receipt = suggestionAcceptanceReceipt
+        .nullable()
+        .parse(row.acceptanceReceipt ?? null);
+      if (!receipt) return null;
+      return {
+        acceptanceReceipt: {
+          ...receipt,
+          evaluatedInput: { fingerprint, provenance },
+        },
+      };
+    },
+    { kind: "field_refresh_evaluated" },
+  );
 }
 
 // Applications identify logical targets even when inactive or rejected after
@@ -512,75 +522,44 @@ export async function recordAiRefreshAttemptFailure(
   attemptToken: string,
   set: {
     state: (typeof aiEvaluation.$inferSelect)["state"];
-    attempts: number;
     error: string;
-    nextAttemptAt: Date;
   },
 ) {
-  await getDb(db)
-    .update(aiEvaluation)
-    .set({ ...set, updatedAt: new Date() })
-    .where(
-      and(
-        eq(aiEvaluation.id, id),
-        eq(aiEvaluation.attemptToken, attemptToken),
-        inArray(aiEvaluation.state, ["running", "result_ready"]),
-      ),
+  const execution = currentJobExecution();
+  if (
+    !execution ||
+    execution.claim.kind !== "ai.evaluation" ||
+    execution.claim.key !== `ai-evaluation:${id}` ||
+    execution.claim.leaseToken !== attemptToken
+  )
+    throw new Error(
+      "AI evaluation failure requires its current universal Job claim",
     );
+  await withTransactionDatabase(db, async (tx) => {
+    await assertCurrentJob(tx);
+    await getDb(tx)
+      .update(aiEvaluation)
+      .set({ state: set.state, error: set.error, updatedAt: new Date() })
+      .where(
+        and(
+          eq(aiEvaluation.id, id),
+          inArray(aiEvaluation.state, ["running", "result_ready"]),
+        ),
+      );
+  });
 }
 
-export async function aiRefreshRelaunchCandidates(db: Database) {
-  const current = await readAiRefreshActivation(db);
-  return getDb(db)
-    .select({ id: run.id })
-    .from(run)
-    .where(
-      and(
-        eq(run.purpose, "ai_refresh"),
-        notDeleted(run),
-        or(
-          inArray(run.status, ["failed", "dispatch_failed"]),
-          and(
-            eq(run.status, "running"),
-            sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = 0`,
-          ),
-        ),
-        sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-        sql`coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES}`,
-        or(
-          and(
-            sql`${run.input}->>${aiRefreshRunInput.keyof().enum.discovery} = 'true'`,
-            current?.discoveryRunId
-              ? eq(run.id, runEntityId.parse(current.discoveryRunId))
-              : sql`false`,
-          ),
-          sql`EXISTS (SELECT 1 FROM "AiEvaluation" AS eligible WHERE eligible."runId" = ${run.id} AND eligible.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.running}, ${aiEvaluationState.enum.result_ready}, ${aiEvaluationState.enum.retry_wait}))`,
-        ),
-      ),
-    )
-    .orderBy(
-      sql`CASE WHEN ${run.status} = ${runStatus.enum.running} THEN 0 ELSE 1 END`,
-      asc(run.updatedAt),
-      asc(run.id),
-    )
-    .limit(10);
-}
-
-export async function hasRunnableAiEvaluation(db: Database, runId: string) {
-  const [runnable] = await getDb(db)
-    .select({ id: aiEvaluation.id })
-    .from(aiEvaluation)
-    .where(
-      and(
-        eq(aiEvaluation.runId, runEntityId.parse(runId)),
-        inArray(aiEvaluation.state, [
-          "queued",
-          "running",
-          "result_ready",
-          "retry_wait",
-        ]),
-      ),
-    )
-    .limit(1);
-  return Boolean(runnable);
+export async function checkConnectionSourceBeforeCommit(
+  db: Database,
+  fingerprint: () => Promise<string>,
+) {
+  const expected = await fingerprint();
+  await runBeforeCommitDatabase(
+    db,
+    async () => {
+      if ((await fingerprint()) !== expected)
+        throw new Error("Connection source changed before commit");
+    },
+    "fence",
+  );
 }

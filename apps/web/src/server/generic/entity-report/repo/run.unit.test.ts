@@ -774,8 +774,8 @@ describe("liveProgressBlocks", () => {
     workflow: {
       purpose: "mail_discovery" as const,
       attempt: 2,
-      instanceId: `${RUN_ID}-2`,
-      instance: { state: "waiting" as const, error: null },
+      instanceId: "00000000-0000-4000-8000-000000000002",
+      instance: { state: "running" as const, error: null },
     },
   };
   const actionsOf = (blocks: ReportBlock[]) =>
@@ -939,42 +939,32 @@ describe("liveProgressBlocks", () => {
     expect(titles).toContain("7 messages saved");
   });
 
-  // Report composition must select the right Workflow and preserve retry attempts;
-  // the browser cannot verify Cloudflare destinations without dashboard authentication.
-  it.each([
-    ["mail_discovery", "cubby-mail-discovery"],
-    ["ai_refresh", "cubby-ai-refresh"],
-    ["mail_reclassify", "cubby-ai-refresh"],
-    ["suggestion_sweep", "cubby-ai-refresh"],
-    ["maintenance", "cubby-step-run"],
-    ["derived_refresh", "cubby-step-run"],
-    ["sweep", "cubby-step-run"],
-  ] as const)(
-    "deep-links %s to its current Workflow attempt",
-    (purpose, name) => {
-      const blocks = liveProgressBlocks(RUN_ID, {
-        ...progress,
-        workflow: { ...progress.workflow, purpose },
-      });
-      expect(recordsOf(blocks, "Workflow").rows[0]).toMatchObject({
-        externalLink: {
-          label: "Open in Cloudflare",
-          url: `https://dash.cloudflare.com/9f10f078d35d86c78dedece2300a6b88/workers/workflows/${name}/instance/${RUN_ID}-2`,
-        },
-      });
-      expect(
-        liveProgressBlocks(RUN_ID, { ...progress, workflow: null }).some(
-          (block) => block.kind === "records" && block.title === "Workflow",
-        ),
-      ).toBe(false);
-    },
-  );
-
-  it("names the Workflow attempt and offers cancel while it runs, retry once failed", () => {
+  // Failure modes: a retired Cloudflare link or adapter state leaks into the
+  // Job row; a Job's raw error is dropped; no Job still renders a block.
+  it("names the Job generation and offers cancel while it runs, retry once failed", () => {
     const running = liveProgressBlocks(RUN_ID, progress);
-    expect(recordsOf(running, "Workflow").rows[0]).toMatchObject({
-      title: `Attempt 2 · ${RUN_ID}-2`,
-      lines: [{ text: "Workflow instance waiting" }],
+    expect(recordsOf(running, "Job").rows[0]).toMatchObject({
+      title: "Attempt 2 · Job 00000000-0000-4000-8000-000000000002",
+      lines: [{ text: "Job running" }],
+    });
+    expect(recordsOf(running, "Job").rows[0]).not.toHaveProperty(
+      "externalLink",
+    );
+    expect(
+      liveProgressBlocks(RUN_ID, { ...progress, workflow: null }).some(
+        (block) => block.kind === "records" && block.title === "Job",
+      ),
+    ).toBe(false);
+    const failed = liveProgressBlocks(RUN_ID, {
+      ...progress,
+      status: "failed",
+      workflow: {
+        ...progress.workflow,
+        instance: { state: "failed", error: "Synthetic Job failure" },
+      },
+    });
+    expect(recordsOf(failed, "Job").rows[0]).toMatchObject({
+      lines: [{ text: "Job failed: Synthetic Job failure" }],
     });
     expect(actionsOf(running).map((action) => action.request)).toEqual([
       {
@@ -990,7 +980,7 @@ describe("liveProgressBlocks", () => {
           status: "failed",
           workflow: {
             ...progress.workflow,
-            instance: { state: "missing", error: null },
+            instance: { state: "failed", error: null },
           },
         }),
       ).map(

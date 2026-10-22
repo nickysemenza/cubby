@@ -14,6 +14,7 @@ import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { generateShortcode, parseShortcodeFor } from "@cubby/shared";
 import {
   eq,
+  getTableColumns,
   getTableName,
   type InferInsertModel,
   type InferSelectModel,
@@ -22,18 +23,13 @@ import {
 } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  FindOrCreateConflictError,
-  findOrCreate,
-  insertAndReturn,
-  isTransaction,
-  unwrapDb,
-} from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import { entityIdentity } from "~/server/db/schema";
 import {
-  findPgError,
-  type UnparsedDatabaseError,
-} from "~/server/errors/db-errors";
+  insertPayloadWithIdentity,
+  isEntityShortcodeCollision,
+} from "~/server/entity-kernel/repo/entity-identity-writer";
+import { findPgError } from "~/server/errors/db-errors";
 
 import {
   SHORTCODE_TABLE,
@@ -110,64 +106,17 @@ export async function generateUniqueShortcode<T extends ShortcodeType>(
 }
 
 /**
- * A Postgres unique-violation on the given table's shortcode index. The
- * identity trigger's insert into `Entity` rejects a code whose payload was
- * hard-deleted, which the payload's own index can no longer see. `constraint`
- * is populated by node-postgres; the message check covers a driver or wrapper
- * that only preserves the text.
- */
-const isShortcodeCollision = (
-  error: UnparsedDatabaseError,
-  tableName: string,
-): boolean => {
-  const pg = findPgError(error);
-  if (pg?.code !== "23505") return false;
-  return [`${tableName}_shortcode_unique`, "Entity_shortcode_unique"].some(
-    (indexName) =>
-      pg.constraint === indexName || (pg.message?.includes(indexName) ?? false),
-  );
-};
-
-/**
- * Insert a row, minting its shortcode and retrying if the DB rejects it.
- *
- * The retry is what makes the unique index authoritative rather than decorative:
- * `generateUniqueShortcode`'s pre-check can't see a code another connection is
- * about to commit, so the only reliable signal is the insert failing.
- *
- * When the caller already has a transaction open, each attempt runs inside a
- * SAVEPOINT (drizzle emits one for a nested `.transaction()`). Without it the
- * first 23505 would abort the caller's whole transaction and the retry would
- * fail with "current transaction is aborted" — the retry would be worse than
- * useless. Standalone inserts need no savepoint: a failed statement outside a
- * transaction poisons nothing, so they retry directly.
- */
-/**
- * `findOrCreate` for a shortcode-bearing table, with the same collision retry.
- *
- * Needed because `findOrCreate`'s insert uses a bare `onConflictDoNothing()`,
- * which is NOT scoped to the `where` predicate's index. A shortcode collision
- * (unrelated to the name/alias match the caller is deduping on) therefore
- * silently inserts nothing, and the follow-up re-SELECT finds no row — surfacing
- * as a `FindOrCreateConflictError` rather than as the transparent retry the
- * caller wants. Retrying the whole find-or-create is correct: the `values` thunk
- * mints a fresh code each attempt, and if the conflict really was the name
- * index, the retry's SELECT finds the winner and returns it.
- *
- * A conflict is only ASSUMED to be the shortcode after checking that the minted
- * code is now taken. Every other unique index on the table produces the exact
- * same silent-insert symptom, so retrying on the symptom alone spends three
- * attempts and then blames the shortcode for someone else's collision — a
- * sub-recipe link ingredient colliding on `lower(name)` can just as easily
- * report itself as a shortcode collision. When the code is free, the conflict
- * was an index this `where` cannot see: that's a caller bug, and it says so.
+ * Find a payload first; otherwise create identity and payload atomically.
+ * A name/alias race rolls back our candidate identity before re-reading the
+ * winner. Only shortcode collisions are retried; unrelated SQL failures retain
+ * their original diagnostics.
  */
 export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,
   entity: T,
   opts: {
     where: SQL | undefined;
-    /** Called per attempt; must NOT set `shortcode` — this mints it. */
+    /** Called only on create; must NOT set `shortcode` — this mints it. */
     values: () =>
       | Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">
       | Promise<Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">>;
@@ -179,45 +128,32 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   // checked against ShortcodeTable at the declaration above.
   const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    // Captured so the conflict path can ask whether THIS code is what collided,
-    // rather than inferring it from the silent insert.
-    let mintedShortcode: string | undefined;
-    const result = await findOrCreate(db, table, {
-      where: opts.where,
-      values: async () => {
-        mintedShortcode = await generateUniqueShortcode(db, entity, generator);
-        // SAFETY: opts.values is the insert model for the same generic table;
-        // this adapter adds its only omitted required field, shortcode.
-        return {
-          ...(await opts.values()),
-          shortcode: mintedShortcode,
-        } as InferInsertModel<ShortcodeTable>;
-      },
-    }).catch(async (error) => {
-      if (!(error instanceof FindOrCreateConflictError)) throw error;
-      if (mintedShortcode && (await shortcodeTaken(db, mintedShortcode)))
-        return null; // the code we minted is gone — retry with a fresh one
-      throw new Error(
-        `findOrCreateWithShortcode(${entity}): the insert conflicted on a unique index that \`where\` does not cover (the minted shortcode was still free), so the winner cannot be re-found. Check every unique index on ${getTableName(table)} against the values being inserted.`,
-        { cause: error },
-      );
-    });
-    if (result) {
-      return {
-        // SAFETY: findOrCreate used SHORTCODE_TABLE[entity]; its returned row
-        // therefore has the select model correlated with this same entity T.
-        row: parseShortcodeRow(
-          entity,
-          result.row as InferSelectModel<ShortcodeTableFor<T>>,
-        ),
-        created: result.created,
-      };
-    }
+  const find = async () => {
+    const rows = await unwrapDb(db)
+      .select(getTableColumns(table))
+      .from(table)
+      .where(opts.where)
+      .limit(1);
+    // SAFETY: The projection is the full row of SHORTCODE_TABLE[entity].
+    const [row] = rows as InferSelectModel<ShortcodeTableFor<T>>[];
+    return row ? parseShortcodeRow(entity, row) : undefined;
+  };
+  const existing = await find();
+  if (existing) return { row: existing, created: false };
+  try {
+    const row = await insertWithShortcode(
+      db,
+      entity,
+      await opts.values(),
+      generator,
+    );
+    return { row, created: true };
+  } catch (error) {
+    if (findPgError(error)?.code !== "23505") throw error;
+    const winner = await find();
+    if (winner) return { row: winner, created: false };
+    throw error;
   }
-  throw new Error(
-    `Failed to find-or-create ${entity} after ${MAX_RETRIES} shortcode collisions`,
-  );
 }
 
 /**
@@ -242,22 +178,26 @@ export async function insertWithShortcode<T extends ShortcodeType>(
     const shortcode = generator.generate(entity);
     // SAFETY: values is the insert model for this generic entity with only its
     // shortcode omitted; adding the schema-parsed branded shortcode completes it.
-    const row = { ...values, shortcode } as InferInsertModel<ShortcodeTable>;
+    const row = { ...values, shortcode } as InferInsertModel<ShortcodeTable> & {
+      shortcode: ShortcodeFor<T>;
+      id?: string;
+      createdAt?: Date;
+      deletedAt?: Date | null;
+    };
     try {
-      const client = unwrapDb(db);
-      const created = isTransaction(client)
-        ? await client.transaction((savepoint) =>
-            insertAndReturn(savepoint, table, row),
-          )
-        : await insertAndReturn(db, table, row);
-      // SAFETY: insertAndReturn used SHORTCODE_TABLE[entity], so the selected
+      // Standalone writes also need a transaction: a rejected payload must
+      // release its identity. Nested transactions isolate retries in savepoints.
+      const created = await unwrapDb(db).transaction((tx) =>
+        insertPayloadWithIdentity(tx, table, entity, row),
+      );
+      // SAFETY: The insert used SHORTCODE_TABLE[entity], so the selected
       // row remains correlated with the same generic entity T.
       return parseShortcodeRow(
         entity,
         created as InferSelectModel<ShortcodeTableFor<T>>,
       );
     } catch (error) {
-      if (!isShortcodeCollision(error, tableName)) throw error;
+      if (!isEntityShortcodeCollision(error, tableName)) throw error;
       lastError = error;
     }
   }

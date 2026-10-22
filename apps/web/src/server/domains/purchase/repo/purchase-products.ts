@@ -58,6 +58,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
+  assertLiveLinkEndpoints,
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
@@ -598,6 +599,10 @@ export async function confirmPurchaseAcquisition(
   return withTransaction(db, async (tx) => {
     const purchaseId = await resolveOrThrow(tx, "purchase", input.purchaseId);
     const productId = await resolveOrThrow(tx, "product", input.productId);
+    await assertLiveLinkEndpoints(tx, "purchaseProduct", [
+      purchaseId,
+      productId,
+    ]);
     const rows = await tx
       .insert(entityLink)
       .values({
@@ -660,6 +665,10 @@ export async function attachPurchaseProducts(
     }
 
     const before = await liveProductShortcodes(tx, purchaseId);
+    await assertLiveLinkEndpoints(tx, "purchaseProduct", [
+      purchaseId,
+      ...uniqueProductIds,
+    ]);
     const inserted = await tx
       .insert(entityLink)
       .values(

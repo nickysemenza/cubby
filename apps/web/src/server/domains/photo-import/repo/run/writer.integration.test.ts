@@ -27,6 +27,7 @@ import {
   createImageFixture,
   createLocationFixture,
   createProductIdentityFixture,
+  insertEntityFixtures,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -697,18 +698,22 @@ describe("commitPhotoGroup", () => {
       makeLocationInput({ name: "Boot shelf", parentId: TEST_HOME_SHORTCODE }),
       ctx.actor,
     );
-    const [entry] = await getDb(ctx.db)
-      .insert(inventoryEntry)
-      .values({
-        productId: product.entityId,
-        locationId: location.entityId,
-        shortcode: generateShortcode("inventory"),
-        amountValue: 2,
-        amountUnit: "each",
-        ownershipMode: "explicit",
-        ownerLedgerPartyId: party.id,
-      })
-      .returning();
+    const [entry] = await insertEntityFixtures(
+      ctx.db,
+      inventoryEntry,
+      "inventory",
+      [
+        {
+          productId: product.entityId,
+          locationId: location.entityId,
+          shortcode: generateShortcode("inventory"),
+          amountValue: 2,
+          amountUnit: "each",
+          ownershipMode: "explicit",
+          ownerLedgerPartyId: party.id,
+        },
+      ],
+    );
     const input = {
       runId: run.shortcode,
       groupKey: "group-add",

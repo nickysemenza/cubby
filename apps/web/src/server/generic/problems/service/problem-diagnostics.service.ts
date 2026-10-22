@@ -23,16 +23,10 @@ import type { loadProjectDateWindows } from "~/server/domains/project/repo/subtr
 const loadUpcCache = () =>
   import("~/server/domains/product/repo/upc-lookup-cache");
 const loadAttention = () => import("~/server/domains/project/repo/attention");
-const loadEmbeddingConfig = () =>
-  import("~/server/generic/embedding/service/semantic/config");
-const loadEmbeddings = () =>
-  import("~/server/generic/embedding/service/semantic/embeddings");
 const loadEntityEdges = () =>
   import("~/server/generic/entity-links/repo/entity-edge-source");
 const loadCookbookDetectors = () =>
   import("~/server/generic/problems/repo/detectors-cookbook");
-const loadEmbeddingDetectors = () =>
-  import("~/server/generic/problems/repo/detectors-embedding");
 const loadFinancialDetectors = () =>
   import("~/server/generic/problems/repo/detectors-financial");
 const loadImportDetectors = () =>
@@ -45,8 +39,6 @@ const loadProductDetectors = () =>
   import("~/server/generic/problems/repo/detectors-product");
 const loadPurchaseDetectors = () =>
   import("~/server/generic/problems/repo/detectors-purchase");
-const loadRecipeDetectors = () =>
-  import("~/server/generic/problems/repo/detectors-recipe");
 const loadImageRepo = () => import("~/server/domains/image/repo/image");
 const loadTitleSize = () => import("~/server/lib/title-unit-size");
 
@@ -307,60 +299,6 @@ export const diagnosticAdapters = {
       const { findToolsUsedOutsideOwnership } = await loadProductDetectors();
       return healthyCount(
         (await findToolsUsedOutsideOwnership(db, options)).length,
-      );
-    },
-  },
-  "entities-missing-embeddings": {
-    sample: async (db, _options, limit) => {
-      if (!(await loadEmbeddings()).semanticEmbeddingsConfigured()) {
-        return {
-          items: [],
-          count: 0,
-          status: {
-            state: "unavailable" as const,
-            message:
-              "Semantic embeddings are not configured for this household.",
-          },
-        };
-      }
-      const config = (await loadEmbeddingConfig()).getSemanticEmbeddingConfig();
-      const { items, count } = await (
-        await loadEmbeddingDetectors()
-      ).findEntitiesMissingEmbeddingsPage(db, config, { limit });
-      return { items, count, status: { state: "healthy" } };
-    },
-    count: async (db) => {
-      if (!(await loadEmbeddings()).semanticEmbeddingsConfigured()) {
-        return {
-          count: 0,
-          status: {
-            state: "unavailable" as const,
-            message:
-              "Semantic embeddings are not configured for this household.",
-          },
-        };
-      }
-      return healthyCount(
-        await (
-          await loadEmbeddingDetectors()
-        ).countEntitiesMissingEmbeddings(
-          db,
-          (await loadEmbeddingConfig()).getSemanticEmbeddingConfig(),
-        ),
-      );
-    },
-  },
-  "stale-parent-recipes": {
-    sample: async (db, _options, limit) => {
-      const { findParentRecipesWithDeletedSubRecipes } =
-        await loadRecipeDetectors();
-      return healthySample(findParentRecipesWithDeletedSubRecipes(db), limit);
-    },
-    count: async (db) => {
-      const { findParentRecipesWithDeletedSubRecipes } =
-        await loadRecipeDetectors();
-      return healthyCount(
-        (await findParentRecipesWithDeletedSubRecipes(db)).length,
       );
     },
   },

@@ -14,7 +14,6 @@ import { hasImportRunReports } from "@cubby/schemas/run-fields";
 import type { SuggestionCountsOut } from "@cubby/schemas/suggestion-list";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
-import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
@@ -30,7 +29,6 @@ import {
   formatCurrency,
   formatPercent,
 } from "~/lib/number-format";
-import { workflowForPurpose } from "~/lib/workflows/run-workflows";
 import { PRODUCT_IDENTITY_REVIEW_REASON } from "~/server/domains/product/repo/resolve-names";
 import { runHasCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
@@ -785,9 +783,9 @@ function progressAge(progress: RunLiveProgress): string | null {
 }
 
 /**
- * The Workflow behind a Gmail Run: its current attempt as Cloudflare reports
- * it, with cancel while it runs and retry once it failed. A retry starts a
- * new attempt that resumes from the Run's saved progress.
+ * The Job behind a Run: its current generation and state with the raw error,
+ * with cancel while it runs and retry once it failed. A retry starts a new
+ * generation that resumes from the Run's saved progress.
  */
 function workflowBlocks(
   runId: RunDetail["publicId"],
@@ -795,10 +793,8 @@ function workflowBlocks(
 ): ReportBlock[] {
   const workflow = progress.workflow;
   if (!workflow) return [];
-  const instance = workflow.instance
-    ? workflow.instance.state === "missing"
-      ? "no longer retained by Cloudflare"
-      : phaseLabel(workflow.instance.state).toLowerCase()
+  const state = workflow.instance
+    ? phaseLabel(workflow.instance.state).toLowerCase()
     : "status unavailable";
   const actions: ReportCommand[] =
     progress.status === "running"
@@ -832,16 +828,12 @@ function workflowBlocks(
     records(
       [
         row("workflow", {
-          externalLink: {
-            label: "Open in Cloudflare",
-            url: `https://dash.cloudflare.com/${CF_ACCOUNT_ID}/workers/workflows/${workflowForPurpose(workflow.purpose).name}/instance/${encodeURIComponent(workflow.instanceId)}`,
-          },
-          title: `Attempt ${workflow.attempt} · ${workflow.instanceId}`,
-          body: `Workflow instance ${instance}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
+          title: `Attempt ${workflow.attempt} · Job ${workflow.instanceId}`,
+          body: `Job ${state}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
           actions,
         }),
       ],
-      { title: "Workflow" },
+      { title: "Job" },
     ),
   ];
 }

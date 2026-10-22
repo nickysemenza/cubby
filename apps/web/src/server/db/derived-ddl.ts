@@ -1,7 +1,7 @@
 import { declaredClassificationPolicies } from "@cubby/schemas/classification-field-policy";
 
-import { entityIdentityTriggerSql } from "~/server/db/entity-identity-schema";
-import { entityLinkLivenessTriggerSql } from "~/server/db/entity-link-schema";
+import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-schema";
+import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema";
 
 import { assessmentHistoryDdl, statementSuggestionDdl } from "./assessment-ddl";
 
@@ -53,12 +53,12 @@ const classificationConstraintSql = (): string =>
 
 /**
  * Desired-state DDL for the database catalog check beyond the Drizzle schema:
- * entity identity, EntityLink liveness, assessment history and operational
- * mail authority, plus classification constraints. db:check applies it only to its scratch
+ * retired business triggers, assessment projection indexes and mail view,
+ * plus classification constraints. db:check applies it only to its scratch
  * model database and compares that catalog with a migration-built database.
  * Changes require targeted SQL in an unmerged migration, not another copy of
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n`;
+  return `${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n`;
 }

@@ -14,7 +14,6 @@ import {
   emailRetrievalFailure,
   email as emailTable,
   importSourceClaim,
-  runFinding,
 } from "~/server/db/schema";
 import { orderMailEvent } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
@@ -23,6 +22,7 @@ import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import { importedPurchaseFixture } from "../../service/import-run.fixtures";

@@ -23,11 +23,9 @@ import { ledgerParty } from "~/server/db/schema";
 import { getMealByID } from "~/server/domains/meal/repo/crud";
 import { getMealPreparations } from "~/server/domains/meal/repo/portions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import type { RequestServices } from "~/server/http/request-services";
 
 type Records = Extract<ReportBlock, { kind: "records" }>;
 type Row = Records["rows"][number];
-type Services = RequestServices["services"];
 
 const scaleInput = (initial: number): ReportCommandInput => ({
   kind: "number",
@@ -116,7 +114,6 @@ const portionUnits = (preparation: Preparation) => {
 export async function mealCompositionReport(
   db: Database,
   code: string,
-  services: Services,
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "meal", code);
   // SAFETY: `resolveOrThrow` just resolved a live meal, so the read cannot miss.
@@ -222,11 +219,7 @@ export async function mealCompositionReport(
     ],
   };
 
-  const { preparations } = await getMealPreparations(
-    db,
-    { mealId },
-    services.recipeCosting,
-  );
+  const { preparations } = await getMealPreparations(db, { mealId });
   // Members and guests can eat; Add portion offers only those without a portion on this meal yet,
   // so it can never replace one silently (changing a portion is Mark eaten/planned or Remove).
   const parties = await getDb(db)

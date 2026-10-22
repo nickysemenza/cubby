@@ -1,6 +1,5 @@
 import type { ProblemsCount } from "@cubby/schemas/problems";
 
-import { readProblemCountsFromDurableObject } from "~/server/db/freshness/client";
 import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
 
 type ProblemCountsContext = Pick<
@@ -8,16 +7,11 @@ type ProblemCountsContext = Pick<
   "db" | "upcLookupClient"
 >;
 
-export async function resolveProblemCounts(
-  readFromDurableObject: () => Promise<ProblemsCount | null>,
-  fallback: () => Promise<ProblemsCount>,
+/** Counts are bounded read-only queries; they are read directly, not cached. */
+export async function readProblemCounts(
+  context: ProblemCountsContext,
 ): Promise<ProblemsCount> {
-  return (await readFromDurableObject()) ?? fallback();
+  const { findProblemCounts } =
+    await import("~/server/generic/problems/service/problems.service");
+  return findProblemCounts(context.db, context.upcLookupClient);
 }
-
-export const readProblemCounts = (context: ProblemCountsContext) =>
-  resolveProblemCounts(readProblemCountsFromDurableObject, async () => {
-    const { findProblemCounts } =
-      await import("~/server/generic/problems/service/problems.service");
-    return findProblemCounts(context.db, context.upcLookupClient);
-  });

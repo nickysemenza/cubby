@@ -27,7 +27,6 @@ import type {
 import { getErrorMessage } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { uniq } from "es-toolkit";
 import type { z } from "zod";
 
 import { topoOrder } from "~/lib/cookbook-graph";
@@ -88,7 +87,6 @@ import {
   upsertImportRecipe,
   upsertNotionRecipeFromImport,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
-import { findParentRecipeIdsBatch } from "~/server/domains/recipe/repo/totals";
 import {
   actorWithRun,
   aiCallRunInput,
@@ -729,20 +727,6 @@ export const deleteCookbookWorkflow = bindWorkflow(
     .call("cookbookId", ({ context }, { input }) =>
       cookbookShortcodes.one(context.db, input.cookbookId),
     )
-    .call("recipeIds", async ({ context }, { cookbookId }) =>
-      (await getCookbookRecipesForDiff(context.db, cookbookId)).map(
-        (row) => row.entityId,
-      ),
-    )
-    .call("parentIds", ({ context }, { recipeIds }) =>
-      findParentRecipeIdsBatch(context.db, recipeIds).then((parentsByRecipe) =>
-        uniq(
-          [...parentsByRecipe.values()]
-            .flat()
-            .filter((id) => !recipeIds.includes(id)),
-        ),
-      ),
-    )
     .commit("deleted", ({ context }, { cookbookId }) =>
       deleteCookbook(context.db, cookbookId, context.actorContext),
     )
@@ -759,13 +743,6 @@ export const deleteCookbookWorkflow = bindWorkflow(
           "recipe.deleteCookbook",
         ),
       ),
-    )
-    .effect("costing", ({ context }, { parentIds }) =>
-      parentIds.length
-        ? context.services.recipeCosting.dispatchRecompute(parentIds, {
-            source: "recipe.deleteCookbook",
-          })
-        : Promise.resolve(0),
     )
     .output(({ deleted }) => ({
       deletedRecipes: deleted.deletedRecipeIds.length,

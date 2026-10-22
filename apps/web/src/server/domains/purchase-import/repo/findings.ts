@@ -32,11 +32,16 @@ import {
 import { isEqual } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/db/helpers";
 import {
   expense,
   auditLog,
-  runFinding,
+  assessmentState,
   expenseAttribution,
   inventoryEntry,
   ledgerParty,
@@ -50,6 +55,8 @@ import { receivableProductIds } from "~/server/domains/inventory/repo/stock-trac
 import { decideLineWrite } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
+import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
@@ -63,6 +70,13 @@ import {
 import { findingHasExpired } from "./finding-expiry";
 import { commitSourceOrderReconciliation } from "./reconciliation";
 import { lockFindingSettlement } from "./reconciliation-state";
+import {
+  isRunFinding,
+  publishRunFinding,
+  runFindingColumns,
+  runFindingStatus,
+  runFindingStatusSql,
+} from "./run-finding";
 import {
   existingExpenses,
   resolveLineProduct,
@@ -217,7 +231,7 @@ async function applyFix(
   >,
   actor: ActorContext,
   ledgerPartyId: string,
-  runId: (typeof runFinding.$inferSelect)["runId"],
+  runId: string | null,
 ) {
   if (fix.kind === "reconcile_source_order") {
     await commitSourceOrderReconciliation(
@@ -325,7 +339,7 @@ async function applyAggregateReplacement(
     typeof purchase.$inferSelect,
     "id" | "date" | "displayLabel" | "vendorId"
   >,
-  source: Pick<typeof runFinding.$inferSelect, "ledgerPartyId" | "runId">,
+  source: { ledgerPartyId: string; runId: string | null },
 ) {
   const purchaseId = targetPurchase.id;
   if (fix.lines.length === 0)
@@ -437,18 +451,16 @@ async function applyAggregateReplacement(
     // Goods left unresolved keep their finding, as the writer files it, so
     // a later delivery still asks to receive them.
     if (identity.lineKind === "principal" && identity.unresolvedReason)
-      await tx
-        .insert(runFinding)
-        .values({
-          runId: source.runId,
-          ledgerPartyId: source.ledgerPartyId,
-          entityKind: "purchase",
-          entityId: purchaseId,
-          kind: "product_unresolved",
-          summary: `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
-          evidenceFingerprint: `replacement:${row.id}`,
-        })
-        .onConflictDoNothing();
+      await publishRunFinding(tx, {
+        runId: source.runId,
+        ledgerPartyId: source.ledgerPartyId,
+        entityKind: "purchase",
+        entityId: purchaseId,
+        kind: "product_unresolved",
+        summary: `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+        proposedFix: null,
+        evidenceFingerprint: `replacement:${row.id}`,
+      });
     audit.push({
       entityKind: "expense" as const,
       entityId: row.id,
@@ -477,7 +489,7 @@ async function applyAggregateReplacement(
 async function assertFindingOwner(
   tx: DrizzleTransaction,
   actor: ActorContext,
-  ownerId: typeof runFinding.$inferSelect.ledgerPartyId,
+  ownerId: typeof ledgerParty.$inferSelect.id,
 ) {
   const [owner] = await tx
     .select({ id: ledgerParty.id })
@@ -503,33 +515,33 @@ export async function resolveRunFinding(
     await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
       .select({
-        id: runFinding.id,
-        status: runFinding.status,
-        expiresAt: runFinding.expiresAt,
-        proposedFix: runFinding.proposedFix,
-        runId: runFinding.runId,
-        ledgerPartyId: runFinding.ledgerPartyId,
-        entityKind: runFinding.entityKind,
-        entityId: runFinding.entityId,
+        id: runFindingColumns.id,
+        status: runFindingColumns.status,
+        expiresAt: runFindingColumns.expiresAt,
+        proposedFix: runFindingColumns.proposedFix,
+        runId: runFindingColumns.runId,
+        ledgerPartyId: runFindingColumns.ledgerPartyId,
+        entityKind: runFindingColumns.entityKind,
+        entityId: runFindingColumns.entityId,
       })
-      .from(runFinding)
+      .from(assessmentState)
       .innerJoin(
         ledgerParty,
         and(
-          eq(ledgerParty.id, runFinding.ledgerPartyId),
+          eq(ledgerParty.id, assessmentState.ledgerPartyId),
           eq(ledgerParty.userId, actor.userId),
           notDeleted(ledgerParty),
         ),
       )
-      .where(eq(runFinding.id, input.id))
+      .where(and(isRunFinding, eq(assessmentState.id, input.id)))
       .limit(1)
-      .for("update", { of: runFinding });
+      .for("update", { of: assessmentState });
     if (!finding) throw new Error("Import finding not found for this member.");
     await assertFindingOwner(tx, actor, finding.ledgerPartyId);
-    if (finding.status !== "open") {
+    if (finding.status !== runFindingStatus.enum.open) {
       const fix = storedImportFix.parse(finding.proposedFix);
       if (
-        finding.status === "applied" &&
+        finding.status === runFindingStatus.enum.applied &&
         input.action === "apply" &&
         fix?.kind === "reconcile_source_order" &&
         fix.review &&
@@ -577,17 +589,28 @@ export async function resolveRunFinding(
         await applyFix(tx, fix, actor, finding.ledgerPartyId, finding.runId);
       }
     }
-    const status = input.action === "apply" ? "applied" : "dismissed";
-    await tx
-      .update(runFinding)
-      .set({
-        status,
-        resolvedAt: new Date(),
-        resolvedByUserId: actor.userId,
-        updatedAt: new Date(),
-      })
-      .where(eq(runFinding.id, finding.id));
-    return resolveRunFindingOut.parse({ id: finding.id, status });
+    const applied = input.action === "apply";
+    // The member's decision is the Feedback; the current row follows it.
+    const decision = await recordFeedback(databaseForTransaction(tx), {
+      assessmentId: finding.id,
+      operationId: "resolution",
+      verdict: applied ? "correct" : "dismissed",
+      intent: applied ? "apply" : "history",
+      authority: "member",
+      actorUserId: actor.userId,
+    });
+    await transitionAssessmentState(
+      tx,
+      finding.id,
+      { status: applied ? "applied" : "rejected" },
+      { kind: "member_review", feedbackId: decision.id },
+    );
+    return resolveRunFindingOut.parse({
+      id: finding.id,
+      status: applied
+        ? runFindingStatus.enum.applied
+        : runFindingStatus.enum.dismissed,
+    });
   });
 }
 
@@ -607,6 +630,13 @@ export async function resolveRunFinding(
  * resolving vacuously. This is checked fresh on every call rather than cached,
  * so it stays correct regardless of how many partial receives happened first.
  */
+const openArrivedFinding = and(
+  isRunFinding,
+  eq(assessmentState.entity, "purchase"),
+  sql`${runFindingColumns.kind} = ${"arrived"}`,
+  sql`${runFindingStatusSql} = ${runFindingStatus.enum.open}`,
+);
+
 /** Re-check the open arrival prompts of every Purchase with a line for this Product. */
 export async function settleArrivedFindingsForProduct(
   db: Database,
@@ -614,23 +644,17 @@ export async function settleArrivedFindingsForProduct(
   actor: ActorContext,
 ) {
   const purchases = await getDb(db)
-    .selectDistinct({ id: runFinding.entityId })
-    .from(runFinding)
+    .selectDistinct({ id: runFindingColumns.entityId })
+    .from(assessmentState)
     .innerJoin(
       expense,
       and(
-        eq(expense.purchaseId, runFinding.entityId),
+        eq(expense.purchaseId, assessmentState.recordId),
         eq(expense.productId, productId),
         notDeleted(expense),
       ),
     )
-    .where(
-      and(
-        eq(runFinding.entityKind, "purchase"),
-        eq(runFinding.kind, "arrived"),
-        eq(runFinding.status, "open"),
-      ),
-    );
+    .where(openArrivedFinding);
   for (const { id } of purchases)
     await resolveArrivedFindingsForPurchase(db, { purchaseId: id }, actor);
 }
@@ -642,25 +666,20 @@ export async function resolveArrivedFindingsForPurchase(
 ): Promise<{ resolved: number }> {
   return withTransaction(db, async (tx) => {
     const openFindings = await tx
-      .select({ id: runFinding.id })
-      .from(runFinding)
+      .select({ id: assessmentState.id })
+      .from(assessmentState)
       .innerJoin(
         ledgerParty,
         and(
-          eq(ledgerParty.id, runFinding.ledgerPartyId),
+          eq(ledgerParty.id, assessmentState.ledgerPartyId),
           eq(ledgerParty.userId, actor.userId),
           notDeleted(ledgerParty),
         ),
       )
       .where(
-        and(
-          eq(runFinding.entityKind, "purchase"),
-          eq(runFinding.entityId, input.purchaseId),
-          eq(runFinding.kind, "arrived"),
-          eq(runFinding.status, "open"),
-        ),
+        and(openArrivedFinding, eq(assessmentState.recordId, input.purchaseId)),
       )
-      .for("update");
+      .for("update", { of: assessmentState });
     if (openFindings.length === 0) return { resolved: 0 };
 
     const productLines = await tx
@@ -699,15 +718,25 @@ export async function resolveArrivedFindingsForPurchase(
     if (!everyLineReceived) return { resolved: 0 };
 
     const ids = openFindings.map((finding) => finding.id);
-    await tx
-      .update(runFinding)
-      .set({
-        status: "applied",
-        resolvedAt: new Date(),
-        resolvedByUserId: actor.userId,
-        updatedAt: new Date(),
-      })
-      .where(inArray(runFinding.id, ids));
+    // Receiving is the member's act; each prompt records that member as its
+    // resolver and closes as the consequence.
+    for (const id of ids) {
+      const decision = await recordFeedback(databaseForTransaction(tx), {
+        assessmentId: id,
+        operationId: "resolution",
+        verdict: "correct",
+        intent: "apply",
+        authority: "member",
+        actorUserId: actor.userId,
+        metadata: { kind: "arrival_received" },
+      });
+      await transitionAssessmentState(
+        tx,
+        id,
+        { status: "applied" },
+        { kind: "arrival_received", feedbackId: decision.id },
+      );
+    }
     return { resolved: ids.length };
   });
 }

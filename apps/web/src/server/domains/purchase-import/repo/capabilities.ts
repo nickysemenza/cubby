@@ -102,8 +102,6 @@ const actionCapability = {
   "statement_rows.delete": "generic_mutation",
   "mail.search": "prepare",
   "mail.correct_relevance": "generic_mutation",
-  "mail.accuracy_sample": "generic_mutation",
-  "mail.accuracy_grade": "generic_mutation",
   "mail.import": "start_run",
   "mail.reclassify": "start_run",
   "mail.rerun_preview": "start_run",

@@ -132,9 +132,7 @@ const sharedProblemBuilders = {
 const excludedDiagnostics = new Set([
   "import-findings", // The queue owns the read-only open/unexpired relation.
   "provisional-financial-accounts", // Uses its canonical gap SQL in the queue.
-  "entities-missing-embeddings",
   "products-with-better-upc-data",
-  "stale-parent-recipes",
   "image-metadata-outcomes", // Re-admitted by the maintenance step's retry.
   "referential-liveness-violations",
   "incomplete-statement-imports", // Reviewed through current accounts below.

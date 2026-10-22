@@ -1,8 +1,19 @@
+import { imageId } from "@cubby/schemas/identifiers";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { aiAnalysis, location as locationTable } from "~/server/db/schema";
+import { deleteImages } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  cancelJob,
+  claimJob,
+  enqueueJob,
+} from "~/server/generic/jobs/repo/jobs";
 import {
   createImageFixture,
   createLocationFixture,
@@ -25,6 +36,143 @@ describe("describeLocation previous description", () => {
     detectInventoryItems: async () => {
       throw new Error("not used");
     },
+  });
+
+  // Paid results may be cached, but a cancelled Job or changed source cannot
+  // make a new location analysis visible after the provider returns.
+  it.each(["cancelled", "source_changed"])(
+    "rejects a %s background description",
+    async (change) => {
+      const location = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: "Synthetic current shelf" }),
+        ctx.actor,
+      );
+      const photo = await createImageFixture(
+        ctx.db,
+        "synthetic-stale-description",
+      );
+      await insertEntityAttachments(ctx.db, {
+        entityId: location.entityId,
+        imageId: photo.id,
+        sortOrder: 0,
+      });
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "background",
+        trigger: "manual",
+      });
+      const saved = await enqueueJob(ctx.db, {
+        key: `synthetic-location:${location.entityId}`,
+        kind: "location-ai.description.refresh",
+        input: {},
+      });
+      const claim = await claimJob(ctx.db, saved.id);
+      if (!claim) throw new Error("Expected location Job");
+      const ai: LocationVisionAiPort = {
+        ...portSaying("Synthetic stale answer"),
+        describeLocation: async () => {
+          if (change === "cancelled") await cancelJob(ctx.db, saved.id);
+          else
+            await getDb(ctx.db)
+              .update(locationTable)
+              .set({ name: "Synthetic changed shelf" })
+              .where(eq(locationTable.id, location.entityId));
+          return { description: "Synthetic stale answer", confidence: "high" };
+        },
+      };
+      await expect(
+        withJobExecution(ctx.db, claim, () =>
+          describeLocation(ctx.db, location.entityId, runId, ai),
+        ),
+      ).rejects.toThrow(
+        change === "cancelled"
+          ? "Job generation or lease is obsolete"
+          : "Location inputs changed",
+      );
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(aiAnalysis)
+          .where(eq(aiAnalysis.entityId, location.entityId)),
+      ).toEqual([]);
+    },
+  );
+
+  // An uncommitted image deletion is invisible to ordinary fingerprint reads.
+  // Publication must wait for that writer and reject its removed-photo result.
+  it("rejects a description overlapping an uncommitted analyzed image deletion", async () => {
+    const location = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic disappearing photo" }),
+      ctx.actor,
+    );
+    const photo = await createImageFixture(
+      ctx.db,
+      "synthetic-overlapping-location-photo",
+    );
+    await insertEntityAttachments(ctx.db, {
+      entityId: location.entityId,
+      imageId: photo.id,
+      sortOrder: 0,
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      trigger: "manual",
+    });
+    const saved = await enqueueJob(ctx.db, {
+      key: `synthetic-location-overlap:${location.entityId}`,
+      kind: "location-ai.description.refresh",
+      input: {},
+    });
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Expected location Job");
+    const deleted = Promise.withResolvers<void>();
+    const allowCommit = Promise.withResolvers<void>();
+    const deletion = withTransactionDatabase(ctx.db, async (tx) => {
+      await deleteImages(tx, [imageId.parse(photo.id)]);
+      deleted.resolve();
+      await allowCommit.promise;
+    });
+    await deleted.promise;
+    let settled = false;
+    const analysis = withJobExecution(ctx.db, claim, () =>
+      describeLocation(
+        ctx.db,
+        location.entityId,
+        runId,
+        portSaying("Synthetic removed-photo answer"),
+      ),
+    ).then(
+      () => {
+        settled = true;
+        return null;
+      },
+      (error: unknown) => {
+        settled = true;
+        return error;
+      },
+    );
+    try {
+      await expect
+        .poll(async () => {
+          if (settled) return "published";
+          const waiting = await getDb(ctx.db).execute(
+            sql`SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND query ILIKE '%Image%' AND wait_event_type='Lock'`,
+          );
+          return waiting.rows.length ? "blocked" : "starting";
+        })
+        .toBe("blocked");
+    } finally {
+      allowCommit.resolve();
+      await deletion;
+    }
+    expect(await analysis).toBeInstanceOf(Error);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiAnalysis)
+        .where(eq(aiAnalysis.entityId, location.entityId)),
+    ).toEqual([]);
   });
 
   it("returns the description that stood before this run, and null for the first", async () => {

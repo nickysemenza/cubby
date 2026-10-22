@@ -33,7 +33,7 @@ const afterCommitQueues = new WeakMap<object, AfterCommitEffect[]>();
 type BeforeCommitEffect = (tx: DrizzleTransaction) => Promise<void>;
 type BeforeCommitEntry = {
   effect: BeforeCommitEffect;
-  phase: "validation" | "fence" | "capture";
+  phase: "validation" | "fence" | "capture" | "publication";
   changedKeys: readonly string[];
 };
 const beforeCommitQueues = new WeakMap<object, BeforeCommitEntry[]>();
@@ -63,7 +63,7 @@ export const runBeforeCommit = async (
   db: Database | RepositoryQueryTransaction,
   effect: BeforeCommitEffect,
   options: {
-    phase?: "validation" | "fence" | "capture";
+    phase?: "validation" | "fence" | "capture" | "publication";
     changedKeys?: readonly string[];
   } = {},
 ): Promise<void> => {
@@ -91,7 +91,7 @@ const transactionParents = new WeakMap<object, Database>();
 export const runBeforeCommitDatabase = (
   db: Database,
   effect: (tx: Database) => Promise<void>,
-  phase: "validation" | "fence" | "capture",
+  phase: "validation" | "fence" | "capture" | "publication",
 ) => runBeforeCommit(db, (tx) => effect(databaseForTransaction(tx)), { phase });
 
 /**
@@ -220,6 +220,12 @@ const withTransactionAttempts = async <T>(
                 await entry.effect(tx);
               for (const entry of before.filter(
                 (entry) => entry.phase === "capture",
+              ))
+                await entry.effect(tx);
+              // Capture may wait for another writer. Recheck live ownership
+              // after that work, then complete Jobs in the same transaction.
+              for (const entry of before.filter(
+                (entry) => entry.phase === "publication",
               ))
                 await entry.effect(tx);
             }

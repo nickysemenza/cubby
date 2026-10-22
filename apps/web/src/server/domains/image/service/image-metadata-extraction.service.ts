@@ -8,7 +8,10 @@ import {
   markImageMetadataOutcome,
   type ImageMetadataExtractionRow,
 } from "~/server/domains/image/repo/image";
-import { applyImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata";
+import {
+  publishExtractedImageMetadata,
+  applyImageMetadataExtraction,
+} from "~/server/domains/image/repo/image-metadata";
 import {
   extractImageMetadata,
   type ImageEmbeddedMetadata,
@@ -75,14 +78,18 @@ export async function extractAndStoreImageMetadata(
   const row = await ports.getRow(db, imageId);
   if (!row) return "skipped";
   const bytes = await ports.getBytes(row.key, MAX_METADATA_FETCH_BYTES);
+  const publish = (write: (tx: Database) => Promise<void>) =>
+    publishExtractedImageMetadata(db, imageId, row, ports.getRow, write);
   // No retry can recover a missing original: the row leaves the backlog as
   // `original_missing` instead of being re-selected forever.
   if (bytes === null) {
     const missing = `R2 object not found: ${row.key} (404)`;
-    await markImageMetadataOutcome(db, imageId, "original_missing", missing);
+    await publish(async (tx) => {
+      await markImageMetadataOutcome(tx, imageId, "original_missing", missing);
+    });
     return { missing };
   }
   const parsed = ports.extract(bytes, row.contentType);
-  await ports.apply(db, imageId, toStoredMetadata(parsed));
+  await publish((tx) => ports.apply(tx, imageId, toStoredMetadata(parsed)));
   return "succeeded";
 }

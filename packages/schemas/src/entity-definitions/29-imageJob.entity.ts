@@ -90,7 +90,7 @@ export default defineEntity({
     },
     detail: {
       hero: {
-        stats: ["attempts", "failuresSinceRetry", "durationMs"],
+        stats: ["attempts", "durationMs"],
         chip: "state",
       },
       additionalSections: [
@@ -174,15 +174,6 @@ export default defineEntity({
         key: "attempts",
         kind: "number",
         display: {},
-        validation: readOnly(z.int().nonnegative()),
-      },
-      {
-        // Failures since the last operator retry; the retry budget compares
-        // this, never the lifetime `attempts`. Declared in the model only
-        // because storage.columns has no number kind; it has no display.
-        key: "failuresSinceRetry",
-        display: { detail: false, list: false },
-        kind: "number",
         validation: readOnly(z.int().nonnegative()),
       },
       {
@@ -284,12 +275,6 @@ export default defineEntity({
         display: { list: false },
         validation: readOnly(z.date()),
       },
-      {
-        // Dispatch backoff: the queue claims a job only once this has passed.
-        key: "nextAttemptAt",
-        kind: "timestamp",
-        validation: readOnly(z.date()),
-      },
       { key: "shortcode", kind: "text" },
       { key: "deletedAt", kind: "timestamp", nullable: true },
     ],
@@ -301,12 +286,10 @@ export default defineEntity({
       { key: "state", specialized: "enum:state" },
       { key: "runId", reference: "run" },
       { key: "attempts", defaultValue: 0 },
-      { key: "failuresSinceRetry", defaultValue: 0 },
       "lastError",
       "processorRevision",
       "dispatchedAt",
       "completedAt",
-      { key: "nextAttemptAt", defaultOverride: "now" },
       "createdAt",
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
@@ -322,7 +305,6 @@ export default defineEntity({
       "imageId",
       "runId",
       "attempts",
-      "failuresSinceRetry",
       "lastExecutor",
       "lastError",
       "durationMs",
@@ -373,7 +355,6 @@ export default defineEntity({
         reference: "imageProcessingSubmission",
       },
       { key: "attemptId", kind: "identifier" },
-      { key: "leaseExpiresAt", kind: "timestamp" },
       { key: "runtime", kind: "json" },
       { key: "result", kind: "json" },
     ],
@@ -383,20 +364,12 @@ export default defineEntity({
         unique: true,
         on: ["imageId", "kind", "sourceContentHash", "processorRevision"],
       },
-      {
-        name: "ImageProcessingJob_dispatch_idx",
-        on: ["state", "nextAttemptAt"],
-      },
       { on: ["imageId", { column: "createdAt", desc: true }] },
     ],
     checks: [
       { name: "ImageProcessingJob_kind_check", column: "kind", bare: true },
       { name: "ImageProcessingJob_state_check", column: "state", bare: true },
       { name: "ImageProcessingJob_attempts_check", sql: "{attempts} >= 0" },
-      {
-        name: "ImageProcessingJob_lease_check",
-        sql: "({state} = 'leased') = ({attemptId} IS NOT NULL AND {leaseExpiresAt} IS NOT NULL)",
-      },
     ],
   },
   filters: {

@@ -14,7 +14,6 @@ import {
   ledgerParty,
   orderMail,
   purchase as purchaseTable,
-  runFinding,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
@@ -23,6 +22,7 @@ import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-impo
 import { prepareMailFinancialEvent } from "~/server/domains/purchase-import/service/mail-financial-event";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
   convergeFinancialTransaction,
@@ -768,9 +768,11 @@ describe("server verified financial convergence", () => {
         },
       ],
     });
-    const finding = await getDb(ctx.db).query.runFinding.findFirst({
-      where: eq(runFinding.entityId, purchase.entityId),
-    });
+    const [finding] = await getDb(ctx.db)
+      .select()
+      .from(runFinding)
+      .where(eq(runFinding.entityId, purchase.entityId))
+      .limit(1);
     if (!finding)
       throw new Error("Expected exact aggregate replacement finding");
     const preview = await prepareSourceOrderReconciliation(

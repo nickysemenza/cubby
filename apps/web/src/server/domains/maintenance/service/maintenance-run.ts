@@ -1,12 +1,5 @@
-import { RECIPE_RECOMPUTE_CHUNK_SIZE } from "@cubby/schemas/background-tasks";
-import { entityRefKey } from "@cubby/schemas/entity";
-import {
-  imageId,
-  type ImageId,
-  type RecipeId,
-} from "@cubby/schemas/identifiers";
+import { imageId, type ImageId } from "@cubby/schemas/identifiers";
 import type { RunStepError, RunStepMeta } from "@cubby/schemas/run-step";
-import { searchableEntitySchema } from "@cubby/schemas/search";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { z } from "zod";
 
@@ -16,15 +9,6 @@ import {
   isE2eAuthTestMode,
 } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import {
-  readImageProcessingJobStates,
-  retryFailedImageProcessingJobs,
-} from "~/server/domains/image-processing/repo/image-processing";
-import { createImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-history";
-import {
-  ALL_IMAGE_PROCESSING_KINDS,
-  countImagesMissingCurrentProcessing,
-} from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import {
   backfillImageProcessing,
   repairImageProcessingWork,
@@ -46,16 +30,6 @@ import type {
   StepDriver,
   StepRunDrivers,
 } from "~/server/domains/run/service/step-run";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import {
-  countUnembeddedSearchDocuments,
-  selectUnembeddedSearchDocumentRefs,
-} from "~/server/generic/search/repo/search-document";
-import {
-  type EmbeddingRefreshPort,
-  productionEmbeddingRefreshPort,
-  refreshEntityEmbeddings,
-} from "~/server/workflows/background-tasks/embedding";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** Uploads abandoned after presign; the same threshold the presign cull uses. */
@@ -67,10 +41,6 @@ const RETIRE_COORDINATORS_AFTER_MS = 24 * 60 * 60_000;
 /** External seams a test replaces; everything else runs for real. */
 export type MaintenancePorts = {
   metadata?: ExtractImageMetadataPorts;
-  /** Runs one image-processing job now (cloud model or companion handoff). */
-  /** `"deferred"`: a funding wait returned the job to pending (see dispatch). */
-  dispatchImageJob?: (db: Database, jobId: string) => Promise<string | void>;
-  embedding?: EmbeddingRefreshPort;
   pageSize?: { exif?: number; imageBackfill?: number };
 };
 
@@ -244,271 +214,30 @@ async function extractImages(
   return { delta, errors };
 }
 
-const searchDocumentRef = (kind: string, id: string) =>
-  `searchDocument:${entityRefKey(searchableEntitySchema.parse(kind), id)}`;
-
-function embeddingsStep(ports: MaintenancePorts): StepDriver {
-  const port = ports.embedding ?? productionEmbeddingRefreshPort;
-  return {
-    key: "embeddings",
-    label: "Search embeddings",
-    page: async (context) => {
-      const { db, step } = context;
-      if (!port.configured()) return { kind: "progress", found: 0, done: true };
-      const config = getSemanticEmbeddingConfig();
-      const retried = retryRefs(context, "searchDocument:").flatMap((key) => {
-        const [entityKind, entityId] = key.split(":");
-        const kind = searchableEntitySchema.safeParse(entityKind);
-        return kind.success && entityId
-          ? [{ entityKind: kind.data, entityId }]
-          : [];
-      });
-      const cursor =
-        z
-          .object({ entityKind: searchableEntitySchema, entityId: z.string() })
-          .nullable()
-          .parse(step.cursor ?? null) ?? undefined;
-      const page = retried.length
-        ? { refs: retried, nextCursor: null }
-        : await selectUnembeddedSearchDocumentRefs(db, config, {
-            cursor,
-            pageSize: 100,
-          });
-      const results = await refreshEntityEmbeddings(db, page.refs, port);
-      const delta = { done: 0, failed: 0, skipped: 0 };
-      const errors: RunStepError[] = [];
-      for (const ref of page.refs) {
-        const result = results.get(entityRefKey(ref.entityKind, ref.entityId));
-        if (!result || "error" in result) {
-          delta.failed += 1;
-          errors.push(
-            failure(
-              result
-                ? failureText(result.error)
-                : "No embedding refresh result",
-              searchDocumentRef(ref.entityKind, ref.entityId),
-            ),
-          );
-        } else if (result.outcome === "written") delta.done += 1;
-        else delta.skipped += 1;
-      }
-      if (retried.length)
-        return {
-          kind: "progress",
-          delta,
-          errors,
-          meta: RETRY_CONSUMED,
-          done: true,
-        };
-      const processed =
-        step.done + step.failed + step.skipped + page.refs.length;
-      return {
-        kind: "progress",
-        delta,
-        found:
-          processed +
-          (page.nextCursor
-            ? // Failed refs behind the cursor stay unembedded until a retry.
-              Math.max(
-                (await countUnembeddedSearchDocuments(db, config)) -
-                  step.failed -
-                  delta.failed,
-                0,
-              )
-            : 0),
-        errors,
-        cursor: page.nextCursor ?? cursor ?? null,
-        done: !page.nextCursor,
-      };
-    },
-  };
-}
-
-const recipeTotalsStep: StepDriver = {
-  key: "recipe-totals",
-  label: "Recipe totals",
-  page: async ({ db, step }) => {
-    const { selectAllStaleRecipeIds, selectStaleRecipeIds } =
-      await import("~/server/domains/recipe/repo/totals");
-    const after = z
-      .string()
-      .nullable()
-      .parse(step.cursor ?? null);
-    const stale = (await selectAllStaleRecipeIds(db))
-      .filter((id) => !after || id > after)
-      .sort();
-    const chunk = stale.slice(0, RECIPE_RECOMPUTE_CHUNK_SIZE);
-    if (!chunk.length) return { kind: "progress", delta: {}, done: true };
-    const { buildCrudServices } = await import("~/server/http/request-context");
-    const errors: RunStepError[] = [];
-    let stillStale: RecipeId[] = [];
-    try {
-      await buildCrudServices(db).services.recipeCosting.recomputeQueued(chunk);
-      stillStale = await selectStaleRecipeIds(db, chunk);
-    } catch (error) {
-      const message = failureText(error);
-      for (const id of chunk) errors.push(failure(message, `recipe:${id}`));
-    }
-    const done = errors.length ? 0 : chunk.length - stillStale.length;
-    return {
-      kind: "progress",
-      found: step.done + step.failed + step.skipped + stale.length,
-      delta: {
-        done,
-        failed: errors.length,
-        skipped: errors.length ? 0 : stillStale.length,
-      },
-      errors,
-      cursor: chunk.at(-1) ?? after,
-      done: stale.length <= chunk.length,
-    };
-  },
-};
-
 function imageBackfillStep(ports: MaintenancePorts): StepDriver {
   const pageSize = ports.pageSize?.imageBackfill ?? 5;
-  const dispatch =
-    ports.dispatchImageJob ??
-    (async (db: Database, jobId: string) => {
-      const { dispatchImageProcessingWakeup } =
-        await import("~/server/domains/image-processing/service/dispatch");
-      return dispatchImageProcessingWakeup(db, jobId);
-    });
   return {
     key: "image-backfill",
-    label: "Image processing backfill",
-    page: async (context) => {
-      // No budget pre-check: the funding ladder decides at each describe or
-      // identify call (credit, plan, then a member's paid allowance), and a
-      // funding wait pauses the Run at its resume time (`dispatchImages`).
-      const { db, step, run } = context;
-      const retried = retryRefs(context, "image:").map((id) =>
-        imageId.parse(id),
-      );
-      if (retried.length) {
-        const submission = await createImageProcessingSubmission(db);
-        const images = [];
-        for (const retriedId of retried)
-          images.push({
-            id: retriedId,
-            jobIds: await retryFailedImageProcessingJobs(db, 100, {
-              imageId: retriedId,
-              submissionId: submission.id,
-            }),
-          });
-        const counts = await dispatchImages(db, images, dispatch);
-        if (counts.deferred) return { ...counts.deferred, delta: counts.delta };
-        return {
-          kind: "progress",
-          delta: counts.delta,
-          errors: counts.errors,
-          meta: RETRY_CONSUMED,
-          done: true,
-        };
-      }
-      const cursor = z
+    label: "Image work admission",
+    page: async ({ db, step, run }) => {
+      const after = z
         .object({ createdAt: z.string(), id: z.string() })
         .nullable()
         .parse(step.cursor ?? null);
-      const scheduled = await backfillImageProcessing(db, {
+      const page = await backfillImageProcessing(db, {
         batchSize: pageSize,
-        after: cursor,
+        after,
         runId: run.id,
-        publish: false,
       });
-      const counts = await dispatchImages(db, scheduled.images, dispatch);
-      // The deferred images keep their pending jobs; the image queue runs
-      // them at the resume time, so the cursor moves past this page.
-      if (counts.deferred)
-        return {
-          ...counts.deferred,
-          delta: counts.delta,
-          errors: counts.errors,
-          cursor: scheduled.images.at(-1)?.cursor ?? cursor,
-        };
-      const processed =
-        step.done + step.failed + step.skipped + scheduled.images.length;
+      const last = page.images.at(-1);
       return {
         kind: "progress",
-        delta: counts.delta,
-        found:
-          processed +
-          (scheduled.images.length
-            ? // Images that got no job stay missing behind the cursor.
-              Math.max(
-                (await countImagesMissingCurrentProcessing(
-                  db,
-                  ALL_IMAGE_PROCESSING_KINDS,
-                )) -
-                  step.skipped -
-                  counts.delta.skipped,
-                0,
-              )
-            : 0),
-        errors: counts.errors,
-        cursor: scheduled.images.at(-1)?.cursor ?? cursor,
-        done: scheduled.images.length < pageSize,
+        delta: { done: page.scheduled },
+        found: step.done + page.scheduled,
+        ...(last ? { cursor: last.cursor } : {}),
+        done: page.images.length < pageSize,
       };
     },
-  };
-}
-
-/**
- * Runs each image's jobs now; an image fails when any of its jobs failed.
- * A funding wait stops the page: the waiting and undispatched images stay
- * pending, are not counted done, and the step pauses until free capacity.
- */
-async function dispatchImages(
-  db: Database,
-  images: ReadonlyArray<{ id: string; jobIds: readonly string[] }>,
-  dispatch: (db: Database, jobId: string) => Promise<string | void>,
-) {
-  const delta = { done: 0, failed: 0, skipped: 0 };
-  const errors: RunStepError[] = [];
-  const jobIds = images.flatMap((candidate) => candidate.jobIds);
-  let deferredJob: string | null = null;
-  for (const jobId of jobIds)
-    if ((await dispatch(db, jobId)) === "deferred") {
-      deferredJob = jobId;
-      break;
-    }
-  const states = await readImageProcessingJobStates(db, jobIds);
-  const byId = new Map(states.map((row) => [row.id, row]));
-  const deferredAt = deferredJob ? jobIds.indexOf(deferredJob) : -1;
-  const reached = (jobId: string) =>
-    deferredAt < 0 || jobIds.indexOf(jobId) < deferredAt;
-  for (const candidate of images) {
-    if (!candidate.jobIds.length) {
-      delta.skipped += 1;
-      continue;
-    }
-    if (!candidate.jobIds.every(reached)) continue;
-    const failed = candidate.jobIds
-      .map((jobId) => byId.get(jobId))
-      .filter((row) => row?.state === "failed");
-    if (!failed.length) {
-      delta.done += 1;
-      continue;
-    }
-    delta.failed += 1;
-    errors.push(
-      failure(
-        failed.map((row) => row?.lastError ?? "Image job failed").join("\n"),
-        imageRef(candidate.id),
-      ),
-    );
-  }
-  const waiting = deferredJob ? byId.get(deferredJob) : undefined;
-  return {
-    delta,
-    errors,
-    deferred: deferredJob
-      ? {
-          kind: "paused" as const,
-          reason: waiting?.lastError ?? "Waiting for free AI capacity",
-          until: waiting?.nextAttemptAt ?? null,
-        }
-      : null,
   };
 }
 
@@ -527,25 +256,18 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
     }),
     onceStep("image-repair", "Image processing repair", async ({ db }) => {
       const repaired = await repairImageProcessingWork(db);
-      const found =
-        repaired.orphans +
-        repaired.executorless +
-        repaired.leases +
-        repaired.dispatch;
+      const found = repaired.orphans + repaired.executorless;
       return {
         found,
         more: repaired.more,
         meta: detail({
           orphans: repaired.orphans,
           executorless: repaired.executorless,
-          leases: repaired.leases,
-          wakeups: repaired.dispatch,
         }),
       };
     }),
     exifStep(ports),
-    embeddingsStep(ports),
-    recipeTotalsStep,
+
     onceStep("pending-uploads", "Abandoned uploads", async ({ db }) => {
       const found = await countCullablePendingImages(db, PENDING_UPLOAD_HOURS);
       if (!found) return { found: 0 };
@@ -614,16 +336,11 @@ export function maintenanceSteps(ports: MaintenancePorts = {}): StepDriver[] {
         ),
       };
     }),
-    onceStep("vector-reconcile", "Vector reconcile", async ({ db }) => {
-      const { recoverEmbeddingArtifactsPage } =
-        await import("~/server/workflows/background-tasks/embedding");
-      const page = await recoverEmbeddingArtifactsPage(db);
-      return {
-        found: 0,
-        done: page.processed,
-        errors: page.errors.map((message) => failure(message)),
-        more: !page.done,
-      };
+    onceStep("derived-refresh", "Derived work admission", async ({ db }) => {
+      await (
+        await import("~/server/generic/derived-refresh/repo/families")
+      ).scheduleRefreshFamilies(db, { invalidate: true });
+      return { found: 0, meta: detail({ admitted: true }) };
     }),
     onceStep("calendar", "Calendar refresh", async () => {
       const origin = getAppOrigin();

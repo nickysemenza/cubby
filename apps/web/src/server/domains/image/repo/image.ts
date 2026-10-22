@@ -146,6 +146,7 @@ import type {
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
 import { provenanceEvidenceLabel } from "~/server/entity-kernel/repo/detail-display-labels";
+import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import {
   type MutationReceipt,
   defineMutationWriter,
@@ -1930,11 +1931,21 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
     countsAsOwnership: !PROCESSING_EDGES.has(key),
     joinColumn: table === entityAttachment ? column : undefined,
     clear: async (tx, imageIds) => {
-      if (disposition.effect === "hard-delete")
-        await tx
+      if (disposition.effect === "hard-delete") {
+        const removal = tx
           .delete(table)
           .where(and(inArray(column, imageIds), edgeScopeWhere(edge)));
-      else
+        const identityTable = Object.values(SHORTCODE_TABLE).find(
+          (candidate) => candidate === table,
+        );
+        if (identityTable) {
+          const removed = await removal.returning({ id: identityTable.id });
+          await tombstoneEntityIdentities(
+            tx,
+            removed.map((row) => row.id),
+          );
+        } else await removal;
+      } else
         await tx
           .update(table)
           .set({ [property]: null })
@@ -2114,6 +2125,7 @@ const deleteImagesTx = async (
 
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
   await retireAssessmentTargetsTx(tx, "image", ids);
+  await tombstoneEntityIdentities(tx, ids);
   await tx.delete(image).where(inArray(image.id, ids));
 
   await touchUpdatedAt(

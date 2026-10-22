@@ -83,6 +83,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { lockExternalIdentifierParents } from "~/server/generic/entity-links/repo/entity-external-ids";
 import {
+  assertLiveLinkEndpoints,
   linkQuantity,
   liveLinks,
   repointLinkEnd,
@@ -1627,6 +1628,10 @@ export const mergeProducts = async (
         // sum preserves the total, so there is no value to name.
         "EntityLink[productComponent].from": async () => {
           if (componentPlan.kit.repoint.length > 0) {
+            await assertLiveLinkEndpoints(tx, "productComponent", [
+              keepId,
+              ...componentPlan.kit.repoint.map((row) => row.componentProductId),
+            ]);
             await tx
               .update(entityLink)
               .set({ fromEntityId: keepId })
@@ -1653,6 +1658,10 @@ export const mergeProducts = async (
         },
         "EntityLink[productComponent].to": async () => {
           if (componentPlan.part.repoint.length > 0) {
+            await assertLiveLinkEndpoints(tx, "productComponent", [
+              keepId,
+              ...componentPlan.part.repoint.map((row) => row.parentProductId),
+            ]);
             await tx
               .update(entityLink)
               .set({ toEntityId: keepId })

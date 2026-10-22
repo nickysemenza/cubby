@@ -90,6 +90,7 @@ import {
   imageProcessingEvent,
   imageProcessingSubmissionJob,
   aiEvaluation,
+  job,
   aiEvaluationRequest,
   auditLog,
   cookbook,
@@ -108,7 +109,6 @@ import {
   imageDerivative,
   imageProcessingJob,
   imageSighting,
-  runFinding,
   importPreparedOrder,
   sourceOrderObservation,
   emailCandidateObservation,
@@ -116,7 +116,6 @@ import {
   emailFinancialAssociation,
   emailRetrievalFailure,
   run as runTable,
-  derivedDiscoveryPass,
   runApproval,
   runControlEvent,
   runOperation,
@@ -677,8 +676,8 @@ export const ENTITY_EDGES = {
       description: "The member scope for an idempotent imported source.",
       liveness: { kind: "must-target-live" },
     },
-    "RunFinding.ledgerPartyId": {
-      column: runFinding.ledgerPartyId,
+    "AssessmentState.ledgerPartyId": {
+      column: assessmentState.ledgerPartyId,
       role: "history",
       label: "import findings",
       description: "The member whose import requires review.",
@@ -1434,15 +1433,15 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   run: edges({
-    "DerivedDiscoveryPass.runId": {
-      column: derivedDiscoveryPass.runId,
+    "Job.runId": {
+      column: job.runId,
       role: "history",
-      label: "discovery passes",
-      description:
-        "The coalesced Sweep owner of a captured discovery input epoch.",
+      label: "Execution jobs",
+      description: "Execution diagnostics attributed to this Run.",
       liveness: {
         kind: "allow-target-deleted",
-        reason: "Coverage retains its Sweep owner through Run archival.",
+        reason:
+          "Job diagnostics retain their Run attribution through archival and deletion.",
       },
     },
     "AiEvaluationRequest.runId": {
@@ -1690,13 +1689,6 @@ export const ENTITY_EDGES = {
       label: "source claims (last seen)",
       description:
         "An idempotent source claim most recently confirmed by this run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunFinding.runId": {
-      column: runFinding.runId,
-      role: "history",
-      label: "findings",
-      description: "An integrity finding this run produced.",
       liveness: { kind: "must-target-live" },
     },
   }),

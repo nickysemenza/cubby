@@ -39,6 +39,42 @@ zero incremental charge for local image work; lack of usage rows alone does not
 establish that work was free. Image jobs without an executor or usage retain
 incomplete price coverage, including while waiting for Apple. Unknown prices remain unknown.
 
+The application response cache (`server/ai/response-cache.ts`) keys an answer
+by feature, prompt version, requested model, the input and options that shape
+the provider request, and a structured call's output schema. Media in our R2
+bucket is keyed by URL, since its object keys are unique per write; other URLs
+are fetched once, sent inline and keyed by content digest. A funded call is
+keyed by its requested tier model, and its entry keeps the model that answered,
+which a hit reports and books. Embeddings are cached per distinct text and
+dimension count; only the misses reach the provider, in one request. The runner
+waits for every text to finish and cache its answer before deferring a batch
+with a busy key; a sibling provider failure remains attached as the cause.
+Completed answers never expire: rows written under the retired 30-day expiry
+and bare entries from before usage retention stay readable without relabeling
+their usage. Values larger than one SQLite row are stored across chunk rows,
+up to a 16 MB bound below the Durable Object RPC message limit; a larger answer
+fails rather than bypassing the cache. Identical concurrent calls share one
+claim. An explicit regeneration (`force`) bypasses the matching entry and
+replaces it only when the new answer is written; failed or invalid answers are
+never stored, and a failed regeneration keeps the prior answer. A cache
+outage, an unwritten answer or an interactive wait past five minutes never
+places an uncached call: it throws `JobDeferredError` with the raw cause, which
+a job republishes as a deferred page and an interactive caller surfaces. A job
+page defers on its first contended lookup instead of polling.
+
+A new answer is written before the call reports success. When the write still
+fails after its retries, the call defers with the cause, keeps the
+answer in its Worker isolate, and lets its claim expire instead of releasing
+it; a retry in that isolate writes the kept answer without another provider
+call. Kept answers are bounded (512 entries, about 32 MB, oldest dropped
+first) and dropped once written or replaced by a cached answer. The cache
+cannot remove a duplicate charge when the provider billed an answer that was
+never durably written and the retry runs in another isolate, after a restart,
+or after its kept answer was dropped: it computes the answer again. The
+purchase-import audit recovery call shares this cache under its own model,
+options and output schema. Injected test ports and live evaluation harnesses
+that set `cache: false` bypass it.
+
 Summaries retain independent known subtotals and unpriced-call counts. A failed
 call that reported no usage had nothing to price: it is counted as failed
 without usage, not as unpriced. Savings sum standard minus charged only where

@@ -12,13 +12,17 @@ import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { run, runOperation, runFinding } from "~/server/db/schema";
+import { run, runOperation } from "~/server/db/schema";
 import {
   executeAtomicOperation,
   executeLeasedOperation,
 } from "~/server/domains/run/repo/operation";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  runFinding,
+  seedRunFindings,
+} from "~/server/testing/run-finding.fixtures";
 
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import {
@@ -116,29 +120,27 @@ describe("settled coordinator retirement", () => {
       name: "Synthetic retained review product",
       manufacturer: "Synthetic maker",
     });
-    await getDb(ctx.db)
-      .insert(runFinding)
-      .values([
-        ...findings,
-        {
-          runId: historical,
-          entityId: product.id,
-          entityKind: "product",
-          ledgerPartyId: owner,
-          kind: "other",
-          summary: "No coordinator activity for two hours",
-          evidenceFingerprint: "synthetic-product-review",
-        },
-        {
-          runId: historical,
-          entityId: newlySettled,
-          entityKind: "run",
-          ledgerPartyId: owner,
-          kind: "other",
-          summary: "Coordinator ended without finishing the run",
-          evidenceFingerprint: "synthetic-other-run-review",
-        },
-      ]);
+    await seedRunFindings(ctx.db, [
+      ...findings,
+      {
+        runId: historical,
+        entityId: product.id,
+        entityKind: "product",
+        ledgerPartyId: owner,
+        kind: "other",
+        summary: "No coordinator activity for two hours",
+        evidenceFingerprint: "synthetic-product-review",
+      },
+      {
+        runId: historical,
+        entityId: newlySettled,
+        entityKind: "run",
+        ledgerPartyId: owner,
+        kind: "other",
+        summary: "Coordinator ended without finishing the run",
+        evidenceFingerprint: "synthetic-other-run-review",
+      },
+    ]);
     const before = await getDb(ctx.db).select().from(runFinding);
     const visible = await findOpenRunFindings(ctx.db);
     expect(visible.map((row) => row.id).sort()).toEqual(
@@ -168,11 +170,10 @@ describe("settled coordinator retirement", () => {
       original.entityId === original.runId &&
       original.summary !== "Synthetic source still needs review";
     for (const original of before.filter(obsolete))
+      // A system retirement, not a member resolution: no resolver is recorded.
       expect(after.find((row) => row.id === original.id)).toEqual({
         ...original,
         status: "dismissed",
-        resolvedAt: expect.any(Date),
-        updatedAt: expect.any(Date),
       });
     for (const original of before.filter((row) => !obsolete(row)))
       expect(after.find((row) => row.id === original.id)).toEqual(original);

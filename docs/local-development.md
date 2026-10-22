@@ -97,9 +97,8 @@ It inserts the synthetic account with Better Auth's password hasher, then runs
 the entity kernel and specialist repositories. Before a Worker exists, its
 background publications are stored in the template's development-only
 `cubby_dev_background_task` outbox. After creating the static graph, the generic
-search-index repair initializes its search documents in pages and queues
-embedding work. Bootstrap leaves durable derived-refresh captures intact rather
-than draining every root's overlapping dependency graph. Clones hand those envelopes to the local
+search Job initializes its search documents in bounded pages. Other refresh and
+provider Jobs remain queued for the Worker. Clones hand those envelopes to the local
 Worker queue on startup, deleting them only after acceptance. The corpus and
 startup handoff idempotently prepare the reserved system actor before its
 scheduled Runs can open, including when an existing completed corpus is reused.

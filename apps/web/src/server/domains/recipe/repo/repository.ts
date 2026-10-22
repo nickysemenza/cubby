@@ -1,5 +1,3 @@
-import { repairStaleRecipesForRead } from "~/server/domains/recipe/repo/repair-stale-recipes-for-read";
-import { findParentRecipeIdsBatch } from "~/server/domains/recipe/repo/totals";
 import {
   mutationEvents,
   runMutationSideEffectsForEntities,
@@ -24,30 +22,7 @@ const recipeShortcodes = bindShortcodeResolver("recipe");
 
 export const recipeRepository = defineRepository("recipe", {
   lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
-  /**
-   * Repair-on-read. A recipe whose totals are stale is recomputed here, in
-   * the request, before it is returned: one recipe's WASM pass is
-   * milliseconds and USDA is cached, so the page never shows "pending" for
-   * a wakeup the queue lost. Its stale parents are published, not cascaded
-   * inline, so the read stays bounded to one recipe. The probe and the
-   * post-repair read go through the service's strong handle: on a browser
-   * read `ctx.db` is the bounded-stale (Hyperdrive-cached) adapter and
-   * would hand back the pre-repair row for up to 60s. The repair is
-   * best-effort: the persisted row still reads as pending and the queue /
-   * "Settle now" remain the durable healers, and failing the GET would only
-   * re-run the same failing repair on every later read.
-   */
-  get: async (ctx, id) => {
-    const [entityId] = await recipeShortcodes.present(ctx.db, [id]);
-    if (!entityId) return null;
-    const strongDb = ctx.services.recipeCosting.database;
-    const repaired = await repairStaleRecipesForRead(
-      ctx.services.recipeCosting,
-      [entityId],
-      "recipe.get",
-    );
-    return getRecipeByShortcode(repaired ? strongDb : ctx.db, id);
-  },
+  get: (ctx, id) => getRecipeByShortcode(ctx.db, id),
   list: listOn(recipeList),
   listRead: (ctx, filters, sorts, pagination, projection) =>
     recipeListRead(ctx.db, filters, sorts, pagination, "page", projection),
@@ -104,27 +79,11 @@ export const recipeRepository = defineRepository("recipe", {
   },
   delete: async (ctx, shortcodes) => {
     const ids = await recipeShortcodes.all(ctx.db, shortcodes);
-    const deletedSet = new Set(ids);
-    const parentsByRecipe = await findParentRecipeIdsBatch(ctx.db, ids);
-    const parentIds = [
-      ...new Set(
-        [...parentsByRecipe.values()]
-          .flat()
-          .filter((id) => !deletedSet.has(id)),
-      ),
-    ];
     const result = await deleteRecipes(ctx.db, ids, ctx.actorContext);
-    await Promise.all([
-      runMutationSideEffectsForEntities(
-        ctx.db,
-        mutationEvents("recipe", "deleted", ids, "recipe.delete"),
-      ),
-      parentIds.length > 0
-        ? ctx.services.recipeCosting.dispatchRecompute(parentIds, {
-            source: "recipe.delete",
-          })
-        : Promise.resolve(0),
-    ]);
+    await runMutationSideEffectsForEntities(
+      ctx.db,
+      mutationEvents("recipe", "deleted", ids, "recipe.delete"),
+    );
     return result;
   },
 });

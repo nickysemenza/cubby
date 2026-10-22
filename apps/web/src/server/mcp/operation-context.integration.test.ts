@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +15,7 @@ import {
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
 import { McpOperationContext } from "~/server/mcp/operation-context";
+import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
 import {
   createImageFixture,
   ingredientRef,
@@ -58,10 +60,10 @@ describe("MCP operation transaction", () => {
         BACKGROUND_QUEUE: {
           send: async () => {},
           sendBatch: async (
-            messages: Iterable<{ body: { task: { kind: string } } }>,
+            messages: Iterable<{ body: BackgroundTaskMessage }>,
           ) => {
             for (const message of messages)
-              published.push(message.body.task.kind);
+              published.push(message.body.queueType);
           },
         },
       }),
@@ -102,6 +104,10 @@ describe("MCP operation transaction", () => {
     if (!recipeId) throw new Error("seeded recipe did not resolve");
     // A fresh recipe is the case whose stale mark rewrites the locked row.
     await requestContext().services.recipeCosting.recomputeQueued([recipeId]);
+    await drainRecipeRefreshJobs(
+      ctx.db,
+      requestContext().services.recipeCosting,
+    );
     expect(await selectStaleRecipeIds(ctx.db, [recipeId])).toEqual([]);
     published.length = 0;
     return { keeper, alias, recipeId };
@@ -128,7 +134,7 @@ describe("MCP operation transaction", () => {
       expect(await selectStaleRecipeIds(ctx.db, [recipeId])).toEqual([
         recipeId,
       ]);
-      expect(published).toContain("recipe-totals.recompute");
+      expect(published).toContain("background");
       expect(
         await resolveLiveShortcode(ctx.db, alias.shortcode, "ingredient"),
       ).toBeNull();

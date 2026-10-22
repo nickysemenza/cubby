@@ -20,6 +20,7 @@ import {
 import { assessmentState } from "~/server/db/schema";
 import { saveSweepSuggestions } from "~/server/domains/run/repo/suggestion-sweep-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
@@ -162,18 +163,18 @@ export async function saveConnectionFieldGuard(
           ...context,
           db,
         });
-        await getDb(db)
-          .update(assessmentState)
-          .set({ data: { reviewKey, connectionEvidence: evidence } })
-          .where(
-            and(
-              eq(assessmentState.runId, runId),
-              eq(assessmentState.recordId, publication.recordId),
-              eq(assessmentState.field, input.field),
-              eq(assessmentState.status, "pending"),
-              sql`${assessmentState.data}->>'reviewKey'=${reviewKey}`,
-            ),
-          );
+        await transitionAssessmentStates(
+          db,
+          and(
+            eq(assessmentState.runId, runId),
+            eq(assessmentState.recordId, publication.recordId),
+            eq(assessmentState.field, input.field),
+            eq(assessmentState.status, "pending"),
+            sql`${assessmentState.data}->>'reviewKey'=${reviewKey}`,
+          ),
+          { data: { reviewKey, connectionEvidence: evidence } },
+          { kind: "connection_evidence_attached" },
+        );
       });
     },
   };

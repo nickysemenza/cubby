@@ -9,8 +9,13 @@ import {
   SUGGESTION_RECORD_IDS_MAX,
 } from "./suggestion-list";
 
+export const automaticDecisionFamily = assessmentFamily.exclude([
+  "run_finding",
+  "evaluation_sample",
+]);
+
 export const automaticDecisionFilters = z.object({
-  family: assessmentFamily.optional(),
+  family: automaticDecisionFamily.optional(),
   recordIds: z
     .array(z.string().min(1))
     .max(SUGGESTION_RECORD_IDS_MAX)
@@ -25,7 +30,7 @@ export const automaticDecisionListInput = automaticDecisionFilters.extend({
 });
 export const automaticDecisionRow = z.object({
   id: assessmentChildHandle,
-  family: assessmentFamily,
+  family: automaticDecisionFamily,
   records: z.array(suggestionRecordRef),
   decision: z.json(),
   summary: z.string(),

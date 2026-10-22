@@ -23,7 +23,6 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import type { Database } from "~/server/db";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
-import { type WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import { publishGmailEvidence } from "../../repo/gmail/admitted-source";
@@ -56,12 +55,12 @@ type IngestPorts = Pick<
   Parameters<typeof ingestGmailMessages>[2],
   "triage" | "relevance" | "candidateChoice" | "storage"
 >;
-/** Freeze member-requested work; Gmail and model IO belong to the Workflow. */
+/** Freeze member-requested work; Gmail and model IO belong to its Job. */
 export async function reclassifyEmails(
   db: Database,
   rawInput: ReclassifyEmailsInput,
   actor: ActorContext,
-  ports: IngestPorts & { launcher?: WorkflowLauncher } = {},
+  _ports: IngestPorts = {},
 ): Promise<ReclassifyEmailsOut> {
   const input = reclassifyEmailsInput.parse(rawInput);
   const emails = await ownedEmails(db, [...new Set(input.ids)], actor);
@@ -73,14 +72,10 @@ export async function reclassifyEmails(
   );
   const created = await startPreparedReclassifyRuns(db, actor, groups);
   for (const item of created)
-    await launchWorkflowRun(
-      db,
-      {
-        runId: item.id,
-        purpose: "mail_reclassify",
-      },
-      ports.launcher,
-    );
+    await launchWorkflowRun(db, {
+      runId: item.id,
+      purpose: "mail_reclassify",
+    });
   return reclassifyEmailsOut.parse({
     runIds: created.map((item) => item.shortcode),
   });

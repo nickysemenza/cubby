@@ -43,9 +43,9 @@ function entityPrefixMatches(kind: AnyPgColumn, shortcode: AnyPgColumn): SQL {
  * survives a merge or a hard delete, so an old code can still redirect or
  * report a tombstone.
  *
- * Rows are written only by the database triggers below
- * (insert, soft delete, hard delete of a payload row) and by `finalizeMerge`
- * (`mergedIntoId`). Rows are never deleted.
+ * Shared transactional repositories create this row before its payload and
+ * preserve its tombstone on removal. `finalizeMerge` also records redirects.
+ * Rows are never deleted.
  */
 export const entityIdentity = pgTable(
   "Entity",
@@ -117,74 +117,23 @@ export const entityIdentityFk = (
   });
 
 /**
- * The database-side half of entity identity (ADR 0006): triggers on every
- * shortcode table keep `Entity` in step with its typed payload, so no write
- * path — repository, workflow, cutover script, or test fixture — can create,
- * soft-delete, or hard-delete an entity without its identity row following.
- *
- * Drizzle does not model triggers, so this SQL reaches databases as derived
- * DDL (`derived-ddl.ts`): `pnpm db:generate` emits a migration whenever the
- * rendered SQL changes, so a new shortcode entity gets its triggers in the
- * same migration series as its table.
- *
- * Trigger names start with an uppercase `E` on purpose. Postgres fires same-
- * event triggers in name order, internal FK checks included
- * (`RI_ConstraintTrigger_*`). The insert trigger must run before the payload's
- * own identity FK is checked, so its name must sort before `R`.
+ * Desired-state cleanup, safe to repeat after historical migrations create
+ * identity triggers. Historical migration SQL remains immutable; new writes
+ * create identity before payloads and maintain lifecycle in their transaction.
  */
-const ENTITY_IDENTITY_FUNCTIONS = `CREATE OR REPLACE FUNCTION "entity_identity_on_insert"() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  INSERT INTO "Entity" ("id", "kind", "shortcode", "createdAt", "deletedAt")
-  VALUES (NEW."id", TG_ARGV[0], NEW."shortcode", NEW."createdAt", NEW."deletedAt");
-  RETURN NULL;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION "entity_identity_on_soft_delete"() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  UPDATE "Entity" SET "deletedAt" = NEW."deletedAt" WHERE "id" = NEW."id";
-  RETURN NULL;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION "entity_identity_on_delete"() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  UPDATE "Entity"
-  SET "deletedAt" = COALESCE("deletedAt", OLD."deletedAt", now())
-  WHERE "id" = OLD."id";
-  RETURN NULL;
-END;
-$$;`;
-
-// Resolved from the manifest rather than the generated table map so the
-// tooling scripts that install these (plain `tsx`, no path aliases) can load
-// this module.
-const identityTables = (): { kind: string; table: string }[] =>
-  [...shortcodeEntities].sort().map((kind) => {
+export const entityIdentityDropTriggerSql = (): string => {
+  const drops = [...shortcodeEntities].sort().flatMap((kind) => {
     const table = entityManifest[kind].dbTable;
     if (!table) throw new Error(`Shortcode entity ${kind} has no dbTable.`);
-    return { kind, table };
+    return ["insert", "soft_delete", "delete"].map(
+      (event) =>
+        `DROP TRIGGER IF EXISTS "Entity_identity_${event}" ON "${table}";`,
+    );
   });
-
-const tableTriggers = ({
-  kind,
-  table,
-}: {
-  kind: string;
-  table: string;
-}) => `CREATE OR REPLACE TRIGGER "Entity_identity_insert" AFTER INSERT ON "${table}"
-  FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_insert"('${kind}');
-CREATE OR REPLACE TRIGGER "Entity_identity_soft_delete" AFTER UPDATE OF "deletedAt" ON "${table}"
-  FOR EACH ROW WHEN (OLD."deletedAt" IS DISTINCT FROM NEW."deletedAt")
-  EXECUTE FUNCTION "entity_identity_on_soft_delete"();
-CREATE OR REPLACE TRIGGER "Entity_identity_delete" AFTER DELETE ON "${table}"
-  FOR EACH ROW EXECUTE FUNCTION "entity_identity_on_delete"();`;
-
-/** Every function and trigger, idempotent, as one script. */
-export const entityIdentityTriggerSql = (): string =>
-  [ENTITY_IDENTITY_FUNCTIONS, ...identityTables().map(tableTriggers)].join(
-    "\n\n",
-  );
+  return [
+    ...drops,
+    'DROP FUNCTION IF EXISTS "entity_identity_on_insert"();',
+    'DROP FUNCTION IF EXISTS "entity_identity_on_soft_delete"();',
+    'DROP FUNCTION IF EXISTS "entity_identity_on_delete"();',
+  ].join("\n");
+};

@@ -1,12 +1,6 @@
 // Type-only RPC contracts keep global Worker environment inference isolated from
 // runtime implementations. worker-environment.d.ts checks this map against exports.
 import type { Rpc } from "@cloudflare/workers-types";
-import type {
-  SearchIndexRepairCounters,
-  SearchRepairCheckpoint,
-  SearchRepairContinuation,
-} from "@cubby/schemas/maintenance";
-import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 import type { ChatGptPlanRpc } from "./ai/chatgpt/rpc";
 import type { AiResponseCacheRpc } from "./ai/response-cache-rpc";
@@ -15,7 +9,6 @@ import type { CalendarFeedDurableObjectRpc } from "./domains/calendar/operations
 import type { ImageProcessingCompanionRpc } from "./domains/image-processing/service/contracts";
 import type { PurchaseImportRunAgentRpc } from "./domains/purchase-agent/service/environment";
 import type { UsdaReleaseRpc } from "./domains/usda-release/operations/rpc";
-import type { WorkflowRunParams } from "./workflows/runs/contract";
 
 export type AiResponseCacheDurableObject = AiResponseCacheRpc &
   Rpc.DurableObjectBranded;
@@ -33,35 +26,9 @@ export type PurchaseImportRunAgent = PurchaseImportRunAgentRpc &
 export type UsdaReleaseDurableObject = UsdaReleaseRpc &
   Rpc.DurableObjectBranded;
 
-export interface SearchIndexRepairWorkflowParams {
-  readonly requestedAt: string;
-  readonly checkpoint?: SearchRepairCheckpoint;
-}
-
-/** The entrypoint shape the `SEARCH_INDEX_REPAIR` binding's params come from. */
-export interface SearchIndexRepairWorkflow {
-  run(
-    event: Readonly<WorkflowEvent<SearchIndexRepairWorkflowParams>>,
-    step: WorkflowStep,
-  ): Promise<SearchIndexRepairCounters | SearchRepairContinuation>;
-}
-
-/** The `MAIL_DISCOVERY` binding: one scheduled `mail_discovery` Run attempt. */
-export interface MailDiscoveryWorkflow {
-  run(
-    event: Readonly<WorkflowEvent<WorkflowRunParams>>,
-    step: WorkflowStep,
-  ): Promise<{ runId: string }>;
-}
-
 export type AiGatewayEgressDurableObject =
   import("./ai/gateway-egress-contract").AiGatewayEgressRpc &
     Rpc.DurableObjectBranded;
-
-export type AiRefreshWorkflow = MailDiscoveryWorkflow;
-
-/** The `STEP_RUN` binding: one attempt of a step-ledger (maintenance, sweep) Run. */
-export type StepRunWorkflow = MailDiscoveryWorkflow;
 
 export interface WorkerRpc {
   AiGatewayEgressDurableObject: AiGatewayEgressDurableObject;
@@ -72,10 +39,6 @@ export interface WorkerRpc {
   ImageProcessingDurableObject: ImageProcessingDurableObject;
   PurchaseImportRunAgent: PurchaseImportRunAgent;
   UsdaReleaseDurableObject: UsdaReleaseDurableObject;
-  SearchIndexRepairWorkflow: SearchIndexRepairWorkflow;
-  MailDiscoveryWorkflow: MailDiscoveryWorkflow;
-  AiRefreshWorkflow: AiRefreshWorkflow;
-  StepRunWorkflow: StepRunWorkflow;
 }
 
 type Worker = typeof import("../../cloudflare.config").productionWorker;

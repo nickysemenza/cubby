@@ -6,7 +6,7 @@
  *   whose endpoint kind disagrees with the Entity row, is refused;
  * - a quantity on a kind that declares none, or a missing one on a counted
  *   kind, is refused;
- * - a live link to a deleted entity is refused by the trigger, while
+ * - a live link to a deleted entity is refused by the shared writer, while
  *   soft-deleting such a link stays possible;
  * - an acyclic kind refuses a write that would close a cycle, and a
  *   self-dependency is refused by the database;
@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { entityLink, product } from "~/server/db/schema";
+import { entityLink, entityIdentity, product } from "~/server/db/schema";
 import {
   getProjectByID,
   updateProject,
@@ -35,7 +35,12 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { linkValues, liveLinks, repointLinkEnd } from "./entity-links";
+import {
+  attachLinks,
+  linkValues,
+  liveLinks,
+  repointLinkEnd,
+} from "./entity-links";
 
 /** The Postgres error behind Drizzle's wrapper, for its code and constraint. */
 const pgRefusal = z.object({
@@ -128,31 +133,23 @@ describe("EntityLink constraints", () => {
       .set({ deletedAt: new Date() })
       .where(eq(product.id, gone));
 
+    await getDb(ctx.db)
+      .update(entityIdentity)
+      .set({ deletedAt: new Date() })
+      .where(eq(entityIdentity.id, gone));
     await expect(
-      pgCause(
-        getDb(ctx.db)
-          .insert(entityLink)
-          .values(linkValues("productComponent", kit, gone, 1)),
+      withTransaction(ctx.db, (tx) =>
+        attachLinks(tx, "productComponent", [{ from: kit, to: gone }]),
       ),
-    ).resolves.toMatchObject({
-      code: "23503",
-      constraint: "EntityLink_live_endpoints_check",
-    });
+    ).rejects.toThrow(
+      "Cannot attach productComponent: endpoint is missing or deleted",
+    );
 
-    // The endpoint of an existing link is deleted: re-touching the live row
-    // is refused, retiring it is not.
+    // Retiring an existing link stays possible after its endpoint is removed.
     await getDb(ctx.db)
       .update(product)
       .set({ deletedAt: new Date() })
       .where(eq(product.id, part));
-    await expect(
-      pgCause(
-        getDb(ctx.db)
-          .update(entityLink)
-          .set({ quantity: 2 })
-          .where(eq(entityLink.id, link!.id)),
-      ),
-    ).resolves.toMatchObject({ constraint: "EntityLink_live_endpoints_check" });
     await getDb(ctx.db)
       .update(entityLink)
       .set({ deletedAt: new Date() })

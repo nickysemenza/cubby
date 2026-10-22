@@ -31,7 +31,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { discoverAcquisitionCandidateScan } from "./acquisition-discovery";

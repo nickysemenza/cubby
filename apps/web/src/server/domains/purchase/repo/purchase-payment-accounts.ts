@@ -31,6 +31,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
+  assertLiveLinkEndpoints,
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
@@ -212,6 +213,10 @@ async function attachPaymentAccounts(
         ],
       });
     const before = await linkedAccountShortcodes(tx, purchaseId);
+    await assertLiveLinkEndpoints(tx, "purchasePaymentAccount", [
+      purchaseId,
+      ...unique,
+    ]);
     const inserted = await tx
       .insert(entityLink)
       .values(

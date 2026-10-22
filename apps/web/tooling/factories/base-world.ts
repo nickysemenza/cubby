@@ -3,6 +3,7 @@ import type { drizzle } from "drizzle-orm/node-postgres";
 
 import {
   automaticRule,
+  entityIdentity,
   location,
   productCategory,
 } from "../../src/server/db/schema";
@@ -29,7 +30,7 @@ export const BASE_HOME_ID = testEntityId(
 export const BASE_HOME_SHORTCODE = testShortcode("location", "LOC-HM3E");
 
 /** The slice of a Drizzle client `seedBaseWorld` needs; any node-postgres client fits. */
-type InsertClient = Pick<ReturnType<typeof drizzle>, "insert">;
+type InsertClient = Pick<ReturnType<typeof drizzle>, "transaction">;
 
 /** Insert the starting rows. Idempotent: a re-seed is a no-op. */
 /**
@@ -43,40 +44,62 @@ export const SEEDED_RULE_REVISIONS = {
 } as const;
 
 export async function seedBaseWorld(db: InsertClient): Promise<void> {
-  await db
-    .insert(location)
-    .values({
-      id: BASE_HOME_ID,
-      shortcode: BASE_HOME_SHORTCODE,
-      name: "Home",
-      aliases: [],
-      type: "house",
-      parentId: null,
-    })
-    .onConflictDoNothing();
-  await db
-    .insert(productCategory)
-    .values(taxonomyRootFixtures)
-    .onConflictDoNothing();
-  await db
-    .insert(automaticRule)
-    .values([
-      {
-        family: "field",
-        ruleKey: "field.addition",
-        revision: SEEDED_RULE_REVISIONS["field.addition"],
-        enabled: true,
-        enabledAt: new Date(),
-        enabledReason: "Synthetic base world: as migrated",
-      },
-      {
-        family: "statement_transaction",
-        ruleKey: "statement_transaction.attach",
-        revision: SEEDED_RULE_REVISIONS["statement_transaction.attach"],
-        enabled: false,
-        disabledAt: new Date(),
-        disabledReason: "Synthetic base world: as migrated",
-      },
-    ])
-    .onConflictDoNothing();
+  await db.transaction(async (tx) => {
+    const createdAt = new Date();
+    // Fixed fixture identities are idempotent, and precede payload FK checks.
+    await tx
+      .insert(entityIdentity)
+      .values([
+        {
+          id: BASE_HOME_ID,
+          kind: "location",
+          shortcode: BASE_HOME_SHORTCODE,
+          createdAt,
+        },
+        ...taxonomyRootFixtures.map((row) => ({
+          id: row.id,
+          kind: "productCategory" as const,
+          shortcode: row.shortcode,
+          createdAt,
+        })),
+      ])
+      .onConflictDoNothing({ target: entityIdentity.id });
+    await tx
+      .insert(location)
+      .values({
+        id: BASE_HOME_ID,
+        shortcode: BASE_HOME_SHORTCODE,
+        name: "Home",
+        aliases: [],
+        type: "house",
+        parentId: null,
+        createdAt,
+      })
+      .onConflictDoNothing();
+    await tx
+      .insert(productCategory)
+      .values(taxonomyRootFixtures.map((row) => ({ ...row, createdAt })))
+      .onConflictDoNothing();
+    await tx
+      .insert(automaticRule)
+      .values([
+        {
+          family: "field",
+          ruleKey: "field.addition",
+          revision: SEEDED_RULE_REVISIONS["field.addition"],
+          enabled: true,
+          enabledAt: new Date(),
+          enabledReason: "Synthetic base world: as migrated",
+        },
+        {
+          family: "statement_transaction",
+          ruleKey: "statement_transaction.attach",
+          revision: SEEDED_RULE_REVISIONS["statement_transaction.attach"],
+          enabled: false,
+          disabledAt: new Date(),
+          disabledReason: "Synthetic base world: as migrated",
+        },
+      ])
+      .onConflictDoNothing();
+  });
 }

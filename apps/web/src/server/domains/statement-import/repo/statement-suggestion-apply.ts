@@ -11,7 +11,7 @@ import {
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 import { createLogger } from "@cubby/worker-tracing";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
@@ -34,6 +34,7 @@ import {
 import { isMoneyMoveKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
+import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
 import { settlementRefsIncluding } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 import {
@@ -91,10 +92,12 @@ export async function applyStatementTransactionSuggestion(
         return `${ref.slice(0, split)}\0${ref.slice(split + 1)}`;
       }),
     );
-    await unwrapDb(tx)
-      .update(assessmentState)
-      .set({ status: "applied" })
-      .where(eq(assessmentState.id, state.id));
+    await transitionAssessmentState(
+      tx,
+      state.id,
+      { status: "applied" },
+      { kind: "statement_applied" },
+    );
   });
 
   const charge = { source: subject.source, chargeKey: subject.chargeKey };

@@ -33,7 +33,6 @@ import { recordStatementRows } from "~/server/domains/statement-import/repo/stat
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
-import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 
 import { reviewAssessment } from "./assessment-review";
 import { readAssessmentRecordRefs } from "./review-families";
@@ -133,17 +132,10 @@ describe("transfer pairs in the global queue", () => {
   // clean queue, or bulk apply creates transactions without linking the move.
   it("bulk accepts a clean pair once, creating both statement-backed legs", async () => {
     await seed();
-    const launcher: WorkflowLauncher = {
-      create: async () => {},
-      terminate: async () => {},
-      status: async () => ({ state: "running", error: null }),
-    };
-    const runId = await startSweep(
-      ctx.db,
-      ctx.actor,
-      { trigger: "manual", families: [{ family: "transfer_pair", scope: {} }] },
-      launcher,
-    );
+    const runId = await startSweep(ctx.db, ctx.actor, {
+      trigger: "manual",
+      families: [{ family: "transfer_pair", scope: {} }],
+    });
     const [owner] = await getDb(ctx.db)
       .select({ progress: run.progress })
       .from(run)
@@ -153,12 +145,7 @@ describe("transfer pairs in the global queue", () => {
       .parse(owner?.progress);
     let outcome: Awaited<ReturnType<typeof advanceStepRun>> | undefined;
     for (let page = 0; page < 5; page++) {
-      outcome = await advanceStepRun(
-        ctx.db,
-        { runId, attempt },
-        undefined,
-        launcher,
-      );
+      outcome = await advanceStepRun(ctx.db, { runId, attempt });
       if (outcome.kind !== "continue") break;
     }
     expect(outcome?.kind).toBe("finished");

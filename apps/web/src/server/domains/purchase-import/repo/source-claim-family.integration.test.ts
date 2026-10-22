@@ -10,10 +10,10 @@ import {
   importSourceClaim,
   importSourceOrder,
   purchasePaymentEvidence,
-  runFinding,
   inventoryEntry,
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { preparePurchaseImport } from "../operations/import-orders";
 import { startImportRunFixture } from "../service/import-run.fixtures";

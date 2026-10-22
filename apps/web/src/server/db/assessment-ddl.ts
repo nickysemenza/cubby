@@ -1,4 +1,4 @@
-/** Histories are append-only even for SQL writers; application publishers own projection creation. */
+/** Application publishers own append-only histories and projection creation. */
 export const assessmentHistoryDdl = () => `
 CREATE OR REPLACE VIEW "AssessmentEmailLink" AS
 SELECT id,(data->>'eventId')::uuid AS "eventId",(data->>'purchaseId')::uuid AS "purchaseId",
@@ -12,36 +12,14 @@ CREATE INDEX IF NOT EXISTS "AssessmentState_email_linked_event_uuid_idx" ON "Ass
 -- A Purchase's reviewed links, read per row by purchaseAssociatedEmailsSql.
 CREATE INDEX IF NOT EXISTS "AssessmentState_email_purchase_uuid_idx" ON "AssessmentState" (((data->>'purchaseId')::uuid)) WHERE family='email_link' AND active;
 
--- Operational mail authority follows retained events, independently of Email lifecycle.
-CREATE OR REPLACE FUNCTION "assessment_mail_lifecycle"() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF TG_TABLE_NAME='Email' THEN
-  IF TG_OP='DELETE' OR NEW."deletedAt" IS NOT NULL THEN
-   UPDATE "AssessmentState" SET entity='orderMailEvent',"recordId"=(data->>'eventId')::uuid,"updatedAt"=now() WHERE family='email_link' AND entity='email' AND "recordId"=OLD.id;
-   UPDATE "AssessmentState" SET active=false,status='superseded',"updatedAt"=now() WHERE entity='email' AND "recordId"=OLD.id;
-  END IF;
- ELSE
-  IF TG_OP='DELETE' OR NEW."supersededAt" IS NOT NULL THEN
-   UPDATE "AssessmentState" SET active=false,status='superseded',"updatedAt"=now() WHERE family='email_link' AND data->>'eventId'=OLD.id::text;
-  END IF;
- END IF;
- RETURN NULL;
-END;
-$$;
+-- Removal repositories retire current targets; mail reads require a retained live event.
 DROP TRIGGER IF EXISTS "Email_assessment_lifecycle" ON "Email";
-CREATE TRIGGER "Email_assessment_lifecycle" AFTER DELETE OR UPDATE OF "deletedAt" ON "Email" FOR EACH ROW EXECUTE FUNCTION "assessment_mail_lifecycle"();
 DROP TRIGGER IF EXISTS "OrderMailEvent_assessment_lifecycle" ON "OrderMailEvent";
-CREATE TRIGGER "OrderMailEvent_assessment_lifecycle" AFTER DELETE OR UPDATE OF "supersededAt" ON "OrderMailEvent" FOR EACH ROW EXECUTE FUNCTION "assessment_mail_lifecycle"();
+DROP FUNCTION IF EXISTS "assessment_mail_lifecycle"();
 
-CREATE OR REPLACE FUNCTION "assessment_history_immutable"() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  RAISE EXCEPTION '% history is immutable', TG_TABLE_NAME;
-END;
-$$;
 DROP TRIGGER IF EXISTS "Assessment_immutable" ON "Assessment";
-CREATE TRIGGER "Assessment_immutable" BEFORE UPDATE OR DELETE ON "Assessment" FOR EACH ROW EXECUTE FUNCTION "assessment_history_immutable"();
 DROP TRIGGER IF EXISTS "Feedback_immutable" ON "Feedback";
-CREATE TRIGGER "Feedback_immutable" BEFORE UPDATE OR DELETE ON "Feedback" FOR EACH ROW EXECUTE FUNCTION "assessment_history_immutable"();
+DROP FUNCTION IF EXISTS "assessment_history_immutable"();
 `;
 
 /** Inactive statement revisions retain suppression and paid labels, so history lookups cannot use an active-only index. */

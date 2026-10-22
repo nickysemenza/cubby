@@ -7,36 +7,19 @@ import type {
   RunStepExecution,
 } from "@cubby/schemas/run-step";
 import type { RunWorkItems } from "@cubby/schemas/run-work-progress";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
-import { createLogger } from "@cubby/worker-tracing";
 import { pick } from "es-toolkit";
 import { z } from "zod";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
-  isTransientConnectionError,
-  isSerializationFailure,
-  isStatementTimeout,
-} from "~/server/errors/db-errors";
-import {
   isStepRunPurpose,
-  STEP_RUN_PURPOSES,
   type StepRunPurpose,
   type WorkflowRunParams,
-  workflowInstanceId,
 } from "~/server/workflows/runs/contract";
-import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
-import {
-  type WorkflowLauncher,
-  productionWorkflowLauncher,
-} from "~/server/workflows/runs/launcher";
 import {
   claimWorkflowRun,
   launchWorkflowRun,
   recordRunProgress,
-  runFailureText,
 } from "~/server/workflows/runs/lifecycle";
 import { wakeStepRunParent } from "~/server/workflows/runs/wake";
 
@@ -50,7 +33,6 @@ import {
   readStepRunOwner,
   recordRunStepPage,
   reopenRunStep,
-  stepRunsToRecover,
   type RunStepDefinition,
   type RunStepRow,
   type StepRunOwner,
@@ -58,8 +40,6 @@ import {
 import { sampleRunWork, stepWorkSamples } from "../repo/work-progress";
 
 type RunRow = StepRunOwner;
-
-const log = createLogger("step-run");
 
 /** What one page of a step reported. */
 export type StepPage = (
@@ -117,8 +97,6 @@ export type StepContext = {
   run: RunRow;
   step: RunStepRow;
   attempt: number;
-  /** Launches a step's child Run (tests inject a recording fake). */
-  launcher: WorkflowLauncher;
   /** The first page after "Retry failed" reopened this step. */
   retrying: boolean;
 };
@@ -141,14 +119,22 @@ export type StepRunDrivers = (
 ) => Promise<StepDriver[]>;
 
 const registry = {
-  derived_refresh: async () =>
-    (await import("~/server/domains/run/service/derived-refresh"))
-      .derivedRefreshDrivers,
   maintenance: async () =>
     (await import("~/server/domains/maintenance/service/maintenance-run"))
       .maintenanceDrivers,
   sweep: async () => (await import("./sweep")).sweepDrivers,
-} satisfies Record<StepRunPurpose, () => Promise<StepRunDrivers>>;
+} satisfies Record<
+  Exclude<StepRunPurpose, "derived_refresh">,
+  () => Promise<StepRunDrivers>
+>;
+
+async function driversForPurpose(purpose: StepRunPurpose) {
+  if (purpose === "derived_refresh")
+    throw new Error(
+      "Legacy derived-refresh Runs are historical; broad family Jobs own refresh",
+    );
+  return registry[purpose]();
+}
 
 export const stepPageSummary = z.object({
   phase: z.string(),
@@ -165,13 +151,6 @@ export const stepPageSummary = z.object({
   cursor: z.object({ stepId: z.string(), page: z.number() }),
 });
 export type StepPageSummary = z.infer<typeof stepPageSummary>;
-export type StepPagePlan = {
-  name: string;
-  scope: string;
-  nextInstanceId: string;
-  summary: StepPageSummary | null;
-};
-
 export type StepAdvance = (
   | { kind: "continue"; execution?: RunStepExecution; waitSeconds?: number }
   | { kind: "wait"; seconds: number }
@@ -179,66 +158,6 @@ export type StepAdvance = (
   | { kind: "finished" }
   | { kind: "lost" }
 ) & { summary?: StepPageSummary };
-
-/** Memoized by the Workflow before its page name is chosen; never runs a driver. */
-export async function inspectStepRun(
-  db: Database,
-  params: WorkflowRunParams,
-  drivers?: StepRunDrivers,
-): Promise<StepPagePlan | null> {
-  const owner = await claimWorkflowRun(db, params);
-  if (!owner || !isStepRunPurpose(owner.purpose)) return null;
-  const list = await (drivers ?? (await registry[owner.purpose]()))(db, owner);
-  let steps = await listRunSteps(db, owner.id);
-  if (!steps.length && list.length) {
-    await ensureRunSteps(db, owner.id, list);
-    steps = await listRunSteps(db, owner.id);
-  }
-  const current = steps.find((step) => !isTerminalStep(step.state));
-  const nextInstanceId = workflowInstanceId(
-    owner.shortcode,
-    params.attempt + 1,
-  );
-  if (!current)
-    return {
-      name: "finish Run",
-      scope: owner.purpose,
-      nextInstanceId,
-      summary: null,
-    };
-  const driver = list.find((entry) => entry.key === current.key);
-  const description = driver?.describe?.(current);
-  const work = stepWorkSamples(current);
-  const processed =
-    description?.processed ??
-    work?.current.processed ??
-    current.done + current.skipped + current.failed;
-  const unit = description?.unit ?? work?.current.unit ?? "items";
-  const phase = description?.phase ?? work?.current.phase ?? current.key;
-  const scope = description?.limit
-    ? `${unit} ${processed + 1}–${processed + description.limit}`
-    : `${processed} ${unit} processed`;
-  return {
-    name: `${phase} p${current.pages + 1} · ${scope}`,
-    scope: current.key,
-    nextInstanceId,
-    summary: {
-      phase: work?.current.phase ?? current.key,
-      unit: work?.current.unit ?? "items",
-      pageProcessed: 0,
-      pageFailures: 0,
-      cumulative: {
-        processed:
-          work?.current.processed ??
-          current.done + current.skipped + current.failed,
-        total: work ? work.current.total : current.found || null,
-        failures: work?.current.failures ?? current.failed,
-      },
-      labels: null,
-      cursor: { stepId: current.id, page: current.pages },
-    },
-  };
-}
 
 const CHILD_WAIT_SECONDS = 60;
 
@@ -345,194 +264,25 @@ function failedPageSummary(step: RunStepRow): StepPageSummary {
 }
 
 function remainingStepWaitSeconds(step: RunStepRow): number | null {
-  const retry = step.meta?.batchRetry;
-  const nextAt = Math.max(
-    retry ? Date.parse(retry.dueAt) : 0,
-    step.meta?.capacityUntil ? Date.parse(step.meta.capacityUntil) : 0,
-  );
+  const nextAt = step.meta?.capacityUntil
+    ? Date.parse(step.meta.capacityUntil)
+    : 0;
   return nextAt > Date.now()
     ? Math.max(1, Math.ceil((nextAt - Date.now()) / 1000))
     : null;
 }
 
-async function handleStepPageFailure(
-  context: StepContext,
-  error: UnparsedError,
-): Promise<StepAdvance> {
-  const {
-    db,
-    run: owner,
-    step: current,
-    launcher,
-    attempt: runAttempt,
-  } = context;
-  const params = { runId: owner.id, attempt: runAttempt };
-  const stamp = stampOf(runAttempt);
-  const pendingRetry = current.meta?.batchRetry;
-  if (isWorkflowInterrupted(error)) throw error;
-  if (
-    (isTransientConnectionError(error) ||
-      isSerializationFailure(error) ||
-      isStatementTimeout(error)) &&
-    (pendingRetry?.attempt ?? 0) + 1 < WORKFLOW_EXECUTION_LIMITS.pageAttempts
-  ) {
-    const attempt = (pendingRetry?.attempt ?? 0) + 1;
-    const waitSeconds = 5 * 2 ** (attempt - 1);
-    if (!(await claimWorkflowRun(db, params, "id")))
-      return lostAfterPage(db, owner, launcher);
-    await recordRunStepPage(db, owner.id, current.key, {
-      meta: {
-        batchRetry: {
-          attempt,
-          dueAt: new Date(Date.now() + waitSeconds * 1000).toISOString(),
-          delta: pendingRetry?.delta ?? {},
-          skippedIds: pendingRetry?.skippedIds,
-        },
-        detail: {
-          retry: runFailureText(error instanceof Error ? error : String(error)),
-        },
-        ...(current.meta?.work && {
-          work: {
-            ...current.meta.work,
-            current: { ...current.meta.work.current, activity: "retry" },
-          },
-        }),
-      },
-    });
-    return { kind: "continue", waitSeconds };
-  }
-  // A thrown page ends this step only; the Run moves on to the next one.
-  // The causes carry the Postgres SQLSTATE a driver's "Failed query" hides.
-  const message =
-    error instanceof Error
-      ? [runFailureText(error), scrubErrorMessage(error.stack ?? "")]
-          .filter(Boolean)
-          .join("\n")
-      : runFailureText(String(error));
-  log.error("Step page failed", {
-    runId: owner.id,
-    step: current.key,
-    error: message,
-  });
-  try {
-    if (!(await claimWorkflowRun(db, params, "id")))
-      return lostAfterPage(db, owner, launcher);
-    await recordRunStepPage(db, owner.id, current.key, {
-      state: "failed",
-      errors: [failure(message)],
-    });
-    await recordRunProgress(
-      db,
-      owner.id,
-      "step_failed",
-      `${current.label}: ${message.split("\n", 1)[0]}`,
-      stamp,
-    );
-  } catch (recordingError) {
-    const combined = `${message}\n${runFailureText(new Error("Failure recording failed", { cause: recordingError }))}`;
-    log.error("Step failure checkpoint failed", {
-      runId: owner.id,
-      step: current.key,
-      error: combined,
-    });
-    throw new Error(combined, { cause: recordingError });
-  }
-  return { kind: "continue", summary: failedPageSummary(current) };
-}
-
-async function settleStepPageRetry(
-  db: Database,
-  owner: RunRow,
-  current: RunStepRow,
-  page: StepPage,
-): Promise<
-  | { kind: "waiting"; advance: StepAdvance }
-  | { kind: "settled"; page: StepPage }
-> {
-  const pendingRetry = current.meta?.batchRetry;
-  if (pendingRetry && page.kind === "progress" && !page.retryable)
-    page = { ...page, meta: { ...page.meta, batchRetry: null } };
-  if (page.kind === "progress" && page.retryable) {
-    const previousSkipped = new Set(pendingRetry?.skippedIds);
-    const skippedIds = [
-      ...new Set([...previousSkipped, ...(page.skippedIds ?? [])]),
-    ];
-    const repeatedSkips = new Set(
-      page.skippedIds?.filter((id) => previousSkipped.has(id)),
-    ).size;
-    const delta = {
-      done:
-        (page.delta?.done ?? 0) +
-        (page.retryAccounting === "replace"
-          ? 0
-          : (pendingRetry?.delta.done ?? 0)),
-      skipped:
-        (page.delta?.skipped ?? 0) +
-        (page.retryAccounting === "replace"
-          ? 0
-          : (pendingRetry?.delta.skipped ?? 0) - repeatedSkips),
-    };
-    if (
-      page.errors?.length &&
-      (pendingRetry?.attempt ?? 0) + 1 < WORKFLOW_EXECUTION_LIMITS.pageAttempts
-    ) {
-      const attempt = (pendingRetry?.attempt ?? 0) + 1;
-      const waitSeconds = Math.max(
-        5 * 2 ** (attempt - 1),
-        page.waitSeconds ?? 0,
-      );
-      await recordRunStepPage(db, owner.id, current.key, {
-        meta: {
-          batchRetry: {
-            attempt,
-            dueAt: new Date(Date.now() + waitSeconds * 1000).toISOString(),
-            delta,
-            skippedIds,
-          },
-          ...(current.meta?.work && {
-            work: {
-              ...current.meta.work,
-              current: { ...current.meta.work.current, activity: "retry" },
-            },
-          }),
-        },
-      });
-      return {
-        kind: "waiting",
-        advance: { kind: "continue", waitSeconds, execution: page.execution },
-      };
-    }
-    const extra =
-      delta.done +
-      delta.skipped -
-      (page.delta?.done ?? 0) -
-      (page.delta?.skipped ?? 0);
-    page = {
-      ...page,
-      delta: { ...page.delta, ...delta },
-      ...(page.work && {
-        work: { ...page.work, processed: page.work.processed + extra },
-      }),
-      meta: { ...page.meta, batchRetry: null },
-    };
-  }
-  return { kind: "settled", page };
-}
-
-/**
- * Runs one page of the first unfinished step. Ledger writes happen only while
- * this attempt still owns the Run; a replayed page re-reads the cursor and
- * does the next page, never the same counts twice.
- */
 export async function advanceStepRun(
   db: Database,
   params: WorkflowRunParams,
   drivers?: StepRunDrivers,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<StepAdvance> {
   const owner = await claimWorkflowRun(db, params);
   if (!owner || !isStepRunPurpose(owner.purpose)) return { kind: "lost" };
-  const list = await (drivers ?? (await registry[owner.purpose]()))(db, owner);
+  const list = await (drivers ?? (await driversForPurpose(owner.purpose)))(
+    db,
+    owner,
+  );
   await ensureRunSteps(db, owner.id, list);
   const steps = await listRunSteps(db, owner.id);
   const current = steps.find((step) => !isTerminalStep(step.state));
@@ -572,21 +322,12 @@ export async function advanceStepRun(
     run: owner,
     step: current,
     attempt: params.attempt,
-    launcher,
     retrying,
   };
-  let page: StepPage;
   const started = Date.now();
-  try {
-    page = await driver.page(context);
-  } catch (error) {
-    return handleStepPageFailure(context, error);
-  }
+  const page = await driver.page(context);
   if (!(await claimWorkflowRun(db, params, "id")))
-    return lostAfterPage(db, owner, launcher);
-  const settlement = await settleStepPageRetry(db, owner, current, page);
-  if (settlement.kind === "waiting") return settlement.advance;
-  page = settlement.page;
+    return lostAfterPage(db, owner);
   const elapsed = Date.now() - started;
   const sampledWork = pageWork(current, page, started, retrying);
   sampledWork.work.current.activity =
@@ -690,7 +431,6 @@ export async function advanceStepRun(
 async function lostAfterPage(
   db: Database,
   owner: RunRow,
-  launcher: WorkflowLauncher,
 ): Promise<StepAdvance> {
   const now = await readStepRunOwner(db, owner.id);
   if (now?.status === "failed" && now.failureCode === "user_cancelled") {
@@ -700,7 +440,6 @@ async function lostAfterPage(
       db,
       buildActorContext(owner.actorUserId, owner.channel),
       owner.id,
-      launcher,
     );
   }
   return { kind: "lost" };
@@ -791,15 +530,14 @@ async function finishStepRun(
  * "Retry failed" on one step: its failures become work again and the Run
  * relaunches from that step; earlier finished steps are not re-run.
  */
-export async function retryRunStep(
-  db: Database,
-  runId: RunId,
-  key: string,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
-) {
+export async function retryRunStep(db: Database, runId: RunId, key: string) {
   const owner = await readStepRunOwner(db, runId);
   if (!owner || !isStepRunPurpose(owner.purpose))
     throw new Error("Only a step-ledger Run has steps to retry");
+  if (owner.purpose === "derived_refresh")
+    throw new Error(
+      "Historical derived-refresh Runs cannot be retried; broad family Jobs own refresh",
+    );
   if (owner.status === "running")
     throw new Error(
       "This Run is still running; retry its failures once it stops.",
@@ -815,55 +553,6 @@ export async function retryRunStep(
     );
   const reopened = await reopenRunStep(db, runId, key);
   if (!reopened) throw new Error("This step has no failures to retry");
-  await launchWorkflowRun(
-    db,
-    { runId, purpose: owner.purpose, retryCancelled: true },
-    launcher,
-  );
+  await launchWorkflowRun(db, { runId, purpose: owner.purpose });
   return reopened;
-}
-
-/**
- * Relaunches step-ledger Runs a paused window or a lost handoff left behind:
- * a funding pause whose resume time passed (or any, once the credit limit is
- * raised), or a Run whose attempt was lost. No budget gate here: the funding
- * ladder decides at each call, and a Run still without capacity pauses again
- * before spending. One Run's failed relaunch never stops the rest.
- */
-export async function recoverStepRuns(
-  db: Database,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
-  runIds?: readonly string[],
-  now = new Date(),
-  budgetRaised = false,
-) {
-  const candidates = await stepRunsToRecover(
-    db,
-    STEP_RUN_PURPOSES,
-    now,
-    runIds,
-    budgetRaised,
-  );
-  let launched = 0;
-  for (const candidate of candidates) {
-    if (!isStepRunPurpose(candidate.purpose)) continue;
-    try {
-      if (
-        await launchWorkflowRun(
-          db,
-          { runId: candidate.id, purpose: candidate.purpose, automatic: true },
-          launcher,
-        )
-      )
-        launched += 1;
-    } catch (error) {
-      // SILENT: a concurrent pass took the one-active slot, or the launch
-      // failed the Run with its reason; the next catch-up retries the rest.
-      log.warn("step-ledger Run did not relaunch", {
-        runId: candidate.id,
-        error: scrubErrorMessage(String(error)),
-      });
-    }
-  }
-  return launched;
 }

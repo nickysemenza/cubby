@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
-import { aiAnalysis, photoRunImage, runFinding } from "~/server/db/schema";
+import { aiAnalysis, photoRunImage } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { syntheticMailImportRun } from "~/server/domains/purchase-import/service/gmail/execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -24,6 +24,10 @@ import {
   makeExpenseInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import {
+  runFinding,
+  seedRunFinding,
+} from "~/server/testing/run-finding.fixtures";
 
 import {
   callMcpTool,
@@ -560,18 +564,15 @@ describe("MCP catalog", () => {
       trigger: "manual",
       status: "completed",
     });
-    const [finding] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        runId,
-        ledgerPartyId: party.id,
-        entityKind: "run",
-        entityId: runId,
-        kind: "synthetic-review",
-        summary: "Synthetic review finding",
-        evidenceFingerprint: "synthetic-review-fingerprint",
-      })
-      .returning();
+    const finding = await seedRunFinding(ctx.db, {
+      runId,
+      ledgerPartyId: party.id,
+      entityKind: "run",
+      entityId: runId,
+      kind: "synthetic-review",
+      summary: "Synthetic review finding",
+      evidenceFingerprint: "synthetic-review-fingerprint",
+    });
     if (!finding) throw new Error("Synthetic finding missing");
     const kernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
@@ -617,22 +618,19 @@ describe("MCP catalog", () => {
       }),
     );
     const expenseId = await resolveOrThrow(ctx.db, "expense", expense.id);
-    const [proposal] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        ledgerPartyId: party.id,
-        entityKind: "expense",
-        entityId: expenseId,
-        kind: "product_unresolved",
-        summary: "Synthetic reviewed Product identity",
-        evidenceFingerprint: "synthetic-product-fingerprint",
-        proposedFix: {
-          kind: "relink_product",
-          expenseId,
-          productId: product.id,
-        },
-      })
-      .returning();
+    const proposal = await seedRunFinding(ctx.db, {
+      ledgerPartyId: party.id,
+      entityKind: "expense",
+      entityId: expenseId,
+      kind: "product_unresolved",
+      summary: "Synthetic reviewed Product identity",
+      evidenceFingerprint: "synthetic-product-fingerprint",
+      proposedFix: {
+        kind: "relink_product",
+        expenseId,
+        productId: product.id,
+      },
+    });
     if (!proposal) throw new Error("Synthetic proposal missing");
     const applied = await callMcpTool(
       createMcpServer(),

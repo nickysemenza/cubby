@@ -165,14 +165,6 @@ const problemActionCapabilities = {
       target: "global-backfill",
     }),
   ],
-  entitiesMissingEmbeddings: [
-    action({
-      id: "backfill-all",
-      label: "Backfill all",
-      scope: "bulk",
-      target: "global-backfill",
-    }),
-  ],
   productsWithBetterUpcData: [
     action({ id: "apply", label: "Apply", scope: "item", target: "item" }),
   ],

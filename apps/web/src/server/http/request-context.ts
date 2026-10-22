@@ -46,9 +46,9 @@ const deferredRecipeCosting = (
 ): RecipeCostingService =>
   deferredService(load, (loaded) => ({
     database,
-    bindTo: (selected, publish) =>
+    bindTo: (selected) =>
       deferredRecipeCosting(
-        async () => (await loaded()).bindTo(selected, publish),
+        async () => (await loaded()).bindTo(selected),
         selected,
       ),
   }));

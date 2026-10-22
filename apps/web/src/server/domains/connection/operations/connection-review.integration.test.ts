@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
+  assessmentState,
   expense,
   feedback,
   financialTransactionAllocation,
@@ -13,7 +14,6 @@ import {
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { processConnectionRetirementPage } from "~/server/generic/derived-refresh/repo/connection-retirement";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readRecordWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import {
@@ -97,7 +97,7 @@ describe("connection application through generic Feedback", () => {
       first,
     );
   });
-  it("retires stale Work candidates in the background before counting and pagination", async () => {
+  it("hides and refuses a stale candidate without retiring it", async () => {
     const item = await createProduct(
       ctx.db,
       makeProductInput({ name: "Synthetic stale wrench" }),
@@ -110,7 +110,7 @@ describe("connection application through generic Feedback", () => {
       cost: 19,
       trade: "electrical",
     });
-    await publishEntityConnection(ctx.db, {
+    const proposal = await publishEntityConnection(ctx.db, {
       relation: "product-expense",
       source,
       target: { entityKind: "expense", entityId: line.output.id },
@@ -126,29 +126,30 @@ describe("connection application through generic Feedback", () => {
       .set({ name: "Synthetic revised evidence" })
       .where(eq(product.id, productId));
     expect(await readEntityConnections(ctx.db, source)).toEqual([]);
-    const work = await readRecordWorkQueueWith(
-      async () => [],
-      ctx.db,
-      null,
-      item.id,
-      false,
-      ctx.actor,
-    );
-    expect(work.items).toContainEqual(
-      expect.objectContaining({ key: `connection:${item.id}` }),
-    );
-    await processConnectionRetirementPage(ctx.db);
-    const retired = await readRecordWorkQueueWith(
-      async () => [],
-      ctx.db,
-      null,
-      item.id,
-      false,
-      ctx.actor,
-    );
-    expect(retired.items).not.toContainEqual(
-      expect.objectContaining({ key: `connection:${item.id}` }),
-    );
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: proposal.review.assessmentId,
+        operationId: "synthetic-stale-acquisition",
+        verdict: "correct",
+        intent: "apply",
+        expectedFingerprint: proposal.fingerprint,
+      }),
+    ).rejects.toThrow("Connection evidence changed");
+    // Neither the read nor the refused apply moves the review state.
+    const [state] = await getDb(ctx.db)
+      .select({
+        active: assessmentState.active,
+        status: assessmentState.status,
+      })
+      .from(assessmentState)
+      .where(eq(assessmentState.id, proposal.review.assessmentId));
+    expect(state).toEqual({ active: true, status: "pending" });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: expense.id })
+        .from(expense)
+        .where(eq(expense.productId, productId)),
+    ).toEqual([]);
   });
 
   it("never proposes or overwrites an existing partial settlement allocation", async () => {

@@ -44,10 +44,7 @@ type QueueRoute = "real" | "dropped" | "unconsumed";
  */
 interface WorkerdProfileDefinition {
   queues: Record<
-    | "cubby-background"
-    | "cubby-image-cloud"
-    | "cubby-telemetry"
-    | "cubby-purchase-agent",
+    "cubby-background" | "cubby-telemetry" | "cubby-purchase-agent",
     QueueRoute
   >;
   /** A local Google OAuth/Gmail provider (`tooling/local-google-provider.ts`). */
@@ -74,7 +71,6 @@ export const WORKERD_PROFILES = {
   offline: {
     queues: {
       "cubby-background": "dropped",
-      "cubby-image-cloud": "dropped",
       "cubby-telemetry": "dropped",
       "cubby-purchase-agent": "unconsumed",
     },
@@ -87,7 +83,6 @@ export const WORKERD_PROFILES = {
   gmail: {
     queues: {
       "cubby-background": "real",
-      "cubby-image-cloud": "real",
       "cubby-telemetry": "dropped",
       "cubby-purchase-agent": "unconsumed",
     },
@@ -100,7 +95,6 @@ export const WORKERD_PROFILES = {
   "gmail-research": {
     queues: {
       "cubby-background": "real",
-      "cubby-image-cloud": "real",
       "cubby-telemetry": "real",
       "cubby-purchase-agent": "real",
     },
@@ -113,7 +107,6 @@ export const WORKERD_PROFILES = {
   "native-import": {
     queues: {
       "cubby-background": "dropped",
-      "cubby-image-cloud": "dropped",
       "cubby-telemetry": "dropped",
       "cubby-purchase-agent": "real",
     },
@@ -130,7 +123,6 @@ export const WORKERD_PROFILES = {
   "purchase-agent": {
     queues: {
       "cubby-background": "unconsumed",
-      "cubby-image-cloud": "unconsumed",
       "cubby-telemetry": "real",
       "cubby-purchase-agent": "real",
     },
@@ -146,7 +138,6 @@ export const WORKERD_PROFILES = {
   coupled: {
     queues: {
       "cubby-background": "real",
-      "cubby-image-cloud": "real",
       "cubby-telemetry": "real",
       "cubby-purchase-agent": "real",
     },

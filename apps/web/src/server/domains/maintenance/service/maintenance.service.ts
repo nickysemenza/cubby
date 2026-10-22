@@ -32,10 +32,6 @@ import { isUniqueViolation } from "~/server/errors/db-errors";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import { countUnembeddedSearchDocuments } from "~/server/generic/search/repo/search-document";
-import {
-  productionWorkflowLauncher,
-  type WorkflowLauncher,
-} from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 const ACTIVE_CONSTRAINT = "Run_one_active_maintenance";
@@ -50,7 +46,6 @@ export async function launchMaintenanceRun(
   db: Database,
   actor: ActorContext,
   trigger: "manual" | "scheduled",
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<MaintenanceRunOut> {
   let active = await latestMaintenanceRun(db, true);
   if (
@@ -82,7 +77,7 @@ export async function launchMaintenanceRun(
       existing: true,
     };
   }
-  await launchWorkflowRun(db, { runId, purpose: "maintenance" }, launcher);
+  await launchWorkflowRun(db, { runId, purpose: "maintenance" });
   const shortcode = await readRunShortcode(db, runId);
   if (!shortcode)
     throw new Error(`Maintenance Run ${runId} vanished on launch`);
@@ -167,8 +162,7 @@ export async function readMaintenanceStatus(
 
 /**
  * Without a gateway and vector store every live row reads as unembedded and
- * nothing can clear it, so the backlog is zero rather than an unfixable wall
- * (mirrors `countMissingEmbeddings` on Problems).
+ * nothing can clear it, so the backlog is zero rather than an unfixable wall.
  */
 export const countUnembeddedEntities = async (db: Database) =>
   semanticEmbeddingsConfigured()

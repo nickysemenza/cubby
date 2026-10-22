@@ -1,4 +1,3 @@
-import { auditEntitySchema } from "@cubby/schemas/audit";
 import type {
   AuditEntityKind,
   AuditFieldChange,
@@ -33,7 +32,6 @@ import {
   lte,
   or,
   type SQL,
-  sql,
 } from "drizzle-orm";
 import { z } from "zod";
 
@@ -641,29 +639,4 @@ export async function getAuditLog(
     ),
     nextCursor,
   };
-}
-
-/** Target-field revisions survive ABA edits and use the existing entity audit index. */
-export async function latestFieldWrite(
-  db: Database,
-  entity: ShortcodeEntity,
-  recordId: string,
-  field: string,
-) {
-  const kind = auditEntitySchema.safeParse(entity);
-  if (!kind.success) return null;
-  const [row] = await unwrapDb(db)
-    .select({ id: auditLog.id, createdAt: auditLog.createdAt })
-    .from(auditLog)
-    .where(
-      and(
-        eq(auditLog.entityKind, kind.data),
-        sql`${auditLog.entityId} = ${recordId}::uuid`,
-        eq(auditLog.action, "update"),
-        sql`${auditLog.changes} ? ${field}`,
-      ),
-    )
-    .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
-    .limit(1);
-  return row ?? null;
 }

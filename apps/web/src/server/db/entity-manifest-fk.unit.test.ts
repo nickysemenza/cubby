@@ -80,9 +80,6 @@ const NON_ENTITY_FK_TARGETS = {
   // domain entity a user ever looks up by id.
   BackgroundBatch: "operational bookkeeping, not a domain entity",
   AuditLog: "immutable row-change evidence retained by derived refresh work",
-  DerivedRefreshWork: "a resumable derived-data wave, not a domain entity",
-  DerivedRefreshCaptureInbox:
-    "immutable save evidence awaiting background folding",
   // Better-Auth / OAuth-provider tables (auth.schema.ts) — infrastructure for
   // sign-in and MCP OAuth 2.1, not app-domain entities. Referenced (directly
   // or transitively) by AuditLog.userId and the oauth_* tables' own edges.
@@ -102,8 +99,6 @@ const NON_ENTITY_FK_TARGETS = {
   AiUsage: "append-only model accounting, not a domain entity",
   EmailClassificationObservation:
     "immutable Email prediction evidence, not a domain entity",
-  EmailAccuracyEvaluation:
-    "frozen prediction evaluation roster, not a domain entity",
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
   ImportSourceClaim: "retained source authority for imported evidence",
@@ -125,10 +120,10 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
-  "DerivedDiscoveryPass.runId": {
+  "Job.runId": {
     classification: "metadata",
     reason:
-      "retains the Sweep owner and covered input epoch for automatic discovery",
+      "attributes execution to a Run without making its lifecycle a second scheduler",
   },
   "AiEvaluationRequest.runId": {
     classification: "metadata",
@@ -325,10 +320,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     reason:
       "records the run that most recently confirmed this idempotent source claim",
   },
-  "RunFinding.runId": {
-    classification: "metadata",
-    reason: "records the run that produced this integrity finding",
-  },
   "ImportPreparedOrder.runId": {
     classification: "ownership",
     reason: "immutable prepared-order evidence owned by its run",
@@ -358,7 +349,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     reason:
       "an original line binding supplies retained variant evidence through Product and Purchase research context; the child row is not a navigable entity",
   },
-  "RunFinding.ledgerPartyId": {
+  "AssessmentState.ledgerPartyId": {
     classification: "metadata",
     reason: "scopes an operational review finding to a household member",
   },

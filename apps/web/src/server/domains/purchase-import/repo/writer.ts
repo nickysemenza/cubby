@@ -46,7 +46,6 @@ import {
   purchase,
   purchasePaymentEvidence,
   run as runTable,
-  runFinding,
   sourceOrderObservation,
   vendorAccount,
 } from "~/server/db/schema";
@@ -109,6 +108,7 @@ import {
   settlePurchaseFromRetainedPayments,
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
+import { publishRunFinding } from "./run-finding";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 
@@ -736,11 +736,10 @@ async function fileFinding(
       proposedFix,
     }),
   );
-  const [row] = await tx
-    .insert(runFinding)
-    .values({
+  return (
+    await publishRunFinding(tx, {
       runId: input.runId,
-      ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+      ledgerPartyId: input.ledgerPartyId,
       entityKind: "purchase",
       entityId: purchaseId,
       kind,
@@ -748,23 +747,7 @@ async function fileFinding(
       proposedFix,
       evidenceFingerprint,
     })
-    .onConflictDoNothing()
-    .returning({ id: runFinding.id });
-  if (row) return row.id;
-  const existing = await tx.query.runFinding.findFirst({
-    where: and(
-      eq(
-        runFinding.ledgerPartyId,
-        parseEntityId("ledgerParty", input.ledgerPartyId),
-      ),
-      eq(runFinding.entityId, purchaseId),
-      eq(runFinding.kind, kind),
-      eq(runFinding.evidenceFingerprint, evidenceFingerprint),
-      eq(runFinding.status, "open"),
-    ),
-  });
-  if (!existing) throw new Error("Import finding conflict did not resolve");
-  return existing.id;
+  ).id;
 }
 
 /** The one `arrived` prompt, shared by import and delivered reconciliation. */

@@ -1,7 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import {
-  listFeedbackByKind,
   seedEmailClassificationFeedback,
   seedEmailLinkDecision,
 } from "tooling/shared-assessment-fixtures";
@@ -11,29 +10,16 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
-  feedback,
-  email as emailTable,
   importSourceClaim,
   importSourceOrder,
   orderMail,
   orderMailAttachment,
   orderMailEvent,
 } from "~/server/db/schema";
-import {
-  createEmailAccuracyEvaluation,
-  gradeEmailAccuracyItem,
-  listBlindEmailAccuracyItems,
-} from "~/server/domains/email/repo/email-accuracy";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import {
-  emailAccuracyViewReport,
-  emailReviewReport,
-} from "~/server/generic/entity-report/repo/email";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Persisted-read failures: contentless messages disappear; absent historical
@@ -463,251 +449,5 @@ describe("Email generic persisted reads", () => {
       reviewedClassification: null,
       reviewedClassificationReason: null,
     });
-  });
-
-  // Unequal strata must retain their denominators in the built-in report;
-  // reviewed relevance remains evidence-bound and never changes import routing.
-  it("renders the latest owned accuracy evaluation with weighted numbers and evidence-bound independent labels", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic report reviewer",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    for (const group of [
-      {
-        name: "Synthetic false positives",
-        count: 6,
-        classification: "related",
-        stage: "decision",
-        model: "typesafe/jev",
-      },
-      {
-        name: "Synthetic true positives",
-        count: 2,
-        classification: "related",
-        stage: "rule",
-        model: null,
-      },
-      {
-        name: "Synthetic false negatives",
-        count: 4,
-        classification: "unrelated",
-        stage: "model",
-        model: "@cf/cloudflare/clef",
-      },
-    ] satisfies Array<{
-      name: string;
-      count: number;
-      classification: "related" | "unrelated";
-      stage: "decision" | "rule" | "model";
-      model: string | null;
-    }>) {
-      for (let index = 0; index < group.count; index++) {
-        const email = await insertWithShortcode(ctx.db, "email", {
-          ledgerPartyId: party.id,
-          mailboxId: "synthetic-report-mailbox",
-          messageId: `${group.name}:${index}`,
-          subject: group.name,
-          sender: "synthetic@example.test",
-          checksum: "a".repeat(64),
-          classification: group.classification,
-          status: "excluded",
-        });
-        await getDb(ctx.db).insert(emailClassificationObservation).values({
-          emailId: email.id,
-          checksum: email.checksum,
-          classification: group.classification,
-          stage: group.stage,
-          model: group.model,
-          reason: "Synthetic classifier evidence",
-          classificationVersion: "synthetic-v1",
-        });
-      }
-    }
-    await insertWithShortcode(ctx.db, "email", {
-      ledgerPartyId: party.id,
-      mailboxId: "synthetic-report-mailbox",
-      messageId: "unknown-report-prediction",
-      checksum: "z".repeat(64),
-      classification: null,
-      status: "pending",
-    });
-    await createEmailAccuracyEvaluation(ctx.db, { sampleSize: 12 }, ctx.actor);
-    const evaluation = await createEmailAccuracyEvaluation(
-      ctx.db,
-      { sampleSize: 3 },
-      ctx.actor,
-    );
-    const blind = await listBlindEmailAccuracyItems(
-      ctx.db,
-      { evaluationId: evaluation.evaluationId },
-      ctx.actor,
-    );
-    for (const item of blind.items) {
-      await gradeEmailAccuracyItem(
-        ctx.db,
-        {
-          evaluationId: evaluation.evaluationId,
-          predictionId: item.predictionId,
-          grade:
-            item.headers?.subject === "Synthetic false positives"
-              ? "unrelated"
-              : "related",
-          reviewedChecksum: "a".repeat(64),
-          reason: "Synthetic original message reviewed independently",
-        },
-        ctx.actor,
-      );
-    }
-    const selected = blind.items.find(
-      (item) => item.headers?.subject === "Synthetic false positives",
-    );
-    if (!selected?.emailId) throw new Error("Synthetic selected Email missing");
-    const evaluationOnly = await emailReviewReport(
-      ctx.db,
-      selected.emailId,
-      null,
-      ctx.actor,
-    );
-    expect(
-      evaluationOnly.find(
-        (block) => block.kind === "table" && block.title === "Member reviews",
-      ),
-    ).toMatchObject({ rows: [] });
-    // An evaluation grade never becomes member routing authority or review history.
-    const selectedAssessment = await ensureEmailAssessment(
-      ctx.db,
-      selected.predictionId,
-    );
-    await reviewAssessment(ctx.db, buildKernelContext(ctx.db), {
-      assessmentId: selectedAssessment.id,
-      operationId: "synthetic:independent-member-history",
-      verdict: "wrong",
-      correction: { present: true, value: "unrelated" },
-      reason: "Synthetic independent member history review",
-      intent: "history",
-    });
-    // Member-wide accuracy lives in the list's Accuracy view, not each Email.
-    const { blocks } = await emailAccuracyViewReport(ctx.db, ctx.actor);
-    const detail = await emailReviewReport(
-      ctx.db,
-      selected.emailId,
-      null,
-      ctx.actor,
-    );
-    expect(
-      detail.flatMap((block) =>
-        block.kind === "stats" ? block.figures.map((figure) => figure.id) : [],
-      ),
-    ).not.toContainEqual(expect.stringMatching(/^email-accuracy-/u));
-    const figures = new Map(
-      blocks
-        .flatMap((block) => (block.kind === "stats" ? block.figures : []))
-        .map((figure) => [figure.id, figure.value]),
-    );
-    expect(
-      Object.fromEntries(
-        [...figures].filter(([id]) => id?.startsWith("email-accuracy-")),
-      ),
-    ).toMatchObject({
-      "email-accuracy-member-emails": 13,
-      "email-accuracy-unpredicted-emails": 1,
-      "email-accuracy-population": 12,
-      "email-accuracy-sample": 3,
-      "email-accuracy-graded": 3,
-      "email-accuracy-ungraded": 0,
-      "email-accuracy-unknown-model": 1,
-      "email-accuracy-pipeline-binary-pairs": 3,
-      "email-accuracy-pipeline-weighted-population": 12,
-      "email-accuracy-pipeline-tp": 2,
-      "email-accuracy-pipeline-fp": 6,
-      "email-accuracy-pipeline-fn": 4,
-      "email-accuracy-pipeline-tn": 0,
-      "email-accuracy-pipeline-precision": 0.25,
-      "email-accuracy-pipeline-recall": 1 / 3,
-      "email-accuracy-model-only-binary-pairs": 2,
-      "email-accuracy-model-only-weighted-population": 10,
-      "email-accuracy-model-only-tp": 0,
-      "email-accuracy-model-only-fp": 6,
-      "email-accuracy-model-only-fn": 4,
-      "email-accuracy-model-only-tn": 0,
-      "email-accuracy-model-only-precision": 0,
-      "email-accuracy-model-only-recall": 0,
-    });
-    const strata = blocks.find(
-      (block) => block.kind === "table" && block.title === "Accuracy strata",
-    );
-    if (strata?.kind !== "table")
-      throw new Error("Accuracy denominators missing");
-    const values = strata.rows.map((row) =>
-      ["Population N", "Sample n", "Inclusion probability", "Weight"].map(
-        (column) => Number(row.cells[strata.columns.indexOf(column)]),
-      ),
-    );
-    expect(values.sort((a, b) => a[0]! - b[0]!)).toEqual([
-      [2, 1, 0.5, 2],
-      [4, 1, 0.25, 4],
-      [6, 1, 1 / 6, 6],
-    ]);
-    expect(
-      blocks
-        .flatMap((block) =>
-          block.kind === "records" ? (block.commands ?? []) : [],
-        )
-        .map((command) => command.request),
-    ).toContainEqual({
-      kind: "operation",
-      operation: "purchaseImport.emailAccuracyCreate",
-      body: { sampleSize: 200 },
-    });
-    const reviews = detail.find(
-      (block) => block.kind === "table" && block.title === "Member reviews",
-    );
-    if (reviews?.kind !== "table")
-      throw new Error("Independent reviews missing");
-    expect(reviews.rows[0]?.cells).toContain("unrelated");
-    expect(reviews.rows[0]?.cells).toContain("Current");
-    const [before] = await getDb(ctx.db)
-      .select()
-      .from(emailTable)
-      .where(eq(emailTable.shortcode, selected.emailId));
-    if (!before) throw new Error("Synthetic Email missing");
-    expect(before.classification).toBe("related");
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum: "b".repeat(64) })
-      .where(eq(emailTable.id, before.id));
-    const [updated] = await getDb(ctx.db)
-      .select()
-      .from(emailTable)
-      .where(eq(emailTable.id, before.id));
-    const changed = await emailReviewReport(
-      ctx.db,
-      selected.emailId,
-      null,
-      ctx.actor,
-    );
-    const stale = changed.find(
-      (block) => block.kind === "table" && block.title === "Member reviews",
-    );
-    if (stale?.kind !== "table")
-      throw new Error("Stale review history missing");
-    expect(stale.rows[0]?.cells).toContain("Stale");
-    const [after] = await getDb(ctx.db)
-      .select()
-      .from(emailTable)
-      .where(eq(emailTable.id, before.id));
-    expect(after).toEqual(updated);
-    expect(after).toMatchObject({
-      classification: "related",
-      checksum: "b".repeat(64),
-    });
-    expect(await listFeedbackByKind(ctx.db, "email_accuracy")).toHaveLength(3);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(eq(feedback.authority, "member")),
-    ).toMatchObject([{ actorUserId: ctx.actor.userId, intent: "history" }]);
   });
 });

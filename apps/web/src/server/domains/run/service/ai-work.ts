@@ -1,4 +1,3 @@
-import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import {
   emailReclassifyResult,
@@ -6,12 +5,10 @@ import {
 } from "@cubby/schemas/email-actions";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
-import { workflowRecoveryProgress } from "@cubby/schemas/workflow-runs";
-import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
-import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   aiEvaluationProgress,
@@ -28,8 +25,6 @@ import {
 } from "~/server/domains/purchase-import/service/gmail/reclassification-target";
 import {
   aiEvaluationsForRun,
-  completeRecoveredAiWorkRun,
-  fundingPausedDiscoveryRuns,
   guardAiEvaluationAttempt,
   pauseRunForAiWork,
   readAiEvaluation,
@@ -37,26 +32,17 @@ import {
   readRun,
   readRunStatus,
   recordAiEvaluationAttemptFailure,
-  recoverableManualAiWorkRuns,
   writeRunningAttemptProgress,
   type AiEvaluationRow,
   type RunRow,
 } from "~/server/domains/run/repo/ai-work-state";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError, JobPausedError } from "~/server/generic/jobs/errors";
 import { buildCrudServices } from "~/server/http/request-context";
-import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
-import { workflowInstanceId } from "~/server/workflows/runs/contract";
-import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
-import {
-  productionWorkflowLauncher,
-  ENDED_INSTANCE_STATES,
-} from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { claimWorkflowRun } from "~/server/workflows/runs/lifecycle";
-import {
-  failWorkflowRun,
-  runFailureText,
-} from "~/server/workflows/runs/lifecycle";
+import { runFailureText } from "~/server/workflows/runs/lifecycle";
 import { wakeStepRunParent } from "~/server/workflows/runs/wake";
 
 import { executeAiRefreshTarget } from "./ai-refresh";
@@ -65,12 +51,9 @@ import {
   type SuggestionSweepPorts,
 } from "./suggestion-sweep";
 
-const log = createLogger("ai-work");
-
 export type AiWorkPorts = {
   reclassification?: ReclassificationPorts;
   sweep?: SuggestionSweepPorts;
-  launcher?: WorkflowLauncher;
 };
 
 /** The real driver and deterministic boundary tests use the same checkpoint/finalization transition. */
@@ -99,7 +82,7 @@ export async function advanceAiWorkRun(
         }),
       },
     });
-    // Preparation preserves the active Workflow attempt.
+    // Preparation preserves the current Job generation.
     const prepared = await readRun(db, owner.id);
     if (!prepared) return null;
     Object.assign(owner, prepared);
@@ -147,11 +130,7 @@ export async function advanceAiWorkRun(
     return advanceAiWorkRun(db, params, ports);
   if (!pending.length) await wakeStepRunParent(db, owner.id);
   return pending
-    .sort(
-      (a, b) =>
-        (a.nextAttemptAt ?? a.deadlineAt ?? a.createdAt).getTime() -
-        (b.nextAttemptAt ?? b.deadlineAt ?? b.createdAt).getTime(),
-    )
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     .slice(0, 2);
 }
 export async function aiWorkItems(db: Database, owner: RunRow) {
@@ -195,6 +174,11 @@ export async function executeAiWorkTarget(
       await executeSuggestionSweepTarget(db, item, { ...ports.sweep, context });
     }
   } catch (error) {
+    const deferred = findErrorCause(
+      error,
+      (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+    );
+    if (deferred) throw deferred;
     const message = runFailureText(
       error instanceof Error ? error : String(error),
     );
@@ -222,32 +206,33 @@ export async function executeAiWorkTarget(
         state:
           obsolete && !paused
             ? "obsolete"
-            : !waiting && item.attempts >= 3
+            : !waiting &&
+                item.attempts >= (currentJobExecution()?.claim.maxAttempts ?? 3)
               ? "failed"
               : "retry_wait",
-        attempts: waiting ? item.attempts - 1 : item.attempts,
         error: message,
-        nextAttemptAt: budget
-          ? new Date(budget.resumeAt)
-          : new Date(Date.now() + 60_000 * Math.max(1, item.attempts)),
       },
     );
-    if (unauthorized) await pauseRunForAiWork(db, item.runId, message);
+    if (paused) throw new JobPausedError("AI work paused by its requester");
+    if (budget) throw new JobDeferredError(message, new Date(budget.resumeAt));
+    if (unauthorized) {
+      await pauseRunForAiWork(db, item.runId, message);
+      throw new JobPausedError(message);
+    }
+    if (message.includes("AI Gateway admission is waiting"))
+      throw new JobDeferredError(message, new Date(Date.now() + 30_000));
+    if (!obsolete) throw error;
   }
   const continuations = z
     .object({ continuationRunIds: z.array(z.uuid()) })
     .safeParse(await readAiEvaluationReceipt(db, id));
   if (continuations.success)
     for (const next of continuations.data.continuationRunIds)
-      await launchWorkflowRun(
-        db,
-        {
-          runId: runEntityId.parse(next),
-          purpose: "mail_reclassify",
-          automatic: true,
-        },
-        ports.launcher,
-      );
+      await launchWorkflowRun(db, {
+        runId: runEntityId.parse(next),
+        purpose: "mail_reclassify",
+        automatic: true,
+      });
   return true;
 }
 
@@ -257,40 +242,9 @@ function aiWorkProgress(
   attempt: number,
   complete = false,
 ) {
-  const oldProgress = z
-    .object({
-      done: z.number().optional(),
-      results: z.array(z.unknown()).optional(),
-      completed: z.number().optional(),
-    })
-    .safeParse(owner.progress);
-  const refreshProgress =
-    owner.purpose === "ai_refresh"
-      ? aiRefreshProgress.safeParse(owner.progress).data
-      : undefined;
-  const oldDone = refreshProgress
-    ? refreshProgress.completed +
-      refreshProgress.blocked +
-      refreshProgress.failed +
-      (refreshProgress.obsolete ?? 0) +
-      (refreshProgress.cancelled ?? 0)
-    : oldProgress.success
-      ? (oldProgress.data.done ??
-        oldProgress.data.results?.length ??
-        oldProgress.data.completed ??
-        0)
-      : 0;
-  const madeProgress =
-    items.filter((item) => !PENDING_AI_STATES.includes(item.state)).length >
-    oldDone;
-  const automaticRecoveryFailures = madeProgress
-    ? 0
-    : (workflowRecoveryProgress.parse(owner.progress ?? {})
-        .automaticRecoveryFailures ?? 0);
   if (owner.purpose === "ai_refresh")
     return {
       ...aiEvaluationProgress(items, attempt),
-      automaticRecoveryFailures,
     };
   if (owner.purpose === "mail_reclassify") {
     const results = items.flatMap((item) => {
@@ -326,7 +280,6 @@ function aiWorkProgress(
       attempt,
       complete,
       results,
-      automaticRecoveryFailures,
     });
   }
   const legacy = suggestionSweepRunProgress.safeParse(owner.progress).data
@@ -364,148 +317,31 @@ function aiWorkProgress(
     ...(legacy ? { legacyCounts: legacy } : {}),
     rosterPrepared: true,
     attempt,
-    automaticRecoveryFailures,
   };
 }
 
-/** Existing catch-up/nightly callers repair lost dispatch independently of refresh activation. */
-const aiBudgetSpent = async (db: Database) => {
-  const { paid } = await readAiBudget(db);
-  return paid.spentUsd >= paid.limitUsd;
-};
-
-/**
- * Agent imports and Mail discovery a funding stop paused (`pauseExecutionRun`)
- * resume once a later six-hour window starts: both budgets reset, and a plan
- * quota without a reset hint is assumed back by then. A Run still without
- * capacity pauses again before any paid transmission, so a resume never
- * spends. `anyWindow` also resumes this window's pauses (a raised credit
- * budget). The window cron, catch-up and the nightly backstop call this.
- */
+/** A member-raised budget may wake queued work earlier; exhausted or controlled Jobs stay stopped. */
 export async function resumeFundingPausedRuns(
   db: Database,
   {
     now = new Date(),
-    launcher = productionWorkflowLauncher,
     anyWindow = false,
-  }: { now?: Date; launcher?: WorkflowLauncher; anyWindow?: boolean } = {},
+  }: { now?: Date; anyWindow?: boolean } = {},
 ) {
-  const pausedBefore = anyWindow ? now : aiBudgetWindow(now).start;
   const imports = await (
     await import("~/server/domains/purchase-import/repo/run-service")
-  ).redispatchBudgetPausedImports(db, now, pausedBefore);
-  let discoveries = 0;
-  for (const runId of await fundingPausedDiscoveryRuns(db, pausedBefore)) {
-    try {
-      await launchWorkflowRun(
-        db,
-        { runId, purpose: "mail_discovery", automatic: true },
-        launcher,
-      );
-      discoveries += 1;
-    } catch (error) {
-      // SILENT: another discovery for the mailbox now runs, or the launch
-      // failed the Run with its reason; the next window retries the rest.
-      log.warn("funding-paused discovery did not resume", { runId, error });
-    }
-  }
-  // Budget-paused Sweeps and maintenance passes resume at their pause's
-  // resume time, or at once when a raised limit (anyWindow) asks.
-  const steps = await (
-    await import("./step-run")
-  ).recoverStepRuns(db, launcher, undefined, now, anyWindow);
-  return imports + discoveries + steps;
-}
-
-export async function recoverManualAiWork(
-  db: Database,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
-  runIds?: readonly string[],
-) {
-  if (!runIds)
-    await (
-      await import("./reclassification-recovery")
-    ).recoverHistoricalReclassification(db);
-  // Paused (budget window over) or lost step-ledger Runs: maintenance, Sweeps.
-  await (await import("./step-run")).recoverStepRuns(db, launcher, runIds);
-  const candidates = await recoverableManualAiWorkRuns(db, runIds);
-  for (const owner of candidates) {
-    if (owner.status === "running") {
-      const attempt = z
-        .object({ attempt: z.number().default(0) })
-        .parse(owner.progress ?? {}).attempt;
-      if (attempt > 0 && isWorkflowRunPurpose(owner.purpose)) {
-        const instance = await launcher.status(
-          owner.purpose,
-          workflowInstanceId(owner.shortcode, attempt),
-        );
-        if (!ENDED_INSTANCE_STATES.has(instance.state)) continue;
-        await failWorkflowRun(
-          db,
-          { runId: owner.id, attempt },
-          {
-            failureCode: "workflow_instance_ended",
-            message: `Workflow startup handoff ended (${instance.state})${instance.error ? `: ${instance.error}` : ""}`,
-          },
-        );
-        const reconciled = await readRun(db, owner.id, { live: true });
-        if (
-          !reconciled ||
-          reconciled.status !== "failed" ||
-          reconciled.failureCode === "user_cancelled" ||
-          z
-            .object({ attempt: z.number().default(0) })
-            .parse(reconciled.progress ?? {}).attempt !== attempt
-        )
-          continue;
-        Object.assign(owner, reconciled);
-      }
-    }
-    if (
-      owner.purpose === "suggestion_sweep" &&
-      !z.object({ rosterPrepared: z.literal(true) }).safeParse(owner.progress)
-        .success
-    ) {
-      const { prepareSuggestionSweep } = await import("./suggestion-sweep");
-      await prepareSuggestionSweep(db, owner.id, {
-        context: {
-          ...buildCrudServices(db),
-          actorContext: buildActorContext(owner.actorUserId, owner.channel),
-        },
-      });
-    }
-    const items = await requestedAiEvaluations(db, owner.id, {
-      currentOnly: true,
-    });
-    if (!items.some((item) => PENDING_AI_STATES.includes(item.state))) {
-      if (
-        (items.length || owner.purpose === "suggestion_sweep") &&
-        !items.some((item) => item.state === "failed")
-      ) {
-        const attempt = z
-          .object({ attempt: z.number().default(0) })
-          .parse(owner.progress ?? {}).attempt;
-        await completeRecoveredAiWorkRun(
-          db,
-          owner,
-          attempt,
-          aiWorkProgress(owner, items, attempt, true),
-        );
-      }
-      continue;
-    }
-    // A budget pause resumes only once a later window has budget.
-    if (
-      owner.status === "paused_auth" &&
-      owner.purpose === "mail_reclassify" &&
-      (await aiBudgetSpent(db))
-    )
-      continue;
-    if (isWorkflowRunPurpose(owner.purpose))
-      await launchWorkflowRun(
-        db,
-        { runId: owner.id, purpose: owner.purpose, automatic: true },
-        launcher,
-      );
-  }
+  ).redispatchBudgetPausedImports(
+    db,
+    now,
+    anyWindow ? now : aiBudgetWindow(now).start,
+  );
+  const moved = anyWindow
+    ? await (
+        await import("~/server/generic/jobs/repo/jobs")
+      ).bringQueuedJobsForward(db, now)
+    : [];
+  await (
+    await import("~/server/workflows/background-tasks/publish")
+  ).wakeJobs({ source: "funding-window" });
+  return imports + moved.length;
 }

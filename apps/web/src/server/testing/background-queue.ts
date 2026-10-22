@@ -1,167 +1,166 @@
-import type { BackgroundTask } from "@cubby/schemas/background-tasks";
-import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
+import {
+  backgroundTaskMessageSchema,
+  type BackgroundTaskMessage,
+} from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { derivedRefreshCursor } from "~/server/db/schema";
-import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/repo/refresh-ports.boundary";
+import { job } from "~/server/db/retained-tables";
+import { scheduleRefreshFamilies } from "~/server/generic/derived-refresh/repo/families";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import type { JobHandlers } from "~/server/generic/jobs/types";
+import {
+  refreshFamilyHandler,
+  createProductionRefreshFamilyHandler,
+} from "~/server/workflows/background-tasks/refresh-families";
 
-/** Discovery fixtures finish publication using an external embedding-provider stub. */
-export async function settleDerivedRefreshForDiscovery(
-  db: Database,
-): Promise<void> {
-  const { processDerivedRefreshPage } =
-    await import("~/server/generic/derived-refresh/repo/process");
-  const ports: DerivedRefreshPorts = {
-    refreshEmbeddings: async (_db, refs) =>
-      new Map(
-        refs.map((ref) => [
-          `${ref.entityKind}:${ref.entityId}`,
-          { state: "ready" },
-        ]),
-      ),
-    prepareRecipe: async () => {
-      throw new Error("Unexpected Recipe in synthetic discovery fixture");
-    },
-  };
-  for (let page = 0; page < 10_000; page++) {
-    const result = await processDerivedRefreshPage(db, ports);
-    if (result.errors.length) throw new Error(result.errors.join("\n"));
-    if (result.done) return;
-  }
-  throw new Error("Synthetic discovery publication exceeded its page budget");
-}
-
-const frontierDrains = new WeakMap<Database, Promise<void>>();
-
-/** Explicit fixture settlement waits for the offline pump on the same handle. */
+/** Explicit provider-free fixture settlement uses the production search Job. */
 export async function drainDerivedRefreshFrontier(
   db: Database,
   maxPages = 10_000,
 ): Promise<void> {
-  const previous = frontierDrains.get(db) ?? Promise.resolve();
-  const draining = previous.then(() =>
-    advanceDerivedRefreshFrontier(db, maxPages),
-  );
-  frontierDrains.set(db, draining);
-  try {
-    await draining;
-  } finally {
-    if (frontierDrains.get(db) === draining) frontierDrains.delete(db);
-  }
-}
-
-/** Run the real provider-free frontier when a test needs settled projections. */
-async function advanceDerivedRefreshFrontier(
-  db: Database,
-  maxPages: number,
-): Promise<void> {
-  const { processDerivedRefreshPage } =
-    await import("~/server/generic/derived-refresh/repo/process");
-  const ports: DerivedRefreshPorts = {
-    prepareRecipe: async () => {
-      throw new Error("Provider called during synthetic frontier-only work");
-    },
-    refreshEmbeddings: async () => {
-      throw new Error("Provider called during synthetic frontier-only work");
-    },
-  };
-  let processed = 0;
   for (let page = 0; page < maxPages; page++) {
-    const result = await processDerivedRefreshPage(db, ports, {
-      frontierOnly: true,
+    const [pending] = await getDb(db)
+      .select()
+      .from(job)
+      .where(eq(job.key, "refresh:search"));
+    if (!pending || pending.state === "completed") return;
+    if (["failed", "cancelled", "paused"].includes(pending.state))
+      throw new Error(
+        `Synthetic search refresh stopped: ${pending.error ?? pending.state}`,
+      );
+    const outcome = await advanceJob(db, pending.id, {
+      "refresh.family": refreshFamilyHandler,
     });
-    if (result.errors.length) throw new Error(result.errors.join("\n"));
-    if (result.done) return;
-    processed += result.processed;
+    if (outcome === "failed")
+      throw new Error(
+        "Synthetic search publication failed; inspect its retained Job.error",
+      );
+    if (outcome === "skipped")
+      throw new Error("Synthetic search Job is not due");
   }
-  throw new Error(
-    `Synthetic derived frontier exceeded its page budget (${processed} pages advanced)`,
-  );
+  throw new Error(`Synthetic search refresh exceeded ${maxPages} pages`);
 }
 
-/** Exercise the periodic SQL/import backstop without a wall-clock wait. */
+/** Settle only recipe intent using real Job ownership and an optional USDA fixture seam. */
+export async function drainRecipeRefreshJobs(
+  db: Database,
+  costing?: import("~/server/domains/recipe/repo/recipe-costing").RecipeCostingService,
+  maxPages = 10_000,
+): Promise<void> {
+  const handler = costing
+    ? createProductionRefreshFamilyHandler({
+        prepareRecipe: (tx, id) => costing.bindTo(tx).prepareRefresh(id),
+      })
+    : refreshFamilyHandler;
+  for (let page = 0; page < maxPages; page++) {
+    const [pending] = await getDb(db)
+      .select()
+      .from(job)
+      .where(eq(job.key, "refresh:recipes"));
+    if (!pending || pending.state === "completed") return;
+    if (["failed", "cancelled", "paused"].includes(pending.state))
+      throw new Error(
+        `Synthetic recipe refresh stopped: ${pending.error ?? pending.state}`,
+      );
+    const outcome = await advanceJob(db, pending.id, {
+      "refresh.family": handler,
+    });
+    if (outcome === "failed" || outcome === "skipped") {
+      const [settled] = await getDb(db)
+        .select()
+        .from(job)
+        .where(eq(job.id, pending.id));
+      throw new Error(
+        `Synthetic recipe refresh ${outcome}: ${settled?.error ?? settled?.state}`,
+      );
+    }
+  }
+  throw new Error(`Synthetic recipe refresh exceeded ${maxPages} pages`);
+}
+
+export const settleDerivedRefreshForDiscovery = drainDerivedRefreshFrontier;
+
+/** Exercise broad raw-SQL catch-up without manufacturing old frontier rows. */
 export async function reconcileDerivedRefreshInputs(
   db: Database,
 ): Promise<void> {
-  const { reconcileDerivedRefreshPage } =
-    await import("~/server/generic/derived-refresh/repo/reconcile");
-  await getDb(db)
-    .update(derivedRefreshCursor)
-    .set({ availableAt: new Date(0) });
-  for (let page = 0; page < 2_000; page++) {
-    if ((await reconcileDerivedRefreshPage(db)).done) {
-      await drainDerivedRefreshFrontier(db);
-      return;
-    }
-  }
-  throw new Error("Synthetic input repair exceeded its page budget");
+  await scheduleRefreshFamilies(db, { invalidate: true });
+  await drainDerivedRefreshFrontier(db);
 }
 
-/** Capture real envelopes and finish durable work; transport/Run admission has separate integration coverage. */
+/** A lost wake does not hide intent: drain committed Jobs, not captured messages. */
 export function captureBackgroundQueue() {
-  const tasks: BackgroundTask[] = [];
+  const messages: BackgroundTaskMessage[] = [];
   setCfEnv(
     fromPartial<Env>({
       BACKGROUND_QUEUE: {
-        sendBatch: async (messages: Iterable<{ body: unknown }>) => {
-          for (const { body } of messages) {
-            tasks.push(backgroundTaskMessageSchema.parse(body).task);
-          }
+        sendBatch: async (batch: Iterable<{ body: unknown }>) => {
+          for (const { body } of batch)
+            messages.push(backgroundTaskMessageSchema.parse(body));
         },
       },
     }),
   );
   return {
-    tasks,
+    messages,
     async drain(
       db: Database,
-      options: {
-        maxTasks?: number;
-        derivedRefreshPorts?: DerivedRefreshPorts;
-      } = {},
+      options: { maxTasks?: number; handlers?: JobHandlers } = {},
     ): Promise<number> {
-      const maxTasks = options.maxTasks ?? 10_000;
-      const { handleBackgroundTask } =
-        await import("~/server/workflows/background-tasks/handle");
-      let handled = 0;
-      while (tasks.length > 0) {
-        if (handled >= maxTasks)
+      const handlers =
+        options.handlers ??
+        (await import("~/server/workflows/jobs")).productionJobHandlers;
+      const maxPages = options.maxTasks ?? 10_000;
+      for (let page = 0; page < maxPages; page++) {
+        const [pending] = await getDb(db)
+          .select()
+          .from(job)
+          .where(
+            and(
+              inArray(job.kind, Object.keys(handlers)),
+              inArray(job.state, ["queued", "retry_wait"]),
+            ),
+          )
+          .orderBy(job.availableAt, job.id)
+          .limit(1);
+        if (!pending) {
+          messages.length = 0;
+          return page;
+        }
+        if (pending.availableAt > new Date())
           throw new Error(
-            `Background queue drain exceeded ${maxTasks} tasks; possible cascade cycle`,
+            `Synthetic drain reached deferred Job ${pending.kind}`,
           );
-        const task = tasks[0]!;
-        if (task.kind === "derived-refresh.wakeup") {
-          const { processDerivedRefreshPage } =
-            await import("~/server/generic/derived-refresh/repo/process");
-          if (!options.derivedRefreshPorts)
-            throw new Error(
-              "Queue drain requires injected derived refresh ports",
-            );
-          let complete = false;
-          for (let page = 0; page < maxTasks; page++) {
-            const result = await processDerivedRefreshPage(
-              db,
-              options.derivedRefreshPorts,
-            );
-            if (result.errors.length) throw new Error(result.errors.join("\n"));
-            if (result.done) {
-              complete = true;
-              break;
-            }
-          }
-          if (!complete)
-            throw new Error(
-              "Synthetic derived refresh exceeded its page budget",
-            );
-        } else await handleBackgroundTask(db, task);
-        tasks.shift();
-        handled++;
+        const outcome = await advanceJob(db, pending.id, handlers);
+        if (outcome === "failed")
+          throw new Error(
+            `Synthetic Job ${pending.kind} failed; inspect retained Job.error`,
+          );
       }
-      return handled;
+      throw new Error(`Background Job drain exceeded ${maxPages} pages`);
     },
     restore: () => setCfEnv(undefined),
   };
+}
+
+/** Domain regression seams execute under the same persisted Job ownership as a worker. */
+export async function withJobFixtureExecution<T>(
+  db: Database,
+  input: import("@cubby/schemas/job").EnqueueJobInput,
+  work: () => Promise<T>,
+) {
+  const { enqueueJob, externalJobClaim, claimJob } =
+    await import("~/server/generic/jobs/repo/jobs");
+  const saved = await enqueueJob(db, input);
+  const claim =
+    (await externalJobClaim(db, saved.key)) ?? (await claimJob(db, saved.id));
+  if (!claim)
+    throw new Error(`Synthetic execution ${saved.key} is ${saved.state}`);
+  return (
+    await import("~/server/generic/jobs/repo/execution")
+  ).withJobExecution(db, claim, work);
 }

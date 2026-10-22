@@ -15,7 +15,7 @@ import type { z } from "zod";
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { assessment, expense, run, runFinding } from "~/server/db/schema";
+import { assessment, expense, run } from "~/server/db/schema";
 import * as connections from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
@@ -32,6 +32,7 @@ import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 // Failure modes: a check filter applied after paging leaves counts and pages
 // that disagree with the rows; a branch that cannot carry the check leaks into
@@ -363,17 +364,15 @@ describe("Work queue gaps, typed columns, and record rows", () => {
           lineBasis: "item_line",
           economicRole: "vendor",
         });
-      await getDb(ctx.db)
-        .insert(runFinding)
-        .values({
-          runId,
-          ledgerPartyId: member.id,
-          entityId: order.id,
-          entityKind: "purchase",
-          kind: "other",
-          summary: `${prefix} ${scenario.name}`,
-          evidenceFingerprint: `synthetic-future-${scenario.name}`,
-        });
+      await seedRunFinding(ctx.db, {
+        runId,
+        ledgerPartyId: member.id,
+        entityId: order.id,
+        entityKind: "purchase",
+        kind: "other",
+        summary: `${prefix} ${scenario.name}`,
+        evidenceFingerprint: `synthetic-future-${scenario.name}`,
+      });
       (scenario.hidden ? hidden : visible).push(order.shortcode);
     }
     const findings = await read({
@@ -537,7 +536,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       { ...ctx.actor, runId: null },
       { purpose: "ai_suggest" },
     );
-    await getDb(ctx.db).insert(runFinding).values({
+    await seedRunFinding(ctx.db, {
       runId,
       ledgerPartyId: member.id,
       entityId: purchase.id,

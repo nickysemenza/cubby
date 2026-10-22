@@ -1,4 +1,3 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   mailboxCoverage,
   mailboxDiscoveryInput,
@@ -10,7 +9,13 @@ import { describe, expect, it } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
+import {
+  aiUsage,
+  job,
+  mailboxCursor,
+  run,
+  runOperation,
+} from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
@@ -112,26 +117,25 @@ describe("member discovery readiness through MCP", () => {
       updatedAt: new Date(),
     });
     await setMailImport(ctx.db, { mailboxId, enabled: true });
-    const launched: string[] = [];
-    await startMailDiscovery(ctx.db, {
-      launcher: {
-        create: async (_purpose, _id, params) => {
-          launched.push(params.runId);
-        },
-        terminate: async () => {
-          throw new Error("read must not terminate Workflow");
-        },
-        status: async () => {
-          throw new Error("read must not load Workflow");
-        },
-      },
-    });
-    const id = runEntityId.parse(launched[0]);
+    await startMailDiscovery(ctx.db);
     const [discovery] = await getDb(ctx.db)
       .select()
       .from(run)
-      .where(eq(run.id, id));
+      .where(eq(run.purpose, "mail_discovery"));
     if (!discovery) throw new Error("Synthetic discovery missing");
+    const id = discovery.id;
+    expect(
+      await getDb(ctx.db)
+        .select({ kind: job.kind, state: job.state, input: job.input })
+        .from(job)
+        .where(eq(job.key, `run:${id}`)),
+    ).toEqual([
+      {
+        kind: "run.execute",
+        state: "queued",
+        input: { runId: id, purpose: "mail_discovery" },
+      },
+    ]);
     const coverage = mailboxCoverage.parse({
       version: 1,
       baselineHistoryId: "100",
@@ -194,6 +198,7 @@ describe("member discovery readiness through MCP", () => {
         },
       ]);
     const beforeRuns = await getDb(ctx.db).select().from(run);
+    const beforeJobs = await getDb(ctx.db).select().from(job);
     const beforeReceipts = await getDb(ctx.db).select().from(runOperation);
     const beforeCursor = await getDb(ctx.db).select().from(mailboxCursor);
     const operationContext = new McpOperationContext(
@@ -283,7 +288,7 @@ describe("member discovery readiness through MCP", () => {
       .update(run)
       .set({ ledgerPartyId: party.id })
       .where(eq(run.id, id));
-    expect(launched).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(job)).toEqual(beforeJobs);
     // The ownership probe changes only its fixture's ownership and update time.
     expect(
       (await getDb(ctx.db).select().from(run)).map(

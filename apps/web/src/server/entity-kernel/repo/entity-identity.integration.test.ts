@@ -1,24 +1,40 @@
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { imageId } from "@cubby/schemas/identifiers";
+import { generateShortcode, parseShortcodeFor } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { entityIdentity } from "~/server/db/schema";
-import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { getDb, withTransaction } from "~/server/db/helpers";
+import {
+  device,
+  entityIdentity,
+  product as productTable,
+  run,
+} from "~/server/db/schema";
+import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
+import {
+  createUploadedImageRecord,
+  deleteImages,
+} from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { removeEntity } from "~/server/generic/removal/repo/entity";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
+// Failure modes without payload identity triggers: removes lose their
+// tombstones, hard-deleted codes are reissued, and merges violate the deleted
+// identity check or stop resolving older redirects.
 describe("durable entity identity", () => {
   const ctx = withTestDb();
 
@@ -46,30 +62,60 @@ describe("durable entity identity", () => {
       missing: "error",
     });
 
-  it("binds every shortcode table to Entity with an FK and all three triggers", async () => {
-    const { rows } = await getDb(ctx.db).execute<{
-      table: string;
-      fks: number;
-      triggers: number;
-    }>(sql`
-      SELECT c.relname AS "table",
-        (SELECT count(*)::int FROM pg_constraint k
-          WHERE k.conrelid = c.oid AND k.conname LIKE '%\\_entity\\_identity\\_fk') AS "fks",
-        (SELECT count(*)::int FROM pg_trigger t
-          WHERE t.tgrelid = c.oid AND t.tgname LIKE 'Entity\\_identity\\_%') AS "triggers"
-      FROM pg_class c
-      JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
-      WHERE c.relkind = 'r'
-        AND EXISTS (SELECT 1 FROM pg_trigger t
-          WHERE t.tgrelid = c.oid AND t.tgname LIKE 'Entity\\_identity\\_%')
-    `);
-    expect(rows).toHaveLength(shortcodeEntities.length);
-    expect(rows.filter((row) => row.fks !== 1 || row.triggers !== 3)).toEqual(
-      [],
-    );
+  it("creates matching identities through Run admission and native Device hello", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const [createdRun] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(await identityOf(createdRun!.shortcode)).toMatchObject({
+      id: runId,
+      kind: "run",
+      deletedAt: null,
+    });
+
+    const installationId = crypto.randomUUID();
+    await upsertDeviceFromHello(ctx.db, {
+      installationId,
+      name: "Synthetic native device",
+      platform: "macos",
+      appVersion: "1.0",
+      osVersion: "1.0",
+      automaticWork: false,
+    });
+    const [createdDevice] = await getDb(ctx.db)
+      .select()
+      .from(device)
+      .where(eq(device.installationId, installationId));
+    expect(await identityOf(createdDevice!.shortcode)).toMatchObject({
+      id: createdDevice!.id,
+      kind: "device",
+      deletedAt: null,
+    });
   });
 
-  it("mirrors create, soft delete, and hard delete onto the identity row", async () => {
+  it("rolls back a removal and its identity tombstone together", async () => {
+    const product = await seedProduct("Aborted identity removal");
+    await expect(
+      withTransaction(ctx.db, async (tx) => {
+        await removeEntity(tx, {
+          entity: "product",
+          ids: [product.entityId],
+          removal: "soft",
+          actor: ctx.actor,
+        });
+        throw new Error("Synthetic removal rollback");
+      }),
+    ).rejects.toThrow("Synthetic removal rollback");
+    expect(await identityOf(product.id)).toMatchObject({ deletedAt: null });
+    const [payload] = await getDb(ctx.db)
+      .select()
+      .from(productTable)
+      .where(eq(productTable.id, product.entityId));
+    expect(payload?.deletedAt).toBeNull();
+  });
+
+  it("preserves identity tombstones through supported soft and hard removal", async () => {
     const product = await seedProduct("Identity mirror");
     expect(await identityOf(product.id)).toMatchObject({
       kind: "product",
@@ -90,9 +136,7 @@ describe("durable entity identity", () => {
       contentType: "image/jpeg",
       size: 10,
     });
-    await getDb(ctx.db).execute(
-      sql`DELETE FROM "Image" WHERE "shortcode" = ${image.shortcode}`,
-    );
+    await deleteImages(ctx.db, [imageId.parse(image.id)]);
     // The payload is gone; its identity survives as a tombstone.
     expect(await identityOf(image.shortcode)).toMatchObject({
       kind: "image",
@@ -107,16 +151,31 @@ describe("durable entity identity", () => {
       contentType: "image/jpeg",
       size: 10,
     });
-    await getDb(ctx.db).execute(
-      sql`DELETE FROM "Image" WHERE "shortcode" = ${image.shortcode}`,
+    await deleteImages(ctx.db, [imageId.parse(image.id)]);
+    let first = true;
+    const replacement = await insertWithShortcode(
+      ctx.db,
+      "image",
+      {
+        key: "identity/reused.jpg",
+        filename: "reused.jpg",
+        contentType: "image/jpeg",
+        size: 10,
+        status: "UPLOADED",
+      },
+      {
+        generate(entity) {
+          if (first) {
+            first = false;
+            return parseShortcodeFor(entity, image.shortcode);
+          }
+          return generateShortcode(entity);
+        },
+      },
     );
-    await expect(
-      getDb(ctx.db).execute(
-        sql`INSERT INTO "Image" ("shortcode", "key", "filename", "contentType", "size", "status")
-            VALUES (${image.shortcode}, 'identity/reused.jpg', 'reused.jpg', 'image/jpeg', 10, 'UPLOADED')`,
-      ),
-    ).rejects.toMatchObject({
-      cause: { constraint: "Entity_shortcode_unique" },
+    expect(replacement.shortcode).not.toBe(image.shortcode);
+    expect(await identityOf(image.shortcode)).toMatchObject({
+      deletedAt: expect.any(Date),
     });
 
     const product = await seedProduct("Fixed code");

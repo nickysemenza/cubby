@@ -9,8 +9,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 
-import type { RUN_WORKFLOWS } from "~/lib/workflows/run-workflows";
-
 import type { PurchaseAgentQueueProducer } from "./domains/purchase-agent/service/purchase-agent-queue-types";
 import type { VectorizeIndexBinding } from "./generic/embedding/service/semantic/vector-store";
 import type { TelemetryQueueProducer } from "./observability/telemetry-queue-types";
@@ -63,14 +61,6 @@ export const setCfEnv = (env?: Env): void => {
 /** True after the request has entered the Cloudflare Worker adapter. */
 export const isCloudflareRuntime = (): boolean => cfEnv !== undefined;
 
-/** Durable search-index repair binding when configured in the Worker environment. */
-export const getSearchIndexRepairWorkflow = ():
-  | Env["SEARCH_INDEX_REPAIR"]
-  | undefined => cfEnv?.SEARCH_INDEX_REPAIR;
-
-export const getRunWorkflow = (binding: keyof typeof RUN_WORKFLOWS) =>
-  cfEnv?.[binding];
-
 /**
  * The background queue producer (`env.BACKGROUND_QUEUE`) on local or deployed
  * Workers, or undefined outside the Worker adapter. The binding
@@ -88,11 +78,6 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   // SAFETY: native configuration infers Env bindings structurally;
   // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
-};
-
-export const getImageCloudQueue = (): BackgroundQueueProducer | undefined => {
-  // SAFETY: native configuration infers this binding; the port narrows sendBatch.
-  return cfEnv?.IMAGE_CLOUD_QUEUE as BackgroundQueueProducer | undefined;
 };
 
 /** Queue producer for the per-run purchase-import agent's events. */
@@ -200,7 +185,5 @@ export const getChatGptPlanNamespace = () => cfEnv?.CHATGPT_PLAN;
 export const getAiGatewayEgress = (gatewayId: string) =>
   cfEnv?.AI_GATEWAY_EGRESS?.getByName(gatewayId);
 
-export const getAiRefreshWorkflow = () => cfEnv?.AI_REFRESH;
-export const getStepRunWorkflow = () => cfEnv?.STEP_RUN;
 export const getAppOrigin = () => cfEnv?.APP_ORIGIN;
 export const isE2eAuthTestMode = () => cfEnv?.E2E_AUTH_TEST_MODE === "true";

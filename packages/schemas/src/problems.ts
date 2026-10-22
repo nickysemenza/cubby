@@ -30,7 +30,6 @@ import {
   type ProjectAttentionType,
   projectAttentionItemSchema,
 } from "./project";
-import { searchableEntityRefFields } from "./search";
 import { proposedImportFix } from "./purchase-import";
 import { imageMetadataOutcome } from "./image-capture-fields";
 
@@ -285,35 +284,6 @@ export const productWithIslandedMappingsSchema = z.object({
     }),
   ),
   coverage: z.object(coverageFields),
-});
-
-/**
- * A live entity with no embedding row under the current provider/model/dimensions
- * — invisible to semantic search until backfilled. Carries no id/model of its
- * own because there is no row yet.
- *
- * These rows are a SAMPLE (the detector caps them); `MaintenanceCounts.
- * entitiesMissingEmbeddings` carries the true figure.
- */
-export const entityMissingEmbeddingSchema = z.object({
-  ...searchableEntityRefFields,
-  // Deliberately NOT hoisted onto `searchableEntityRefFields` itself: this row
-  // always points at a LIVE entity, so it can always be resolved and is safe
-  // to link. Plain string, not a branded schema: `entityKind` is one of ten
-  // different entities, so no single branded type could be right for all of
-  // them — mirrors why `entityId` above is also a plain string.
-  entityId: publicEntityIdSchema,
-});
-
-// A live parent recipe whose persisted totals are marked fresh
-// (`totalsComputedAt IS NOT NULL`) yet still reference — via a live section →
-// link → sub-recipe ingredient — a soft-deleted sub-recipe. The escaped state
-// the derived-data-on-removal guardrail catches: a removal path that skipped
-// staleness propagation, or a dangling sub-recipe line the recipe still carries.
-// Pure SQL (no WASM), so it rides the fast detector group.
-export const staleParentRecipeSchema = z.object({
-  id: recipeShortcode,
-  name: z.string(),
 });
 
 // A live image whose EXIF/GPS extraction ended without metadata: its original
@@ -710,12 +680,6 @@ export const problemDetectors = {
   // intentionally ambiguous human worklist; keep both under one attention
   // section so the list and Problems page share one membership predicate.
   imageProcessingIssues: detector("fast", "coverage", problemRowSchema),
-  entitiesMissingEmbeddings: detector(
-    "fast",
-    "defect",
-    entityMissingEmbeddingSchema,
-  ),
-  staleParentRecipes: detector("fast", "defect", staleParentRecipeSchema),
   imageMetadataOutcomes: detector(
     "fast",
     "defect",
@@ -1202,7 +1166,6 @@ export type DefectProblemKey = Exclude<ProblemKey, CoverageProblemKey>;
  */
 export const AUTO_FIX_PROBLEM_KEYS = [
   "locationsWithoutAiDescription",
-  "entitiesMissingEmbeddings",
 ] as const satisfies readonly DefectProblemKey[];
 export type AutoFixProblemKey = (typeof AUTO_FIX_PROBLEM_KEYS)[number];
 
@@ -1351,10 +1314,6 @@ export const maintenanceCountsSchema = z.object({
   locationsWithoutAiDescription: z.number().int(),
   staleRecipeTotals: z.number().int(),
   cullablePendingImages: z.number().int(),
-  // Live entities with no embedding under the current model. The TRUE figure —
-  // the matching Problems section only carries a capped sample, so this is what
-  // the auto-fix button counts. 0 when embeddings aren't configured.
-  entitiesMissingEmbeddings: z.number().int(),
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;
 

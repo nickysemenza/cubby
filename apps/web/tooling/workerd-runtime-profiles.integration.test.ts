@@ -21,11 +21,6 @@ const queues = {
     producer: "BACKGROUND_QUEUE",
     consumerLog: "[background-tasks] unreadable message queue=cubby-background",
   },
-  "cubby-image-cloud": {
-    producer: "IMAGE_CLOUD_QUEUE",
-    consumerLog:
-      "[background-tasks] unreadable message queue=cubby-image-cloud",
-  },
   "cubby-telemetry": {
     producer: "TELEMETRY_QUEUE",
     consumerLog: "[telemetry] dropped invalid queue message",
@@ -82,13 +77,11 @@ describe("workerd test runtime profiles", () => {
       expect(
         await realConsumers(started.harness, [
           "cubby-background",
-          "cubby-image-cloud",
           "cubby-telemetry",
           "cubby-purchase-agent",
         ]),
       ).toEqual([
         "cubby-background",
-        "cubby-image-cloud",
         "cubby-telemetry",
         "cubby-purchase-agent",
       ]);

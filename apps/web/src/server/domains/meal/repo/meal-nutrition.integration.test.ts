@@ -33,7 +33,6 @@ import {
 import { saveMealFood, removeMealFood } from "~/server/domains/meal/repo/food";
 import { saveMealRecipePreparation } from "~/server/domains/meal/repo/portions";
 import { getMealNutrition } from "~/server/domains/meal/service/meal-nutrition.service";
-import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -265,7 +264,7 @@ describe("meal nutrition service", () => {
     });
   });
 
-  it("repairs stale recipe totals before a dependent daily nutrition read", async () => {
+  it("shows pending nutrition without repairing stale recipe totals during a read", async () => {
     const [sourceMeal, targetMeal, eater, staleRecipe] = await Promise.all([
       seedMeal("2026-09-18", "Repair source"),
       seedMeal("2026-09-18", "Repair target"),
@@ -294,7 +293,6 @@ describe("meal nutrition service", () => {
       ctx.db,
       { date: "2026-09-18" },
       noUsda,
-      new RecipeCostingService(ctx.db, noUsda),
     );
 
     expect(
@@ -302,8 +300,8 @@ describe("meal nutrition service", () => {
         where: eq(recipe.id, staleRecipe.id),
         columns: { totalsComputedAt: true },
       }),
-    ).toEqual({ totalsComputedAt: expect.any(Date) });
-    expect(result.people[0]?.foods[0]?.totals.nutrition.kcal.status).not.toBe(
+    ).toEqual({ totalsComputedAt: null });
+    expect(result.people[0]?.foods[0]?.totals.nutrition.kcal.status).toBe(
       "pending",
     );
   });

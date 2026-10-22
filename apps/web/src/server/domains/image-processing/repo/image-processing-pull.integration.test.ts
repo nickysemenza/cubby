@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { job as durableJob } from "~/server/db/retained-tables";
 import {
   image,
   imageProcessingAttempt,
@@ -61,15 +62,21 @@ describe("background companion leases", () => {
     const waiting = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const first = await claim();
     if (!first) throw new Error("Expected initial lease");
+    // Device expiry must use the requested lease owned by Job, rather than
+    // silently substituting the worker's longer default lease.
+    expect(first.leaseExpiresAt.getTime() - Date.now()).toBeGreaterThan(50_000);
+    expect(first.leaseExpiresAt.getTime() - Date.now()).toBeLessThanOrEqual(
+      60_000,
+    );
     await markImageProcessingWaitingForDevice(ctx.db, {
       jobId: first.id,
       attemptId: first.attemptId,
     });
     const pending = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ nextAttemptAt: sql`now() + interval '1 hour'` })
-      .where(eq(imageProcessingJob.id, pending));
+      .update(durableJob)
+      .set({ availableAt: sql`now() + interval '1 hour'` })
+      .where(eq(durableJob.key, `image-processing:${pending}`));
     expect(
       await claimImageProcessingJob(ctx.db, {
         kinds: ["describe_image"],
@@ -157,9 +164,9 @@ describe("background companion leases", () => {
       }),
     ).toBe(false);
     await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ nextAttemptAt: sql`now()` })
-      .where(eq(imageProcessingJob.id, first.id));
+      .update(durableJob)
+      .set({ availableAt: sql`now()` })
+      .where(eq(durableJob.key, `image-processing:${first.id}`));
     const second = await claim();
     expect(second?.attemptId).not.toBe(first.attemptId);
     const completion = await completeImageProcessingJob(ctx.db, {

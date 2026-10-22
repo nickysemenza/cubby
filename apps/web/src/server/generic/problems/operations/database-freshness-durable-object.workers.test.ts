@@ -1,9 +1,11 @@
-import { problemsCountSchema } from "@cubby/schemas/problems";
-import { evictDurableObject, runInDurableObject } from "cloudflare:test";
+import {
+  evictDurableObject,
+  runDurableObjectAlarm,
+  runInDurableObject,
+} from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-import { mock } from "~/lib/test/mock-schema";
 import { decideReadConsistency } from "~/server/db/read-consistency";
 
 describe("database freshness Durable Object", () => {
@@ -46,35 +48,15 @@ describe("database freshness Durable Object", () => {
     expect(await first.readFreshness()).toEqual(write);
   });
 
-  it("batches writes behind the first alarm and retains a snapshot when refresh fails", async () => {
+  // Regression: an older deploy's Problem counts refresh alarm can fire
+  // before the constructor deletes it.
+  it("drains an alarm left by an older deploy without changing freshness", async () => {
     const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
-    const counts = mock(problemsCountSchema, { seed: 17 });
-
-    await stub.recordWrite();
-    const firstAlarm = await runInDurableObject(stub, (_instance, state) =>
-      state.storage.getAlarm(),
+    const before = await stub.readFreshness();
+    await runInDurableObject(stub, (_instance, state) =>
+      state.storage.setAlarm(Date.now() + 60_000),
     );
-    expect(firstAlarm).not.toBeNull();
-    if (firstAlarm === null) throw new Error("write did not schedule an alarm");
-    expect(firstAlarm - Date.now()).toBeGreaterThan(14 * 60_000);
-
-    await stub.recordWrite();
-    expect(
-      await runInDurableObject(stub, (_instance, state) =>
-        state.storage.getAlarm(),
-      ),
-    ).toBe(firstAlarm);
-
-    await runInDurableObject(stub, async (instance, state) => {
-      state.storage.sql.exec(
-        "INSERT INTO problem_counts (id, counts_json, computed_at, covered_sequence, quality) VALUES (1, ?, ?, 0, 'complete')",
-        JSON.stringify(counts),
-        Date.now(),
-      );
-      await instance.alarm();
-      expect(await state.storage.getAlarm()).toBeGreaterThan(firstAlarm);
-    });
-
-    expect(await stub.getProblemCounts()).toEqual(counts);
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    expect(await stub.readFreshness()).toEqual(before);
   });
 });

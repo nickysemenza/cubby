@@ -33,7 +33,7 @@ import {
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
-import { type SQL, sql } from "drizzle-orm";
+import { inArray, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
@@ -45,6 +45,7 @@ import {
   unwrapDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { assessmentState } from "~/server/db/schema";
 import {
   previewFinancialStatementImport,
   prepareFinancialStatementPreview,
@@ -71,10 +72,10 @@ import {
   statementTransactionKind,
 } from "~/server/domains/statement-import/repo/statement-transaction-kind";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import {
   automaticRuleStamp,
   matchStatementRules,
-  statementSubjectKey,
 } from "~/server/generic/assessment/repo/automatic-rules";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
@@ -85,7 +86,11 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 import { prepareStatementSpending } from "./statement-spending";
 
-/** Matching revision and Automatic attach precision window; clean-only changes use the policy below. */
+const STATE = "AssessmentState";
+const pendingStatementState = sql`${assessmentState.family} = ${assessmentFamily.enum.statement_transaction} AND ${assessmentState.active} AND ${assessmentState.status} = ${suggestionStatus.enum.pending}`;
+const stateData = z.record(z.string(), z.json());
+
+/** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
 export const STATEMENT_SUGGESTION_REVISION = "2026-10-20.1";
 /**
  * Bump when only bulk-acceptability changes. Labels ride on top of the
@@ -1312,9 +1317,12 @@ export async function publishChargeProposal(
     ) {
       const fresh = await prepareStatementSpending(tx, proposal.judgment);
       if (fresh?.status === "already_booked") {
-        await client.execute(sql`UPDATE "AssessmentState" SET active=false, status=${suggestionStatus.enum.superseded}, "updatedAt"=now()
-          WHERE family=${assessmentFamily.enum.statement_transaction} AND active AND status=${suggestionStatus.enum.pending}
-            AND data->>${"source"}=${charge.source} AND data->>${"chargeKey"}=${charge.chargeKey}`);
+        await transitionAssessmentStates(
+          tx,
+          sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}`,
+          { active: false, status: "superseded" },
+          { kind: "statement_already_booked" },
+        );
         return { outcome: "settled", labelsReused: 0 };
       }
     }
@@ -1427,16 +1435,15 @@ export async function publishChargeProposal(
     }
     const retire = prior.filter((row) => row.active).map((row) => row.id);
     if (retire.length)
-      await client.execute(sql`
-        UPDATE "AssessmentState"
-        SET active = false,
-          status = CASE WHEN status = ${suggestionStatus.enum.pending} THEN ${suggestionStatus.enum.superseded} ELSE status END,
-          "updatedAt" = now()
-        WHERE id IN (${sql.join(
-          retire.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )})
-      `);
+      await transitionAssessmentStates(
+        tx,
+        inArray(assessmentState.id, retire),
+        (row) => ({
+          active: false,
+          ...(row.status === "pending" && { status: "superseded" }),
+        }),
+        { kind: "superseded_by_publication" },
+      );
     const { judgment } = proposal;
     const inputPosition = prior.find(
       (row) => row.active && row.status === "pending",
@@ -1508,11 +1515,7 @@ export async function publishChargeProposal(
           applicationPending: producer.kind === "model",
           ...(applicationOrder && { applicationOrder }),
           ...(checkpoint && { labelCheckpoint: checkpoint }),
-          ...(await automaticRuleStamp(
-            "statement_transaction",
-            matchStatementRules(judgment),
-            statementSubjectKey(charge),
-          )),
+          ...automaticRuleStamp(matchStatementRules(judgment)),
         },
       },
     );
@@ -1523,18 +1526,18 @@ export async function publishChargeProposal(
       await runAfterCommit(tx, (committed) =>
         withTransactionDatabase(committed, async (retirement) => {
           await assertWorkflowEffect(retirement);
-          await getDb(retirement)
-            .execute(
-              sql`UPDATE "AssessmentState" SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
-            WHERE id = ${published.id}::uuid AND status = ${suggestionStatus.enum.pending}
+          await transitionAssessmentStates(
+            retirement,
+            sql`${assessmentState.id} = ${published.id}::uuid AND ${assessmentState.status} = ${suggestionStatus.enum.pending}
               AND EXISTS (
                 SELECT 1 FROM ${chargeStateOf(
                   sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
                 )} cs
                 WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${judgment.recommended !== "book"})
               )`,
-            )
-            .then(() => undefined);
+            { active: false, status: "superseded" },
+            { kind: "statement_settled_elsewhere" },
+          );
         }),
       );
     return {
@@ -1794,17 +1797,25 @@ export async function recordStatementLabelCheckpoint(
   const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
-    const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`
-    UPDATE "AssessmentState" s
-    SET data = jsonb_set(coalesce(s.data, '{}'::jsonb), '{labelCheckpoint}', ${JSON.stringify(checkpoint)}::jsonb),
-      "updatedAt" = now()
-    WHERE ${pendingSuggestion()}
-      AND ${suggestionField("source")} = ${input.charge.source}
-      AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
-      AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
-    RETURNING s.id
-  `);
-    if (rows.length) return "saved";
+    let matched = 0;
+    await transitionAssessmentStates(
+      tx,
+      sql`${pendingSuggestion(STATE)}
+      AND ${suggestionField("source", STATE)} = ${input.charge.source}
+      AND ${suggestionField("chargeKey", STATE)} = ${input.charge.chargeKey}
+      AND ${suggestionField("evidenceFingerprint", STATE)} = ${input.evidenceFingerprint}`,
+      (row) => {
+        matched += 1;
+        return {
+          data: {
+            ...stateData.parse(row.data ?? {}),
+            labelCheckpoint: z.json().parse(jsonSnapshot.parse(checkpoint)),
+          },
+        };
+      },
+      { kind: "statement_label_checkpoint" },
+    );
+    if (matched) return "saved";
     const { rows: settled } = await unwrapDb(tx).execute(sql`
     SELECT 1 FROM "AssessmentState" s
     WHERE s.family = ${assessmentFamily.enum.statement_transaction}
@@ -1829,13 +1840,19 @@ export async function completeStatementApplications(
   if (!assessmentIds.length) return;
   await withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
-    await unwrapDb(tx).execute(sql`
-      UPDATE "AssessmentState" SET data = data - 'applicationPending' - 'applicationOrder', "updatedAt" = now()
-      WHERE id IN (${sql.join(
-        assessmentIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
-    `);
+    await transitionAssessmentStates(
+      tx,
+      inArray(assessmentState.id, [...assessmentIds]),
+      (row) => {
+        const {
+          applicationPending: _pending,
+          applicationOrder: _order,
+          ...data
+        } = stateData.parse(row.data ?? {});
+        return { data };
+      },
+      { kind: "statement_application_completed" },
+    );
   });
 }
 

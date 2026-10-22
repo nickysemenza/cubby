@@ -982,7 +982,7 @@ All five review families use this storage: fields, Email relevance and event/Pur
 
 A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
 
-Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Image-analysis retries publish the first retained result for that exact analysis identity; a later response cannot replace immutable Assessment evidence or confirmed text. Live description authority disappears with the Image; history and inactive confirmation times survive. Current field targets and declared inputs supersede pending Assessments through both generated Postgres triggers and kernel invalidation. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
+Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Image-analysis retries publish the first retained result for that exact analysis identity; a later response cannot replace immutable Assessment evidence or confirmed text. Live description authority disappears with the Image; history and inactive confirmation times survive. No trigger or revision ledger invalidates pending advice. A pending field Assessment stores the snapshot of its target, declared basis, direct reference rows and latest audited write of that field; reads hide it and apply refuses it once the snapshot differs. A save that changes no value keeps it pending, while a restore after an intermediate write does not. Pending detector Product pairs are hidden the same way once either Product's identity snapshot changes, and their Assessment history remains. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
 
 Product identity retrieval and triage run through existing Run-backed AiEvaluation work, gated by AI refresh activation. A resumable cursor covers every live Product, with explicit miscellaneous exclusions counted as coverage. Exact identifier retrieval is independent of name/model gates; semantic similarity and model verdicts are candidate evidence. Reads use stored pair Assessments. Current nonnull model disagreements and retained historical identity conflicts block pair application, including weak recommendations. Equal current model strings or research notes do not verify identity or clear historical conflicts; uncertain variant matches remain pending review. An explicit merge can supersede historical advice only after identity inputs differ from every retained conflicting comparison, with current conflicts rechecked transactionally. Automatic matching remains blocked; notes do not unlock it. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
 
@@ -2111,152 +2111,47 @@ edge and gets the toggle like any other.
 ### Background derived data
 
 Searchable entities use persisted `SearchDocument` rows for lexical search and
-embedding input. Source preparation constructs SQL only for requested entity
-kinds; a typed empty union arm keeps the source columns stable, and recursive
-location paths are included only for Location sources.
-An ordinary write records a durable dirty root and known
-old/new endpoints after all authoritative changes in its transaction. It does
-not enumerate dependents, refresh projections, fingerprint a corpus, run AI
-admission, or fetch expanded mutation detail. Capture work scales with the
-rows explicitly changed. Inheritance-changing edits are the deliberate
-exception: they validate their affected authoritative graph transactionally.
-FinancialTransaction account/date/kind changes similarly retain immediate
-settlement-conflict validation across the Purchases they fund. These scoped
-invariant checks may scale with affected records; unrelated edits skip them.
-Neither exception permits synchronous derived fanout. Immediate refusal evidence
-is bounded.
+embedding input. Authoritative mutations record broad Job intent in the same
+transaction as the save. Queue delivery, app-open and cron only wake the shared
+Job drain. Reads serve persisted projections and never initiate repairs.
 
-The bound covers ordinary scalar edits and derived refresh, rather than every
-existing mutation workflow. Collection patch resolution can still read the
-current collection/detail, and financial allocation edits keep their existing
-whole-set validation and audit behavior. Product creation with a catalog code
-also retains its existing optional cover lookup. Those paths have no uniform
-foreground bound; they need separate collection and provider-work changes.
+The five `refresh.family` Jobs cover search, recipes, conversions, embeddings
+and direct orphan cleanup. Each family scans current sources with a resumable
+cursor. Search, conversion and embedding-admission pages contain at most 25
+sources; recipe preparation processes one recipe and its authoritative closure.
+Ordinary writes capture fixed family intent instead of traversing dependents.
+Inheritance-changing edits and financial settlement conflicts still validate
+their affected authoritative facts transactionally. These domain invariants do
+not authorize synchronous derived fanout.
 
-Dependency traversal lives in `generic/derived-refresh/repo/dependencies.ts` as
-indexed keyset routes. Projection-only dependents are leaves; only declared
-transitive input routes continue traversal. A Product's purchase-line text does
-not turn sibling Products or the vendor's other purchases into dirty inputs.
-A best-effort post-commit queue wake-up processes small
-provider-free projection and dependency pages; the existing `derived_refresh` Run/StepRun handles longer work and
-recovery. Search projections, assessment retirement, recipe totals and
-embeddings complete through durable pages. Statement observation and settlement
-writers advance a small input clock; a separate cursor checks at most 100
-pending statement suggestions per page. Apply always revalidates authoritative
-statement evidence, so delayed retirement cannot authorize a stale action.
-Connection retirement similarly scans at most 16 pending Assessments per page,
-including guarded field suggestions, against the shared input revision. It
-owns guarded connection evidence exclusively; generic field retirement must not
-treat a missing generic live-input fingerprint as stale connection evidence. It
-finishes an epoch before restarting for newer edits and fences status updates
-against intervening input or review changes. Preparation runs outside publication
-locks and retains only candidate/version projections, not stored basis snapshots.
-The epoch also includes the household date; pending date-dependent Project-tool
-evidence schedules a wake at the next household day boundary even without a write.
-Both retirement scans and the ordinary refresh frontier advance before the
-driver continues, so continuous edits cannot starve projection work.
-The projection frontier completes before recipe or embedding providers are
-consulted. Provider backoff therefore cannot block new queue-driven projection
-waves. Pending recipe computation remains visible after the frontier completes.
-Recipe computation reads current
-inputs outside the publication transaction; totals and page acknowledgement
-commit together. A failed phase retains its error and continues dependency
-traversal, so one failed record cannot hide its parents or other affected rows.
-The projection page invalidates only that Recipe's totals and Product's
-conversion coverage. Containing kits and Expense price evidence follow the
-declared dependency routes. Unrelated failed work never hides healthy totals
-or valid semantic candidates; suggestion application checks its authoritative
-field inputs directly.
+Preparation and provider work run outside publication transactions. Publication
+locks the owning Job and validates its live token and generation, rechecks the
+specific authoritative inputs, then commits output and cursor together.
+Standalone explicit refresh paths use this same Job or specific input
+validation. No global input revision or publication epoch stands in for that
+check. Failed, cancelled and manually paused Jobs require explicit retry;
+ordinary captures and periodic wakes do not revive them.
 
-Frontier dependency packets query at most eight adjacent routes, stop at the
-first nonempty indexed page, and return at most 100 references. Empty routes
-share one publication transaction and cursor acknowledgement. If preparation
-fails after an empty prefix, that prefix checkpoints first; the failed route
-retries alone with the normal failure budget. A short final route completes the
-scope immediately. Assessment advances directly to dependencies (or completion
-when no traversal is needed); stored legacy `recipe` cursors still resume.
-Projection also skips a separate assessment step when a bounded candidate
-query proves none exist. Any candidate retains normal retirement paging and
-fingerprint checks; failure of the optional absence query leaves assessment
-scheduled, where preparation failures keep their own phase attribution.
-Recipe computation and embedding publication remain separate from frontier
-packets.
+A successful page can wake another bounded drain. The drain reselects fair
+batches, up to 256 pages or 20 seconds between pages, so a lost follow-up wake
+does not reduce an entire corpus to one page per minute. Completed families are
+eligible for another pass after roughly two minutes. This is a healthy-service
+staleness target for a quiet small household. Large imports, provider capacity,
+one expensive recipe closure or repeated cursor resets can take longer.
+Continuous edits can prevent a broad pass from finishing.
 
-Each page has a single-use lease and acknowledges its exact Work version and
-owner token. Expensive preparation and provider calls happen outside the
-transaction. Short output transactions validate the captured input revision,
-then update frontier metadata. Authoritative saves advance input revisions and
-append immutable roots, field deltas and known old/new endpoints to
-`DerivedRefreshCaptureInbox` after business writes. They never read or update
-worker-owned Work/Scope progress. A bounded background transaction folds a
-locked inbox page into Work/Scope and deletes exactly those captures atomically;
-rollback retains the captures. Folding does not advance input revisions again.
-Pending captures count as unmaterialized inputs until that fold commits, so
-search/discovery cannot mistake the interval before folding for freshness. Lock contention reschedules without spending the
-failure budget. Failures are bounded per phase and actual input fingerprint,
-survive transport retries and new Runs, and retain raw credential-scrubbed
-diagnostics for explicit retry in existing Run/maintenance surfaces. A derived
-failure does not undo a successful save.
+Pending review evidence is checked against current field, connection, Product
+or statement inputs on read and before apply. Obsolete retirement scanners and
+their cursors are absent. Counts may lag while background work converges; reads
+never change evidence or financial/import facts. Valid semantic matches remain
+usable while incomplete current embeddings withhold exhaustive coverage.
 
-Application hooks provide immediate coverage; no database capture triggers
-are required. Periodic reconciliation pages through authoritative rows and
-removals without trusting hooks or timestamps, and separately repairs missing
-recipe totals, missing configured embeddings and unfinished vector artifacts even when input snapshots are
-unchanged. Healthy-service targets are search catch-up and discovery queue
-eligibility within 60 seconds. Input scanning shares one cursor transaction
-across at most eight adjacent table pages, stopping at the first nonempty
-page. Each populated page still processes at most 100 rows; cursor progress,
-observations and captures commit atomically, and a failed scan rolls them back.
-Provider completion depends on capacity. Recipe
-reads expose pending totals after that Recipe's invalidation page until its
-totals publish. Projection-code changes require the streaming "Repair index"
-maintenance action.
-The full repair pass runs hourly. Ordinary entity edits do not advance the
-repair-wide snapshot clocks: own-row changes traverse their dependency pages.
-Observations retain direct owner identities, including child owners. Context
-edits refresh those owners. Entity endpoint changes or removals retain the changed
-entity as the root and refresh old/current endpoints as projection leaves,
-except endpoints declared as transitive dependencies, such as Product pricing.
-Saved Purchase endpoints of an Expense have a narrower paged frontier: project
-text on adjustment lines refreshes without traversing principal lines or their
-Products, including after reassignment or physical source removal.
-Reassigning a reference must not traverse unrelated members of its old/new Project
-or Vendor. Only input rows without a recognizable owner use conservative
-repair clocks that can revisit a broader corpus. This backstop scans full
-authoritative row contents in bounded pages, including opaque imported data.
-
-`EntityEmbedding` retains immutable physical artifacts and submission receipts.
-An intent commits before an external upload. Selection requires the expected
-payload in storage, a positive observation of that physical ID through ANN
-search, current document/model inputs and a final publication fence. Submission
-acceptance alone is not readiness. A changed text returning to an earlier value
-gets a new physical ID; retired IDs are never reused. Delayed uploads and
-deletes therefore cannot overwrite or remove a newer selection. Remote cleanup
-is paged independently and retains tombstones after delete submission.
-Selected artifacts receive a daily integrity check; retired physical IDs are
-re-deleted weekly to catch late remote submissions. Initial deployment replaces
-legacy artifacts through bounded pages, so semantic coverage remains incomplete
-during that one-time re-embedding pass. These maintenance reads and deletions
-are ongoing background costs, separate from save work.
-
-Every semantic query validates both its seed and returned physical IDs against
-selected artifacts, live identities, current projections and model configuration.
-One fixed candidate budget bounds overfetch; insufficient valid results or
-unfinished relevant work reports incomplete coverage. Approximate search does
-not claim exhaustive neighbour retrieval. A missing configured artifact also
-withholds completeness, including documents saved while providers were disabled.
-Unconfirmed visibility is retried
-without regenerating embeddings and cannot certify a completed negative scan.
-Connection fingerprints use fixed-size input/projection/embedding revision
-vectors; a newly selected vector invalidates earlier source discovery coverage.
-Valid connection candidates publish even when semantic coverage is incomplete.
-The evaluation retains a raw coverage diagnostic and its existing bounded retry
-budget; it cannot record completed discovery until coverage is confirmed.
-Exhausted unrelated refresh work withholds that completion rather than preventing
-all positive discovery for the input class.
-Ordinary writes never perform discovery or manage AI admission.
-Pending field suggestions created before authoritative input fingerprints are
-retired and evaluated again; they cannot be applied using their old basis.
+Embedding execution retains the provider result, physical upload hash and
+mutation receipt while awaiting visibility. A stopped artifact's explicit retry
+uses a fresh physical Job ID, preserving the old diagnostic and protecting the
+replacement from delayed remote cleanup. Search repair admits these same broad
+Jobs and reports their persisted progress. The execution and migration contract
+is owned by [ADR 0015](adr/0015-unified-durable-work-coordination.md).
 
 ### Row sets and same-row matching
 
@@ -2885,8 +2780,8 @@ relationship browser check.
 ## Identity, attachments, and the physical graph
 
 Every shortcode entity has one durable `Entity` row (ADR 0006): payloads bind
-to it with a composite `(id, shortcode)` FK, and database triggers write it on
-insert and mirror soft and hard deletes. `finalizeMerge` records one-hop,
+to it with a composite `(id, shortcode)` FK. Shared transactional writers create
+identity before payload insertion and retain tombstones on soft and hard deletes. `finalizeMerge` records one-hop,
 path-compressed `mergedIntoId` redirects. A read through a merged-away code
 returns the survivor with `redirectedFrom`, and detail reads list
 `previousShortcodes`; a write through one refuses with the survivor's code, and
@@ -3413,9 +3308,9 @@ precedence rule.
 5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge. A new shortcode table
-   gets its identity FK and shortcode index generated; the identity
-   triggers follow the roster automatically, and the production cutover for
-   an existing database must backfill `Entity`. A new join or child table that
+   gets its identity FK and shortcode index generated; its writer uses the shared
+   transactional identity helper, and the production cutover for an existing
+   database must backfill `Entity`. A new join or child table that
    carries an edge column names its owner in `ENTITY_EDGE_OWNERS`. A new
    many-to-many pairing of two entities is a kind in `ENTITY_LINK_KINDS`, not a
    new table.

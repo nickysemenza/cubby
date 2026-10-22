@@ -1,6 +1,6 @@
 import type { AssessmentFamily } from "./assessment";
 
-/** Review kind describes authority, never a projection's stored status. */
+/** Suggestions metadata excludes Problems findings and historical grading rosters. */
 export const assessmentReviewFamilies = {
   field: { kind: "proposal", label: "Fields" },
   email_relevance: { kind: "automatic_decision", label: "Email relevance" },
@@ -18,6 +18,6 @@ export const assessmentReviewFamilies = {
   statement_transaction: { kind: "proposal", label: "Statements" },
   transfer_pair: { kind: "proposal", label: "Transfer pairs" },
 } as const satisfies Record<
-  AssessmentFamily,
+  Exclude<AssessmentFamily, "run_finding" | "evaluation_sample">,
   { kind: "proposal" | "automatic_decision"; label: string }
 >;

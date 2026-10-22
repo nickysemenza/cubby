@@ -54,7 +54,7 @@ describe("AI response cache Durable Object", () => {
     const stub = env.AI_RESPONSE_CACHE.getByName(crypto.randomUUID());
     const hit = await stub.readOrClaim("hit", false);
     if (hit.kind !== "claimed") throw new Error("claim missing");
-    await stub.publish("hit", hit.token, "cached", 60_000);
+    await stub.publish("hit", hit.token, "cached");
     await stub.readOrClaim("busy", false);
     const requests = ["hit", "busy", "missing"].map((key) => ({
       key,
@@ -69,7 +69,7 @@ describe("AI response cache Durable Object", () => {
     expect(results[2]?.kind).toBe("claimed");
     const miss = results[2];
     if (miss?.kind !== "claimed") throw new Error("batch miss claim missing");
-    expect(await stub.publish("missing", miss.token, "new", 60_000)).toBe(true);
+    expect(await stub.publish("missing", miss.token, "new")).toBe(true);
     expect(await stub.readOrClaim("missing", false)).toEqual({
       kind: "hit",
       value: "new",
@@ -101,7 +101,6 @@ describe("AI response cache Durable Object", () => {
         "key",
         claim.token,
         JSON.stringify({ choice: "one" }),
-        60_000,
       ),
     ).toBe(true);
     expect(await second.readOrClaim("key", false)).toEqual({
@@ -115,20 +114,54 @@ describe("AI response cache Durable Object", () => {
     const refresh = await second.readOrClaim("key", true);
     expect(refresh.kind).toBe("claimed");
     if (refresh.kind !== "claimed") throw new Error("refresh claim missing");
-    expect(await first.publish("key", claim.token, "stale", 60_000)).toBe(
-      false,
-    );
+    expect(await first.publish("key", claim.token, "stale")).toBe(false);
+    // An abandoned regeneration keeps the answer it would have replaced.
     await second.release("key", refresh.token);
-    expect((await first.readOrClaim("key", false)).kind).toBe("claimed");
+    expect(await first.readOrClaim("key", false)).toEqual({
+      kind: "hit",
+      value: JSON.stringify({ choice: "one" }),
+    });
   });
 
-  it("reclaims an expired cached value", async () => {
+  // Regression: completed answers expired after 30 days and were paid for again.
+  it("retains a completed value written with the retired expiry", async () => {
     const stub = env.AI_RESPONSE_CACHE.getByName(crypto.randomUUID());
     const claim = await stub.readOrClaim("key", false);
     if (claim.kind !== "claimed") throw new Error("claim missing");
-    await stub.publish("key", claim.token, "old", 1);
-    await sleep(5);
-    expect((await stub.readOrClaim("key", false)).kind).toBe("claimed");
+    await stub.publish("key", claim.token, "retained");
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        "UPDATE responses SET expires_at = 1 WHERE key = ?",
+        "key",
+      );
+    });
+    await evictDurableObject(stub);
+    expect(await stub.readOrClaim("key", false)).toEqual({
+      kind: "hit",
+      value: "retained",
+    });
+  });
+
+  // Regression: values above one SQLite row were released uncached.
+  it("stores a value larger than one row and replaces it inline", async () => {
+    const stub = env.AI_RESPONSE_CACHE.getByName(crypto.randomUUID());
+    // A surrogate pair straddles the first chunk boundary.
+    const large = `${"a".repeat(499_999)}😀${"b".repeat(700_000)}`;
+    const claim = await stub.readOrClaim("key", false);
+    if (claim.kind !== "claimed") throw new Error("claim missing");
+    expect(await stub.publish("key", claim.token, large)).toBe(true);
+    await evictDurableObject(stub);
+    expect(await stub.readOrClaim("key", false)).toEqual({
+      kind: "hit",
+      value: large,
+    });
+    const refresh = await stub.readOrClaim("key", true);
+    if (refresh.kind !== "claimed") throw new Error("refresh claim missing");
+    await stub.publish("key", refresh.token, "small");
+    expect(await stub.readOrClaim("key", false)).toEqual({
+      kind: "hit",
+      value: "small",
+    });
   });
 
   it("reclaims an abandoned lease without accepting a late publisher", async () => {
@@ -143,8 +176,6 @@ describe("AI response cache Durable Object", () => {
     });
     const replacement = await stub.readOrClaim("key", false);
     expect(replacement.kind).toBe("claimed");
-    expect(await stub.publish("key", abandoned.token, "late", 60_000)).toBe(
-      false,
-    );
+    expect(await stub.publish("key", abandoned.token, "late")).toBe(false);
   });
 });

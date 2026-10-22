@@ -99,11 +99,14 @@ export async function seedPerformanceCorpus(
         .from(entityIdentity)
     ).map((row) => row.code),
   );
+  const identities: (typeof entityIdentity.$inferInsert)[] = [];
   function identity<K extends ShortcodeType>(kind: K) {
     let shortcode = generateShortcode(kind);
     while (usedCodes.has(shortcode)) shortcode = generateShortcode(kind);
     usedCodes.add(shortcode);
-    return { id: parseEntityId(kind, randomUUID()), shortcode };
+    const row = { id: parseEntityId(kind, randomUUID()), shortcode };
+    identities.push({ ...row, kind });
+    return row;
   }
   const audits: AuditEntryInput[] = [];
   const refs: { entityKind: SearchableEntity; entityId: string }[] = [];
@@ -439,6 +442,14 @@ export async function seedPerformanceCorpus(
     });
   }
   await withTransaction(db, async (tx) => {
+    // A full corpus exceeds Postgres's bind limit with three binds per row.
+    // One JSON input preserves the bulk write and its ordinary FK/unique checks.
+    await tx.execute(sql`
+      INSERT INTO "Entity" ("id", "kind", "shortcode")
+      SELECT "id"::uuid, "kind", "shortcode"
+      FROM jsonb_to_recordset(${JSON.stringify(identities)}::jsonb)
+        AS identities("id" text, "kind" text, "shortcode" text)
+    `);
     await tx.insert(vendor).values(suppliers);
     await tx.insert(vendorAccount).values(sourceAccounts);
     await tx.insert(financialAccount).values(tenders);

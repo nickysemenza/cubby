@@ -5,26 +5,31 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
 import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
-import { getDb } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
+import {
+  repositoryQueries as getDb,
+  repositoryBeforeCommit,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { refreshInputKeys } from "~/server/generic/derived-refresh/repo/input-keys";
-import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Exact authoritative target/basis snapshot also catches SQL-only writers. */
 export async function fieldInputFingerprint(
-  db: Database,
+  db: RepositoryQueryInput,
   entity: string,
   recordId: string,
   field: string,
+  options: { lock?: boolean } = {},
 ) {
   const fingerprint = await fieldInputFingerprintIfLive(
     db,
     entity,
     recordId,
     field,
+    options,
   );
   if (fingerprint === null)
     throw new Error(
@@ -35,10 +40,11 @@ export async function fieldInputFingerprint(
 
 /** Discovery skips deleted subjects; write fences still require a live subject. */
 export async function fieldInputFingerprintIfLive(
-  db: Database,
+  db: RepositoryQueryInput,
   entity: string,
   recordId: string,
   field: string,
+  options: { lock?: boolean } = {},
 ) {
   const kind = entitySchema.parse(entity);
   const model = entityFieldModels[kind].fields.find(
@@ -52,7 +58,7 @@ export async function fieldInputFingerprintIfLive(
   if (!table) throw new Error(`No authoritative table: ${entity}`);
   const [source] = (
     await getDb(db).execute<{ value: unknown }>(sql`
-    SELECT to_jsonb(r) AS value FROM ${table} r WHERE r.id=${recordId}::uuid AND r."deletedAt" IS NULL LIMIT 1
+    SELECT to_jsonb(r) AS value FROM ${table} r WHERE r.id=${recordId}::uuid AND r."deletedAt" IS NULL LIMIT 1 ${options.lock ? sql`FOR UPDATE` : sql``}
   `)
   ).rows;
   if (!source) return null;
@@ -81,7 +87,7 @@ export async function fieldInputFingerprintIfLive(
         ? (
             await getDb(db).execute<{ value: unknown }>(sql`
       SELECT to_jsonb(r)-ARRAY['createdAt','updatedAt','verifiedAt','lastVerifiedAt','lastSeenAt']::text[] AS value
-      FROM ${target} r WHERE r.id=${id}::uuid AND r."deletedAt" IS NULL LIMIT 1
+      FROM ${target} r WHERE r.id=${id}::uuid AND r."deletedAt" IS NULL LIMIT 1 ${options.lock ? sql`FOR SHARE` : sql``}
     `)
           ).rows
         : [];
@@ -98,26 +104,61 @@ export async function fieldInputFingerprintIfLive(
           parseEntityId("product", recordId),
         ),
       );
-  // Own writes have a point revision. An unrelated row of the same kind must
-  // not invalidate adjacent review actions. Inheritance and same-kind basis
-  // references still need the kind epoch for another row's effective value/label.
-  const sameKindInput =
-    keys.some((key) =>
-      entityFieldModels[kind].fields.some(
-        (field) =>
-          field.key === key &&
-          (field.resolution || field.reference?.entity === kind),
-      ),
-    ) ||
-    backings.some((backing) => "entity" in backing && backing.entity === kind);
-  const revisionKeys = [
-    ...refreshInputKeys(kind).filter(
-      (key) => sameKindInput || key !== `kind:${kind}`,
-    ),
-    `entity:${kind}:${recordId}`,
-  ];
-  basis.scopeRevisions = z
-    .json()
-    .parse(await readInputRevisions(db, revisionKeys));
+  // Direct reference rows are input; the model sees no ancestor beyond them.
+  // Inherited classification resolves through `classificationEvidence`, and
+  // finance fields check their own review fingerprint.
+  for (const key of keys) {
+    const reference = entityFieldModels[kind].fields.find(
+      (candidate) => candidate.key === key,
+    )?.reference;
+    if (!reference) continue;
+    const target = Object.entries(SHORTCODE_TABLE).find(
+      ([entity]) => entity === reference.entity,
+    )?.[1];
+    if (!target) continue;
+    const raw = row[key];
+    const ids = z
+      .array(z.uuid())
+      .parse(raw == null ? [] : Array.isArray(raw) ? raw : [raw]);
+    const related = ids.length
+      ? (
+          await getDb(db).execute<{ value: unknown }>(sql`
+        SELECT to_jsonb(r)-ARRAY['createdAt','updatedAt','verifiedAt','lastVerifiedAt','lastSeenAt']::text[] AS value
+        FROM ${target} r WHERE r.id=ANY(${uuidArrayParam(ids)}) AND r."deletedAt" IS NULL ORDER BY r.id ${options.lock ? sql`FOR SHARE` : sql``}
+      `)
+        ).rows
+      : [];
+    basis[`reference:${key}`] = related.map((item) =>
+      z.json().parse(item.value),
+    );
+  }
+  basis.fieldWriteIntent =
+    (await latestFieldWrite(db, kind, recordId, field))?.id ?? null;
   return sha256Hex(canonicalJson(basis));
+}
+
+/** Hold actual inputs through commit and refuse later changes in a caller's batch. */
+export async function fenceFieldInputsAtCommit(
+  db: RepositoryQueryInput,
+  entity: string,
+  recordId: string,
+  field: string,
+) {
+  const expected = await fieldInputFingerprint(db, entity, recordId, field, {
+    lock: true,
+  });
+  await repositoryBeforeCommit(
+    db,
+    async (tx) => {
+      if (
+        (await fieldInputFingerprint(tx, entity, recordId, field, {
+          lock: true,
+        })) !== expected
+      )
+        throw new Error(
+          "Suggestion inputs changed later in the same transaction",
+        );
+    },
+    { phase: "validation" },
+  );
 }

@@ -1,36 +1,16 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
-import {
-  imageId,
-  locationId,
-  parseEntityRef,
-  recipeId,
-  runEntityId,
-} from "./identifiers";
+import { imageId, locationId, parseEntityRef } from "./identifiers";
 import { imageProcessingResult } from "./image-processing";
-import { derivedRefreshWakeupTask } from "./derived-refresh";
 
-/**
- * Background tasks are self-contained queue payloads: the message carries
- * everything the handler needs, and no execution row exists behind it.
- *
- * Every kind here is idempotent by construction — the handler re-checks the
- * derived state's own freshness marker (a stale flag, a hash, a fingerprint
- * cache) before doing work, so duplicate or out-of-order delivery is a no-op.
- * The stale marker on the source row, not the message, is the durable record
- * of pending work; a lost message is repaired on read or by "Settle now".
- */
+/** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
 export const backgroundTaskKinds = [
-  "derived-refresh.wakeup",
-  "workflow.continue",
-  "recipe-totals.recompute",
   "entity-embedding.refresh",
   "location-ai.description.refresh",
   "location-ai.inventory.refresh",
   "image-processing.wakeup",
   "image-processing.result",
   "image-metadata.extract",
-  "maintenance.recover",
   "maintenance.purchase-discovery",
   "calendar-feed.mark-dirty",
 ] as const;
@@ -38,30 +18,12 @@ export const backgroundTaskKinds = [
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
 export type BackgroundTaskKind = z.infer<typeof backgroundTaskKindSchema>;
 
-/**
- * One recompute message covers at most this many recipes so a single queue
- * invocation stays inside its CPU budget even when every recipe in the chunk
- * has a large ingredient closure. Publishers split larger sets.
- */
-export const RECIPE_RECOMPUTE_CHUNK_SIZE = 25;
-
 const taskEnvelopeFields = {
-  /** When the publisher observed the change; handlers use it for freshness gates. */
+  /** Timestamp retained with the durable admission input. */
   requestedAt: z.iso.datetime(),
-  /**
-   * The Run whose actor issued the mutation that queued this task, when one
-   * exists. Optional so a message already in flight from the preceding
-   * deployment (with no `runId` key at all) still parses; the handler falls
-   * back to `systemActor()` when it is absent.
-   */
+  /** Run provenance for mutations that have an owning Run. */
   runId: z.uuid().optional(),
 };
-
-export const recipeTotalsRecomputeTaskSchema = z.object({
-  kind: z.literal("recipe-totals.recompute"),
-  ...taskEnvelopeFields,
-  recipeIds: z.array(recipeId).min(1).max(RECIPE_RECOMPUTE_CHUNK_SIZE),
-});
 
 const searchableEntitySchema = z.enum(searchableEntities);
 
@@ -100,7 +62,7 @@ export const imageProcessingWakeupTaskSchema = z.object({
   jobId: z.uuid(),
 });
 
-/** A companion result is replay-safe because the lease attempt gates adoption. */
+/** A companion result retains its original Job token for receipt adoption. */
 export const imageProcessingResultTaskSchema = z.object({
   kind: z.literal("image-processing.result"),
   ...taskEnvelopeFields,
@@ -117,22 +79,6 @@ export const imageMetadataExtractTaskSchema = z.object({
   kind: z.literal("image-metadata.extract"),
   ...taskEnvelopeFields,
   imageId,
-});
-
-/** Catch-up scans read the durable source rows/cursors and tolerate replay. */
-export const maintenanceRecoverTaskSchema = z.object({
-  kind: z.literal("maintenance.recover"),
-  ...taskEnvelopeFields,
-  /** Operator recovery may retire newly settled coordinators through one fixed cutoff. */
-  coordinatorRetireBefore: z.iso.datetime().optional(),
-});
-
-/** A fresh queue invocation creates the successor; the Run attempt fences replay. */
-export const workflowContinuationTaskSchema = z.object({
-  kind: z.literal("workflow.continue"),
-  ...taskEnvelopeFields,
-  runId: runEntityId,
-  attempt: z.number().int().positive(),
 });
 
 export const maintenancePurchaseDiscoveryTaskSchema = z.object({
@@ -153,16 +99,12 @@ export const calendarFeedMarkDirtyTaskSchema = z.object({
 });
 
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
-  derivedRefreshWakeupTask,
-  workflowContinuationTaskSchema,
-  recipeTotalsRecomputeTaskSchema,
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
   imageProcessingWakeupTaskSchema,
   imageProcessingResultTaskSchema,
   imageMetadataExtractTaskSchema,
-  maintenanceRecoverTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
 ]);
@@ -173,8 +115,8 @@ export type BackgroundTask = z.infer<typeof backgroundTaskSchema>;
 export type BackgroundTaskInput = z.input<typeof backgroundTaskSchema>;
 
 /**
- * What an explicit enqueue action reports back: how many tasks the queue
- * accepted. No batch or job identity exists to return.
+ * What an explicit enqueue action reports back: how many tasks durable admission
+ * accepted. A queue wake is optional and does not own execution.
  */
 export const backgroundTaskReceiptSchema = z.object({
   count: z.number().int().nonnegative(),

@@ -1,6 +1,5 @@
 import { assessmentChildren } from "./assessment.js";
 import { emailObservationChildren } from "./email-observations.js";
-import { emailAccuracyChildren } from "./email-accuracy.js";
 import { emailFinancialAssociationChildren } from "./email-financial-associations.js";
 import { importObservationChildren } from "./import-observations.js";
 import { imageProcessingChildren } from "./image-processing.js";
@@ -10,7 +9,6 @@ export const modulesChildren = [
   ...assessmentChildren,
   ...importObservationChildren,
   ...emailObservationChildren,
-  ...emailAccuracyChildren,
   ...emailFinancialAssociationChildren,
   ...imageProcessingChildren,
   /** Human-confirmed merchant routing; never inferred repeatedly at write time. */

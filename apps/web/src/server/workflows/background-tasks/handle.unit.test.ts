@@ -1,4 +1,4 @@
-import { backgroundTaskSchema } from "@cubby/schemas/background-tasks";
+import { calendarFeedMarkDirtyTaskSchema } from "@cubby/schemas/background-tasks";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDatabase } from "~/server/db/database-runtime";
@@ -13,7 +13,7 @@ const db = createDatabase(() => {
   throw new Error("the calendar handler never touches the database");
 });
 
-const markDirtyTask = backgroundTaskSchema.parse({
+const markDirtyTask = calendarFeedMarkDirtyTaskSchema.parse({
   kind: "calendar-feed.mark-dirty",
   requestedAt: "2026-09-12T12:00:00.000Z",
   origin: "https://cubby.example",
@@ -44,9 +44,9 @@ describe("calendar-feed.mark-dirty", () => {
     );
   });
 
-  // The queue only retries a throwing handler; swallowing the failure would
+  // Job retries require a throwing handler; swallowing the failure would
   // leave the feed stale, which is the gap this task exists to close.
-  it("throws when the dirty-mark fails so the queue retries", async () => {
+  it("throws when the dirty-mark fails so its Job retries", async () => {
     const markCalendarFeedDirty = vi
       .fn()
       .mockRejectedValue(new Error("stub RPC failure"));

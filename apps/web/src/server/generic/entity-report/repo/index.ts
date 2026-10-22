@@ -158,13 +158,8 @@ const REPORTS = {
     locationContentsValuationReport,
   ),
   "vendor.mail-search": reportBuilder(vendorMailSearchReport),
-  // Costs the batch for its portions, so the meal service stays off every other report's closure.
-  "meal.composition": reportBuilder(
-    async (db, id, _viewer, _actor, _cursor, services) => {
-      if (!services)
-        throw new Error("This report needs the request's services.");
-      return (await import("./meal")).mealCompositionReport(db, id, services);
-    },
+  "meal.composition": reportBuilder(async (db, id) =>
+    (await import("./meal")).mealCompositionReport(db, id),
   ),
   "product.labels": identityBuilder(productId, productLabelsReport),
   "product.cookbooks": identityBuilder(productId, productCookbooksReport),

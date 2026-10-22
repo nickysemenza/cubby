@@ -36,7 +36,6 @@ import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
 import { aiCallRunInput, ensureRun } from "../repo/ensure-run";
 import {
-  PAIRED_MODEL,
   PRIMARY_MODEL,
   SUGGESTED_CATEGORY,
   categoryPorts,
@@ -54,8 +53,8 @@ import {
 
 // Regression modes: review writes go through the entity kernel and supersede
 // sibling Suggestions; rejection records a Miss and never applies the
-// suggested value; stale finance evidence is refused; paired rows stay out of
-// the review queue.
+// suggested value; stale finance evidence is refused; unserved rows stay out
+// of the review queue.
 describe("Suggestion review", () => {
   const ctx = withTestDb();
 
@@ -306,7 +305,6 @@ describe("Suggestion review", () => {
           {
             context: kernelCtx(ctx),
             suggestPorts: ports,
-            samplePair: () => false,
           },
         ),
       );
@@ -447,7 +445,6 @@ describe("Suggestion review", () => {
       categoryId: taxonomyId("tools"),
     });
     const runId = await sweepCategories([product.id]);
-    const pairKey = crypto.randomUUID();
     const uuid = await recordId(ctx.db, product.id, "product");
     await Promise.all(
       [0.99, 0.98, 0.97].map((confidence) =>
@@ -464,7 +461,6 @@ describe("Suggestion review", () => {
             model: "synthetic/unserved-trial",
             kind: "correction" as const,
             status: "pending" as const,
-            pairKey,
           },
           false,
         ),
@@ -851,7 +847,7 @@ describe("Suggestion review", () => {
         fields: ["categoryId"],
         filters: { ids: [addition.id, correction.id] },
       },
-      { context, samplePair: () => true, ...categoryPorts(0.6) },
+      { context, ...categoryPorts(0.6) },
     );
     const list = async (kind: "any" | "addition" | "correction") => {
       const result = await executeEntity(context, {
@@ -890,9 +886,6 @@ describe("Suggestion review", () => {
       if (!row) throw new Error(`Synthetic ${model} Suggestion is missing`);
       return row;
     };
-    // The low-confidence paired row stays pending but never surfaces once
-    // the pinned row leaves the pending set.
-    expect((await additionRow(PAIRED_MODEL)).status).toBe("pending");
     const pinned = await additionRow(PRIMARY_MODEL);
     await getDb(ctx.db)
       .update(suggestionTable)

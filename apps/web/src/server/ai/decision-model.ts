@@ -483,11 +483,12 @@ async function runDecisionChoiceInternal(
     );
   }
 
+  // Cached entries never expire, so a hit re-derives confidence from its
+  // probability rather than replaying the buckets of the code that stored it.
   const validate = (value: unknown): DecisionChoiceResult => {
     const result = z
       .object({
         selectedIndex: z.number().int().nonnegative().nullable(),
-        confidence: z.enum(["low", "medium", "high"]),
         probability: z.number().finite().min(0).max(1),
         ranked: z.array(
           z.object({
@@ -506,7 +507,7 @@ async function runDecisionChoiceInternal(
     if (result.ranked.some(({ index }) => index >= args.choices.length)) {
       throw new Error("The decision model cached an unknown ranked choice.");
     }
-    return result;
+    return { ...result, confidence: decisionConfidence(result.probability) };
   };
   const feature = { ...args.feature, model: decisionModelFor(args, input) };
   await captureAiInput(feature, args.usage.operation, input);

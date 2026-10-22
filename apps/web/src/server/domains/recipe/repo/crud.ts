@@ -1104,9 +1104,8 @@ export const updateRecipe = defineMutationWriter({
 /**
  * The graph's second hop, which no recipe edge names: the lines under its
  * sections, and the portions sourced from its meal-plan occurrences. The
- * sub-recipe pointer (`Ingredient.recipeId`) is `preserve`: the router
- * recomputes parents, with findParentRecipesWithDeletedSubRecipes as the
- * backstop detector.
+ * sub-recipe pointer (`Ingredient.recipeId`) is `preserve`: the recipe Job
+ * recomputes parents.
  */
 const removeRecipeGrandchildren = async (
   tx: DrizzleTransaction,

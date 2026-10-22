@@ -477,12 +477,6 @@ export const nativeCoverage = {
       "planting.schedule",
       "task.agenda",
     ]),
-    // Member-wide accuracy measurement is a desk workflow: sampling and blind
-    // grading run through the MCP `mail` tool and a Gmail-connected session.
-    ...unsupported(
-      ["email.accuracy"],
-      "Email accuracy review runs on the web or through the MCP mail tool.",
-    ),
   },
 } as const satisfies {
   control: Record<ControlRendererId, NativeCoverageEntry>;

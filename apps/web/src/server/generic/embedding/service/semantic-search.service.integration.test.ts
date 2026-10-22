@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { entityEmbedding } from "~/server/db/schema";
+import { entityEmbedding, job } from "~/server/db/schema";
 import { countUnembeddedEntities } from "~/server/domains/maintenance/service/maintenance.service";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -29,6 +29,7 @@ import {
   countUnembeddedSearchDocuments,
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
+  prepareSearchDocuments,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/generic/search/repo/search-document";
 import {
@@ -38,12 +39,14 @@ import {
   seedSearchDocumentsFixtureRaw,
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
-import type {
-  EmbeddingRefreshPort,
-  EmbeddingRefreshResult,
-} from "~/server/workflows/background-tasks/embedding";
-import { refreshEntityEmbeddings } from "~/server/workflows/background-tasks/embedding";
+import type { EmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
+import { enqueueEmbeddingRefs } from "~/server/workflows/background-tasks/embedding";
 import { executeWorkflow } from "~/server/workflows/runtime";
+
+import {
+  advanceEmbeddingFixture,
+  embedFixtures,
+} from "../repo/embedding-job.fixtures";
 
 /** Stand in for `env.AI.gateway("cubby")` (see `ai-gateway.unit.test.ts`). */
 type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
@@ -98,20 +101,21 @@ const fakeEmbeddingPort = (
   },
 });
 
-/**
- * Single-ref adapter over the batch API: calls `refreshEntityEmbeddings`
- * with a one-element batch and reads that ref's entry back by
- * `entityRefKey`, the same way a real caller (e.g. `handle.ts`) reads its
- * own refs out of the returned map.
- */
-const refreshOne = (
+/** Exercise the real claim, upload checkpoint and selection publication. */
+const refreshOne = async (
   db: Database,
   ref: SearchableEntityRef,
   port: EmbeddingRefreshPort,
-): Promise<EmbeddingRefreshResult | undefined> =>
-  refreshEntityEmbeddings(db, [ref], port).then((results) =>
-    results.get(entityRefKey(ref.entityKind, ref.entityId)),
+) => {
+  const [saved] = await enqueueEmbeddingRefs(
+    db,
+    await prepareSearchDocuments(db, [ref]),
+    port.config(),
   );
+  if (!saved) throw new Error("Missing synthetic embedding Job");
+  await advanceEmbeddingFixture(db, saved.id, port);
+  return advanceEmbeddingFixture(db, saved.id, port);
+};
 
 describe("semantic search background tasks", () => {
   const ctx = withTestDb();
@@ -170,15 +174,19 @@ describe("semantic search background tasks", () => {
     expect(result).toEqual({ accepted: true });
     expect(published).toEqual([
       expect.objectContaining({
-        version: 2,
+        version: 3,
         queueType: "background",
-        task: expect.objectContaining({
-          kind: "entity-embedding.refresh",
-          entityKind: "product",
-          entityId: product.entityId,
-        }),
       }),
     ]);
+    const jobs = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.kind, "embedding.refresh"));
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.input).toMatchObject({
+      entityKind: "product",
+      entityId: product.entityId,
+    });
   });
 
   it("dismisses a current duplicate group and suppresses its recommendation", async () => {
@@ -302,13 +310,15 @@ describe("semantic search background tasks", () => {
     const port = fakeEmbeddingPort(calls);
     const ref = { entityKind: "product" as const, entityId: product.entityId };
 
-    await expect(refreshOne(ctx.db, ref, port)).resolves.toEqual({
-      outcome: "written",
+    const first = await refreshOne(ctx.db, ref, port);
+    expect(first).toMatchObject({
+      state: "completed",
+      result: { outcome: "written" },
     });
     // Duplicate or out-of-order delivery: the stored hash gates the provider.
-    await expect(refreshOne(ctx.db, ref, port)).resolves.toEqual({
-      outcome: "fresh",
-    });
+    const duplicate = await refreshOne(ctx.db, ref, port);
+    expect(duplicate.id).toBe(first.id);
+    expect(duplicate.state).toBe("completed");
     expect(calls).toHaveLength(1);
     expect(
       await countUnembeddedSearchDocuments(
@@ -360,15 +370,16 @@ describe("semantic search background tasks", () => {
             "Embedding after concurrent change",
           );
           await refreshSearchDocument(ctx.db, "product", product.entityId);
-          await refreshEntityEmbeddings(ctx.db, [ref], writerBPort);
+          await embedFixtures(ctx.db, [ref], writerBPort);
           return texts.map(() => vectorFor(0.1));
         }
         return texts.map(() => vectorFor(0.9));
       },
     };
 
-    await expect(refreshOne(ctx.db, ref, writerAPort)).resolves.toEqual({
-      outcome: "obsolete",
+    expect(await refreshOne(ctx.db, ref, writerAPort)).toMatchObject({
+      state: "cancelled",
+      error: "Embedding source superseded",
     });
 
     const currentText = await getSearchDocumentEmbeddingText(
@@ -422,17 +433,9 @@ describe("semantic search background tasks", () => {
         texts.map(() => Array(config.dimensions).fill(0.5)),
     };
 
-    // A vector-store failure is reported per ref rather than thrown out of
-    // `refreshEntityEmbeddings` — the queue consumer (`consume.ts`) reads
-    // `{ error, throttled }` off the returned map and retries from there,
-    // rather than recording a "written" row for a vector that was never
-    // stored.
     const result = await refreshOne(ctx.db, ref, port);
-    expect(result).toEqual({
-      error: expect.objectContaining({ message: "vectorize outage" }),
-      throttled: false,
-      exhausted: false,
-    });
+    expect(result.state).toBe("retry_wait");
+    expect(result.error).toContain("vectorize outage");
 
     const stored = await getStoredEmbeddingHashes(ctx.db, [ref], config);
     expect(
@@ -440,16 +443,13 @@ describe("semantic search background tasks", () => {
     ).toBeUndefined();
   });
 
-  // Regression: batching is the point of partitioning the queue by wave —
-  // one embed call and one Vectorize upsert per refresh, not one pair per
-  // ref, and a duplicate ref within the wave (queue redelivery, or two
-  // requests racing for the same entity) must not double that cost.
-  it("batches a whole refresh wave into one embed call and one vector upsert", async () => {
+  // Repeated admission cannot create a second paid execution for a content key.
+  it("coalesces duplicate refs into immutable Job execution", async () => {
     const products = await Promise.all(
       Array.from({ length: 10 }, (_, index) =>
         createProduct(
           ctx.db,
-          makeProductInput({ name: `Batch product ${index}` }),
+          makeProductInput({ name: `Synthetic batch product ${index}` }),
           ctx.actor,
         ),
       ),
@@ -458,39 +458,16 @@ describe("semantic search background tasks", () => {
       entityKind: "product",
       entityId: product.entityId,
     }));
-    const [duplicateRef] = refs;
-    expect(duplicateRef).toBeDefined();
-    const refsWithDuplicate = duplicateRef ? [...refs, duplicateRef] : refs;
-    expect(refsWithDuplicate).toHaveLength(11);
-
+    const first = refs[0];
+    if (!first) throw new Error("Missing synthetic ref");
     const calls: string[][] = [];
-    const upsertCalls: unknown[][] = [];
-    const storage = fakeVectorStore();
-    const vectorStore: VectorStorePort = {
-      ...storage,
-      upsert: async (items) => {
-        upsertCalls.push([...items]);
-        return storage.upsert(items);
-      },
-    };
-    const port = fakeEmbeddingPort(calls, vectorStore);
-
-    const results = await refreshEntityEmbeddings(
-      ctx.db,
-      refsWithDuplicate,
-      port,
-    );
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toHaveLength(10);
-    expect(upsertCalls).toHaveLength(1);
-    expect(upsertCalls[0]).toHaveLength(10);
-    expect(results.size).toBe(10);
-    for (const ref of refs) {
-      expect(results.get(entityRefKey(ref.entityKind, ref.entityId))).toEqual({
-        outcome: "written",
-      });
-    }
+    const port = fakeEmbeddingPort(calls);
+    const saved = await embedFixtures(ctx.db, [...refs, first], port);
+    expect(new Set(saved.map((execution) => execution.id)).size).toBe(10);
+    expect(calls).toHaveLength(10);
+    expect(await countUnembeddedSearchDocuments(ctx.db, port.config())).toBe(0);
+    await embedFixtures(ctx.db, refs, port);
+    expect(calls).toHaveLength(10);
   });
 
   it("pages the unembedded selection with a keyset cursor", async () => {
@@ -552,7 +529,7 @@ describe("semantic search background tasks", () => {
     await seedSearchDocumentsFixtureRaw(ctx.db, "product", 2);
     // No setCfEnv call: no VECTORIZE binding, so semanticEmbeddingsConfigured()
     // is false and the count must degrade to 0 rather than report an
-    // unfixable backlog (mirrors problems.service.ts countMissingEmbeddings).
+    // unfixable backlog.
     expect(await countUnembeddedEntities(ctx.db)).toBe(0);
   });
 });

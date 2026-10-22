@@ -1,41 +1,24 @@
 import { entityRefKey } from "@cubby/schemas/entity";
+import { jobState } from "@cubby/schemas/job";
 import {
   isEmbeddableEntity,
+  searchableEntitySchema,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { getErrorMessage } from "@cubby/shared";
-import { retryWithBackoff } from "@cubby/shared/retry";
-import { chunk } from "es-toolkit";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
-import { describeErrorCauses } from "~/lib/error-diagnostics";
-import { ENTITY_EMBEDDING_FEATURE } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
-import { withTransactionDatabase } from "~/server/db/helpers";
-import { findPgError } from "~/server/errors/db-errors";
-import {
-  assertInputRevision,
-  currentInputRevision,
-  DerivedInputsChanged,
-} from "~/server/generic/derived-refresh/repo/freshness";
-import {
-  claimEmbeddingArtifact,
-  deferEmbeddingVisibility,
-  failEmbeddingSubmission,
-  markEmbeddingSubmitting,
-  recordEmbeddingSubmission,
-  retireMissingEmbeddingSelections,
-  selectEmbeddingArtifact,
-  vectorPayloadHash,
-  type EmbeddingArtifact,
-  embeddingArtifactRecoveryPage,
-  deferArtifactRecovery,
-  retireEmbeddingArtifact,
-  recordArtifactCleanup,
-} from "~/server/generic/embedding/repo/embedding-artifact";
-import type { EntityEmbeddingUpsert } from "~/server/generic/embedding/repo/entity-embedding-refresh";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { entityEmbedding, job } from "~/server/db/retained-tables";
+import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import {
+  getSemanticEmbeddingConfig,
+  type SemanticEmbeddingConfig,
+} from "~/server/generic/embedding/service/semantic/config";
 import {
   embedTexts,
   semanticEmbeddingsConfigured,
@@ -43,13 +26,12 @@ import {
 import {
   productionVectorStore,
   type VectorStorePort,
-  type StoredVector,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import {
-  getSearchDocumentEmbeddingTexts,
-  prepareSearchDocuments,
-  publishPreparedSearchDocuments,
-} from "~/server/generic/search/repo/search-document";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
+import type { PreparedJobPage } from "~/server/generic/jobs/types";
+import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
+import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 
 export interface EmbeddingRefreshPort {
   readonly configured: () => boolean;
@@ -63,376 +45,269 @@ export const productionEmbeddingRefreshPort: EmbeddingRefreshPort = {
   config: getSemanticEmbeddingConfig,
   vectorStore: productionVectorStore,
 };
-type EmbeddingRefreshOutcome =
-  | "written"
-  | "fresh"
-  | "missing"
-  | "pending"
-  | "obsolete"
-  | "unconfigured"
-  | "notEmbeddable";
-export type EmbeddingRefreshResult =
-  | { outcome: EmbeddingRefreshOutcome }
-  | { error: unknown; throttled: boolean; exhausted?: boolean };
+export type EmbeddingRefreshResult = { outcome: "pending" | "unconfigured" };
 
-export function isThrottleError<TError>(error: TError): boolean {
-  return /\b(40041|429)\b|Too Many Requests|Rate limited/.test(
-    getErrorMessage(error),
-  );
-}
-const keyOf = (ref: SearchableEntityRef) =>
-  entityRefKey(ref.entityKind, ref.entityId);
-const contention = (error: unknown) =>
-  error instanceof DerivedInputsChanged ||
-  ["55P03", "40P01"].includes(findPgError(error)?.code ?? "");
-type ArtifactEntry = {
-  input: EntityEmbeddingUpsert;
-  artifact: EmbeddingArtifact;
-  selected: boolean;
-};
+export const embeddingJobInput = z.object({
+  entityKind: searchableEntitySchema,
+  entityId: z.uuid(),
+  hash: z.string(),
+  text: z.string(),
+  config: z.object({
+    provider: z.literal("openai"),
+    model: z.enum(["text-embedding-3-small", "text-embedding-3-large"]),
+    dimensions: z.number().int().positive(),
+  }),
+});
+const submittedCursor = z.object({
+  hash: z.string(),
+  mutationId: z.string(),
+  submittedAt: z.string(),
+});
 
-async function refreshWave(
+/** Content-addressed Job IDs are immutable physical vector IDs, including interrupted uploads. */
+export async function enqueueEmbeddingRefs(
   db: Database,
-  refs: readonly SearchableEntityRef[],
-  port: EmbeddingRefreshPort,
-  results: Map<string, EmbeddingRefreshResult>,
+  prepared: Awaited<ReturnType<typeof prepareSearchDocuments>>,
+  config: SemanticEmbeddingConfig,
 ) {
-  try {
-    const revision = await currentInputRevision(db);
-    const prepared = await prepareSearchDocuments(db, refs);
-    await withTransactionDatabase(db, async (tx) => {
-      await publishPreparedSearchDocuments(tx, prepared, revision);
-      await assertInputRevision(tx, revision);
-    });
-  } catch (error) {
-    for (const ref of refs)
-      results.set(
-        keyOf(ref),
-        contention(error)
-          ? { outcome: "pending" }
-          : { error, throttled: isThrottleError(error) },
-      );
-    return;
-  }
-  const revision = await currentInputRevision(db);
-  const documents = new Map(
-    (await getSearchDocumentEmbeddingTexts(db, refs)).map((text) => [
-      keyOf(text),
-      text,
-    ]),
-  );
-  const claimed: ArtifactEntry[] = [];
-  const observe: ArtifactEntry[] = [];
-  const missing: SearchableEntityRef[] = [];
-  const config = port.config();
-  for (const ref of refs) {
-    const document = documents.get(keyOf(ref));
-    if (!document) {
-      missing.push(ref);
-      results.set(keyOf(ref), { outcome: "missing" });
-      continue;
-    }
-    if (!isEmbeddableEntity(ref.entityKind)) {
-      results.set(keyOf(ref), { outcome: "notEmbeddable" });
-      continue;
-    }
-    if (!port.configured()) {
-      results.set(keyOf(ref), { outcome: "unconfigured" });
-      continue;
-    }
-    const embeddingHash = await embeddingTextHash({
-      ...ref,
+  const jobs = [];
+  for (const { source, body } of prepared.entries) {
+    if (!isEmbeddableEntity(source.entityKind)) continue;
+    const text = normalizeSearchText(body);
+    const hash = await embeddingTextHash({
+      entityKind: source.entityKind,
       ...config,
-      text: normalizeSearchText(document.embeddingText),
+      text,
     });
-    const input: EntityEmbeddingUpsert = {
-      ...document,
-      embeddingHash,
-      inputRevision: revision,
-      config,
-    };
-    const claim = await claimEmbeddingArtifact(db, input);
-    if (claim.kind === "blocked") {
-      results.set(keyOf(ref), {
-        error: new Error(claim.error),
-        throttled: false,
-        exhausted: true,
-      });
-      continue;
-    }
-    if (claim.kind === "busy") {
-      results.set(keyOf(ref), { outcome: "pending" });
-      continue;
-    }
-    const entry = {
-      input,
-      artifact: claim.artifact,
-      selected: claim.kind === "selected",
-    };
-    if (claim.kind === "claimed") claimed.push(entry);
-    else observe.push(entry);
-  }
-  await retireMissingEmbeddingSelections(db, missing);
-  if (claimed.length) {
-    try {
-      const embeddings = await port.embed(
-        claimed.map(({ input }) => normalizeSearchText(input.embeddingText)),
-        {
-          operation: "entityEmbeddingRefresh",
-          db,
-          feature: ENTITY_EMBEDDING_FEATURE.feature,
-        },
-      );
-      if (embeddings.length !== claimed.length)
-        throw new Error(
-          `Embedding provider returned ${embeddings.length} vectors for ${claimed.length} inputs`,
-        );
-      const vectors: StoredVector[] = [];
-      const submitting: ArtifactEntry[] = [];
-      for (const [index, entry] of claimed.entries()) {
-        const embedding = embeddings[index];
-        if (
-          !embedding ||
-          embedding.length !== config.dimensions ||
-          embedding.some((value) => !Number.isFinite(value))
-        )
-          throw new Error(
-            `Invalid embedding vector at input ${index}; expected ${config.dimensions} finite values`,
-          );
-        const values = embedding.map(Math.fround);
-        const artifact = await markEmbeddingSubmitting(
-          db,
-          entry.artifact,
-          await vectorPayloadHash(values),
-        );
-        if (!artifact) {
-          results.set(keyOf(entry.input), { outcome: "obsolete" });
-          continue;
+    const key = `embedding:${source.entityKind}:${source.entityId}:${hash}`;
+    jobs.push(
+      await withTransactionDatabase(db, async (tx) => {
+        // Returning to earlier text must use a fresh physical upload. Retain
+        // stopped history and reject superseded results before publication.
+        await getDb(tx).execute(sql`UPDATE "Job" SET
+        key=key || ':retired:' || id::text,
+        state=CASE WHEN state IN (${jobState.enum.queued},${jobState.enum.retry_wait},${jobState.enum.running}) THEN ${jobState.enum.cancelled} ELSE state END,
+        "leaseToken"=NULL, "leaseExpiresAt"=NULL,
+        error=coalesce(error,'Embedding source superseded'), "updatedAt"=now()
+        WHERE kind='embedding.refresh' AND input->>'entityKind'=${source.entityKind}
+          AND input->>'entityId'=${source.entityId} AND input->>'hash'<>${hash}
+          AND input->'config'=${JSON.stringify(config)}::jsonb
+          AND key NOT LIKE '%:retired:%'`);
+        const [existing] = await getDb(tx)
+          .select()
+          .from(job)
+          .where(eq(job.key, key))
+          .for("update");
+        if (existing?.state === "completed") {
+          const [selected] = await getDb(tx)
+            .select({ id: entityEmbedding.id })
+            .from(entityEmbedding)
+            .where(
+              and(
+                eq(entityEmbedding.id, existing.id),
+                eq(entityEmbedding.artifactState, "selected"),
+                isNull(entityEmbedding.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!selected)
+            await getDb(tx)
+              .update(job)
+              .set({ key: `${key}:retired:${existing.id}` })
+              .where(eq(job.id, existing.id));
         }
-        submitting.push({ ...entry, artifact });
-        vectors.push({
-          id: artifact.id,
-          entityKind: entry.input.entityKind,
-          values,
-        });
-      }
-      if (vectors.length) {
-        // Retries of one physical ID reuse exactly these captured float32 values.
-        const receipts = await retryWithBackoff(
-          () => port.vectorStore.upsert(vectors),
-          {
-            delayFor: (outcome, attempt) =>
-              outcome.ok || !isThrottleError(outcome.error)
-                ? null
-                : ([500, 1000, 2000][attempt] ?? null),
+        return enqueueJob(tx, {
+          key,
+          kind: "embedding.refresh",
+          input: {
+            entityKind: source.entityKind,
+            entityId: source.entityId,
+            hash,
+            text,
+            config: {
+              provider: config.provider,
+              model: config.model,
+              dimensions: config.dimensions,
+            },
           },
-        );
-        for (const entry of submitting) {
-          const receipt = receipts.get(entry.artifact.id);
-          if (!receipt)
-            throw new Error(
-              `Vectorize returned no mutation receipt for artifact ${entry.artifact.id}`,
-            );
-          const artifact = await recordEmbeddingSubmission(
-            db,
-            entry.artifact,
-            receipt,
-          );
-          if (artifact) observe.push({ ...entry, artifact });
-          else results.set(keyOf(entry.input), { outcome: "obsolete" });
-        }
-      }
-    } catch (error) {
-      for (const entry of claimed) {
-        const attempts = await failEmbeddingSubmission(
-          db,
-          entry.artifact,
-          entry.input,
-          error,
-        );
-        results.set(keyOf(entry.input), {
-          error,
-          throttled: isThrottleError(error),
-          exhausted: attempts >= 3,
         });
-      }
-    }
-  }
-  const due = observe.filter(
-    ({ artifact, selected }) => selected || artifact.availableAt <= new Date(),
-  );
-  for (const entry of observe)
-    if (!due.includes(entry))
-      results.set(keyOf(entry.input), { outcome: "pending" });
-  let observations: Awaited<ReturnType<VectorStorePort["getByIds"]>>;
-  try {
-    observations = due.length
-      ? await port.vectorStore.getByIds(due.map(({ artifact }) => artifact.id))
-      : [];
-  } catch (error) {
-    for (const entry of due) {
-      if (entry.selected)
-        results.set(keyOf(entry.input), {
-          error,
-          throttled: isThrottleError(error),
-        });
-      else {
-        await deferEmbeddingVisibility(
-          db,
-          entry.artifact,
-          entry.input,
-          JSON.stringify(describeErrorCauses(error)),
-        );
-        results.set(keyOf(entry.input), { outcome: "pending" });
-      }
-    }
-    return;
-  }
-  const observed = new Map(observations.map((vector) => [vector.id, vector]));
-  for (const entry of due) {
-    const vector = observed.get(entry.artifact.id);
-    const matches =
-      vector &&
-      vector.values.length === entry.input.config.dimensions &&
-      (await vectorPayloadHash(vector.values)) === entry.artifact.vectorHash;
-    if (!matches) {
-      if (entry.selected)
-        await failEmbeddingSubmission(
-          db,
-          entry.artifact,
-          entry.input,
-          new Error(
-            `Selected vector artifact ${entry.artifact.id} is absent or differs from its stored payload`,
-          ),
-        );
-      else await deferEmbeddingVisibility(db, entry.artifact, entry.input);
-      results.set(keyOf(entry.input), { outcome: "pending" });
-      continue;
-    }
-    if (!entry.selected) {
-      try {
-        const indexed = await port.vectorStore.queryById(entry.artifact.id, {
-          entityKinds: [entry.input.entityKind],
-          topK: 100,
-        });
-        if (!indexed.some((match) => match.id === entry.artifact.id)) {
-          await deferEmbeddingVisibility(db, entry.artifact, entry.input);
-          results.set(keyOf(entry.input), { outcome: "pending" });
-          continue;
-        }
-        // Positive observation establishes eligibility for approximate search.
-      } catch (error) {
-        await deferEmbeddingVisibility(
-          db,
-          entry.artifact,
-          entry.input,
-          JSON.stringify(describeErrorCauses(error)),
-        );
-        results.set(keyOf(entry.input), { outcome: "pending" });
-        continue;
-      }
-    }
-    if (entry.selected) {
-      results.set(keyOf(entry.input), { outcome: "fresh" });
-      continue;
-    }
-    try {
-      results.set(keyOf(entry.input), {
-        outcome: (await selectEmbeddingArtifact(
-          db,
-          entry.artifact,
-          entry.input,
-        ))
-          ? "written"
-          : "obsolete",
-      });
-    } catch (error) {
-      results.set(
-        keyOf(entry.input),
-        contention(error)
-          ? { outcome: "pending" }
-          : { error, throttled: isThrottleError(error) },
-      );
-    }
-  }
-}
-
-/** Durable artifact intents precede external work; retries never mutate an older vector ID. */
-export async function refreshEntityEmbeddings(
-  db: Database,
-  refs: ReadonlyArray<SearchableEntityRef>,
-  port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
-): Promise<Map<string, EmbeddingRefreshResult>> {
-  const unique = [...new Map(refs.map((ref) => [keyOf(ref), ref])).values()];
-  const results = new Map<string, EmbeddingRefreshResult>();
-  for (const batch of chunk(unique, 100))
-    await refreshWave(db, batch, port, results);
-  return results;
-}
-
-/** Recover physical work even when its queue message or originating page was lost. */
-export async function recoverEmbeddingArtifactsPage(
-  db: Database,
-  port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
-): Promise<{ done: boolean; processed: number; errors: string[] }> {
-  if (!port.configured()) return { done: true, processed: 0, errors: [] };
-  const rows = await embeddingArtifactRecoveryPage(db);
-  const cleanup: EmbeddingArtifact[] = [];
-  const refresh: SearchableEntityRef[] = [];
-  for (const row of rows) {
-    if (
-      row.artifactState === "retired" ||
-      row.artifactState === "failed" ||
-      (row.artifactState === "selected" && row.deletedAt)
-    ) {
-      if (row.artifactState === "selected")
-        await retireEmbeddingArtifact(db, row);
-      cleanup.push(row);
-    } else if (row.artifactState === "legacy") {
-      await retireEmbeddingArtifact(db, row);
-      cleanup.push(row);
-      if (!row.deletedAt) refresh.push(row);
-    } else refresh.push(row);
-  }
-  const errors = new Set<string>();
-  if (cleanup.length) {
-    const physicalId = (row: EmbeddingArtifact) =>
-      row.artifactHash === null ? `${row.entityKind}:${row.entityId}` : row.id;
-    try {
-      const receipts = await port.vectorStore.deleteByIds(
-        cleanup.map(physicalId),
-      );
-      for (const row of cleanup) {
-        const mutationId = receipts.get(physicalId(row));
-        if (!mutationId)
-          throw new Error(
-            `Vectorize returned no deletion receipt for artifact ${row.id}`,
-          );
-        await recordArtifactCleanup(db, row, { mutationId });
-      }
-    } catch (error) {
-      errors.add(JSON.stringify(describeErrorCauses(error)));
-      for (const row of cleanup)
-        await recordArtifactCleanup(db, row, { error });
-    }
-  }
-  if (refresh.length) {
-    const results = await refreshEntityEmbeddings(db, refresh, port);
-    for (const result of results.values())
-      if ("error" in result)
-        errors.add(JSON.stringify(describeErrorCauses(result.error)));
-    await deferArtifactRecovery(
-      db,
-      rows
-        .filter(
-          (row) => row.artifactState === "selected" && row.deletedAt === null,
-        )
-        .map((row) => row.id),
+      }),
     );
   }
-  return {
-    done: rows.length < 100,
-    processed: rows.length,
-    errors: [...errors],
-  };
+  return jobs;
+}
+
+export function embeddingJobHandler(
+  port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
+) {
+  return defineJobHandler(
+    embeddingJobInput,
+    async (db, claim, input): Promise<PreparedJobPage> => {
+      if (!port.configured())
+        throw new Error(
+          "Embedding provider or Vectorize binding is unavailable",
+        );
+      const current = await prepareSearchDocuments(db, [input]);
+      const text = current.entries[0]?.body;
+      if (
+        text === undefined ||
+        (await embeddingTextHash({
+          entityKind: input.entityKind,
+          ...input.config,
+          text: normalizeSearchText(text),
+        })) !== input.hash
+      )
+        return { page: { done: true, result: { outcome: "obsolete" } } };
+      const cursor = claim.cursor ? submittedCursor.parse(claim.cursor) : null;
+      if (!cursor) {
+        const embedded = await port.embed([input.text], {
+          db,
+          feature: "entity_embedding",
+          entity: input,
+        });
+        const values = embedded[0];
+        if (!values) throw new Error("Embedding provider returned no vector");
+        const hash = await vectorPayloadHash(values);
+        const receipts = await port.vectorStore.upsert([
+          { id: claim.id, entityKind: input.entityKind, values },
+        ]);
+        const mutationId = receipts.get(claim.id);
+        if (!mutationId)
+          throw new Error("Vectorize returned no upload receipt");
+        return {
+          page: {
+            done: false,
+            cursor: { hash, mutationId, submittedAt: new Date().toISOString() },
+            availableAt: new Date(Date.now() + 3_000),
+          },
+        };
+      }
+      const [observed] = await port.vectorStore.getByIds([claim.id]);
+      if (
+        !observed ||
+        (await vectorPayloadHash(observed.values)) !== cursor.hash
+      ) {
+        if (Date.now() - Date.parse(cursor.submittedAt) > 2 * 60_000)
+          throw new Error(
+            "Vectorize did not expose the uploaded artifact before its visibility deadline",
+          );
+        return {
+          page: {
+            done: false,
+            cursor,
+            availableAt: new Date(Date.now() + 5_000),
+          },
+        };
+      }
+      return {
+        page: {
+          done: true,
+          result: {
+            outcome: "written",
+            mutationId: cursor.mutationId,
+            vectorHash: cursor.hash,
+          },
+        },
+        publish: async (tx) => {
+          // Writers and removals lock the source before its durable identity.
+          // Hold the same rows until commit so deletion cannot pass this check
+          // and leave a newly selected vector behind.
+          const source = SHORTCODE_TABLE[input.entityKind];
+          const [liveSource] = await getDb(tx)
+            .select({ id: source.id })
+            .from(source)
+            .where(and(eq(source.id, input.entityId), isNull(source.deletedAt)))
+            .for("share");
+          const [liveIdentity] = await getDb(tx)
+            .select({ id: entityIdentity.id })
+            .from(entityIdentity)
+            .where(
+              and(
+                eq(entityIdentity.id, input.entityId),
+                isNull(entityIdentity.deletedAt),
+              ),
+            )
+            .for("share");
+          if (!liveSource || !liveIdentity)
+            throw new Error("Embedding source was removed before selection");
+          const latest = await prepareSearchDocuments(tx, [input]);
+          const body = latest.entries[0]?.body;
+          if (
+            body === undefined ||
+            (await embeddingTextHash({
+              entityKind: input.entityKind,
+              ...input.config,
+              text: normalizeSearchText(body),
+            })) !== input.hash
+          )
+            throw new Error("Embedding inputs changed before selection");
+          await getDb(tx)
+            .update(entityEmbedding)
+            .set({ deletedAt: new Date(), artifactState: "retired" })
+            .where(
+              and(
+                eq(entityEmbedding.entityKind, input.entityKind),
+                eq(entityEmbedding.entityId, input.entityId),
+                isNull(entityEmbedding.deletedAt),
+              ),
+            );
+          await getDb(tx)
+            .insert(entityEmbedding)
+            .values({
+              id: claim.id,
+              entityKind: input.entityKind,
+              entityId: input.entityId,
+              embeddingText: input.text,
+              embeddingHash: input.hash,
+              artifactHash: input.hash,
+              ...input.config,
+              artifactState: "selected",
+              vectorHash: cursor.hash,
+              submissionId: cursor.mutationId,
+              observedAt: new Date(),
+              indexedAt: new Date(),
+              deletedAt: null,
+            })
+            .onConflictDoUpdate({
+              target: entityEmbedding.id,
+              set: {
+                deletedAt: null,
+                artifactState: "selected",
+                observedAt: new Date(),
+                indexedAt: new Date(),
+              },
+            });
+        },
+      };
+    },
+  );
+}
+
+/** Explicit background refresh uses the same Jobs as broad passes. Reads never call this. */
+export async function refreshEntityEmbeddings(
+  db: Database,
+  refs: readonly SearchableEntityRef[],
+  port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
+): Promise<Map<string, EmbeddingRefreshResult>> {
+  const results = new Map<string, EmbeddingRefreshResult>();
+  if (!port.configured()) {
+    for (const ref of refs)
+      results.set(entityRefKey(ref.entityKind, ref.entityId), {
+        outcome: "unconfigured",
+      });
+    return results;
+  }
+  await enqueueEmbeddingRefs(
+    db,
+    await prepareSearchDocuments(db, refs),
+    port.config(),
+  );
+  await (
+    await import("./publish")
+  ).wakeJobs({ source: "embedding.explicit-refresh" });
+  for (const ref of refs)
+    results.set(entityRefKey(ref.entityKind, ref.entityId), {
+      outcome: "pending",
+    });
+  return results;
 }

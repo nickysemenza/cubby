@@ -6,24 +6,25 @@
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
+  job,
   mailboxCursor,
   email as emailTable,
   orderMail,
   orderMailAttachment,
   run,
-  runFinding,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 import {
   launchWorkflowRun,
   reconcileWorkflowRuns,
@@ -34,12 +35,12 @@ import type { GmailProvider } from "../../repo/gmail/types";
 import { startMailImport } from "../../repo/mail-import-run";
 import {
   startMailDiscovery,
-  listMailDiscovery,
-  saveMailDiscoveryBatch,
-  finishMailDiscovery,
-  continueMailDiscovery,
+  listMailDiscovery as listMailDiscoveryImplementation,
+  saveMailDiscoveryBatch as saveMailDiscoveryBatchImplementation,
+  finishMailDiscovery as finishMailDiscoveryImplementation,
+  continueMailDiscovery as continueMailDiscoveryImplementation,
   pruneRoutineRuns,
-  failMailDiscovery,
+  failMailDiscovery as failMailDiscoveryImplementation,
   type DiscoveryPorts,
 } from "./discovery";
 
@@ -66,20 +67,83 @@ const gmail = (overrides: Partial<GmailProvider> = {}): GmailProvider => ({
   getAttachment: async () => ({}),
   ...overrides,
 });
-const recorder = () => {
-  const created: { runId: string; attempt: number }[] = [];
-  const launcher: WorkflowLauncher = {
-    create: async (_purpose, _id, params) => {
-      created.push(params);
+const listMailDiscovery = (
+  ...args: Parameters<typeof listMailDiscoveryImplementation>
+) =>
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1].runId}`,
+      kind: "run.execute",
+      input: { runId: args[1].runId, purpose: "mail_discovery" },
+      runId: runEntityId.parse(args[1].runId),
     },
-    terminate: async () => undefined,
-    status: async () => ({ state: "running", error: null }),
-  };
-  return { launcher, created };
-};
+    () => listMailDiscoveryImplementation(...args),
+  );
+const saveMailDiscoveryBatch = (
+  ...args: Parameters<typeof saveMailDiscoveryBatchImplementation>
+) =>
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1].runId}`,
+      kind: "run.execute",
+      input: { runId: args[1].runId, purpose: "mail_discovery" },
+      runId: runEntityId.parse(args[1].runId),
+    },
+    () => saveMailDiscoveryBatchImplementation(...args),
+  );
+const finishMailDiscovery = (
+  ...args: Parameters<typeof finishMailDiscoveryImplementation>
+) =>
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1].runId}`,
+      kind: "run.execute",
+      input: { runId: args[1].runId, purpose: "mail_discovery" },
+      runId: runEntityId.parse(args[1].runId),
+    },
+    () => finishMailDiscoveryImplementation(...args),
+  );
+const continueMailDiscovery = (
+  ...args: Parameters<typeof continueMailDiscoveryImplementation>
+) =>
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1].runId}`,
+      kind: "run.execute",
+      input: { runId: args[1].runId, purpose: "mail_discovery" },
+      runId: runEntityId.parse(args[1].runId),
+    },
+    () => continueMailDiscoveryImplementation(...args),
+  );
+const failMailDiscovery = (
+  ...args: Parameters<typeof failMailDiscoveryImplementation>
+) =>
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1].runId}`,
+      kind: "run.execute",
+      input: { runId: args[1].runId, purpose: "mail_discovery" },
+      runId: runEntityId.parse(args[1].runId),
+    },
+    () => failMailDiscoveryImplementation(...args),
+  );
 
 describe("scheduled Gmail discovery", () => {
   const ctx = withTestDb();
+  const created = () =>
+    getDb(ctx.db)
+      .select({ runId: run.id, attempt: job.generation })
+      .from(job)
+      .innerJoin(run, eq(run.id, job.runId))
+      .where(
+        and(eq(job.kind, "run.execute"), eq(run.purpose, "mail_discovery")),
+      )
+      .orderBy(asc(job.createdAt), asc(job.id));
   const seed = async ({ targeted = true } = {}) => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic discovery member",
@@ -93,7 +157,6 @@ describe("scheduled Gmail discovery", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
-    const launch = recorder();
     await setMailImport(ctx.db, {
       mailboxId: "synthetic-google-subject",
       enabled: true,
@@ -104,10 +167,10 @@ describe("scheduled Gmail discovery", () => {
         name: "Synthetic Seed Vendor",
         orderEmailSenders: ["orders@seed.example.test"],
       });
-    await startMailDiscovery(ctx.db, launch);
-    const params = launch.created[0];
+    await startMailDiscovery(ctx.db);
+    const params = (await created())[0];
     if (!params) throw new Error("Synthetic discovery not launched");
-    return { party, ...launch, params };
+    return { party, params };
   };
   const readRun = async (id: string) => {
     const [row] = await getDb(ctx.db)
@@ -144,8 +207,8 @@ describe("scheduled Gmail discovery", () => {
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     await finishMailDiscovery(ctx.db, state.params);
-    await continueMailDiscovery(ctx.db, state.params, state);
-    const successor = state.created[1];
+    await continueMailDiscovery(ctx.db, state.params);
+    const successor = (await created())[1];
     if (!successor) throw new Error("Synthetic continuation missing");
     expect((await readRun(successor.runId)).input).toMatchObject({
       executionPolicy: "import",
@@ -185,26 +248,27 @@ describe("scheduled Gmail discovery", () => {
     );
   });
 
-  it("fails a quiet discovery Run whose instance ended and leaves a waiting one", async () => {
+  it("preserves a waiting Job and projects a terminal Job's raw diagnostic", async () => {
     const state = await seed();
-    const later = new Date(Date.now() + 3_600_000);
-    const status = vi
-      .spyOn(state.launcher, "status")
-      .mockResolvedValue({ state: "waiting", error: null });
-    expect(await reconcileWorkflowRuns(ctx.db, state.launcher, later)).toBe(0);
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "retry_wait",
+        availableAt: new Date(Date.now() + 3_600_000),
+      })
+      .where(eq(job.key, `run:${state.params.runId}`));
+    expect(await reconcileWorkflowRuns(ctx.db)).toBe(0);
     expect((await readRun(state.params.runId)).status).toBe("running");
-    status.mockResolvedValue({
-      state: "errored",
-      error: "Synthetic ended instance",
-    });
-    expect(await reconcileWorkflowRuns(ctx.db, state.launcher, later)).toBe(1);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "failed", error: "HTTP 503: Synthetic ended execution" })
+      .where(eq(job.key, `run:${state.params.runId}`));
+    expect(await reconcileWorkflowRuns(ctx.db)).toBe(1);
     expect(await readRun(state.params.runId)).toMatchObject({
       status: "failed",
-      failureCode: "workflow_instance_ended",
+      failureCode: "job_failed",
+      dispatchError: "HTTP 503: Synthetic ended execution",
     });
-    expect((await readRun(state.params.runId)).progressHistory).toEqual(
-      expect.arrayContaining([expect.objectContaining({ phase: "failed" })]),
-    );
   });
 
   it("alternates verified Vendor history with new mail and continues only while coverage remains", async () => {
@@ -242,15 +306,15 @@ describe("scheduled Gmail discovery", () => {
     const research = vi.fn(async () => []);
     const seam: DiscoveryPorts = { ...ports(provider), research };
     for (const pass of [1, 2]) {
-      await startMailDiscovery(ctx.db, state);
-      const params = state.created[pass];
+      await startMailDiscovery(ctx.db);
+      const params = (await created())[pass];
       if (!params) throw new Error(`Synthetic pass ${pass} not launched`);
       await listMailDiscovery(ctx.db, params, seam);
       await saveMailDiscoveryBatch(ctx.db, params, 0, seam);
       await finishMailDiscovery(ctx.db, params);
       // Completed coverage never chains another pass.
-      await continueMailDiscovery(ctx.db, params, state);
-      expect(state.created).toHaveLength(pass + 1);
+      await continueMailDiscovery(ctx.db, params);
+      expect(await created()).toHaveLength(pass + 1);
     }
     expect(queries).toEqual([
       "(from:orders@priority.example.test) -in:spam -in:trash",
@@ -394,7 +458,7 @@ describe("scheduled Gmail discovery", () => {
 
   it("starts one pass per connected mailbox and refuses an overlapping one", async () => {
     const state = await seed();
-    expect(await startMailDiscovery(ctx.db, state)).toEqual({
+    expect(await startMailDiscovery(ctx.db)).toEqual({
       started: 0,
       running: 1,
     });
@@ -403,7 +467,7 @@ describe("scheduled Gmail discovery", () => {
     });
   });
   it("does not starve a second connected mailbox belonging to the same member", async () => {
-    const state = await seed();
+    await seed();
     await getDb(ctx.db).insert(account).values({
       id: crypto.randomUUID(),
       accountId: "synthetic-second-google-subject",
@@ -415,12 +479,12 @@ describe("scheduled Gmail discovery", () => {
       mailboxId: "synthetic-second-google-subject",
       enabled: true,
     });
-    expect(await startMailDiscovery(ctx.db, state)).toEqual({
+    expect(await startMailDiscovery(ctx.db)).toEqual({
       started: 1,
       running: 1,
     });
-    expect(state.created).toHaveLength(2);
-    expect((await readRun(state.created[1]!.runId)).input).toMatchObject({
+    expect(await created()).toHaveLength(2);
+    expect((await readRun((await created())[1]!.runId)).input).toMatchObject({
       mailboxId: "synthetic-second-google-subject",
     });
   });
@@ -547,7 +611,7 @@ describe("scheduled Gmail discovery", () => {
     seam.research = async (_db, input) => {
       sizes.push(input.messageIds.length);
       if (input.messageIds.length > 50)
-        throw new Error("Synthetic source set exceeds launcher bound");
+        throw new Error("Synthetic source set exceeds import batch bound");
       expect(
         (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.history
           .historyId,
@@ -578,14 +642,10 @@ describe("scheduled Gmail discovery", () => {
     ).toEqual({ kind: "stopped" });
     expect((await readRun(state.params.runId)).status).toBe("paused_auth");
     expect(await getDb(ctx.db).select().from(emailTable)).toEqual([]);
-    const next = await launchWorkflowRun(
-      ctx.db,
-      {
-        runId: runEntityId.parse(state.params.runId),
-        purpose: "mail_discovery",
-      },
-      state.launcher,
-    );
+    const next = await launchWorkflowRun(ctx.db, {
+      runId: runEntityId.parse(state.params.runId),
+      purpose: "mail_discovery",
+    });
     const params = { ...state.params, attempt: next.attempt };
     await listMailDiscovery(ctx.db, params, ports(gmail()));
     await saveMailDiscoveryBatch(ctx.db, params, 0, ports(gmail()));
@@ -623,45 +683,44 @@ describe("scheduled Gmail discovery", () => {
       await listMailDiscovery(ctx.db, state.params, ports(provider));
       await saveMailDiscoveryBatch(ctx.db, state.params, 0, ports(provider));
       await finishMailDiscovery(ctx.db, state.params);
-      await continueMailDiscovery(ctx.db, state.params, state);
-      await continueMailDiscovery(ctx.db, state.params, state);
-      expect(state.created).toHaveLength(scanPending ? 2 : 1);
+      await continueMailDiscovery(ctx.db, state.params);
+      await continueMailDiscovery(ctx.db, state.params);
+      expect(await created()).toHaveLength(scanPending ? 2 : 1);
       expect(
         await Promise.all(
-          state.created
+          (await created())
             .slice(1)
             .map(async (params) => (await readRun(params.runId)).input),
         ),
       ).toEqual(scanPending ? [(await readRun(state.params.runId)).input] : []);
     },
   );
-  it("prunes month-old routine passes and keeps a pass that holds a finding", async () => {
+  it("keeps a month-old routine pass that holds a finding", async () => {
     const state = await seed();
     const quiet = gmail({ listMessages: async () => ({}) });
     await listMailDiscovery(ctx.db, state.params, ports(quiet));
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, ports(quiet));
     await finishMailDiscovery(ctx.db, state.params, new Date("2026-01-01"));
-    await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        runId: runEntityId.parse(state.params.runId),
-        ledgerPartyId: state.party.id,
-        entityKind: "run",
-        entityId: runEntityId.parse(state.params.runId),
-        kind: "unknown_mail_sender",
-        summary: "Synthetic historical finding",
-        evidenceFingerprint: "synthetic",
-      });
+    const [quietPass] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, runEntityId.parse(state.params.runId)));
+    // A finding is retained review history: it keeps its Run.
+    await seedRunFinding(ctx.db, {
+      runId: runEntityId.parse(state.params.runId),
+      ledgerPartyId: state.party.id,
+      entityKind: "run",
+      entityId: runEntityId.parse(state.params.runId),
+      kind: "unknown_mail_sender",
+      summary: "Synthetic historical finding",
+      evidenceFingerprint: "synthetic",
+    });
     expect(await pruneRoutineRuns(ctx.db, new Date("2026-03-01"))).toBe(0);
-    await getDb(ctx.db)
-      .delete(runFinding)
-      .where(eq(runFinding.runId, runEntityId.parse(state.params.runId)));
-    expect(await pruneRoutineRuns(ctx.db, new Date("2026-03-01"))).toBe(1);
     expect(
       await getDb(ctx.db)
         .select()
         .from(run)
         .where(eq(run.id, runEntityId.parse(state.params.runId))),
-    ).toEqual([]);
+    ).toEqual([quietPass]);
   });
 });

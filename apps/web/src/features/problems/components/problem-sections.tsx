@@ -35,7 +35,6 @@ import type { ElementType, ReactNode } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   EntityIcon,
-  entities,
   entityDetailLink,
   entityLabel,
   entityPluralLabel,
@@ -51,10 +50,7 @@ import {
   reconciliationDelta,
 } from "~/features/purchase/purchase-reconciliation";
 import { RunFindingActions } from "~/features/purchase/run-finding-actions";
-import {
-  product as productOperations,
-  maintenance,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay, formatTimestamp } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/number-format";
@@ -517,28 +513,6 @@ function UpcApplyAction({
     >
       <DownloadIcon className="mr-1 size-3" />
       {apply.isPending ? "Applying…" : "Apply"}
-    </Button>
-  );
-}
-
-function MissingEmbeddingsBackfillAction() {
-  const backfill = useActionMutation({
-    mutationFn: maintenance.run.mutationOptions,
-    success: (data) => (
-      <a className="underline" href={`/runs/${encodeURIComponent(data.runId)}`}>
-        {data.existing
-          ? "Maintenance is already running. View run"
-          : "Maintenance started. View run"}
-      </a>
-    ),
-  });
-  return (
-    <Button
-      size="sm"
-      onClick={() => backfill.mutate(undefined)}
-      disabled={backfill.isPending}
-    >
-      {backfill.isPending ? "Starting…" : "Run maintenance"}
     </Button>
   );
 }
@@ -1395,29 +1369,6 @@ const DECLARED_SECTIONS = [
     headerAction: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
   }),
   section({
-    id: "missing-embeddings",
-    label: "Unindexed",
-    select: (p) => p.entitiesMissingEmbeddings,
-    problemKeys: ["entitiesMissingEmbeddings"],
-    icon: WrenchIcon,
-    headerAction: <MissingEmbeddingsBackfillAction />,
-    renderItem: (entity) => ({
-      key: `${entity.entityKind}:${entity.entityId}`,
-      // The WHOLE shortcode. This was `.slice(0, 8)`, copied from the orphaned
-      // sibling — where the id really is a uuid and truncating it is right. Here
-      // it is a public shortcode, so slicing only risked cutting a real code in
-      // half for no gain.
-      title: entity.entityId,
-      fields: facts(
-        fact("Kind", entities[entity.entityKind].label),
-        fact("Search index", "Missing", "warning"),
-      ),
-      // Live entity ⇒ always resolvable to a real page, unlike the orphaned
-      // side of this pair — see the note on `entityMissingEmbeddingSchema`.
-      route: entityDetailLink(entity.entityKind, entity.entityId),
-    }),
-  }),
-  section({
     id: "weight-sold-products",
     label: "Weight-sold, no weight mapping",
     select: (p) => p.weightSoldProducts,
@@ -1445,21 +1396,6 @@ const DECLARED_SECTIONS = [
           shortcodeFact("Ingredient", "ingredient", [product.ingredientId]),
       ),
       route: entityDetailLink("product", product.id),
-    }),
-  }),
-  section({
-    id: "stale-parent-recipes",
-    label: "Deleted sub-recipes",
-    select: (p) => p.staleParentRecipes,
-    problemKeys: ["staleParentRecipes"],
-    entity: "recipe",
-    renderItem: (recipe) => ({
-      title: recipe.name,
-      // The detector returns only {id, name}, so the card cannot yet name WHICH
-      // sub-recipe went missing — but it can at least state the finding rather
-      // than leaving a card that is a title and a button.
-      fields: facts(fact("Sub-recipe", "Deleted", "destructive")),
-      route: entityDetailLink("recipe", recipe.id),
     }),
   }),
   section({

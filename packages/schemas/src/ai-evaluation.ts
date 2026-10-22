@@ -1,5 +1,4 @@
 import { assessmentChildHandle } from "./assessment-reference";
-import { workflowRecoveryProgress } from "./workflow-runs";
 import { z } from "zod";
 
 export const SUGGESTION_AUTO_APPLY_THRESHOLD = 0.95;
@@ -141,7 +140,6 @@ export const aiRefreshRunInput = z.object({
 });
 export type AiRefreshRunInput = z.infer<typeof aiRefreshRunInput>;
 export const aiRefreshProgress = z.object({
-  ...workflowRecoveryProgress.shape,
   attempt: z.number().int().nonnegative().default(0),
   selected: z.number().int().nonnegative().default(0),
   completed: z.number().int().nonnegative().default(0),

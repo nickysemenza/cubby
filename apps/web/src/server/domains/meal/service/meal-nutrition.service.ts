@@ -19,37 +19,17 @@ import {
 } from "~/server/domains/meal/repo/portions";
 import { getProductsByShortcodes } from "~/server/domains/product/repo/crud";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
-import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
-import { repairStaleRecipesForRead } from "~/server/domains/recipe/repo/repair-stale-recipes-for-read";
 import {
   batchEnrichWithFood,
   type UsdaFoodBatchPort,
 } from "~/server/domains/usda-food/repo/usda-helpers";
-import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 export async function getMealNutrition(
   db: Database,
   input: MealNutritionInput,
   usdaClient: UsdaFoodBatchPort,
-  recipeCosting?: RecipeCostingService,
 ) {
-  let rows = await getMealNutritionRows(db, input);
-  if (recipeCosting) {
-    const recipeIds = await resolveAllOrThrow(
-      recipeCosting.database,
-      "recipe",
-      [...new Set(rows.portions.map((row) => row.recipeId))],
-    );
-    const repaired = await repairStaleRecipesForRead(
-      recipeCosting,
-      recipeIds,
-      "meal.getNutrition",
-    );
-    if (repaired) {
-      rows = await getMealNutritionRows(recipeCosting.database, input);
-      db = recipeCosting.database;
-    }
-  }
+  const rows = await getMealNutritionRows(db, input);
   const meals = new Map(
     rows.meals.map((m) => [
       m.id,

@@ -8,7 +8,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { image, imageProcessingJob } from "~/server/db/schema";
+import { image, imageProcessingJob, job } from "~/server/db/schema";
 import { IMAGE_PROCESSING_SOCKET_PATH } from "~/server/http/direct-socket-paths";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -172,10 +172,17 @@ test.describe("companion socket", () => {
         .set({
           state: "waiting_for_device",
           attemptId: null,
-          leaseExpiresAt: null,
-          nextAttemptAt: sql`now() - interval '1 minute'`,
         })
         .where(eq(imageProcessingJob.id, jobId));
+      await database
+        .update(job)
+        .set({
+          state: "queued",
+          leaseToken: null,
+          leaseExpiresAt: null,
+          availableAt: sql`now() - interval '1 minute'`,
+        })
+        .where(eq(job.key, `image-processing:${jobId}`));
       jobIds.push(jobId);
     }
     await page.goto("/");

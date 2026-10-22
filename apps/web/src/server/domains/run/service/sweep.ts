@@ -32,10 +32,6 @@ import {
 import { STATEMENT_LABEL_BATCH } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { buildCrudServices } from "~/server/http/request-context";
 import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
-import {
-  type WorkflowLauncher,
-  productionWorkflowLauncher,
-} from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import {
@@ -56,7 +52,7 @@ import type { StepDriver, StepPage, StepRunDrivers } from "./step-run";
 
 /**
  * Starts a Sweep: one step per Suggestion family in scope, run by the
- * StepRunWorkflow. A scheduled Sweep that found nothing ends routine.
+ * universal Job. A scheduled Sweep that found nothing ends routine.
  */
 export async function startSweep(
   db: Database,
@@ -65,7 +61,6 @@ export async function startSweep(
     trigger: "manual" | "scheduled";
     families: readonly SweepFamilyScope[];
   },
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
 ) {
   const runId = await ensureRun(db, actor, {
     purpose: "sweep",
@@ -73,7 +68,7 @@ export async function startSweep(
     status: "running",
     input: sweepRunInput.parse({ kind: "sweep", families: input.families }),
   });
-  await launchWorkflowRun(db, { runId, purpose: "sweep" }, launcher);
+  await launchWorkflowRun(db, { runId, purpose: "sweep" });
   return runId;
 }
 
@@ -84,18 +79,12 @@ export async function startSweep(
 export async function startRoutineSweep(
   db: Database,
   family: SweepFamilyScope["family"],
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
 ) {
   if (await activeSweepFor(db, family)) return null;
-  return startSweep(
-    db,
-    systemActor(),
-    {
-      trigger: "scheduled",
-      families: [sweepFamilyScope.parse({ family, scope: {} })],
-    },
-    launcher,
-  );
+  return startSweep(db, systemActor(), {
+    trigger: "scheduled",
+    families: [sweepFamilyScope.parse({ family, scope: {} })],
+  });
 }
 
 /** What a Sweep would look at, from stored state; nothing runs. */
@@ -608,7 +597,7 @@ const connectionTotals = z
 const ROSTER_PAGE = 10;
 
 async function connectionPage(
-  { db, run, step, launcher, retrying }: PageContext,
+  { db, run, step, retrying }: PageContext,
   scope: Extract<SweepFamilyScope, { family: "recommendation" }>["scope"],
 ): Promise<StepPage> {
   const cursor = connectionCursor.safeParse(step.cursor).success
@@ -686,11 +675,13 @@ async function connectionPage(
       };
     }
     // The child was held paused while its roster grew; nothing else starts it.
-    await launchWorkflowRun(
-      db,
-      { runId: childRunId, purpose: "ai_refresh" },
-      launcher,
-    );
+    const launched = await launchWorkflowRun(db, {
+      runId: childRunId,
+      purpose: "ai_refresh",
+      automatic: true,
+    });
+    if (!launched)
+      return childPage(childRunId, await readChildRun(db, childRunId), counts);
     return {
       kind: "child",
       childRunId,
@@ -702,7 +693,7 @@ async function connectionPage(
   }
   let child = await readChildRun(db, childRunId);
   if (retrying && child?.status === "failed") {
-    await retryChild(db, run, child, launcher);
+    await retryChild(db, run, child);
     child = await readChildRun(db, childRunId);
   }
   const progress = aiRefreshProgress.safeParse(child?.progress ?? {});
@@ -729,7 +720,6 @@ async function retryChild(
   db: Database,
   run: StepRunOwner,
   child: NonNullable<Awaited<ReturnType<typeof readChildRun>>>,
-  launcher: WorkflowLauncher,
 ) {
   if (!isWorkflowRunPurpose(child.purpose)) return;
   const { controlWorkflowRun } =
@@ -739,7 +729,6 @@ async function retryChild(
     actorOf(run),
     { runPublicId: child.shortcode, action: "retry" },
     child.purpose,
-    launcher,
   );
 }
 
@@ -770,7 +759,7 @@ function fieldTargets(
 }
 
 async function fieldPage(
-  { db, run, step, launcher, retrying }: PageContext,
+  { db, run, step, retrying }: PageContext,
   scope: Extract<SweepFamilyScope, { family: "field" }>["scope"],
 ): Promise<StepPage> {
   const targets = fieldTargets(scope.targets);
@@ -778,7 +767,7 @@ async function fieldPage(
     ? fieldCursor.parse(step.cursor)
     : { index: 0, childRunIds: [] };
   if (!cursor.childRunIds.length)
-    return startFieldChild(db, run, launcher, targets, 0, []);
+    return startFieldChild(db, run, targets, 0, []);
   const read = () =>
     Promise.all(
       cursor.childRunIds.map((id) => readChildRun(db, runEntityId.parse(id))),
@@ -786,8 +775,7 @@ async function fieldPage(
   let children = await read();
   if (retrying) {
     for (const child of children)
-      if (child?.status === "failed")
-        await retryChild(db, run, child, launcher);
+      if (child?.status === "failed") await retryChild(db, run, child);
     children = await read();
   }
   // Totals are re-summed over every child on each page, so a retried child's
@@ -824,7 +812,6 @@ async function fieldPage(
     return startFieldChild(
       db,
       run,
-      launcher,
       targets,
       cursor.index + 1,
       cursor.childRunIds,
@@ -850,7 +837,6 @@ async function fieldPage(
 async function startFieldChild(
   db: Database,
   run: StepRunOwner,
-  launcher: WorkflowLauncher,
   targets: ReturnType<typeof fieldTargets>,
   index: number,
   started: readonly string[],
@@ -870,7 +856,6 @@ async function startFieldChild(
       parentRunId: run.id,
     },
     {
-      launcher,
       context: {
         ...buildCrudServices(db),
         actorContext: buildActorContext(run.actorUserId, run.channel),

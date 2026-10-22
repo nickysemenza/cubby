@@ -14,7 +14,7 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 import { requireActor } from "~/server/http/request-context";
 import {
   captureBackgroundQueue,
-  drainDerivedRefreshFrontier,
+  drainRecipeRefreshJobs,
 } from "~/server/testing/background-queue";
 import {
   ingredientRef,
@@ -25,8 +25,8 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
  * Authoritative changes remain durable when wake-ups are lost. The generic
- * frontier computes each affected recipe and visits parent links once per wave;
- * pending reads and cyclic graphs must remain truthful and terminating.
+ * recipe Job recomputes the corpus in bounded pages; cyclic graphs must
+ * remain truthful and terminate without relying on queue delivery.
  */
 describe("recipe totals cascade", () => {
   const ctx = withTestDb();
@@ -118,8 +118,9 @@ describe("recipe totals cascade", () => {
       parent: await resolve(parent.id),
       grandparent: await resolve(grandparent.id),
     };
-    // Settle the whole tree inline so every later assertion starts fresh.
+    // Settle saved recipe intent through the production Job before checking changes.
     await costing().recompute([ids.child, ids.parent, ids.grandparent]);
+    await drainRecipeRefreshJobs(ctx.db, costing());
     return { ...ids, product, ingredient };
   };
 
@@ -138,47 +139,29 @@ describe("recipe totals cascade", () => {
     );
   };
 
-  const drainFrontier = async () => {
-    const { processDerivedRefreshPage } =
-      await import("~/server/domains/run/service/derived-refresh");
-    for (let page = 0; page < 2_000; page++) {
-      const result = await processDerivedRefreshPage(ctx.db);
-      expect(result.errors).toEqual([]);
-      if (result.done) return;
-    }
-    throw new Error("Synthetic recipe frontier did not terminate");
-  };
+  const drainRecipes = () => drainRecipeRefreshJobs(ctx.db, costing());
 
-  it("materializes a parent chain through the bounded generic frontier", async () => {
+  it("refreshes a parent chain through the bounded recipe Job", async () => {
     const tree = await seedTree();
-    await drainFrontier();
-    queue.tasks.length = 0;
+    await drainRecipes();
+    queue.messages.length = 0;
+    const before = await getRecipeTotalsState(ctx.db, tree.grandparent);
     await changePrice(tree.product, 9);
-    await drainDerivedRefreshFrontier(ctx.db);
-    expect(await stale(tree.child)).toBe(true);
-    expect(await stale(tree.grandparent)).toBe(true);
-    await drainFrontier();
+    queue.messages.length = 0;
+    await drainRecipes();
+    const after = await getRecipeTotalsState(ctx.db, tree.grandparent);
+    expect(after?.totalsComputedAt?.getTime()).toBeGreaterThan(
+      before?.totalsComputedAt?.getTime() ?? 0,
+    );
     expect(await stale(tree.child)).toBe(false);
     expect(await stale(tree.parent)).toBe(false);
     expect(await stale(tree.grandparent)).toBe(false);
-    // A duplicate delivery neither enumerates parents nor creates another wave.
-    queue.tasks.length = 0;
     await costing().recomputeQueued([tree.child]);
-    expect(queue.tasks).toEqual([]);
+    await drainRecipes();
     expect(await stale(tree.parent)).toBe(false);
   });
 
-  it("invalidates its own totals before background publication", async () => {
-    const tree = await seedTree();
-    await changePrice(tree.product, 9);
-    await drainDerivedRefreshFrontier(ctx.db);
-    expect(await stale(tree.child)).toBe(true);
-    await drainFrontier();
-    expect(await stale(tree.child)).toBe(false);
-    expect(await stale(tree.grandparent)).toBe(false);
-  });
-
-  it("terminates a cyclic dependency frontier without repeated cache invalidation", async () => {
+  it("finishes a bounded refresh of cyclic recipe references", async () => {
     const tree = await seedTree();
     await updateRecipe(
       ctx.db,
@@ -200,11 +183,11 @@ describe("recipe totals cascade", () => {
       },
       ctx.actor,
     );
-    await drainFrontier();
+    await drainRecipes();
     expect(await stale(tree.child)).toBe(false);
     expect(await stale(tree.parent)).toBe(false);
-    queue.tasks.length = 0;
-    await drainFrontier();
-    expect(queue.tasks).toEqual([]);
+    queue.messages.length = 0;
+    await drainRecipes();
+    expect(queue.messages).toEqual([]);
   });
 });

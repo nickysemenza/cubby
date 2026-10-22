@@ -122,7 +122,7 @@ export default defineEntity({
     },
     list: {
       read: { media: ["displayImages"], quality: ["dataQuality"] },
-      views: ["table", { kind: "slot", id: "accuracy", label: "Accuracy" }],
+      views: ["table"],
       savedViews: [
         {
           id: "pipeline-worklist",

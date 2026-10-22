@@ -33,6 +33,7 @@ import {
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
+  insertEntityFixtures,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -669,22 +670,23 @@ describe("data quality: list filters, sort and hydration agree", () => {
     const flagged = await make("flagged", true);
     const twin = await make("twin", false);
     const vendorId = await findOrCreateVendor(ctx.db, "Amazon.com");
-    const [order] = await unwrapDb(ctx.db)
-      .insert(purchase)
-      .values({
+    const [order] = await insertEntityFixtures(ctx.db, purchase, "purchase", [
+      {
         shortcode: testShortcode("purchase", "PUR-DQ-COMMODITY"),
         vendorId,
         date: "2026-01-15",
         displayLabel: "DQ commodity order",
-      })
-      .returning({ id: purchase.shortcode });
+      },
+    ]);
     for (const row of [flagged, twin]) {
       await createExpense(
         ctx.db,
         makeExpenseInput({
           name: `DQ commodity line ${row.id}`,
           productId: row.id,
-          purchaseId: order ? parseShortcodeFor("purchase", order.id) : null,
+          purchaseId: order
+            ? parseShortcodeFor("purchase", order.shortcode)
+            : null,
           cost: 2,
           productQuantity: 1,
         }),

@@ -6,15 +6,13 @@
  *
  * Freshness is event-driven: writes null `totalsComputedAt` on the affected
  * rows (see repo/recipe/totals + the recipe/product write paths). The stale
- * flag is the durable record of pending work; a queue task, a read of the
- * recipe page, or "Settle now" recomputes it. Queue messages are wakeups only.
+ * flag describes the persisted projection. A transactional broad Job refreshes
+ * it; page reads serve stored totals. Queue messages are wakeups only.
  */
 
-import { RECIPE_RECOMPUTE_CHUNK_SIZE } from "@cubby/schemas/background-tasks";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   type IngredientId,
-  parseEntityId,
   type RecipeId,
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
@@ -34,7 +32,6 @@ import type {
 } from "@cubby/schemas/recipe-shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
-import { createLogger } from "@cubby/worker-tracing";
 import { keyBy, uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -62,28 +59,16 @@ import {
   getSubRecipeClosure,
 } from "~/server/domains/recipe/repo/crud";
 import {
-  commitRecipeTotals,
   getRecipeTotalsState,
   markRecipesStale,
   selectAllActiveRecipeIds,
   selectAllStaleRecipeIds,
-  selectStaleRecipeIds,
 } from "~/server/domains/recipe/repo/totals";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { createAppError } from "~/server/errors/app-error";
 import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
-import { currentInputRevision } from "~/server/generic/derived-refresh/repo/freshness";
-import {
-  resolveAllPresent,
-  resolveLiveShortcodes,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
-import {
-  type BackgroundTaskPublisher,
-  publishBackgroundTasks,
-} from "~/server/workflows/background-tasks/publish";
-
-const log = createLogger("recompute");
 
 const toRecipeTotals = (totals: CalculateTotalsResult): RecipeTotals =>
   totals.estimates;
@@ -133,7 +118,6 @@ const totalsDiffer = (
     ),
   );
 
-type CascadeMode = "inline" | "queue";
 interface RecipeRecomputeDispatchMetadata {
   source?: string;
   entity?: EntityRef;
@@ -173,18 +157,11 @@ export class RecipeCostingService {
   constructor(
     private db: Database,
     private usdaClient: UsdaFoodBatchPort,
-    private publish: BackgroundTaskPublisher = publishBackgroundTasks,
   ) {}
 
-  /**
-   * The same service on another database handle — a caller's open
-   * transaction — with its publications routed through `publish`. Stale marks
-   * then land in the caller's transaction (an outer-pool UPDATE on a row that
-   * transaction holds would deadlock) and the wakeups go out only after it
-   * commits.
-   */
-  bindTo(db: Database, publish: BackgroundTaskPublisher): RecipeCostingService {
-    return new RecipeCostingService(db, this.usdaClient, publish);
+  /** Bind stale markers and durable Job admission to the caller's transaction. */
+  bindTo(db: Database): RecipeCostingService {
+    return new RecipeCostingService(db, this.usdaClient);
   }
 
   /** The handle this instance reads and writes through — the request's strong pool unless `bindTo` rebound it. */
@@ -433,161 +410,17 @@ export class RecipeCostingService {
     };
   }
 
-  private async tracedRecompute(
-    operation: string,
-    extraAttrs: Record<string, string | number | boolean | undefined>,
-    run: () => Promise<number>,
-  ): Promise<number> {
-    return withTrace(
-      TraceNames.service("recipeCosting", operation),
-      async (span) => {
-        const t0 = performance.now();
-        const recomputed = await run();
-        const ms = Math.round(performance.now() - t0);
-        span.setAttributes({
-          ...extraAttrs,
-          "recipe.recomputed": recomputed,
-          duration_ms: ms,
-        });
-        log.info(
-          `[recipe-totals] ${operation} recomputed ${recomputed} recipe(s) in ${ms}ms`,
-        );
-        return recomputed;
-      },
-    );
-  }
-
+  /** Explicit background recompute records the same broad recipes Job. */
   async recompute(recipeIds: RecipeId[]): Promise<number> {
-    return this.tracedRecompute("recompute", {}, async () => {
-      const visited = new Set<RecipeId>();
-      await this.recomputeTree(recipeIds, visited, "inline");
-      return visited.size;
+    return this.dispatchRecompute(recipeIds, {
+      source: "recipe-costing.explicit",
     });
   }
 
-  /**
-   * Recompute only this supplied chunk. The generic refresh frontier owns
-   * parent traversal and invalidation; a duplicate queue message does not
-   * enumerate parents or create a second propagation wave.
-   */
   async recomputeQueued(recipeIds: RecipeId[]): Promise<number> {
-    return this.tracedRecompute(
-      "recompute",
-      { "recipe.cascade_mode": "queue" },
-      async () => {
-        const staleRecipeIds = await selectStaleRecipeIds(this.db, recipeIds);
-        // Defensive per-invocation budget guard: every message is produced by
-        // publishChunks (≤ RECIPE_RECOMPUTE_CHUNK_SIZE ids), so this is
-        // unreachable today. It enforces the bound by code rather than by
-        // producer discipline — an oversized message is re-split, not run.
-        if (staleRecipeIds.length > RECIPE_RECOMPUTE_CHUNK_SIZE) {
-          await this.publishChunks(staleRecipeIds, "recipe-costing.resplit");
-          return 0;
-        }
-        const visited = new Set<RecipeId>();
-        if (staleRecipeIds.length > 0) {
-          await this.recomputeTree(staleRecipeIds, visited, "queue");
-        }
-        return visited.size;
-      },
-    );
-  }
-
-  /**
-   * Recompute + persist totals for the given recipe ids, then **eagerly recurse
-   * into any parent recipes whose sub-recipe cost changed** so the whole tree is
-   * fresh in one pass (a recipe is an ingredient when used as a sub-recipe). USDA
-   * is always available now, so a recompute either succeeds or throws — we always
-   * stamp fresh; a `usdaMiss` is a permanent costing gap, not a stale-for-retry
-   * state. `visited` guards against re-work and sub-recipe cycles.
-   *
-   * Internal/recursive worker — **always call this from inside the service**
-   * (recursion, the ingredient/all funnels), never the timed public
-   * {@link recompute}, so a single bulk op emits exactly one span + log line.
-   */
-  private async recomputeTree(
-    recipeIds: RecipeId[],
-    visited: Set<RecipeId> = new Set(),
-    cascadeMode: CascadeMode = "inline",
-  ): Promise<void> {
-    const todo = recipeIds.filter((id) => !visited.has(id));
-    if (todo.length === 0) return;
-    for (const id of todo) visited.add(id);
-
-    const tLoad = performance.now();
-    const inputRevision = await currentInputRevision(this.db);
-    const recipes = await getRecipesByIDs(this.db, todo);
-    const totalsMap = await this.computeTotals(recipes);
-    const resolvedRecipeIds = await resolveLiveShortcodes(
-      this.db,
-      recipes.map((r) => r.id),
-      "recipe",
-    );
-    const loadMs = Math.round(performance.now() - tLoad);
-    const updates: Array<{ id: RecipeId; totals: RecipeTotals }> = [];
-    const freshOnlyIds: RecipeId[] = [];
-    const changedIds: RecipeId[] = [];
-    for (const r of recipes) {
-      const computed = totalsMap.get(r.id);
-      if (!computed) continue;
-      const { totals: next } = computed;
-      const idValue = resolvedRecipeIds.get(r.id);
-      if (!idValue) continue;
-      const id = parseEntityId("recipe", idValue);
-      if (totalsDiffer(r.totals, next)) {
-        updates.push({ id, totals: next });
-        changedIds.push(id);
-      } else {
-        freshOnlyIds.push(id);
-      }
-    }
-    const tWrite = performance.now();
-    // Totals, fresh stamps, and the invalidation of changed parents commit
-    // together. Parent cascades are driven by actual total changes, not merely
-    // by a stale child being restamped fresh; otherwise repeated wakeups would
-    // keep re-staling parents and create their own backlog.
-    const { changedParentIds } = await commitRecipeTotals(this.db, {
-      updates,
-      freshOnlyIds,
-      changedIds,
-      processedIds: todo,
-      inputRevision,
-      cascadeParents: cascadeMode === "inline",
+    return this.dispatchRecompute(recipeIds, {
+      source: "recipe-costing.explicit",
     });
-    const writeMs = Math.round(performance.now() - tWrite);
-    // One line per processed chunk. `load+compute` is real wall-clock (it spans
-    // DB reads + the USDA fetch, which are I/O so the workerd clock advances);
-    // WASM CPU is invisible here by design (see computeTotalsInner).
-    log.info(
-      `recipes=${todo.length} changed=${changedIds.length} fresh=${freshOnlyIds.length} load+compute=${loadMs}ms write=${writeMs}ms`,
-    );
-    // Queue mode stops here: the parents are durably stale, and the caller
-    // publishes every currently-stale parent after this chunk commits.
-    if (cascadeMode === "queue") return;
-    const parentIds = changedParentIds.filter((id) => !visited.has(id));
-    if (parentIds.length > 0) {
-      await this.recomputeTree(parentIds, visited, cascadeMode);
-    }
-  }
-
-  /** Publish bounded recompute tasks for a set of already-stale recipes. */
-  private async publishChunks(
-    recipeIds: RecipeId[],
-    source: string,
-  ): Promise<void> {
-    const requestedAt = new Date().toISOString();
-    const tasks = [];
-    for (let i = 0; i < recipeIds.length; i += RECIPE_RECOMPUTE_CHUNK_SIZE) {
-      tasks.push({
-        kind: "recipe-totals.recompute" as const,
-        requestedAt,
-        recipeIds: recipeIds.slice(i, i + RECIPE_RECOMPUTE_CHUNK_SIZE),
-      });
-    }
-    await this.publish(this.db, tasks, { source });
-    log.info(
-      `[recompute-queue] published recipes=${recipeIds.length} chunks=${tasks.length} source=${source}`,
-    );
   }
 
   async recomputeForIngredient(
@@ -623,25 +456,14 @@ export class RecipeCostingService {
     );
   }
 
-  /**
-   * The single entry for recompute triggered by a request-path mutation. Every
-   * dispatch first marks the affected recipes stale — the durable record — then
-   * publishes bounded tasks. The queue drains each chunk in its
-   * own invocation with a fresh CPU/memory budget. Node callers must configure
-   * an explicit queue producer. Returns the count of recipes
-   * invalidated.
-   */
+  /** Record stale totals and broad refresh intent in the same transaction. */
   async dispatchRecompute(
     recipeIds: RecipeId[],
-    metadata: RecipeRecomputeDispatchMetadata = {},
+    _metadata: RecipeRecomputeDispatchMetadata = {},
   ): Promise<number> {
     const ids = uniq(recipeIds);
     if (ids.length === 0) return 0;
-    // Correctness floor for both inline and deferred paths: callers may have
-    // already committed the triggering write, so stamp stale before any work
-    // that can fail independently.
     await markRecipesStale(this.db, ids);
-    await this.publishChunks(ids, metadata.source ?? "recipe-costing.dispatch");
     return ids.length;
   }
 
@@ -686,14 +508,7 @@ export class RecipeCostingService {
     );
   }
 
-  /**
-   * Recompute-all: mark every active recipe stale and publish bounded
-   * `recipe-totals.recompute` tasks — instead of holding a single request open
-   * to do the full CPU-heavy pass inline. The work then survives a navigate-
-   * away / Worker CPU limit: it runs on the queue. This is the same path every
-   * mutation-triggered recompute uses ({@link dispatchRecompute}); a full
-   * recompute is just the widest possible affected set.
-   */
+  /** Explicit full refresh uses the same broad recipes Job as mutation capture. */
   async selectAllQueued(): Promise<RecipeId[]> {
     return selectAllActiveRecipeIds(this.db);
   }
@@ -705,12 +520,7 @@ export class RecipeCostingService {
     return { enqueued: total, total };
   }
 
-  /**
-   * Recompute-STALE: same shape as the all-recipes drain, but seeded from
-   * {@link selectAllStaleRecipeIds} and publishing straight from that selection
-   * rather than through {@link dispatchRecompute}, whose stale-marking would be a
-   * no-op here and would misrepresent a backlog drain as a fresh invalidation.
-   */
+  /** Select persisted pending totals for an explicit refresh request. */
   async selectStaleQueued(): Promise<RecipeId[]> {
     return selectAllStaleRecipeIds(this.db);
   }
@@ -718,7 +528,9 @@ export class RecipeCostingService {
   async enqueueStaleQueued(ids: RecipeId[]) {
     const total = ids.length;
     if (total === 0) return { enqueued: 0, total: 0 };
-    await this.publishChunks(ids, "maintenance.recompute-stale");
+    await this.dispatchRecompute(ids, {
+      source: "maintenance.recompute-stale",
+    });
     return { enqueued: total, total };
   }
 }

@@ -23,7 +23,7 @@ import { groupBy, sumBy, uniq } from "es-toolkit";
 import { findDirectedDependencyCycles } from "~/server/db/helpers/dependency-graph";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
-import { entityLink } from "~/server/db/retained-tables";
+import { entityIdentity, entityLink } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
 import { recordContextRefresh as captureContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
 
@@ -78,6 +78,27 @@ export const linkQuantity = (quantity: number | null): number => {
 const endColumn = (end: EntityLinkEnd, table: LinkTable = entityLink) =>
   end === "from" ? table.fromEntityId : table.toEntityId;
 
+/** Hold endpoint identities through commit so removal cannot race attachment. */
+export async function assertLiveLinkEndpoints(
+  tx: DrizzleTransaction,
+  kind: EntityLinkKind,
+  ids: readonly string[],
+) {
+  const uniqueIds = uniq(ids).sort();
+  if (uniqueIds.length === 0) return;
+  const rows = await tx
+    .select({ id: entityIdentity.id, deletedAt: entityIdentity.deletedAt })
+    .from(entityIdentity)
+    .where(inArray(entityIdentity.id, uniqueIds))
+    .orderBy(entityIdentity.id)
+    .for("share");
+  if (
+    rows.length !== uniqueIds.length ||
+    rows.some((row) => row.deletedAt !== null)
+  )
+    throw new Error(`Cannot attach ${kind}: endpoint is missing or deleted`);
+}
+
 /**
  * Insert links, skipping pairs already live (the live pair key). Returns the
  * ids of the rows actually inserted.
@@ -88,6 +109,11 @@ export async function attachLinks(
   links: readonly { from: string; to: string; quantity?: number | null }[],
 ): Promise<string[]> {
   if (links.length === 0) return [];
+  await assertLiveLinkEndpoints(
+    tx,
+    kind,
+    links.flatMap((link) => [link.from, link.to]),
+  );
   const rows = await tx
     .insert(entityLink)
     .values(
@@ -250,8 +276,7 @@ type LinkRepointResult = {
  * resolving each collision with a live link the survivor already holds for
  * the same other end by the declared `onMergeCollision` of this end. A link
  * whose two ends both land on the survivor is dropped: it would be a
- * self-link. Runs before the losers are tombstoned (the live-endpoint trigger
- * refuses an update that leaves a live link on a deleted entity).
+ * self-link. Runs before the losers are tombstoned.
  */
 export async function repointLinkEnd(
   tx: DrizzleTransaction,
@@ -283,6 +308,10 @@ export async function repointLinkEnd(
     .from(entityLink)
     .where(and(liveLinks(args.kind), inArray(own, [...mergeSet])))
     .orderBy(entityLink.createdAt, entityLink.id);
+  await assertLiveLinkEndpoints(tx, args.kind, [
+    args.keepId,
+    ...rows.flatMap((row) => [row.fromEntityId, row.toEntityId]),
+  ]);
   const ownOf = (row: LinkRow) =>
     args.end === "from" ? row.fromEntityId : row.toEntityId;
   const otherOf = (row: LinkRow) =>
