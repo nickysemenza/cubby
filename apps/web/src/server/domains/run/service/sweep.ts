@@ -37,6 +37,7 @@ import {
   countUnmatchedCharges,
   generateStatementHoldVoidPage,
   generateStatementSuggestionPage,
+  retryStatementGenerationRefs,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { buildCrudServices } from "~/server/http/request-context";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -352,8 +353,29 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
     ),
     boundary: null,
   }),
-  page: async ({ db, run, step, work }) => {
+  page: async ({ db, run, step, work, retrying }) => {
     const scope = scopeOf(run, "statement_transaction");
+    const retryRefs = step.meta?.retryRefs;
+    if (retryRefs && (retrying || retryRefs.length > 0)) {
+      const refs = retryRefs.slice(0, JOB_PAGE_LIMITS.suggestionsPerPage);
+      const retried = await retryStatementGenerationRefs(db, {
+        runId: run.id,
+        scope,
+        refs,
+        work,
+      });
+      return {
+        kind: "progress",
+        delta: {
+          done: retried.done,
+          skipped: retried.skipped,
+          failed: retried.failed.length,
+        },
+        errors: retried.failed,
+        meta: { retryRefs: retryRefs.slice(refs.length) },
+        done: refs.length === retryRefs.length,
+      };
+    }
     const cursor = statementCursor.parse(step.cursor ?? null) ?? {
       after: null,
     };

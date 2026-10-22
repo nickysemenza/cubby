@@ -61,6 +61,7 @@ import {
   generateStatementHoldVoidPage,
   labelledProposal,
   publishChargeProposal,
+  retryStatementGenerationRefs,
 } from "./statement-suggestions";
 
 const importInput = (
@@ -821,19 +822,21 @@ describe("statement Transaction suggestions", () => {
       await getDb(ctx.db).execute(
         sql`DELETE FROM "SyntheticStatementPublicationFailure"`,
       );
-      const recovered = await generateStatementSuggestionPage(ctx.db, {
-        after: null,
+      const recovered = await retryStatementGenerationRefs(ctx.db, {
         runId: null,
-        limit: 5,
+        refs: first.failed.flatMap((failure) =>
+          failure.ref ? [failure.ref] : [],
+        ),
       });
-      expect(recovered).toMatchObject({
-        found: 5,
-        processed: 5,
-        published: 1,
-        unchanged: 4,
-        failed: [],
-        next: first.next,
-      });
+      expect(recovered).toEqual({ done: 1, skipped: 0, failed: [] });
+      expect(
+        await retryStatementGenerationRefs(ctx.db, {
+          runId: null,
+          refs: first.failed.flatMap((failure) =>
+            failure.ref ? [failure.ref] : [],
+          ),
+        }),
+      ).toEqual({ done: 1, skipped: 0, failed: [] });
       expect(await suggestions(ctx)).toHaveLength(7);
     } finally {
       await removeFailure();

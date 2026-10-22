@@ -21,8 +21,8 @@ import {
 } from "~/server/testing/background-queue";
 
 import { ensureRun } from "../repo/ensure-run";
-import { readRunSteps } from "../repo/run-step";
-import { advanceStepRun } from "./step-run";
+import { readRunSteps, recordRunStepPage } from "../repo/run-step";
+import { advanceStepRun, retryRunStep } from "./step-run";
 import { estimateSweep, startSweep } from "./sweep";
 
 let position = 0;
@@ -164,6 +164,52 @@ describe("Sweeps", () => {
       sql`SELECT count(*)::int AS count FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`,
     );
     expect(rows[0]?.count).toBe(3);
+  });
+
+  it("retries retained generation failures without revisiting new or healthy charges", async () => {
+    await account("Synthetic recovery card", "Synthetic Card (...4242)");
+    await recordRows([row(), row(), row()], "synthetic-recovery-original");
+    const runId = await startSweep(ctx.db, ctx.actor, {
+      trigger: "manual",
+      families: [{ family: "statement_transaction", scope: {} }],
+    });
+    expect(await drive(runId)).toBe("finished");
+    const { rows: original } = await getDb(ctx.db).execute<{
+      source: string;
+      chargeKey: string;
+    }>(sql`
+      SELECT source, "chargeKey" FROM "SourceTransactionRecord" ORDER BY id LIMIT 1
+    `);
+    const charge = original[0]!;
+    // Simulate a committed publication whose after-commit acknowledgement failed.
+    await recordRunStepPage(ctx.db, runId, "statement_generate", {
+      state: "failed",
+      delta: { done: -1, failed: 1 },
+      errors: [
+        {
+          at: new Date().toISOString(),
+          ref: `charge:${charge.source}:${charge.chargeKey}`,
+          message: "Synthetic after-commit failure",
+        },
+      ],
+    });
+    await recordRows([row()], "synthetic-recovery-later-arrival");
+    const reopened = await retryRunStep(ctx.db, runId, "statement_generate");
+    expect(reopened).not.toBeNull();
+    expect(await drive(runId)).toBe("finished");
+    const generation = (await readRunSteps(ctx.db, runId)).find(
+      (step) => step.key === "statement_generate",
+    );
+    expect(generation).toMatchObject({
+      state: "done",
+      done: 3,
+      failed: 0,
+      meta: { retryRefs: [], retriedFailures: 1 },
+    });
+    const { rows: counts } = await getDb(ctx.db).execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+    `);
+    expect(counts[0]?.count).toBe(3);
   });
 
   // Failure mode (prod label lag): a page of only stale suggestions ended the

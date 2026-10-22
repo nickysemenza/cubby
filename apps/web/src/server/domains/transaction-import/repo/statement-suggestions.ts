@@ -1428,7 +1428,17 @@ export async function publishChargeProposal(
         )} cs
         WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${proposal.judgment.recommended !== "book"})
       `);
-      if (settled.length) return { outcome: "settled", labelsReused: 0 };
+      if (settled.length) {
+        // A prior commit may have lost its after-commit retirement effect.
+        // Replaying that exact charge must finish the effect, not leave stale advice.
+        await transitionAssessmentStates(
+          tx,
+          sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}`,
+          { active: false, status: "superseded" },
+          { kind: "statement_settled_elsewhere" },
+        );
+        return { outcome: "settled", labelsReused: 0 };
+      }
     }
     if (isSettledBooking(proposal.judgment)) {
       const fresh = await prepareStatementSpending(tx, proposal.judgment);
@@ -1732,6 +1742,53 @@ export async function regenerateCharges(
     await publishChargeProposal(db, proposal, ruleProducer(null));
 }
 
+/** Re-admit only retained failed charges through the ordinary current-evidence planner. */
+export async function retryStatementGenerationRefs(
+  db: Database,
+  input: {
+    runId: string | null;
+    scope?: StatementSuggestionScope;
+    refs: readonly string[];
+    work?: PageWork;
+  },
+) {
+  const failed: RunStepError[] = [];
+  let done = 0;
+  let skipped = 0;
+  // Keep the same bounded page size even for a large historical failure set.
+  for (
+    let offset = 0;
+    offset < input.refs.length;
+    offset += STATEMENT_SUGGESTION_PAGE
+  ) {
+    const refs = input.refs.slice(offset, offset + STATEMENT_SUGGESTION_PAGE);
+    const charges = refs.flatMap((ref) => {
+      const match = /^charge:([^:]+):(.+)$/.exec(ref);
+      if (match?.[1] && match[2])
+        return [{ source: match[1], chargeKey: match[2] }];
+      failed.push(
+        statementGenerationFailure(
+          ref,
+          new Error("Unsupported statement generation failure reference"),
+        ),
+      );
+      return [];
+    });
+    if (!charges.length) continue;
+    const page = await generateStatementSuggestionPage(db, {
+      runId: input.runId,
+      scope: input.scope,
+      after: null,
+      retryCharges: charges,
+      work: input.work,
+    });
+    failed.push(...page.failed);
+    skipped += page.outOfScope;
+    done += page.processed - page.failed.length - page.outOfScope;
+  }
+  return { done, skipped, failed };
+}
+
 /** One generation page: deterministic, safe to repeat, resumable at `next`. */
 export async function generateStatementSuggestionPage(
   db: Database,
@@ -1742,6 +1799,8 @@ export async function generateStatementSuggestionPage(
     scope?: StatementSuggestionScope;
     /** A Run step's page recorder; receives the same timings the log line carries. */
     work?: PageWork;
+    /** Retained item failures only; never advance or restart the population cursor. */
+    retryCharges?: readonly ChargeRef[];
   },
 ): Promise<{
   found: number;
@@ -1762,11 +1821,13 @@ export async function generateStatementSuggestionPage(
     ),
   );
   const startedAt = performance.now();
-  const charges = await nextUnmatchedCharges(db, {
-    after: input.after,
-    limit,
-    scope: input.scope ?? {},
-  });
+  const charges = input.retryCharges
+    ? [...input.retryCharges]
+    : await nextUnmatchedCharges(db, {
+        after: input.after,
+        limit,
+        scope: input.scope ?? {},
+      });
   let published = 0;
   let labelsReused = 0;
   let unchanged = 0;
@@ -1854,7 +1915,8 @@ export async function generateStatementSuggestionPage(
     unchanged,
     outOfScope,
     failed,
-    next: charges.length === limit ? charges.at(-1)! : null,
+    next:
+      !input.retryCharges && charges.length === limit ? charges.at(-1)! : null,
   };
 }
 
