@@ -30,8 +30,6 @@ export type SpendingAdvicePort = (input: {
 export function needsSpendingAdvice(judgment: StatementTransactionJudgment) {
   return Boolean(
     judgment.create &&
-    judgment.create.status !== "void" &&
-    judgment.create.status !== "expected" &&
     ["purchase", "refund", "fee"].includes(judgment.create.kind),
   );
 }
