@@ -1,0 +1,21 @@
+apps/web/tests/e2e/declared-record-lists.spec.ts
+  s_d04e55f8362046::t_0cea341f7f141a 1,166,200-241,249-250,256-257,259,261-262,264-271,273,277,281-288,302
+apps/web/tests/e2e/table-work-signals.spec.ts
+  s_d04e55f8362046::t_68ae82a8ca92ac 1,16-17,52-59,79-87,114,116-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e18808b22a1d2771ca297c814b190875d22ba85f",
+  "prompts": {},
+  "sessions": {
+    "s_d04e55f8362046": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a165dc-2abb-7671-aae0-8cec2ac283bc",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

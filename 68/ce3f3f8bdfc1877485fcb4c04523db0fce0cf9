@@ -1,0 +1,19 @@
+docs/import-evidence-convergence.md
+  s_d04e55f8362046::t_3a74a4f380e575 113-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "68ce3f3f8bdfc1877485fcb4c04523db0fce0cf9",
+  "prompts": {},
+  "sessions": {
+    "s_d04e55f8362046": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a165dc-2abb-7671-aae0-8cec2ac283bc",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

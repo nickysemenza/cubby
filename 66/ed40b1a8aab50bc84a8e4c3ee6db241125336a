@@ -1,0 +1,23 @@
+apps/web/tests/e2e/fixtures/core.ts
+  s_d04e55f8362046::t_482f7f502fe4d5 13-17,21,23,31-46,133,153,156,158,191-195
+docs/agents/validation-tests.md
+  s_d04e55f8362046::t_8c23495b8e307b 55-60
+apps/web/tests/e2e/support/dispatch-wire.ts
+  s_d04e55f8362046::t_28f90df74e4de5 1,46-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "66ed40b1a8aab50bc84a8e4c3ee6db241125336a",
+  "prompts": {},
+  "sessions": {
+    "s_d04e55f8362046": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a165dc-2abb-7671-aae0-8cec2ac283bc",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
