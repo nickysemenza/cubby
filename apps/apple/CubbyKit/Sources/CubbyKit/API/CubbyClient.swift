@@ -707,7 +707,8 @@ public actor CubbyClient {
             try await api.calendar_range(
                 body: .json(
                     .init(
-                        startDate: start, endDateExclusive: end, kinds: [.meal]))
+                        startDate: .init(rawValue: start),
+                        endDateExclusive: .init(rawValue: end), kinds: [.meal]))
             ).ok.body.json
         }
     }
