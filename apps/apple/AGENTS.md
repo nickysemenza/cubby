@@ -6,6 +6,9 @@ harness. This document is the current native implementation guidance.
 [ITERATION.md](ITERATION.md) owns focused tests, previews, headless and simulator
 loops. [Validation](../../docs/agents/validation.md) owns check selection and delivery.
 
+For Apple UI changes, use `axiom-design` then `axiom-swiftui` (Claude names
+them `axiom:axiom-*`), plus the relevant platform skill.
+
 ## Build order
 
 [README](README.md#build-order) owns build order, running, and TestFlight setup.

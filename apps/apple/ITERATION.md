@@ -134,8 +134,9 @@ When only the selector changes, `test-without-building` reuses the existing test
 bundles and DerivedData without compiling again.
 
 1. Edit a `CubbyKit` algorithm or model and run its focused Swift test. For a
-   networked native change, run `pnpm test:e2e:sim -- --headless` after each
-   edit. Cargo and Swift use their standard incremental caches across runs.
+   networked native change, run the affected headless journey with
+   `pnpm test:e2e:sim -- --headless` after batching related edits.
+   Cargo and Swift use their standard incremental caches across runs.
 2. Edit a SwiftUI view and render its nearest `#Preview` through Xcode MCP.
    Entity row previews need `SignedInPreview` even with plain-data fixtures:
    their lazy field explanations read `AppModel` from the environment.
@@ -143,8 +144,8 @@ bundles and DerivedData without compiling again.
    block network reads. Add focused states such as empty, loading, error, dark,
    and large text when they expose the change. The generated fixture JSON comes
    from `pnpm generate`.
-3. When the change needs real interactions, run `pnpm test:e2e:sim` after each
-   edit. Xcode and Swift use their standard incremental caches across runs.
+3. When the change needs real interactions, run the affected
+   `pnpm test:e2e:sim` journey after batching related edits. Xcode and Swift use their standard incremental caches across runs.
 4. Run the scripted simulator flow for a cross-layer journey. Add `--video` when
    a human should review the exact UI actions. The database is unique per run
    and dropped afterward; artifacts stay under `artifacts/sim-e2e/`.

@@ -1,44 +1,31 @@
 # Cubby agent rules
 
-## Universal loop
+## Working loop
 
-- Make the requested in-scope change and reuse existing coverage by default.
-  New tests must protect a material uncovered failure worth their maintenance
-  and CI cost; code changes and bug fixes do not automatically earn a test.
-  [Validation policy](docs/agents/validation.md#test-retention) owns that decision, narrow
-  checks, failed-test read-back, client verification, and the merge gate.
-- Update the doc that owns a behavior in the same change. Follow
-  [documentation ownership](docs/README.md#ownership-and-pruning): one home per
-  fact, executable configuration in code, completed plans/reports in Git history.
-- Keep edits disjoint across agents/worktrees. Work directly by default; before
-  spawning (including a Codex hand-off), load [model
-  routing](docs/agents/model-routing.md) and use its lane, effort, review, and
-  handoff contract. Preserve an explicit user model choice and the current main
-  session.
-- Use synthetic data in all repository and outward-facing content — code,
-  fixtures, docs, commit messages, and GitHub issues, PRs, and comments —
-  including diagnostics, screenshots, and mockups; exclude household records,
-  private source material, and real entity identifiers. Preserve functional
-  public links.
-- Comments preserve constraints, regressions, contracts, and active TODOs—not
-  narration.
-- Bound tool output before returning it: targeted `rg`, file regions, selected
-  JSON fields, and failure excerpts. Use `rg --max-columns` when generated
-  files may contain large single-line records. Save verbose logs under ignored
-  `artifacts/` and retrieve relevant regions; a truncated dump is not evidence.
-  Batch independent reads within one shared output budget. Reuse unchanged
-  reads. Use absolute paths, `git -C`, and `pnpm --dir`; never `cd`.
-- The done report lists what the change deleted.
-- A correction becomes a rule in the doc that owns it. A repeated mistake means
-  that rule is unclear: rewrite it in place.
+- Make the requested change; preserve unrelated edits. Update the behavior's
+  [owning doc](docs/README.md#ownership-and-pruning) in the same change.
+- Reuse existing coverage. For test choice, checks, or delivery, load only the
+  relevant [validation section](docs/agents/validation.md#entry-points).
+- Work directly by default. Before delegation or selecting independent review,
+  load [model routing](docs/agents/model-routing.md). Preserve explicit user
+  model choices and the current main session; keep edits disjoint.
+- Use synthetic data in code, fixtures, docs, commits, issues, PRs, diagnostics,
+  screenshots and mockups. Exclude household records, private source material
+  and real entity identifiers; preserve functional public links.
+- Search with bounded `rg` and read the owning section before expanding scope.
+  Filter tool results before returning them; save verbose logs under ignored
+  `artifacts/`. A truncated dump requires targeted read-back. Use absolute
+  paths, `git -C`, and `pnpm --dir`; never `cd`.
+- Comments record constraints, regressions, contracts and active TODOs. Use
+  plain technical English. The done report lists deletions and unverified work.
+- Correct the owning rule when a mistake reveals a missing or unclear contract.
 
 ## Work tracking
 
-[GitHub Issues](https://github.com/nickysemenza/cubby/issues) is the canonical
-backlog. Follow the [issue workflow](docs/agents/issues.md) when selecting,
-creating, updating, or completing work; read Project fields and the issue body.
-Before implementation, check for existing issues covering the requested outcome;
-follow that workflow for discovery and PR attribution.
+Search existing [GitHub Issues](https://github.com/nickysemenza/cubby/issues)
+before implementation. For matches or backlog changes, follow the
+[issue workflow](docs/agents/issues.md#agent-workflow-with-gh), including Project
+fields, issue bodies and PR attribution. Issues own unfinished work.
 
 ## Breaking changes
 
@@ -56,12 +43,10 @@ RPC, MCP, manifest, stored-shape, or native wire changes, load
 
 ## Generic by default
 
-Design for the two-person household and its actual data volume. Prefer the
-smallest design that preserves the user flow, money, source evidence and member
-decisions. Give each responsibility one owner; reuse it before adding another
-ledger, scheduler, cache or recovery path. Justify additional machinery with a
-concrete failure or measured cost. When replacing a mechanism, remove its old
-callers, adapters and tests as part of the change.
+Design for the two-person household and its actual data volume. Preserve user
+flows, money, source evidence and member decisions. Reuse one owner per
+responsibility; justify added machinery with a concrete failure or measured
+cost. Replacing a mechanism removes its old callers, adapters and tests.
 
 Reuse before writing: search [generic paths](docs/agents/generic-paths.md).
 Entity behavior belongs in declarations and generic runtimes; for entity or
@@ -74,46 +59,18 @@ For background work or derived data, load
 [Background derived data](docs/entities.md#background-derived-data) before adding
 scheduling, consistency or repair behavior.
 
-Use plain technical English in code, docs and explanations. Name the operation
-and the condition it checks; prefer established terms over invented vocabulary.
-
 ## Product constraints
 
-The [README tenets](README.md#tenets) are binding: inventory never
-auto-decrements; `fdc_id` is product-only; rare interactive work stays
-interactive; all money is `SUM(Expense.cost)`; the trusted household has no
-multi-user coordination, restore/undo, reservations, or locking. Because the
-trusted household is the only audience, error surfaces (toasts, Technical
-details, HTTP/MCP error bodies) show raw diagnostics — SQL text and
-parameters, Postgres SQLSTATE codes, upstream response bodies — and are never
-masked or softened into generic messages; the only redaction is
-credential-shaped values (`scrubErrorMessage`). The README holds the entity map
-and example household scenarios; [development](docs/development.md) holds
-architecture, commands, testing, and deployment. Read only the relevant heading.
+Read the binding [README tenets](README.md#tenets) before changing product
+behavior. For error surfaces, follow [raw diagnostics](docs/agents/domain-rules.md#error-diagnostics).
+[Development](docs/development.md) owns architecture, commands and deployment.
+Read the relevant heading, not the whole reference.
 
-## Skill routing
-
-Use one owning skill; add another only for a distinct concern.
-
-- Unresolved material design decisions: `grilling`; approved briefs proceed.
-- Web UI: `impeccable` (Operate mode) and `apps/web/DESIGN.md`; broad sweeps:
-  `cubby-ui-design-audit`. Static detail polish (radius, alignment, hit
-  areas): `better-ui`. Motion and interaction feel: `emil-design-eng`.
-- Apple UI: `axiom-design` then `axiom-swiftui` (Claude names them
-  `axiom:axiom-*`); add the relevant platform skill.
-- Module seams and interfaces for a generic runtime: `codebase-design`.
-- Plans: `cubby-adversarial-plan-review`. PR fixes/CI:
-  `cubby-pr-ci-maintenance`. Decision evaluation: `decision-grading`.
-- Household operations: the matching meal, maintenance, garden, photo,
-  enrichment, or purchase skill.
-- Hard regressions: `diagnosing-bugs`. Terminology/model decisions:
-  `domain-modeling`. Requested test-first work: `tdd`; review: `code-review`.
-  Shared terms: [Terminology](docs/guide/terminology.md); household labels and
-  storage roles: [GLOSSARY.md](GLOSSARY.md).
+Use one owning skill; add another only for a distinct concern. Use the skill
+catalog's task triggers; app rules below own UI skill selection.
 
 ## Load when triggered
 
-- **Test choice, CI, PR, or validation:** [agent validation](docs/agents/validation.md).
 - **Schema, migration, delete/merge, identifiers, repo/service boundary, WASM,
   or Workers:** [agent domain rules](docs/agents/domain-rules.md).
 - **React, routes, browser behavior, styling, images, tables, or web UI:**
