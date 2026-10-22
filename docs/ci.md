@@ -227,8 +227,11 @@ defines a `.requiresVisionHardware` trait that skips Vision-dependent
 contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
-The host and simulator jobs each have a repository concurrency group with a
-non-dropping queue; at most one of each is active.
+Host and simulator jobs from independent runs may execute concurrently on
+separate hosted VMs, subject to GitHub's account-wide capacity. They have no
+repository-wide lane queue: serializing unrelated PRs would leave available
+macOS capacity unused. Workflow concurrency still cancels superseded PR
+revisions and lets an active main push finish before the next main push starts.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
@@ -509,7 +512,7 @@ and do not require human review.
 Optimize readiness across four concurrent PRs on the existing hosted plan.
 The Linux `lanes` matrix sets no `max-parallel`, so its six entries run
 concurrently; validation and short control jobs are additional demand, and
-native/optional work has repository-level limits. Standalone browser shards pay
+optional work has repository-level limits. Standalone browser shards pay
 setup four times to shorten the slowest lane; this does not reserve
 account-wide capacity or guarantee fairness against unrelated repositories.
 
