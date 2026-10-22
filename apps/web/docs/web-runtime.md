@@ -192,6 +192,8 @@ replace receipt reconciliation. Reads already in flight are retired and loaded
 views retain their ordinary refresh/error UI. Notification invalidation retains
 inactive baselines because streamed sections may still need them to hydrate;
 mount and detail loaders refetch those invalidated baselines before reuse.
+Refresh status renders only after its own hydration boundary is ready, since
+the shell can initiate subscription recovery before streamed sections hydrate.
 Additional hints received during refresh are combined for the next read.
 Subscription establishment, reconnect and app resume resync cache-backed queries
 to recover missed hints. Logout unmounts the subscription; delivery requires
