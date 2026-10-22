@@ -53,10 +53,8 @@ async function drainSearchJobs(db: Database, maxPages: number): Promise<void> {
     const outcome = await advanceJob(db, pending.id, {
       "refresh.family": refreshFamilyHandler,
     });
-    if (outcome === "failed")
-      throw new Error(
-        "Synthetic search publication failed; inspect its retained Job.error",
-      );
+    // A failed attempt can still be retry_wait. Read the durable state again
+    // so Job owns the retry budget and terminal errors retain its diagnostics.
     if (outcome === "skipped") {
       // Another runtime can already own the same durable Job; wait for its fenced publication.
       if (performance.now() >= deadline)
