@@ -1,0 +1,139 @@
+apps/web/drizzle/0008_run_model.sql
+  s_2f5ef323e3bb48::t_5283fb36e3a47f 1-50
+apps/web/drizzle/meta/_journal.json
+  s_2f5ef323e3bb48::t_d9f3fb4c451764 60-66
+apps/web/src/features/problems/components/maintenance-run-card.tsx
+  s_2f5ef323e3bb48::t_7eda062e81f102 192
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.ts
+  s_2f5ef323e3bb48::t_a91e25c644d201 1383,1385-1388,1394-1425,1438,1444-1457,1464-1510,1545-1546,1566-1567,1590,1613-1616,1625-1626,1628,1660,1679-1680,1685-1686,1688-1691,1693-1700,1706,1730-1732,1746,1759-1801
+apps/web/src/server/domains/maintenance/service/maintenance-run.integration.test.ts
+  s_2f5ef323e3bb48::t_dba0c669bcde59 2,22,30-33,105,116-124,219
+apps/web/src/server/domains/maintenance/service/maintenance-run.ts
+  s_2f5ef323e3bb48::t_456620c8d7a68c 23,70-73,76,78,91,98,109-111,114-118,231-233,235-239,242,250-266,269,271,278,280,287,301,314,324,328,330,332,336,338,345,354,357-358
+apps/web/src/server/domains/product/repo/conversion-coverage.ts
+  s_2f5ef323e3bb48::t_495ad7900af0b0 4,177-185
+apps/web/src/server/domains/purchase-import/operations/run-review.ts
+  s_2f5ef323e3bb48::t_843983eba5e0da 56,301
+apps/web/src/server/domains/purchase-import/repo/capabilities.ts
+  s_2f5ef323e3bb48::t_3b2da31d813cbf 69
+apps/web/src/server/domains/purchase-import/repo/gmail/publication-concurrency.integration.test.ts
+  s_2f5ef323e3bb48::t_bab914b0cd45f7 20,228-233
+apps/web/src/server/domains/run/operations/run.server.ts
+  s_2f5ef323e3bb48::t_7e2e6181ea9121 54,126
+apps/web/src/server/domains/run/repo/ai-refresh-admission.ts
+  s_2f5ef323e3bb48::t_82308edec6c935 22
+apps/web/src/server/domains/run/repo/ai-refresh-state.ts
+  s_2f5ef323e3bb48::t_cd306f8276acb2 135
+apps/web/src/server/domains/run/repo/connection-refresh.integration.test.ts
+  s_2f5ef323e3bb48::t_13292230cf5376 5,49
+apps/web/src/server/domains/run/repo/connection-refresh.ts
+  s_2f5ef323e3bb48::t_8d8fe104e77ce4 9-19,25,34,38,141-147,149-150,156-157,159,161-162,185-222,226,231,235-245,257,268
+apps/web/src/server/domains/run/repo/derived-discovery.ts
+  s_2f5ef323e3bb48::t_a246ac5d06c826 6,22,26
+apps/web/src/server/domains/run/repo/ensure-run.integration.test.ts
+  s_2f5ef323e3bb48::t_20f9459c1a4c0c 8
+apps/web/src/server/domains/run/repo/ensure-run.ts
+  s_2f5ef323e3bb48::t_dd516b7d4de1a0 31,151
+apps/web/src/server/domains/run/repo/routine-run.ts
+  s_2f5ef323e3bb48::t_748831dd011bf1 1-201
+apps/web/src/server/domains/run/repo/run-model-migration.integration.test.ts
+  s_2f5ef323e3bb48::t_70abb96ee5cd38 1-101
+apps/web/src/server/domains/run/repo/run-step.ts
+  s_2f5ef323e3bb48::t_6aecf700933ec3 17,31-32,73-112,135,160-162,235-245,337-379
+apps/web/src/server/domains/run/repo/work-progress.ts
+  s_2f5ef323e3bb48::t_37078a3f5c53d1 12,14,48-49,156-157,212-214,307-312,350,395,404
+apps/web/src/server/domains/run/service/ai-work.ts
+  s_2f5ef323e3bb48::t_5e1b00548f68c6 7-10,56-59,130,134,141,258
+apps/web/src/server/domains/run/service/derived-discovery.ts
+  s_2f5ef323e3bb48::t_1126cdcd57bae3 18-19,21-26,33,35-36,38-46,51-53,56,58-59
+apps/web/src/server/domains/run/service/run-step-registry.ts
+  s_2f5ef323e3bb48::t_16b15b01255149 1-43
+apps/web/src/server/domains/run/service/run-step-registry.unit.test.ts
+  s_2f5ef323e3bb48::t_5f6e9f7c579087 1-37
+apps/web/src/server/domains/run/service/step-run.integration.test.ts
+  s_2f5ef323e3bb48::t_fa03a557f66ed0 3,28,31-35,37-38,41-55,63,125,155,361-366,383-395,441-456,480-506,573-575,577-585,587-591,593-594,597-598,600-620,626-627,636-650,666-680,693-709,714
+apps/web/src/server/domains/run/service/step-run.ts
+  s_2f5ef323e3bb48::t_68e00b24c1529f 3-9,13,16-17,21,38,43,46,48-49,52,55-69,77,79,82-84,90,94-95,98-102,104-107,109-113,115-138,141-142,145,154-166,168-170,172,175-185,188,194,206-236,240,244-245,247-248,250-253,256-259,261,263,266,269-286,290-293,298,301-325,327-363,370,372-380,382-385,389-390,392-394,396,399,405,413-414,429,433,438,445,479,482,502-507
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_2f5ef323e3bb48::t_f09dc75696b298 203-250,371,542,546
+apps/web/src/server/domains/run/service/sweep.integration.test.ts
+  s_2f5ef323e3bb48::t_f56414c6d3c813 13,112-113,148-155,160,232-251,269-280,292,296,298,312,315-332,335-338,340,342-345,351,361-365
+apps/web/src/server/domains/run/service/sweep.ts
+  s_2f5ef323e3bb48::t_cc0089c4dc49d8 1,9,12,17-21,24-25,29,31,34,38,43,49-51,54,137-172,174,176-179,181-215,219-220,222-226,230,234-237,239-255,257-259,261-274,276-311,313-316,327-328,330-346,351-381,385-389,393-395,397,399-410,412-428,430-431,433-494,496,498-499,504-507,509-562,565-568,570-575,577-578,582-609,622,624-628,630-631,634-638,640-641,643-659,661,680-705,708-712,714-718,720-755,757-768
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts
+  s_2f5ef323e3bb48::t_20e51502438966 1811-1828,1846
+apps/web/src/server/domains/transaction-import/service/statement-suggestion-labels.ts
+  s_2f5ef323e3bb48::t_225f3953c40874 68
+apps/web/src/server/generic/assessment/repo/transfer-pair-queue.integration.test.ts
+  s_2f5ef323e3bb48::t_580599eb6bbc56 162-170
+apps/web/src/server/generic/derived-refresh/repo/broad-refresh.integration.test.ts
+  s_2f5ef323e3bb48::t_6afad662c30cd2 6-12,14-17,24-25,39,62-110
+apps/web/src/server/generic/derived-refresh/repo/families.ts
+  s_2f5ef323e3bb48::t_3b72b3505388fe 1,12-13
+apps/web/src/server/generic/derived-refresh/repo/process.ts
+  s_2f5ef323e3bb48::t_4cec656d5321fd 7,12-22,28,59-60,63-64,70,75-93,95,97-103,105-113,115-116,118-120,122-217,219-223,225-226,230-242,246-256
+apps/web/src/server/generic/embedding/repo/embedding-cleanup.ts
+  s_2f5ef323e3bb48::t_e1bf9e15721f2a 36
+apps/web/src/server/generic/entity-report/repo/run-dependencies.ts
+  s_2f5ef323e3bb48::t_5235d8c15bdbfc 20,159,161
+apps/web/src/server/generic/entity-report/repo/run-steps.unit.test.ts
+  s_2f5ef323e3bb48::t_fdb16820f9275f 32-36,38,43-51,53,55,63,72-80,84-85,87,89,95-102,105,107,109-111,117-122,127-136
+apps/web/src/server/generic/entity-report/repo/run.ts
+  s_2f5ef323e3bb48::t_80ff9c22f37d9f 13-16,900,902,906,914-920,922-927,934-938,944,949-950,958-973,979,982-986
+apps/web/src/server/generic/jobs/repo/jobs.integration.test.ts
+  s_2f5ef323e3bb48::t_dfdacf91714353 18-21,369-372
+apps/web/src/server/generic/problems/service/problems.service.ts
+  s_2f5ef323e3bb48::t_8024b376ef4318 322,326-331
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_2f5ef323e3bb48::t_c681319adde817 123,577
+apps/web/src/server/workflows/background-tasks/refresh-families.ts
+  s_2f5ef323e3bb48::t_5a606adf246e8e 10,32-38,50
+apps/web/src/server/workflows/runs/contract.ts
+  s_2f5ef323e3bb48::t_03212cc550bca3 5-6,8
+apps/web/src/server/workflows/runs/control.ts
+  s_2f5ef323e3bb48::t_9bf0e34cccf896 4-7,24,27-35,49,127-128,130-133,139-144,184-212,216,219,230,233,236,244-245,247,250-254,256-267,269-338
+apps/web/src/server/workflows/runs/job-execution.ts
+  s_2f5ef323e3bb48::t_a54c29e09f9e42 4,15,20,29-33,50-51,72,78,87
+apps/web/src/server/workflows/runs/lifecycle.ts
+  s_2f5ef323e3bb48::t_378d8e93e53d8d 25,71-76,79,104,110,132,136-143
+apps/web/src/server/workflows/runs/wake.ts
+  s_2f5ef323e3bb48::t_7948bbde27422e 6-10,25-26,31-35,44-48
+apps/web/tooling/test-setup.ts
+  s_2f5ef323e3bb48::t_5c99212279af1d 166-170,173-190
+docs/agents/generic-paths.md
+  s_2f5ef323e3bb48::t_a1a6e84dc5b801 25-36
+docs/entities.md
+  s_2f5ef323e3bb48::t_814f037f09b6b2 2216-2228
+docs/guide/terminology.md
+  s_2f5ef323e3bb48::t_8ebacb5fca88ce 503-528,786-788
+docs/runbooks/ai-refresh.md
+  s_2f5ef323e3bb48::t_8b1b7b1577ad16 59-61,73,172
+packages/schemas/src/activity-fields.ts
+  s_2f5ef323e3bb48::t_f0836e083e2615 3-110,113-442,444-466,472-511,550-553
+packages/schemas/src/activity.ts
+  s_2f5ef323e3bb48::t_89f7b3815ab52d 34
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_2f5ef323e3bb48::t_5366ec3d0d17d7 11,230-234,240
+packages/schemas/src/maintenance.ts
+  s_2f5ef323e3bb48::t_5b29b358d50d21 36-37
+packages/schemas/src/run-fields.ts
+  s_2f5ef323e3bb48::t_b5d79fc166b97b 10,12-13,15-19,21-27,453-466,471
+packages/schemas/src/run-step.ts
+  s_2f5ef323e3bb48::t_4fdef95aed8a66 2,6-9,37-52,54-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3efa867172900bd60b00feb50aa25c2fa0ae03b3",
+  "prompts": {},
+  "sessions": {
+    "s_2f5ef323e3bb48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "983d1247-580e-4791-a535-3dd4fb15b7d6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
