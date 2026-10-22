@@ -248,7 +248,7 @@ describe("MCP catalog", () => {
         to: "2026-01-11",
       }),
     ).toBeDefined();
-    expect(await call("finance_read", { action: "imports" })).toBeDefined();
+    expect(await call("finance_read", { action: "summary" })).toBeDefined();
     expect(await call("ai_funding_read", { action: "status" })).toMatchObject({
       credit: { state: "available" },
     });
