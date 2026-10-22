@@ -1,8 +1,8 @@
+import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
 import { MAX_PROJECT_TREE_DEPTH } from "../project-fields.js";
 import { selectControlOptions } from "./select-control-options.js";
-import { plainDate } from "@cubby/schemas/base-entity";
 import {
   ledgerPartyShortcode,
   imageShortcode,
@@ -40,7 +40,7 @@ export default defineEntity({
         {
           id: "schedule",
           title: "Schedule",
-          fields: ["dueDate", "dueEndDate"],
+          fields: ["due"],
         },
         {
           id: "ordering",
@@ -59,7 +59,6 @@ export default defineEntity({
       actionLabel: "New Task",
     },
     icons: { phosphor: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
-    spans: [{ start: "dueDate", end: "dueEndDate", label: "Due" }],
     detail: {
       activityRelations: [
         { relation: "subtasks", dateField: "dueDate" },
@@ -176,13 +175,7 @@ export default defineEntity({
           label: "Board",
           groupBy: "status",
           groupings: ["status", "projectId", "trade"],
-          cardFields: [
-            "projectId",
-            "trade",
-            "dueDate",
-            "status",
-            "dataQuality",
-          ],
+          cardFields: ["projectId", "trade", "due", "status", "dataQuality"],
           filters: { topLevelOnly: true },
           pageSize: 50,
           caps: [
@@ -203,11 +196,11 @@ export default defineEntity({
         "timeline",
       ],
       timeline: {
-        fields: ["dueDate", "dueEndDate"],
+        fields: ["due.start", "due.end"],
         lifecycle: {
           start: "createdAt",
-          milestones: ["dueDate"],
-          end: "dueEndDate",
+          milestones: ["due.start"],
+          end: "due.end",
         },
       },
     },
@@ -501,38 +494,27 @@ export default defineEntity({
         },
       },
       {
-        key: "dueDate",
-        kind: "date",
+        key: "due",
+        kind: "dateRange",
         nullable: true,
-        control: { kind: "date" },
+        dateRange: {
+          start: "dueDate",
+          end: "dueEndDate",
+          semantics: "deadline",
+        },
+        control: { kind: "dateRange" },
         display: {
-          format: "plainDate",
+          columnIdOverride: "dueDate",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
         validation: {
-          read: plainDate.nullable(),
-          create: plainDate.nullable().default(null),
-          update: plainDate.nullable().optional(),
+          read: storedDateRangeSchema.nullable(),
+          create: dateRangeSchema.nullable().default(null),
+          update: dateRangeSchema.nullable().optional(),
         },
       },
-      {
-        key: "dueEndDate",
-        kind: "date",
-        nullable: true,
-        control: { kind: "date" },
-        display: { listHidden: true, format: "plainDate" },
-        validation: {
-          read: plainDate.describe("End of a due-date range").nullable(),
-          create: plainDate
-            .describe("End of a due-date range")
-            .nullable()
-            .default(null),
-          update: plainDate
-            .describe("End of a due-date range")
-            .nullable()
-            .optional(),
-        },
-      },
+      { key: "dueDate", kind: "date", nullable: true },
+      { key: "dueEndDate", kind: "date", nullable: true },
       {
         key: "trade",
         kind: "enum",
@@ -812,8 +794,7 @@ export default defineEntity({
       "assigneeId",
       "assigneeMode",
       "parentTaskId",
-      "dueDate",
-      "dueEndDate",
+      "due",
       "trade",
       "sortOrder",
       "pendingImageIds",
@@ -828,8 +809,7 @@ export default defineEntity({
       "assigneeId",
       "assigneeMode",
       "parentTaskId",
-      "dueDate",
-      "dueEndDate",
+      "due",
       "trade",
       "sortOrder",
       "blockedByIds",
@@ -847,8 +827,7 @@ export default defineEntity({
       "assigneeId",
       "assigneeMode",
       "parentTaskId",
-      "dueDate",
-      "dueEndDate",
+      "due",
       "trade",
     ],
     derived: {
@@ -890,7 +869,7 @@ export default defineEntity({
           "assigneeId",
           "assigneeMode",
           "trade",
-          "dueDate",
+          "due",
           "pendingImageIds",
         ],
         full: [
@@ -903,14 +882,14 @@ export default defineEntity({
           "assigneeId",
           "assigneeMode",
           "trade",
-          "dueDate",
-          "dueEndDate",
+          "due",
+
           "notes",
           "pendingImageIds",
           "removeImageIds",
           "imageOrder",
         ],
-        schedule: ["name", "status", "dueDate", "dueEndDate"],
+        schedule: ["name", "status", "due"],
         status: ["status"],
         project: ["projectId"],
         subject: ["subjectProductId"],
@@ -922,7 +901,7 @@ export default defineEntity({
       editorFields: ["notes"],
       // Rescheduling is the point of the schedule editor, so a date is
       // required there even though a task may be unscheduled.
-      required: { schedule: ["dueDate"] },
+      required: { schedule: ["due"] },
     },
     output: [
       "fieldResolutions",
@@ -934,8 +913,7 @@ export default defineEntity({
       "projectId",
       "subjectProductId",
       "parentTaskId",
-      "dueDate",
-      "dueEndDate",
+      "due",
       "trade",
       "sortOrder",
       "projectName",
@@ -1282,7 +1260,7 @@ export default defineEntity({
       routing: {
         category: "home",
         candidateFields: ["name"],
-        temporalFields: ["dueDate"],
+        temporalFields: ["due.start", "due.end"],
         lifecycleFilters: [
           {
             field: "status",
@@ -1301,18 +1279,9 @@ export default defineEntity({
     dataQuality: {
       checks: [
         {
-          id: "task_due_date",
-          satisfiedLabel: "Due date recorded",
-          placement: { field: "dueDate" },
-          facet: "paperwork",
-          weight: 1,
-          label: "Due date",
-          message: "A due window end is recorded without its start.",
-        },
-        {
           id: "task_due_range",
           satisfiedLabel: "Due window in order",
-          placement: { field: "dueEndDate" },
+          placement: { field: "due" },
           facet: "integrity",
           kind: "defect",
           weight: 2,

@@ -1,3 +1,4 @@
+import type { TaskOut } from "@cubby/schemas/project";
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -32,8 +33,7 @@ interface TaskRow {
   subjectProductName: string | null;
   parentTaskId: string | null;
   parentTaskName: string | null;
-  dueDate: string | null;
-  dueEndDate: string | null;
+  due: TaskOut["due"];
   trade: string;
   sortOrder: number | null;
 }
@@ -46,8 +46,7 @@ const TASK_ROW: TaskRow = {
   subjectProductName: "Cabinet hinge",
   parentTaskId: "TSK-1",
   parentTaskName: "Demo cabinets",
-  dueDate: "2026-09-20",
-  dueEndDate: null,
+  due: { start: "2026-09-20", end: null },
   trade: "carpentry",
   sortOrder: null,
 };
@@ -81,7 +80,7 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
  * for the three relation-label columns (`projectId`/`subjectProductId`/
  * `parentTaskId` are `identifier` fields with a `reference`, so
  * `createEntityDisplayColumns` throws without one), and everything else
- * (`status`, `dueDate`, `dueEndDate`, `trade`, `sortOrder`) left generic to
+ * (`status`, `due`, `trade`, `sortOrder`) left generic to
  * exercise the declaration's own width/format/mobile metadata.
  */
 function buildTaskColumns() {
@@ -130,10 +129,13 @@ function renderTaskCell(columnId: string, row: TaskRow) {
 }
 
 describe("task list display columns", () => {
-  it("folds dueDate and dueEndDate into the one declared span column", () => {
+  it("renders the atomic due range in its declared column", () => {
     render(
       <>
-        {renderTaskCell("dueDate", { ...TASK_ROW, dueEndDate: "2026-09-23" })}
+        {renderTaskCell("dueDate", {
+          ...TASK_ROW,
+          due: { start: "2026-09-20", end: "2026-09-23" },
+        })}
       </>,
     );
     expect(screen.getByText(/Sep 20 – 23/)).toBeVisible();

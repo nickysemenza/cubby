@@ -19,7 +19,8 @@ function project(
     name: seed,
     status: "planning",
     parentProjectId: parent ? projectId(parent) : null,
-    dates: {
+    dates: start || end ? { start: start ?? null, end: end ?? null } : null,
+    dateWindow: {
       effectiveStart: start ?? null,
       effectiveEnd: end ?? null,
       startSource: start ? "explicit" : "none",
@@ -43,8 +44,7 @@ function task(
     projectId: owner ? projectId(owner) : null,
     parentTaskId: parent ? taskId(parent) : null,
     status: "not_started",
-    dueDate: due ?? null,
-    dueEndDate: dueEnd ?? null,
+    due: due || dueEnd ? { start: due ?? null, end: dueEnd ?? null } : null,
     blockedByIds: [],
     blockingIds: [],
   });

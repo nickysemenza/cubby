@@ -15,15 +15,13 @@ describe("calendarScheduleRows", () => {
         mock(taskOut, {
           overrides: {
             name: "Prepare bed",
-            dueDate: "2026-04-01",
-            dueEndDate: "2026-04-04",
+            due: { start: "2026-04-01", end: "2026-04-04" },
           },
         }),
         mock(taskOut, {
           overrides: {
             name: "Check supplies",
-            dueDate: null,
-            dueEndDate: null,
+            due: null,
           },
         }),
       ],
@@ -31,17 +29,15 @@ describe("calendarScheduleRows", () => {
         mock(plantingOut, {
           overrides: {
             displayName: "Example crop",
-            sowedOn: "2026-04-02",
+            season: { start: "2026-04-02", end: null },
             transplantedOn: "2026-05-10",
-            finishedOn: null,
           },
         }),
         mock(plantingOut, {
           overrides: {
             displayName: "Undated crop",
-            sowedOn: null,
+            season: null,
             transplantedOn: null,
-            finishedOn: null,
           },
         }),
       ],
@@ -81,8 +77,7 @@ describe("calendarScheduleRows", () => {
         mock(taskOut, {
           overrides: {
             name: "Prepare bed",
-            dueDate: null,
-            dueEndDate: null,
+            due: null,
           },
         }),
       ],
@@ -90,9 +85,8 @@ describe("calendarScheduleRows", () => {
         mock(plantingOut, {
           overrides: {
             displayName: "Example crop",
-            sowedOn: "2026-04-02",
+            season: { start: "2026-04-02", end: null },
             transplantedOn: "2026-04-10",
-            finishedOn: null,
           },
         }),
       ],

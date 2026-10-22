@@ -1,8 +1,8 @@
+import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
-import { plainDate } from "@cubby/schemas/base-entity";
 import {
   ledgerPartyShortcode,
   projectShortcode,
@@ -48,7 +48,7 @@ export default defineEntity({
         {
           id: "schedule",
           title: "Schedule",
-          fields: ["startDate", "endDate"],
+          fields: ["dates"],
         },
         {
           id: "details",
@@ -68,7 +68,6 @@ export default defineEntity({
       actionLabel: "New Project",
     },
     icons: { phosphor: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
-    spans: [{ start: "startDate", end: "endDate", label: "Dates" }],
     detail: {
       activityRelations: [
         { relation: "purchases", dateField: "date" },
@@ -527,33 +526,20 @@ Rules:
         },
       },
       {
-        key: "startDate",
-        kind: "date",
+        key: "dates",
+        kind: "dateRange",
         nullable: true,
-        control: { kind: "date" },
-        display: { format: "plainDate" },
+        dateRange: { start: "startDate", end: "endDate", semantics: "period" },
+        control: { kind: "dateRange" },
+        display: { columnIdOverride: "startDate" },
         validation: {
-          read: plainDate
-            .describe("Manual start override; usually null")
-            .nullable(),
-          create: plainDate.nullable().default(null),
-          update: plainDate.nullable().optional(),
+          read: storedDateRangeSchema.nullable(),
+          create: dateRangeSchema.nullable().default(null),
+          update: dateRangeSchema.nullable().optional(),
         },
       },
-      {
-        key: "endDate",
-        kind: "date",
-        nullable: true,
-        control: { kind: "date" },
-        display: { format: "plainDate" },
-        validation: {
-          read: plainDate
-            .describe("Manual end override; usually null")
-            .nullable(),
-          create: plainDate.nullable().default(null),
-          update: plainDate.nullable().optional(),
-        },
-      },
+      { key: "startDate", kind: "date", nullable: true },
+      { key: "endDate", kind: "date", nullable: true },
 
       {
         key: "notes",
@@ -742,7 +728,7 @@ Rules:
       },
       {
         display: { detail: false, list: false },
-        key: "dates",
+        key: "dateWindow",
         kind: "json",
         validation: {
           read: projectDateWindow,
@@ -809,8 +795,7 @@ Rules:
       "defaultTrade",
       "costEstimate",
       "parentProjectId",
-      "startDate",
-      "endDate",
+      "dates",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",
@@ -827,8 +812,7 @@ Rules:
       "defaultTrade",
       "costEstimate",
       "parentProjectId",
-      "startDate",
-      "endDate",
+      "dates",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",
@@ -845,8 +829,7 @@ Rules:
       "defaultTrade",
       "costEstimate",
       "parentProjectId",
-      "startDate",
-      "endDate",
+      "dates",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",
@@ -905,7 +888,7 @@ Rules:
           "assigneeId",
           "assigneeMode",
           "defaultTrade",
-          "startDate",
+          "dates",
         ],
         full: [
           "emoji",
@@ -913,8 +896,8 @@ Rules:
           "status",
           "kind",
           "parentProjectId",
-          "startDate",
-          "endDate",
+          "dates",
+
           "costEstimate",
           "locations",
           "locationsMode",
@@ -928,7 +911,7 @@ Rules:
         ],
         status: ["emoji", "status"],
         kind: ["emoji", "kind"],
-        dates: ["emoji", "startDate", "endDate"],
+        dates: ["emoji", "dates"],
         parent: ["emoji", "parentProjectId"],
       },
       create: ["capture", "full"],
@@ -947,8 +930,7 @@ Rules:
       "defaultTrade",
       "costEstimate",
       "parentProjectId",
-      "startDate",
-      "endDate",
+      "dates",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",
@@ -961,7 +943,7 @@ Rules:
       "rollup",
       "spent",
       "taskProgress",
-      "dates",
+      "dateWindow",
     ],
   },
   fields: {
@@ -1550,7 +1532,7 @@ Rules:
       routing: {
         category: "home",
         candidateFields: ["name", "notes"],
-        temporalFields: ["startDate", "endDate"],
+        temporalFields: ["dates.start", "dates.end"],
         lifecycleFilters: [
           {
             field: "status",
@@ -1580,7 +1562,7 @@ Rules:
         {
           id: "project_start_date",
           satisfiedLabel: "Start date recorded",
-          placement: { field: "startDate" },
+          placement: { field: "dates" },
           facet: "paperwork",
           weight: 1,
           label: "Start date",
@@ -1589,7 +1571,7 @@ Rules:
         {
           id: "project_date_order",
           satisfiedLabel: "Dates in order",
-          placement: { field: "endDate" },
+          placement: { field: "dates" },
           facet: "integrity",
           kind: "defect",
           weight: 2,

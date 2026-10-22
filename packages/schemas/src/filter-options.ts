@@ -97,7 +97,7 @@ export const filterOptionItem = z.object({
    * Present when requested through `include` (`project`'s effective content
    * window — see `projectNameOptions`).
    */
-  dates: z
+  dateWindow: z
     .object({
       effectiveStart: plainDate.nullable(),
       effectiveEnd: plainDate.nullable(),

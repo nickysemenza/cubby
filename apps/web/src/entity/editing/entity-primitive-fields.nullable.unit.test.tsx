@@ -1,3 +1,4 @@
+import { dateRangeSchema } from "@cubby/schemas/date-range";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -103,8 +104,7 @@ it("clears nullable text and numbers as null without treating zero as empty", as
 
 const spanValuesSchema = z.object({
   draft: z.object({
-    dueDate: z.string().nullable(),
-    dueEndDate: z.string().nullable(),
+    due: dateRangeSchema.nullable(),
   }),
 });
 function TaskSpanFields({
@@ -113,7 +113,7 @@ function TaskSpanFields({
   save: (values: z.infer<typeof spanValuesSchema>) => void;
 }) {
   const form = useForm<z.infer<typeof spanValuesSchema>>({
-    defaultValues: { draft: { dueDate: null, dueEndDate: "2026-10-30" } },
+    defaultValues: { draft: { due: { start: null, end: "2026-10-30" } } },
   });
   return (
     <FormProvider {...form}>
@@ -125,8 +125,8 @@ function TaskSpanFields({
         <EntityPrimitiveFields
           entity="task"
           mode="edit"
-          include={["dueDate", "dueEndDate"]}
-          paths={{ dueDate: "draft.dueDate", dueEndDate: "draft.dueEndDate" }}
+          include={["due"]}
+          paths={{ due: "draft.due" }}
         />
         <button type="submit">Save</button>
       </form>
@@ -142,7 +142,7 @@ it("preserves mapped span values until an explicit change and submits a single d
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(save).toHaveBeenLastCalledWith({
-      draft: { dueDate: null, dueEndDate: "2026-10-30" },
+      draft: { due: { start: null, end: "2026-10-30" } },
     }),
   );
 
@@ -155,7 +155,7 @@ it("preserves mapped span values until an explicit change and submits a single d
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(save).toHaveBeenLastCalledWith({
-      draft: { dueDate: "2026-10-28", dueEndDate: null },
+      draft: { due: { start: "2026-10-28", end: null } },
     }),
   );
 
@@ -165,7 +165,7 @@ it("preserves mapped span values until an explicit change and submits a single d
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(save).toHaveBeenLastCalledWith({
-      draft: { dueDate: null, dueEndDate: null },
+      draft: { due: null },
     }),
   );
 });

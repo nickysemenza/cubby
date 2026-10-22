@@ -95,6 +95,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
       "sets the item or label purpose for each pending ProductImage row",
   },
   project: {
+    dates: "stored as the startDate + endDate column pair",
     googleDriveFolderUrl: "writes the (google-drive, folder) EntityExternalId",
     notionPageUrl: "the url of the (notion, page) EntityExternalId",
   },
@@ -103,7 +104,13 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     sections: "writes RecipeSection + RecipeSectionIngredient rows",
     pendingImageIds: "writes RecipeImage rows",
   },
-  task: { pendingImageIds: "writes TaskImage rows" },
+  task: {
+    due: "stored as the dueDate + dueEndDate column pair",
+    pendingImageIds: "writes TaskImage rows",
+  },
+  planting: {
+    season: "stored as the sowedOn + finishedOn column pair",
+  },
   wish: { candidateProductIds: "writes wishCandidate EntityLink rows" },
 };
 

@@ -8,7 +8,10 @@ test("calendar events open an anchored editor, save atomically, and restore focu
 }, testInfo) => {
   const name = `e2e inline calendar task ${Date.now()}-${testInfo.workerIndex}-${testInfo.repeatEachIndex}`;
   const updatedName = `${name} edited`;
-  await seedTaskPrerequisite(page, { name, dueDate: "2026-07-16" });
+  await seedTaskPrerequisite(page, {
+    name,
+    due: { start: "2026-07-16", end: null },
+  });
   await gotoAuthenticatedPage(page, "/calendar?date=2026-07-01");
 
   const event = page.getByRole("button", { name: `${name}, All day` }).first();

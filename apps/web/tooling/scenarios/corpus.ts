@@ -389,8 +389,7 @@ async function seedConnectedHousehold(
           index % 4
         ],
         locations: [locations[index % locations.length]!.id],
-        startDate: day(-60),
-        endDate: day(30),
+        dates: { start: day(-60), end: day(30) },
         notes:
           "Invented project with connected supplies, purchases, and work.\nSecond line exercises multiline facts.",
       }),
@@ -539,7 +538,7 @@ async function seedConnectedHousehold(
         projectId: projects[index % projects.length]!.id,
         subjectProductId:
           index % 2 ? foodProducts[index % foodProducts.length]!.id : tool.id,
-        dueDate: day(index - 8),
+        due: { start: day(index - 8), end: null },
         trade: "other",
       }),
     );
@@ -580,7 +579,7 @@ async function seedConnectedHousehold(
         name: `Cedar Sow ${name} ${status}`,
         projectId: projects[1]!.id,
         subjectProductId: seeds.id,
-        dueDate: sowingDate,
+        due: { start: sowingDate, end: null },
         status: status === "planned" ? "not_started" : "done",
         trade: "other",
       });
@@ -594,8 +593,13 @@ async function seedConnectedHousehold(
           status === "finished" ? (index === 2 ? "failed" : "succeeded") : null,
         quantity: "Six starts",
         plannedWindow: "Autumn",
-        sowedOn: status === "planned" ? null : sowingDate,
-        finishedOn: status === "finished" ? day(-7) : null,
+        season:
+          status === "planned"
+            ? null
+            : {
+                start: sowingDate,
+                end: status === "finished" ? day(-7) : null,
+              },
       });
       await create("gardenEntry", {
         locationId: garden.id,

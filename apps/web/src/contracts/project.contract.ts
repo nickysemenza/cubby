@@ -30,8 +30,7 @@ const houseStatusTask = schemas.taskOut.pick({
   projectName: true,
   subjectProductId: true,
   subjectProductName: true,
-  dueDate: true,
-  dueEndDate: true,
+  due: true,
   trade: true,
 });
 

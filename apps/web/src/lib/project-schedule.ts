@@ -7,7 +7,7 @@ export type ProjectScheduleRow = ReportScheduleRow;
 
 export type ProjectForSchedule = Pick<
   ProjectOut,
-  "id" | "name" | "status" | "dates" | "blockedByIds" | "blockingIds"
+  "id" | "name" | "status" | "dateWindow" | "blockedByIds" | "blockingIds"
 >;
 
 export function projectScheduleRow(
@@ -15,12 +15,12 @@ export function projectScheduleRow(
   depth: number,
   expandable: boolean,
 ): ProjectScheduleRow {
-  const start = project.dates.effectiveStart;
-  const end = project.dates.effectiveEnd;
+  const start = project.dateWindow.effectiveStart;
+  const end = project.dateWindow.effectiveEnd;
   const dated = start ?? end;
   const source =
-    project.dates.startSource === "derived" ||
-    project.dates.endSource === "derived"
+    project.dateWindow.startSource === "derived" ||
+    project.dateWindow.endSource === "derived"
       ? " · Derived dates"
       : "";
   const segments: ProjectScheduleRow["segments"] = [];
@@ -55,8 +55,7 @@ type ScheduleTask = Pick<
   | "id"
   | "name"
   | "status"
-  | "dueDate"
-  | "dueEndDate"
+  | "due"
   | "projectId"
   | "parentTaskId"
   | "blockedByIds"
@@ -68,8 +67,8 @@ function taskScheduleRow(
   depth: number,
   expandable: boolean,
 ): ProjectScheduleRow {
-  const start = task.dueDate;
-  const end = task.dueEndDate;
+  const start = task.due?.start ?? null;
+  const end = task.due?.end ?? null;
   const dated = start ?? end;
   const segments: ProjectScheduleRow["segments"] = [];
   if (dated) {

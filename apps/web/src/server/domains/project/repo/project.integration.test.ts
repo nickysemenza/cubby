@@ -370,8 +370,7 @@ describe("project repository — date windows (derivation)", () => {
       trade: "other",
       name: "dates content task",
       projectId: project.id,
-      dueDate: "2024-02-01",
-      dueEndDate: "2024-02-03",
+      due: { start: "2024-02-01", end: "2024-02-03" },
     });
     await createRepoEntity(ctx, "expense", {
       trade: "other",
@@ -383,7 +382,7 @@ describe("project repository — date windows (derivation)", () => {
     });
 
     const after = await getProjectByID(ctx.db, projectEntityId);
-    expect(after.dates).toEqual({
+    expect(after.dateWindow).toEqual({
       derivedStart: "2024-01-15",
       derivedEnd: "2024-02-03",
       effectiveStart: "2024-01-15",
@@ -407,7 +406,7 @@ describe("project repository — date windows (derivation)", () => {
    * It shipped broken because nothing exercised this sort, and `startDate` is
    * the projects table's DEFAULT sort. It must also sort by the EARLIER of the
    * task and expense mins (LEAST, not a coalesce chain) so the ordering
-   * agrees with the `dates.effectiveStart` each row displays.
+   * agrees with the `dateWindow.effectiveStart` each row displays.
    */
 });
 

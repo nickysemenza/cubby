@@ -11,8 +11,7 @@ const PLAIN_DATE = /^(\d{4})-(\d{2})-\d{2}$/;
  * The one human format for a (start, optional end) plain-date span: "Sep 22",
  * "Sep 22 – 25", "Sep 30 – Oct 2". The year always appears, on both ends when they differ in year. Past, present,
  * and future days include relative context; a range covering today is ongoing. A null
- * or equal end collapses to a single day. Declared spans
- * (`presentation.spans`) and every ad hoc range label share this.
+ * or equal end collapses to a single day. Compound date ranges and every ad hoc range label share this.
  */
 export function formatDateSpan(
   start: string | null,

@@ -1,3 +1,4 @@
+import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -30,7 +31,6 @@ export default defineEntity({
       actionLabel: "New Planting",
     },
     icons: { phosphor: "Plant", sfSymbol: "leaf", emoji: "🌱" },
-    spans: [{ start: "sowedOn", end: "finishedOn", label: "Season" }],
     detail: {
       activityRelations: [{ relation: "entries", dateField: "observedOn" }],
       variantOverride: "journal",
@@ -64,9 +64,8 @@ export default defineEntity({
             "sourceProductId",
             "quantity",
             "plannedWindow",
-            "sowedOn",
+            "season",
             "transplantedOn",
-            "finishedOn",
             "notes",
             "taskId",
             "expectedHarvest",
@@ -117,15 +116,15 @@ export default defineEntity({
       links: [{ label: "Garden workbench", path: "/garden-workbench" }],
       timeline: {
         fields: [
-          "sowedOn",
+          "season.start",
           "transplantedOn",
           "expectedHarvestStart",
-          "finishedOn",
+          "season.end",
         ],
         lifecycle: {
-          start: ["sowedOn", "transplantedOn"],
+          start: ["season.start", "transplantedOn"],
           milestones: ["transplantedOn", "expectedHarvestStart"],
-          end: "finishedOn",
+          end: "season.end",
         },
       },
     },
@@ -215,7 +214,7 @@ export default defineEntity({
         control: {
           kind: "select",
           suggest: {
-            basis: ["transplantedOn", "finishedOn"],
+            basis: ["transplantedOn", "season"],
             rules: [
               `Infer the planting lifecycle status from its dates, compared with Today. A finished date on or before Today indicates finished. A sow or transplant date on or before Today indicates growing. A sow or transplant date after Today is an estimate on a planned planting, so choose planned; with no dates choose planned.`,
             ],
@@ -290,17 +289,19 @@ export default defineEntity({
         },
       },
       {
-        key: "sowedOn",
-        kind: "date",
+        key: "season",
+        kind: "dateRange",
         nullable: true,
-        control: { kind: "date" },
-        display: { format: "plainDate" },
+        dateRange: { start: "sowedOn", end: "finishedOn", semantics: "period" },
+        control: { kind: "dateRange" },
+        display: { columnIdOverride: "sowedOn" },
         validation: {
-          read: plainDate.nullable(),
-          create: plainDate.nullable().default(null),
-          update: plainDate.nullable().optional(),
+          read: storedDateRangeSchema.nullable(),
+          create: dateRangeSchema.nullable().default(null),
+          update: dateRangeSchema.nullable().optional(),
         },
       },
+      { key: "sowedOn", kind: "date", nullable: true },
       {
         key: "transplantedOn",
         kind: "date",
@@ -313,18 +314,7 @@ export default defineEntity({
           update: plainDate.nullable().optional(),
         },
       },
-      {
-        key: "finishedOn",
-        kind: "date",
-        nullable: true,
-        control: { kind: "date" },
-        display: { format: "plainDate" },
-        validation: {
-          read: plainDate.nullable(),
-          create: plainDate.nullable().default(null),
-          update: plainDate.nullable().optional(),
-        },
-      },
+      { key: "finishedOn", kind: "date", nullable: true },
       {
         display: { detail: false, list: false },
         key: "plantName",
@@ -409,7 +399,7 @@ export default defineEntity({
             "The later of the sow and transplant dates each plus the plant's days to maturity, from its packet when recorded, else the crop estimate.",
           readPath: "expectedHarvestStart",
           sourceDependencies: [
-            { path: "sowedOn", label: "Sowed" },
+            { path: "season.start", label: "Sowed" },
             { path: "transplantedOn", label: "Transplanted" },
             { path: "plantId", label: "Plant" },
           ],
@@ -511,9 +501,8 @@ export default defineEntity({
       "quantity",
       "notes",
       "plannedWindow",
-      "sowedOn",
+      "season",
       "transplantedOn",
-      "finishedOn",
     ],
     update: [
       "plantId",
@@ -525,18 +514,10 @@ export default defineEntity({
       "quantity",
       "notes",
       "plannedWindow",
-      "sowedOn",
+      "season",
       "transplantedOn",
-      "finishedOn",
     ],
-    audit: [
-      "status",
-      "outcome",
-      "plantId",
-      "locationId",
-      "finishedOn",
-      "taskId",
-    ],
+    audit: ["status", "outcome", "plantId", "locationId", "taskId"],
     derived: {
       gardenEntryId: { via: "entries" },
       // From the first of sowed, transplanted or created to `finishedOn`
@@ -559,9 +540,8 @@ export default defineEntity({
           "quantity",
           "notes",
           "plannedWindow",
-          "sowedOn",
+          "season",
           "transplantedOn",
-          "finishedOn",
         ],
       },
       create: ["full", "capture"],
@@ -578,9 +558,8 @@ export default defineEntity({
       "quantity",
       "notes",
       "plannedWindow",
-      "sowedOn",
+      "season",
       "transplantedOn",
-      "finishedOn",
       "displayName",
       "plantName",
       "expectedHarvestStart",
@@ -827,7 +806,7 @@ export default defineEntity({
       routing: {
         category: "plants",
         candidateFields: ["plantName", "notes"],
-        temporalFields: ["sowedOn", "transplantedOn", "finishedOn"],
+        temporalFields: ["season.start", "transplantedOn", "season.end"],
         lifecycleFilters: [{ field: "status", equals: "growing" }],
         signals: {
           ocrFields: ["plantName", "notes"],
@@ -869,7 +848,7 @@ export default defineEntity({
         {
           id: "planting_finished",
           satisfiedLabel: "Finish recorded",
-          placement: { field: "finishedOn" },
+          placement: { field: "season" },
           facet: "content",
           weight: 2,
           label: "Finish",

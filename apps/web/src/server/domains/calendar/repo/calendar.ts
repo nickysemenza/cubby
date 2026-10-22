@@ -162,16 +162,10 @@ const loadCalendarTasks = async (
     .where(
       and(
         condition,
-        or(
-          isNotNull(task[calendarSources.task.dates[0]]),
-          isNotNull(task[calendarSources.task.dates[1]]),
-        ),
-        lte(
-          sql`coalesce(${task[calendarSources.task.dates[0]]}, ${task[calendarSources.task.dates[1]]})`,
-          endInclusive,
-        ),
+        or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
+        lte(sql`coalesce(${task.dueDate}, ${task.dueEndDate})`, endInclusive),
         gte(
-          sql`coalesce(${task[calendarSources.task.dates[1]]}, ${task[calendarSources.task.dates[0]]})`,
+          sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
           input.startDate,
         ),
       ),
@@ -275,12 +269,8 @@ const mapTaskItems = async (
   return rows.flatMap((row) => {
     // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
     const value = dbTaskToAPI(row, [], [], 0, 0, dataQualities.get(row.id)!);
-    const startDate =
-      value[calendarSources.task.dates[0]] ??
-      value[calendarSources.task.dates[1]];
-    const endDate =
-      value[calendarSources.task.dates[1]] ??
-      value[calendarSources.task.dates[0]];
+    const startDate = value.due?.start ?? value.due?.end;
+    const endDate = value.due?.end ?? value.due?.start;
     return startDate && endDate
       ? [
           {
@@ -290,8 +280,7 @@ const mapTaskItems = async (
             startDate,
             endDateExclusive: shiftPlainDate(endDate, 1),
             interaction: "move" as const,
-            dueDate: value[calendarSources.task.dates[0]],
-            dueEndDate: value[calendarSources.task.dates[1]],
+            due: value.due,
             status: value.status,
             trade: value.trade,
             projectName: value.projectName,
@@ -524,17 +513,14 @@ export async function getCalendarSchedule(
             and(
               notDeleted(task),
               or(
-                and(
-                  isNull(task[calendarSources.task.dates[0]]),
-                  isNull(task[calendarSources.task.dates[1]]),
-                ),
+                and(isNull(task.dueDate), isNull(task.dueEndDate)),
                 and(
                   lte(
-                    sql`coalesce(${task[calendarSources.task.dates[0]]}, ${task[calendarSources.task.dates[1]]})`,
+                    sql`coalesce(${task.dueDate}, ${task.dueEndDate})`,
                     endInclusive,
                   ),
                   gte(
-                    sql`coalesce(${task[calendarSources.task.dates[1]]}, ${task[calendarSources.task.dates[0]]})`,
+                    sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
                     input.startDate,
                   ),
                 ),
@@ -560,19 +546,19 @@ export async function getCalendarSchedule(
   ]);
   tasks.sort(
     (a, b) =>
-      (a.dueDate ?? a.dueEndDate ?? "9999-12-31").localeCompare(
-        b.dueDate ?? b.dueEndDate ?? "9999-12-31",
+      (a.due?.start ?? a.due?.end ?? "9999-12-31").localeCompare(
+        b.due?.start ?? b.due?.end ?? "9999-12-31",
       ) || a.name.localeCompare(b.name),
   );
   plantings.sort(
     (a, b) =>
       (
-        a.sowedOn ??
+        a.season?.start ??
         a.transplantedOn ??
-        a.finishedOn ??
+        a.season?.end ??
         "9999-12-31"
       ).localeCompare(
-        b.sowedOn ?? b.transplantedOn ?? b.finishedOn ?? "9999-12-31",
+        b.season?.start ?? b.transplantedOn ?? b.season?.end ?? "9999-12-31",
       ) || a.displayName.localeCompare(b.displayName),
   );
   return { tasks, plantings };

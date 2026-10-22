@@ -1,3 +1,4 @@
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 /** Complete, non-paginated work graph for the graph explorer. */
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -285,8 +286,7 @@ const projectNodes = (
         name: row.name,
         status: row.status,
         locations: row.locations,
-        dueDate: null,
-        dueEndDate: null,
+        due: null,
         parentId: row.parentProjectId
           ? (codes.projects.get(row.parentProjectId) ?? null)
           : null,
@@ -318,8 +318,7 @@ const taskNodes = (
         locations: row.projectId
           ? (projects.get(row.projectId)?.locations ?? [])
           : [],
-        dueDate: row.dueDate,
-        dueEndDate: row.dueEndDate,
+        due: dateRangeFromDates(row.dueDate, row.dueEndDate),
         parentId,
         external: !scope.ownedTasks.has(row.id),
       },

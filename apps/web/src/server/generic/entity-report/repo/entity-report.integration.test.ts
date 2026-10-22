@@ -467,8 +467,7 @@ describe("entity report", () => {
   it("lists the schedule in tree order with undated rows and dependency ids", async () => {
     const { output: root } = await createRepoEntity(ctx, "project", {
       name: "Schedule root",
-      startDate: "2026-09-01",
-      endDate: "2026-09-30",
+      dates: { start: "2026-09-01", end: "2026-09-30" },
     });
     const { output: child } = await createRepoEntity(ctx, "project", {
       name: "Schedule child",
@@ -478,7 +477,7 @@ describe("entity report", () => {
       name: "Schedule dated task",
       trade: "other",
       projectId: root.id,
-      dueDate: "2026-09-10",
+      due: { start: "2026-09-10", end: null },
     });
     const { output: undated } = await createRepoEntity(ctx, "task", {
       name: "Schedule undated task",

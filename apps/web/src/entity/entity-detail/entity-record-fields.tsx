@@ -27,6 +27,7 @@ const INLINE_EDITABLE_CONTROLS = new Set([
   "textarea",
   "number",
   "date",
+  "dateRange",
   "select",
   "checkbox",
 ]);

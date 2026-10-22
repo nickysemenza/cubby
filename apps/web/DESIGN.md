@@ -71,13 +71,13 @@ source evidence and raw failures retain their existing review disclosure. Activi
 rows may stack provenance beneath the primary change; an arrow stays attached to
 its destination value rather than wrapping alone.
 
-An editor showing both ends of a declared plain-date span uses one labelled
-control with Single date and Date range modes. It keeps typed date entry, the
-shared calendar, both canonical form fields and their validation errors. Opening
-or dismissing the control preserves values, including an existing end-only date;
-choosing Single date explicitly clears the optional end. Scoped single-field and
-bulk editors retain their independent field controls. Record references and
-inheritance sources use EntityRefLink.
+A declared `dateRange` field uses one labelled control and saves both calendar-date
+bounds together. Deadline fields offer Single date and Date range; period fields
+keep independent optional Start and End controls. Typed entry and the shared
+calendar remain available. Opening or dismissing the picker preserves end-only
+values; Single date explicitly clears the end. Periods display From or Through
+when only one bound is known. Scoped and bulk edits use the same compound value.
+Record references and inheritance sources use EntityRefLink.
 
 ### Component sources and boundaries
 

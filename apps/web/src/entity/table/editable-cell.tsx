@@ -1,12 +1,18 @@
 "use client";
 
 import type { Amount } from "@cubby/schemas/codec";
+import {
+  dateRangeSchema,
+  dateRangeFromDates,
+  type CalendarDateRange,
+} from "@cubby/schemas/date-range";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { useId } from "react";
 import type React from "react";
 import {
   createContext,
@@ -24,6 +30,7 @@ import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { CellEditorPendingContext } from "~/ui/data-table/cell-editor-overlay";
+import { DateSpanInput } from "~/ui/date-span-input";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -1061,5 +1068,99 @@ export function EditableAmountCell({
         </CellEditorOverlay>
       )}
     </>
+  );
+}
+
+/** The outer cell owns the atomic save; the range picker edits a local draft. */
+export function EditableDateRangeCell({
+  value,
+  onSave,
+  renderValue,
+  semantics,
+  clipboard,
+}: {
+  value: CalendarDateRange | null;
+  onSave: (value: CalendarDateRange | null) => Promise<void>;
+  renderValue: () => React.ReactNode;
+  semantics: "deadline" | "period";
+  clipboard?: CellClipboardSpec<CalendarDateRange | null>;
+}) {
+  const edit = useCellEditState(clipboard);
+  return (
+    <>
+      <EditableDisplay
+        mode="wrap"
+        triggerRef={edit.triggerRef}
+        onStartEdit={edit.open}
+        clipboard={edit.clipboard}
+      >
+        {renderValue()}
+      </EditableDisplay>
+      {edit.isEditing && (
+        <CellEditorOverlay
+          anchorEl={edit.triggerRef.current}
+          onRequestCancel={edit.cancel}
+          cancelOnOutside={false}
+        >
+          <DateRangeCellEditor
+            value={value}
+            onSave={onSave}
+            onCancel={edit.cancel}
+            semantics={semantics}
+          />
+        </CellEditorOverlay>
+      )}
+    </>
+  );
+}
+
+function DateRangeCellEditor({
+  value,
+  onSave,
+  onCancel,
+  semantics,
+}: {
+  value: CalendarDateRange | null;
+  onSave: (value: CalendarDateRange | null) => Promise<void>;
+  onCancel: () => void;
+  semantics: "deadline" | "period";
+}) {
+  const id = useId();
+  const [draft, setDraft] = useState(value);
+  const { commit, isPending } = useEditorCommit({
+    onSave: async (next: CalendarDateRange | null) =>
+      onSave(dateRangeSchema.nullable().parse(next)),
+    onCancel,
+    onCommit: onCancel,
+  });
+  return (
+    <div className="flex items-center gap-1" aria-busy={isPending}>
+      <DateSpanInput
+        id={id}
+        label="Dates"
+        semantics={semantics}
+        start={draft?.start ?? null}
+        end={draft?.end ?? null}
+        onChange={({ start, end }) => setDraft(dateRangeFromDates(start, end))}
+      />
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label="Save value"
+        disabled={isPending}
+        onClick={() => void commit(draft)}
+      >
+        <CheckIcon className="size-3.5" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label="Cancel editing"
+        disabled={isPending}
+        onClick={onCancel}
+      >
+        <XIcon className="size-3.5" />
+      </Button>
+    </div>
   );
 }

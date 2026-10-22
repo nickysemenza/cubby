@@ -1,4 +1,5 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
   type LedgerPartyId,
@@ -285,8 +286,7 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
     childProjectIds: childProjectIds.map((id) =>
       parseShortcodeFor("project", id),
     ),
-    startDate: row.startDate,
-    endDate: row.endDate,
+    dates: dateRangeFromDates(row.startDate, row.endDate),
     emoji: row.emoji ?? null,
     notes: row.notes,
     googleDriveFolderUrl: row.googleDriveFolderUrl,
@@ -298,7 +298,7 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
     rollup: { ...ownRollup, subtree: subtreeRollup },
     spent: ownRollup.spent,
     taskProgress: `${ownRollup.doneTaskCount}/${ownRollup.taskCount}`,
-    dates,
+    dateWindow: dates,
     dataQuality,
   };
 };

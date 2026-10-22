@@ -69,7 +69,7 @@ describe("project dashboard attribution", () => {
       middle.shortcode,
       late.shortcode,
     ]);
-    expect(rows.data.map((row) => row.dates.effectiveStart)).toEqual([
+    expect(rows.data.map((row) => row.dateWindow.effectiveStart)).toEqual([
       "2026-01-01",
       "2026-01-02",
       "2026-01-03",

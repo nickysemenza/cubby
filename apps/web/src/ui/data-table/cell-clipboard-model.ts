@@ -13,6 +13,7 @@ export type CellKind =
   | "text"
   | "number"
   | "currency"
+  | "dateRange"
   | "date"
   | "timestamp"
   | "boolean"

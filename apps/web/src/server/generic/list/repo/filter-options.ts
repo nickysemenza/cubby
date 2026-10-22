@@ -354,7 +354,7 @@ async function loadEntityRows(
 type EntityOptionRow = OptionRow &
   Pick<
     FilterOptionsOut["items"][number],
-    "count" | "logo" | "kind" | "emoji" | "dates"
+    "count" | "logo" | "kind" | "emoji" | "dateWindow"
   >;
 
 /**
@@ -408,7 +408,7 @@ async function withProjectDates(
   );
   return rows.map((row) => ({
     ...row,
-    dates: byShortcode.get(row.id) ?? {
+    dateWindow: byShortcode.get(row.id) ?? {
       effectiveStart: null,
       effectiveEnd: null,
     },

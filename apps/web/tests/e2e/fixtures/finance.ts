@@ -118,13 +118,11 @@ export async function seedRelationshipReviewPrerequisite(
   const year = 2100 + (projectCount?.value ?? 0);
   const current = await createEntityFixture(page, "project", {
     name: `${name} current`,
-    startDate: `${year}-05-01`,
-    endDate: `${year}-05-31`,
+    dates: { start: `${year}-05-01`, end: `${year}-05-31` },
   });
   const target = await createEntityFixture(page, "project", {
     name: `${name} suggested`,
-    startDate: `${year}-05-01`,
-    endDate: `${year}-05-31`,
+    dates: { start: `${year}-05-01`, end: `${year}-05-31` },
   });
   const product = await seedProductPrerequisite(page, {
     name: `${name} switch`,

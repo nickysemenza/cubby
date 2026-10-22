@@ -90,17 +90,20 @@ test("task detail keeps both ranged due date endpoints editable", async ({
   const name = `e2e ranged task ${Date.now()}`;
   const task = await seedTaskPrerequisite(page, {
     name,
-    dueDate: "2031-09-22",
-    dueEndDate: "2031-09-25",
+    due: { start: "2031-09-22", end: "2031-09-25" },
   });
   await gotoAuthenticatedPage(page, `/tasks/${task.id}`);
 
-  await expect(
-    page.getByRole("button", { name: /^Sep 22, 2031/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /^Sep 25, 2031/ }),
-  ).toBeVisible();
+  const due = page.getByRole("button", { name: /Sep 22 – 25, 2031/ });
+  await expect(due).toBeVisible();
+  await due.click();
+  await page.getByRole("button", { name: "Dates", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Dates start" })).toHaveValue(
+    "Sep 22, 2031",
+  );
+  await expect(page.getByRole("textbox", { name: "Dates end" })).toHaveValue(
+    "Sep 25, 2031",
+  );
   await expect(page.getByText("2031-09-22")).toHaveCount(0);
   await expect(page.getByText("2031-09-25")).toHaveCount(0);
 });

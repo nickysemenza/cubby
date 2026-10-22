@@ -32,21 +32,21 @@ test("list cells show project completion, open deadlines, and sampled run work",
     trade: "other",
     projectId: project.id,
     status: "not_started",
-    dueDate: householdDaysFromNow(-2),
+    due: { start: householdDaysFromNow(-2), end: null },
   });
   await createEntityFixture(page, "task", {
     name: `${prefix} finished`,
     trade: "other",
     projectId: project.id,
     status: "done",
-    dueDate: householdDaysFromNow(-2),
+    due: { start: householdDaysFromNow(-2), end: null },
   });
   await createEntityFixture(page, "task", {
     name: `${prefix} future`,
     trade: "other",
     projectId: project.id,
     status: "not_started",
-    dueDate: householdDaysFromNow(2),
+    due: { start: householdDaysFromNow(2), end: null },
   });
 
   await gotoAuthenticatedPage(

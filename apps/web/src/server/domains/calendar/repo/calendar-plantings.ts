@@ -1,4 +1,3 @@
-import { calendarSources } from "@cubby/schemas/calendar";
 import type {
   CalendarItem,
   CalendarPlantingMilestone,
@@ -18,9 +17,9 @@ import { plantingDisplayName } from "~/server/domains/garden/repo/garden";
  * Shared by the "any milestone falls in range" read predicate and by
  * `mapPlantingItems`'s per-milestone emission. */
 const MILESTONE_COLUMNS = {
-  sowed: planting[calendarSources.planting.dates[0]],
-  transplanted: planting[calendarSources.planting.dates[1]],
-  finished: planting[calendarSources.planting.dates[2]],
+  sowed: planting.sowedOn,
+  transplanted: planting.transplantedOn,
+  finished: planting.finishedOn,
 } as const satisfies Record<CalendarPlantingMilestone, AnyColumn>;
 
 // SAFETY: `Object.keys` only widens to `string[]` — the keys are exactly
@@ -116,9 +115,9 @@ export interface CalendarPlantingRow {
 }
 
 const MILESTONE_DATE = {
-  sowed: calendarSources.planting.dates[0],
-  transplanted: calendarSources.planting.dates[1],
-  finished: calendarSources.planting.dates[2],
+  sowed: "sowedOn",
+  transplanted: "transplantedOn",
+  finished: "finishedOn",
 } satisfies Record<CalendarPlantingMilestone, keyof CalendarPlantingRow>;
 
 /**

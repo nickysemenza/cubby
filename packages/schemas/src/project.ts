@@ -1,3 +1,4 @@
+import { dateRangeSchema, storedDateRangeSchema } from "./date-range";
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
 import { projectDateSourceSchema } from "./project-output-fields";
@@ -207,8 +208,7 @@ export type TaskBulkTradeInput = z.infer<typeof taskBulkTradeInput>;
 
 export const taskBulkDueDateInput = z.object({
   ids: z.array(taskShortcode).min(1),
-  dueDate: plainDate.nullable(),
-  dueEndDate: plainDate.nullable(),
+  due: dateRangeSchema.nullable(),
 });
 export type TaskBulkDueDateInput = z.infer<typeof taskBulkDueDateInput>;
 
@@ -337,8 +337,7 @@ export const taskTodayBriefingItemOut = z.object({
   id: taskShortcode,
   name: z.string(),
   status: z.enum(["not_started", "in_progress"]),
-  dueDate: z.string().nullable(),
-  dueEndDate: z.string().nullable(),
+  due: storedDateRangeSchema.nullable(),
   projectId: projectShortcode.nullable(),
   projectName: z.string().nullable(),
   projectEmoji: z.string().nullable(),

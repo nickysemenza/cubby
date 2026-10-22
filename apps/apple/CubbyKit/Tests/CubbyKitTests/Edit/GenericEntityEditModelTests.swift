@@ -22,6 +22,37 @@ private final class EditStub: URLProtocol, @unchecked Sendable {
 @Suite("GenericEntityEditModel", .serialized)
 @MainActor
 struct GenericEntityEditModelTests {
+    @Test func dateRangePatchReplacesClearsAndRejectsReversedDates() async throws {
+        let original: JSONValue = [
+            "id": "PRJ-2345", "dates": ["start": "2039-05-10", "end": "2039-05-20"],
+        ]
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.project], mode: .update(id: "PRJ-2345"),
+            client: try makeClient(), original: original)
+        #expect(try model.patch().isEmpty)
+        let replacement: JSONValue = ["start": .null, "end": "2039-05-21"]
+        model.draft["dates"] = replacement
+        #expect(try model.patch().values["dates"] == replacement)
+        model.draft["dates"] = .null
+        #expect(try model.patch().cleared == ["dates"])
+        model.draft["dates"] = ["start": "2039-05-21", "end": "2039-05-10"]
+        #expect(!model.canSave)
+        #expect(!(await model.save()))
+        #expect(model.fieldErrors["dates"] == "Start must be on or before end")
+        let historical = GenericEntityEditModel(
+            descriptor: EntityCatalog[.project], mode: .update(id: "PRJ-2345"),
+            client: try makeClient(),
+            original: [
+                "id": "PRJ-2345", "name": "Original",
+                "dates": ["start": "2039-05-21", "end": "2039-05-10"],
+            ])
+        historical.draft["name"] = "Renamed"
+        #expect(historical.canSave)
+        #expect(historical.dateRangeErrors.isEmpty)
+        #expect(try historical.patch().values["dates"] == nil)
+
+    }
+
     @Test func invalidCollectionDraftCanExposeItsSaveErrorWithoutLosingInput() async throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),

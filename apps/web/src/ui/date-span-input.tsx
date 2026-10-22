@@ -33,6 +33,7 @@ export function DateSpanInput({
   label,
   id,
   clearable = true,
+  semantics = "deadline",
   invalid = false,
   describedBy,
   inputRef,
@@ -44,26 +45,27 @@ export function DateSpanInput({
   label: string;
   id: string;
   clearable?: boolean;
+  semantics?: "deadline" | "period";
   invalid?: boolean;
   describedBy?: string;
   inputRef?: Ref<HTMLButtonElement>;
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"single" | "range">(
-    end ? "range" : "single",
+    semantics === "period" || end ? "range" : "single",
   );
   const from = start ? parsePlainDate(start) : undefined;
   const to = end ? parsePlainDate(end) : undefined;
   const summary = start
-    ? `${formatCalendarDay(start, "dateShort")}${end ? ` – ${formatCalendarDay(end, "dateShort")}` : ""}`
+    ? `${semantics === "period" && !end ? "From " : ""}${formatCalendarDay(start, "dateShort")}${end ? ` – ${formatCalendarDay(end, "dateShort")}` : ""}`
     : end
-      ? `Until ${formatCalendarDay(end, "dateShort")}`
+      ? `Through ${formatCalendarDay(end, "dateShort")}`
       : `Choose ${label.toLowerCase()}…`;
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) setMode(end ? "range" : "single");
+        if (next) setMode(semantics === "period" || end ? "range" : "single");
         else onBlur?.();
         setOpen(next);
       }}
@@ -85,20 +87,22 @@ export function DateSpanInput({
         {summary}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)]">
-        <Picker
-          mode="segmented"
-          label={`${label} selection`}
-          options={[
-            { value: "single", label: "Single date" },
-            { value: "range", label: "Date range" },
-          ]}
-          value={mode}
-          onValueChange={(next) => {
-            if (next !== "single" && next !== "range") return;
-            setMode(next);
-            if (next === "single") onChange({ start, end: null });
-          }}
-        />
+        {semantics === "deadline" && (
+          <Picker
+            mode="segmented"
+            label={`${label} selection`}
+            options={[
+              { value: "single", label: "Single date" },
+              { value: "range", label: "Date range" },
+            ]}
+            value={mode}
+            onValueChange={(next) => {
+              if (next !== "single" && next !== "range") return;
+              setMode(next);
+              if (next === "single") onChange({ start, end: null });
+            }}
+          />
+        )}
         <div
           className={mode === "range" ? "grid grid-cols-2 gap-2" : "grid gap-2"}
         >

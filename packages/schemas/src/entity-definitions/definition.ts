@@ -30,6 +30,7 @@ export const entityFieldKinds = [
   "boolean",
   "date",
   "timestamp",
+  "dateRange",
   "enum",
   "json",
   "identifier",
@@ -43,6 +44,7 @@ export const entityFieldControlKinds = [
   "checkbox",
   "select",
   "date",
+  "dateRange",
   "number",
   "specialized",
 ] as const;
@@ -637,6 +639,16 @@ const buildMetadataSchemas = () => {
     .object({
       key: nonEmptyString(),
       kind: z.enum(entityFieldKinds),
+      /** One public value backed by existing calendar-date columns. */
+      dateRange: z
+        .strictObject({
+          start: nonEmptyString(),
+          end: nonEmptyString(),
+          semantics: z.enum(["deadline", "period"]),
+        })
+        .nullable()
+        .optional()
+        .default(null),
       /** Identity or owned-resource semantics; these values cannot be shared by bulk assignment. */
       semanticRole: z.enum(["externalIdentifier", "attachment"]).optional(),
       nullable: z
@@ -1320,26 +1332,6 @@ const buildMetadataSchemas = () => {
           emoji: nonEmptyString(),
         })
         .strict(),
-      /**
-       * Date pairs that read as one span: `start` (usually one day) and an
-       * optional `end`. Detail and list surfaces render one row labelled
-       * `label` ("Sep 22 – 25") in the start field's place and hide the end
-       * field; both stay editable, and the editor rejects an end before its
-       * start. The one declaration for the span — `edit` validation, the
-       * native catalog's `editDateRanges` and the calendar read it.
-       */
-      spans: z
-        .array(
-          z
-            .object({
-              start: fieldKey,
-              end: fieldKey,
-              label: nonEmptyString(),
-            })
-            .strict(),
-        )
-        .optional()
-        .default([]),
       detail: z
         .object({
           /**

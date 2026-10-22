@@ -65,6 +65,7 @@
     "./testing/recipe": "./src/test-support/recipe.ts",
     "./common": "./src/common.ts",
     "./base-entity": "./src/base-entity.ts",
+    "./date-range": "./src/date-range.ts",
     "./pagination": "./src/pagination.ts",
     "./context": "./src/context.ts",
     "./context-breakdown": "./src/context-breakdown.ts",

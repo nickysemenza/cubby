@@ -332,6 +332,7 @@
         "packages/schemas/src/import-source.ts",
         "packages/schemas/src/execution-authorization.ts",
         "packages/schemas/src/base-entity.ts",
+        "packages/schemas/src/date-range.ts",
         "packages/schemas/src/codec.ts",
         "packages/schemas/src/group-keys.ts",
         "packages/schemas/src/data-quality-facets.ts",

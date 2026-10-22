@@ -1,7 +1,10 @@
+import { storedDateRangeSchema } from "@cubby/schemas/date-range";
 import type { Entity } from "@cubby/schemas/entity";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { z } from "zod";
 
+import { dateSpanParts } from "~/lib/date-span";
+import { householdLocalDate } from "~/lib/household-date";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 
 import { enumFieldLabel } from "../display/enum-field-display";
@@ -47,6 +50,19 @@ export function compactFieldText<TRecord extends object>(
   }
   const path = field.display.readPath ?? field.readKey;
   const raw = path ? readPathValue(record, path) : undefined;
+  if (field.kind === "dateRange") {
+    const range = storedDateRangeSchema.safeParse(raw).data;
+    if (!range || (range.start === null && range.end === null)) return null;
+    const { label } = dateSpanParts(
+      range.start,
+      range.end,
+      householdLocalDate(),
+    );
+    if (range.start === null) return `Through ${label}`;
+    if (range.end === null && field.dateRange?.semantics === "period")
+      return `From ${label}`;
+    return label;
+  }
   const value = scalar.safeParse(raw).data;
   if (value === undefined || value === "") return null;
   if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : null;

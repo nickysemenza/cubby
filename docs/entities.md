@@ -690,14 +690,25 @@ The web `EntityIntentFields` and the native `GenericEntityEditModel` render
 that list as is, with no fallback grouping of their own. The image-block keys
 (`pendingImageIds`, `pendingImagePurposes`, `removeImageIds`, `imageOrder`)
 stay out, since the editors' image block owns them on both platforms.
-`presentation.spans` (`[{ start, end, label }]`, date fields only) declares a
-start/optional-end pair. Web lists fold it into the start field's row through
-`DateDisplay` and `formatDateSpan` (full date plus relative context outside tables;
-compact stacked day/distance inside tables, per [web UI contracts](../apps/web/docs/web-ui.md))
-and hide the end field. Web details and inspectors show both endpoints as
-independently editable, human-readable dates with their contextual quality
-results. The editor rejects an end before its start; the native catalog's
-`editDateRanges` is generated from the declaration. `capabilities.timeline`
+Calendar-date periods are first-class `kind: "dateRange"` fields with a
+`dateRange` declaration naming two nullable stored date columns and
+`semantics: "deadline" | "period"`. Task `due`, Project `dates`, and Planting
+`season` expose one nullable `{ start, end }` value through reads and writes.
+A populated value has at least one valid calendar date; two bounds are inclusive
+and ordered on writes. Reads preserve existing stored bounds for correction.
+Null means unscheduled. Omitted update fields preserve both columns;
+null clears both, and an object replaces both atomically. The physical columns
+remain storage-only, retaining existing household dates. These are calendar days,
+not timestamp intervals, and never pass through UTC conversion.
+
+The generic web and native editors own one field and one validation surface.
+Deadline start-only means one due day; period start-only means From, and end-only
+means Through. Display, clipboard copy/paste, scoped edits, and bulk updates carry
+the whole value. List sort/filter keys can continue naming the underlying date
+columns; timeline event paths name `due.start`/`due.end` or their period equivalents.
+Project's derived effective dates and provenance remain a separate read-only
+`dateWindow`; editing `dates` changes stored overrides, never the inferred window.
+`capabilities.timeline`
 (`"default"`: audit log plus the declared date fields; `"custom"`: the
 `extensions.ports.timeline` implementation) publishes the
 entity on `entity.timeline`. The compiler checks every named field,

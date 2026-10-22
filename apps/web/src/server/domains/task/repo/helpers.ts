@@ -1,4 +1,5 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import type {
   LedgerPartyId,
   ProductId,
@@ -95,8 +96,7 @@ export const dbTaskToAPI = <
   parentTaskId: row.parentTask
     ? parseShortcodeFor("task", row.parentTask.shortcode)
     : null,
-  dueDate: row.dueDate,
-  dueEndDate: row.dueEndDate,
+  due: dateRangeFromDates(row.dueDate, row.dueEndDate),
   trade: row.trade,
   fieldResolutions: row.fieldResolutions,
   sortOrder: row.sortOrder,

@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
@@ -241,8 +242,10 @@ export const createProject = defineMutationWriter({
         defaultTrade: data.defaultTrade,
         costEstimate: data.costEstimate,
         parentProjectId,
-        startDate: data.startDate,
-        endDate: data.endDate,
+        startDate:
+          data.dates === undefined ? undefined : (data.dates?.start ?? null),
+        endDate:
+          data.dates === undefined ? undefined : (data.dates?.end ?? null),
         emoji: data.emoji,
         notes: data.notes,
       });
@@ -402,8 +405,10 @@ export const updateProject = defineMutationWriter({
         ...settings,
         costEstimate: data.costEstimate,
         parentProjectId,
-        startDate: data.startDate,
-        endDate: data.endDate,
+        startDate:
+          data.dates === undefined ? undefined : (data.dates?.start ?? null),
+        endDate:
+          data.dates === undefined ? undefined : (data.dates?.end ?? null),
         emoji: data.emoji,
         notes: data.notes,
       });
@@ -434,9 +439,20 @@ export const updateProject = defineMutationWriter({
       }
 
       const changes: AuditChangeMap = {
-        ...computeChanges(beforeWithUrls!, updated!, [
-          ...entityFieldModels.project.audit,
-        ]),
+        ...computeChanges(
+          {
+            ...beforeWithUrls!,
+            dates: dateRangeFromDates(
+              beforeWithUrls!.startDate,
+              beforeWithUrls!.endDate,
+            ),
+          },
+          {
+            ...updated!,
+            dates: dateRangeFromDates(updated!.startDate, updated!.endDate),
+          },
+          [...entityFieldModels.project.audit],
+        ),
       };
       if (resolvedBlockedByIds !== undefined) {
         const blockedByChange = diffUnorderedIdSet(

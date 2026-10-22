@@ -37,11 +37,10 @@ describe("garden schedule", () => {
       locationId: testShortcode("location", "bed"),
       locationName: "Example bed",
       plannedWindow: "after the rain",
-      sowedOn: null,
+      season: null,
       transplantedOn: null,
       expectedHarvestStart: null,
       expectedHarvestEnd: null,
-      finishedOn: null,
     });
     const rows = plantingScheduleRows([planting], 2026);
     expect(rows.map((row) => [row.name, row.depth])).toEqual([
@@ -62,11 +61,10 @@ describe("garden schedule", () => {
       locationId: testShortcode("location", "planter"),
       locationName: "Example planter",
       plannedWindow: null,
-      sowedOn: "2026-05-01",
+      season: { start: "2026-05-01", end: null },
       transplantedOn: null,
       expectedHarvestStart: null,
       expectedHarvestEnd: null,
-      finishedOn: null,
     });
     const rows = plantingScheduleRows(
       [planting],

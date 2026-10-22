@@ -289,6 +289,8 @@ const genericValueAvailable = (
       );
     case "text-array":
       return leaf instanceof z.ZodArray;
+    case "dateRange":
+      return type === "object";
     case "json":
       return [
         "object",
@@ -677,7 +679,13 @@ const checkListTimeline = (
   lookup: FieldLookup,
 ) => {
   const dateKey = (key: string, where: string) => {
-    const field = lookup.read(key, where);
+    const [root, endpoint] = key.split(".");
+    const field = lookup.read(root ?? key, where);
+    if (
+      field.kind === "dateRange" &&
+      (endpoint === "start" || endpoint === "end")
+    )
+      return;
     if (field.kind !== "date" && field.kind !== "timestamp")
       throw new EntityDeclarationError(
         `${lookup.context}.${where} ${key} must be a date or timestamp field.`,
@@ -777,40 +785,6 @@ const compileEditSections = (
     .filter((section) => section.fields.length > 0);
 };
 
-const checkSpans = (
-  spans: EntityPresentation["spans"],
-  detailFields: readonly string[],
-  lookup: FieldLookup,
-) => {
-  const { context } = lookup;
-  const claimed = new Set<string>();
-  for (const [index, span] of spans.entries()) {
-    const where = `spans[${index}]`;
-    for (const key of [span.start, span.end]) {
-      const field = lookup.edit(key, where);
-      if (field.kind !== "date")
-        throw new EntityDeclarationError(
-          `${context}.${where} names ${key}, which is not a date field.`,
-        );
-      if (claimed.has(key))
-        throw new EntityDeclarationError(
-          `${context}.${where} names ${key}, which another span already claims.`,
-        );
-      claimed.add(key);
-    }
-    if (span.start === span.end)
-      throw new EntityDeclarationError(
-        `${context}.${where} names ${span.start} as both start and end.`,
-      );
-    for (const key of [span.start, span.end]) {
-      if (!detailFields.includes(key))
-        throw new EntityDeclarationError(
-          `${context}.${where} names ${key}, which is not a display.detail field.`,
-        );
-    }
-  }
-};
-
 const checkEdit = (edit: EntityPresentation["edit"], lookup: FieldLookup) => {
   for (const [index, rule] of edit.hiddenWhen.entries()) {
     const where = `edit.hiddenWhen[${index}]`;
@@ -865,7 +839,7 @@ export const compilePresentation = (
     facts.readSchemas.list,
     "list",
   );
-  const { detail, list, spans } = presentation;
+  const { detail, list } = presentation;
   const emojiField = presentation.recordEmojiField;
   checkRecordEmoji(presentation, facts, context);
   if (presentation.recordIconEntityField) {
@@ -995,7 +969,6 @@ export const compilePresentation = (
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,
     );
   checkEdit(presentation.edit, lookup);
-  checkSpans(spans, detailFields, lookup);
   const mobileSubtitle = fieldModel.fields
     .filter(
       (field) =>

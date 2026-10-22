@@ -318,7 +318,8 @@ describe("entity reference filter options", () => {
       include: ["dates"],
     });
     expect(
-      withCharge.items.find((item) => item.id === tracked.output.id)?.dates,
+      withCharge.items.find((item) => item.id === tracked.output.id)
+        ?.dateWindow,
     ).toEqual({ effectiveStart: "2026-03-10", effectiveEnd: "2026-03-10" });
 
     const excluded = await getFilterOptions(ctx.db, {
@@ -331,7 +332,7 @@ describe("entity reference filter options", () => {
       excludeExpenseId: charge.output.id,
     });
     expect(
-      excluded.items.find((item) => item.id === tracked.output.id)?.dates,
+      excluded.items.find((item) => item.id === tracked.output.id)?.dateWindow,
     ).toEqual({ effectiveStart: null, effectiveEnd: null });
 
     await expect(

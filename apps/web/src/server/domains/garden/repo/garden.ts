@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import {
@@ -245,8 +246,10 @@ const mapPlantingRead = (
   projection: ListProjection,
   dataQuality?: DataQuality,
 ) => {
+  const { sowedOn, finishedOn, ...fields } = row;
   const result = {
-    ...row,
+    ...fields,
+    season: dateRangeFromDates(sowedOn, finishedOn),
     id: parseShortcodeFor("planting", row.shortcode),
     displayName: plantingDisplayName(row.plant),
   };
@@ -555,9 +558,9 @@ export const createPlanting = defineMutationWriter({
         quantity: data.quantity ?? null,
         notes: data.notes ?? null,
         plannedWindow: data.plannedWindow ?? null,
-        sowedOn: data.sowedOn ?? null,
+        sowedOn: data.season?.start ?? null,
         transplantedOn: data.transplantedOn ?? null,
-        finishedOn: data.finishedOn ?? null,
+        finishedOn: data.season?.end ?? null,
       });
       await logAuditEntry(tx, actor, {
         entityKind: "planting",
@@ -707,14 +710,24 @@ export const updatePlanting = defineMutationWriter({
         quantity: data.quantity,
         notes: data.notes,
         plannedWindow: data.plannedWindow,
-        sowedOn: data.sowedOn,
+        sowedOn:
+          data.season === undefined ? undefined : (data.season?.start ?? null),
         transplantedOn: data.transplantedOn,
-        finishedOn: data.finishedOn,
+        finishedOn:
+          data.season === undefined ? undefined : (data.season?.end ?? null),
       });
       const updated = await updateLiveAndReturn(tx, planting, values, id);
-      const changes = computeChanges(before, updated, [
-        ...entityFieldModels.planting.audit,
-      ]);
+      const changes = computeChanges(
+        {
+          ...before,
+          season: dateRangeFromDates(before.sowedOn, before.finishedOn),
+        },
+        {
+          ...updated,
+          season: dateRangeFromDates(updated.sowedOn, updated.finishedOn),
+        },
+        [...entityFieldModels.planting.audit],
+      );
       if (changes) {
         await logAuditEntry(tx, actor, {
           entityKind: "planting",

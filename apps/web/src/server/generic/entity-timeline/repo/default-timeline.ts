@@ -15,6 +15,7 @@ import type {
   ParsedEntityTimelineInputByEntity,
   TimelineEntity,
 } from "~/entity/generated/entity-timelines.gen";
+import { readPathValue } from "~/entity/read-path";
 import { householdDateTime, householdLocalDate } from "~/lib/household-date";
 import { wasm } from "~/lib/wasm";
 import { executeEntityAs } from "~/server/entity-kernel";
@@ -80,9 +81,19 @@ const recordTitle = (entity: TimelineEntity, record: TimelineRecord) =>
     .catch(record.id)
     .parse(record[entitySummary[entity].titleField]);
 
-const fieldLabel = (entity: TimelineEntity, key: string) =>
-  entityFieldModels[entity].fields.find((field) => field.key === key)?.label ??
-  key;
+const fieldLabel = (entity: TimelineEntity, key: string) => {
+  const [fieldKey, endpoint] = key.split(".");
+  const label =
+    entityFieldModels[entity].fields.find((field) => field.key === fieldKey)
+      ?.label ??
+    fieldKey ??
+    key;
+  return endpoint === "start" || endpoint === "end"
+    ? `${label} ${endpoint}`
+    : key.includes(".")
+      ? key
+      : label;
+};
 
 const recordLink = (entity: TimelineEntity, record: TimelineRecord) => ({
   entity,
@@ -205,7 +216,7 @@ const fieldEvents = (
 ): DatedEvent[] =>
   records.flatMap((record) =>
     keys.flatMap((key) => {
-      const date = plainDateOf(record[key]);
+      const date = plainDateOf(readPathValue(record, key));
       if (date === null || !inWindow(date, window)) return [];
       return [
         {
@@ -262,7 +273,7 @@ const lifecycleStartOf = (
   lifecycle: Lifecycle,
 ): { date: string; confident: boolean } | null => {
   for (const [index, key] of lifecycle.start.entries()) {
-    const date = plainDateOf(record[key]);
+    const date = plainDateOf(readPathValue(record, key));
     if (date !== null) return { date, confident: index === 0 };
   }
   return null;
@@ -276,9 +287,11 @@ export const lifecycleRows = (
 ): EntityTimelineRow[] =>
   records.flatMap((record) => {
     const start = lifecycleStartOf(record, lifecycle);
-    const end = lifecycle.end ? plainDateOf(record[lifecycle.end]) : null;
+    const end = lifecycle.end
+      ? plainDateOf(readPathValue(record, lifecycle.end))
+      : null;
     const markers = lifecycleKeysOf(lifecycle).flatMap((key) => {
-      const date = plainDateOf(record[key]);
+      const date = plainDateOf(readPathValue(record, key));
       return date === null || !inWindow(date, window)
         ? []
         : [{ date, kind: `field:${key}`, link: recordLink(entity, record) }];

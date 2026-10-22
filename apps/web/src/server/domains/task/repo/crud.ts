@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
@@ -427,8 +428,8 @@ const createTaskWithOutput = async <TOutput>(
         data.subjectProductMode ??
         (data.subjectProductId === null ? "inherit" : "explicit"),
       parentTaskId,
-      dueDate: data.dueDate,
-      dueEndDate: data.dueEndDate,
+      dueDate: data.due === undefined ? undefined : (data.due?.start ?? null),
+      dueEndDate: data.due === undefined ? undefined : (data.due?.end ?? null),
       trade: data.trade,
     });
     await assertEffectiveTaskTrade(tx, created.id);
@@ -643,8 +644,8 @@ const updateTaskWithOutput = async <TOutput>(
       name: data.name,
       status: data.status,
       ...assignments,
-      dueDate: data.dueDate,
-      dueEndDate: data.dueEndDate,
+      dueDate: data.due === undefined ? undefined : (data.due?.start ?? null),
+      dueEndDate: data.due === undefined ? undefined : (data.due?.end ?? null),
       sortOrder: data.sortOrder,
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
@@ -679,7 +680,17 @@ const updateTaskWithOutput = async <TOutput>(
     }
 
     const changes: TaskUpdateChanges = {
-      ...computeChanges(before, updated, [...entityFieldModels.task.audit]),
+      ...computeChanges(
+        {
+          ...before,
+          due: dateRangeFromDates(before.dueDate, before.dueEndDate),
+        },
+        {
+          ...updated,
+          due: dateRangeFromDates(updated.dueDate, updated.dueEndDate),
+        },
+        [...entityFieldModels.task.audit],
+      ),
     };
     if (data.blockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(

@@ -341,8 +341,7 @@ test("record dates retain their calendar label with present and future context",
     name: `${prefix} ongoing`,
     trade: "other",
     projectId: project.id,
-    dueDate: today,
-    dueEndDate: householdDaysFromNow(1),
+    due: { start: today, end: householdDaysFromNow(1) },
   });
   // Table cells stack the day over its compact distance; the title keeps
   // the full label.
@@ -367,13 +366,13 @@ test("record dates retain their calendar label with present and future context",
     name: `${prefix} current`,
     projectId: project.id,
     trade: "other",
-    dueDate: today,
+    due: { start: today, end: null },
   });
   const futureTask = await createFixture(page, "task", {
     name: `${prefix} future`,
     projectId: project.id,
     trade: "other",
-    dueDate: later,
+    due: { start: later, end: null },
   });
   await gotoAuthenticatedPage(
     page,

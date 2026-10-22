@@ -42,7 +42,7 @@ describe("progressive garden lists", () => {
       {
         plantId: crop.id,
         locationId: bed.id,
-        sowedOn: "2026-01-01",
+        season: { start: "2026-01-01", end: null },
         status: "growing",
       },
       ctx.actor,

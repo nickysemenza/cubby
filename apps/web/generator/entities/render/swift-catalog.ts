@@ -370,6 +370,7 @@ const fieldJSON = (
     label: field.label,
     columnLabel: field.display.columnLabel ?? null,
     kind: field.kind,
+    dateRangeSemantics: field.dateRange?.semantics ?? null,
     nullable: field.nullable,
     reference: referenceJSON(field.reference, entityKey, where),
     explanation: explanationJSON(field.explanation),
@@ -632,10 +633,6 @@ const presentationJSON = (
       title: section.title,
       fields: [...section.fields],
       collapsed: section.collapsed,
-    })),
-    editDateRanges: presentation.spans.map(({ start, end }) => ({
-      start,
-      end,
     })),
     // The filter a fresh list opens with, as the same wire patch.
     initialFilters: savedViewFilters(

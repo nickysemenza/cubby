@@ -18,7 +18,7 @@ import { defaultTimeline } from "./default-timeline";
 
 const createdTask = async (
   context: ReturnType<typeof entityKernelContextSchema.parse>,
-  data: { name: string; dueDate?: string; dueEndDate?: string },
+  data: { name: string; due?: { start: string | null; end: string | null } },
 ) => {
   const result = await executeEntity(context, {
     action: "create",
@@ -136,12 +136,11 @@ describe("default entity timeline", () => {
     const today = householdLocalDate();
     const first = await createdTask(context(), {
       name: "Timeline first",
-      dueDate: "2026-02-10",
-      dueEndDate: "2026-02-12",
+      due: { start: "2026-02-10", end: "2026-02-12" },
     });
     const second = await createdTask(context(), {
       name: "Timeline second",
-      dueDate: "2026-05-01",
+      due: { start: "2026-05-01", end: null },
     });
     await executeEntity(context(), {
       action: "update",
@@ -187,8 +186,8 @@ describe("default entity timeline", () => {
     );
     expect(desc.groups[1]!.events).toEqual([
       expect.objectContaining({
-        kind: "field:dueDate",
-        detail: "Due date",
+        kind: "field:due.start",
+        detail: "Due start",
         link: { entity: "task", id: second },
       }),
     ]);
@@ -220,8 +219,8 @@ describe("default entity timeline", () => {
         group.events.map((event) => [group.date, event.kind]),
       ),
     ).toEqual([
-      ["2026-02-12", "field:dueEndDate"],
-      ["2026-05-01", "field:dueDate"],
+      ["2026-02-12", "field:due.end"],
+      ["2026-05-01", "field:due.start"],
     ]);
     expect(windowed.extent).toEqual({ from: "2026-02-12", to: "2026-05-01" });
 
@@ -241,8 +240,7 @@ describe("default entity timeline", () => {
     const today = householdLocalDate();
     const dated = await createdTask(context(), {
       name: "Lifecycle task",
-      dueDate: "2026-03-03",
-      dueEndDate: "2026-03-09",
+      due: { start: "2026-03-03", end: "2026-03-09" },
     });
     const undated = await createdTask(context(), { name: "Undated task" });
 
@@ -256,10 +254,13 @@ describe("default entity timeline", () => {
       intervals: [{ start: today, end: "2026-03-09", confident: true }],
       markers: expect.arrayContaining([
         expect.objectContaining({ date: today, kind: "field:createdAt" }),
-        expect.objectContaining({ date: "2026-03-03", kind: "field:dueDate" }),
+        expect.objectContaining({
+          date: "2026-03-03",
+          kind: "field:due.start",
+        }),
         expect.objectContaining({
           date: "2026-03-09",
-          kind: "field:dueEndDate",
+          kind: "field:due.end",
         }),
       ]),
     });

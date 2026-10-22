@@ -15,12 +15,6 @@ export const taskChecks = defineEntityChecks({
   entity: "task",
   table: task,
   checks: {
-    task_due_date: {
-      // Due dates are optional (`later` and open-ended work have none); only
-      // a recorded end of the due window implies a start that is missing.
-      expected: (t: Task) => sql`${t.dueEndDate} IS NOT NULL`,
-      missing: (t: Task) => sql`${t.dueDate} IS NULL`,
-    },
     task_due_range: {
       expected: (t: Task) =>
         sql`${t.dueDate} IS NOT NULL AND ${t.dueEndDate} IS NOT NULL`,

@@ -72,7 +72,7 @@ export const taskCaptureRequest = (input?: {
   if (input?.status) seed.status = input.status;
   if (input?.projectId !== undefined) seed.projectId = input.projectId;
   if (input?.trade) seed.trade = input.trade;
-  if (input?.date) seed.dueDate = input.date;
+  if (input?.date) seed.due = { start: input.date, end: null };
   if (input?.name) seed.name = input.name;
   if (input?.subjectProductId !== undefined) {
     seed.subjectProductId = input.subjectProductId;
@@ -142,7 +142,7 @@ export const projectCaptureRequest = (input?: {
 }): DialogRequest<"project"> => {
   const seed: MutableDraft<"project"> = {};
   if (input?.parentProjectId) seed.parentProjectId = input.parentProjectId;
-  if (input?.date) seed.startDate = input.date;
+  if (input?.date) seed.dates = { start: input.date, end: null };
   return {
     entity: "project",
     operation: "create",

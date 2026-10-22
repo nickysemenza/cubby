@@ -13,6 +13,17 @@ struct EntityFieldValueTests {
         #expect(EntityFieldValue.formattedDate("2039-02-30") == nil)
     }
 
+    @Test func compoundRangesPreserveOpenEndpointMeaning() throws {
+        let period = try #require(EntityCatalog[.project].field("dates"))
+        let deadline = try #require(EntityCatalog[.task].field("due"))
+        let start: JSONValue = ["start": "2039-05-10", "end": .null]
+        let end: JSONValue = ["start": .null, "end": "2039-05-10"]
+        #expect(EntityFieldValue.text(start, field: period) == "From May 10, 2039")
+        #expect(EntityFieldValue.text(start, field: deadline) == "May 10, 2039")
+        #expect(EntityFieldValue.text(end, field: period) == "Through May 10, 2039")
+        #expect(EntityFieldValue.text(.null, field: period) == nil)
+    }
+
     /// `format: "amount"` renders the `{value, unit}` shape the inventory list carries.
     @Test func amountFormatRendersValueAndUnit() throws {
         let field = try #require(EntityCatalog[.inventory].field("amount"))

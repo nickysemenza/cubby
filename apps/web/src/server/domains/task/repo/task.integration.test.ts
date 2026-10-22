@@ -481,30 +481,40 @@ describe("task kernel — bulkUpdate", () => {
     );
   });
 
-  it("preserves the other half of a partially patched due-date window", async () => {
-    const { output: t } = await createRepoEntity(ctx, "task", {
+  it("preserves omitted due dates and atomically replaces or clears the window", async () => {
+    const { output: t, entityId } = await createRepoEntity(ctx, "task", {
       trade: "other",
       name: "kernel due window",
-      dueDate: "2024-03-01",
-      dueEndDate: "2024-03-05",
+      due: { start: "2024-03-01", end: "2024-03-05" },
     });
 
-    await bulkUpdate([t.id], { dueDate: "2024-03-02" });
-    expect((await getTaskByShortcode(ctx.db, t.id))?.dueDate).toBe(
-      "2024-03-02",
-    );
-    expect((await getTaskByShortcode(ctx.db, t.id))?.dueEndDate).toBe(
-      "2024-03-05",
-    );
-
+    await bulkUpdate([t.id], { status: "in_progress" });
+    expect((await getTaskByShortcode(ctx.db, t.id))?.due).toEqual({
+      start: "2024-03-01",
+      end: "2024-03-05",
+    });
     expect(
-      (
-        await bulkUpdate([t.id], {
-          dueDate: "2024-04-01",
-          dueEndDate: "2024-04-03",
-        })
-      ).updatedReferences,
+      (await bulkUpdate([t.id], { due: { start: null, end: "2024-04-03" } }))
+        .updatedReferences,
     ).toEqual([{ entity: "task", id: t.id }]);
+    expect((await getTaskByShortcode(ctx.db, t.id))?.due).toEqual({
+      start: null,
+      end: "2024-04-03",
+    });
+    const auditRows = await getDb(ctx.db)
+      .select({ changes: auditLog.changes })
+      .from(auditLog)
+      .where(
+        and(eq(auditLog.entityKind, "task"), eq(auditLog.entityId, entityId)),
+      );
+    expect(auditRows.map((row) => row.changes)).toContainEqual({
+      due: {
+        from: { start: "2024-03-01", end: "2024-03-05" },
+        to: { start: null, end: "2024-04-03" },
+      },
+    });
+    await bulkUpdate([t.id], { due: null });
+    expect((await getTaskByShortcode(ctx.db, t.id))?.due).toBeNull();
   });
 });
 

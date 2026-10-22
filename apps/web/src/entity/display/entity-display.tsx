@@ -1,6 +1,10 @@
 import type { AuditEntityKind } from "@cubby/schemas/audit";
 import { amount as amountSchema } from "@cubby/schemas/codec";
 import {
+  storedDateRangeSchema,
+  type CalendarDateRange,
+} from "@cubby/schemas/date-range";
+import {
   type Entity,
   type EntityRef,
   entitySchema,
@@ -40,7 +44,11 @@ import {
   createEditableAccessorColumn,
   renderOptionCell,
 } from "~/entity/table/column-helpers";
-import { EditableCell, type PickerOption } from "~/entity/table/editable-cell";
+import {
+  EditableCell,
+  EditableDateRangeCell,
+  type PickerOption,
+} from "~/entity/table/editable-cell";
 import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
@@ -55,6 +63,7 @@ import {
   type ScalarDisplayValue,
 } from "~/ui/common/scalar-value";
 import type { CellClipboardSpec } from "~/ui/data-table/cell-clipboard";
+import { dateRangeCellData } from "~/ui/data-table/cell-data";
 import {
   type ColumnCellData,
   type PasteFieldValues,
@@ -113,7 +122,6 @@ import {
 import { listRendererColumns } from "./list-field-renderers";
 
 type DisplayField = EntityFieldModel["fields"][number];
-type SpanDeclaration = Readonly<{ start: string; end: string; label: string }>;
 type DisplaySurface = "list" | "detail";
 const proseFieldKeys = new Set([
   "notes",
@@ -507,6 +515,7 @@ function readScalarField<TRecord extends object>(
     }
     // A structured value renders as readable JSON unless a domain renderer
     // claims it; the detail page never crashes on an undeclared shape.
+    case "dateRange":
     case "json":
       return { kind: "json", raw: value };
   }
@@ -682,6 +691,7 @@ export function renderDetailFieldValue<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
+  if (field.kind === "dateRange") return renderDateRangeValue(record, field);
   const emptyLabel = resolutionEmptyLabel(entity, record, field);
   if (emptyLabel) return emptyLabel;
   if (field.display.itemsPath) {
@@ -780,6 +790,7 @@ export function renderCompactFieldValue<TRecord extends object>(
   const domainRenderer = compactFieldRendererFor(entity, field.key);
   const domainValue = domainRenderer?.(record);
   if (domainValue !== undefined) return domainValue;
+  if (field.kind === "dateRange") return renderDateRangeValue(record, field);
   const emptyLabel = resolutionEmptyLabel(entity, record, field);
   if (emptyLabel) return emptyLabel;
   const reference = readDisplayReferenceField(record, field);
@@ -972,34 +983,6 @@ const entityDetailFields = (
   });
 };
 
-/**
- * The declared `presentation.spans` that fold into one value: those whose
- * start is among `fields`. The start field renders the span's own row and its
- * end field is hidden; a span whose start is absent leaves its end alone.
- */
-const foldedSpans = (entity: Entity, fields: readonly DisplayField[]) => {
-  const present = new Set(fields.map((field) => field.key));
-  const declared: readonly SpanDeclaration[] = entitySummary[entity].spans;
-  const active = declared.filter((span) => present.has(span.start));
-  return {
-    byStart: new Map(active.map((span) => [span.start, span])),
-    ends: new Set(active.map((span) => span.end)),
-  };
-};
-
-const spanDateOf = <TRecord extends object>(
-  entity: Entity,
-  record: TRecord,
-  key: string,
-): string | null => {
-  const field = entityFieldModels[entity].fields.find(
-    (candidate) => candidate.key === key,
-  );
-  if (field === undefined) return null;
-  const value = readScalarField(entity, record, field);
-  return value.kind === "date" ? value.raw : null;
-};
-
 /** Statuses that settle a deadline; a settled record is never overdue. */
 const SETTLED_STATUSES = new Set([
   "done",
@@ -1023,28 +1006,55 @@ const settledRecord = z.looseObject({
 export function isOpenDeadline(key: string, record: unknown): boolean {
   if (!/(^d|D)ue(End)?Date$/.test(key)) return false;
   const parsed = settledRecord.safeParse(record);
-  if (!parsed.success) return true;
-  const { status, completedAt } = parsed.data;
+  return isUnsettledRecord(parsed.success ? parsed.data : null);
+}
+
+function isUnsettledRecord(
+  record: z.infer<typeof settledRecord> | null,
+): boolean {
+  if (record === null) return true;
+  const { status, completedAt } = record;
   if (status && SETTLED_STATUSES.has(status.toLowerCase())) return false;
   return completedAt === undefined || completedAt === null;
 }
 
-const renderSpanValue = <TRecord extends object>(
-  entity: Entity,
+const readDateRange = <TRecord extends object>(
   record: TRecord,
-  span: SpanDeclaration,
+  field: DisplayField,
+) =>
+  storedDateRangeSchema
+    .nullish()
+    .parse(
+      readPathValue(
+        record,
+        field.display.readPath ?? field.readKey ?? field.key,
+      ),
+    ) ?? null;
+
+const renderDateRangeValue = <TRecord extends object>(
+  record: TRecord,
+  field: DisplayField,
 ): ReactNode => {
-  const start = spanDateOf(entity, record, span.start);
-  const end = spanDateOf(entity, record, span.end);
-  return start === null && end === null ? (
-    <NoneValue />
-  ) : (
-    <DateDisplay
-      start={start}
-      end={end}
-      due={isOpenDeadline(span.start, record)}
-      className="tabular-nums"
-    />
+  const value = readDateRange(record, field);
+  if (value === null) return <NoneValue />;
+  const period = field.dateRange?.semantics === "period";
+  const settled = settledRecord.safeParse(record);
+  return (
+    <span>
+      {period && value.start && !value.end
+        ? "From "
+        : !value.start
+          ? "Through "
+          : ""}
+      <DateDisplay
+        start={value.start}
+        end={value.end}
+        due={
+          !period && isUnsettledRecord(settled.success ? settled.data : null)
+        }
+        className="tabular-nums"
+      />
+    </span>
   );
 };
 
@@ -1270,12 +1280,15 @@ export function EntityBasicInfo<TRecord extends object>({
 }
 
 /** The concrete value shapes a generic editable control can save. */
-type EditableFieldValue = string | number | boolean | null;
 // `nullish`: an optional read key absent from a partial projection edits
 // from empty rather than failing the whole fields section.
 const editableFieldValue = z
-  .union([z.string(), z.number(), z.boolean()])
+  .union([z.string(), z.number(), z.boolean(), storedDateRangeSchema])
   .nullish();
+type EditableFieldValue = Exclude<
+  z.output<typeof editableFieldValue>,
+  undefined
+>;
 
 type EditableField = Pick<
   DisplayField,
@@ -1289,6 +1302,7 @@ const editableControlKinds = new Set([
   "textarea",
   "number",
   "date",
+  "dateRange",
   "select",
   "checkbox",
 ]);
@@ -1367,6 +1381,7 @@ function editableFieldCellData<TRecord extends object>(
         kind: "checkbox",
         data: booleanCellData<TRecord>((row) => asBoolean(read(row)), save),
       };
+    case "dateRange":
     case "specialized":
       throw new Error(
         `Editable control kind "${field.control.kind}" needs a hand-written override`,
@@ -1613,6 +1628,27 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
       const save = async (next: EditableFieldValue): Promise<void> => {
         await mutate({ id: record.id, data: { [key]: next } });
       };
+      if (field.kind === "dateRange") {
+        const range = readDateRange(record, field);
+        const data = dateRangeCellData(
+          () => range,
+          (_row, next) => save(next),
+        );
+        return [
+          key,
+          () => ({
+            value: (
+              <EditableDateRangeCell
+                value={range}
+                onSave={save}
+                semantics={field.dateRange?.semantics ?? "period"}
+                renderValue={() => renderDateRangeValue(record, field)}
+                clipboard={specFromCellData(data, record)}
+              />
+            ),
+          }),
+        ] as const;
+      }
       const binding = editableFieldCellData(
         entity,
         { ...field, control },
@@ -1755,7 +1791,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
     onSaveField?: (
       row: TRecord,
       field: string,
-      value: string | number | boolean | null,
+      value: EditableFieldValue,
     ) => Promise<void>;
   } = {},
 ): CubbyColumnCollection<TRecord> {
@@ -1776,11 +1812,8 @@ export function createEntityDisplayColumns<TRecord extends object>(
   const onSaveField =
     options.onSaveField ??
     (onSaveFields
-      ? (
-          row: TRecord,
-          field: string,
-          value: string | number | boolean | null,
-        ) => onSaveFields(row, { [field]: value })
+      ? (row: TRecord, field: string, value: EditableFieldValue) =>
+          onSaveFields(row, { [field]: value })
       : undefined);
   const withRowWrite = <TSaved,>(
     field: string,
@@ -1803,7 +1836,6 @@ export function createEntityDisplayColumns<TRecord extends object>(
             throw new Error(`${entity}.${id} is not a list column`);
           return [field];
         });
-  const spans = foldedSpans(entity, selected);
   // oxlint-disable-next-line complexity -- one exhaustive manifest control dispatcher preserves column metadata and clipboard ownership together.
   return createCubbyColumnCollection<TRecord>((addColumn) => {
     const usedOverrides = new Set<string>();
@@ -1840,52 +1872,46 @@ export function createEntityDisplayColumns<TRecord extends object>(
       // The standard-column pipeline owns the one canonical identity lane; an
       // override claiming it fails below as undeclared.
       if (isIdentityField) continue;
-      // A declared span is one column in its start field's place. The start
-      // keeps its inline editor; the end is edited in the edit sheet.
-      if (spans.ends.has(field.key)) continue;
-      const span = spans.byStart.get(field.key);
-      if (span !== undefined) {
-        const startOf = (row: TRecord) => spanDateOf(entity, row, span.start);
-        const startControl = field.control;
-        const startEditable =
-          onSaveField !== undefined &&
-          startControl !== null &&
-          startControl.kind === "date" &&
-          updateFields.includes(field.key);
-        const saveStart = (
-          row: TRecord,
-          value: string | number | boolean | null,
-        ) => onSaveField?.(row, field.key, value) ?? Promise.resolve();
+      if (field.kind === "dateRange") {
+        const valueOf = (row: TRecord) => readDateRange(row, field);
+        const save =
+          onSaveField && updateFields.includes(field.key)
+            ? (row: TRecord, value: CalendarDateRange | null) =>
+                onSaveField(row, field.key, value)
+            : undefined;
         const cellData = withRowWrite(
           field.key,
-          dateCellData<TRecord>(startOf, startEditable ? saveStart : undefined),
+          dateRangeCellData(valueOf, save),
         );
         add(
-          createEditableAccessorColumn(helper, startOf, {
-            id: columnId,
-            header: span.label,
-            enableSorting: sortableColumnIds.includes(columnId),
-            meta: {
-              entityColumnRole: "fact",
-              className: "w-80",
-              mobile: toMobileColumnMeta(field.display.mobile),
+          createEditableAccessorColumn(
+            helper,
+            (row) => valueOf(row)?.start ?? valueOf(row)?.end ?? null,
+            {
+              id: columnId,
+              header: field.label,
+              enableSorting: sortableColumnIds.includes(columnId),
+              meta: {
+                entityColumnRole: "fact",
+                className: "w-80",
+                mobile: toMobileColumnMeta(field.display.mobile),
+              },
+              cellData,
+              renderValue: (row) => renderDateRangeValue(row, field),
+              renderEditable: (row) =>
+                save ? (
+                  <EditableDateRangeCell
+                    value={valueOf(row)}
+                    onSave={(next) => save(row, next)}
+                    semantics={field.dateRange?.semantics ?? "period"}
+                    renderValue={() => renderDateRangeValue(row, field)}
+                    clipboard={specFromCellData(cellData, row)}
+                  />
+                ) : (
+                  renderDateRangeValue(row, field)
+                ),
             },
-            cellData,
-            renderValue: (row) => renderSpanValue(entity, row, span),
-            renderEditable: (row, _value, clipboard) =>
-              startEditable && startControl !== null
-                ? renderEditableField(
-                    entity,
-                    { ...field, control: startControl },
-                    startOf(row),
-                    (next) => saveStart(row, next),
-                    row,
-                    "list",
-                    { kind: "date", data: clipboard },
-                    renderSpanValue(entity, row, span),
-                  )
-                : renderSpanValue(entity, row, span),
-          }),
+          ),
         );
         continue;
       }
@@ -1979,7 +2005,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
         });
       });
       if (overridden) continue;
-      const save = (row: TRecord, value: string | number | boolean | null) =>
+      const save = (row: TRecord, value: EditableFieldValue) =>
         onSaveField?.(row, field.key, value) ?? Promise.resolve();
       const referenceEditable =
         field.reference !== null &&

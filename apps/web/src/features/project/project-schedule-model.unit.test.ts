@@ -23,7 +23,7 @@ function project(
     name: seed,
     status: "planning",
     parentProjectId: parent ? projectId(parent) : null,
-    dates: {
+    dateWindow: {
       effectiveStart: start ?? null,
       effectiveEnd: end ?? null,
       startSource: start ? "explicit" : "none",

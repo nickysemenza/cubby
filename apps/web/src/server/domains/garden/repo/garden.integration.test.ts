@@ -243,8 +243,7 @@ describe("garden workflows", () => {
         plantId: crop.id,
         locationId: location.id,
         status: "finished",
-        sowedOn: "2026-04-01",
-        finishedOn: "2026-06-01",
+        season: { start: "2026-04-01", end: "2026-06-01" },
       },
       TEST_ACTOR,
     );
@@ -718,8 +717,7 @@ describe("garden workflows", () => {
       {
         plantId: crop.id,
         status: "finished",
-        sowedOn: "2026-05-01",
-        finishedOn: "2026-06-01",
+        season: { start: "2026-05-01", end: "2026-06-01" },
       },
       TEST_ACTOR,
     );
@@ -728,8 +726,7 @@ describe("garden workflows", () => {
       {
         plantId: crop.id,
         status: "finished",
-        sowedOn: "2026-01-01",
-        finishedOn: "2026-02-01",
+        season: { start: "2026-01-01", end: "2026-02-01" },
       },
       TEST_ACTOR,
     );
@@ -745,7 +742,7 @@ describe("garden workflows", () => {
     expect(ids.has(inactive.id)).toBe(false);
   });
 
-  it("generic bulk update patches status and finishedOn together and clears locationId with an explicit null", async () => {
+  it("generic bulk update patches status and season together and clears locationId with an explicit null", async () => {
     const crop = await createPlantFixture(
       ctx.db,
       { name: "Bulk update crop" },
@@ -766,7 +763,11 @@ describe("garden workflows", () => {
     await bulkUpdateFor("planting")(
       ctx.db,
       [first.id, second.id],
-      { status: "finished", finishedOn: "2026-08-01", locationId: null },
+      {
+        status: "finished",
+        season: { start: null, end: "2026-08-01" },
+        locationId: null,
+      },
       TEST_ACTOR,
     );
 

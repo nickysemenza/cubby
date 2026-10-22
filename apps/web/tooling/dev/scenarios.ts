@@ -100,13 +100,12 @@ export async function seedLocalFixturePack(
       const today = new Date().toISOString().slice(0, 10);
       const project = await create("project", {
         name: "Synthetic seasonal maintenance",
-        startDate: today,
-        endDate: today,
+        dates: { start: today, end: today },
       });
       await create("task", {
         name: "Synthetic calendar inspection",
         trade: "other",
-        dueDate: today,
+        due: { start: today, end: null },
         projectId: project.id,
       });
       await create("expense", {

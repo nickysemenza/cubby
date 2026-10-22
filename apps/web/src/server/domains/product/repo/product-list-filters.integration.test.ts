@@ -134,7 +134,7 @@ describe("product list declared filters", () => {
       name: "Parity bag flour",
       subjectProductId: flour.id,
       status: "done",
-      dueDate: "2026-09-01",
+      due: { start: "2026-09-01", end: null },
       trade: "other",
     });
     return { garage, rack, drivers, driver, flour, misc, kit, bit, tote };

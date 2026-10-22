@@ -179,7 +179,7 @@ describe("calendar effective attribution", () => {
     expect(schedule.plantings).toEqual([
       expect.objectContaining({
         id: linked.shortcode,
-        sowedOn: "2026-09-20",
+        season: { start: "2026-09-20", end: null },
         transplantedOn: "2026-09-22",
       }),
     ]);

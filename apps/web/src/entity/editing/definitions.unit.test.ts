@@ -557,11 +557,10 @@ describe("entity edit definitions", () => {
         {
           name: "Laundry",
           status: "not_started",
-          dueDate: "2026-08-20",
-          dueEndDate: "2026-08-19",
+          due: { start: "2026-08-20", end: "2026-08-19" },
         },
       ),
-    ).toMatchObject({ ok: false, issues: [{ field: "dueEndDate" }] });
+    ).toMatchObject({ ok: false, issues: [{ field: "due" }] });
 
     expect(
       buildEntityEdit(
@@ -576,13 +575,12 @@ describe("entity edit definitions", () => {
         {
           name: "Laundry",
           status: "not_started",
-          dueDate: null,
-          dueEndDate: null,
+          due: null,
         },
       ),
     ).toMatchObject({
       ok: false,
-      issues: [{ field: "dueDate", message: "This field is required." }],
+      issues: [{ field: "due", message: "This field is required." }],
     });
 
     const actualExpense = resolveEntityEdit(entityEditRegistry, {

@@ -44,7 +44,7 @@ describe("entity kernel bulkUpdate", () => {
         ids: [idFor("planting")],
         data: {
           status: "finished",
-          finishedOn: "2026-08-01",
+          season: { start: null, end: "2026-08-01" },
           locationId: null,
         },
       }).success,

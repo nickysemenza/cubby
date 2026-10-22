@@ -796,7 +796,7 @@ describe("row-set filters", () => {
       name: "Row-set parent task",
       subjectProductId: parseShortcodeFor("product", inherited),
       status: "done",
-      dueDate: "2026-09-01",
+      due: { start: "2026-09-01", end: null },
       trade: "other",
     });
     // The child sets no subject, so it reads its parent's.
@@ -810,7 +810,7 @@ describe("row-set filters", () => {
       name: "Row-set direct task",
       subjectProductId: parseShortcodeFor("product", direct),
       status: "in_progress",
-      dueDate: "2026-10-01",
+      due: { start: "2026-10-01", end: null },
       trade: "other",
     });
     const fixture = new Set<string>([direct, inherited, untasked]);
