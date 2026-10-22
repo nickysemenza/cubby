@@ -51,7 +51,7 @@ type EntityProjectionMaps = Readonly<{
   schema: readonly ContractEntity[];
   detail: readonly ContractEntity[];
   list: readonly ContractEntity[];
-  /** List-roster entities the browser also creates and edits. */
+  /** List-roster entities with browser create or update actions. */
   crud: readonly ContractEntity[];
   filters: readonly CompiledEntity[];
   routes: readonly CompiledEntity[];
@@ -79,7 +79,9 @@ export const entityProjectionMaps = (
   const detail = schema.filter(servesKernelGet);
   const list = schema.filter(hasGenericListOperation);
   const crud = list.filter(
-    ({ contract }) => contract.create !== null && contract.update !== null,
+    ({ contract, fieldModel }) =>
+      fieldModel.intents !== null &&
+      (contract.create !== null || contract.update !== null),
   );
   return {
     schema,
@@ -995,6 +997,13 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         key,
         {
           ...rest,
+          storage: fieldModel.storage.map(
+            ({
+              referenceOptions: _referenceOptions,
+              defaultSql: _defaultSql,
+              ...storage
+            }) => storage,
+          ),
           fields: fieldModel.fields.map(({ validation, ...field }) => ({
             ...field,
             // `resolution.inherit` is emitted compiled, as list fields' `inherit`.
@@ -1301,7 +1310,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           name: "generatedEntityEditIntents",
           entries: entityEditIntents,
           satisfies:
-            "Partial<Record<Entity, { fields: Record<string, readonly string[]>; create: readonly [string, ...string[]]; update: readonly [string, ...string[]]; required: Record<string, readonly string[]> }>>",
+            "Partial<Record<Entity, { fields: Record<string, readonly string[]>; create: readonly string[]; update: readonly [string, ...string[]]; required: Record<string, readonly string[]> }>>",
           comment:
             "// Editing intents per entity: named field fragments and the ordered\n// intent names each operation accepts (first is the default).",
         }),
@@ -1361,7 +1370,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         " */\n" +
         'export type GeneratedListField = { readonly shape: "via"; readonly path: string; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly terminal: { readonly kind: "record"; readonly titleColumn: string | null } | { readonly kind: "field"; readonly column: string; readonly fieldKind: string }; readonly many: boolean; readonly sort: string | null; readonly group: string | null } | { readonly shape: "rows"; readonly path: string; readonly rows: string; readonly terminal: { readonly kind: "column"; readonly column: string; readonly fieldKind: string | null; readonly options: GroupOptions } | { readonly kind: "record"; readonly target: Entity; readonly titleColumn: string | null; readonly column: string | null }; readonly sort: string; readonly group: string } | { readonly shape: "value"; readonly type: "text" | "number" | "date" | "dateInterval" | "boolean" | "enum"; readonly options: readonly string[] | null; readonly sort: null; readonly group: string | null } | { readonly shape: "predicate"; readonly predicate: "text" | "multiselect" | "idMulti" | "boolean" | "presence" | "range"; readonly options: readonly string[] | null; readonly reason: string; readonly sort: string; readonly group: string; readonly exclude: string | null };\n\n' +
         "/** A compiled `model.rows` row set: an FK path (narrowed by `where`), a JSON array of records, or a repository relation. */\n" +
-        'export type GeneratedRowSet = { readonly label: string; readonly storage: { readonly kind: "path"; readonly steps: readonly RelationshipPathStep[]; readonly where: Readonly<Record<string, string>> } | { readonly kind: "json"; readonly column: string; readonly keys: readonly string[] } | { readonly kind: "relation"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity } | { readonly kind: "repository"; readonly columns: Readonly<Record<string, Entity | null>>; readonly types: Readonly<Record<string, string>> } };\n\n' +
+        'export type GeneratedRowSet = { readonly label: string; readonly storage: { readonly kind: "path"; readonly steps: readonly RelationshipPathStep[]; readonly where: Readonly<Record<string, string>> } | { readonly kind: "json"; readonly column: string; readonly keys: readonly string[] } | { readonly kind: "relation"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity } | { readonly kind: "repository"; readonly columns: Readonly<Record<string, Entity | null>>; readonly connections: readonly string[]; readonly types: Readonly<Record<string, string>> } };\n\n' +
         "/** Every `listTermExpanders` key a text filter declares. */\n" +
         `export type GeneratedListTermKey = ${
           [

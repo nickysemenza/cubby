@@ -1,11 +1,19 @@
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { imageSighting, purchase } from "~/server/db/schema";
+import {
+  imageSighting,
+  purchase,
+  sourceTransactionRecord,
+} from "~/server/db/schema";
 import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -100,6 +108,149 @@ describe("entity edge source", () => {
       (group) => group.edgeKey === "InventoryEntry.productId",
     );
     expect(stock?.disposition).toMatchObject({ effect: expect.any(String) });
+  });
+
+  it("connects retained source versions through accepted aliases with exact counts and bounded samples", async () => {
+    const observe = (
+      fingerprint: string,
+      providerId: string,
+      version: number,
+    ) =>
+      recordSourceTransactionRecords(
+        ctx.db,
+        recordSourceTransactionRecordsInput.parse({
+          import: {
+            source: "synthetic-edge-source",
+            label: "Synthetic connection evidence",
+            fingerprint,
+            dateKind: "transaction",
+            rowCountDeclared: 1,
+          },
+          rows: [
+            {
+              providerTransactionId: providerId,
+              accountDescriptor: "Synthetic card",
+              statementDate: "2026-06-01",
+              providerAmount: -12.5,
+              rawDescription: "Synthetic connection charge",
+              providerData: { version },
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+    await observe("synthetic-edge-v1", "synthetic-charge", 1);
+    const original = (await listSourceTransactionRecords(ctx.db, {})).data[0];
+    if (!original) throw new Error("Synthetic source record was not recorded");
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ legacyReference: "synthetic-legacy-settlement" })
+      .where(eq(sourceTransactionRecord.shortcode, original.id));
+    const account = (
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Synthetic connection account",
+      })
+    ).output;
+    const transaction = async (externalIds: string[]) =>
+      (
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId: account.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 12.5,
+          postedDate: "2026-06-01",
+          sourceRefs: externalIds.map((externalId) => ({
+            source: original.source,
+            externalId,
+          })),
+        })
+      ).output;
+    const first = await transaction([
+      original.externalId,
+      "synthetic-legacy-settlement",
+    ]);
+    await observe("synthetic-edge-v2", "synthetic-charge", 2);
+    const revised = (await listSourceTransactionRecords(ctx.db, {})).data.find(
+      (row) => row.id !== original.id,
+    );
+    if (!revised)
+      throw new Error("Synthetic revised source record was not recorded");
+    const second = await transaction([revised.externalId]);
+    await observe("synthetic-edge-other", "synthetic-other-charge", 1);
+    const unrelated = (
+      await listSourceTransactionRecords(ctx.db, {})
+    ).data.find((row) => row.chargeKey !== original.chargeKey);
+    if (!unrelated)
+      throw new Error("Synthetic unrelated source record was not recorded");
+    await transaction([unrelated.externalId]);
+
+    const edgeKey =
+      "rows:sourceTransactionRecord.acceptedTransactions.transaction";
+    const outgoing = await getEntityConnections(ctx.db, {
+      id: revised.id,
+      operation: "delete",
+      limitPerGroup: 1,
+    });
+    const outgoingGroup = outgoing.groups.find(
+      (group) => group.edgeKey === edgeKey,
+    );
+    expect(outgoingGroup).toMatchObject({
+      direction: "outgoing",
+      otherKind: "financialTransaction",
+      role: "reference",
+      disposition: null,
+      count: 2,
+      items: [
+        { id: [first.id, second.id].sort()[0], kind: "financialTransaction" },
+      ],
+    });
+    const fullOutgoing = await getEntityConnections(ctx.db, {
+      id: original.id,
+    });
+    expect(
+      fullOutgoing.groups
+        .find((group) => group.edgeKey === edgeKey)
+        ?.items.map((item) => item.id)
+        .sort(),
+    ).toEqual([first.id, second.id].sort());
+    const incoming = await getEntityConnections(ctx.db, {
+      id: first.id,
+      operation: "delete",
+      limitPerGroup: 1,
+    });
+    const incomingGroup = incoming.groups.find(
+      (group) => group.edgeKey === edgeKey,
+    );
+    expect(incomingGroup).toMatchObject({
+      direction: "incoming",
+      otherKind: "sourceTransactionRecord",
+      role: "reference",
+      disposition: null,
+      count: 2,
+      items: [
+        {
+          id: [original.id, revised.id].sort()[0],
+          kind: "sourceTransactionRecord",
+        },
+      ],
+    });
+    expect(
+      (
+        await getEntityConnections(ctx.db, { id: first.id, limitPerGroup: 1 })
+      ).groups.find((group) => group.edgeKey === edgeKey)?.items,
+    ).toEqual(incomingGroup?.items);
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ deletedAt: new Date() })
+      .where(eq(sourceTransactionRecord.shortcode, original.id));
+    expect(
+      (await getEntityConnections(ctx.db, { id: second.id })).groups.find(
+        (group) => group.edgeKey === edgeKey,
+      ),
+    ).toMatchObject({
+      count: 1,
+      items: [{ id: revised.id }],
+    });
   });
 
   it("reads a merged-away code as its survivor", async () => {

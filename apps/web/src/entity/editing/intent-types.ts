@@ -45,7 +45,12 @@ type EntityEditDraftExtras = {
  * runtime; callers can no longer invent field names or incompatible values. */
 type EntityEditDraftMap = {
   [E in TypedEditableEntity]: Partial<
-    EntityEditCreateInputMap[E] & EntityEditUpdateInputMap[E]
+    ([EntityEditCreateInputMap[E]] extends [never]
+      ? unknown
+      : EntityEditCreateInputMap[E]) &
+      ([EntityEditUpdateInputMap[E]] extends [never]
+        ? unknown
+        : EntityEditUpdateInputMap[E])
   > &
     (E extends keyof EntityEditDraftExtras
       ? EntityEditDraftExtras[E]

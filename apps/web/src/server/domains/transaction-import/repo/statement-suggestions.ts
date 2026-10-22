@@ -10,7 +10,7 @@ import {
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
-  type FinancialStatementImportRow,
+  type FinancialTransactionImportRow,
 } from "@cubby/schemas/financial-transaction";
 import {
   financialTransactionKind,
@@ -18,7 +18,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { RunStepError } from "@cubby/schemas/run-step";
-import { statementRowProviderStatus } from "@cubby/schemas/statement-row";
+import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import {
   type StatementCounterparty,
   type StatementKindVotes,
@@ -47,7 +47,7 @@ import {
 } from "~/server/db/helpers";
 import { assessmentState, financialTransaction } from "~/server/db/schema";
 import {
-  previewFinancialStatementImport,
+  previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { findTransferPairsForCharges } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
@@ -58,19 +58,19 @@ import {
   pendingSuggestion,
   suggestionField,
   suggestionRefKey,
-} from "~/server/domains/statement-import/repo/statement-charge";
-import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
+} from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementLabelInputs,
   statementLabelSubject,
-} from "~/server/domains/statement-import/repo/statement-label-input";
+} from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
   decideStatementKind,
   kindAgreed,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
-} from "~/server/domains/statement-import/repo/statement-transaction-kind";
+} from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import {
@@ -196,31 +196,31 @@ async function nextUnmatchedCharges(
   const filters = [
     ...(importId
       ? [
-          sql`(seen.id IN (SELECT m."statementRowId" FROM ${statementImportMembers} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
+          sql`(seen.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
         ]
       : []),
     ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),
   ];
   const state = filters.length
     ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM "StatementRow" seen
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM "SourceTransactionRecord" seen
         WHERE seen."deletedAt" IS NULL AND ${sql.join(filters, sql` AND `)}
       )`)
     : CHARGE_STATE;
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
     SELECT cs.source, cs."chargeKey" FROM ${state} cs
     WHERE NOT cs.ignored AND NOT cs.superseded
-      AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM "StatementRow" head
+      AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM "SourceTransactionRecord" head
         WHERE head.source=cs.source AND head."chargeKey"=cs."chargeKey" AND head.current
           AND head."withdrawnAt" IS NULL AND head.amount <> 0 AND head."deletedAt" IS NULL))
         OR EXISTS (SELECT 1 FROM "FinancialTransaction" changed
-          JOIN "StatementRow" head ON head.source=cs.source AND head."chargeKey"=cs."chargeKey"
+          JOIN "SourceTransactionRecord" head ON head.source=cs.source AND head."chargeKey"=cs."chargeKey"
           WHERE changed.shortcode=cs.shortcode AND changed."deletedAt" IS NULL
             AND head.current AND head."deletedAt" IS NULL
             AND ((head."withdrawnAt" IS NOT NULL AND changed.status <> ${financialTransactionStatus.enum.void}) OR
               (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR round(changed.amount::numeric,2) <> round(head.amount::numeric,2)
-                OR (head."providerStatus" = ${statementRowProviderStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.posted} OR changed."postedDate" IS DISTINCT FROM head."statementDate"))
-                OR (head."providerStatus" = ${statementRowProviderStatus.enum.pending} AND changed.status <> ${financialTransactionStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.pending} OR changed."transactionDate" IS DISTINCT FROM head."statementDate"))))))
+                OR (head."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.posted} OR changed."postedDate" IS DISTINCT FROM head."statementDate"))
+                OR (head."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending} AND changed.status <> ${financialTransactionStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.pending} OR changed."transactionDate" IS DISTINCT FROM head."statementDate"))))))
         OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
         WHERE ft.shortcode = cs.shortcode AND ft."deletedAt" IS NULL
           AND ft.status IN (${financialTransactionStatus.enum.posted}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.observed})
@@ -270,8 +270,8 @@ async function loadObservations(
       r."statementDate", r."providerAmount", r.amount, r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus",
       r."providerNotes", r."withdrawnAt", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
-    FROM "StatementRow" r
-    JOIN "StatementImport" si ON si.id = r."batchId"
+    FROM "SourceTransactionRecord" r
+    JOIN "TransactionImport" si ON si.id = r."batchId"
     WHERE r."deletedAt" IS NULL
       AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})
     ORDER BY r.current DESC, r."lastObservedAt" DESC, r."createdAt" DESC, r.id
@@ -318,7 +318,7 @@ const canonicalObservation = (observations: Observation[]) => observations[0]!;
 const previewRowFor = (
   charge: ChargeRef,
   row: Observation,
-): FinancialStatementImportRow => ({
+): FinancialTransactionImportRow => ({
   key: chargeId(charge),
   source: row.source,
   account: row.accountDescriptor,
@@ -366,8 +366,8 @@ async function statementPendingTransactions(
     FROM "FinancialTransaction" ft
     JOIN "EntityExternalId" fx ON fx."entityId" = ft.id
       AND fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
-    JOIN "StatementRow" sr ON sr.source = fx.source AND sr."externalId" = fx."externalId"
-      AND sr."deletedAt" IS NULL AND sr."providerStatus" = ${statementRowProviderStatus.enum.pending}
+    JOIN "SourceTransactionRecord" sr ON sr.source = fx.source AND sr."externalId" = fx."externalId"
+      AND sr."deletedAt" IS NULL AND sr."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending}
     WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
       ${page?.after ? sql`AND ft.id > ${page.after}::uuid` : sql``}
       AND ft."accountId" IN (${sql.join(
@@ -379,9 +379,9 @@ async function statementPendingTransactions(
         WHERE other."entityId" = ft.id AND other.kind = 'settlement_ref'
           AND other."deletedAt" IS NULL
           AND NOT EXISTS (
-            SELECT 1 FROM "StatementRow" held
+            SELECT 1 FROM "SourceTransactionRecord" held
             WHERE held.source = other.source AND held."externalId" = other."externalId"
-              AND held."deletedAt" IS NULL AND held."providerStatus" = ${statementRowProviderStatus.enum.pending}
+              AND held."deletedAt" IS NULL AND held."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending}
           )
       )
     GROUP BY ft.id
@@ -448,7 +448,7 @@ async function siblingsFor(
     ),
     o AS MATERIALIZED (
       SELECT p.key, p."rowIds", o.id, o.source, ${chargeKeyOf("o")} AS "chargeKey"
-      FROM p JOIN "StatementRow" o ON o.source = p.source
+      FROM p JOIN "SourceTransactionRecord" o ON o.source = p.source
         AND o."accountDescriptor" = p.descriptor
         AND o."providerAmount" = p.amount
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
@@ -459,7 +459,7 @@ async function siblingsFor(
       sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM o)`,
     )},
     members AS MATERIALIZED (
-      SELECT m."importId", m."statementRowId" FROM ${statementImportMembers} m
+      SELECT m."importId", m."statementRowId" FROM ${transactionImportMembers} m
       WHERE m."statementRowId" IN (SELECT id FROM o UNION SELECT unnest("rowIds") FROM p)
     )
     SELECT o.key, array_agg(DISTINCT o."chargeKey" ORDER BY o."chargeKey") AS siblings
@@ -516,12 +516,12 @@ async function claimedCandidates(
     hits AS MATERIALIZED (
       SELECT refs.key, refs."transactionId", refs."chargeKey" AS own,
         r.source, ${chargeKeyOf("r")} AS "claimKey"
-      FROM refs JOIN "StatementRow" r ON r.source = refs.source
+      FROM refs JOIN "SourceTransactionRecord" r ON r.source = refs.source
         AND r."externalId" = refs."externalId" AND r."deletedAt" IS NULL
       UNION
       SELECT refs.key, refs."transactionId", refs."chargeKey",
         r.source, ${chargeKeyOf("r")}
-      FROM refs JOIN "StatementRow" r ON r.source = refs.source
+      FROM refs JOIN "SourceTransactionRecord" r ON r.source = refs.source
         AND r."legacyReference" = refs."externalId" AND r."deletedAt" IS NULL
     ),
     -- An ignored or superseded charge was set aside by the member, so it no
@@ -765,7 +765,7 @@ export async function buildChargeProposals(
     : { rows: [] };
   const accepted = new Map(acceptedRows.map((row) => [row.shortcode, row]));
   const preparation = await prepareFinancialStatementPreview(db);
-  const preview = await previewFinancialStatementImport(
+  const preview = await previewFinancialTransactionImport(
     db,
     {
       rows: grouped.map(({ charge, canonical }) =>
@@ -1248,7 +1248,7 @@ async function buildHoldVoidProposalsForHolds(
 async function loadObservationsById(db: Database, rowIds: readonly string[]) {
   if (!rowIds.length) return [];
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
-    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM "StatementRow" r
+    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM "SourceTransactionRecord" r
     WHERE r.id IN (${sql.join(
       rowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -1270,9 +1270,9 @@ async function laterCoveringImport(
   },
 ): Promise<string | null> {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
-    SELECT DISTINCT si.id FROM "StatementImport" si
-    JOIN "StatementRow" head ON head."withdrawalImportId" = si.id
-    JOIN "StatementRow" held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
+    SELECT DISTINCT si.id FROM "TransactionImport" si
+    JOIN "SourceTransactionRecord" head ON head."withdrawalImportId" = si.id
+    JOIN "SourceTransactionRecord" held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
     WHERE si."deletedAt" IS NULL AND si.source=${input.source} AND si."completedAt" IS NOT NULL
       AND si.coverage->>${"visibility"}=${"all"} AND head.current AND head."withdrawnAt" IS NOT NULL
       AND head."deletedAt" IS NULL AND held."deletedAt" IS NULL
@@ -1294,14 +1294,14 @@ async function postedTwinExists(
     amount: string;
     statementDate: unknown;
   }>(sql`
-    SELECT r.amount, r."statementDate" FROM "StatementRow" r
+    SELECT r.amount, r."statementDate" FROM "SourceTransactionRecord" r
     WHERE r."deletedAt" IS NULL
-      AND r."providerStatus" IS DISTINCT FROM ${statementRowProviderStatus.enum.pending}
+      AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
       AND r."statementDate" BETWEEN ${date}::date - ${PENDING_POST_WINDOW_DAYS}::int
         AND ${date}::date + ${PENDING_POST_WINDOW_DAYS}::int
       AND sign(r.amount) = sign(${hold.amount}::numeric)
       AND r."accountDescriptor" IN (
-        SELECT held."accountDescriptor" FROM "StatementRow" held
+        SELECT held."accountDescriptor" FROM "SourceTransactionRecord" held
         WHERE held.id IN (${sql.join(
           hold.pendingRowIds.map((id) => sql`${id}::uuid`),
           sql`, `,
@@ -1579,7 +1579,7 @@ export async function publishChargeProposal(
         family: "statement_transaction",
         subject: {
           kind: "statement_transaction",
-          entity: "statementRow",
+          entity: "sourceTransactionRecord",
           recordId: proposal.canonical.id,
           source: charge.source,
           chargeKey: charge.chargeKey,
@@ -2011,9 +2011,9 @@ export async function suggestionsNeedingLabels(
 const importScope = (importId: string | null) =>
   importId
     ? sql`AND (${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM "StatementRow" seen
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM "SourceTransactionRecord" seen
         WHERE seen."deletedAt" IS NULL AND seen.id IN (
-          SELECT m."statementRowId" FROM ${statementImportMembers} m WHERE m."importId" = ${importId}::uuid))`
+          SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${importId}::uuid))`
     : sql``;
 
 /** How many pending suggestions still need labels, for a Sweep's count. */

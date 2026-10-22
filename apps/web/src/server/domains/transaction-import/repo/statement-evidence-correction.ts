@@ -4,14 +4,21 @@ import {
   parseShortcodeFor,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
-import { statementImportInput } from "@cubby/schemas/statement-row";
+import { transactionImportInput } from "@cubby/schemas/source-transaction-record";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
-import { statementImport, statementRow } from "~/server/db/schema";
+import {
+  getDb,
+  notDeleted,
+  unwrapDb,
+  withTransaction,
+} from "~/server/db/helpers";
+import { transactionImport, sourceTransactionRecord } from "~/server/db/schema";
 import { reconcileFinancialEvidenceCorrection } from "~/server/domains/financial-transaction/repo/financial-evidence-correction";
+
+import { auditEvidenceRows } from "./intake-audit";
 
 /** Revisions can change generated money only while every retained source agrees. */
 export async function reconcileRecordedFinancialEvidence(
@@ -27,13 +34,13 @@ export async function reconcileRecordedFinancialEvidence(
   if (!chargeKeys.length) return reviews;
   const heads = await getDb(db)
     .select()
-    .from(statementRow)
+    .from(sourceTransactionRecord)
     .where(
       and(
-        eq(statementRow.source, source),
-        inArray(statementRow.chargeKey, [...chargeKeys]),
-        eq(statementRow.current, true),
-        notDeleted(statementRow),
+        eq(sourceTransactionRecord.source, source),
+        inArray(sourceTransactionRecord.chargeKey, [...chargeKeys]),
+        eq(sourceTransactionRecord.current, true),
+        notDeleted(sourceTransactionRecord),
       ),
     );
   for (const head of heads) {
@@ -43,7 +50,7 @@ export async function reconcileRecordedFinancialEvidence(
     }>(sql`
       SELECT DISTINCT ft.shortcode, ft."accountId" FROM "FinancialTransaction" ft
       JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind = 'settlement_ref' AND ref."deletedAt" IS NULL
-      JOIN "StatementRow" observed ON observed.source = ref.source AND observed."deletedAt" IS NULL
+      JOIN "SourceTransactionRecord" observed ON observed.source = ref.source AND observed."deletedAt" IS NULL
         AND (observed."externalId" = ref."externalId" OR
           observed."legacyReference" = ref."externalId")
       WHERE observed.source = ${source} AND observed."chargeKey" = ${head.chargeKey} AND ft."deletedAt" IS NULL
@@ -55,10 +62,27 @@ export async function reconcileRecordedFinancialEvidence(
       target.shortcode,
     );
     if (head.accountId === null)
-      await getDb(db)
-        .update(statementRow)
-        .set({ accountId: parseEntityId("financialAccount", target.accountId) })
-        .where(eq(statementRow.id, head.id));
+      await withTransaction(db, async (tx) => {
+        const updated = await tx
+          .update(sourceTransactionRecord)
+          .set({
+            accountId: parseEntityId("financialAccount", target.accountId),
+          })
+          .where(
+            and(
+              eq(sourceTransactionRecord.id, head.id),
+              sql`${sourceTransactionRecord.accountId} IS NULL`,
+            ),
+          )
+          .returning();
+        await auditEvidenceRows(
+          tx,
+          actor,
+          "sourceTransactionRecord",
+          [head],
+          updated,
+        );
+      });
     const result = await reconcileFinancialEvidenceCorrection(
       db,
       {
@@ -71,11 +95,11 @@ export async function reconcileRecordedFinancialEvidence(
             const [proof] = observation.withdrawalImportId
               ? await getDb(tx)
                   .select()
-                  .from(statementImport)
+                  .from(transactionImport)
                   .where(
                     and(
-                      eq(statementImport.id, observation.withdrawalImportId),
-                      notDeleted(statementImport),
+                      eq(transactionImport.id, observation.withdrawalImportId),
+                      notDeleted(transactionImport),
                     ),
                   )
                   .limit(1)
@@ -83,11 +107,11 @@ export async function reconcileRecordedFinancialEvidence(
             const { rows: counts } = await unwrapDb(tx).execute<{
               count: number;
             }>(sql`
-            SELECT count(*)::int AS count FROM "StatementImportRow" m
-            JOIN "StatementRow" r ON r.id=m."statementRowId" AND r."deletedAt" IS NULL
+            SELECT count(*)::int AS count FROM "TransactionImportRecord" m
+            JOIN "SourceTransactionRecord" r ON r.id=m."statementRowId" AND r."deletedAt" IS NULL
             WHERE m."importId"=${observation.withdrawalImportId}::uuid
           `);
-            const parsed = statementImportInput.shape.coverage.safeParse(
+            const parsed = transactionImportInput.shape.coverage.safeParse(
               proof?.coverage,
             );
             const coverage = parsed.success ? parsed.data : undefined;
@@ -117,9 +141,9 @@ export async function reconcileRecordedFinancialEvidence(
             latest.source = ${source} AND latest."chargeKey" = ${head.chargeKey} AS own
           FROM "FinancialTransaction" ft
           JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind='settlement_ref' AND ref."deletedAt" IS NULL
-          LEFT JOIN "StatementRow" observed ON observed.source=ref.source AND observed."deletedAt" IS NULL
+          LEFT JOIN "SourceTransactionRecord" observed ON observed.source=ref.source AND observed."deletedAt" IS NULL
             AND (observed."externalId"=ref."externalId" OR observed."legacyReference"=ref."externalId")
-          LEFT JOIN "StatementRow" latest ON latest.source=observed.source AND latest."chargeKey"=observed."chargeKey"
+          LEFT JOIN "SourceTransactionRecord" latest ON latest.source=observed.source AND latest."chargeKey"=observed."chargeKey"
             AND latest.current AND latest."deletedAt" IS NULL
           WHERE ft.shortcode=${transactionId}
         `);

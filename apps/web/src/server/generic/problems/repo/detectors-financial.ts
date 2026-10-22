@@ -15,7 +15,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { financialTransaction, financialAccount } from "~/server/db/schema";
-import { statementImportMembers } from "~/server/domains/statement-import/repo/statement-import-membership";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
@@ -275,9 +275,9 @@ export async function findProvisionalFinancialAccounts(
  * Deliberately the only statement-ledger detector: unmatched rows are the drift
  * worklist, not defects, and 15k of them here would make Problems unusable.
  */
-export async function findIncompleteStatementImports(
+export async function findIncompleteTransactionImports(
   db: Database,
-): Promise<ProblemItem<"incompleteStatementImports">[]> {
+): Promise<ProblemItem<"incompleteTransactionImports">[]> {
   const result = await getDb(db).execute<{
     source: string;
     label: string;
@@ -288,9 +288,9 @@ export async function findIncompleteStatementImports(
     SELECT si.source, si.label, si.fingerprint,
            si."rowCountDeclared" AS "rowCountDeclared",
            count(sr.id)::int AS "rowCountStored"
-    FROM "StatementImport" si
-    LEFT JOIN ${statementImportMembers} member ON member."importId" = si.id
-    LEFT JOIN "StatementRow" sr
+    FROM "TransactionImport" si
+    LEFT JOIN ${transactionImportMembers} member ON member."importId" = si.id
+    LEFT JOIN "SourceTransactionRecord" sr
       ON sr.id = member."statementRowId" AND sr."deletedAt" IS NULL
     WHERE si."deletedAt" IS NULL AND si."rowCountDeclared" IS NOT NULL
     GROUP BY si.id, si.source, si.label, si.fingerprint, si."rowCountDeclared"

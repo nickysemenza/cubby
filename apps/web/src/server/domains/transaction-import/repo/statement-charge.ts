@@ -1,6 +1,6 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import { statementRowDisposition } from "@cubby/schemas/statement-row";
+import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { type SQL, sql } from "drizzle-orm";
 
@@ -9,7 +9,7 @@ import { type SQL, sql } from "drizzle-orm";
  * `(source, externalId)` pairs a statement row matches on.
  *
  * Joined once and hashed rather than probed per row: cost scales with the
- * references (~6k) rather than with StatementRow (~34k).
+ * references (~6k) rather than with SourceTransactionRecord (~34k).
  *
  * LOAD-BEARING: joining without DISTINCT is safe because the live
  * `EntityExternalId_source_kind_externalId_key` unique allows one live owner
@@ -37,10 +37,10 @@ export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
  */
 export const chargeStateOf = (scope: SQL) => sql`(
   SELECT r.source, ${chargeKeyOf("r")} AS "chargeKey",
-    bool_or(r.disposition = ${statementRowDisposition.enum.ignored}) AS ignored,
+    bool_or(r.disposition = ${sourceTransactionRecordDisposition.enum.ignored}) AS ignored,
     bool_or(r."supersededByRowId" IS NOT NULL) AS superseded,
     min(COALESCE(own.shortcode, legacy.shortcode)) AS shortcode
-  FROM "StatementRow" r
+  FROM "SourceTransactionRecord" r
   LEFT JOIN ${LIVE_REFS} own
     ON own.source = r.source AND own."externalId" = r."externalId"
   LEFT JOIN ${LIVE_REFS} legacy
@@ -77,7 +77,7 @@ export const pendingSuggestion = (alias = "s") =>
   sql`${sql.raw(`"${alias}"`)}.family = ${assessmentFamily.enum.statement_transaction}
     AND ${sql.raw(`"${alias}"`)}.active
     AND ${sql.raw(`"${alias}"`)}.status = ${suggestionStatus.enum.pending}
-    AND EXISTS (SELECT 1 FROM "StatementRow" head
+    AND EXISTS (SELECT 1 FROM "SourceTransactionRecord" head
       WHERE head.source=${sql.raw(`"${alias}"`)}.data->>${"source"}
         AND head."externalId"=${sql.raw(`"${alias}"`)}.data->>'headRef'
         AND head.current AND (head."withdrawnAt" IS NULL OR ${sql.raw(`"${alias}"`)}.data->>'reviewReason' IS NOT NULL) AND head."deletedAt" IS NULL)
@@ -91,8 +91,8 @@ export const pendingSuggestion = (alias = "s") =>
       )
       -- includes-deleted: removed observations invalidate current advice.
       OR EXISTS (
-        SELECT 1 FROM "StatementRow" r WHERE r.source=split_part(ref.value,':',1)
+        SELECT 1 FROM "SourceTransactionRecord" r WHERE r.source=split_part(ref.value,':',1)
           AND r."externalId"=substr(ref.value,strpos(ref.value,':')+1)
-          AND (r."deletedAt" IS NOT NULL OR r.disposition=${statementRowDisposition.enum.ignored} OR r."supersededByRowId" IS NOT NULL)
+          AND (r."deletedAt" IS NOT NULL OR r.disposition=${sourceTransactionRecordDisposition.enum.ignored} OR r."supersededByRowId" IS NOT NULL)
       )
     )`;

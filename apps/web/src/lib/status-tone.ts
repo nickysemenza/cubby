@@ -1,17 +1,17 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import type { FinancialStatementImportPreviewOut } from "@cubby/schemas/financial-transaction";
+import type { FinancialTransactionImportPreviewOut } from "@cubby/schemas/financial-transaction";
 import type { ProjectStatus } from "@cubby/schemas/project-fields";
 import type {
-  StatementRowDisposition,
-  StatementRowMatchState,
-} from "@cubby/schemas/statement-row";
+  SourceTransactionRecordDisposition,
+  SourceTransactionRecordMatchState,
+} from "@cubby/schemas/source-transaction-record";
 import type { TaskStatus } from "@cubby/schemas/task-fields";
 import type { McpToolUsageStatus } from "@cubby/schemas/telemetry";
 
 import type { BadgeVariant } from "~/ui/primitives/badge";
 
-type StatementImportStatus =
-  FinancialStatementImportPreviewOut["rows"][number]["status"];
+type TransactionImportStatus =
+  FinancialTransactionImportPreviewOut["rows"][number]["status"];
 
 /**
  * One tone per enum value. A status is condition, so it lands on
@@ -43,18 +43,18 @@ const STATUS_TONES = {
     unmatched: "warning",
     superseded: "slate",
     ignored: "secondary",
-  } satisfies Record<StatementRowMatchState, BadgeVariant>,
+  } satisfies Record<SourceTransactionRecordMatchState, BadgeVariant>,
   statementDisposition: {
     open: "outline",
     ignored: "secondary",
-  } satisfies Record<StatementRowDisposition, BadgeVariant>,
-  statementImport: {
+  } satisfies Record<SourceTransactionRecordDisposition, BadgeVariant>,
+  transactionImport: {
     ready_to_create: "default",
     already_recorded: "secondary",
     possible_existing: "warning",
     unresolved_account: "warning",
     indistinguishable_duplicate: "warning",
-  } satisfies Record<StatementImportStatus, BadgeVariant>,
+  } satisfies Record<TransactionImportStatus, BadgeVariant>,
   mcpUsage: {
     active: "default",
     inactive: "secondary",

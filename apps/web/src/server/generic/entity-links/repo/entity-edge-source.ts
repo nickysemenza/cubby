@@ -24,6 +24,10 @@ import {
   entityLinkKinds,
 } from "@cubby/schemas/entity-links";
 import {
+  generatedEntityListFields,
+  type GeneratedRowSet,
+} from "@cubby/schemas/entity-list-fields";
+import {
   allEntities,
   entityManifest,
   shortcodeEntities,
@@ -53,6 +57,7 @@ import {
 } from "~/server/entity-kernel/repo/entity-identity";
 import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/entity-kernel/repo/entity-lifecycle-registry";
 import { createAppError } from "~/server/errors/app-error";
+import { repositoryConnectionRows } from "~/server/generic/list/repo/list";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type EdgeSource =
@@ -305,6 +310,76 @@ const readEdges = async (
   return z.array(edgeRow).parse(result.rows);
 };
 
+const countedEdgeRow = edgeRow.extend({ count: z.number().int().positive() });
+
+/** Connections opt in independently of the physical graph and lifecycle policy. */
+const readRepositoryConnections = async (
+  db: Database | DrizzleTransaction,
+  subject: { id: string; kind: ShortcodeEntity },
+  limit: number,
+) => {
+  const groups = [];
+  for (const sourceKind of shortcodeEntities) {
+    const rowSets: Readonly<Record<string, GeneratedRowSet>> =
+      generatedEntityListFields[sourceKind].rows;
+    for (const [key, rowSet] of Object.entries(rowSets)) {
+      const { storage } = rowSet;
+      if (storage.kind !== "repository") continue;
+      for (const column of storage.connections) {
+        const targetKind = storage.columns[column];
+        if (!targetKind || !isShortcodeEntity(targetKind))
+          throw new Error(
+            `${sourceKind}.model.rows.${key}.${column}: connections require a shortcode entity reference`,
+          );
+        const directions = (["incoming", "outgoing"] as const).filter(
+          (direction) =>
+            direction === "incoming"
+              ? targetKind === subject.kind
+              : sourceKind === subject.kind,
+        );
+        if (directions.length === 0) continue;
+        // Repositories register during application startup, after this module loads.
+        const relation = repositoryConnectionRows(sourceKind, key, column);
+        const edgeKey = `rows:${sourceKind}.${key}.${column}`;
+        for (const direction of directions) {
+          const subjectColumn =
+            direction === "incoming" ? ident(column) : ident("owner");
+          const result = await unwrapDb(db).execute(sql`
+            WITH pairs AS (
+              SELECT DISTINCT row_set."owner" AS "sourceId",
+                row_set.${ident(column)} AS "targetId",
+                source_entity."shortcode" AS "sourceCode",
+                target_entity."shortcode" AS "targetCode"
+              FROM (${relation}) row_set
+              JOIN "Entity" source_entity ON source_entity."id" = row_set."owner"
+                AND source_entity."kind" = ${sourceKind}
+                AND source_entity."deletedAt" IS NULL
+                AND source_entity."shortcode" IS NOT NULL
+              JOIN "Entity" target_entity ON target_entity."id" = row_set.${ident(column)}
+                AND target_entity."kind" = ${targetKind}
+                AND target_entity."deletedAt" IS NULL
+                AND target_entity."shortcode" IS NOT NULL
+              WHERE row_set.${subjectColumn} = ${subject.id}::uuid
+            )
+            SELECT ${edgeKey}::text AS "edgeKey", ${sourceKind}::text AS "sourceKind",
+              ${targetKind}::text AS "targetKind", pairs.*,
+              (count(*) OVER ())::integer AS "count"
+            FROM pairs
+            ORDER BY "sourceCode", "sourceId", "targetCode", "targetId"
+            LIMIT ${limit}
+          `);
+          groups.push({
+            direction,
+            label: ENTITY_LABEL[sourceKind].toLowerCase(),
+            rows: z.array(countedEdgeRow).parse(result.rows),
+          });
+        }
+      }
+    }
+  }
+  return groups;
+};
+
 // One column (`EntityAttachment.imageId` aside) can target several kinds, so
 // a spec is named by its target kind and edge key together.
 const SPECS_BY_TARGET_AND_KEY = new Map(
@@ -340,7 +415,7 @@ const liveSubject = async (
   );
 };
 
-/** One-hop physical connections of an entity, grouped by edge. */
+/** One-hop physical and opted-in repository connections, grouped by edge. */
 export async function getEntityConnections(
   db: Database | DrizzleTransaction,
   rawInput: EntityConnectionsInput,
@@ -355,9 +430,10 @@ export async function getEntityConnections(
       spec.source.kind === "identity" ||
       spec.source.sourceKind === subject.kind,
   );
-  const [incoming, outgoing] = await Promise.all([
+  const [incoming, outgoing, repositoryConnections] = await Promise.all([
     readEdges(db, incomingSpecs, { side: "target", id: subject.id }),
     readEdges(db, outgoingSpecs, { side: "source", id: subject.id }),
+    readRepositoryConnections(db, subject, input.limitPerGroup),
   ]);
   const policy =
     input.operation === undefined
@@ -375,7 +451,9 @@ export async function getEntityConnections(
   const add = (
     direction: "incoming" | "outgoing",
     row: EdgeRow,
-    spec: EntityEdgeSpec,
+    spec: Pick<EntityEdgeSpec, "label" | "role">,
+    /** Repository rows carry their exact SQL count and have no lifecycle disposition. */
+    repositoryCount?: number,
   ) => {
     const otherKind = edgeKindSchema.parse(
       direction === "incoming" ? row.sourceKind : row.targetKind,
@@ -395,14 +473,14 @@ export async function getEntityConnections(
       otherKind,
       count: 0,
       disposition:
-        direction === "incoming" && policy
+        repositoryCount === undefined && direction === "incoming" && policy
           ? (Object.entries(policy).find(
               ([edge]) => edge === row.edgeKey,
             )?.[1] ?? null)
           : null,
       others: [],
     };
-    group.count += 1;
+    group.count = repositoryCount ?? group.count + 1;
     if (otherCode && group.others.length < input.limitPerGroup) {
       group.others.push({ id: otherId, kind: otherKind, code: otherCode });
     }
@@ -415,6 +493,15 @@ export async function getEntityConnections(
   for (const row of outgoing) {
     const spec = specFor(row.targetKind, row.edgeKey);
     if (spec) add("outgoing", row, spec);
+  }
+  for (const group of repositoryConnections) {
+    for (const row of group.rows)
+      add(
+        group.direction,
+        row,
+        { label: group.label, role: "reference" },
+        row.count,
+      );
   }
 
   const drafts = [...groups.values()];

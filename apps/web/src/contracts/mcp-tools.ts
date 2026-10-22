@@ -70,8 +70,8 @@ import {
 import { recommendationsContract } from "~/contracts/recommendations.contract";
 import { runContract } from "~/contracts/run.contract";
 import { searchContract } from "~/contracts/search.contract";
+import { sourceTransactionRecordContract } from "~/contracts/source-transaction-record.contract";
 import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
-import { statementRowContract } from "~/contracts/statement-row.contract";
 import { suggestionsContract } from "~/contracts/suggestions.contract";
 import { taskContract } from "~/contracts/task.contract";
 import {
@@ -586,30 +586,20 @@ export const MCP_TOOLS = defineMcpTools({
 
   finance_read: {
     description:
-      "Statement-row, settlement, contribution-ledger, and cash-flow reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",
+      "Financial evidence summary/drift, settlement, contribution-ledger, and cash-flow reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",
     actions: {
-      statement_rows: mcpAction({
-        op: statementRowContract.ops.list,
-        description:
-          "Recorded statement rows with their derived match state. Match state is per charge: every observation sharing a row's v1 identity (repeated exports of one charge) inherits an ignore, supersession or match recorded on any of them. `unmatched` is the drift worklist: a charge with no live Financial Transaction carrying any of its source references. `matched` returns the FTX- shortcode that claims it. `ignored` and `superseded` are off the worklist by an agent's explicit judgment. Eligible unmatched rows may include advisory vendorInference derived from prior settled transactions with the same Merchant label; it neither matches nor links anything. Filter by source, account (FAC- shortcode), match state, disposition, date range, amount range, or a search over the raw statement description. To close an unmatched row, entity.update(financialTransaction) to append its source reference; the row flips to matched on the next read, with no write to the row itself.",
-      }),
       summary: mcpAction({
-        op: statementRowContract.ops.summary,
+        op: sourceTransactionRecordContract.ops.summary,
         description:
-          "Count and total statement rows by match state for a filter — total, matched, unmatched, ignored, superseded, the dollar amount in total and per match state, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
-      }),
-      imports: mcpAction({
-        op: statementRowContract.ops.imports,
-        description:
-          "Recorded provider exports, newest first, with rows actually stored versus the count the client declared. A stored count short of the declared one means a chunked ingest was never finished.",
+          "Count and total source transaction records by match state for a filter — total, matched, unmatched, ignored, superseded, the dollar amount in total and per match state, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
       }),
       drift: mcpAction({
-        op: statementRowContract.ops.drift,
+        op: sourceTransactionRecordContract.ops.drift,
         description:
-          "Charges recorded TWICE under two identities. A row's identity hash covers its raw description, so a charge re-exported after its descriptor firms up (`AMAZON MKTPLACE PMTS` becoming `AMAZON MKTPL*XD8AR9RG3`) mints a second identity for money already recorded. Groups live, unsuperseded rows by (source, accountDescriptor, statementDate, providerAmount) and returns groups holding more than one, oldest row first so rows[0] is the likeliest predecessor. By default only groups spanning TWO exports are reported: one export speaks one descriptor vocabulary, so two of its own rows differing only in description are two real charges rather than one charge seen twice. Pass includeSameBatch to see them anyway. Still advisory: read the descriptions before acting. The remedy is statement_rows.update with `supersededByExternalId` on the predecessor, an explicit per-row judgment. Superseded rows drop out, so the list shrinks as it is worked.",
+          "Charges recorded TWICE under two identities. A row's identity hash covers its raw description, so a charge re-exported after its descriptor firms up (`EXAMPLE STORE PENDING` becoming `EXAMPLE STORE POSTED`) mints a second identity for money already recorded. Groups live, unsuperseded rows by (source, accountDescriptor, statementDate, providerAmount) and returns groups holding more than one, oldest row first so rows[0] is the likeliest predecessor. By default only groups spanning TWO exports are reported: one export speaks one descriptor vocabulary, so two of its own rows differing only in description are two real charges rather than one charge seen twice. Pass includeSameBatch to see them anyway. Still advisory: read the descriptions before acting. Read both records through entity_read, then use entity.update(sourceTransactionRecord) to set `supersededByRowId` on the predecessor to the reviewed successor record ID. Superseded rows drop out, so the list shrinks as it is worked.",
       }),
       preview_import: mcpAction({
-        op: financialTransactionContract.ops.previewStatementImport,
+        op: financialTransactionContract.ops.previewTransactionImport,
         readPolicy: "strong",
         description:
           "Preview client-parsed Monarch statement rows before recording settlement evidence. Normalized rows only — never a CSV path, upload, or file contents; at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate per row. Eligible rows may include advisory vendorInference from prior settled transactions with the same Merchant label; it neither matches nor links anything. Unresolved rows include a non-persisted provisional Account suggestion. It never creates Accounts, Financial Transactions, Purchases, or links: create only user-approved ready_to_create rows afterwards with entity.create(financialTransaction), then review every result.",
@@ -782,25 +772,14 @@ export const MCP_TOOLS = defineMcpTools({
     },
   },
 
-  statement_rows: {
+  source_transaction_records: {
     description:
       "Durable financial source observations, revisions and collection coverage. Cubby owns charge identity, guarded corrections and discovery through the existing Sweep.",
     actions: {
       record: mcpAction({
-        op: statementRowContract.ops.record,
+        op: sourceTransactionRecordContract.ops.record,
         description:
           "Record normalized financial evidence from an MCP source or client-parsed export; never submit file contents or paths. At most 500 observations per call. Resume a collection with identical source, fingerprint, observedAt, declared count and coverage. Scoped provider IDs identify revisions; retain providerAccountId, providerTransactionId, original descriptions and providerData. For ID-less exports preserve physical rowPosition. providerAmount is charges-negative; Cubby derives its outflow-positive amount. Zero records are retained without spending. Unknown providerStatus remains null; pending/unknown status does not prevent otherwise supported booking. Complete only an exhaustively enumerated account/window whose retained count equals its declaration. A visible-only query cannot prove withdrawal; confirmedWithdrawals additionally requires complete all-visibility coverage and source rechecking. Evidence plus the existing Sweep Job intent commit atomically. Dry runs and unchanged replays launch no financial work. Guarded corrections can revise or retire untouched generated lump bookings; edited/itemized/corroborated cases remain in Suggestions. Historical observations and settlement references are retained.",
-      }),
-      update: mcpAction({
-        op: statementRowContract.ops.update,
-        description:
-          "Write judgments onto statement rows; the provider's own columns are immutable after ingest. Address rows by {source, externalIds} for a handful, or by {filter} for a bulk pass (an empty filter is refused). Set disposition 'ignored' with both a reason and a note to take rows off the worklist permanently — only for a row that must never become a transaction (a duplicate of another export's row, a mis-parsed line); every real charge, consumer spend included, is in scope. `accountId` records which account a row belongs to, and `supersededByExternalId` links a pending row to the posted row that replaced it (superseding requires the explicit id selector).",
-      }),
-      delete: mcpAction({
-        op: statementRowContract.ops.delete,
-        destructive: true,
-        description:
-          "Soft-delete statement rows. Rare by design: a row that will never match should be dispositioned 'ignored' with its reasoning, which keeps the evidence and the audit trail. Delete only rows that should never have been recorded, such as a mis-parsed export.",
       }),
     },
   },

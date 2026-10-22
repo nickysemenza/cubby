@@ -1906,10 +1906,10 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
-    id: "incomplete-statement-imports",
+    id: "incomplete-transaction-imports",
     label: "Statement import coverage",
-    select: (p) => p.incompleteStatementImports,
-    problemKeys: ["incompleteStatementImports"],
+    select: (p) => p.incompleteTransactionImports,
+    problemKeys: ["incompleteTransactionImports"],
     entity: "financialAccount",
     renderItem: (item) => ({
       key: item.fingerprint,

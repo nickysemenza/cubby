@@ -1,6 +1,6 @@
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
@@ -15,7 +15,7 @@ import { aiAnalysis, photoRunImage } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { syntheticMailImportRun } from "~/server/domains/purchase-import/service/gmail/execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -129,7 +129,7 @@ describe("MCP catalog", () => {
   // A dry run of an existing collection once scheduled automatic financial work.
   // The public operation boundary, unlike a repository-only test, owns that intent.
   it("keeps dry runs and unchanged evidence replays free of financial Jobs", async () => {
-    const input = recordStatementRowsInput.parse({
+    const input = recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         fingerprint: "synthetic-pure-replay",
@@ -145,7 +145,7 @@ describe("MCP catalog", () => {
         },
       ],
     });
-    await recordStatementRows(ctx.db, input, ctx.actor);
+    await recordSourceTransactionRecords(ctx.db, input, ctx.actor);
     const kernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -161,7 +161,7 @@ describe("MCP catalog", () => {
     for (const dryRun of [true, false]) {
       const response = await callMcpTool(
         createMcpServer(),
-        "statement_rows",
+        "source_transaction_records",
         { action: "record", ...input, dryRun },
         kernelRequestContext(kernel),
         { entityKernel: kernel },
@@ -264,7 +264,7 @@ describe("MCP catalog", () => {
       "entries",
     );
     expect(
-      await call("statement_rows", {
+      await call("source_transaction_records", {
         action: "record",
         import: {
           source: "monarch",

@@ -291,6 +291,8 @@ const buildListRendererCoverage = () => {
       "run-activity": implemented(runListRenderers["run-activity"]),
     },
     imageJob: scoredCoverage<"imageJob">(),
+    sourceTransactionRecord: unscoredCoverage<"sourceTransactionRecord">(),
+    transactionImport: unscoredCoverage<"transactionImport">(),
     "usda-food": {
       "data-quality": implemented<
         ClientListRenderer<ClientListRows["usda-food"]>

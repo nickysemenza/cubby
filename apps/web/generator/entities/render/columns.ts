@@ -14,6 +14,8 @@ export const identifierTypeNames = {
   expense: "ExpenseId",
   financialAccount: "FinancialAccountId",
   financialTransaction: "FinancialTransactionId",
+  sourceTransactionRecord: "SourceTransactionRecordId",
+  transactionImport: "TransactionImportId",
   ingredient: "IngredientId",
   inventory: "InventoryId",
   ledgerParty: "LedgerPartyId",
@@ -140,7 +142,7 @@ const literalDefaultExpression = (value: DeclarationValue): string => {
 export const renderStorageColumn = (
   entity: CompiledEntity,
   field: EntityStorageField,
-  reference: (entity: string) => string,
+  reference: (entity: string, column?: string) => string,
 ): string => {
   const column = JSON.stringify(field.column);
   if (field.specialized === "amount-columns") {
@@ -213,10 +215,12 @@ export const renderStorageColumn = (
   if (field.default === "now") expression += ".defaultNow()";
   if (field.default === "literal")
     expression += `.default(${literalDefaultExpression(field.defaultValue)})`;
+  if (field.defaultSql !== undefined)
+    expression += `.default(sql\`${field.defaultSql}\`)`;
   if (field.specialized === "updated-at")
     expression += ".$onUpdate(() => new Date())";
   if (field.reference !== null)
-    expression += `.references(${reference(field.reference)})`;
+    expression += `.references(${reference(field.reference, field.referenceOptions?.column)}${field.referenceOptions?.onUpdate ? `, { onUpdate: ${JSON.stringify(field.referenceOptions.onUpdate)} }` : ""})`;
   return `${JSON.stringify(field.key)}:${expression}`;
 };
 

@@ -88,8 +88,8 @@ table), `vendorId` names the Vendor when one matches. The seed is the union of
 sources found in the old product identifier table, `sourceRefs`, statement
 imports and rows, and ledger source claims, plus `notion` and `google-drive`,
 after one spelling was chosen per source (`authorize.net` became
-`authorize-net`). The `source` column of `EntityExternalId`, `StatementImport`,
-`StatementRow`, and `LedgerSourceClaim` is an FK to the registry
+`authorize-net`). The `source` column of `EntityExternalId`, `TransactionImport`,
+`SourceTransactionRecord`, and `LedgerSourceClaim` is an FK to the registry
 (`ON UPDATE cascade`). Writers register a slug through
 `ensureExternalSources` before using it.
 

@@ -22,7 +22,7 @@ against the disposable Worker. Use
 `pnpm test:e2e:sim -- --headless --photo --purchase` or
 `pnpm test:e2e:local -- headless:wardrobe` for the composed photo, retailer,
 and normalized statement workflow. Statement evidence is recorded through
-`statementRow.record`; reviewed transaction kinds are explicit kernel creates.
+`sourceTransactionRecord.record`; reviewed transaction kinds are explicit kernel creates.
 The wardrobe journey checks exact replay, overlapping evidence, decoy charges,
 reviewed settlement, and preservation of Expense and inventory during convergence.
 

@@ -1,4 +1,4 @@
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -8,11 +8,10 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
   financialTransaction,
-  statementImport,
-  statementRow,
+  sourceTransactionRecord,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 
@@ -90,47 +89,40 @@ describe("generated booking evidence corrections", () => {
         ),
       })
       .where(eq(financialTransaction.id, transaction.entityId));
-    const [batch] = await getDb(ctx.db)
-      .insert(statementImport)
-      .values({
-        source: "synthetic-bank",
-        label: "Synthetic observations",
-        fingerprint: "synthetic-correction",
-      })
-      .returning();
-    if (!batch) throw new Error("Synthetic import was not created");
-    await getDb(ctx.db)
-      .insert(statementRow)
-      .values([
-        {
-          batchId: batch.id,
+    const retained = await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
           source: "synthetic-bank",
-          externalId:
-            "v3:1111111111111111111111111111111111111111111111111111111111111111",
-          chargeKey: "synthetic-charge",
-          current: false,
-          accountId: account.entityId,
+          label: "Synthetic observations",
+          fingerprint: "synthetic-correction",
+        },
+        rows: [25, 30].map((amount, index) => ({
+          rowPosition: index + 1,
           accountDescriptor: "Synthetic cash",
           statementDate: "2026-09-01",
           rawDescription: "Synthetic store",
-          amount: 25,
-          providerAmount: 25,
-        },
-        {
-          batchId: batch.id,
-          source: "synthetic-bank",
-          externalId:
-            "v3:2222222222222222222222222222222222222222222222222222222222222222",
+          providerAmount: -amount,
+        })),
+      }),
+      ctx.actor,
+    );
+    // This fixture retains historical aliases and revision state predating provider identity intake.
+    for (const position of [1, 2])
+      await getDb(ctx.db)
+        .update(sourceTransactionRecord)
+        .set({
+          externalId: `v3:${String(position).repeat(64)}`,
           chargeKey: "synthetic-charge",
-          current: true,
+          current: position === 2,
           accountId: account.entityId,
-          accountDescriptor: "Synthetic cash",
-          statementDate: "2026-09-01",
-          rawDescription: "Synthetic store",
-          amount: 30,
-          providerAmount: 30,
-        },
-      ]);
+        })
+        .where(
+          and(
+            eq(sourceTransactionRecord.batchId, retained.batchId!),
+            eq(sourceTransactionRecord.rowPosition, position),
+          ),
+        );
     const input: FinancialEvidenceCorrectionInput = {
       source: "synthetic-bank",
       externalId:
@@ -206,16 +198,16 @@ describe("generated booking evidence corrections", () => {
     const providerTransactionId = "synthetic-intake-correction";
     const providerAccountId = "synthetic-intake-account";
     await getDb(ctx.db)
-      .update(statementRow)
+      .update(sourceTransactionRecord)
       .set({ providerTransactionId, providerAccountId })
-      .where(eq(statementRow.chargeKey, "synthetic-charge"));
+      .where(eq(sourceTransactionRecord.chargeKey, "synthetic-charge"));
     const coverage = {
       account: providerAccountId,
       from: "2026-09-01",
       to: "2026-09-30",
       visibility: "all",
     };
-    const revision = recordStatementRowsInput.parse({
+    const revision = recordSourceTransactionRecordsInput.parse({
       import: {
         source: input.source,
         label: "Synthetic source revision",
@@ -238,7 +230,7 @@ describe("generated booking evidence corrections", () => {
       complete: true,
     });
     expect(
-      await recordStatementRows(ctx.db, revision, ctx.actor),
+      await recordSourceTransactionRecords(ctx.db, revision, ctx.actor),
     ).toMatchObject({ inserted: 1, revised: 1, correctionReviews: [] });
     expect(await money()).toEqual({
       amount: 40,
@@ -246,7 +238,7 @@ describe("generated booking evidence corrections", () => {
       allocations: [40],
       expenses: [40],
     });
-    const withdrawal = recordStatementRowsInput.parse({
+    const withdrawal = recordSourceTransactionRecordsInput.parse({
       import: {
         ...revision.import,
         label: "Synthetic source withdrawal",
@@ -259,7 +251,7 @@ describe("generated booking evidence corrections", () => {
       confirmedWithdrawals: [providerTransactionId],
     });
     expect(
-      await recordStatementRows(ctx.db, withdrawal, ctx.actor),
+      await recordSourceTransactionRecords(ctx.db, withdrawal, ctx.actor),
     ).toMatchObject({ withdrawn: 1, correctionReviews: [] });
     expect(await money()).toEqual({
       amount: 40,
@@ -268,7 +260,7 @@ describe("generated booking evidence corrections", () => {
       expenses: [],
     });
     expect(
-      await recordStatementRows(ctx.db, withdrawal, ctx.actor),
+      await recordSourceTransactionRecords(ctx.db, withdrawal, ctx.actor),
     ).toMatchObject({ withdrawn: 0, revised: 0 });
     expect(await money()).toEqual({
       amount: 40,
@@ -283,9 +275,9 @@ describe("generated booking evidence corrections", () => {
   it("routes a changed effective funding date to review without rewriting its booking", async () => {
     const { input, money } = await fixture(true);
     await getDb(ctx.db)
-      .update(statementRow)
+      .update(sourceTransactionRecord)
       .set({ providerStatus: "posted", statementDate: "2026-09-02" })
-      .where(eq(statementRow.externalId, input.externalId));
+      .where(eq(sourceTransactionRecord.externalId, input.externalId));
     const before = await money();
     expect(
       await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
@@ -360,13 +352,13 @@ describe("generated booking evidence corrections", () => {
       await reconcileFinancialEvidenceCorrection(ctx.db, withdrawal, ctx.actor),
     ).toMatchObject({ status: "review" });
     await getDb(ctx.db)
-      .update(statementRow)
+      .update(sourceTransactionRecord)
       .set({ current: false, withdrawnAt: new Date() })
       .where(
         and(
-          eq(statementRow.source, input.source),
-          eq(statementRow.externalId, input.externalId),
-          notDeleted(statementRow),
+          eq(sourceTransactionRecord.source, input.source),
+          eq(sourceTransactionRecord.externalId, input.externalId),
+          notDeleted(sourceTransactionRecord),
         ),
       );
     expect(

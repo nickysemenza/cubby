@@ -11,17 +11,17 @@ describe("MCP tool generation", () => {
   it("refuses a tool that mixes query and mutation actions", () => {
     expect(() =>
       toolKind("finance_read", [
-        { name: "statement_rows", kind: "query" },
+        { name: "source_transaction_records", kind: "query" },
         { name: "record", kind: "mutation" },
       ]),
     ).toThrow(
-      "MCP tool finance_read mixes query actions (statement_rows) and mutation actions (record)",
+      "MCP tool finance_read mixes query actions (source_transaction_records) and mutation actions (record)",
     );
   });
 
   it("returns the shared kind of a homogeneous tool", () => {
     expect(
-      toolKind("statement_rows", [
+      toolKind("source_transaction_records", [
         { name: "record", kind: "mutation" },
         { name: "delete", kind: "mutation" },
       ]),

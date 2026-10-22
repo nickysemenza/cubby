@@ -93,8 +93,8 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
     description:
       "A member's assertion that this account paid an order is soft-deleted with the account; the order's paying accounts fall back to its payment evidence.",
   },
-  "StatementRow.accountId": {
-    code: "block-live-statement-rows",
+  "SourceTransactionRecord.accountId": {
+    code: "block-live-source-transaction-records",
     effect: "block",
     description:
       "An account cannot be deleted while live statement rows are assigned to it. The column is nullable, so detaching would succeed silently — and it would discard the triage judgment that put the row on this account while leaving the row looking untriaged.",

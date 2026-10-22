@@ -89,7 +89,7 @@ import {
 import {
   pendingSuggestion,
   suggestionField,
-} from "~/server/domains/statement-import/repo/statement-charge";
+} from "~/server/domains/transaction-import/repo/statement-charge";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";

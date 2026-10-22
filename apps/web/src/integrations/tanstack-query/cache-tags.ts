@@ -488,6 +488,7 @@ export const ripple = {
   financialTransaction: rippleTags([
     FIELD_SUGGESTIONS,
     ["financialTransaction"],
+    ["sourceTransactionRecord"],
     ["financialAccount"],
     ["purchase"],
     ["problems"],
@@ -496,8 +497,12 @@ export const ripple = {
 
   wish: rippleTags([["wish"], ["search"], ["dashboard"]]),
 
-  /** Recording statement rows: the rows and the dashboard counts. */
-  statementRow: rippleTags([["statementRow"], ["dashboard"]]),
+  /** Intake changes source records, collection coverage, and dashboard counts. */
+  sourceTransactionRecord: rippleTags([
+    ["sourceTransactionRecord"],
+    ["transactionImport"],
+    ["dashboard"],
+  ]),
 
   /** Not an entity — the Problems page's own detector cards, resolved by a fix
    * that touched nothing else. */

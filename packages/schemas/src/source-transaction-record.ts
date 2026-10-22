@@ -1,14 +1,13 @@
 import { z } from "zod";
 import { externalIdSource } from "./external-id";
 import { money } from "./money";
-import { financialTransactionProviderStatus } from "./financial-transaction-fields";
 import { createSortPaginationFields } from "./pagination";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
+  transactionImportShortcode,
 } from "./identifiers";
 import { numericRangeFields, plainDate } from "./base-entity";
-import { merchantVendorInference } from "./financial-transaction";
 
 /**
  * The provider-statement ledger: what the card statements said, stored verbatim
@@ -21,119 +20,44 @@ import { merchantVendorInference } from "./financial-transaction";
  * writable after ingest.
  */
 
-export const statementDateKind = z.enum(["posted", "transaction", "unknown"]);
-export type StatementDateKind = z.infer<typeof statementDateKind>;
+export * from "./source-transaction-record-fields";
+import {
+  statementDateKind,
+  sourceTransactionRecordDisposition,
+  sourceTransactionRecordDispositionReason,
+  sourceTransactionRecordProviderStatus,
+  sourceTransactionRecordMatchState,
+} from "./source-transaction-record-fields";
 
-export const statementRowDisposition = z.enum(["open", "ignored"]);
-export type StatementRowDisposition = z.infer<typeof statementRowDisposition>;
+import { sourceTransactionRecordBaseFilterFields } from "./generated/sourceTransactionRecord.gen";
+import { sourceTransactionRecordOut } from "./generated/sourceTransactionRecord.gen";
+export {
+  sourceTransactionRecordOut,
+  type SourceTransactionRecordOut,
+} from "./generated/sourceTransactionRecord.gen";
+export {
+  transactionImportOut,
+  type TransactionImportOut,
+} from "./transaction-import";
+import { transactionImportOut } from "./transaction-import";
 
-/**
- * Why a row will never match. Parallel in style to `dataExceptionReason`, but a
- * deliberately separate set: that vocabulary is about a record Cubby owns being
- * wrong, this one is about a statement line Cubby will never hold.
- */
-export const statementRowDispositionReason = z.enum([
-  /**
-   * Legacy: real spend once judged out of scope. Every charge is now in scope,
-   * consumer spend included, so new judgments never use it; it stays only so
-   * stored rows still parse.
-   */
-  "not_modeled",
-  "not_a_purchase",
-  "duplicate_of_other_source",
-  "pre_cubby",
-  "other",
-]);
-export type StatementRowDispositionReason = z.infer<
-  typeof statementRowDispositionReason
+export const sourceTransactionRecordFilterFields = {
+  ...sourceTransactionRecordBaseFilterFields,
+};
+export const sourceTransactionRecordFilters = z.object(
+  sourceTransactionRecordFilterFields,
+);
+export type SourceTransactionRecordFilters = z.infer<
+  typeof sourceTransactionRecordFilters
 >;
 
-export const statementRowProviderStatus = financialTransactionProviderStatus;
-
-/**
- * Derived from whether a live transaction carries the row's `(source,
- * externalId)` pair — never stored, so it cannot go stale.
- */
-export const statementRowMatchState = z.enum([
-  "matched",
-  "unmatched",
-  "superseded",
-  "ignored",
-]);
-export type StatementRowMatchState = z.infer<typeof statementRowMatchState>;
-
-export const statementImportOut = z.object({
-  source: z.string(),
-  label: z.string(),
-  fingerprint: z.string(),
-  dateKind: statementDateKind,
-  rowCountDeclared: z.number().int().nullable(),
-  rowCountStored: z.number().int(),
-  observedAt: z.date(),
-  completedAt: z.date().nullable(),
-  coverage: z.json().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
-export type StatementImportOut = z.infer<typeof statementImportOut>;
-
-export const statementRowOut = z.object({
-  // Opaque read/selection handle only; mutations still address (source, externalId).
-  id: z
-    .guid()
-    .readonly()
-    .describe("Opaque read handle; not a route or mutation selector."),
-  // v2 names a file occurrence; v1 references remain valid for historical evidence.
-  source: z.string(),
-  externalId: z.string(),
-  importFingerprint: z.string(),
-  rowPosition: z.number().int().positive().nullable().default(null),
-  providerTransactionId: z.string().nullable().default(null),
-  legacyExternalId: z.string().nullable().default(null),
-  chargeKey: z.string(),
-  current: z.boolean(),
-  withdrawnAt: z.date().nullable(),
-  providerAccountId: z.string().nullable(),
-  providerData: z.json().nullable(),
-
-  accountDescriptor: z.string(),
-  statementDate: plainDate,
-  amount: z.number(),
-  providerAmount: z.number(),
-  merchant: z.string().nullable(),
-  rawDescription: z.string(),
-  sourceCategory: z.string().nullable(),
-  providerStatus: statementRowProviderStatus.nullable(),
-  providerNotes: z.string().nullable(),
-
-  accountId: financialAccountShortcode.nullable(),
-  accountName: z.string().nullable(),
-  disposition: statementRowDisposition,
-  dispositionReason: statementRowDispositionReason.nullable(),
-  dispositionNote: z.string().nullable(),
-  supersededBy: z.string().nullable(),
-  notes: z.string().nullable(),
-
-  matchState: statementRowMatchState,
-  transactionId: financialTransactionShortcode.nullable(),
-  vendorInference: merchantVendorInference
-    .nullable()
-    .default(null)
-    .describe(
-      "Advisory Vendor evidence only. Null for matched, ignored, or superseded rows. It neither matches nor links anything.",
-    ),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
-export type StatementRowOut = z.infer<typeof statementRowOut>;
-
-export const statementRowFilters = z.object({
+export const sourceTransactionRecordLegacyFilters = z.object({
   source: z.string().optional(),
   importFingerprint: z.string().optional(),
   accountId: financialAccountShortcode.optional(),
-  matchState: statementRowMatchState.optional(),
-  disposition: statementRowDisposition.optional(),
-  dispositionReason: statementRowDispositionReason.optional(),
+  matchState: sourceTransactionRecordMatchState.optional(),
+  disposition: sourceTransactionRecordDisposition.optional(),
+  dispositionReason: sourceTransactionRecordDispositionReason.optional(),
   /**
    * The provider's own category, verbatim. The provider already classified
    * every row, so a bulk pass over "every Restaurants row" is one filtered
@@ -141,15 +65,17 @@ export const statementRowFilters = z.object({
    */
   sourceCategory: z.string().optional(),
   // Plain days, not relative tokens: these filters also select the rows a
-  // statement_rows mutation writes, and mutations resolve no filter tokens.
+  // source_transaction_records mutation writes, and mutations resolve no filter tokens.
   dateFrom: plainDate.optional(),
   dateTo: plainDate.optional(),
   ...numericRangeFields("amount", { coerce: false }),
   search: z.string().optional(),
 });
-export type StatementRowFilters = z.infer<typeof statementRowFilters>;
+export type SourceTransactionRecordLegacyFilters = z.infer<
+  typeof sourceTransactionRecordLegacyFilters
+>;
 
-export const statementRowSortableFields = [
+export const sourceTransactionRecordSortableFields = [
   "statementDate",
   "amount",
   "accountDescriptor",
@@ -159,7 +85,7 @@ export const statementRowSortableFields = [
 
 export const STATEMENT_ROW_RECORD_MAX_ROWS = 500;
 
-export const statementImportInput = z.strictObject({
+export const transactionImportInput = z.strictObject({
   source: externalIdSource,
   label: z.string().min(1),
   fingerprint: z.string().min(1),
@@ -177,14 +103,14 @@ export const statementImportInput = z.strictObject({
     .optional(),
   notes: z.string().nullable().default(null),
 });
-export type StatementImportInput = z.infer<typeof statementImportInput>;
+export type TransactionImportInput = z.infer<typeof transactionImportInput>;
 
 /**
  * A provider row as the client parsed it. `externalId` is absent by design —
  * the server derives it, so a client cannot mint an identity that disagrees
  * with the one `sourceRefs` matching depends on.
  */
-export const statementRowInput = z.strictObject({
+export const sourceTransactionRecordInput = z.strictObject({
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
   providerAccountId: z
@@ -214,15 +140,19 @@ export const statementRowInput = z.strictObject({
   merchant: z.string().nullable().default(null),
   rawDescription: z.string(),
   sourceCategory: z.string().nullable().default(null),
-  providerStatus: statementRowProviderStatus.nullable().default(null),
+  providerStatus: sourceTransactionRecordProviderStatus
+    .nullable()
+    .default(null),
   providerNotes: z.string().nullable().default(null),
 });
-export type StatementRowInput = z.infer<typeof statementRowInput>;
+export type SourceTransactionRecordInput = z.infer<
+  typeof sourceTransactionRecordInput
+>;
 
-export const recordStatementRowsInput = z.strictObject({
-  import: statementImportInput,
+export const recordSourceTransactionRecordsInput = z.strictObject({
+  import: transactionImportInput,
   rows: z
-    .array(statementRowInput)
+    .array(sourceTransactionRecordInput)
     .max(STATEMENT_ROW_RECORD_MAX_ROWS)
     .refine((rows) => {
       const positions = rows.flatMap((row) =>
@@ -235,7 +165,7 @@ export const recordStatementRowsInput = z.strictObject({
    * nothing — no batch, no rows.
    *
    * The server owns the hash, so before this the only way to learn whether a
-   * chunk was already recorded was to reproduce `statementRowExternalId`
+   * chunk was already recorded was to reproduce `sourceTransactionRecordExternalId`
    * offline and query for the results. Ask the server instead.
    */
   dryRun: z.boolean().default(false),
@@ -245,10 +175,12 @@ export const recordStatementRowsInput = z.strictObject({
     .max(STATEMENT_ROW_RECORD_MAX_ROWS)
     .default([]),
 });
-export type RecordStatementRowsInput = z.infer<typeof recordStatementRowsInput>;
+export type RecordSourceTransactionRecordsInput = z.infer<
+  typeof recordSourceTransactionRecordsInput
+>;
 
-export const recordStatementRowsOut = z.object({
-  batchId: z.string().nullable(),
+export const recordSourceTransactionRecordsOut = z.object({
+  batchId: transactionImportShortcode.nullable(),
   batchCreated: z.boolean(),
   /** Echoes the request, so a caller cannot mistake a preview for a write. */
   dryRun: z.boolean(),
@@ -293,43 +225,59 @@ export const recordStatementRowsOut = z.object({
  * as "everything" — the one case where "unrestricted" is the wrong default,
  * since here it would silently rewrite the whole ledger's judgments.
  */
-type StatementRowFilterValue = StatementRowFilters[keyof StatementRowFilters];
-const hasStatementRowFilterValue = (value: StatementRowFilterValue): boolean =>
-  value !== undefined && value !== "";
+type SourceTransactionRecordFilterValue =
+  SourceTransactionRecordLegacyFilters[keyof SourceTransactionRecordLegacyFilters];
+const hasSourceTransactionRecordFilterValue = (
+  value: SourceTransactionRecordFilterValue,
+): boolean => value !== undefined && value !== "";
 
-export const statementRowSelector = z.union([
+export const sourceTransactionRecordSelector = z.union([
   z.strictObject({
     source: externalIdSource,
     externalIds: z.array(z.string()).min(1).max(500),
   }),
   z.strictObject({
-    filter: statementRowFilters.refine(
-      (value) => Object.values(value).some(hasStatementRowFilterValue),
+    filter: sourceTransactionRecordLegacyFilters.refine(
+      (value) =>
+        Object.values(value).some(hasSourceTransactionRecordFilterValue),
       "filter must restrict something; an empty filter would address every row",
     ),
   }),
 ]);
-export type StatementRowSelector = z.infer<typeof statementRowSelector>;
+export type SourceTransactionRecordSelector = z.infer<
+  typeof sourceTransactionRecordSelector
+>;
 
 /**
  * Only the judgment fields. Provider evidence is immutable after ingest, which
  * is enforced by this schema's shape rather than by convention.
  */
-export const statementRowUpdateData = z.strictObject({
+export {
+  sourceTransactionRecordUpdateData,
+  type SourceTransactionRecordUpdateData,
+} from "./generated/sourceTransactionRecord.gen";
+
+export const sourceTransactionRecordLegacyUpdateData = z.strictObject({
   accountId: financialAccountShortcode.nullable().optional(),
-  disposition: statementRowDisposition.optional(),
-  dispositionReason: statementRowDispositionReason.nullable().optional(),
+  disposition: sourceTransactionRecordDisposition.optional(),
+  dispositionReason: sourceTransactionRecordDispositionReason
+    .nullable()
+    .optional(),
   dispositionNote: z.string().nullable().optional(),
   supersededByExternalId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
-export type StatementRowUpdateData = z.infer<typeof statementRowUpdateData>;
+export type SourceTransactionRecordLegacyUpdateData = z.infer<
+  typeof sourceTransactionRecordLegacyUpdateData
+>;
 
-export const updateStatementRowsInput = z.strictObject({
-  selector: statementRowSelector,
-  data: statementRowUpdateData,
+export const updateSourceTransactionRecordsInput = z.strictObject({
+  selector: sourceTransactionRecordSelector,
+  data: sourceTransactionRecordLegacyUpdateData,
 });
-export type UpdateStatementRowsInput = z.infer<typeof updateStatementRowsInput>;
+export type UpdateSourceTransactionRecordsInput = z.infer<
+  typeof updateSourceTransactionRecordsInput
+>;
 
 /**
  * Two live rows that are the same charge under two identities.
@@ -345,7 +293,7 @@ export type UpdateStatementRowsInput = z.infer<typeof updateStatementRowsInput>;
  * Same-amount-same-day coincidences are real (two $4.50 coffees), so a
  * candidate is a question, not a finding.
  */
-export const statementRowDriftCandidate = z.object({
+export const sourceTransactionRecordDriftCandidate = z.object({
   source: z.string(),
   accountDescriptor: z.string(),
   statementDate: plainDate,
@@ -363,18 +311,18 @@ export const statementRowDriftCandidate = z.object({
       externalId: z.string(),
       rawDescription: z.string(),
       merchant: z.string().nullable(),
-      providerStatus: statementRowProviderStatus.nullable(),
-      disposition: statementRowDisposition,
+      providerStatus: sourceTransactionRecordProviderStatus.nullable(),
+      disposition: sourceTransactionRecordDisposition,
       importFingerprint: z.string(),
       createdAt: z.date(),
     }),
   ),
 });
-export type StatementRowDriftCandidate = z.infer<
-  typeof statementRowDriftCandidate
+export type SourceTransactionRecordDriftCandidate = z.infer<
+  typeof sourceTransactionRecordDriftCandidate
 >;
 
-export const findStatementRowDriftInput = z.object({
+export const findSourceTransactionRecordDriftInput = z.object({
   source: z.string().optional(),
   dateFrom: plainDate.optional(),
   dateTo: plainDate.optional(),
@@ -390,12 +338,12 @@ export const findStatementRowDriftInput = z.object({
   includeSameBatch: z.boolean().default(false),
   limit: z.number().int().min(1).max(200).default(50),
 });
-export type FindStatementRowDriftInput = z.infer<
-  typeof findStatementRowDriftInput
+export type FindSourceTransactionRecordDriftInput = z.infer<
+  typeof findSourceTransactionRecordDriftInput
 >;
 
-export const findStatementRowDriftOut = z.object({
-  candidates: z.array(statementRowDriftCandidate),
+export const findSourceTransactionRecordDriftOut = z.object({
+  candidates: z.array(sourceTransactionRecordDriftCandidate),
   /**
    * True when `limit` cut the list. A bounded sweep that says nothing about
    * what it dropped reads as "no more drift", which is the opposite of true.
@@ -403,37 +351,37 @@ export const findStatementRowDriftOut = z.object({
   truncated: z.boolean(),
 });
 
-export const deleteStatementRowsInput = z.strictObject({
-  selector: statementRowSelector,
+export const deleteSourceTransactionRecordsInput = z.strictObject({
+  selector: sourceTransactionRecordSelector,
 });
 
-export const statementRowWriteOut = z.object({
+export const sourceTransactionRecordWriteOut = z.object({
   affected: z.number().int(),
 });
 
 /** Shared by the browser workflow and MCP tool, so they cannot drift. */
-export const listStatementRowsInput = z.object({
-  filters: statementRowFilters.optional(),
+export const listSourceTransactionRecordsInput = z.object({
+  filters: sourceTransactionRecordLegacyFilters.optional(),
   ...createSortPaginationFields({
-    sortableFields: statementRowSortableFields,
+    sortableFields: sourceTransactionRecordSortableFields,
     defaultSort: "statementDate",
   }),
 });
 
-export const statementRowSummaryInput = z.object({
-  filters: statementRowFilters.optional(),
+export const sourceTransactionRecordSummaryInput = z.object({
+  filters: sourceTransactionRecordLegacyFilters.optional(),
 });
 
-export const listStatementImportsInput = z.object({
+export const listTransactionImportsInput = z.object({
   source: externalIdSource.optional(),
 });
 
-export const statementRowListOut = z.object({
-  data: z.array(statementRowOut),
+export const sourceTransactionRecordListOut = z.object({
+  data: z.array(sourceTransactionRecordOut),
   count: z.number().int(),
 });
 
-export const statementRowSummaryOut = z.object({
+export const sourceTransactionRecordSummaryOut = z.object({
   total: z.number().int(),
   matched: z.number().int(),
   unmatched: z.number().int(),
@@ -449,7 +397,7 @@ export const statementRowSummaryOut = z.object({
   unmatchedCharges: z.number().int(),
 });
 
-export const statementImportListOut = z.object({
-  data: z.array(statementImportOut),
+export const transactionImportListOut = z.object({
+  data: z.array(transactionImportOut),
   count: z.number().int(),
 });

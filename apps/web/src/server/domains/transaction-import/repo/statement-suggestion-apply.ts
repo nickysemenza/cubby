@@ -26,12 +26,12 @@ import {
   createFinancialTransaction,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { updateStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   type ChargeProposal,
   regenerateCharges,
-} from "~/server/domains/statement-import/repo/statement-suggestions";
-import { isMoneyMoveKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
+} from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
@@ -127,7 +127,7 @@ export async function applyStatementTransactionSuggestion(
   }
   const actor = context.actorContext;
   const claimRows = async () => {
-    await updateStatementRows(
+    await updateSourceTransactionRecords(
       db,
       {
         selector: {
@@ -291,7 +291,7 @@ async function applySupersede(
     source: string;
     externalId: string;
   }>(sql`
-    SELECT source, "externalId" FROM "StatementRow"
+    SELECT source, "externalId" FROM "SourceTransactionRecord"
     WHERE id IN (${sql.join(
       supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -299,7 +299,7 @@ async function applySupersede(
   `);
   await effects.claimRows();
   for (const source of new Set(pendingRows.map((row) => row.source)))
-    await updateStatementRows(
+    await updateSourceTransactionRecords(
       db,
       {
         selector: {

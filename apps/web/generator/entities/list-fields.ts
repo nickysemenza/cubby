@@ -118,6 +118,8 @@ type CompiledRowSet = Readonly<{
         kind: "repository";
         /** Column → the entity it references, or null for a value. */
         columns: Readonly<Record<string, string | null>>;
+        /** Reference columns exposed as nonphysical connections. */
+        connections: readonly string[];
         /** A value column's declared type. */
         types: Readonly<Record<string, string>>;
       }>;
@@ -385,6 +387,7 @@ const compileRowSets = (
     if ("repository" in declared) {
       const columns: Record<string, string | null> = {};
       const types: Record<string, string> = {};
+      const connections: string[] = [];
       for (const [column, type] of Object.entries(declared.repository)) {
         const reference = typeof type === "string" ? null : type.reference;
         if (typeof type === "string") types[column] = type;
@@ -393,10 +396,12 @@ const compileRowSets = (
             `${context}.repository.${column} references unknown entity ${reference}.`,
           );
         columns[column] = reference;
+        if (typeof type !== "string" && type.connection)
+          connections.push(column);
       }
       compiled[key] = {
         label: declared.label,
-        storage: { kind: "repository", columns, types },
+        storage: { kind: "repository", columns, connections, types },
       };
       continue;
     }

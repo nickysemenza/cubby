@@ -69,7 +69,7 @@ export { relatedDataContract } from "./related-data.contract";
 export { runContract } from "./run.contract";
 export { searchContract, searchStreamsContract } from "./search.contract";
 export { suggestionsContract } from "./suggestions.contract";
-export { statementRowContract } from "./statement-row.contract";
+export { sourceTransactionRecordContract } from "./source-transaction-record.contract";
 export { spendingClassificationContract } from "./spending-classification.contract";
 export { taskContract } from "./task.contract";
 export { upcContract } from "./upc.contract";

@@ -35,6 +35,17 @@ resolves concepts whose names differ across layers.
   entries, and one real card line may settle several Purchases — a return desk
   processing two orders onto one receipt, or a statement posting one line for
   several same-day refunds.
+- A **Source transaction record** (`SourceTransactionRecord`, `STR-`) is one
+  retained provider observation or revision, including pending, withdrawn,
+  incoming and zero-value evidence. It is distinct from a canonical
+  FinancialTransaction and never adds spend. Equal-looking observations do not
+  by themselves prove one charge.
+- A **Transaction import** (`TransactionImport`, `TIM-`) is one immutable source
+  collection: a file or bounded MCP snapshot, including resumed chunks. Membership
+  does not establish complete account/window coverage or completed reconciliation.
+- **Financial evidence** is the area containing Source transaction records and
+  Transaction imports. Use those entity labels across clients; statement rows
+  and batches describe source formats or transport, not replacement entity names.
 - An **Allocation** (`FinancialTransactionAllocation`) is how much of one
   transaction settled one Purchase. Evidence only: its amount never enters spend.
   A transaction has either no allocations (unlinked evidence) or a set that sums
@@ -284,7 +295,7 @@ Settlement is a separate axis:
 FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purchase
 ```
 
-- **Merchant** (`FinancialTransaction.merchant`, `StatementRow.merchant`) is the
+- **Merchant** (`FinancialTransaction.merchant`, `SourceTransactionRecord.merchant`) is the
   provider's settlement label. It may name a processor or marketplace rather
   than the place the household bought from, so it is evidence text rather than
   Vendor identity. A Possible vendor suggestion derived from repeated Merchant

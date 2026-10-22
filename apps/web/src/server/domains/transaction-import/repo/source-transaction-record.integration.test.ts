@@ -1,32 +1,44 @@
 import {
-  recordStatementRowsInput,
-  type StatementImportInput,
-  type StatementRowInput,
-} from "@cubby/schemas/statement-row";
-import { sql } from "drizzle-orm";
+  recordSourceTransactionRecordsInput,
+  type TransactionImportInput,
+  type SourceTransactionRecordInput,
+} from "@cubby/schemas/source-transaction-record";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { findIncompleteStatementImports } from "~/server/generic/problems/repo/detectors-financial";
-import { deleteThroughKernel } from "~/server/testing/entity-kernel";
-
-import { statementImportMembers } from "./statement-import-membership";
 import {
-  deleteStatementRows,
-  findStatementRowDrift,
-  getStatementRowSummary,
-  listStatementImports,
-  listStatementRows,
-  recordStatementRows,
-  updateStatementRows,
-} from "./statement-row";
-import { statementRowExternalId } from "./statement-row-identity";
+  auditLog,
+  sourceTransactionRecord,
+  transactionImportRecord,
+} from "~/server/db/schema";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { findIncompleteTransactionImports } from "~/server/generic/problems/repo/detectors-financial";
+import {
+  deleteThroughKernel,
+  updateThroughKernel,
+} from "~/server/testing/entity-kernel";
+
+import {
+  findSourceTransactionRecordDrift,
+  getSourceTransactionRecordSummary,
+  listSourceTransactionRecordsRead,
+  recordSourceTransactionRecords,
+  updateSourceTransactionRecords,
+} from "./source-transaction-record";
+import { sourceTransactionRecordExternalId } from "./source-transaction-record-identity";
+import {
+  listTransactionImports,
+  listSourceTransactionRecords,
+} from "./source-transaction-record.fixtures";
+import { transactionImportMembers } from "./transaction-import-membership";
 
 const importInput = (
-  overrides: Partial<StatementImportInput> = {},
-): StatementImportInput => ({
+  overrides: Partial<TransactionImportInput> = {},
+): TransactionImportInput => ({
   source: "monarch",
   label: "monarch-2026-08.csv",
   fingerprint: "fp-monarch-1",
@@ -37,8 +49,8 @@ const importInput = (
 });
 
 const rowInput = (
-  overrides: Partial<StatementRowInput> = {},
-): StatementRowInput => ({
+  overrides: Partial<SourceTransactionRecordInput> = {},
+): SourceTransactionRecordInput => ({
   accountDescriptor: "Test Card (...4242)",
   statementDate: "2026-05-04",
   providerAmount: -128.5,
@@ -51,15 +63,15 @@ const rowInput = (
 });
 
 const record = (
-  db: Parameters<typeof recordStatementRows>[0],
-  actor: Parameters<typeof recordStatementRows>[2],
-  rows: StatementRowInput[],
-  importOverrides: Partial<StatementImportInput> = {},
+  db: Parameters<typeof recordSourceTransactionRecords>[0],
+  actor: Parameters<typeof recordSourceTransactionRecords>[2],
+  rows: SourceTransactionRecordInput[],
+  importOverrides: Partial<TransactionImportInput> = {},
   dryRun = false,
 ) =>
-  recordStatementRows(
+  recordSourceTransactionRecords(
     db,
-    recordStatementRowsInput.parse({
+    recordSourceTransactionRecordsInput.parse({
       import: importInput(importOverrides),
       rows,
       dryRun,
@@ -70,6 +82,305 @@ const record = (
 describe("statement row ledger", () => {
   const ctx = withTestDb();
 
+  it("audits intake and judgment changes once while keeping provider evidence immutable", async () => {
+    const input = recordSourceTransactionRecordsInput.parse({
+      import: importInput({
+        fingerprint: "synthetic-audited-intake",
+        rowCountDeclared: 1,
+      }),
+      rows: [rowInput({ rowPosition: 1, providerData: { synthetic: true } })],
+    });
+    const audits = () =>
+      getDb(ctx.db)
+        .select()
+        .from(auditLog)
+        .where(
+          inArray(auditLog.entityKind, [
+            "sourceTransactionRecord",
+            "transactionImport",
+          ]),
+        );
+    await recordSourceTransactionRecords(
+      ctx.db,
+      { ...input, dryRun: true },
+      ctx.actor,
+    );
+    expect(await audits()).toEqual([]);
+    expect(await getDb(ctx.db).select().from(transactionImportRecord)).toEqual(
+      [],
+    );
+
+    await recordSourceTransactionRecords(ctx.db, input, ctx.actor);
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    expect(row).toBeDefined();
+    expect(row!.id).toMatch(/^STR-/);
+    expect(row!.batchId).toMatch(/^TIM-/);
+    expect(row!.displayName).toBe(input.rows[0]!.rawDescription);
+    const initialAudits = await audits();
+    expect(initialAudits).toHaveLength(2);
+    expect(
+      initialAudits.find((entry) => entry.entityKind === "transactionImport")
+        ?.changes,
+    ).toMatchObject({ records: { to: [expect.any(String)] } });
+    for (const entry of initialAudits)
+      expect(entry.changes).not.toHaveProperty("id");
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(eq(sourceTransactionRecord.shortcode, row!.id));
+
+    const publicAudit = await getAuditLog(ctx.db, {
+      entityKind: "transactionImport",
+      limit: 25,
+    });
+    expect(publicAudit.entries[0]?.changes).toMatchObject({
+      records: { to: [row!.id] },
+    });
+    expect(publicAudit.entries[0]?.references).toHaveProperty(row!.id);
+    expect(
+      initialAudits.find((entry) => entry.entityKind === "transactionImport")
+        ?.changes,
+    ).toMatchObject({ records: { to: [stored!.id] } });
+
+    await recordSourceTransactionRecords(ctx.db, input, ctx.actor);
+    expect(await audits()).toEqual(initialAudits);
+    expect((await listSourceTransactionRecords(ctx.db, {})).data[0]).toEqual(
+      row,
+    );
+    const [replayed] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(eq(sourceTransactionRecord.shortcode, row!.id));
+    expect(replayed?.id).toBe(stored?.id);
+
+    await expect(
+      recordSourceTransactionRecords(
+        ctx.db,
+        {
+          ...input,
+          rows: [{ ...input.rows[0]!, providerData: { synthetic: "changed" } }],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("original evidence");
+    expect(await audits()).toEqual(initialAudits);
+
+    const base = await listSourceTransactionRecordsRead(
+      ctx.db,
+      {},
+      [],
+      { pageIndex: 0, pageSize: 10 },
+      { kind: "base" },
+    );
+    expect(base.data[0]).toMatchObject({
+      id: row!.id,
+      source: input.import.source,
+      matchState: "unmatched",
+    });
+    expect(base.data[0]).not.toHaveProperty("providerData");
+    expect(base.data[0]).not.toHaveProperty("vendorInference");
+    expect(base.data[0]).not.toHaveProperty("accountName");
+    const metadata = await listSourceTransactionRecordsRead(
+      ctx.db,
+      {},
+      [],
+      { pageIndex: 0, pageSize: 10 },
+      selectedListProjection("sourceTransactionRecord", ["id", "providerData"]),
+    );
+    expect(metadata.data).toEqual([
+      { id: row!.id, providerData: { synthetic: true } },
+    ]);
+
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      row!.id,
+      { notes: "Synthetic reviewed note" },
+    );
+    expect(await audits()).toHaveLength(3);
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      row!.id,
+      { notes: "Synthetic reviewed note" },
+    );
+    expect(await audits()).toHaveLength(3);
+    const [reviewed] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    expect(reviewed?.notes).toBe("Synthetic reviewed note");
+    expect(reviewed?.providerData).toEqual(row!.providerData);
+  });
+
+  it("blocks deleting a superseding record and retains import membership after an unreferenced deletion", async () => {
+    await record(ctx.db, ctx.actor, [
+      rowInput({ rowPosition: 1 }),
+      rowInput({ rowPosition: 2, rawDescription: "SYNTHETIC SECOND PURCHASE" }),
+    ]);
+    const rows = (await listSourceTransactionRecords(ctx.db, {})).data;
+    const predecessor = rows[0]!;
+    const successor = rows[1]!;
+    await expect(
+      updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        predecessor.id,
+        { supersededByRowId: predecessor.id },
+      ),
+    ).rejects.toThrow("itself or form a cycle");
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      predecessor.id,
+      { supersededByRowId: successor.id },
+    );
+    await expect(
+      updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        successor.id,
+        { supersededByRowId: predecessor.id },
+      ),
+    ).rejects.toThrow("itself or form a cycle");
+    await expect(
+      deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
+        successor.id,
+      ]),
+    ).rejects.toThrow("superseding record");
+    expect((await listSourceTransactionRecords(ctx.db, {})).count).toBe(2);
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      predecessor.id,
+      { supersededByRowId: null },
+    );
+    await deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
+      successor.id,
+    ]);
+    expect((await listSourceTransactionRecords(ctx.db, {})).count).toBe(1);
+    expect(
+      await getDb(ctx.db).select().from(transactionImportRecord),
+    ).toHaveLength(2);
+  });
+
+  it("blocks deleting a revised observation when a transaction retains a predecessor reference", async () => {
+    const evidence = rowInput({
+      providerTransactionId: "synthetic-retained-charge",
+      providerData: { version: 1 },
+    });
+    await record(ctx.db, ctx.actor, [evidence], {
+      fingerprint: "synthetic-charge-original",
+      rowCountDeclared: 1,
+    });
+    const original = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
+    const account = (
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Synthetic settlement account",
+      })
+    ).output;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: original.amount,
+      postedDate: original.statementDate,
+      sourceRefs: [
+        { source: original.source, externalId: original.externalId },
+      ],
+    });
+    await record(
+      ctx.db,
+      ctx.actor,
+      [{ ...evidence, providerData: { version: 2 } }],
+      {
+        fingerprint: "synthetic-charge-revision",
+        rowCountDeclared: 1,
+      },
+    );
+    const records = (await listSourceTransactionRecords(ctx.db, {})).data;
+    const revised = records.find(
+      (row) => row.externalId !== original.externalId,
+    )!;
+    expect(revised.chargeKey).toBe(original.chargeKey);
+    await expect(
+      deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
+        revised.id,
+      ]),
+    ).rejects.toThrow("settlement evidence");
+    expect((await listSourceTransactionRecords(ctx.db, {})).count).toBe(2);
+  });
+
+  it("shares provider evidence across collection positions without reviving an older version after head deletion", async () => {
+    const first = recordSourceTransactionRecordsInput.parse({
+      import: importInput({
+        fingerprint: "synthetic-position-first",
+        observedAt: "2026-06-01T00:00:00Z",
+        rowCountDeclared: 1,
+      }),
+      rows: [
+        rowInput({
+          rowPosition: 1,
+          providerTransactionId: "synthetic-position-charge",
+          providerData: { version: 1 },
+        }),
+      ],
+    });
+    await recordSourceTransactionRecords(ctx.db, first, ctx.actor);
+    const original = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
+    await recordSourceTransactionRecords(
+      ctx.db,
+      {
+        ...first,
+        import: {
+          ...first.import,
+          fingerprint: "synthetic-position-second",
+          observedAt: "2026-06-02T00:00:00Z",
+        },
+        rows: [{ ...first.rows[0]!, rowPosition: 2 }],
+      },
+      ctx.actor,
+    );
+    expect((await listSourceTransactionRecords(ctx.db, {})).data).toMatchObject(
+      [{ id: original.id, rowPosition: 1 }],
+    );
+    expect(
+      await getDb(ctx.db).select().from(transactionImportRecord),
+    ).toHaveLength(2);
+    await recordSourceTransactionRecords(
+      ctx.db,
+      {
+        ...first,
+        import: {
+          ...first.import,
+          fingerprint: "synthetic-position-revision",
+          observedAt: "2026-06-03T00:00:00Z",
+        },
+        rows: [{ ...first.rows[0]!, providerData: { version: 2 } }],
+      },
+      ctx.actor,
+    );
+    const head = (await listSourceTransactionRecords(ctx.db, {})).data.find(
+      (row) => row.current,
+    )!;
+    expect(head.id).not.toBe(original.id);
+    await deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
+      head.id,
+    ]);
+    const beforeReplay = await getDb(ctx.db).select().from(auditLog);
+    await recordSourceTransactionRecords(ctx.db, first, ctx.actor);
+    expect((await listSourceTransactionRecords(ctx.db, {})).data).toMatchObject(
+      [{ id: original.id, current: false }],
+    );
+    expect(
+      await getDb(ctx.db).select().from(transactionImportRecord),
+    ).toHaveLength(3);
+    expect(await getDb(ctx.db).select().from(auditLog)).toEqual(beforeReplay);
+  });
+
   // Confirmed withdrawal is monotonic: an old collection cannot resurrect money.
   // Separate provider IDs also keep identical coexisting purchases independent.
   it("retains provider revisions and zero evidence without replaying a withdrawn head", async () => {
@@ -79,7 +390,7 @@ describe("statement row ledger", () => {
       to: "2026-05-31",
       visibility: "all",
     };
-    const first = recordStatementRowsInput.parse({
+    const first = recordSourceTransactionRecordsInput.parse({
       import: {
         ...importInput(),
         fingerprint: "synthetic-first-window",
@@ -97,10 +408,10 @@ describe("statement row ledger", () => {
       ),
       complete: true,
     });
-    await recordStatementRows(ctx.db, first, ctx.actor);
-    const initial = await listStatementRows(ctx.db, {});
+    await recordSourceTransactionRecords(ctx.db, first, ctx.actor);
+    const initial = await listSourceTransactionRecords(ctx.db, {});
     expect(new Set(initial.data.map((row) => row.chargeKey)).size).toBe(3);
-    const second = recordStatementRowsInput.parse({
+    const second = recordSourceTransactionRecordsInput.parse({
       import: {
         ...importInput(),
         fingerprint: "synthetic-second-window",
@@ -119,14 +430,16 @@ describe("statement row ledger", () => {
       complete: true,
       confirmedWithdrawals: ["one"],
     });
-    expect(await recordStatementRows(ctx.db, second, ctx.actor)).toMatchObject({
+    expect(
+      await recordSourceTransactionRecords(ctx.db, second, ctx.actor),
+    ).toMatchObject({
       inserted: 1,
       revised: 1,
       withdrawn: 1,
       completed: true,
     });
-    await recordStatementRows(ctx.db, first, ctx.actor);
-    const all = (await listStatementRows(ctx.db, {})).data;
+    await recordSourceTransactionRecords(ctx.db, first, ctx.actor);
+    const all = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(all).toHaveLength(4);
     expect(
       all.find((row) => row.providerTransactionId === "one")?.withdrawnAt,
@@ -138,9 +451,9 @@ describe("statement row ledger", () => {
       all.find((row) => row.providerTransactionId === "zero")?.amount,
     ).toBe(0);
     await expect(
-      recordStatementRows(
+      recordSourceTransactionRecords(
         ctx.db,
-        recordStatementRowsInput.parse({
+        recordSourceTransactionRecordsInput.parse({
           ...second,
           import: {
             ...second.import,
@@ -167,13 +480,13 @@ describe("statement row ledger", () => {
       observedAt: "2026-06-01T00:00:00Z",
       rowCountDeclared: 1,
     });
-    const scope: NonNullable<StatementImportInput["coverage"]> = {
+    const scope: NonNullable<TransactionImportInput["coverage"]> = {
       account: "synthetic-enriched-account",
       from: "2026-05-01",
       to: "2026-05-31",
       visibility: "all",
     };
-    const enriched = recordStatementRowsInput.parse({
+    const enriched = recordSourceTransactionRecordsInput.parse({
       import: importInput({
         fingerprint: "synthetic-enriched-window",
         observedAt: "2026-06-02T00:00:00Z",
@@ -184,13 +497,13 @@ describe("statement row ledger", () => {
       complete: true,
     });
     expect(
-      await recordStatementRows(ctx.db, enriched, ctx.actor),
+      await recordSourceTransactionRecords(ctx.db, enriched, ctx.actor),
     ).toMatchObject({
       inserted: 1,
       revised: 1,
       completed: true,
     });
-    const observations = (await listStatementRows(ctx.db, {})).data;
+    const observations = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(new Set(observations.map((row) => row.chargeKey)).size).toBe(1);
     expect(observations.find((row) => row.current)?.providerAccountId).toBe(
       scope.account,
@@ -207,7 +520,7 @@ describe("statement row ledger", () => {
         },
       ),
     ).toMatchObject({ inserted: 1, revised: 0 });
-    const separate = (await listStatementRows(ctx.db, {})).data;
+    const separate = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(new Set(separate.map((row) => row.chargeKey)).size).toBe(2);
     expect(
       separate.filter((row) => row.current).map((row) => row.providerAccountId),
@@ -215,9 +528,9 @@ describe("statement row ledger", () => {
       expect.arrayContaining([scope.account, "synthetic-other-account"]),
     );
     await expect(
-      recordStatementRows(
+      recordSourceTransactionRecords(
         ctx.db,
-        recordStatementRowsInput.parse({
+        recordSourceTransactionRecordsInput.parse({
           ...enriched,
           complete: false,
           rows: [
@@ -233,9 +546,9 @@ describe("statement row ledger", () => {
       "A completed collection cannot admit additional observations",
     );
     expect(
-      await recordStatementRows(
+      await recordSourceTransactionRecords(
         ctx.db,
-        recordStatementRowsInput.parse({
+        recordSourceTransactionRecordsInput.parse({
           import: {
             ...enriched.import,
             fingerprint: "synthetic-enriched-absence",
@@ -261,17 +574,17 @@ describe("statement row ledger", () => {
     // The migration retains v1 observations and charge owners rather than
     // rehashing historical references into the current collection identity.
     await getDb(ctx.db).execute(sql`
-      UPDATE "StatementRow" SET "externalId" = "legacyExternalId",
+      UPDATE "SourceTransactionRecord" SET "externalId" = "legacyExternalId",
         "chargeKey" = "legacyExternalId", "legacyReference" = "legacyExternalId"
     `);
-    const historical = (await listStatementRows(ctx.db, {})).data;
+    const historical = (await listSourceTransactionRecords(ctx.db, {})).data;
     const ignored = historical.find(
       (row) => row.rawDescription === rows[0]!.rawDescription,
     )!;
     const booked = historical.find(
       (row) => row.rawDescription === rows[1]!.rawDescription,
     )!;
-    await updateStatementRows(
+    await updateSourceTransactionRecords(
       ctx.db,
       {
         selector: { source: "monarch", externalIds: [ignored.externalId] },
@@ -298,7 +611,7 @@ describe("statement row ledger", () => {
         sourceRefs: [{ source: booked.source, externalId: booked.externalId }],
       })
     ).output;
-    const before = (await listStatementRows(ctx.db, {})).data;
+    const before = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(
       await record(ctx.db, ctx.actor, rows, { fingerprint }),
     ).toMatchObject({
@@ -308,7 +621,9 @@ describe("statement row ledger", () => {
       alreadyInThisBatch: 2,
       rowCountStored: 2,
     });
-    expect((await listStatementRows(ctx.db, {})).data).toEqual(before);
+    expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
+      before,
+    );
     expect(before.find((row) => row.id === ignored.id)?.matchState).toBe(
       "ignored",
     );
@@ -323,7 +638,9 @@ describe("statement row ledger", () => {
         { fingerprint },
       ),
     ).rejects.toThrow("physical positions");
-    expect((await listStatementRows(ctx.db, {})).data).toEqual(before);
+    expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
+      before,
+    );
     expect(
       await record(ctx.db, ctx.actor, rows, {
         fingerprint: "synthetic-independent-collection",
@@ -331,7 +648,9 @@ describe("statement row ledger", () => {
     ).toMatchObject({ inserted: 2, revised: 0 });
     expect(
       new Set(
-        (await listStatementRows(ctx.db, {})).data.map((row) => row.chargeKey),
+        (await listSourceTransactionRecords(ctx.db, {})).data.map(
+          (row) => row.chargeKey,
+        ),
       ).size,
     ).toBe(4);
   });
@@ -344,11 +663,13 @@ describe("statement row ledger", () => {
       [rowInput({ rowPosition: 1 }), rowInput({ rowPosition: 2 })],
       { fingerprint },
     );
-    const before = (await listStatementRows(ctx.db, {})).data;
+    const before = (await listSourceTransactionRecords(ctx.db, {})).data;
     await expect(
       record(ctx.db, ctx.actor, [rowInput()], { fingerprint }),
     ).rejects.toThrow("physical positions");
-    expect((await listStatementRows(ctx.db, {})).data).toEqual(before);
+    expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
+      before,
+    );
   });
 
   it("refuses conflicting historical position identities instead of matching content", async () => {
@@ -358,29 +679,31 @@ describe("statement row ledger", () => {
       rowInput({ rowPosition: 2, rawDescription: "SYNTHETIC SECOND CHARGE" }),
     ];
     await record(ctx.db, ctx.actor, rows, { fingerprint });
-    const retained = (await listStatementRows(ctx.db, {})).data;
+    const retained = (await listSourceTransactionRecords(ctx.db, {})).data;
     const first = retained.find((row) => row.rowPosition === 1)!;
     const second = retained.find((row) => row.rowPosition === 2)!;
     await getDb(ctx.db).execute(
-      sql`UPDATE "StatementRow" SET "externalId" = "legacyExternalId"`,
+      sql`UPDATE "SourceTransactionRecord" SET "externalId" = "legacyExternalId"`,
     );
     await getDb(ctx.db).execute(sql`
-      UPDATE "StatementRow" SET
+      UPDATE "SourceTransactionRecord" SET
         "externalId" = CASE WHEN "rowPosition" = 1 THEN ${second.externalId} ELSE ${first.externalId} END,
         "chargeKey" = CASE WHEN "rowPosition" = 1 THEN ${second.externalId} ELSE ${first.externalId} END
     `);
-    const before = (await listStatementRows(ctx.db, {})).data;
+    const before = (await listSourceTransactionRecords(ctx.db, {})).data;
     await expect(
       record(ctx.db, ctx.actor, rows, { fingerprint }),
     ).rejects.toThrow(
       "An observation identity cannot change its original evidence",
     );
-    expect((await listStatementRows(ctx.db, {})).data).toEqual(before);
+    expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
+      before,
+    );
   });
 
   // Opaque handles must survive replay, distinguish observations and keep
   // the paged roster/count aligned with the full-filtered-set footer.
-  it("keeps opaque read IDs across reimport and filtered pages", async () => {
+  it("keeps public shortcodes across reimport and filtered pages", async () => {
     const rows = [1, 2, 3].map((rowPosition) => rowInput({ rowPosition }));
     const fingerprint = "read-handle-pages";
     await record(ctx.db, ctx.actor, rows, { fingerprint, rowCountDeclared: 3 });
@@ -390,13 +713,13 @@ describe("statement row ledger", () => {
     });
     const filters = { source: "monarch", importFingerprint: fingerprint };
     const sort = { orderBy: "statementDate", direction: "asc" as const };
-    const first = await listStatementRows(
+    const first = await listSourceTransactionRecords(
       ctx.db,
       filters,
       { pageIndex: 0, pageSize: 2 },
       sort,
     );
-    const second = await listStatementRows(
+    const second = await listSourceTransactionRecords(
       ctx.db,
       filters,
       { pageIndex: 1, pageSize: 2 },
@@ -409,16 +732,16 @@ describe("statement row ledger", () => {
     const original = [...first.data, ...second.data];
     expect(new Set(original.map((row) => row.id)).size).toBe(3);
     for (const row of original)
-      expect(row.id).toMatch(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/);
+      expect(row.id).toMatch(/^STR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$/);
     expect(new Set(original.map((row) => row.externalId)).size).toBe(3);
     expect(
-      (await getStatementRowSummary(ctx.db, filters)).amountTotal,
+      (await getSourceTransactionRecordSummary(ctx.db, filters)).amountTotal,
     ).toBeCloseTo(3 * 128.5);
     expect(first.data.reduce((sum, row) => sum + row.amount, 0)).toBeCloseTo(
       2 * 128.5,
     );
     await record(ctx.db, ctx.actor, rows, { fingerprint, rowCountDeclared: 3 });
-    const repeated = await listStatementRows(
+    const repeated = await listSourceTransactionRecords(
       ctx.db,
       filters,
       { pageIndex: 0, pageSize: 4 },
@@ -462,7 +785,7 @@ describe("statement row ledger", () => {
       rowCountStored: 2,
     });
 
-    const listed = await listStatementRows(ctx.db, {});
+    const listed = await listSourceTransactionRecords(ctx.db, {});
     expect(listed.count).toBe(2);
     const charge = listed.data.find((row) => row.providerAmount === -128.5);
     expect(charge).toMatchObject({
@@ -489,7 +812,7 @@ describe("statement row ledger", () => {
       observedAt: "2026-06-01T00:00:00Z",
       rowCountDeclared: 1,
     });
-    const original = (await listStatementRows(ctx.db, {})).data[0];
+    const original = (await listSourceTransactionRecords(ctx.db, {})).data[0];
     const overlapping = {
       fingerprint: "fp-overlapping",
       observedAt: "2026-06-02T00:00:00Z",
@@ -505,7 +828,7 @@ describe("statement row ledger", () => {
       alreadyInAnotherBatch: 1,
       refreshed: 1,
     });
-    expect((await listStatementImports(ctx.db)).count).toBe(1);
+    expect((await listTransactionImports(ctx.db)).count).toBe(1);
     const partial = await record(ctx.db, ctx.actor, [shared], overlapping);
     expect(partial).toMatchObject({
       inserted: 0,
@@ -513,7 +836,7 @@ describe("statement row ledger", () => {
       rowCountStored: 1,
       refreshed: 1,
     });
-    expect(await findIncompleteStatementImports(ctx.db)).toMatchObject([
+    expect(await findIncompleteTransactionImports(ctx.db)).toMatchObject([
       {
         fingerprint: overlapping.fingerprint,
         rowCountDeclared: 2,
@@ -526,7 +849,7 @@ describe("statement row ledger", () => {
         rowCountStored: 2,
       },
     );
-    const beforeReplay = (await listStatementRows(ctx.db, {})).data;
+    const beforeReplay = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(
       await record(ctx.db, ctx.actor, [shared, later], overlapping),
     ).toMatchObject({
@@ -535,13 +858,13 @@ describe("statement row ledger", () => {
       refreshed: 0,
       rowCountStored: 2,
     });
-    expect(await findIncompleteStatementImports(ctx.db)).toEqual([]);
+    expect(await findIncompleteTransactionImports(ctx.db)).toEqual([]);
     // First-batch ownership and recorded membership name the same pair once.
     const members = await getDb(ctx.db).execute(
-      sql`SELECT count(*)::int AS rows, count(DISTINCT (member."importId", member."statementRowId"))::int AS pairs FROM ${statementImportMembers} member`,
+      sql`SELECT count(*)::int AS rows, count(DISTINCT (member."importId", member."statementRowId"))::int AS pairs FROM ${transactionImportMembers} member`,
     );
     expect(members.rows).toEqual([{ rows: 3, pairs: 3 }]);
-    expect((await listStatementImports(ctx.db)).data).toEqual(
+    expect((await listTransactionImports(ctx.db)).data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           fingerprint: importInput().fingerprint,
@@ -553,15 +876,19 @@ describe("statement row ledger", () => {
         }),
       ]),
     );
-    const all = await listStatementRows(ctx.db, {});
+    const all = await listSourceTransactionRecords(ctx.db, {});
     expect(all.count).toBe(2);
     expect(all.data).toEqual(beforeReplay);
     expect(
       all.data.find((row) => row.externalId === original?.externalId),
-    ).toEqual({ ...original, updatedAt: expect.any(Date) });
+    ).toEqual({
+      ...original,
+      lastObservedAt: new Date(overlapping.observedAt),
+      updatedAt: expect.any(Date),
+    });
     expect(
       (
-        await listStatementRows(ctx.db, {
+        await listSourceTransactionRecords(ctx.db, {
           importFingerprint: overlapping.fingerprint,
         })
       ).count,
@@ -586,13 +913,15 @@ describe("statement row ledger", () => {
     const input = { source: "monarch", includeSameBatch: false, limit: 100 };
     expect(
       (
-        await findStatementRowDrift(ctx.db, {
+        await findSourceTransactionRecordDrift(ctx.db, {
           ...input,
           importFingerprint: "fp-shared-export",
         })
       ).candidates,
     ).toEqual([]);
-    expect((await findStatementRowDrift(ctx.db, input)).candidates).toEqual([]);
+    expect(
+      (await findSourceTransactionRecordDrift(ctx.db, input)).candidates,
+    ).toEqual([]);
     await record(
       ctx.db,
       ctx.actor,
@@ -600,7 +929,7 @@ describe("statement row ledger", () => {
       { fingerprint: "fp-separate-export", rowCountDeclared: 1 },
     );
     expect(
-      (await findStatementRowDrift(ctx.db, input)).candidates,
+      (await findSourceTransactionRecordDrift(ctx.db, input)).candidates,
     ).toMatchObject([{ crossBatch: true, rows: expect.any(Array) }]);
   });
 
@@ -634,8 +963,8 @@ describe("statement row ledger", () => {
     });
     // No batch, no rows: the preview must be free of side effects, or it is
     // just an ingest that lies about what it did.
-    expect((await listStatementImports(ctx.db)).data).toHaveLength(0);
-    expect((await listStatementRows(ctx.db, {})).count).toBe(0);
+    expect((await listTransactionImports(ctx.db)).data).toHaveLength(0);
+    expect((await listSourceTransactionRecords(ctx.db, {})).count).toBe(0);
 
     const written = await record(ctx.db, ctx.actor, rows, {
       fingerprint: "fp-dry",
@@ -663,7 +992,7 @@ describe("statement row ledger", () => {
     await record(ctx.db, ctx.actor, [rowInput()], {
       fingerprint: "fp-match",
     });
-    const [row] = (await listStatementRows(ctx.db, {})).data;
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(row?.matchState).toBe("unmatched");
 
     const account = (
@@ -694,19 +1023,27 @@ describe("statement row ledger", () => {
       })
     ).output;
 
-    // No write to StatementRow: appending the ref on the transaction side is
+    // No write to SourceTransactionRecord: appending the ref on the transaction side is
     // what flips the row, which is why triage needs no new mutation surface.
-    const afterMatch = (await listStatementRows(ctx.db, {})).data[0];
+    const afterMatch = (await listSourceTransactionRecords(ctx.db, {})).data[0];
     expect(afterMatch).toMatchObject({
       matchState: "matched",
       transactionId: transaction.id,
     });
 
+    await expect(
+      deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
+        row!.id,
+      ]),
+    ).rejects.toThrow("settlement evidence");
+    expect((await listSourceTransactionRecords(ctx.db, {})).count).toBe(1);
+
     // A soft-deleted transaction is not evidence.
     await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
       transaction.id,
     ]);
-    const afterDelete = (await listStatementRows(ctx.db, {})).data[0];
+    const afterDelete = (await listSourceTransactionRecords(ctx.db, {}))
+      .data[0];
     expect(afterDelete).toMatchObject({
       matchState: "unmatched",
       transactionId: null,
@@ -729,9 +1066,9 @@ describe("statement row ledger", () => {
       ],
       { fingerprint: "fp-summary-split" },
     );
-    const matchedRow = (await listStatementRows(ctx.db, {})).data.find(
-      (row) => row.merchant === "Acme Supply",
-    );
+    const matchedRow = (
+      await listSourceTransactionRecords(ctx.db, {})
+    ).data.find((row) => row.merchant === "Acme Supply");
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Test Card",
@@ -751,7 +1088,7 @@ describe("statement row ledger", () => {
       ],
     });
 
-    const summary = await getStatementRowSummary(ctx.db, {});
+    const summary = await getSourceTransactionRecordSummary(ctx.db, {});
     expect(summary).toMatchObject({ matched: 1, unmatched: 1 });
     expect(summary.matchedAmount).not.toBe(0);
     expect(summary.unmatchedAmount).not.toBe(0);
@@ -762,7 +1099,8 @@ describe("statement row ledger", () => {
       "superseded",
     ] as const) {
       expect(summary[`${matchState}Amount`]).toBe(
-        (await getStatementRowSummary(ctx.db, { matchState })).amountTotal,
+        (await getSourceTransactionRecordSummary(ctx.db, { matchState }))
+          .amountTotal,
       );
     }
     expect(
@@ -786,7 +1124,7 @@ describe("statement row ledger", () => {
     );
     expect(copilot.inserted).toBe(1);
 
-    const rows = (await listStatementRows(ctx.db, {})).data;
+    const rows = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(rows).toHaveLength(2);
     const [a, b] = rows;
     expect(a!.externalId).not.toBe(b!.externalId);
@@ -822,7 +1160,9 @@ describe("statement row ledger", () => {
     // One transaction, two matching refs: each row must appear once. Without
     // the global (source, externalId) uniqueness this join relies on, the
     // correlated lookup would be a fan-out.
-    const matched = await listStatementRows(ctx.db, { matchState: "matched" });
+    const matched = await listSourceTransactionRecords(ctx.db, {
+      matchState: "matched",
+    });
     expect(matched.count).toBe(2);
     expect(matched.data).toHaveLength(2);
     expect(new Set(matched.data.map((row) => row.transactionId)).size).toBe(1);
@@ -830,12 +1170,12 @@ describe("statement row ledger", () => {
 
   it("rejects an ignore without reasoning, and a non-slug source", async () => {
     await record(ctx.db, ctx.actor, [rowInput()], { fingerprint: "fp-checks" });
-    const [row] = (await listStatementRows(ctx.db, {})).data;
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
 
     // The CHECK, not application code, is what makes a reasonless ignore
     // impossible — dispositions carry their reasoning or do not exist.
     await expect(
-      updateStatementRows(
+      updateSourceTransactionRecords(
         ctx.db,
         {
           selector: { source: "monarch", externalIds: [row!.externalId] },
@@ -848,7 +1188,7 @@ describe("statement row ledger", () => {
 
     await expect(
       getDb(ctx.db).execute(sql`
-        INSERT INTO "StatementImport" ("source", "label", "fingerprint")
+        INSERT INTO "TransactionImport" ("source", "label", "fingerprint")
         VALUES ('Monarch', 'bad-slug.csv', 'fp-bad-slug')
       `),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
@@ -864,7 +1204,7 @@ describe("statement row ledger", () => {
         fingerprint: "fp-empty-filter",
       },
     );
-    const before = await listStatementRows(ctx.db, {});
+    const before = await listSourceTransactionRecords(ctx.db, {});
     expect(before.count).toBe(2);
 
     // `""` is *supplied*, so a `!== undefined` check passes it — but the filter
@@ -872,7 +1212,7 @@ describe("statement row ledger", () => {
     // row is never what a bulk disposition meant.
     for (const filter of [{ search: "" }, { source: "" }] as const) {
       await expect(
-        updateStatementRows(
+        updateSourceTransactionRecords(
           ctx.db,
           {
             selector: { filter },
@@ -886,13 +1226,9 @@ describe("statement row ledger", () => {
         ),
         // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
-      await expect(
-        deleteStatementRows(ctx.db, { filter }, ctx.actor),
-        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
-      ).rejects.toThrow();
     }
 
-    const after = await listStatementRows(ctx.db, {});
+    const after = await listSourceTransactionRecords(ctx.db, {});
     expect(after.count).toBe(2);
     expect(after.data.every((row) => row.disposition === "open")).toBe(true);
   });
@@ -914,11 +1250,11 @@ describe("statement row ledger", () => {
 
   it("retains the frozen legacy content hash beside the observation identity", async () => {
     await record(ctx.db, ctx.actor, [rowInput()], { fingerprint: "fp-hash" });
-    const [row] = (await listStatementRows(ctx.db, {})).data;
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
     // The stored columns reproduce the hash payload exactly, so the ledger can
     // audit its own identity function rather than trusting an opaque token.
     await expect(
-      statementRowExternalId({
+      sourceTransactionRecordExternalId({
         source: row!.source,
         account: row!.accountDescriptor,
         date: row!.statementDate,

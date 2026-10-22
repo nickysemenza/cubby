@@ -43,6 +43,13 @@
       "when": 1792644956087,
       "tag": "0005_thin_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792686722313,
+      "tag": "0006_financial_evidence_entities",
+      "breakpoints": true
     }
   ]
 }

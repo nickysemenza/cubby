@@ -28,8 +28,8 @@ import {
   countUnmatchedCharges,
   generateStatementSuggestionPage,
   generateStatementHoldVoidPage,
-} from "~/server/domains/statement-import/repo/statement-suggestions";
-import { STATEMENT_LABEL_BATCH } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+} from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { STATEMENT_LABEL_BATCH } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { buildCrudServices } from "~/server/http/request-context";
 import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -355,7 +355,7 @@ async function statementGenerationPage(
     scope,
   });
   const { precomputeStatementSuggestionLabels } =
-    await import("~/server/domains/statement-import/service/statement-suggestion-labels");
+    await import("~/server/domains/transaction-import/service/statement-suggestion-labels");
   const speculative =
     (cursor.speculativeUntil ?? 0) > Date.now()
       ? Promise.resolve(null)
@@ -495,7 +495,7 @@ async function statementPage(
     };
   }
   const { labelStatementSuggestions } =
-    await import("~/server/domains/statement-import/service/statement-suggestion-labels");
+    await import("~/server/domains/transaction-import/service/statement-suggestion-labels");
   const labelsAhead =
     cursor.after === null
       ? await countSuggestionsNeedingLabels(db, scope.importId ?? null)

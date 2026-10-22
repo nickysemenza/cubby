@@ -78,6 +78,9 @@ export const ledgerTransferId = ENTITY_ID_SCHEMA.ledgerTransfer;
 export const projectId = ENTITY_ID_SCHEMA.project;
 export const taskId = ENTITY_ID_SCHEMA.task;
 export const expenseId = ENTITY_ID_SCHEMA.expense;
+export const sourceTransactionRecordId =
+  ENTITY_ID_SCHEMA.sourceTransactionRecord;
+export const transactionImportId = ENTITY_ID_SCHEMA.transactionImport;
 export const financialAccountId = ENTITY_ID_SCHEMA.financialAccount;
 export const financialTransactionId = ENTITY_ID_SCHEMA.financialTransaction;
 export const vendorId = ENTITY_ID_SCHEMA.vendor;
@@ -106,6 +109,8 @@ export type LedgerTransferId = EntityId<"ledgerTransfer">;
 export type ProjectId = EntityId<"project">;
 export type TaskId = EntityId<"task">;
 export type ExpenseId = EntityId<"expense">;
+export type SourceTransactionRecordId = EntityId<"sourceTransactionRecord">;
+export type TransactionImportId = EntityId<"transactionImport">;
 export type FinancialAccountId = EntityId<"financialAccount">;
 export type FinancialTransactionId = EntityId<"financialTransaction">;
 export type VendorId = EntityId<"vendor">;
@@ -176,6 +181,8 @@ const PARSE_ENTITY_REF = {
   spendingCategory: entityRefParser("spendingCategory"),
   cookbook: entityRefParser("cookbook"),
   expense: entityRefParser("expense"),
+  sourceTransactionRecord: entityRefParser("sourceTransactionRecord"),
+  transactionImport: entityRefParser("transactionImport"),
   financialAccount: entityRefParser("financialAccount"),
   financialTransaction: entityRefParser("financialTransaction"),
   image: entityRefParser("image"),
@@ -220,6 +227,8 @@ export {
   anyShortcodeSchema,
   cookbookShortcode,
   expenseShortcode,
+  sourceTransactionRecordShortcode,
+  transactionImportShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
   imageShortcode,
@@ -253,6 +262,8 @@ export {
 export type {
   CookbookShortcode,
   ExpenseShortcode,
+  SourceTransactionRecordShortcode,
+  TransactionImportShortcode,
   FinancialAccountShortcode,
   FinancialTransactionShortcode,
   ImageShortcode,

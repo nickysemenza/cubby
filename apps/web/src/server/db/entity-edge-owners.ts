@@ -44,7 +44,7 @@ import {
   purchasePaymentEvidence,
   recipeSection,
   recipeSectionIngredient,
-  statementRow,
+  transactionImportRecord,
 } from "./schema";
 
 // `edges()` holds each key to its column's literal `Table.column` name, so the
@@ -108,7 +108,7 @@ export const ENTITY_EDGE_OWNERS = {
       owner: recipeSection.recipeId,
     },
   },
-  StatementRow: { owner: statementRow.accountId },
+  TransactionImportRecord: { owner: transactionImportRecord.importId },
   // A run's target list is how a run relates to what it imported.
   PhotoRunImage: { owner: photoRunImage.runId },
   RunStep: { owner: runStep.runId },

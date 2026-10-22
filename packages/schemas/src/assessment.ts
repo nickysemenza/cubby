@@ -113,7 +113,7 @@ export const assessmentSubjects = {
   /** One provider charge: every observation sharing its v1 identity. */
   statement_transaction: z.object({
     kind: z.literal("statement_transaction"),
-    entity: z.literal("statementRow"),
+    entity: z.literal("sourceTransactionRecord"),
     recordId: z.uuid(),
     source: z.string().min(1),
     chargeKey: z.string().min(1),
@@ -209,9 +209,9 @@ export const assessmentProjectionTargets = {
   }),
   product_pair: z.object({ entity: z.literal("product"), recordId: z.uuid() }),
   recommendation: publicAssessmentTarget,
-  /** StatementRow has no shortcode; the target names the canonical observation. */
+  /** Assessment history retains the canonical observation UUID behind its public code. */
   statement_transaction: z.object({
-    entity: z.literal("statementRow"),
+    entity: z.literal("sourceTransactionRecord"),
     recordId: z.uuid(),
   }),
   transfer_pair: z.object({

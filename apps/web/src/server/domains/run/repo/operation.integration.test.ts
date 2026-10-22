@@ -207,9 +207,10 @@ describe("RunOperation rows written by earlier code", () => {
       agentSessionId: "synthetic-paused-session",
       status: "running",
     });
-    const toolName = "statement_rows.update";
+    const toolName = "entity.update";
     const params = {
-      selector: { source: "synthetic", externalIds: ["row-a"] },
+      entity: "sourceTransactionRecord",
+      id: "STR-ABCDE",
       data: { disposition: "open", dispositionNote: null },
     };
     const args = { toolName, params };

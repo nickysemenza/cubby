@@ -6,9 +6,9 @@ import {
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
 import {
-  type FinancialStatementImportPreviewInput,
-  type FinancialStatementImportRow,
-  type FinancialStatementImportPreviewOut,
+  type FinancialTransactionImportPreviewInput,
+  type FinancialTransactionImportRow,
+  type FinancialTransactionImportPreviewOut,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -23,14 +23,14 @@ import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.bou
 import {
   financialAccount,
   financialTransaction,
-  statementRow,
-  statementImport,
+  sourceTransactionRecord,
+  transactionImport,
   vendor,
 } from "~/server/db/retained-tables";
 import {
-  statementRowExternalId,
-  statementRowOccurrenceId,
-} from "~/server/domains/statement-import/repo/statement-row-identity";
+  sourceTransactionRecordExternalId,
+  sourceTransactionRecordOccurrenceId,
+} from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   merchantVendorInferences,
   normalizeMerchant,
@@ -62,7 +62,7 @@ const last4FromDescriptor = (descriptor: string) => {
 };
 
 const provisionalAccountFor = (
-  row: FinancialStatementImportPreviewInput["rows"][number],
+  row: FinancialTransactionImportPreviewInput["rows"][number],
 ) => {
   const last4 = last4FromDescriptor(row.account);
   const network = networkFromDescriptor(row.account);
@@ -100,7 +100,7 @@ export type FinancialStatementPreviewOptions = {
   candidatePolicy?: "import" | "suggestion";
   /** Server-owned retained observations, never supplied by a client. */
   retainedRefs?: ReadonlyMap<string, string>;
-  /** Server-only: a stored StatementRow account outranks alias/last4 resolution, keyed by row key. */
+  /** Server-only: a stored SourceTransactionRecord account outranks alias/last4 resolution, keyed by row key. */
   accountHints?: ReadonlyMap<string, string>;
   /** One synchronous preparation scope; never retain across model latency or another page. */
   preparation?: FinancialStatementPreviewPreparation;
@@ -148,21 +148,21 @@ type FinancialStatementPreviewPreparation = Awaited<
  * Preview only: client-parsed rows become a decision worklist. It intentionally
  * does not create accounts/transactions or infer any Purchase link.
  */
-export async function previewFinancialStatementImport(
+export async function previewFinancialTransactionImport(
   db: Database,
-  input: FinancialStatementImportPreviewInput,
+  input: FinancialTransactionImportPreviewInput,
   options: FinancialStatementPreviewOptions = {},
-): Promise<FinancialStatementImportPreviewOut> {
+): Promise<FinancialTransactionImportPreviewOut> {
   const suggestionPolicy = options.candidatePolicy === "suggestion";
   const legacyIds = await Promise.all(
-    input.rows.map((row) => statementRowExternalId(row)),
+    input.rows.map((row) => sourceTransactionRecordExternalId(row)),
   );
   const sourceRefIds = await Promise.all(
     input.rows.map(
       (row, index) =>
         options.retainedRefs?.get(row.key) ??
         (row.importFingerprint && row.rowPosition !== undefined
-          ? statementRowOccurrenceId(
+          ? sourceTransactionRecordOccurrenceId(
               row.source,
               row.importFingerprint,
               row.rowPosition,
@@ -181,20 +181,20 @@ export async function previewFinancialStatementImport(
   const observations = providerPairs.length
     ? await unwrapDb(db)
         .select({
-          source: statementRow.source,
-          providerTransactionId: statementRow.providerTransactionId,
-          providerAccountId: statementRow.providerAccountId,
-          externalId: statementRow.externalId,
+          source: sourceTransactionRecord.source,
+          providerTransactionId: sourceTransactionRecord.providerTransactionId,
+          providerAccountId: sourceTransactionRecord.providerAccountId,
+          externalId: sourceTransactionRecord.externalId,
         })
-        .from(statementRow)
+        .from(sourceTransactionRecord)
         .where(
           and(
-            notDeleted(statementRow),
+            notDeleted(sourceTransactionRecord),
             or(
               ...providerPairs.map((row) =>
                 and(
-                  sql`${statementRow.source} = ${row.source}`,
-                  sql`${statementRow.providerTransactionId} = ${row.providerTransactionId}`,
+                  sql`${sourceTransactionRecord.source} = ${row.source}`,
+                  sql`${sourceTransactionRecord.providerTransactionId} = ${row.providerTransactionId}`,
                 ),
               ),
             ),
@@ -210,21 +210,21 @@ export async function previewFinancialStatementImport(
   const sameFileObservations = fingerprints.length
     ? await unwrapDb(db)
         .select({
-          source: statementRow.source,
-          externalId: statementRow.externalId,
-          fingerprint: statementImport.fingerprint,
-          rowPosition: statementRow.rowPosition,
+          source: sourceTransactionRecord.source,
+          externalId: sourceTransactionRecord.externalId,
+          fingerprint: transactionImport.fingerprint,
+          rowPosition: sourceTransactionRecord.rowPosition,
         })
-        .from(statementRow)
+        .from(sourceTransactionRecord)
         .innerJoin(
-          statementImport,
-          sql`${statementRow.batchId} = ${statementImport.id}`,
+          transactionImport,
+          sql`${sourceTransactionRecord.batchId} = ${transactionImport.id}`,
         )
         .where(
           and(
-            notDeleted(statementRow),
-            notDeleted(statementImport),
-            inArray(statementImport.fingerprint, fingerprints),
+            notDeleted(sourceTransactionRecord),
+            notDeleted(transactionImport),
+            inArray(transactionImport.fingerprint, fingerprints),
           ),
         )
     : [];
@@ -302,7 +302,7 @@ export async function previewFinancialStatementImport(
     sourceRefs: refsByTransaction.get(transaction.id) ?? [],
   }));
 
-  const accountFor = (row: FinancialStatementImportRow) => {
+  const accountFor = (row: FinancialTransactionImportRow) => {
     const hinted = options.accountHints?.get(row.key);
     if (hinted) {
       const stored = parsedAccounts.find((account) => account.id === hinted);
@@ -363,12 +363,12 @@ export async function previewFinancialStatementImport(
     return accountMatches.length === 1 ? accountMatches[0] : null;
   };
   const statusFor = (
-    row: FinancialStatementImportRow,
+    row: FinancialTransactionImportRow,
     externalId: string,
     recorded: number,
     account: boolean,
     possible: number,
-  ): FinancialStatementImportPreviewOut["rows"][number]["status"] =>
+  ): FinancialTransactionImportPreviewOut["rows"][number]["status"] =>
     // Rows keyed by the legacy ref (no fingerprint or no row position) share it
     // when identical, so creating both would drop one real charge.
     ((!row.importFingerprint || row.rowPosition === undefined) &&
@@ -397,7 +397,7 @@ export async function previewFinancialStatementImport(
     const sourceRef = { source: row.source, externalId };
     const normalizedAmount = -row.amount;
     const kind = row.kind ?? (normalizedAmount > 0 ? "purchase" : "refund");
-    const proposed: FinancialStatementImportPreviewOut["rows"][number]["proposed"] =
+    const proposed: FinancialTransactionImportPreviewOut["rows"][number]["proposed"] =
       {
         sourceRef,
         amount: normalizedAmount,

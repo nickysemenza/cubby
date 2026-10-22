@@ -1,4 +1,4 @@
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -16,7 +16,7 @@ import {
   financialTransaction,
   ledgerTransfer,
   run,
-  statementRow,
+  sourceTransactionRecord,
 } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
 import {
@@ -28,10 +28,10 @@ import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { advanceStepRun } from "~/server/domains/run/service/step-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { startSweep } from "~/server/domains/run/service/sweep";
-import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
-import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
+import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
@@ -73,9 +73,9 @@ describe("transfer pairs in the global queue", () => {
         ],
       });
     }
-    await recordStatementRows(
+    await recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         import: {
           source: "monarch",
           label: "Synthetic transfers.csv",
@@ -382,8 +382,10 @@ describe("transfer pairs in the global queue", () => {
       .where(eq(financialAccount.name, "Synthetic savings"));
     const [observed] = await getDb(ctx.db)
       .select()
-      .from(statementRow)
-      .where(eq(statementRow.accountDescriptor, "Synthetic savings"));
+      .from(sourceTransactionRecord)
+      .where(
+        eq(sourceTransactionRecord.accountDescriptor, "Synthetic savings"),
+      );
     await createRepoEntity(ctx, "financialTransaction", {
       accountId: destination!.shortcode,
       amount: -180,
