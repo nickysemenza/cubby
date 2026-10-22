@@ -1,0 +1,21 @@
+apps/web/src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts
+  s_a484f7a3d54cab::t_867eb0db2fd4f4 31-39,129-135,137-160,166-167,192,215-216,218,703-706,944,1128
+apps/web/tooling/database-socket-lifecycle.integration.test.ts
+  s_a484f7a3d54cab::t_6a55bcce5b23a4 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "449666efe65d612670d910d5b825ccc015f4d424",
+  "prompts": {},
+  "sessions": {
+    "s_a484f7a3d54cab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a165dc-151e-7b03-8320-aadba9f654e0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
