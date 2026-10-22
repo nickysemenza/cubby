@@ -2,10 +2,11 @@
 
 ## Universal loop
 
-- Make the requested in-scope change and choose the narrowest checks that
-  verify its behavior. [Validation policy](docs/agents/validation.md) owns test
-  choice and retention, failed-test read-back, subagent evidence, client
-  verification, PR screenshots, and the merge gate.
+- Make the requested in-scope change and reuse existing coverage by default.
+  New tests must protect a material uncovered failure worth their maintenance
+  and CI cost; code changes and bug fixes do not automatically earn a test.
+  [Validation policy](docs/agents/validation.md#test-retention) owns that decision, narrow
+  checks, failed-test read-back, client verification, and the merge gate.
 - Update the doc that owns a behavior in the same change. Follow
   [documentation ownership](docs/README.md#ownership-and-pruning): one home per
   fact, executable configuration in code, completed plans/reports in Git history.
@@ -21,9 +22,6 @@
   public links.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
   narration.
-- Retain tests for consequential behavior we own. Before adding a test, apply
-  the [test retention gate](docs/agents/validation.md#test-retention);
-  temporary migration probes are disposable.
 - Bound tool output before returning it: targeted `rg`, file regions, selected
   JSON fields, and failure excerpts. Use `rg --max-columns` when generated
   files may contain large single-line records. Save verbose logs under ignored

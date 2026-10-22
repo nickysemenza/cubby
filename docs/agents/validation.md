@@ -1,18 +1,14 @@
 # Validation, CI, and delivery
 
-Prefer an E2E scenario at the real user or system boundary for behavior it can
-observe. Use an isolated test for a specific plausible failure that E2E cannot
-reasonably catch, such as a database constraint, native wire contract, or
-concurrency boundary. Use real implementations; mocks are for external seams
-that cannot run locally. Write failure modes and any isolated test before the
-implementation it guards. Negative fixtures must satisfy earlier admission
+Default to existing coverage and the narrowest checks that verify the change.
+Before adding or extending a test, apply the [retention gate](#test-retention).
+
+Write the failure modes and any justified failing regression before the
+implementation it guards. Use real implementations; mocks are for external
+seams that cannot run locally. Negative fixtures must satisfy earlier admission
 contracts so the observed failure reaches the intended guard.
 
 ## Signal and speed
-
-Small Router subscription and pending-state refinements reuse affected workflow
-regressions rather than adding a dedicated browser capability. Document any
-deliberately unretained interaction permutation when removing its test.
 
 Choose the cheapest boundary that can expose the failure. Classify individual
 cases in mixed service-backed suites: SQL elsewhere in a file does not make
@@ -29,11 +25,28 @@ previews cannot prove server filtering or writes. See the
 
 ## Test retention
 
-Adding a committed test requires a specific, plausible failure in behavior we
-own, a gap in existing coverage or compiler/generator guards, and enough impact
-or recurrence risk to justify its maintenance and runtime cost. Establish those
-before writing the test. Straightforward library swaps, renderer migrations,
-and low-risk refactors normally reuse existing coverage.
+A code change, bug fix, or new library API does not automatically require a new
+test. Before adding or extending an automated test, establish all three:
+
+- A concrete failure would materially affect an ordinary workflow or a
+  consequential data, security, or cross-client contract.
+- Existing workflow coverage, compiler checks, or generator guards cannot
+  reasonably catch it. Name the nearest existing owner and its actual gap.
+- The smallest useful regression is worth its ongoing maintenance, runtime,
+  and fixture/harness cost. Reproducing a bug before a fix is evidence, not
+  sufficient justification for retaining the test.
+
+If that case is not established, make no test change. Report the existing
+checks and any deliberate coverage gap. Disposable probes can establish a
+refinement without becoming permanent coverage.
+
+When a test earns retention, extend the existing owning workflow first. Prefer
+one E2E scenario at the real user/system boundary when it covers the failure;
+use an isolated test only for a material failure that boundary cannot reasonably
+catch, such as a database constraint or native wire contract. Small subscription,
+pending-state, presentation, and behavior-preserving refactors normally reuse
+existing checks; exercising a framework primitive through mocked transport does
+not by itself justify another test or required browser capability.
 
 For new tests, library rendering smoke checks, prop forwarding, SVG node counts,
 exact style attributes, and one-off migration parity checks are disposable
