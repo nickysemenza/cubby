@@ -10,22 +10,39 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { z } from "zod";
 import { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
-import type { EntityBrowserMutationCommand } from "~/server/entity-kernel/contracts";
+import {
+  entityBrowserMutationCommandSchema,
+  type EntityBrowserMutationCommand,
+} from "~/server/entity-kernel/contracts";
+import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import {
   type CreatableEntity,
   type EntityOverrides,
+  buildEntity,
 } from "../../../tooling/factories/build";
-import { createEntity } from "../../../tooling/factories/create";
-import {
-  buildKernelContext,
-  createFixtureWithContext,
-} from "../../../tooling/scenarios/context";
+import { buildKernelContext } from "../../../tooling/scenarios/context";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { e2eFaker } from "../support/e2e-helpers";
 
 type CreatedEntity = { id: string };
+
+/** Fixture callers consume an identity, not the mutation's detail projection. */
+async function createIdentityFixture<Input>(
+  context: ReturnType<typeof buildKernelContext>,
+  entity: Extract<EntityBrowserMutationCommand, { action: "create" }>["entity"],
+  input: Input,
+): Promise<CreatedEntity> {
+  const command = entityBrowserMutationCommandSchema.parse({
+    action: "create",
+    entity,
+    data: input,
+  });
+  if (command.action !== "create") throw new Error("Expected fixture create");
+  const result = await executeEntityMutationRead(context, command, ["id"]);
+  return z.object({ id: z.string().min(1) }).parse(result.item);
+}
 
 const fixtureSessionSchema = z.object({
   user: z.object({ id: z.string().min(1) }).optional(),
@@ -113,7 +130,7 @@ export async function createFixture<Input>(
   input: Input,
 ): Promise<CreatedEntity> {
   const context = buildKernelContext(getFixtureDb(), await fixtureUserId(page));
-  const created = await createFixtureWithContext(context, entity, input);
+  const created = await createIdentityFixture(context, entity, input);
   await drainDerivedRefreshFrontier(getFixtureDb());
   return created;
 }
@@ -133,13 +150,12 @@ export async function createEntityFixture<E extends CreatableEntity>(
   entity: E,
   overrides: EntityOverrides<E> = {},
 ): Promise<CreatedEntity> {
-  const created = await createEntity(
+  const created = await createIdentityFixture(
     await fixtureKernelContext(page),
     entity,
-    overrides,
-    {
+    buildEntity(entity, overrides, {
       faker: e2eFaker(),
-    },
+    }),
   );
   await drainDerivedRefreshFrontier(getFixtureDb());
   return created;
@@ -172,7 +188,11 @@ export async function createFixtureGraph<Result>(
   const created = await withTransactionDatabase(getFixtureDb(), async (db) => {
     const context = buildKernelContext(db, userId);
     return build((entity, input) =>
-      createEntity(context, entity, input, { faker: e2eFaker() }),
+      createIdentityFixture(
+        context,
+        entity,
+        buildEntity(entity, input, { faker: e2eFaker() }),
+      ),
     );
   });
   await drainDerivedRefreshFrontier(getFixtureDb());

@@ -1,4 +1,4 @@
-import type { Request, Response, Route } from "@playwright/test";
+import type { Page, Request, Response, Route } from "@playwright/test";
 import superjson from "superjson";
 import { z } from "zod";
 
@@ -41,6 +41,21 @@ export function dispatchesOperation(
   return dispatchOperations(request).some(
     (item) => item.operation === operation && matches(item),
   );
+}
+
+/** Wait for the committed operation, including its decoded success envelope. */
+export async function performOperation(
+  page: Page,
+  operation: string,
+  action: () => Promise<void>,
+): Promise<void> {
+  const [response] = await Promise.all([
+    page.waitForResponse((response) =>
+      dispatchesOperation(response.request(), operation),
+    ),
+    action(),
+  ]);
+  await operationResult(response, operation, z.unknown());
 }
 
 const lineSchema = z.object({ i: z.number(), r: superJsonResultSchema });
