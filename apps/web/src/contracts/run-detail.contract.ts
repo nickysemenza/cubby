@@ -5,20 +5,6 @@ import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
 
-/**
- * What the step's last page spent its time on, stored as `RunStep.meta.page`
- * by the step driver: wall time per phase (`selection`, `preparation`,
- * `publication`, `application`), the database queries it issued, and each
- * bounded phase's peak in-flight work. Absent until a driver measures it;
- * readers say "not measured", never estimate.
- */
-export const runStepPageSample = z.object({
-  timings: z.record(z.string(), z.number().nonnegative()),
-  queries: z.number().int().nonnegative().nullable(),
-  concurrency: z.record(z.string(), z.number().int().nonnegative()).optional(),
-});
-export type RunStepPageSample = z.infer<typeof runStepPageSample>;
-
 /** One stored RunStep; `meta` stays raw so the view model owns its reading. */
 const runDetailStep = z.object({
   key: z.string(),
@@ -29,6 +15,8 @@ const runDetailStep = z.object({
   done: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
+  /** `found − done − failed − skipped − removed`; null outside count mode. */
+  left: z.number().int().nonnegative().nullable(),
   pages: z.number().int().nonnegative(),
   pausedReason: z.string().nullable(),
   pausedUntil: z.iso.datetime().nullable(),

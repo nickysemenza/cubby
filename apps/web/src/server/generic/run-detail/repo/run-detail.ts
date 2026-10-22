@@ -11,7 +11,7 @@ import {
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, run } from "~/server/db/schema";
-import { listRunSteps } from "~/server/domains/run/repo/run-step";
+import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const iso = (date: Date | null) => date?.toISOString() ?? null;
@@ -27,7 +27,7 @@ export async function readRunDetailSteps(
       .select({ purpose: run.purpose, status: run.status })
       .from(run)
       .where(eq(run.id, runId)),
-    listRunSteps(db, runId),
+    readRunSteps(db, runId),
   ]);
   if (!owner[0]) throw new Error(`Run ${code} does not exist`);
   return {
@@ -41,6 +41,7 @@ export async function readRunDetailSteps(
       done: step.done,
       failed: step.failed,
       skipped: step.skipped,
+      left: step.left,
       pages: step.pages,
       pausedReason: step.pausedReason,
       pausedUntil: iso(step.pausedUntil),

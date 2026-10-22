@@ -22,6 +22,7 @@ export const repositoryOwners = [
   "src/server/generic/assessment/repo/field-input-fence.ts",
   "src/server/generic/jobs/errors.ts",
   "src/server/generic/jobs/repo/jobs.ts",
+  "src/server/generic/jobs/limits.ts",
   "src/server/entity-kernel/repo/entity-identity-writer.ts",
   "src/server/generic/jobs/context.ts",
   "src/server/generic/jobs/repo/execution.ts",

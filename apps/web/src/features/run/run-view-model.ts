@@ -3,85 +3,38 @@ import {
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import type { JobWaitReason } from "@cubby/schemas/job";
-import { runStepMeta, type RunStepError } from "@cubby/schemas/run-step";
-import { runWorkSamples } from "@cubby/schemas/run-work-progress";
-import { z } from "zod";
+import {
+  runStepDeclaration,
+  type RunStepInputMode,
+} from "@cubby/schemas/run-fields";
+import {
+  runStepMeta,
+  type RunStepError,
+  type RunStepMeta,
+} from "@cubby/schemas/run-step";
 
 import type {
   JobFacts,
   JobListOut,
   LimitBinding,
 } from "~/contracts/job.contract";
-import {
-  type RunDecisionStatus,
-  type RunDetailStep,
-  type RunDetailStepsOut,
-  runStepPageSample,
+import type {
+  RunDecisionStatus,
+  RunDetailStep,
+  RunDetailStepsOut,
 } from "~/contracts/run-detail.contract";
 import { formatInstant } from "~/lib/date-format";
 
 /**
  * The Run detail page's one reading of stored RunSteps and Job facts. Every
- * component renders these shapes; only `stepView` and `declarationOf` read
- * the stored step meta and the step declarations.
+ * component renders these shapes; only `stepView` reads the stored step meta
+ * and the step's manifest declaration.
  */
 
-export type StepInputMode = "count" | "estimate" | "tally";
+export type StepInputMode = RunStepInputMode;
 
-/** What a step declares about itself (`RunStepDeclaration` in `RUN_KINDS`). */
-type StepDeclarationView = {
-  label: string;
-  purpose: string | null;
-  action: string | null;
-  unit: string;
-  mode: StepInputMode | null;
-  /** The Assessment family this step publishes into, for its ledger. */
-  results: AssessmentFamily | null;
-};
-
-/**
- * The step-input meta (`input`, `tallies`, `reasons`, `action`) as the
- * step-input contract stores it. `runStepMeta` gains these keys with that
- * contract; until then this reads them beside it.
- */
-const stepMeta = runStepMeta.partial().extend({
-  input: z
-    .object({
-      mode: z.enum(["count", "estimate", "tally"]),
-      total: z.number().int().nonnegative().nullable(),
-      boundary: z.json().nullable(),
-      countedAt: z.iso.datetime(),
-    })
-    .optional(),
-  tallies: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  reasons: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  action: z.string().nullable().optional(),
-  work: runWorkSamples.optional(),
-  page: runStepPageSample.optional(),
-});
-type StepMeta = z.infer<typeof stepMeta>;
-
-const readMeta = (meta: RunDetailStep["meta"]): StepMeta =>
-  stepMeta.safeParse(meta ?? {}).data ?? {};
-
-/**
- * The step's declaration. Purpose, action, unit and results come from
- * `runStepDeclaration(purpose, key)` once `RUN_KINDS` declares steps; until
- * then a step whose key names an Assessment family publishes that family.
- */
-function declarationOf(
-  _purpose: string,
-  step: Pick<RunDetailStep, "key" | "label">,
-): StepDeclarationView {
-  return {
-    label: step.label,
-    purpose: null,
-    action: null,
-    unit: "items",
-    mode: null,
-    results: assessmentFamily.safeParse(step.key).data ?? null,
-  };
-}
+const readMeta = (meta: RunDetailStep["meta"]): Partial<RunStepMeta> =>
+  runStepMeta.partial().safeParse(meta ?? {}).data ?? {};
 
 export type StepPhase =
   | "done"
@@ -230,7 +183,7 @@ const boundaryText = (boundary: unknown): string | null => {
 
 function rateOf(
   step: RunDetailStep,
-  meta: StepMeta,
+  meta: Partial<RunStepMeta>,
   processed: number,
   left: number | null,
   now: number,
@@ -262,13 +215,10 @@ function stepView(
   now: number,
 ): RunStepView {
   const meta = readMeta(step.meta);
-  const declaration = declarationOf(purpose, step);
+  const declaration = runStepDeclaration(purpose, step.key);
   const phase = PHASE_OF[step.state];
-  // A stored input wins; a step without one counts when it found anything.
-  const mode: StepInputMode =
-    meta.input?.mode ??
-    declaration.mode ??
-    (step.found > 0 || phase === "not_started" ? "count" : "tally");
+  // The frozen input wins; a step that has not counted yet reads as declared.
+  const mode = meta.input?.mode ?? declaration?.input.mode ?? "tally";
   const removed = meta.tallies?.removed ?? 0;
   const processed = step.done + step.failed + step.skipped + removed;
   const total =
@@ -277,13 +227,7 @@ function stepView(
       : mode === "estimate"
         ? (meta.input?.total ?? null)
         : null;
-  const left =
-    mode === "count"
-      ? Math.max(
-          step.found - step.done - step.failed - step.skipped - removed,
-          0,
-        )
-      : null;
+  const left = mode === "count" ? step.left : null;
   const live = phase === "running" || phase === "waiting";
   const stepWait: StepWait | null =
     phase === "waiting" || phase === "paused"
@@ -299,12 +243,12 @@ function stepView(
   return {
     key: step.key,
     position: step.position,
-    label: declaration.label,
-    purpose: declaration.purpose,
-    unit: declaration.unit,
+    label: declaration?.label ?? step.label,
+    purpose: declaration?.purpose ?? null,
+    unit: declaration?.unit ?? "items",
     mode,
     phase,
-    action: live ? (meta.action ?? declaration.action) : null,
+    action: live ? (meta.action ?? declaration?.action ?? null) : null,
     total,
     processed,
     left,
@@ -335,11 +279,12 @@ function stepView(
     endedAt: step.endedAt,
     durationMs:
       started === null ? null : (ended ?? (live ? now : started)) - started,
-    results: declaration.results,
+    results:
+      assessmentFamily.safeParse(declaration?.results?.family).data ?? null,
   };
 }
 
-function pageWorkOf(meta: StepMeta): StepPageWork | null {
+function pageWorkOf(meta: Partial<RunStepMeta>): StepPageWork | null {
   if (!meta.page) return null;
   const entries = Object.entries(meta.page.timings);
   const measured = entries.reduce((sum, [, ms]) => sum + ms, 0);

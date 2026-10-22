@@ -14,7 +14,6 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { z } from "zod";
 
 import type {
   JobFacts,
@@ -22,15 +21,16 @@ import type {
   JobListOut,
   JobSubjectEntity,
 } from "~/contracts/job.contract";
-import { runStepPageSample } from "~/contracts/run-detail.contract";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { run, runStep } from "~/server/db/schema";
+import {
+  evaluateBinding,
+  limitEntries,
+} from "~/server/generic/jobs/limits-catalog";
+import { dueJobsAhead, type JobRow } from "~/server/generic/jobs/repo/jobs";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-import { evaluateBinding, limitEntries } from "../limits-catalog";
-import { dueJobsAhead, type JobRow } from "./jobs";
 
 /** The Job that executes any Run; other kinds are the Run's fan-out. */
 const RUN_EXECUTE = "run.execute";
@@ -153,12 +153,11 @@ async function currentStep(db: Database, runId: RunId) {
     .orderBy(asc(runStep.position))
     .limit(1);
   if (!step) return null;
-  const meta = runStepMeta.partial().safeParse(step.meta ?? {});
-  const page = z.object({ page: runStepPageSample }).safeParse(step.meta);
+  const meta = runStepMeta.partial().safeParse(step.meta ?? {}).data;
   return {
     key: step.key,
-    lastPageMs: meta.success ? (meta.data.timing?.lastPageMs ?? null) : null,
-    page: page.success ? page.data.page : null,
+    lastPageMs: meta?.timing?.lastPageMs ?? null,
+    page: meta?.page ?? null,
   };
 }
 

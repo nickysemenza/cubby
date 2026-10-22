@@ -50,6 +50,21 @@ export const runStepInput = z.object({
 });
 export type RunStepInput = z.infer<typeof runStepInput>;
 
+/**
+ * What a step's last page spent its time on, written by the step driver
+ * through the page context: wall time per phase (`selection`,
+ * `preparation`, `publication`, `application`), the database queries it
+ * issued (null when the driver's database path cannot count them), and each
+ * bounded phase's peak in-flight work. Absent until a driver measures it;
+ * readers say "not measured", never estimate.
+ */
+export const runStepPageSample = z.object({
+  timings: z.record(z.string(), z.number().nonnegative()),
+  queries: z.number().int().nonnegative().nullable(),
+  concurrency: z.record(z.string(), z.number().int().nonnegative()).optional(),
+});
+export type RunStepPageSample = z.infer<typeof runStepPageSample>;
+
 export const runStepMeta = z.object({
   input: runStepInput.optional(),
   /**
@@ -78,6 +93,8 @@ export const runStepMeta = z.object({
       totalMs: z.number().nonnegative(),
     })
     .optional(),
+  /** The last page's phase timings, query count and peak concurrency. */
+  page: runStepPageSample.optional(),
   detail: z
     .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
     .optional(),

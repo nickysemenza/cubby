@@ -76,6 +76,15 @@ export default defineEntity({
         // A step-ledger Run (maintenance, sweep) leads with its steps; the
         // slot is empty for every other purpose.
         { kind: "slot", id: "steps", title: "Steps" },
+        // The Assessments a step-ledger Run published, then the Job that
+        // executes it: limits, waits and raw logs.
+        { kind: "slot", id: "decisions", title: "Decisions" },
+        {
+          kind: "slot",
+          id: "diagnostics",
+          workspace: "evidence",
+          title: "Diagnostics",
+        },
         { kind: "slot", id: "live-progress", title: "Progress" },
         // What the run counted and the records it worked, before its
         // controls and agent: the first questions about any run.

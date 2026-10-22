@@ -916,8 +916,9 @@ describe("targeted prompt refresh", () => {
         }),
       ).toEqual([]);
       expect(errors).not.toHaveBeenCalledWith(
-        "[ai-refresh] Field refresh discovery failed",
-        expect.anything(),
+        expect.objectContaining({
+          message: "[ai-refresh] Field refresh discovery failed",
+        }),
       );
     } finally {
       errors.mockRestore();

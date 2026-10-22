@@ -11,6 +11,7 @@ import {
   JobDeferredError,
   JobSupersededError,
 } from "~/server/generic/jobs/errors";
+import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
   claimJob,
   dueJobs,
@@ -21,7 +22,6 @@ import {
   type JobClaim,
 } from "~/server/generic/jobs/repo/jobs";
 
-import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "../limits";
 import type { JobHandler, JobHandlers, PreparedJobPage } from "../types";
 export {
   JobPausedError,

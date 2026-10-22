@@ -5,7 +5,7 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOu
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 import type { RunDecision } from "~/contracts/run-detail.contract";
 import {
@@ -15,8 +15,10 @@ import {
 import { formatCount } from "~/lib/number-format";
 import type { KeyNumber } from "~/ui/common/key-numbers";
 import { RecordList } from "~/ui/common/record-list";
-import { useSectionCount } from "~/ui/data-table/detail-section-state";
-import { Section } from "~/ui/layout/section";
+import {
+  useSectionCount,
+  useSectionEmpty,
+} from "~/ui/data-table/detail-section-state";
 
 import { JobDiagnostics } from "../job/job-diagnostics";
 import { DecisionLedger } from "./decision-ledger";
@@ -35,11 +37,38 @@ import {
 } from "./run-view-model";
 
 const LIVE_POLL_MS = 3_000;
-const DIAGNOSTICS_ID = "run-diagnostics";
-const DECISIONS_ID = "run-decisions";
+// The declared Run slot ids, which the detail page uses as section ids.
+const DIAGNOSTICS_ID = "diagnostics";
+const DECISIONS_ID = "decisions";
 
 const live = (status: string) =>
   ACTIVE_RUN_STATUSES.some((active) => active === status);
+
+/**
+ * The ledger facet a step tally drilled into. The Steps and Decisions slots
+ * are separate sections of one page, so the selection lives beside them,
+ * keyed by Run.
+ */
+const facetByRun = new Map<string, string | null>();
+const facetListeners = new Set<() => void>();
+function useRunFacet(runId: string) {
+  const facet = useSyncExternalStore(
+    (listener) => {
+      facetListeners.add(listener);
+      return () => facetListeners.delete(listener);
+    },
+    () => facetByRun.get(runId) ?? null,
+    () => null,
+  );
+  const setFacet = useCallback(
+    (next: string | null) => {
+      facetByRun.set(runId, next);
+      for (const listener of facetListeners) listener();
+    },
+    [runId],
+  );
+  return [facet, setFacet] as const;
+}
 
 /** Facet counts in the presenter's order, for the header figures and funnel. */
 function facetCounts(
@@ -62,11 +91,10 @@ const scrollTo = (id: string) =>
     ?.scrollIntoView({ behavior: "smooth", block: "start" });
 
 /**
- * A step-ledger Run's detail body: the honest overall strip, the RunStep
- * timeline, each published family's decision ledger, and Diagnostics (the
- * executing Job, its limits and raw logs) as one continuous page.
+ * The reads every Run detail slot shares; React Query dedupes them, so the
+ * Steps, Decisions and Diagnostics sections poll once together.
  */
-export function RunStepsDetail({ record }: { record: RunOut }) {
+function useRunDetail(record: RunOut) {
   const polling = live(record.status) ? LIVE_POLL_MS : false;
   const steps = useQuery({
     ...runDetail.steps.queryOptions({ runId: record.id }),
@@ -94,7 +122,20 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
     enabled: family !== null,
     refetchInterval: polling,
   });
-  const [facet, setFacet] = useState<string | null>(null);
+  const presenter = family ? presenterFor(family) : null;
+  const rows = decisions.data?.rows ?? [];
+  const facets = presenter ? facetCounts(rows, presenter) : [];
+  return { steps, jobs, overview, family, decisions, presenter, rows, facets };
+}
+
+/**
+ * A step-ledger Run's Steps section: the honest per-step strip and the
+ * RunStep timeline. Decisions and Diagnostics are their own declared slots.
+ */
+export function RunStepsDetail({ record }: { record: RunOut }) {
+  const { steps, overview, family, decisions, presenter, rows, facets } =
+    useRunDetail(record);
+  const [facet, setFacet] = useRunFacet(record.id);
   useSectionCount(steps.data?.steps.length);
 
   if (steps.isPending)
@@ -111,9 +152,6 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       />
     );
 
-  const presenter = family ? presenterFor(family) : null;
-  const rows = decisions.data?.rows ?? [];
-  const facets = presenter ? facetCounts(rows, presenter) : [];
   const drill = (key: string) => {
     setFacet(key);
     scrollTo(DECISIONS_ID);
@@ -207,74 +245,82 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
   );
 
   return (
-    <div className="grid gap-9">
-      <div className="grid gap-4">
-        <RunStepStrip overview={overview} figures={figures} />
-        <RunStepTimeline
-          steps={overview.steps}
-          speed={speed}
-          breakdownOf={breakdownOf}
-          linksOf={linksOf}
+    <div className="grid gap-4">
+      <RunStepStrip overview={overview} figures={figures} />
+      <RunStepTimeline
+        steps={overview.steps}
+        speed={speed}
+        breakdownOf={breakdownOf}
+        linksOf={linksOf}
+      />
+    </div>
+  );
+}
+
+/** The Assessments the Run published in its current family, with evidence. */
+export function RunDecisions({ record }: { record: RunOut }) {
+  const { decisions, presenter, rows } = useRunDetail(record);
+  const [facet, setFacet] = useRunFacet(record.id);
+  useSectionCount(presenter ? decisions.data?.total : undefined);
+  useSectionEmpty(!presenter);
+  if (!presenter) return null;
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs/4.5 text-muted-foreground">
+        {humanizeKey(presenter.noun)} this Run published. A recommendation
+        changes nothing until it is applied.
+      </p>
+      {decisions.isPending ? (
+        <RecordList state={{ status: "pending", rows: 6 }} />
+      ) : decisions.isError ? (
+        <RecordList
+          state={{
+            status: "error",
+            error: decisions.error,
+            title: "Couldn't load decisions",
+            onRetry: () => void decisions.refetch(),
+          }}
         />
-      </div>
-      {presenter ? (
-        <Section
-          id={DECISIONS_ID}
-          headingAs="h3"
-          title="Decisions"
-          count={decisions.data?.total}
-          caption={`${humanizeKey(presenter.noun)} this Run published. A recommendation changes nothing until it is applied.`}
-          className="scroll-mt-4"
-        >
-          {decisions.isPending ? (
-            <RecordList state={{ status: "pending", rows: 6 }} />
-          ) : decisions.isError ? (
-            <RecordList
-              state={{
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No {presenter.noun} yet. They appear as the step publishes them.
+        </p>
+      ) : (
+        <DecisionLedger
+          rows={rows}
+          total={decisions.data.total}
+          presenter={presenter}
+          facet={facet}
+          onFacet={setFacet}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The Job executing the Run, its limits and raw logs. */
+export function RunDiagnostics({ record }: { record: RunOut }) {
+  const { jobs } = useRunDetail(record);
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs/4.5 text-muted-foreground">
+        The Job executing this Run, its limits and raw logs.
+      </p>
+      <JobDiagnostics
+        jobs={jobs.data}
+        state={
+          jobs.isError
+            ? {
                 status: "error",
-                error: decisions.error,
-                title: "Couldn't load decisions",
-                onRetry: () => void decisions.refetch(),
-              }}
-            />
-          ) : rows.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No {presenter.noun} yet. They appear as the step publishes them.
-            </p>
-          ) : (
-            <DecisionLedger
-              rows={rows}
-              total={decisions.data.total}
-              presenter={presenter}
-              facet={facet}
-              onFacet={setFacet}
-            />
-          )}
-        </Section>
-      ) : null}
-      <Section
-        id={DIAGNOSTICS_ID}
-        headingAs="h3"
-        title="Diagnostics"
-        caption="The Job executing this Run, its limits and raw logs."
-        className="scroll-mt-4"
-      >
-        <JobDiagnostics
-          jobs={jobs.data}
-          state={
-            jobs.isError
-              ? {
-                  status: "error",
-                  error: jobs.error,
-                  title: "Couldn't load Jobs",
-                  onRetry: () => void jobs.refetch(),
-                }
-              : jobs.isPending
-                ? { status: "pending", rows: 4 }
-                : { status: "success" }
-          }
-        />
-      </Section>
+                error: jobs.error,
+                title: "Couldn't load Jobs",
+                onRetry: () => void jobs.refetch(),
+              }
+            : jobs.isPending
+              ? { status: "pending", rows: 4 }
+              : { status: "success" }
+        }
+      />
     </div>
   );
 }

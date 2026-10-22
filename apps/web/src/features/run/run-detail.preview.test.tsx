@@ -17,7 +17,7 @@ import { overrideStartDispatch } from "~/integrations/tanstack-query/start-trans
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 
-import { RunStepsDetail } from "./run-detail";
+import { RunDecisions, RunDiagnostics, RunStepsDetail } from "./run-detail";
 
 const NOW = Date.now();
 const ago = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
@@ -42,6 +42,7 @@ const step = (
   done: 0,
   failed: 0,
   skipped: 0,
+  left: 0,
   pages: 0,
   pausedReason: null,
   pausedUntil: null,
@@ -65,12 +66,14 @@ const steps: RunDetailStepsOut = {
       startedAt: ago(30),
       endedAt: ago(28),
     }),
-    step("transfer_pair", 2, {
-      label: "Transfer pairs",
+    step("transfer_pair_scan", 2, {
+      label: "Transfer pairs: scan",
       state: "running",
       found: 1_200,
       done: 300,
       skipped: 60,
+      // 1,200 − 300 done − 60 skipped − 12 removed.
+      left: 828,
       pages: 3,
       startedAt: ago(20),
       meta: {
@@ -90,7 +93,7 @@ const steps: RunDetailStepsOut = {
         },
       },
     }),
-    step("statement_transaction", 3, { label: "Statements" }),
+    step("statement_generate", 3, { label: "Statements: generate" }),
   ],
 };
 
@@ -223,18 +226,29 @@ beforeEach(async () => {
   });
 });
 
+/** The three Run slots, as the detail page renders them. */
+const renderRun = () =>
+  render(
+    <>
+      <RunStepsDetail record={run} />
+      <RunDecisions record={run} />
+      <RunDiagnostics record={run} />
+    </>,
+    { wrapper: harness.wrapper },
+  );
+
 afterEach(() => {
   restore?.();
   harness.dispose();
 });
 
 it("shows each step's own count, what sets its speed, and steps not yet counted", async () => {
-  render(<RunStepsDetail record={run} />, { wrapper: harness.wrapper });
+  renderRun();
   const strip = await screen.findByTestId("run-step-strip");
   expect(strip).toHaveTextContent("Step 2 of 3");
   expect(strip).toHaveTextContent("no overall percentage");
 
-  const current = screen.getByTestId("run-step-transfer_pair");
+  const current = screen.getByTestId("run-step-transfer_pair_scan");
   // 300 done + 60 skipped + 12 removed of the frozen 1,200.
   expect(within(current).getByText("31%")).toBeVisible();
   expect(within(current).getByRole("progressbar")).toHaveAttribute(
@@ -249,7 +263,7 @@ it("shows each step's own count, what sets its speed, and steps not yet counted"
   );
   expect(within(current).getByText("No candidate")).toBeVisible();
 
-  const later = screen.getByTestId("run-step-statement_transaction");
+  const later = screen.getByTestId("run-step-statement_generate");
   expect(
     within(later).getByText("Counts its inputs when it starts."),
   ).toBeVisible();
@@ -261,7 +275,7 @@ it("shows each step's own count, what sets its speed, and steps not yet counted"
 });
 
 it("drills a tally into the ledger and opens evidence from the keyboard", async () => {
-  render(<RunStepsDetail record={run} />, { wrapper: harness.wrapper });
+  renderRun();
   const ledger = await screen.findByTestId("decision-ledger");
   // A header row plus both decisions.
   expect(within(ledger).getAllByRole("row")).toHaveLength(3);

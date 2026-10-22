@@ -270,8 +270,10 @@ and tally steps a sliding info segment. Steps sit on the RecordList timeline:
 Run figures and funnel rows drill into the decision ledger. The ledger is the
 step's declared results family, read through a family presenter. It has facets,
 search, J/K/Enter, `/` and Esc, and stacked rows on phone. Evidence opens in a
-`SidePanel`. Diagnostics is a continuous section, never a tab: Job facts, Jobs
-by kind, Limits (Binding, Not limiting or Unknown) and the inline log panel.
+`SidePanel`. Steps, Decisions and Diagnostics are the Run's declared `steps`,
+`decisions` and `diagnostics` slots, so the section index lists all three.
+Diagnostics is a continuous section, never a tab: Job facts, Jobs by kind,
+Limits (Binding, Not limiting or Unknown) and the inline log panel.
 
 The dedicated Work queue is a workbench table across record types. Its
 workbench band carries line tabs (All, Review, Research, Waiting, Automatic)
