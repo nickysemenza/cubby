@@ -224,7 +224,10 @@ Integration tests install `captureBackgroundQueue()` and explicitly `drain(db)`
 when asserting consumer effects. Workflow finalizers and retry fallbacks also
 need a producer even when a test reads only synchronous writes. The bounded
 drain runs real handlers, including
-follow-up publications, and retains a failed task for diagnosis.
+follow-up publications, and retains a failed task for diagnosis. Offline E2E
+search draining honors the durable Job attempt budget: it advances `retry_wait`
+without waiting out backoff, and reports terminal failures with the retained
+`Job.error` diagnostics.
 
 Optional packs still add small focused graphs to the running session:
 

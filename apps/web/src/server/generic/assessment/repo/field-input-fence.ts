@@ -13,7 +13,7 @@ import {
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { fieldWriteRevision } from "~/server/generic/audit-log/repo/field-write";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Exact authoritative target/basis snapshot also catches SQL-only writers. */
@@ -132,8 +132,7 @@ export async function fieldInputFingerprintIfLive(
       z.json().parse(item.value),
     );
   }
-  basis.fieldWriteIntent =
-    (await latestFieldWrite(db, kind, recordId, field))?.id ?? null;
+  basis.fieldWriteIntent = await fieldWriteRevision(db, kind, recordId, field);
   return sha256Hex(canonicalJson(basis));
 }
 
