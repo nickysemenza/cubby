@@ -1,13 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import * as d3Hierarchy from "d3-hierarchy";
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
+import { nivoChartTheme, nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/number-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
-import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
+import { ChartTooltip } from "~/ui/charts/chart-tooltip";
+import { ResponsiveTreeMap } from "~/ui/charts/nivo-responsive";
 import { Visualization } from "~/ui/visualizations/visualization";
-
-import { VizTooltip } from "./viz-overlay";
 
 interface TreemapNode {
   name: string;
@@ -34,7 +33,6 @@ export default function RecipeCostTreemap({
   ingredients,
   totalCost,
 }: RecipeCostTreemapProps) {
-  // Transform ingredient data into treemap structure
   const treemapData = useMemo(() => {
     const pricedItems: TreemapNode[] = [];
     const unpricedItems: TreemapNode[] = [];
@@ -67,19 +65,18 @@ export default function RecipeCostTreemap({
           name,
           ingredientId,
           rowKey,
-          value: 1, // Placeholder value for layout
+          value: 0,
           percentage: 0,
           hasPrice: false,
         });
       }
     }
 
-    // Sort by cost descending
     pricedItems.sort((a, b) => b.value - a.value);
 
     return {
       name: "Recipe Cost",
-      value: totalCost,
+      value: 0,
       ingredientId: null,
       rowKey: "recipe-cost",
       percentage: 100,
@@ -105,215 +102,72 @@ export default function RecipeCostTreemap({
   return <Treemap data={treemapData} />;
 }
 
-interface TreemapProps {
-  data: TreemapNode;
-}
-
-function Treemap({ data }: TreemapProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dimensions = useContainerDimensions(containerRef, {
-    minHeight: 250,
-    initialWidth: 400,
-    initialHeight: 300,
-  });
-  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-  const noPricePatternId = useId();
-
-  const hierarchy = useMemo(() => {
-    return d3Hierarchy
-      .hierarchy(data)
-      .sum((d) => {
-        // For leaf nodes, use their value
-        if (!d.children) {
-          return d.value;
-        }
-        return 0;
-      })
-      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-  }, [data]);
-
-  const treemapLayout = useMemo(() => {
-    return d3Hierarchy
-      .treemap<TreemapNode>()
-      .size([dimensions.width, dimensions.height])
-      .paddingOuter(4)
-      .paddingInner(2)
-      .round(true)(hierarchy);
-  }, [hierarchy, dimensions]);
-
-  const nodes = useMemo(() => treemapLayout.leaves(), [treemapLayout]);
-
-  // Sequential ink ramp (paper -> ultramarine): bigger cost share -> deeper
-  // step. Unpriced cells get a hatched pattern instead of a dominant gray.
-  const getNodeFill = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<TreemapNode>) => {
-      if (!node.data.hasPrice) return `url(#${noPricePatternId})`;
-      const p = node.data.percentage;
-      if (p >= 40) return "var(--chart-seq-5)";
-      if (p >= 25) return "var(--chart-seq-4)";
-      if (p >= 12) return "var(--chart-seq-3)";
-      if (p >= 5) return "var(--chart-seq-2)";
-      return "var(--chart-seq-1)";
-    },
-    [noPricePatternId],
+function Treemap({ data }: { data: TreemapNode }) {
+  const pricedData = useMemo(
+    () => ({
+      ...data,
+      children: data.children?.filter((node) => node.hasPrice),
+    }),
+    [data],
   );
-  // Deep ramp steps need paper-colored ink; shallow steps read with foreground.
-  const isDeepFill = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<TreemapNode>) =>
-      node.data.hasPrice && node.data.percentage >= 25,
-    [],
-  );
-
   return (
-    <div
-      ref={containerRef}
-      className="relative h-[300px] w-full overflow-hidden border border-[var(--border)]"
-    >
-      <svg
-        aria-hidden="true"
-        width={dimensions.width}
-        height={dimensions.height}
-      >
-        <defs>
-          <pattern
-            id={noPricePatternId}
-            width="8"
-            height="8"
-            patternTransform="rotate(45)"
-            patternUnits="userSpaceOnUse"
-          >
-            <rect width="8" height="8" fill="var(--muted)" />
-            <line
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="8"
-              stroke="var(--background)"
-              strokeWidth="4"
-            />
-          </pattern>
-        </defs>
-        {nodes.map((node) => {
-          const width = node.x1 - node.x0;
-          const height = node.y1 - node.y0;
-          const isHovered = hoveredNode === node.data.name;
+    <div>
+      <div style={{ height: 300 }}>
+        <ResponsiveTreeMap
+          data={pricedData}
+          identity="rowKey"
+          value="value"
+          leavesOnly
+          innerPadding={2}
+          outerPadding={4}
+          label={(node) => node.data.name}
+          labelSkipSize={36}
+          labelTextColor="var(--background)"
+          colors={(node) =>
+            node.data.percentage >= 25
+              ? "var(--chart-seq-5)"
+              : "var(--chart-seq-3)"
+          }
+          borderWidth={1}
+          borderColor="var(--border)"
+          theme={nivoChartTheme}
+          {...nivoMotion}
+          tooltip={({ node }) => (
+            <ChartTooltip>
+              {node.data.name}: {formatCurrency(node.value)} (
+              {node.data.percentage.toFixed(1)}%)
+            </ChartTooltip>
+          )}
 
-          if (width < 4 || height < 4) return null;
-
-          return (
-            <g key={node.data.rowKey}>
-              <rect
-                x={node.x0}
-                y={node.y0}
-                width={width}
-                height={height}
-                fill={getNodeFill(node)}
-                stroke={isHovered ? "var(--primary)" : "var(--border)"}
-                strokeWidth={isHovered ? 2.5 : 1.5}
-                strokeDasharray={node.data.hasPrice ? undefined : "4 3"}
-                rx={0}
-                className="cursor-pointer transition-opacity hover:opacity-90"
-                onMouseEnter={() => setHoveredNode(node.data.name)}
-                onMouseLeave={() => setHoveredNode(null)}
-              />
-              {width > 50 && height > 30 && (
-                <foreignObject
-                  x={node.x0 + 4}
-                  y={node.y0 + 4}
-                  width={width - 8}
-                  height={height - 8}
-                  style={{ pointerEvents: "none" }}
-                >
-                  <div className="flex h-full flex-col overflow-hidden">
-                    <div
-                      className="text-xs font-medium"
-                      style={{
-                        color: isDeepFill(node)
-                          ? "var(--background)"
-                          : node.data.hasPrice
-                            ? "var(--foreground)"
-                            : "var(--muted-foreground)",
-                      }}
-                    >
-                      {node.data.ingredientId ? (
-                        <Link
-                          to="/ingredients/$shortcode"
-                          params={{ shortcode: node.data.ingredientId }}
-                          className="hover:underline"
-                          style={{ pointerEvents: "auto" }}
-                        >
-                          {node.data.name.length > 20
-                            ? `${node.data.name.slice(0, 18)}...`
-                            : node.data.name}
-                        </Link>
-                      ) : (
-                        <span>
-                          {node.data.name.length > 20
-                            ? `${node.data.name.slice(0, 18)}...`
-                            : node.data.name}
-                        </span>
-                      )}
-                    </div>
-                    {node.data.hasPrice && width > 60 && height > 45 && (
-                      <div
-                        className={
-                          "mt-0.5 font-mono text-2xs tabular-nums" /* tight: label stack inside a clipped treemap tile */
-                        }
-                        style={{
-                          color: isDeepFill(node)
-                            ? "oklch(from var(--background) l c h / 0.85)"
-                            : "var(--muted-foreground)",
-                        }}
-                      >
-                        {formatCurrency(node.data.value)} (
-                        {node.data.percentage.toFixed(0)}%)
-                      </div>
-                    )}
-                    {!node.data.hasPrice && width > 60 && height > 45 && (
-                      <div
-                        className={
-                          "mt-0.5 text-xs font-medium text-muted-foreground" /* tight: label stack inside a clipped treemap tile */
-                        }
-                      >
-                        No price
-                      </div>
-                    )}
-                  </div>
-                </foreignObject>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-
-      {hoveredNode && <HoverTooltip nodes={nodes} hoveredName={hoveredNode} />}
-    </div>
-  );
-}
-
-function HoverTooltip({
-  nodes,
-  hoveredName,
-}: {
-  nodes: d3Hierarchy.HierarchyRectangularNode<TreemapNode>[];
-  hoveredName: string;
-}) {
-  const node = nodes.find((n) => n.data.name === hoveredName);
-  if (!node) return null;
-
-  return (
-    <VizTooltip>
-      <div className="font-medium">{node.data.name}</div>
-      <div className="mt-1 text-muted-foreground">
-        {node.data.hasPrice ? (
-          <>
-            <div>Cost: {formatCurrency(node.data.value)}</div>
-            <div>{node.data.percentage.toFixed(1)}% of total</div>
-          </>
-        ) : (
-          <div>No pricing data</div>
-        )}
+          ariaLabel="Recipe cost by ingredient. Unpriced ingredients are listed separately and excluded from tile areas."
+        />
       </div>
-    </VizTooltip>
+      <details className="border-t border-border p-2 text-xs">
+        <summary className="cursor-pointer">Ingredient costs and links</summary>
+        <ul className="max-h-64 overflow-auto py-2">
+          {data.children?.map((node) => (
+            <li
+              key={node.rowKey}
+              className="flex min-h-11 items-center justify-between gap-2 sm:min-h-0"
+            >
+              {node.ingredientId ? (
+                <Link
+                  to="/ingredients/$shortcode"
+                  params={{ shortcode: node.ingredientId }}
+                  className="text-primary hover:underline"
+                >
+                  {node.name}
+                </Link>
+              ) : (
+                <span>{node.name}</span>
+              )}
+              <span className="font-mono">
+                {node.hasPrice ? formatCurrency(node.value) : "Unpriced"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
   );
 }

@@ -350,7 +350,6 @@ export default defineConfig({
                   "@phosphor-icons/react/dist/csr/Thermometer",
                   "@phosphor-icons/react/dist/csr/Timer",
                   "@tanstack/react-virtual",
-                  "d3-force",
                   "p-map",
                 ],
                 entries: [

@@ -53,7 +53,7 @@ import { RecipeTagList } from "./recipe-tag";
 import { RecipeIngredientList } from "./recipeingredientlist";
 import { useRecipeTree } from "./use-recipe-tree";
 
-// d3-hierarchy is heavy and only renders in the Data view, so keep it out of the
+// The treemap only renders in the Data view, so keep it out of the
 // recipe-detail route chunk until that view is opened (lazy import + Suspense).
 const NutritionBars = lazy(() => import("~/ui/visualizations/nutrition-bars"));
 const RecipeCostTreemap = lazy(

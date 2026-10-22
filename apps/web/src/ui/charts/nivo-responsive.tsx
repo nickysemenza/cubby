@@ -1,7 +1,11 @@
 import type { ResponsiveBar as NivoResponsiveBar } from "@nivo/bar";
 import type { ResponsiveLine as NivoResponsiveLine } from "@nivo/line";
+import type { ResponsiveNetwork as NivoResponsiveNetwork } from "@nivo/network";
 import type { ResponsivePie as NivoResponsivePie } from "@nivo/pie";
 import type { ResponsiveSankey as NivoResponsiveSankey } from "@nivo/sankey";
+import type { ResponsiveSunburst as NivoResponsiveSunburst } from "@nivo/sunburst";
+import type { ResponsiveTree as NivoResponsiveTree } from "@nivo/tree";
+import type { ResponsiveTreeMap as NivoResponsiveTreeMap } from "@nivo/treemap";
 import type { ComponentType } from "react";
 
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
@@ -64,5 +68,47 @@ export const ResponsiveSankey = browserOnlyChart<typeof NivoResponsiveSankey>(
         import("@nivo/sankey").then((m) => ({
           // SAFETY: props reach it unchanged from the typed export below.
           default: m.ResponsiveSankey as ComponentType<object>,
+        })),
+);
+
+export const ResponsiveNetwork = browserOnlyChart<typeof NivoResponsiveNetwork>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("@nivo/network").then((m) => ({
+          // SAFETY: the typed export forwards props unchanged to this renderer.
+          default: m.ResponsiveNetwork as ComponentType<object>,
+        })),
+);
+
+export const ResponsiveTreeMap = browserOnlyChart<typeof NivoResponsiveTreeMap>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("@nivo/treemap").then((m) => ({
+          // SAFETY: the typed export forwards props unchanged to this renderer.
+          default: m.ResponsiveTreeMap as ComponentType<object>,
+        })),
+);
+
+export const ResponsiveSunburst = browserOnlyChart<
+  typeof NivoResponsiveSunburst
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("@nivo/sunburst").then((m) => ({
+          // SAFETY: the typed export forwards props unchanged to this renderer.
+          default: m.ResponsiveSunburst as ComponentType<object>,
+        })),
+);
+
+export const ResponsiveTree = browserOnlyChart<typeof NivoResponsiveTree>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("@nivo/tree").then((m) => ({
+          // SAFETY: the typed export forwards props unchanged to this renderer.
+          default: m.ResponsiveTree as ComponentType<object>,
         })),
 );

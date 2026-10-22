@@ -1,33 +1,13 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import * as d3Force from "d3-force";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
 import { wasm } from "~/lib/wasm";
-import { useContainerDimensions } from "~/ui/hooks/use-container-dimensions";
+import {
+  NetworkChart,
+  type NetworkChartNode,
+  type NetworkChartLink,
+} from "~/ui/charts/network-chart";
 import { Row } from "~/ui/layout";
-
-/**
- * A live node-link graph of a product's unit mappings: nodes are units (g, lb,
- * cup, each, $, kcal…), edges are conversions, colored by measurement kind.
- * Disconnected components drift apart, so an islanded price ($──each floating
- * away from the g cluster) is visible at a glance. Fed the editor's *preview*
- * mappings, so it redraws as you type — node positions persist across updates so
- * the layout nudges rather than re-randomizing on every keystroke.
- */
-interface UNode extends d3Force.SimulationNodeDatum {
-  id: string;
-  label: string;
-  kind: string;
-}
-interface ULink extends d3Force.SimulationLinkDatum<UNode> {
-  source: string | UNode;
-  target: string | UNode;
-  /** A built-in conversion (e.g. g↔lb) rather than a stored mapping. */
-  native?: boolean;
-}
-
-const isResolvedUnitNode = (value: string | UNode): value is UNode =>
-  typeof value !== "string";
 
 const KIND_COLOR = {
   weight: "var(--chart-1)",
@@ -90,30 +70,18 @@ export function UnitMappingGraph({
 }: {
   mappings: UnitMapping[];
   height?: number;
-  /**
-   * Show the USDA per-nutrient edges (100 g = N mg potassium…). Off by default —
-   * they explode the node count and aren't about convertibility — but the
-   * conversion dialog's "Show nutrient mappings" toggle opts in.
-   */
   includeNutrients?: boolean;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dim = useContainerDimensions(containerRef, {
-    minHeight: height,
-    initialWidth: 248,
-    initialHeight: height,
-  });
-  const width = dim.width;
-
   const { nodes, links } = useMemo(() => {
-    const nodeMap = new Map<string, UNode>();
-    const linkArr: ULink[] = [];
+    const nodeMap = new Map<string, NetworkChartNode>();
+    const linkArr: NetworkChartLink[] = [];
     const ensure = (unit: string) => {
       if (!nodeMap.has(unit)) {
         nodeMap.set(unit, {
           id: unit,
           label: unitLabel(unit),
-          kind: amountKind(unit),
+          color: kindColor(amountKind(unit)),
+          size: 10,
         });
       }
     };
@@ -140,136 +108,38 @@ export function UnitMappingGraph({
     return { nodes: [...nodeMap.values()], links: linkArr };
   }, [mappings, includeNutrients]);
 
-  // Persist node positions across re-layouts so typing nudges the graph instead
-  // of teleporting every node to a new random spot.
-  const posRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-  const [simNodes, setSimNodes] = useState<UNode[]>([]);
-  const [simLinks, setSimLinks] = useState<ULink[]>([]);
-
-  useEffect(() => {
-    if (nodes.length === 0) {
-      setSimNodes([]);
-      setSimLinks([]);
-      return;
-    }
-    const nodesCopy: UNode[] = nodes.map((n) => {
-      const saved = posRef.current.get(n.id);
-      return {
-        ...n,
-        x: saved?.x ?? width / 2 + (Math.random() - 0.5) * 40,
-        y: saved?.y ?? height / 2 + (Math.random() - 0.5) * 40,
-      };
-    });
-    const linksCopy: ULink[] = links.map((l) => ({
-      source: l.source,
-      target: l.target,
-      // Preserve `native` so the tick handler's setSimLinks carries it to render
-      // (these draw dashed); without it every edge would render solid.
-      native: l.native,
-    }));
-
-    const sim = d3Force
-      .forceSimulation<UNode>(nodesCopy)
-      .force(
-        "link",
-        d3Force
-          .forceLink<UNode, ULink>(linksCopy)
-          .id((d) => d.id)
-          .distance(62),
-      )
-      .force("charge", d3Force.forceManyBody().strength(-280))
-      .force("center", d3Force.forceCenter(width / 2, height / 2))
-      .force("collision", d3Force.forceCollide<UNode>().radius(28));
-
-    sim.on("tick", () => {
-      // Labels sit beside the dot pointing inward, so only the small dot needs
-      // margin against the container's overflow-hidden.
-      for (const n of nodesCopy) {
-        n.x = Math.max(12, Math.min(width - 12, n.x ?? 0));
-        n.y = Math.max(12, Math.min(height - 12, n.y ?? 0));
-        posRef.current.set(n.id, { x: n.x, y: n.y });
-      }
-      setSimNodes([...nodesCopy]);
-      setSimLinks([...linksCopy]);
-    });
-
-    sim.alpha(0.6).restart();
-    return () => {
-      sim.stop();
-    };
-  }, [nodes, links, width, height]);
-
+  const data = useMemo(() => ({ nodes, links }), [nodes, links]);
   return (
-    <div
-      ref={containerRef}
-      className="w-full overflow-hidden border border-[var(--border)] bg-background/40"
-      style={{ height }}
-    >
+    <div className="w-full border border-border bg-background/40">
       {nodes.length === 0 ? (
         <Row
           align="center"
           justify="center"
-          className="h-full text-2xs text-muted-foreground"
+          style={{ height }}
+          className="text-xs text-muted-foreground"
         >
           No mappings yet.
         </Row>
       ) : (
-        <svg aria-hidden="true" width={width} height={height}>
-          <g>
-            {simLinks.map((link) => {
-              if (
-                !isResolvedUnitNode(link.source) ||
-                !isResolvedUnitNode(link.target)
-              ) {
-                return null;
-              }
-              const s = link.source;
-              const t = link.target;
-              if (s.x == null || t.x == null) return null;
-              return (
-                <line
-                  key={`${s.id}-${t.id}`}
-                  x1={s.x}
-                  y1={s.y}
-                  x2={t.x}
-                  y2={t.y}
-                  stroke="var(--border)"
-                  strokeWidth={1.5}
-                  strokeDasharray={link.native ? "3 3" : undefined}
-                  strokeOpacity={link.native ? 0.5 : 1}
-                />
-              );
-            })}
-          </g>
-          <g>
-            {simNodes.map((n) => {
-              // Label beside the dot, pointing toward center so it never clips
-              // the container edge — far more readable than cramming text into a
-              // tiny circle. Full unit on hover via <title>.
-              const onRight = (n.x ?? 0) > width / 2;
-              return (
-                <g key={n.id} transform={`translate(${n.x ?? 0}, ${n.y ?? 0})`}>
-                  <title>{n.id}</title>
-                  <circle
-                    r={5}
-                    fill={kindColor(n.kind)}
-                    stroke="var(--card)"
-                    strokeWidth={1.5}
-                  />
-                  <text
-                    x={onRight ? -8 : 8}
-                    textAnchor={onRight ? "end" : "start"}
-                    dominantBaseline="middle"
-                    className="pointer-events-none fill-foreground"
-                    style={{ fontSize: 11 }}
-                  >
-                    {n.label.length > 13 ? `${n.label.slice(0, 12)}…` : n.label}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+        <NetworkChart
+          data={data}
+          height={height}
+          summary={`${nodes.length} units connected by ${links.length} conversions. Dashed lines are built-in conversions.`}
+        />
+      )}
+      {links.length > 0 && (
+        <details className="border-t border-border p-2 text-xs">
+          <summary className="cursor-pointer">Conversion connections</summary>
+          <ul className="max-h-64 overflow-auto py-2">
+            {links.map((link, index) => (
+              // oxlint-disable-next-line react/no-array-index-key -- Conversion rows can share endpoints; the list has no per-row state.
+              <li key={index}>
+                {link.source} ↔ {link.target}
+                {link.native ? " · built-in" : ""}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

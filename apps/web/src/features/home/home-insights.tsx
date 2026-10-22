@@ -15,7 +15,7 @@ export function HomeInsights() {
       <Section
         headingAs="h3"
         title="Which categories hold our products?"
-        caption="Distribution across categories — click a ring to open one."
+        caption="Distribution across categories; expand counts for record links."
       >
         <HierarchySunburst entity="productCategory" />
       </Section>
