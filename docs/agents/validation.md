@@ -190,8 +190,9 @@ behavior, not merely because generated Swift changed.
 CI selects broad tiers from their declared inputs; avoid repeating the full
 PostgreSQL, fast, lint, Knip, or build suites locally as a gate. While
 iterating, lint the edited paths with `pnpm exec oxlint <paths>` rather than
-`pnpm lint`; the commit hook owns staged lint/format. Run Knip for changed
-entry points/dependencies, generator validation for changed declarations, and
+`pnpm lint`; the commit hook owns staged lint/format. Run the full configured
+Knip check for changed entry points/dependencies or removed consumers; a
+dependency-only check misses orphaned files and exports. Run generator validation for changed declarations and
 `actionlint` for CI workflow changes. CI starts every Linux lane and replays
 unchanged tasks from the Nx cache; that is not an instruction to run those
 lanes locally.
