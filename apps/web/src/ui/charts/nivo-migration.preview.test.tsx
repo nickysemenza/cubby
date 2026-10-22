@@ -79,6 +79,9 @@ it("keeps duplicate ingredient rows and excludes unknown prices from tile areas"
       screen.container.querySelectorAll('svg rect[fill^="var(--chart-seq-"]'),
     ).toHaveLength(2),
   );
+  expect(
+    screen.container.querySelector('svg rect[fill^="var(--chart-seq-"]'),
+  ).toHaveAttribute("fill-opacity", "1");
   fireEvent.click(screen.getByText("Ingredient costs and links"));
   expect(screen.getAllByRole("link", { name: "Synthetic flour" })).toHaveLength(
     2,

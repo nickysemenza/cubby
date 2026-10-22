@@ -123,11 +123,9 @@ function Treemap({ data }: { data: TreemapNode }) {
           label={(node) => node.data.name}
           labelSkipSize={36}
           labelTextColor="var(--background)"
-          colors={(node) =>
-            node.data.percentage >= 25
-              ? "var(--chart-seq-5)"
-              : "var(--chart-seq-3)"
-          }
+          colors={() => "var(--chart-seq-5)"}
+          // Nivo's default 0.33 opacity washes out the surface behind light labels.
+          nodeOpacity={1}
           borderWidth={1}
           borderColor="var(--border)"
           theme={nivoChartTheme}
