@@ -18,7 +18,10 @@ export default defineEntity({
       description: "Record financial evidence through the intake workflow.",
     },
     icons: { phosphor: "Files", sfSymbol: "tray.full", emoji: "📥" },
-    list: { read: { derived: ["rowCountStored"] }, savedViews: [] },
+    list: {
+      read: { media: ["displayImages"], derived: ["rowCountStored"] },
+      savedViews: [],
+    },
     detail: {
       relationFilterOverrides: {
         records: { descriptor: "importId" },

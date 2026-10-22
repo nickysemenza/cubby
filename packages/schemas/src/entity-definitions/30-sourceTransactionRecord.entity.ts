@@ -30,6 +30,7 @@ export default defineEntity({
     icons: { phosphor: "Receipt", sfSymbol: "doc.text", emoji: "🧾" },
     list: {
       read: {
+        media: ["displayImages"],
         derived: ["vendorInference", "providerData"],
         relations: [
           "accountName",
