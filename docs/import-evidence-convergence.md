@@ -110,6 +110,9 @@ reconciliation writer. Candidate ranking considers the full bounded set of
 20 candidates, including differing merchant names and dates, without granting
 automatic matching authority. Split proposals preserve existing edges;
 `finance.allocate_settlement` refuses a stale prior allocation graph.
+The browser reopens settlement review with fresh candidates and their accepted
+splits. Allocation writes use the catalog mutation's cache invalidation; the
+dialog does not issue a second invalidation after the same accepted write.
 
 SpendingCategory is independent of ProductCategory. Purchase defaults flow to
 Expense lines unless a line has its own category. Itemization expectation resolves

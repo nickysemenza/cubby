@@ -17,10 +17,8 @@ import {
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
-import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { financialTransaction as financeOperations } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -173,11 +171,6 @@ function MatchStatementReview({
       setSaveError(error instanceof Error ? error.message : String(error));
       return;
     }
-    void invalidateOperationTags(
-      queryClient,
-      entityRipple("financialTransaction"),
-      { removeInactive: true },
-    );
     onOpenChange(false);
   };
 
