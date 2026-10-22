@@ -1,3 +1,7 @@
+import {
+  seedImagePrerequisite,
+  attachProductImagePrerequisite,
+} from "./fixtures/photos";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -344,7 +348,10 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
   }
 });
 
-test("unassessed quality remains visible in phone cards", async ({ page }) => {
+test("unassessed quality remains visible in phone cards", async ({
+  page,
+  e2eRuntime,
+}) => {
   await page.setViewportSize({ width: 402, height: 874 });
   const name = `Synthetic planned quality ${Date.now()}`;
   await createEntityFixture(page, "expense", {
@@ -355,8 +362,17 @@ test("unassessed quality remains visible in phone cards", async ({ page }) => {
     costType: "services",
     trade: "other",
   });
+  const product = await createEntityFixture(page, "product", {
+    name: "Synthetic planned quality cover",
+  });
+  const image = await seedImagePrerequisite(
+    "planned-quality-cover",
+    e2eRuntime.objectStorageUrl,
+  );
+  await attachProductImagePrerequisite(page, image.id, product.id, "item");
   await createEntityFixture(page, "expense", {
     name,
+    productId: product.id,
     future: true,
     cost: null,
     date: null,
