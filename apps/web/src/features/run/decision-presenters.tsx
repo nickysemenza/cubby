@@ -625,10 +625,7 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "reason",
       header: "Reason",
-      value: (row) => {
-        const judgment = parse(row);
-        return judgment ? reasonOf(row, judgment) : null;
-      },
+      value: decisionExplanation,
       className: "text-muted-foreground",
       cell: (row) => {
         return (
