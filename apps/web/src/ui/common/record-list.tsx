@@ -358,18 +358,23 @@ const TONE_DOT = {
   muted: "border-[1.5px] border-muted-foreground/60 bg-card",
 } as const satisfies Record<RecordTone, string>;
 
+/** A row state plus `waiting`: work that holds its place without moving (a wait on capacity). */
+export type RecordDotState = ReportRowState | "waiting";
+
 /**
  * Each state's mark. Skipped is a hollow ring and not-reached a faint point, so neither reads as a
  * loading spinner; running pulses (record-list.css) and holds a still halo under reduced motion.
+ * Waiting is the running mark held still.
  */
 const STATE_DOT = {
   done: "bg-positive",
   running: "bg-primary",
+  waiting: "bg-primary",
   warning: "bg-warning",
   failed: "bg-destructive",
   skipped: "border-[1.5px] border-muted-foreground/60 bg-card",
   not_reached: "size-1.5 bg-muted-foreground/35",
-} as const satisfies Record<ReportRowState, string>;
+} as const satisfies Record<RecordDotState, string>;
 
 /**
  * A row's mark with a label that stays readable to assistive tech: a `state` for stage and log
@@ -383,7 +388,7 @@ export function RecordDot({
   spoken = true,
 }: {
   tone?: RecordTone | undefined;
-  state?: ReportRowState | undefined;
+  state?: RecordDotState | undefined;
   color?: string | undefined;
   label?: string | undefined;
   /** Off when the row already says the label in visible text, so it is announced once. */

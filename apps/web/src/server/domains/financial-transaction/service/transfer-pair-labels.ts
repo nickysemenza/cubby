@@ -27,6 +27,7 @@ import {
   transferPairEvidenceFingerprint,
   transferPairsNeedingLabels,
   type TransferPairLabelCursor,
+  TRANSFER_PAIR_PUBLISH_CONCURRENCY,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
@@ -37,8 +38,6 @@ const TRANSFER_PAIR_LABEL_BATCH = Math.min(
   JOB_PAGE_LIMITS.suggestionsPerPage,
   Math.floor(JOB_PAGE_LIMITS.maxDecisionQuestionsPerPage / 2),
 );
-/** Database work only; model calls never occupy this lane. */
-const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
 type Question = DecisionChoiceArgs;
 type Usage = Question["usage"];

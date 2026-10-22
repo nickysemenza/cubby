@@ -30,7 +30,11 @@ test("Cloudflare config keeps the runtime Job page limits loadable", async () =>
       );
     }
   }
-  for (const file of ["job-page-limits.ts"]) {
+  for (const file of [
+    "job-page-limits.ts",
+    "background-queue.ts",
+    "background-queue-consumer.json",
+  ]) {
     assert.equal(
       isFileLoadingAllowed(
         config,

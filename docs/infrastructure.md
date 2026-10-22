@@ -394,18 +394,19 @@ pnpm --dir apps/web exec wrangler secret put NAME --name cubby
 pnpm --dir apps/web exec cf workers secrets list --worker cubby
 ```
 
-| Name                   | Storage                        | Purpose                                                       |
-| ---------------------- | ------------------------------ | ------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                |
-| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                         |
-| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                         |
-| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                          |
-| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                         |
-| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts) |
-| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                |
-| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent         |
-| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Authenticated REST inference, including named subscriber BYOK |
-| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                   |
+| Name                             | Storage                        | Purpose                                                                   |
+| -------------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`             | `cubby` Worker secret          | Better Auth signing/encryption                                            |
+| `R2_ACCESS_KEY_ID`               | `cubby` Worker secret          | Main R2 S3 credential                                                     |
+| `R2_SECRET_ACCESS_KEY`           | `cubby` Worker secret          | Main R2 S3 credential                                                     |
+| `GOOGLE_CLIENT_SECRET`           | `cubby` Worker secret          | Google OAuth confidential credential                                      |
+| `GOOGLE_CLIENT_ID`               | Checked-in Worker `vars` value | Public Google OAuth client identifier                                     |
+| `APNS_KEY_ID`                    | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)             |
+| `APNS_TEAM_ID`                   | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                            |
+| `APNS_PRIVATE_KEY`               | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                     |
+| `AI_GATEWAY_API_KEY`             | Worker/local secret            | Authenticated REST inference, including named subscriber BYOK             |
+| `NOTION_API_KEY`                 | Optional Worker/local secret   | Optional Notion integration                                               |
+| `CLOUDFLARE_OBSERVABILITY_TOKEN` | Optional `cubby` Worker secret | Workers Observability read for inline Job logs; absent = "not configured" |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -775,6 +776,57 @@ fallback used outside Cloudflare Workers. It is optional in the deployed Worker
 because the `AI` binding supplies Worker-identity authentication.
 
 ## Observability
+
+### Inline Job logs and limits
+
+A Run's Diagnostics section and an Image's or Location's Jobs slot read one
+Job's raw Worker lines through `job.logs`
+(`server/generic/jobs/service/job-logs.ts`). It calls the Workers
+Observability telemetry query API, `POST /accounts/{account}/workers/observability/telemetry/query`.
+
+- **Filter.** `jobId` OR `runId` (the top-level fields `@cubby/worker-tracing`
+  logs), view `events`, at most 500 lines.
+- **Window.** The Job's active window, with a minute of margin either side.
+- **Credentials.** The token comes from `CLOUDFLARE_OBSERVABILITY_TOKEN` and
+  needs Workers Observability read.
+- **Missing token.** The panel reads "not configured". The dev config deletes
+  secrets, so local runs always show this.
+- **Retention.** A window older than Workers Logs' 7-day retention reads
+  "raw logs expired".
+- **Failures.** A failed query shows its raw response, redacted only by
+  `scrubErrorMessage`, with Retry and the dashboard link.
+
+`server/generic/jobs/limits-catalog.ts` lists every limit that can set a Run's
+speed, imported from the constant or config that enforces it:
+
+- queue consumers;
+- drain pages, time and batch;
+- lease and heartbeat;
+- attempts and backoff;
+- step page caps and in-page publication concurrency;
+- AI Gateway in-flight, rate and deadline;
+- AI refresh slots;
+- the funding window;
+- provider retry wait;
+- database connections.
+
+Change a value at its source, never in the catalog.
+
+`evaluateBinding` names the limit binding now:
+
+- **Typed Job waits.** A wait (`provider_capacity`, `ai_funding_window`,
+  `rate_limit`, `device`) and a retry backoff each name their limit.
+- **Due Jobs.** A due Job is held by drain capacity, counted with its same-kind
+  Jobs ahead.
+- **Running pages.** A running step reads its last page sample (`RunStep.meta.page`):
+  - a page near the drain budget is cut by it;
+  - a phase whose peak in-flight work reaches its cap is "concurrency N of N
+    busy";
+  - otherwise the page's own work sets the pace ("preparation 61% of page time
+    · 106 queries/page").
+- **No sample.** Without a sample the verdict is "Unknown — no recent samples".
+
+### Error tracking and traces
 
 The web/Workers Sentry DSN is intentionally public and defined exactly once,
 in `packages/worker-tracing/src/sentry-dsn.ts`; the web client and Worker, the

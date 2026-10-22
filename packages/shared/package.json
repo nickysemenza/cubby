@@ -25,6 +25,7 @@
     "./text-case": "./src/text-case.ts",
     "./upc": "./src/upc.ts",
     "./job-page-limits": "./src/job-page-limits.ts",
+    "./background-queue": "./src/background-queue.ts",
     "./ai/models": "./src/ai/models.ts",
     "./ai/pricing": "./src/ai/pricing.ts",
     "./ai/gateway-request": "./src/ai/gateway-request.ts",

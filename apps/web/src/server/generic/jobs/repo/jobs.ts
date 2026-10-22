@@ -23,8 +23,14 @@ import {
 import { job } from "~/server/db/retained-tables";
 
 import { JobSupersededError } from "../errors";
+import { JOB_DRAIN } from "../limits";
 
-const LEASE_MS = 5 * 60_000;
+/** How long a claim holds a Job before another worker may take it over. */
+export const JOB_LEASE_MS = 5 * 60_000;
+/** Consecutive failures before a Job fails; an enqueue may declare its own. */
+export const DEFAULT_JOB_MAX_ATTEMPTS = 3;
+/** A failed page waits `baseMs · 2^attempts`, capped at `maxMs`. */
+export const JOB_RETRY_BACKOFF = { baseMs: 1_000, maxMs: 60_000 } as const;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & { leaseToken: string; leaseExpiresAt: Date };
 
@@ -43,7 +49,7 @@ export async function enqueueJob(
     subjectId: input.subjectId ?? null,
     runId: input.runId ? parseEntityId("run", input.runId) : null,
     priority: input.priority ?? 0,
-    maxAttempts: input.maxAttempts ?? 3,
+    maxAttempts: input.maxAttempts ?? DEFAULT_JOB_MAX_ATTEMPTS,
     availableAt: input.availableAt ?? new Date(),
   };
   const insertion = client.insert(job).values(values);
@@ -99,7 +105,7 @@ const due = (now: Date) =>
  * Interleave kinds; a short drain starts with the kind claimed least recently.
  * Only a claim is service: invalidations and enqueues leave `lastClaimedAt`.
  */
-export async function dueJobs(db: Database, limit = 25) {
+export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
   const result = await getDb(db).execute<{ id: string; kind: string }>(sql`
     WITH served AS (
       SELECT kind, max("lastClaimedAt") AS last_served FROM "Job" GROUP BY kind
@@ -130,7 +136,7 @@ export async function dueJobsAhead(db: Database, id: string) {
 export async function claimJob(
   db: Database,
   id: string,
-  leaseMs = LEASE_MS,
+  leaseMs = JOB_LEASE_MS,
 ): Promise<JobClaim | null> {
   if (!Number.isFinite(leaseMs) || leaseMs <= 0)
     throw new Error("Job lease must be a positive finite duration");
@@ -184,7 +190,7 @@ export async function renewJob(db: Database, claim: JobClaim) {
   const [row] = await getDb(db)
     .update(job)
     .set({
-      leaseExpiresAt: new Date(Date.now() + LEASE_MS),
+      leaseExpiresAt: new Date(Date.now() + JOB_LEASE_MS),
       updatedAt: new Date(),
     })
     .where(
@@ -316,7 +322,11 @@ export async function failJob(
     .set({
       state: claim.attempts >= claim.maxAttempts ? "failed" : "retry_wait",
       availableAt: new Date(
-        Date.now() + Math.min(60_000, 1_000 * 2 ** claim.attempts),
+        Date.now() +
+          Math.min(
+            JOB_RETRY_BACKOFF.maxMs,
+            JOB_RETRY_BACKOFF.baseMs * 2 ** claim.attempts,
+          ),
       ),
       waitReason: null,
       waitUntil: null,

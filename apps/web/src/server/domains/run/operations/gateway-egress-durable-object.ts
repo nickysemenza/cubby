@@ -12,26 +12,18 @@ import { DurableObject } from "cloudflare:workers";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
+  GATEWAY_EGRESS_LIMITS,
   gatewayEgressInput,
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
 
-const WINDOW_MS = 60_000;
-const REQUESTS_PER_WINDOW = 180;
-// Checked 2026-10-20: Unified Billing is 200 requests/60s/gateway (BYOK
-// excluded); Cubby reserves 20 for other clients. Workers AI defaults are
-// 300 RPM text generation / 2,000 classification, with no published fixed
-// concurrency ceiling. 64 unified permits leave >2x the 30 needed at 10s.
-// https://developers.cloudflare.com/ai-gateway/reference/limits/
-// https://developers.cloudflare.com/workers-ai/platform/limits/
-// Anthropic BYOK has organization/model RPM and token limits, not one universal
-// concurrency number: honor its 429 Retry-After without inventing a flat cap.
-// https://platform.claude.com/docs/en/api/rate-limits
-// ChatGPT plan transport bypasses AI Gateway; its plan-dependent usage limits
-// publish no fixed concurrency allowance and it has no local fan-out cap.
-// https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
-const UNIFIED_MAX_IN_FLIGHT = 64;
-const REQUEST_DEADLINE_MS = 10 * 60_000;
+const {
+  windowMs: WINDOW_MS,
+  requestsPerWindow: REQUESTS_PER_WINDOW,
+  unifiedMaxInFlight: UNIFIED_MAX_IN_FLIGHT,
+  requestDeadlineMs: REQUEST_DEADLINE_MS,
+} = GATEWAY_EGRESS_LIMITS;
+
 const CREDIT_BUCKET = "subscriber-credit:anthropic";
 
 const windowStart = (now: number) =>

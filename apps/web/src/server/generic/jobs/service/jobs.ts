@@ -21,6 +21,7 @@ import {
   type JobClaim,
 } from "~/server/generic/jobs/repo/jobs";
 
+import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "../limits";
 import type { JobHandler, JobHandlers, PreparedJobPage } from "../types";
 export {
   JobPausedError,
@@ -77,7 +78,7 @@ export async function advanceJob(
           renewing = undefined;
         });
     }
-  }, 30_000);
+  }, JOB_HEARTBEAT_MS);
   try {
     if (!handler)
       throw new Error(`No job handler registered for ${claimed.kind}`);
@@ -152,13 +153,16 @@ export async function advanceJob(
 export async function drainDueJobs(
   db: Database,
   handlers: JobHandlers,
-  limit = 256,
-  timeBudgetMs = 20_000,
+  limit = JOB_DRAIN.pageLimit,
+  timeBudgetMs = JOB_DRAIN.timeBudgetMs,
 ) {
   const outcomes: string[] = [];
   const deadline = Date.now() + timeBudgetMs;
   while (outcomes.length < limit && Date.now() < deadline) {
-    const candidates = await dueJobs(db, Math.min(25, limit - outcomes.length));
+    const candidates = await dueJobs(
+      db,
+      Math.min(JOB_DRAIN.batch, limit - outcomes.length),
+    );
     if (!candidates.length) return outcomes;
     for (const candidate of candidates) {
       outcomes.push(await advanceJob(db, candidate.id, handlers));
