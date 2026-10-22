@@ -84,7 +84,8 @@ const OVERLAP_WINDOW_DAYS = 3;
 /** Pool reach around the seeds: a candidate's competitors and overlaps included. */
 const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
 const PREVIEW_CHUNK = 500;
-const TRANSFER_PAIR_GENERATION_PAGE = 32;
+// Amortize Job dispatch between pages; the byte bound still limits publications.
+const TRANSFER_PAIR_GENERATION_PAGE = 128;
 const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
 const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
 
