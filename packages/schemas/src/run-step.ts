@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { runStepInputMode } from "./activity-fields";
 import { runWorkSamples } from "./run-work-progress";
 
 /**
- * One ordered unit of a step-ledger Run (a maintenance backlog, a Sweep's
- * Suggestion family). Counts are atomic increments; `left` is derived at read
- * as found − done − failed − skipped, and a step with a child Run reports the
- * child's counts, never a copy of them.
+ * One ordered unit of a step-ledger Run (a maintenance backlog, one stage of
+ * a Sweep family), declared in `RUN_KINDS`. For a `count` step `found` is the
+ * population frozen when the step started; `left` is derived at read as
+ * found − done − failed − skipped − removed. `tally` steps have no `found`.
  */
 export const runStepState = z.enum([
   "queued",
@@ -18,11 +19,6 @@ export const runStepState = z.enum([
 export type RunStepState = z.infer<typeof runStepState>;
 
 export const RUN_STEP_ERROR_SAMPLE = 20;
-/** A driver names the phase of its next bounded Job page. */
-export const runStepExecution = z.object({
-  phase: z.string(),
-});
-export type RunStepExecution = z.infer<typeof runStepExecution>;
 
 /** A raw failure as the step saw it; only `scrubErrorMessage` redacts it. */
 export const runStepError = z.object({
@@ -38,7 +34,33 @@ export const runStepErrors = z.array(runStepError).max(RUN_STEP_ERROR_SAMPLE);
  * Step annotations: the failures a retry re-admits, and a driver's own scalar
  * details (a phase split, a budget note) shown beside the step.
  */
+const tallies = z.record(z.string(), z.number().int().nonnegative());
+
+/**
+ * The population a step froze when it started: one COUNT per step
+ * generation over the predicate its pager walks, bounded by `boundary`
+ * (a cutoff the pager also applies). Never recounted on resume or read.
+ */
+export const runStepInput = z.object({
+  mode: runStepInputMode,
+  /** The frozen count, or a provider's estimate; null for a tally. */
+  total: z.number().int().nonnegative().nullable(),
+  boundary: z.json().nullable(),
+  countedAt: z.iso.datetime(),
+});
+export type RunStepInput = z.infer<typeof runStepInput>;
+
 export const runStepMeta = z.object({
+  input: runStepInput.optional(),
+  /**
+   * Running counts without a denominator: candidates, decisions, and
+   * `removed` (inputs that left eligibility after the count froze).
+   */
+  tallies: tallies.optional(),
+  /** Why inputs produced no result, summed per page (`no_candidate: 12`). */
+  reasons: tallies.optional(),
+  /** What the step is doing now when narrower than its declared action. */
+  action: z.string().nullable().optional(),
   capacityUntil: z.iso.datetime().nullable().optional(),
   work: runWorkSamples.optional(),
   /**

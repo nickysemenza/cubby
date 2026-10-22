@@ -17,6 +17,7 @@ import {
   orderMail,
   orderMailAttachment,
   emailCandidateObservation,
+  job,
 } from "~/server/db/schema";
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -193,7 +194,6 @@ describe("Gmail final publication concurrency", () => {
       });
       try {
         await entered.promise;
-        const queue = { send: vi.fn(async () => undefined) };
         const admitted = await startMailImport(ctx.db, {
           ledgerPartyId: f.party.id,
           userId: ctx.actor.userId,
@@ -225,7 +225,12 @@ describe("Gmail final publication concurrency", () => {
         expect(f.storage.put).not.toHaveBeenCalled();
         expect(f.storage.delete).not.toHaveBeenCalled();
         expect(f.provider.getAttachment).not.toHaveBeenCalled();
-        expect(queue.send).toHaveBeenCalledTimes(1);
+        expect(
+          await getDb(ctx.db)
+            .select({ runId: job.runId })
+            .from(job)
+            .where(eq(job.kind, "purchase.dispatch")),
+        ).toEqual([{ runId: admitted[0]?.runId }]);
       } finally {
         release.resolve();
         await Promise.allSettled([pending]);

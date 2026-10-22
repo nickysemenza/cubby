@@ -19,7 +19,7 @@ export async function tryLockAiRefreshScheduling(db: Database) {
   return rows.rows[0]?.locked === true;
 }
 
-/** Discovery has an activation owner; explicit Sweep children keep their parent ownership. */
+/** Discovery has an activation owner; Sweeps own their evaluations and take no slot. */
 export async function hasAiRefreshRunCapacity(db: Database, excludeId?: RunId) {
   const [row] = await getDb(db)
     .select({ count: count() })

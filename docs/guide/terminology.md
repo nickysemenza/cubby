@@ -500,6 +500,32 @@ _Avoid_: image processing run, activity row
 A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs list presents every purpose together. Retained target outcomes, including Email targets, remain visible after the mutable target roster is retired. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself.
 _Avoid_: image processing job, individual attempt, search job
 
+**Run kind**:
+A Run purpose declared once in `RUN_KINDS`: its label, trigger, whether it is
+routine or historical, how it executes, and its ordered steps. Routine kinds
+(refresh families, connection discovery) are hidden from the Runs list by
+default and create their Run only when a pass has work.
+_Avoid_: workflow purpose, step-run purpose
+
+**Run step**:
+One declared stage of a Run, with an input mode. A `count` step freezes its
+population with one COUNT when it starts and reads "done of N"; inputs that
+leave before the pager reaches them end as `removed`. An `estimate` step reads
+"about N" and a `tally` step only its running counts, so neither shows a
+percentage or ETA. A step that has not started reads "Not started".
+_Avoid_: phase (a progress sample), child Run
+
+**Job**:
+The durable unit of execution: one keyed Postgres row with a lease, cursor,
+attempts and generation. A `run.execute` Job pages a Run; an `ai.evaluation`
+Job executes one AI evaluation that a Run owns or requested.
+_Avoid_: task, workflow instance
+
+**Queue**:
+Transport that wakes the Job drain. A delivered or lost message never
+completes or loses work; the Job rows hold it.
+_Avoid_: Job, backlog
+
 **Image processing job**:
 One image operation, identified by `IPR-`, with its own kind, state, attempts, and diagnostics. The stored `ready` state means successfully completed work; clients display it as Completed. A skipped operation retains its reason and does not imply successful processing. It may belong to a Run or stand alone. Its cost is a component of a parent Run total when both are shown, not an additional household expense.
 _Avoid_: Run, merged work record
@@ -757,7 +783,9 @@ _Avoid_: dismissal (a presentation preference, not a correctness verdict)
 **Sweep**:
 A bulk pass that computes Suggestions across a filtered set of records. A
 member's "Find suggestions" starts one Sweep across every Suggestion family in
-scope, with one part per family; automatic passes are Sweeps too.
+scope, with one part per family; automatic passes are Sweeps too. A Sweep is
+a Run kind whose families contribute Run steps; its evaluations are
+`ai.evaluation` Jobs the Sweep owns or requests, not child Runs.
 _Avoid_: backfill (when the work produces Suggestions rather than derived data),
 discovery (outside the connection code path)
 

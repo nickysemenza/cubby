@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   claimAiEvaluation,
@@ -18,7 +18,6 @@ import {
   location,
   product,
   run,
-  user,
 } from "~/server/db/schema";
 import { connectionHandlers } from "~/server/domains/connection/operations/connection.server";
 import { acquisitionPairEligible } from "~/server/domains/connection/repo/connection-candidates";
@@ -47,7 +46,7 @@ import {
   connectionSourceFingerprints,
   scheduleConnectionRefresh,
 } from "./connection-refresh";
-import { ensureRun, systemActor } from "./ensure-run";
+import { ensureRun } from "./ensure-run";
 
 const reconciledSourceFingerprint = async (
   ...args: Parameters<typeof connectionSourceFingerprint>
@@ -64,16 +63,6 @@ const each = (value: number) => ({ value, unit: "each" }) as const;
 // basis rejection on apply and unchanged-save advice availability.
 describe("connection discovery source freshness", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await getDb(ctx.db).insert(user).values({
-      id: systemActor().userId,
-      name: "Synthetic system",
-      email: "synthetic-system@example.test",
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  });
   it.each(["failed", "dispatch_failed", "cancelled"] as const)(
     "keeps the %s owner stopped when explicit rediscovery finds its retained work",
     async (outcome) => {

@@ -65,7 +65,7 @@ import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-export const STATEMENT_LABEL_BATCH = JOB_PAGE_LIMITS.suggestionsPerPage;
+const STATEMENT_LABEL_BATCH = JOB_PAGE_LIMITS.suggestionsPerPage;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");

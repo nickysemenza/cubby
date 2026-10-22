@@ -1,6 +1,6 @@
 {
-  "id": "a49c3d16-9698-4bb2-a0d8-9fa65526c816",
-  "prevId": "e5070dc7-013d-468e-a482-910128b0afca",
+  "id": "26a74d9e-9179-48f0-bee4-a2981b381591",
+  "prevId": "a49c3d16-9698-4bb2-a0d8-9fa65526c816",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -17848,22 +17848,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "Run_one_active_derived_refresh": {
-          "name": "Run_one_active_derived_refresh",
-          "columns": [
-            {
-              "expression": "purpose",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"Run\".\"purpose\" = 'derived_refresh' AND \"Run\".\"status\" IN ('running', 'paused_auth', 'paused')",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -17983,7 +17967,7 @@
         },
         "Run_purpose_check": {
           "name": "Run_purpose_check",
-          "value": "\"Run\".\"purpose\" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'suggestion_sweep', 'ai_refresh', 'background', 'file_import', 'mail_search', 'mail_discovery', 'mail_reclassify', 'maintenance', 'derived_refresh', 'sweep')"
+          "value": "\"Run\".\"purpose\" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'suggestion_sweep', 'ai_refresh', 'background', 'file_import', 'mail_search', 'mail_discovery', 'mail_reclassify', 'connection_discovery', 'maintenance', 'derived_refresh', 'sweep')"
         },
         "Run_cause_check": {
           "name": "Run_cause_check",

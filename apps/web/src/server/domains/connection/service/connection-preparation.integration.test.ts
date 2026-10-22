@@ -14,14 +14,12 @@ import {
   aiEvaluation,
   assessmentState,
   run,
-  user,
   expense,
   searchDocument,
   product,
 } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { executeAiRefreshTarget as executeAiRefreshTargetImplementation } from "~/server/domains/run/service/ai-refresh";
 import {
   kernelCtx,
@@ -84,14 +82,6 @@ describe("connection preparation and publication authority", () => {
   let queue: ReturnType<typeof captureBackgroundQueue>;
   beforeEach(async () => {
     queue = captureBackgroundQueue();
-    await getDb(ctx.db).insert(user).values({
-      id: systemActor().userId,
-      name: "Synthetic system",
-      email: "synthetic-system@example.test",
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
   });
   afterEach(() => queue.restore());
   async function fixture() {

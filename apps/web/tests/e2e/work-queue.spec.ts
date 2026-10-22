@@ -285,7 +285,6 @@ test("Work queue Run navigation reads passive retained details", async ({
   expect(savedBefore).toMatchObject({
     status: "paused_auth",
     dispatchEventId,
-    dispatchAttempts: 0,
     coordinatorStartedAt: null,
   });
   const agentWrites: string[] = [];

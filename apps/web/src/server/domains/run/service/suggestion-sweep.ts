@@ -200,7 +200,54 @@ export async function prepareSuggestionSweep(
   ports: SuggestionSweepPorts,
 ) {
   const saved = await readSuggestionSweepRun(db, runId);
-  const input = sweepRunInputSchema.parse(saved.input);
+  const processed = new Set(
+    processedTargetIdsSchema.parse(saved.progress ?? {}).processedTargetIds,
+  );
+  await rosterSuggestionTargets(db, runId, saved.input, ports, processed);
+  await writeSuggestionSweepProgress(db, runId, {
+    ...suggestionSweepRunProgress.parse(saved.progress),
+    ...(processed.size
+      ? {
+          legacyCounts: suggestionSweepRunProgress
+            .pick({ done: true, applied: true, queued: true, failed: true })
+            .parse(saved.progress),
+        }
+      : {}),
+    rosterPrepared: true,
+    attempt: z
+      .object({ attempt: z.number().default(0) })
+      .parse(saved.progress ?? {}).attempt,
+  });
+}
+
+/** The stored input a field pass evaluates under, as `startSuggestionSweep` captures it. */
+export async function suggestionSweepInput(
+  db: Database,
+  input: SweepInput,
+  ports: Pick<SuggestionSweepPorts, "decisionModel" | "suggestPorts"> = {},
+) {
+  return suggestionSweepRunInput.parse({
+    kind: "suggestion_sweep",
+    ...input,
+    decisionModelOverride:
+      ports.decisionModel?.() ?? ports.suggestPorts?.decisionModel,
+    taxonomyRevision: await spendingClassificationRevision(db),
+  });
+}
+
+/**
+ * Queues one AI evaluation per listed record and decision field, requested
+ * by `runId`: a `suggestion_sweep` Run's own roster, or a Sweep's field step.
+ * Returns how many evaluations it requested.
+ */
+export async function rosterSuggestionTargets(
+  db: Database,
+  runId: RunId,
+  storedInput: unknown,
+  ports: SuggestionSweepPorts,
+  processed: ReadonlySet<string> = new Set(),
+) {
+  const input = sweepRunInputSchema.parse(storedInput);
   let pageIndex = 0;
   let rowsSeen = 0;
   let totalCount = 0;
@@ -239,9 +286,6 @@ export async function prepareSuggestionSweep(
     }
     pageIndex++;
   } while (rowsSeen < totalCount);
-  const processed = new Set(
-    processedTargetIdsSchema.parse(saved.progress ?? {}).processedTargetIds,
-  );
   const selected = new Set(
     targets.map((target) => `${target.entityId}:${target.field}`),
   );
@@ -324,20 +368,7 @@ export async function prepareSuggestionSweep(
       sequence,
     );
   }
-  await writeSuggestionSweepProgress(db, runId, {
-    ...suggestionSweepRunProgress.parse(saved.progress),
-    ...(processed.size
-      ? {
-          legacyCounts: suggestionSweepRunProgress
-            .pick({ done: true, applied: true, queued: true, failed: true })
-            .parse(saved.progress),
-        }
-      : {}),
-    rosterPrepared: true,
-    attempt: z
-      .object({ attempt: z.number().default(0) })
-      .parse(saved.progress ?? {}).attempt,
-  });
+  return targets.length;
 }
 
 export async function executeSuggestionSweepTarget(
@@ -508,23 +539,11 @@ export async function resumeSuggestionSweep(db: Database, runId: RunId) {
 }
 export async function startSuggestionSweep(
   db: Database,
-  {
-    trigger = "manual",
-    parentRunId,
-    ...input
-  }: SweepInput & { trigger?: SweepTrigger; parentRunId?: RunId },
+  { trigger = "manual", ...input }: SweepInput & { trigger?: SweepTrigger },
   ports: SuggestionSweepPorts,
 ) {
-  const decisionModelOverride =
-    ports.decisionModel?.() ?? ports.suggestPorts?.decisionModel;
-  const taxonomyRevision = await spendingClassificationRevision(db);
   const actor = { ...ports.context.actorContext, runId: null };
-  const storedInput = suggestionSweepRunInput.parse({
-    kind: "suggestion_sweep",
-    ...input,
-    decisionModelOverride,
-    taxonomyRevision,
-  });
+  const storedInput = await suggestionSweepInput(db, input, ports);
   const initialProgress = suggestionSweepRunProgress.parse({
     total: 0,
     done: 0,
@@ -540,7 +559,6 @@ export async function startSuggestionSweep(
       status: "running",
       input: storedInput,
       progress: initialProgress,
-      ...(parentRunId && { parentRunId }),
     });
     await prepareSuggestionSweep(tx, runId, {
       ...ports,

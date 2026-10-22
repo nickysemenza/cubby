@@ -7,10 +7,24 @@ import {
 import type { MailReclassificationCheckpoint } from "./email-actions.js";
 import { z } from "zod";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
-import { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
+import { RUN_KINDS, RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
 export {
+  EXECUTED_RUN_PURPOSES,
+  isExecutedRunPurpose,
   isStepRunPurpose,
+  OWNED_AI_WORK_PURPOSES,
+  ROUTINE_RUN_PURPOSES,
+  RUN_KINDS,
+  runStepDeclaration,
+  runStepInputMode,
   STEP_RUN_PURPOSES,
+  VISIBLE_RUN_PURPOSES,
+  type ExecutedRunPurpose,
+  type RunKindDeclaration,
+  type RunStepDeclaration,
+  type RunStepDeclarationOf,
+  type RunStepInputMode,
+  type RunStepKey,
   type StepRunPurpose,
 } from "./activity-fields";
 export {
@@ -436,10 +450,25 @@ export const maintenanceRunInput = z.strictObject({
   kind: z.literal("maintenance"),
 });
 export type MaintenanceRunInput = z.infer<typeof maintenanceRunInput>;
+/** The derived data families a routine refresh pass covers, one per Run. */
+export const derivedRefreshFamily = z.enum(
+  // SAFETY: the declared steps are a non-empty literal list of these keys.
+  RUN_KINDS.derived_refresh.steps.map((step) => step.key) as [
+    (typeof RUN_KINDS.derived_refresh.steps)[number]["key"],
+    ...(typeof RUN_KINDS.derived_refresh.steps)[number]["key"][],
+  ],
+);
+export type DerivedRefreshFamily = z.infer<typeof derivedRefreshFamily>;
+export const derivedRefreshRunInput = z.strictObject({
+  kind: z.literal("derived_refresh"),
+  family: derivedRefreshFamily,
+});
+export type DerivedRefreshRunInput = z.infer<typeof derivedRefreshRunInput>;
 
 export type RunInput =
   | SweepRunInput
   | MaintenanceRunInput
+  | DerivedRefreshRunInput
   | MailReclassifyRunInput
   | ResearchObjectivesRunInput
   | MailResearchRunInput

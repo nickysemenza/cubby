@@ -33,6 +33,7 @@ export async function prepareEmbeddingCleanupPage(
     ORDER BY physical.id LIMIT ${limit}`);
   return {
     nextCursor: rows.rows.length === limit ? rows.rows.at(-1)?.id : undefined,
+    pending: rows.rows.length,
     publish: async (tx: Database) => {
       for (const row of rows.rows)
         await enqueueJob(tx, {

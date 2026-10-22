@@ -15,7 +15,10 @@ import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
+import {
+  launchWorkflowRun,
+  MANUAL_RUN_PRIORITY,
+} from "~/server/workflows/runs/lifecycle";
 
 import { setJobStepKey, withJobExecution } from "../context";
 import { JobDeferredError } from "../errors";
@@ -363,7 +366,10 @@ describe("durable jobs", () => {
       .select()
       .from(job)
       .where(eq(job.runId, runId));
-    expect(saved).toMatchObject({ kind: "run.execute", priority: 100 });
+    expect(saved).toMatchObject({
+      kind: "run.execute",
+      priority: MANUAL_RUN_PRIORITY,
+    });
   });
 
   it("persists a typed deferral without spending failures and clears waits on claim, publication and failure", async () => {

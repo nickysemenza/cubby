@@ -1380,19 +1380,49 @@ type TransferPairGenerationPage = {
   published: number;
   unchanged: number;
   retired: number;
+  /** Rows the page read: seeds started, or pending pairs rechecked. */
   processed: number;
+  /** Seeds whose whole scan finished on this page (a split seed counts once). */
+  seeds: number;
+  /** Why scanned inputs produced no publication (`no_candidate`, `out_of_scope`). */
+  reasons: Record<TransferPairNoResult, number>;
   bytes: number;
   failed: RunStepError[];
   next: TransferPairGenerationCursor | null;
 };
 
-/** Raw identities are paged before hydration; each seed still reads its complete competing pool. */
-async function nextTransferPairSeeds(
-  db: Database,
-  input: { after: string | null; limit: number; since: string | null },
-) {
-  const { rows } = await unwrapDb(db).execute<{ key: string }>(sql`
-    SELECT key FROM (
+/** Upstream outcomes that leave no Assessment; a Sweep step keeps them as reason counts. */
+const NO_RESULTS = [
+  "not_transfer_like",
+  "no_candidate",
+  "out_of_scope",
+  "owned_by_other_seed",
+  "suppressed",
+  "still_candidate",
+  "inactive",
+] as const;
+type TransferPairNoResult = (typeof NO_RESULTS)[number];
+
+const noResults = () =>
+  ({
+    not_transfer_like: 0,
+    no_candidate: 0,
+    out_of_scope: 0,
+    owned_by_other_seed: 0,
+    suppressed: 0,
+    still_candidate: 0,
+    inactive: 0,
+  }) satisfies Record<TransferPairNoResult, number>;
+
+/**
+ * The seed identities a scan pages; `createdBefore` is the population
+ * boundary a Sweep step froze with its count, so late arrivals wait for the
+ * next pass.
+ */
+const transferPairSeedKeys = (input: {
+  since: string | null;
+  createdBefore?: string | null;
+}) => sql`
       SELECT 'ftx:' || ft.shortcode AS key FROM "FinancialTransaction" ft
       WHERE ft."deletedAt" IS NULL AND ft.status IN (${sql.join(
         transferEvidenceStatuses.map((status) => sql`${status}`),
@@ -1405,16 +1435,77 @@ async function nextTransferPairSeeds(
           sql`, `,
         )}) OR ft."sourceCategory" IS NOT NULL)
         ${input.since ? sql`AND COALESCE(ft."postedDate", ft."transactionDate") >= ${input.since}::date` : sql``}
+        ${input.createdBefore ? sql`AND ft."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}
       UNION
       SELECT 'stmt:' || r.source || ':' || ${chargeKeyOf("r")} AS key
       FROM "SourceTransactionRecord" r
       WHERE r."deletedAt" IS NULL AND r."sourceCategory" IS NOT NULL
         ${input.since ? sql`AND r."statementDate" >= ${input.since}::date` : sql``}
-    ) seeds
+        ${input.createdBefore ? sql`AND r."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}`;
+
+/** Raw identities are paged before hydration; each seed still reads its complete competing pool. */
+async function nextTransferPairSeeds(
+  db: Database,
+  input: {
+    after: string | null;
+    limit: number;
+    since: string | null;
+    createdBefore?: string | null;
+  },
+) {
+  const { rows } = await unwrapDb(db).execute<{ key: string }>(sql`
+    SELECT key FROM (${transferPairSeedKeys(input)}) seeds
     ${input.after ? sql`WHERE key COLLATE "C" > ${input.after} COLLATE "C"` : sql``}
     ORDER BY key COLLATE "C" LIMIT ${input.limit}
   `);
   return rows.map((row) => row.key);
+}
+
+/** One COUNT over the seed predicate a scan pages, under the same boundary. */
+export async function countTransferPairSeeds(
+  db: Database,
+  input: { since: string | null; createdBefore: string | null },
+) {
+  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count FROM (${transferPairSeedKeys(input)}) seeds
+  `);
+  return rows[0]?.count ?? 0;
+}
+
+/** Every transfer-pair state in scope, the population a retire pass rechecks. */
+const retireScope = (
+  scope: TransferPairScope,
+  createdBefore?: string | null,
+) => {
+  const accountScope = scope.accountIds?.length
+    ? sql`AND (s.data->>'outflowAccountId' IN (${sql.join(
+        scope.accountIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+          OR s.data->>'inflowAccountId' IN (${sql.join(
+            scope.accountIds.map((id) => sql`${id}`),
+            sql`, `,
+          )}))`
+    : sql``;
+  let sinceScope = sql``;
+  if (scope.since) {
+    // eslint-disable-next-line cubby/no-raw-enum-literal-in-sql -- date is a TransferPairJudgment JSON property, not an enum value.
+    sinceScope = sql`AND s.data->>'date' >= ${scope.since}`;
+  }
+  return sql`s.family = ${assessmentFamily.enum.transfer_pair}
+        ${accountScope} ${sinceScope}
+        ${createdBefore ? sql`AND s."createdAt" <= ${createdBefore}::timestamptz` : sql``}`;
+};
+
+export async function countTransferPairStates(
+  db: Database,
+  input: { scope: TransferPairScope; createdBefore: string | null },
+) {
+  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count FROM "AssessmentState" s
+    WHERE ${retireScope(input.scope, input.createdBefore)}
+  `);
+  return rows[0]?.count ?? 0;
 }
 
 /** A pair belongs to the first eligible seed, independent of seed page boundaries. */
@@ -1451,6 +1542,8 @@ export async function generateTransferPairSuggestionsPage(
     after?: TransferPairGenerationCursor | null;
     limit?: number;
     maxBytes?: number;
+    /** A Sweep step's frozen population boundary. */
+    createdBefore?: string | null;
   },
 ): Promise<TransferPairGenerationPage> {
   const scope = input.scope ?? {};
@@ -1470,6 +1563,8 @@ export async function generateTransferPairSuggestionsPage(
     retired: 0,
     failed: [],
     processed: 0,
+    seeds: 0,
+    reasons: noResults(),
     bytes: 0,
     next: null,
   };
@@ -1480,21 +1575,6 @@ export async function generateTransferPairSuggestionsPage(
     afterPair: null,
   };
   if (after.kind === "retire") {
-    const accountScope = scope.accountIds?.length
-      ? sql`AND (s.data->>'outflowAccountId' IN (${sql.join(
-          scope.accountIds.map((id) => sql`${id}`),
-          sql`, `,
-        )})
-          OR s.data->>'inflowAccountId' IN (${sql.join(
-            scope.accountIds.map((id) => sql`${id}`),
-            sql`, `,
-          )}))`
-      : sql``;
-    let sinceScope = sql``;
-    if (scope.since) {
-      // eslint-disable-next-line cubby/no-raw-enum-literal-in-sql -- date is a TransferPairJudgment JSON property, not an enum value.
-      sinceScope = sql`AND s.data->>'date' >= ${scope.since}`;
-    }
     // Include inactive history identities so a committed retirement cannot
     // shift this page's counts or continuation when its acknowledgement is lost.
     const { rows } = await unwrapDb(db).execute<{
@@ -1507,8 +1587,7 @@ export async function generateTransferPairSuggestionsPage(
       SELECT s.id::text AS id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
         s.data->>'pairKey' AS "pairKey", s.active, s.status
       FROM "AssessmentState" s
-      WHERE s.family = ${assessmentFamily.enum.transfer_pair}
-        ${accountScope} ${sinceScope}
+      WHERE ${retireScope(scope, input.createdBefore)}
         ${after.after ? sql`AND (s."createdAt", s.id) > (${after.after.createdAt}::timestamp, ${after.after.id}::uuid)` : sql``}
       ORDER BY s."createdAt", s.id LIMIT ${limit + 1}
     `);
@@ -1531,7 +1610,10 @@ export async function generateTransferPairSuggestionsPage(
       selected,
       TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
       async (row) => {
-        if (!row.active || row.status !== suggestionStatus.enum.pending) return;
+        if (!row.active || row.status !== suggestionStatus.enum.pending) {
+          page.reasons.inactive++;
+          return;
+        }
         try {
           // Absence is verified now, not inferred from an earlier seed page.
           // Matching preparation holds no publication transaction open.
@@ -1540,8 +1622,10 @@ export async function generateTransferPairSuggestionsPage(
             current &&
             inScope(current, scope) &&
             pairSeedKeys(current, scope).length
-          )
+          ) {
+            page.reasons.still_candidate++;
             return;
+          }
           const retired = await withTransactionDatabase(db, async (tx) => {
             await assertWorkflowEffect(tx);
             await getDb(tx).execute(pairLock(row.pairKey));
@@ -1573,6 +1657,7 @@ export async function generateTransferPairSuggestionsPage(
     after: after.seed ?? after.afterSeed,
     limit: limit + 1,
     since: scope.since ?? null,
+    createdBefore: input.createdBefore ?? null,
   });
   const seeds = after.seed ? [after.seed, ...following] : following;
   const publications: Pair[] = [];
@@ -1591,25 +1676,34 @@ export async function generateTransferPairSuggestionsPage(
     }
     page.processed++;
     if (!potentialSeeds.has(seed)) {
+      page.reasons.not_transfer_like++;
+      page.seeds++;
       afterSeed = seed;
       continue;
     }
     let pairs: Pair[];
+    // A seed split across pages reports its reasons once, when it finishes.
+    const seedReasons = noResults();
     try {
-      pairs = (
-        await discover(
-          db,
-          { kind: "legs", keys: [seed], seedOnly: true },
-          accounts,
-        )
-      ).filter(
-        (pair) => inScope(pair, scope) && pairSeedKeys(pair, scope)[0] === seed,
+      const discovered = await discover(
+        db,
+        { kind: "legs", keys: [seed], seedOnly: true },
+        accounts,
       );
+      if (!discovered.length) seedReasons.no_candidate++;
+      pairs = discovered.filter((pair) => {
+        if (!inScope(pair, scope)) seedReasons.out_of_scope++;
+        else if (pairSeedKeys(pair, scope)[0] !== seed)
+          seedReasons.owned_by_other_seed++;
+        else return true;
+        return false;
+      });
     } catch (error) {
       if (isWorkflowInterrupted(error)) throw error;
       page.failed.push(
         transferPairFailure(`transfer_pair_seed:${seed}`, error),
       );
+      page.seeds++;
       afterSeed = seed;
       continue;
     }
@@ -1633,6 +1727,9 @@ export async function generateTransferPairSuggestionsPage(
       afterPair = pair.judgment.key;
     }
     if (unfinished) break;
+    for (const reason of NO_RESULTS)
+      page.reasons[reason] += seedReasons[reason];
+    page.seeds++;
     afterSeed = seed;
   }
   await forEachConcurrently(
@@ -1646,6 +1743,7 @@ export async function generateTransferPairSuggestionsPage(
           ruleProducer(input.runId),
         );
         if (outcome === "published") page.published++;
+        else if (outcome === "suppressed") page.reasons.suppressed++;
         else page.unchanged++;
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
@@ -1656,6 +1754,49 @@ export async function generateTransferPairSuggestionsPage(
     },
   );
   return page;
+}
+
+/**
+ * "Retry failed" for a scan: re-discovers each failed seed and republishes
+ * each failed pair from its current legs. Refs are the scan's own failure refs.
+ */
+export async function retryTransferPairRefs(
+  db: Database,
+  input: {
+    runId: string | null;
+    scope?: TransferPairScope;
+    refs: readonly string[];
+  },
+) {
+  const scope = input.scope ?? {};
+  const failed: RunStepError[] = [];
+  const outcome = { done: 0, failed };
+  for (const ref of input.refs) {
+    try {
+      const pairs = ref.startsWith("transfer_pair_seed:")
+        ? (
+            await discover(db, {
+              kind: "legs",
+              keys: [ref.slice("transfer_pair_seed:".length)],
+              seedOnly: true,
+            })
+          ).filter(
+            (pair) =>
+              inScope(pair, scope) &&
+              pairSeedKeys(pair, scope)[0] ===
+                ref.slice("transfer_pair_seed:".length),
+          )
+        : [await buildTransferPair(db, ref.slice("transfer_pair:".length))];
+      for (const pair of pairs)
+        if (pair)
+          await publishTransferPair(db, pair, ruleProducer(input.runId));
+      outcome.done++;
+    } catch (error) {
+      if (isWorkflowInterrupted(error)) throw error;
+      outcome.failed.push(transferPairFailure(ref, error));
+    }
+  }
+  return outcome;
 }
 
 /**
