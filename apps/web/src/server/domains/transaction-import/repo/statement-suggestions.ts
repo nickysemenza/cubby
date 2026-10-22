@@ -1744,7 +1744,7 @@ export async function publishChargeProposal(
 }
 
 /** Share admission for first/unchanged rules; changed retained decisions use the ordinary writer. */
-async function publishNewRuleProposals(
+async function publishRuleBatch(
   db: Database,
   proposals: readonly ChargeProposal[],
   producer: AssessmentProducer,
@@ -1895,7 +1895,7 @@ async function publishRuleGenerationPage(
         { outcome: PublishOutcome; labelsReused: number }
       >();
       try {
-        published = await publishNewRuleProposals(db, batch, producer);
+        published = await publishRuleBatch(db, batch, producer);
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
         // A failed batch rolls back together; a failed after-commit check may
