@@ -1,5 +1,11 @@
 import { allEntities } from "@cubby/schemas/entity-manifest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -37,15 +43,31 @@ function sheet() {
   return screen.getByRole("table", { name: "Entity schema" });
 }
 
-function entityRow(entity: string) {
-  const button = within(sheet()).getByRole("button", { name: entity });
-  const row = button.closest("tr");
-  if (!row) throw new Error(`row missing for ${entity}`);
-  return row;
+function recordRows() {
+  return [
+    ...sheet().querySelectorAll<HTMLTableRowElement>("tr.table-record-row"),
+  ];
+}
+
+async function entityRow(entity: string) {
+  fireEvent.change(
+    await screen.findByPlaceholderText("Search entities and declarations"),
+    {
+      target: { value: entity },
+    },
+  );
+  return waitFor(() => {
+    const row = within(sheet())
+      .getByText(entity, { exact: true })
+      .closest("tr.table-record-row");
+    if (!(row instanceof HTMLTableRowElement))
+      throw new Error(`row missing for ${entity}`);
+    return row;
+  });
 }
 
 function panel(entity: string) {
-  return screen.getByRole("region", { name: `${entity} schema` });
+  return screen.findByRole("complementary", { name: `${entity} schema` });
 }
 
 describe("SavedViewChips", () => {
@@ -72,20 +94,28 @@ describe("EntityManifestGrid schema sheet", () => {
     ["recipe", { create: "yes", read: "yes", update: "yes", delete: "yes" }],
     ["run", { create: "no", read: "yes", update: "no", delete: "no" }],
     ["image", { create: "no", read: "yes", update: "yes", delete: "yes" }],
-  ] as const)("splits %s kernel actions into CRUD cells", (entity, slots) => {
-    renderGrid();
+  ] as const)(
+    "splits %s kernel actions into CRUD cells",
+    async (entity, slots) => {
+      renderGrid();
 
-    const row = entityRow(entity);
-    for (const [slot, value] of Object.entries(slots))
-      expect(within(row).getByTitle(`${slot}: ${value}`)).toBeInTheDocument();
-  });
+      const row = await entityRow(entity);
+      for (const [slot, value] of Object.entries(slots))
+        expect(within(row).getByTitle(`${slot}: ${value}`)).toBeInTheDocument();
+    },
+  );
 
-  it("sorts numeric columns largest first, then smallest, then back to declaration order", () => {
+  it("sorts numeric columns largest first, then smallest, then back to declaration order", async () => {
     renderGrid();
-    const header = within(sheet()).getByRole("button", { name: "Ovr" });
+    const header = await screen.findByRole("button", {
+      name: "Sort by Declaration overrides",
+    });
     const firstEntity = () =>
-      within(within(sheet()).getAllByRole("row")[2]!).getAllByRole("button")[0]!
-        .textContent;
+      recordRows()[0]
+        ?.querySelector("td")
+        ?.textContent?.replace("external", "")
+        .trim();
+    await waitFor(() => expect(recordRows().length).toBeGreaterThan(0));
     const descendingByOverrides = [...allEntities].sort(
       (left, right) => overridesFor(right).length - overridesFor(left).length,
     );
@@ -95,23 +125,22 @@ describe("EntityManifestGrid schema sheet", () => {
 
     fireEvent.click(header);
     expect(header.closest("th")).toHaveAttribute("aria-sort", "descending");
-    expect(firstEntity()).toBe(descendingByOverrides[0]);
+    await waitFor(() => expect(firstEntity()).toBe(descendingByOverrides[0]));
 
     fireEvent.click(header);
     expect(header.closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(firstEntity()).toBe(ascendingByOverrides[0]);
+    await waitFor(() => expect(firstEntity()).toBe(ascendingByOverrides[0]));
 
     fireEvent.click(header);
-    expect(header.closest("th")).not.toHaveAttribute("aria-sort");
-    expect(firstEntity()).toBe(allEntities[0]);
+    expect(header.closest("th")).toHaveAttribute("aria-sort", "none");
+    await waitFor(() => expect(firstEntity()).toBe(allEntities[0]));
   });
 
-  it("selects a row into the side panel instead of expanding it inline", () => {
+  it("inspects a searched row with shared panel metadata and close controls", async () => {
     const onSelect = vi.fn();
     const { rerender } = renderGrid({ onSelect });
-
-    expect(screen.queryByRole("region", { name: /schema$/ })).toBeNull();
-    fireEvent.click(within(entityRow("product")).getByRole("button"));
+    const row = await entityRow("product");
+    fireEvent.click(row);
     expect(onSelect).toHaveBeenLastCalledWith("product");
 
     rerender(
@@ -122,7 +151,7 @@ describe("EntityManifestGrid schema sheet", () => {
         active={false}
       />,
     );
-    const productPanel = panel("product");
+    const productPanel = await panel("product");
     expect(within(productPanel).getByText("Storage table")).toBeInTheDocument();
     expect(
       within(productPanel).getAllByText(
@@ -132,66 +161,62 @@ describe("EntityManifestGrid schema sheet", () => {
     expect(
       within(productPanel).getByRole("link", { name: "Open schema page" }),
     ).toHaveAttribute("href", "/entities/schema/product");
-    expect(entityRow("product")).toHaveAttribute("aria-current", "true");
-
-    // Clicking the selected row again, the close button, or Escape clears it.
-    fireEvent.click(within(entityRow("product")).getByRole("button"));
-    expect(onSelect).toHaveBeenLastCalledWith(null);
-    onSelect.mockClear();
+    expect(row).toHaveAttribute("aria-current", "true");
     fireEvent.click(
       within(productPanel).getByRole("button", { name: "Close panel" }),
     );
     expect(onSelect).toHaveBeenLastCalledWith(null);
-    onSelect.mockClear();
-    fireEvent.keyDown(within(entityRow("recipe")).getByRole("button"), {
-      key: "Escape",
-    });
-    expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 
-  it("closes the panel with Escape from inside it and returns focus to the row", () => {
+  it("closes the standard inspector with Escape from inside it", async () => {
     const { onSelect } = renderGrid({ selected: "product" });
-    const close = within(panel("product")).getByRole("button", {
+    const close = within(await panel("product")).getByRole("button", {
       name: "Close panel",
     });
     close.focus();
-
     fireEvent.keyDown(close, { key: "Escape" });
-
     expect(onSelect).toHaveBeenLastCalledWith(null);
-    expect(within(entityRow("product")).getByRole("button")).toHaveFocus();
   });
 
-  it("sorts the lifecycle Delete column independently of the CRUD D column", () => {
+  it("sorts the lifecycle Delete column independently of the CRUD D column", async () => {
     renderGrid();
-    const lifecycle = within(sheet()).getByRole("button", { name: "Delete" });
-    const crud = within(sheet()).getByRole("button", { name: "D" });
+    const lifecycle = await screen.findByRole("button", {
+      name: "Sort by Surfaces · Delete",
+    });
+    const crud = within(sheet()).getByRole("button", {
+      name: "Sort by delete",
+    });
 
     fireEvent.click(lifecycle);
 
     expect(lifecycle.closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(crud.closest("th")).not.toHaveAttribute("aria-sort");
+    expect(crud.closest("th")).toHaveAttribute("aria-sort", "none");
     // Text sorts A→Z, so entities without a delete mode ("") lead.
-    const firstRow = within(sheet()).getAllByRole("row")[2]!;
+    await waitFor(() => expect(recordRows().length).toBeGreaterThan(0));
+    const firstRow = recordRows()[0]!;
     expect(within(firstRow).getAllByText("—").length).toBeGreaterThan(0);
   });
 
-  it("moves the open panel with the arrow keys", () => {
-    const { onSelect } = renderGrid({ selected: "product" });
-    const productButton = within(entityRow("product")).getByRole("button");
-    productButton.focus();
-
-    fireEvent.keyDown(productButton, { key: "ArrowDown" });
-
-    const next = allEntities[allEntities.indexOf("product") + 1]!;
-    expect(onSelect).toHaveBeenLastCalledWith(next);
-    expect(within(entityRow(next)).getByRole("button")).toHaveFocus();
+  it("steps the open panel with J/K across the full row model", async () => {
+    const index = allEntities.length - 2;
+    const selected = allEntities[index]!;
+    const { onSelect } = renderGrid({ selected });
+    const close = within(await panel(selected)).getByRole("button", {
+      name: "Close panel",
+    });
+    close.focus();
+    fireEvent.keyDown(close, { key: "j" });
+    expect(onSelect).toHaveBeenLastCalledWith(allEntities[index + 1]);
+    fireEvent.keyDown(close, { key: "k" });
+    expect(onSelect).toHaveBeenLastCalledWith(allEntities[index - 1]);
   });
 
-  it("navigates the panel to a relation target", () => {
+  it("navigates the panel to a relation target", async () => {
     const { onSelect } = renderGrid({ selected: "wish" });
 
-    const row = within(panel("wish")).getByText("candidates").closest("tr")!;
+    const row = within(await panel("wish"))
+      .getByText("candidates")
+      .closest("tr")!;
     const target = within(row).getByRole("button");
     fireEvent.click(target);
 
@@ -200,29 +225,33 @@ describe("EntityManifestGrid schema sheet", () => {
 });
 
 describe("EntityManifestGrid panel relations", () => {
-  it("marks wish's `candidates` relation omitted with its reason", () => {
+  it("marks wish's `candidates` relation omitted with its reason", async () => {
     renderGrid({ selected: "wish" });
 
-    const row = within(panel("wish")).getByText("candidates").closest("tr")!;
+    const row = within(await panel("wish"))
+      .getByText("candidates")
+      .closest("tr")!;
     expect(within(row).getByText("omitted")).toHaveAttribute(
       "title",
       "The Candidate alternatives section edits candidates in place with its own renderer.",
     );
   });
 
-  it("marks task's compiler-derived `plantings` relation as derived", () => {
+  it("marks task's compiler-derived `plantings` relation as derived", async () => {
     renderGrid({ selected: "task" });
 
-    const row = within(panel("task")).getByText("plantings").closest("tr")!;
+    const row = within(await panel("task"))
+      .getByText("plantings")
+      .closest("tr")!;
     expect(within(row).getByText("derived")).toBeInTheDocument();
   });
 
   it.each([["product", "images", "image"]] as const)(
     "shows %s.%s as a custom list when %s has a separate list source",
-    (entity, relation, target) => {
+    async (entity, relation, target) => {
       renderGrid({ selected: entity });
 
-      const row = within(panel(entity))
+      const row = within(await panel(entity))
         .getByText(relation, { exact: true })
         .closest("tr")!;
       expect(within(row).getByRole("button", { name: target })).toBeVisible();

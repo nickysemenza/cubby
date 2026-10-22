@@ -274,28 +274,50 @@ it("shows each step's own count, what sets its speed, and steps not yet counted"
     .toBeVisible();
 });
 
-it("drills a tally into the ledger and opens evidence from the keyboard", async () => {
-  renderRun();
-  const ledger = await screen.findByTestId("decision-ledger");
-  // A header row plus both decisions.
-  expect(within(ledger).getAllByRole("row")).toHaveLength(3);
+it.each([1440, 402])(
+  "filters the shared ledger and opens evidence at width %s",
+  async (width) => {
+    await page.viewport(width, 1200);
+    renderRun();
+    const ledger = await screen.findByTestId("decision-ledger");
+    expect(await within(ledger).findByText("2 of 2 decisions")).toBeVisible();
+    expect(
+      screen.queryByRole("complementary", { name: "Decision evidence" }),
+    ).toBeNull();
 
-  await userEvent.click(
-    await within(screen.getByTestId("run-step-strip")).findByRole("button", {
-      name: /blocked/i,
-    }),
-  );
-  await waitFor(() =>
-    expect(within(ledger).getAllByRole("row")).toHaveLength(2),
-  );
-
-  await userEvent.keyboard("j");
-  await userEvent.keyboard("{Enter}");
-  const drawer = await screen.findByRole("complementary", {
-    name: "Decision evidence",
-  });
-  expect(
-    within(drawer).getByText("Transfers create no Expenses."),
-  ).toBeVisible();
-  expect(within(drawer).getByText("owners_differ")).toBeVisible();
-});
+    await userEvent.click(
+      await within(screen.getByTestId("run-step-strip")).findByRole("button", {
+        name: /blocked/i,
+      }),
+    );
+    expect(await within(ledger).findByText("1 of 2 decisions")).toBeVisible();
+    const row =
+      width >= 768
+        ? within(ledger).getByRole("row", { name: /Brokerage/ })
+        : within(ledger).getByRole("button", { name: /Brokerage/ });
+    if (width >= 768) await userEvent.click(row);
+    else {
+      row.focus();
+      await userEvent.keyboard("{Enter}");
+    }
+    const drawer = await screen.findByRole("complementary", {
+      name: "Decision evidence",
+    });
+    await waitFor(() =>
+      expect(
+        within(drawer).getByText("Transfers create no Expenses."),
+      ).toBeVisible(),
+    );
+    expect(within(drawer).getByText("owners_differ")).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("complementary", { name: "Decision evidence" }),
+      ).toBeNull(),
+    );
+    await userEvent.click(
+      within(ledger).getByRole("button", { name: "Clear Status filter" }),
+    );
+    expect(await within(ledger).findByText("2 of 2 decisions")).toBeVisible();
+  },
+);

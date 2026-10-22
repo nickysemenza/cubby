@@ -21,14 +21,7 @@ import {
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 import { Skeleton } from "~/ui/primitives/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const FOUNDATION_SWATCHES = [
@@ -176,35 +169,41 @@ export function ControlsSection() {
           </Row>
         </Section>
         <Section headingAs="h2" title="Purchase lines">
-          <Table className="min-w-[32rem] table-auto">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Line</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell>Illustrative materials order</TableCell>
-                <TableCell>
-                  <Badge variant="positive">Matched</Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  $120.00
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Illustrative hardware order</TableCell>
-                <TableCell>
-                  <Badge variant="warning">Pending</Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  $300.00
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+          <StaticTable
+            className="min-w-[32rem] table-auto"
+            rows={[
+              {
+                name: "Illustrative materials order",
+                matched: true,
+                cost: "$120.00",
+              },
+              {
+                name: "Illustrative hardware order",
+                matched: false,
+                cost: "$300.00",
+              },
+            ]}
+            rowKey={(row) => row.name}
+            columns={[
+              { id: "line", header: "Line", cell: (row) => row.name },
+              {
+                id: "status",
+                header: "Status",
+                cell: (row) => (
+                  <Badge variant={row.matched ? "positive" : "warning"}>
+                    {row.matched ? "Matched" : "Pending"}
+                  </Badge>
+                ),
+              },
+              {
+                id: "cost",
+                header: "Cost",
+                headClassName: "text-right",
+                cellClassName: "text-right font-mono tabular-nums",
+                cell: (row) => row.cost,
+              },
+            ]}
+          />
         </Section>
       </div>
     </Stack>

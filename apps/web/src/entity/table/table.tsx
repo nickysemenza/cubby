@@ -32,6 +32,10 @@ import {
 } from "~/ui/primitives/dropdown-menu";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
+  StaticTable,
+  type StaticTableColumn,
+} from "~/ui/primitives/static-table";
+import {
   Table,
   TableBody,
   TableCell,
@@ -63,7 +67,10 @@ import { TreeStatusRow } from "../../ui/data-table/tree-status-row";
 import { useDataTableController } from "../../ui/data-table/use-data-table-controller";
 import type { GroupConfig } from "../../ui/data-table/use-grouped-list";
 import { serverTreeStatusOf } from "../../ui/hooks/use-server-tree-children";
-import { TableRowStepContext } from "../../ui/overlays/side-panel";
+import {
+  SidePanelLayout,
+  TableRowStepContext,
+} from "../../ui/overlays/side-panel";
 import {
   type EntityActionsEntry,
   EntityActionsProvider,
@@ -136,6 +143,8 @@ function ghostRowsStyle(rowHeight: number): React.CSSProperties {
 
 export interface RTableProps<TItem extends RowData> {
   table: ITable<TItem>;
+  /** Print every filtered/sorted loaded row through StaticTable, without virtual gaps. */
+  printable?: boolean;
   /** Slot for additional toolbar content like summaries (e.g., "Value: $5,845.91") */
   additionalToolbarContent?: ReactNode;
   /** Primary actions for the toolbar (e.g., "Create New" button) */
@@ -271,6 +280,75 @@ export interface RTableProps<TItem extends RowData> {
   filterOptionHints?: Readonly<
     Record<string, Readonly<Record<string, string>>>
   >;
+  /** Table-owned row inspector, docked at xl and presented in a sheet below. */
+  inspector?: {
+    content: ReactNode;
+    title: string;
+    onClose: () => void;
+  };
+}
+
+function TableInspectorLayout({
+  inspector,
+  children,
+}: {
+  inspector?: RTableProps<object>["inspector"];
+  children: ReactNode;
+}) {
+  if (!inspector) return children;
+  return (
+    <SidePanelLayout
+      panel={inspector.content}
+      title={inspector.title}
+      onClose={inspector.onClose}
+    >
+      {children}
+    </SidePanelLayout>
+  );
+}
+
+function TablePrintView<TItem extends RowData>({
+  table,
+  ariaLabel,
+  rowDetail,
+}: Pick<RTableProps<TItem>, "table" | "ariaLabel" | "rowDetail">) {
+  const columns = table.getVisibleLeafColumns();
+  // This is the complete loaded row model, not a promise to fetch server pages.
+  const rows = table
+    .getPrePaginatedRowModel()
+    .rows.flatMap((row) => [
+      { row, detail: false },
+      ...(rowDetail?.openIds.has(row.id) ? [{ row, detail: true }] : []),
+    ]);
+  return (
+    <StaticTable
+      aria-label={ariaLabel}
+      containerClassName="hidden print:block print:overflow-visible"
+      className="table-auto"
+      rows={rows}
+      rowKey={({ row, detail }) => `${row.id}:${detail ? "detail" : "record"}`}
+      columns={columns.map<StaticTableColumn<(typeof rows)[number]>>(
+        (column, index) => ({
+          id: column.id,
+          header:
+            typeof column.columnDef.header === "string"
+              ? column.columnDef.header
+              : column.id,
+          cellProps: ({ detail }) =>
+            detail ? (index === 0 ? { colSpan: columns.length } : null) : {},
+          cell: ({ row, detail }) => {
+            if (detail) return rowDetail?.render(row);
+            const cell = row
+              .getVisibleCells()
+              .find((cell) => cell.column.id === column.id);
+            return cell
+              ? flexRender(column.columnDef.cell, cell.getContext())
+              : null;
+          },
+        }),
+      )}
+    />
+  );
 }
 
 /** Page state belongs beside the scroll pane, rather than in its wide table. */
@@ -783,7 +861,20 @@ export default function RTable<TItem extends RowData>(
     );
   let content = (
     <>
-      <RTableInner {...props} />
+      {props.printable ? (
+        <>
+          <div className="print:hidden">
+            <RTableInner {...props} />
+          </div>
+          <TablePrintView
+            table={props.table}
+            ariaLabel={props.ariaLabel}
+            rowDetail={props.rowDetail}
+          />
+        </>
+      ) : (
+        <RTableInner {...props} />
+      )}
       {actionDialogs}
     </>
   );
@@ -824,6 +915,7 @@ function DesktopTableView<TItem extends RowData>({
   entity,
   embedded = false,
   desktopInspector,
+  rowInspectorOpen,
   externalToolbar,
   desktopToolbar,
   showToolbar,
@@ -857,6 +949,7 @@ function DesktopTableView<TItem extends RowData>({
   statusContent: ReactNode;
   hasStatusContent: boolean;
   tableBody: ReactNode;
+  rowInspectorOpen: boolean;
 }) {
   const {
     cellSelectionContainerProps,
@@ -905,6 +998,7 @@ function DesktopTableView<TItem extends RowData>({
               {desktopToolbar}
             </div>
           ) : null}
+          {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- This labeled, focusable scroll region owns grid keyboard navigation. */}
           <section
             // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The keyboard-navigable grid and horizontal scroll pane must be directly focusable.
             tabIndex={0}
@@ -913,6 +1007,12 @@ function DesktopTableView<TItem extends RowData>({
             aria-label={`${ariaLabel} keyboard navigation`}
             className="min-h-0 flex-1 overflow-auto bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[cell-dragging]:select-none"
             {...cellSelectionContainerProps}
+            onKeyDown={(event) => {
+              // An open inspector owns Escape; resetting a selected grid cell
+              // here would prevent the shared panel's close handler from seeing it.
+              if (rowInspectorOpen && event.key === "Escape") return;
+              cellSelectionContainerProps.onKeyDown?.(event);
+            }}
           >
             <Table
               aria-label={ariaLabel}
@@ -993,9 +1093,13 @@ function tableChrome<TItem extends RowData>({
   hasPageIdentity: boolean;
   hasWorkbenchTarget: boolean;
 }) {
-  const hasFilterConfig = table
-    .getAllLeafColumns()
-    .some((column) => column.columnDef.meta?.filterConfig);
+  const hasFilterConfig = Boolean(
+    table.options.meta?.primarySearch ||
+    table.options.meta?.filterFields?.length ||
+    table
+      .getAllLeafColumns()
+      .some((column) => column.columnDef.meta?.filterConfig),
+  );
   const hasToolbarContent = Boolean(
     actions ?? bulkActionBar ?? additionalToolbarContent ?? hasFilterConfig,
   );
@@ -1059,6 +1163,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     emptyState,
     showCellSelectionStats = false,
     desktopInspector,
+    inspector,
     filterOptionHints,
   } = props;
   const controller = useDataTableController({
@@ -1426,77 +1531,95 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         fieldKeys={table.getVisibleLeafColumns().map((column) => column.id)}
       >
         <EntityDisplayImagesProvider refs={entityMediaRefs}>
-          <Stack>
-            <DesktopTableView
-              table={table}
-              isLoading={isLoading || !hydrated}
-              controller={controller}
-              entity={entity}
-              embedded={embedded}
-              desktopInspector={
-                desktopInspector ? (
-                  <TableRowStepContext.Provider value={stepRow}>
-                    {desktopInspector}
-                  </TableRowStepContext.Provider>
-                ) : undefined
-              }
-              externalToolbar={externalToolbar}
-              desktopToolbar={desktopToolbar}
-              showToolbar={showToolbar}
-              infiniteScroll={infiniteScroll}
-              showPagination={showPagination}
-              showCellSelectionStats={showCellSelectionStats}
-              timing={timing}
-              ariaLabel={ariaLabel}
-              cellSelectionEnabled={cellSelectionEnabled}
-              statusContent={statusContent}
-              hasStatusContent={hasStatusContent}
-              tableBody={renderTableBody()}
-            />
+          <TableInspectorLayout
+            inspector={
+              inspector
+                ? {
+                    ...inspector,
+                    content: inspector.content ? (
+                      <TableRowStepContext.Provider value={stepRow}>
+                        {inspector.content}
+                      </TableRowStepContext.Provider>
+                    ) : null,
+                  }
+                : undefined
+            }
+          >
+            <Stack>
+              <DesktopTableView
+                table={table}
+                isLoading={isLoading || !hydrated}
+                controller={controller}
+                entity={entity}
+                embedded={embedded}
+                rowInspectorOpen={Boolean(
+                  inspector?.content || desktopInspector,
+                )}
+                desktopInspector={
+                  desktopInspector ? (
+                    <TableRowStepContext.Provider value={stepRow}>
+                      {desktopInspector}
+                    </TableRowStepContext.Provider>
+                  ) : undefined
+                }
+                externalToolbar={externalToolbar}
+                desktopToolbar={desktopToolbar}
+                showToolbar={showToolbar}
+                infiniteScroll={infiniteScroll}
+                showPagination={showPagination}
+                showCellSelectionStats={showCellSelectionStats}
+                timing={timing}
+                ariaLabel={ariaLabel}
+                cellSelectionEnabled={cellSelectionEnabled}
+                statusContent={statusContent}
+                hasStatusContent={hasStatusContent}
+                tableBody={renderTableBody()}
+              />
 
-            {/* Mobile List View. Also rendered pre-hydration (see the desktop
+              {/* Mobile List View. Also rendered pre-hydration (see the desktop
           wrapper's breakpoint comment) so a phone's first paint is the
           shape-matched skeleton rather than a clipped desktop table. */}
-            {(isMobile || !hydrated) && (
-              <MobileListScreen
-                table={table}
-                entity={entity}
-                getDetailsHref={getMobileDetailsHref}
-                disableDetailsHref={disableMobileDetailsHref}
-                renderRowFooter={renderMobileRowFooter}
-                onRowClick={onRowClick}
-                additionalToolbarContent={additionalToolbarContent}
-                actions={actions}
-                bulkActionBar={bulkActionsWithSuggestions}
-                isLoading={isLoading}
-                error={error}
-                infiniteScroll={infiniteScroll}
-                refreshControls={refreshControls}
-                groupConfig={groupConfig}
-                presentationSwitches={presentationSwitches(nestToggle)}
-                isTransitioning={isTransitioning}
-                rowContentVersion={rowContentVersion}
-                portalWorkbenchUtilities={externalToolbar}
-                showToolbar={showToolbar}
-                showViewOptions={showMobileViewOptions({
-                  embedded,
-                  showColumnMenu,
-                  externalToolbar,
-                })}
-                toolbarVariant={tableChromeVariant(embedded)}
-                emptyState={emptyState}
-              />
-            )}
+              {(isMobile || !hydrated) && (
+                <MobileListScreen
+                  table={table}
+                  entity={entity}
+                  getDetailsHref={getMobileDetailsHref}
+                  disableDetailsHref={disableMobileDetailsHref}
+                  renderRowFooter={renderMobileRowFooter}
+                  onRowClick={onRowClick}
+                  additionalToolbarContent={additionalToolbarContent}
+                  actions={actions}
+                  bulkActionBar={bulkActionsWithSuggestions}
+                  isLoading={isLoading}
+                  error={error}
+                  infiniteScroll={infiniteScroll}
+                  refreshControls={refreshControls}
+                  groupConfig={groupConfig}
+                  presentationSwitches={presentationSwitches(nestToggle)}
+                  isTransitioning={isTransitioning}
+                  rowContentVersion={rowContentVersion}
+                  portalWorkbenchUtilities={externalToolbar}
+                  showToolbar={showToolbar}
+                  showViewOptions={showMobileViewOptions({
+                    embedded,
+                    showColumnMenu,
+                    externalToolbar,
+                  })}
+                  toolbarVariant={tableChromeVariant(embedded)}
+                  emptyState={emptyState}
+                />
+              )}
 
-            {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
-            {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
-              <DataTablePagination
-                table={table}
-                timing={timing}
-                variant={tableChromeVariant(embedded)}
-              />
-            )}
-          </Stack>
+              {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
+              {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
+                <DataTablePagination
+                  table={table}
+                  timing={timing}
+                  variant={tableChromeVariant(embedded)}
+                />
+              )}
+            </Stack>
+          </TableInspectorLayout>
         </EntityDisplayImagesProvider>
       </RecordSuggestionsProvider>
     </ProposalCountProvider>

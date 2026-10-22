@@ -3,28 +3,28 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwis
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
+import RTable from "~/entity/table/table";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
 import { cn } from "~/lib/utils";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
+import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { StatusText } from "~/ui/primitives/status-text";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
 import {
   Tooltip,
   TooltipContent,
@@ -151,123 +151,258 @@ export function EquivalencesReport() {
       )}
 
       {data && data.candidates.length > 0 && (
-        <Table className="table-auto">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Ingredient</TableHead>
-              <TableHead>Equivalence</TableHead>
-              <TableHead className="text-right">Seen</TableHead>
-              <TableHead>Spread</TableHead>
-              <TableHead>Examples</TableHead>
-              <TableHead>Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {groups.map((group) =>
-              group.map((c, idx) => (
-                <TableRow
-                  key={`${c.ingredientId} ${c.unitA} ${c.unitB}`}
-                  // Border only at group boundaries, so an ingredient's rows
-                  // read as one cluster.
-                  className={cn(idx !== group.length - 1 && "border-b-0")}
-                >
-                  {idx === 0 && (
-                    <TableCell
-                      rowSpan={group.length}
-                      className="border-b align-top"
-                    >
-                      <EntityRefLink
-                        displayImage={
-                          displayImages[
-                            entityDisplayImageKey({
-                              entityKind: "ingredient",
-                              entityId: c.ingredientId,
-                            })
-                          ] ?? null
-                        }
-                        entity="ingredient"
-                        data={{
-                          id: c.ingredientId,
-                          name: c.ingredientName,
-                        }}
-                      />
-                    </TableCell>
-                  )}
-                  <TableCell className="align-top font-medium">
-                    <span className="inline-flex items-center gap-1">
-                      {equivalenceLabel(c)}
-                      {c.existingRatio != null && (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <span className="inline-flex text-warning" />
-                            }
-                          >
-                            <WarningIcon className="size-3.5" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Existing mapping converts 1 {c.unitA} ≈{" "}
-                            {fmtRatio(c.existingRatio)} {c.unitB}, but recipes
-                            suggest {fmtRatio(c.medianRatio)} {c.unitB}.
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right align-top text-muted-foreground tabular-nums">
-                    {c.occurrences}
-                  </TableCell>
-                  <TableCell className="align-top text-muted-foreground">
-                    {spreadLabel(c)}
-                  </TableCell>
-                  <TableCell className="align-top whitespace-normal">
-                    <Stack as="ul" gap="xs">
-                      {c.examples.map((ex) => (
-                        <li
-                          key={`${ex.recipeId}-${ex.rawLine ?? ex.recipeName}`}
-                          className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground"
-                        >
-                          <EntityRefLink
-                            displayImage={
-                              displayImages[
-                                entityDisplayImageKey({
-                                  entityKind: "recipe",
-                                  entityId: ex.recipeId,
-                                })
-                              ] ?? null
-                            }
-                            entity="recipe"
-                            data={{
-                              id: ex.recipeId,
-                              name: ex.recipeName,
-                            }}
-                            compact
-                          />
-                          {ex.rawLine && <span>· {ex.rawLine}</span>}
-                        </li>
-                      ))}
-                    </Stack>
-                  </TableCell>
-                  <TableCell className="align-top">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      render={
-                        <Link
-                          to="/ingredients/workbench"
-                          search={equivalenceWorkbenchSearch(c)}
-                        />
-                      }
-                    >
-                      {c.existingRatio == null ? "Review" : "Resolve conflict"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              )),
-            )}
-          </TableBody>
-        </Table>
+        <EquivalenceRows
+          candidates={groups.flat()}
+          displayImages={displayImages}
+        />
       )}
     </Stack>
+  );
+}
+
+const equivalenceHelper = createCubbyColumnHelper<CandidateEquivalence>();
+const candidateId = (c: CandidateEquivalence) =>
+  JSON.stringify([c.ingredientId, c.unitA, c.unitB]);
+const candidateSearch = {
+  text: (c: CandidateEquivalence) =>
+    [
+      c.ingredientName,
+      equivalenceLabel(c),
+      ...c.examples.map((ex) => `${ex.recipeName} ${ex.rawLine ?? ""}`),
+    ].join(" "),
+  placeholder: "Search ingredients, units, or examples",
+};
+type DisplayImages = ReturnType<typeof useEntityDisplayImages>;
+function ReviewLink({ candidate: c }: { candidate: CandidateEquivalence }) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      render={
+        <Link
+          to="/ingredients/workbench"
+          search={equivalenceWorkbenchSearch(c)}
+        />
+      }
+    >
+      {c.existingRatio == null ? "Review" : "Resolve conflict"}
+    </Button>
+  );
+}
+function EquivalenceEvidence({
+  candidate: c,
+  displayImages,
+  onClose,
+}: {
+  candidate: CandidateEquivalence;
+  displayImages: DisplayImages;
+  onClose: () => void;
+}) {
+  const step = useTableRowStep();
+  return (
+    <SidePanel
+      label="Equivalence evidence"
+      title={c.ingredientName}
+      onClose={onClose}
+      onPrev={() => step(-1)}
+      onNext={() => step(1)}
+      actions={<ReviewLink candidate={c} />}
+    >
+      <Stack className="p-3">
+        <p>
+          {equivalenceLabel(c)} · {c.occurrences} observations ·{" "}
+          {spreadLabel(c)} spread
+        </p>
+        {c.existingRatio != null ? (
+          <p>
+            Existing mapping converts 1 {c.unitA} ≈ {fmtRatio(c.existingRatio)}{" "}
+            {c.unitB}, but recipes suggest {fmtRatio(c.medianRatio)} {c.unitB}.
+          </p>
+        ) : null}
+        <h3 className="text-sm font-medium">Recipe evidence</h3>
+        <Stack as="ul" gap="sm">
+          {c.examples.map((ex) => (
+            <li key={`${ex.recipeId}-${ex.rawLine ?? ex.recipeName}`}>
+              <EntityRefLink
+                displayImage={
+                  displayImages[
+                    entityDisplayImageKey({
+                      entityKind: "recipe",
+                      entityId: ex.recipeId,
+                    })
+                  ] ?? null
+                }
+                entity="recipe"
+                data={{ id: ex.recipeId, name: ex.recipeName }}
+                compact
+              />
+              {ex.rawLine ? (
+                <p className="text-xs text-muted-foreground">{ex.rawLine}</p>
+              ) : null}
+            </li>
+          ))}
+        </Stack>
+      </Stack>
+    </SidePanel>
+  );
+}
+function EquivalenceRows({
+  candidates,
+  displayImages,
+}: {
+  candidates: CandidateEquivalence[];
+  displayImages: DisplayImages;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<CandidateEquivalence>((add) => {
+        add(
+          equivalenceHelper.accessor("ingredientName", {
+            header: "Ingredient",
+            size: 240,
+            meta: attachCubbyColumnMeta<CandidateEquivalence>({
+              mobile: { slot: "title", priority: 0 },
+            }),
+            cell: ({ row: { original: c } }) => (
+              <EntityRefLink
+                displayImage={
+                  displayImages[
+                    entityDisplayImageKey({
+                      entityKind: "ingredient",
+                      entityId: c.ingredientId,
+                    })
+                  ] ?? null
+                }
+                entity="ingredient"
+                data={{ id: c.ingredientId, name: c.ingredientName }}
+              />
+            ),
+          }),
+        );
+        add(
+          equivalenceHelper.accessor(equivalenceLabel, {
+            id: "equivalence",
+            header: "Equivalence",
+            size: 230,
+            meta: attachCubbyColumnMeta<CandidateEquivalence>({
+              mobile: { slot: "subtitle", priority: 0 },
+            }),
+            cell: ({ row: { original: c } }) => (
+              <span className="inline-flex items-center gap-1">
+                {equivalenceLabel(c)}
+                {c.existingRatio != null ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<span className="text-warning" />}
+                      tabIndex={0}
+                      aria-label="Conflicts with existing mapping"
+                    >
+                      <WarningIcon className="size-3.5" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Existing mapping: 1 {c.unitA} ≈{" "}
+                      {fmtRatio(c.existingRatio)} {c.unitB}. Suggested:{" "}
+                      {fmtRatio(c.medianRatio)} {c.unitB}.
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </span>
+            ),
+          }),
+        );
+        add(
+          equivalenceHelper.accessor("occurrences", {
+            header: "Seen",
+            size: 80,
+            meta: attachCubbyColumnMeta<CandidateEquivalence>({
+              numeric: true,
+              mobile: { slot: "meta", priority: 1 },
+            }),
+          }),
+        );
+        add(
+          equivalenceHelper.accessor(
+            (candidate) =>
+              candidate.ratioSpread.min > 0
+                ? candidate.ratioSpread.max / candidate.ratioSpread.min
+                : 1,
+            {
+              id: "spread",
+              header: "Spread",
+              size: 90,
+              cell: ({ row }) => spreadLabel(row.original),
+              meta: attachCubbyColumnMeta<CandidateEquivalence>({
+                mobile: { slot: "meta", priority: 2 },
+              }),
+            },
+          ),
+        );
+        add(
+          equivalenceHelper.accessor((c) => c.examples.length, {
+            id: "examples",
+            header: "Examples",
+            size: 100,
+            meta: attachCubbyColumnMeta<CandidateEquivalence>({
+              numeric: true,
+              mobile: { slot: "meta", priority: 3 },
+            }),
+            cell: ({ row }) => (
+              <button
+                type="button"
+                className="text-primary hover:underline"
+                onClick={() => setSelected(row.id)}
+              >
+                {row.original.examples.length} examples
+              </button>
+            ),
+          }),
+        );
+        add(
+          equivalenceHelper.display({
+            id: "actions",
+            header: "Action",
+            size: 140,
+            meta: attachCubbyColumnMeta<CandidateEquivalence>({
+              entityColumnRole: "action",
+              mobile: { slot: "actions", priority: 0 },
+            }),
+            cell: ({ row }) => <ReviewLink candidate={row.original} />,
+          }),
+        );
+      }),
+    [displayImages],
+  );
+  const table = useLocalTable({
+    rows: candidates,
+    columns,
+    getRowId: candidateId,
+    search: candidateSearch,
+  });
+  const current = table
+    .getFilteredRowModel()
+    .rows.find((row) => row.id === selected)?.original;
+  const close = () => setSelected(null);
+  return (
+    <RTable
+      table={table}
+      embedded
+      ariaLabel="Ingredient equivalences"
+      withoutImages="Candidates are computed cross-unit ratios rather than stored records."
+      currentRowId={current ? candidateId(current) : undefined}
+      onRowClick={(row) => setSelected(row.id)}
+      disableMobileDetailsHref
+      inspector={{
+        content: current ? (
+          <EquivalenceEvidence
+            candidate={current}
+            displayImages={displayImages}
+            onClose={close}
+          />
+        ) : null,
+        title: "Equivalence evidence",
+        onClose: close,
+      }}
+    />
   );
 }

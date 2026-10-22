@@ -307,7 +307,7 @@ function isKeyboardFocus(target: EventTarget | null) {
 
 function isInteractiveEventTarget(target: EventTarget | null) {
   return (
-    target instanceof HTMLElement &&
+    target instanceof Element &&
     target.closest(
       "a, button, input, select, textarea, [role=button], [role=link], [role=checkbox]",
     ) !== null

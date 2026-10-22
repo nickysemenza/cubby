@@ -50,8 +50,8 @@ interface UseCellSelectionArgs<TItem extends RowData> {
 }
 
 interface ContainerProps {
-  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
-  onMouseDown?: React.MouseEventHandler<HTMLDivElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
+  onMouseDown?: React.MouseEventHandler<HTMLElement>;
 }
 
 interface UseCellSelectionResult {
@@ -113,7 +113,7 @@ interface CellKeyContext<TItem extends RowData> {
 }
 
 function handleClipboardKey<TItem extends RowData>(
-  event: React.KeyboardEvent<HTMLDivElement>,
+  event: React.KeyboardEvent<HTMLElement>,
   context: CellKeyContext<TItem>,
 ) {
   if (event.key === "Delete" || event.key === "Backspace") {
@@ -142,7 +142,7 @@ function handleClipboardKey<TItem extends RowData>(
 }
 
 function handleArrowKey<TItem extends RowData>(
-  event: React.KeyboardEvent<HTMLDivElement>,
+  event: React.KeyboardEvent<HTMLElement>,
   context: CellKeyContext<TItem>,
 ) {
   const direction = ARROW_DIRECTION.get(event.key);
@@ -168,7 +168,7 @@ function handleArrowKey<TItem extends RowData>(
 }
 
 function handleEditKey<TItem extends RowData>(
-  event: React.KeyboardEvent<HTMLDivElement>,
+  event: React.KeyboardEvent<HTMLElement>,
   context: CellKeyContext<TItem>,
 ) {
   if (event.key === "Escape") {
@@ -611,7 +611,7 @@ export function useCellSelection<TItem extends RowData>({
   );
 
   const onKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
+    (event: React.KeyboardEvent<HTMLElement>) => {
       // The container has focusable children (header filter inputs, cell
       // trigger buttons); key events bubble up here. Never hijack typing in an
       // input/textarea/select/contenteditable (an open editor or a filter).

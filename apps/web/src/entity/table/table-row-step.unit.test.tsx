@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,7 +32,15 @@ function StepButtons() {
   );
 }
 
-function Harness({ onRowClick }: { onRowClick: (id: string) => void }) {
+function Harness({
+  onRowClick,
+  embedded = false,
+  printable = false,
+}: {
+  onRowClick: (id: string) => void;
+  embedded?: boolean;
+  printable?: boolean;
+}) {
   const columns = useMemo(
     () => helper.columns([helper.accessor("name", { header: "Name" })]),
     [],
@@ -45,11 +53,21 @@ function Harness({ onRowClick }: { onRowClick: (id: string) => void }) {
   return (
     <RTable
       table={table}
+      printable={printable}
       ariaLabel="Synthetic rows"
       withoutImages="Fixture: row stepping needs no columns beyond a name."
       currentRowId="row-150"
       onRowClick={(row) => onRowClick(row.id)}
-      desktopInspector={<StepButtons />}
+      embedded={embedded}
+      {...(embedded
+        ? {
+            inspector: {
+              content: <StepButtons />,
+              title: "Synthetic inspector",
+              onClose: () => {},
+            },
+          }
+        : { desktopInspector: <StepButtons /> })}
     />
   );
 }
@@ -63,13 +81,32 @@ describe("docked panel row stepping", () => {
   });
   afterEach(() => harness.dispose());
 
-  it("steps through the row model when the current row is not mounted", () => {
-    const onRowClick = vi.fn();
-    render(<Harness onRowClick={onRowClick} />, { wrapper: harness.wrapper });
-    expect(screen.queryByText("Synthetic row 150")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(onRowClick).toHaveBeenLastCalledWith("row-151");
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-    expect(onRowClick).toHaveBeenLastCalledWith("row-149");
+  it("keeps offscreen loaded rows in the print projection", () => {
+    render(<Harness onRowClick={() => {}} printable />, {
+      wrapper: harness.wrapper,
+    });
+    const tables = screen.getAllByRole("table", {
+      name: "Synthetic rows",
+      hidden: true,
+    });
+    expect(within(tables[0]!).queryByText("Synthetic row 199")).toBeNull();
+    expect(
+      within(tables[1]!).getByText("Synthetic row 199"),
+    ).toBeInTheDocument();
   });
+
+  it.each([false, true])(
+    "steps through unmounted rows with embedded=%s",
+    (embedded) => {
+      const onRowClick = vi.fn();
+      render(<Harness onRowClick={onRowClick} embedded={embedded} />, {
+        wrapper: harness.wrapper,
+      });
+      expect(screen.queryByText("Synthetic row 150")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect(onRowClick).toHaveBeenLastCalledWith("row-151");
+      fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+      expect(onRowClick).toHaveBeenLastCalledWith("row-149");
+    },
+  );
 });

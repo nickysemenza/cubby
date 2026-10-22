@@ -318,6 +318,9 @@ describe("DesktopDataRow", () => {
     const { result } = renderHook(() =>
       useTestTable(() => (
         <button type="button" onClick={buttonClick}>
+          <svg aria-label="Settlement icon">
+            <path d="M0 0h1" />
+          </svg>
           Inspect settlement
         </button>
       )),
@@ -336,7 +339,7 @@ describe("DesktopDataRow", () => {
       </table>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Inspect settlement" }));
+    fireEvent.click(screen.getByLabelText("Settlement icon"));
 
     expect(buttonClick).toHaveBeenCalledOnce();
     expect(onRowClick).not.toHaveBeenCalled();

@@ -1,26 +1,23 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, photoCategories } from "@cubby/schemas/entity-manifest";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { useQuery } from "@tanstack/react-query";
-import {
-  type KeyboardEvent,
-  type RefObject,
-  useEffect,
-  useEffectEvent,
-  type ReactNode,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useMemo } from "react";
 
 import { EntityIcon } from "~/entity/entities";
 import type { EntityInspectorHealth } from "~/entity/entity-inspector-health";
+import RTable from "~/entity/table/table";
 import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/catalog/entityInspectorHealth.gen";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
 import { Badge } from "~/ui/primitives/badge";
+import { StaticTable } from "~/ui/primitives/static-table";
 import {
   Table,
   TableBody,
@@ -90,7 +87,7 @@ type Column = {
   numeric?: boolean;
   /** Boolean marks sit centered in their narrow column. */
   mark?: boolean;
-  compare: (left: SchemaRow, right: SchemaRow) => number;
+  value: (row: SchemaRow) => string | number;
   render: (row: SchemaRow) => ReactNode;
   cellTitle?: (row: SchemaRow) => string | undefined;
 };
@@ -98,13 +95,6 @@ type Column = {
 type ColumnGroup = { label: string; columns: readonly Column[] };
 
 const bool = (value: boolean) => (value ? 1 : 0);
-const byNumber =
-  (value: (row: SchemaRow) => number) => (left: SchemaRow, right: SchemaRow) =>
-    value(left) - value(right);
-const byText =
-  (value: (row: SchemaRow) => string) => (left: SchemaRow, right: SchemaRow) =>
-    value(left).localeCompare(value(right));
-
 const COLUMN_GROUPS: readonly ColumnGroup[] = [
   {
     label: "Identity",
@@ -112,7 +102,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
       {
         id: "domain",
         label: "Domain",
-        compare: byText((row) => row.domain ?? ""),
+        value: (row) => row.domain ?? "",
         render: (row) =>
           row.domain ? (
             <span className="text-foreground">
@@ -125,28 +115,28 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
       {
         id: "code",
         label: "Code",
-        compare: byText((row) => row.code ?? ""),
+        value: (row) => row.code ?? "",
         render: (row) => row.code ?? dash,
       },
       {
         id: "legacy",
         label: "Legacy",
         title: "Legacy QR prefix still resolved for printed labels",
-        compare: byText((row) => row.legacy ?? ""),
+        value: (row) => row.legacy ?? "",
         render: (row) => row.legacy ?? dash,
       },
       {
         id: "table",
         label: "Table",
         title: "Storage table",
-        compare: byText((row) => row.table ?? ""),
+        value: (row) => row.table ?? "",
         render: (row) => row.table ?? dash,
       },
       {
         id: "rows",
         label: "Rows",
         numeric: true,
-        compare: byNumber((row) => row.rows ?? -1),
+        value: (row) => row.rows ?? -1,
         render: (row) => <Num value={row.rows} />,
       },
     ],
@@ -159,7 +149,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: slot.code,
         title: slot.key,
         mark: true,
-        compare: byNumber((row) => bool(row.crud[slot.key])),
+        value: (row) => bool(row.crud[slot.key]),
         render: (row) => <Mark value={row.crud[slot.key]} />,
         cellTitle: (row) => `${slot.key}: ${row.crud[slot.key] ? "yes" : "no"}`,
       })),
@@ -167,7 +157,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         id: "extras",
         label: "Extra",
         title: "Kernel actions beyond CRUD",
-        compare: byNumber((row) => row.extras.length),
+        value: (row) => row.extras.length,
         render: (row) =>
           row.extras.length > 0 ? (
             <span className="text-muted-foreground">
@@ -187,7 +177,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "1",
         title: "One-cardinality relations",
         numeric: true,
-        compare: byNumber((row) => row.one),
+        value: (row) => row.one,
         render: (row) => <Num value={row.one} />,
       },
       {
@@ -195,7 +185,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "N",
         title: "Many-cardinality relations",
         numeric: true,
-        compare: byNumber((row) => row.many),
+        value: (row) => row.many,
         render: (row) => <Num value={row.many} />,
       },
       {
@@ -203,7 +193,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Decl",
         title: "Hand-declared detail tables",
         numeric: true,
-        compare: byNumber((row) => row.tables.declared),
+        value: (row) => row.tables.declared,
         render: (row) => <Num value={row.tables.declared} />,
       },
       {
@@ -211,7 +201,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Der",
         title: "Compiler-derived detail tables",
         numeric: true,
-        compare: byNumber((row) => row.tables.derived),
+        value: (row) => row.tables.derived,
         render: (row) => <Num value={row.tables.derived} />,
       },
       {
@@ -219,7 +209,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Omit",
         title: "Many relations without a detail table",
         numeric: true,
-        compare: byNumber((row) => row.tables.omitted),
+        value: (row) => row.tables.omitted,
         render: (row) => <Num value={row.tables.omitted} />,
       },
     ],
@@ -232,7 +222,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Search",
         title:
           "semantic: lexical search plus an embedding; lexical: no embedding",
-        compare: byText((row) => row.search ?? ""),
+        value: (row) => row.search ?? "",
         render: (row) =>
           row.search === null ? (
             dash
@@ -251,7 +241,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Filt",
         title: "Filters (ID filters in parentheses)",
         numeric: true,
-        compare: byNumber((row) => row.filters),
+        value: (row) => row.filters,
         render: (row) => (
           <>
             <Num value={row.filters} />
@@ -266,13 +256,13 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Sect",
         title: "Detail page sections",
         numeric: true,
-        compare: byNumber((row) => row.sections),
+        value: (row) => row.sections,
         render: (row) => <Num value={row.sections} />,
       },
       {
         id: "deleteMode",
         label: "Delete",
-        compare: byText((row) => row.deleteMode ?? ""),
+        value: (row) => row.deleteMode ?? "",
         render: (row) => row.deleteMode ?? dash,
       },
       {
@@ -280,7 +270,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Mrg",
         title: "Merge",
         mark: true,
-        compare: byNumber((row) => bool(row.merge)),
+        value: (row) => bool(row.merge),
         render: (row) => <Mark value={row.merge} />,
         cellTitle: (row) => `merge: ${row.merge ? "yes" : "no"}`,
       },
@@ -289,7 +279,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "MCP",
         title: "MCP owner and operation count",
         numeric: true,
-        compare: byNumber((row) => row.mcpOperations.length),
+        value: (row) => row.mcpOperations.length,
         render: (row) => (
           <>
             <span className="text-muted-foreground">
@@ -306,7 +296,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Ovr",
         title: "Declaration overrides",
         numeric: true,
-        compare: byNumber((row) => row.overrides),
+        value: (row) => row.overrides,
         render: (row) => <Num value={row.overrides} />,
       },
       {
@@ -314,7 +304,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         label: "Native calls",
         title:
           "HTTP actions and RPCs the native app calls — not whether it can browse the entity",
-        compare: byText((row) => row.native ?? ""),
+        value: (row) => row.native ?? "",
         render: (row) => (
           <span className="block max-w-[11rem] truncate text-muted-foreground">
             {row.native ?? "—"}
@@ -328,177 +318,101 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
 
 const COLUMNS = COLUMN_GROUPS.flatMap((group) => group.columns);
 
-type Sort = { id: string; desc: boolean } | null;
-
-/** Numbers sort largest first, text A→Z; a third click restores declaration order. */
-function nextSort(sort: Sort, column: Column): Sort {
-  const firstDesc = column.numeric ?? false;
-  if (sort?.id !== column.id) return { id: column.id, desc: firstDesc };
-  if (sort.desc === firstDesc) return { id: column.id, desc: !firstDesc };
-  return null;
-}
+const schemaHelper = createCubbyColumnHelper<SchemaRow>();
+const schemaId = (row: SchemaRow) => row.entity;
+const schemaSearch = {
+  text: (row: SchemaRow) =>
+    [
+      row.entity,
+      row.domain,
+      ...COLUMNS.map((column) => column.cellTitle?.(row) ?? ""),
+    ].join(" "),
+  placeholder: "Search entities and declarations",
+};
+const schemaColumns = createCubbyColumnCollection<SchemaRow>((add) => {
+  add(
+    schemaHelper.accessor("entity", {
+      header: "Entity",
+      size: 200,
+      meta: attachCubbyColumnMeta<SchemaRow>({
+        entityColumnRole: "identity",
+        mobile: { slot: "title", priority: 0 },
+      }),
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5">
+          <EntityIcon
+            entity={row.original.entity}
+            className="size-3.5 shrink-0"
+          />
+          {row.original.entity}
+          {row.original.external ? (
+            <span className="text-2xs text-muted-foreground">external</span>
+          ) : null}
+        </span>
+      ),
+    }),
+  );
+  COLUMN_GROUPS.forEach((group) =>
+    group.columns.forEach((column) =>
+      add(
+        schemaHelper.accessor(column.value, {
+          id: column.id,
+          header: column.title ?? `${group.label} · ${column.label}`,
+          size: column.numeric || column.mark ? 110 : 170,
+          sortDescFirst: column.numeric ?? false,
+          meta: attachCubbyColumnMeta<SchemaRow>({
+            numeric: column.numeric,
+            mobile: { slot: "meta", priority: 1 },
+          }),
+          cell: ({ row }) => (
+            <span title={column.cellTitle?.(row.original)}>
+              {column.render(row.original)}
+            </span>
+          ),
+        }),
+      ),
+    ),
+  );
+});
 
 function SchemaTable({
   rows,
   selected,
   onSelect,
-  buttons,
 }: {
   rows: readonly SchemaRow[];
   selected: Entity | null;
   onSelect: (entity: Entity | null) => void;
-  buttons: RefObject<Map<Entity, HTMLButtonElement>>;
 }) {
-  const [sort, setSort] = useState<Sort>(null);
-  const sorted = useMemo(() => {
-    const column =
-      sort && COLUMNS.find((candidate) => candidate.id === sort.id);
-    if (!column) return rows;
-    return [...rows].sort((left, right) =>
-      sort.desc ? column.compare(right, left) : column.compare(left, right),
-    );
-  }, [rows, sort]);
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTableSectionElement>) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    const focused = sorted.findIndex(
-      (row) => buttons.current.get(row.entity) === document.activeElement,
-    );
-    if (focused === -1) return;
-    event.preventDefault();
-    const next = sorted[focused + (event.key === "ArrowDown" ? 1 : -1)]?.entity;
-    if (!next) return;
-    buttons.current.get(next)?.focus();
-    // Moving through rows only follows with the panel once one is open,
-    // so arrowing through the sheet never pops a panel uninvited.
-    if (selected) onSelect(next);
-  };
-
+  const table = useLocalTable({
+    rows,
+    columns: schemaColumns,
+    getRowId: schemaId,
+    search: schemaSearch,
+  });
+  const close = () => onSelect(null);
   return (
-    <Table
-      containerClassName="max-h-[calc(100dvh-12rem)] overflow-auto border-t border-l border-border"
-      aria-label="Entity schema"
-      className="w-full table-auto border-separate border-spacing-0 font-mono text-xs tabular-nums"
-    >
-      <TableHeader className="sticky top-0 z-20">
-        <TableRow>
-          <TableHead
-            rowSpan={2}
-            className={cn(
-              gridHead,
-              "sticky left-0 z-10 h-12 min-w-[11rem] text-left align-bottom",
-            )}
-          >
-            Entity
-          </TableHead>
-          {COLUMN_GROUPS.map((group) => (
-            <TableHead
-              key={group.label}
-              colSpan={group.columns.length}
-              className={cn(gridHead, "h-5 text-left font-sans")}
-            >
-              {group.label}
-            </TableHead>
-          ))}
-        </TableRow>
-        <TableRow>
-          {COLUMNS.map((column) => {
-            const active = sort?.id === column.id;
-            return (
-              <TableHead
-                key={column.id}
-                aria-sort={
-                  active ? (sort.desc ? "descending" : "ascending") : undefined
-                }
-                className={cn(gridHead, "h-7 p-0")}
-              >
-                <button
-                  type="button"
-                  title={column.title ?? column.label}
-                  onClick={() => setSort(nextSort(sort, column))}
-                  className={cn(
-                    "inline-flex size-full items-center gap-0.5 px-2 hover:bg-[var(--brand-hairline)] hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-                    column.numeric && "justify-end",
-                    column.mark && "justify-center",
-                    active && "text-foreground",
-                  )}
-                >
-                  {column.label}
-                  {active &&
-                    (sort.desc ? (
-                      <CaretDownIcon aria-hidden className="size-2.5" />
-                    ) : (
-                      <CaretUpIcon aria-hidden className="size-2.5" />
-                    ))}
-                </button>
-              </TableHead>
-            );
-          })}
-        </TableRow>
-      </TableHeader>
-      <TableBody onKeyDown={onKeyDown}>
-        {sorted.map((row) => {
-          const isSelected = selected === row.entity;
-          return (
-            <TableRow
-              key={row.entity}
-              data-state={isSelected ? "selected" : undefined}
-              aria-current={isSelected ? "true" : undefined}
-              className="group/row cursor-default"
-              onClick={() => onSelect(isSelected ? null : row.entity)}
-            >
-              <TableCell
-                className={cn(
-                  gridCell,
-                  "sticky left-0 z-10 bg-card p-0 group-hover/row:bg-muted group-data-[state=selected]/row:bg-[var(--row-selected)]",
-                )}
-              >
-                <button
-                  ref={(node) => {
-                    if (node) buttons.current.set(row.entity, node);
-                    else buttons.current.delete(row.entity);
-                  }}
-                  type="button"
-                  aria-pressed={isSelected}
-                  className="flex size-full items-center gap-1.5 px-2 text-left font-mono focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-                >
-                  <EntityIcon
-                    entity={row.entity}
-                    className="size-3.5 shrink-0"
-                  />
-                  {row.entity}
-                  {row.external && (
-                    <span
-                      title="An external catalog served by its own workflow, with no kernel repository"
-                      className="ml-auto font-sans text-2xs text-muted-foreground"
-                    >
-                      external
-                    </span>
-                  )}
-                </button>
-              </TableCell>
-              {COLUMNS.map((column) => (
-                <TableCell
-                  key={column.id}
-                  title={column.cellTitle?.(row)}
-                  className={cn(
-                    gridCell,
-                    "bg-card group-hover/row:bg-muted group-data-[state=selected]/row:bg-[var(--row-selected)]",
-                    column.numeric
-                      ? "text-right"
-                      : column.mark
-                        ? "text-center"
-                        : "text-left",
-                  )}
-                >
-                  {column.render(row)}
-                </TableCell>
-              ))}
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <RTable
+      table={table}
+      embedded
+      showColumnMenu
+      ariaLabel="Entity schema"
+      withoutImages="Schema declarations describe entity types, not household records."
+      currentRowId={selected ?? undefined}
+      onRowClick={(row) => onSelect(row.original.entity)}
+      disableMobileDetailsHref
+      inspector={{
+        content: selected ? (
+          <EntitySchemaPanel
+            entity={selected}
+            onSelect={onSelect}
+            onClose={close}
+          />
+        ) : null,
+        title: "Entity schema",
+        onClose: close,
+      }}
+    />
   );
 }
 
@@ -604,54 +518,54 @@ function RelationsMatrix({ onSelect }: { onSelect: (entity: Entity) => void }) {
 
 function PhotoCategoriesTable() {
   return (
-    <Table
+    <StaticTable
       containerClassName="overflow-auto border-t border-l border-border"
       className="w-full table-auto border-separate border-spacing-0 text-xs"
-    >
-      <TableHeader>
-        <TableRow>
-          <TableHead className={cn(gridHead, "h-7 text-left")}>
-            Category
-          </TableHead>
-          <TableHead className={cn(gridHead, "h-7 text-left")}>
-            Entities
-          </TableHead>
-          <TableHead className={cn(gridHead, "h-7 text-left")}>
-            Classifier labels (effective)
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {Object.values(photoCategories).map((category) => (
-          <TableRow key={category.key}>
-            <TableCell className={cn(gridCell, "bg-card")}>
+      rows={Object.values(photoCategories)}
+      rowKey={(category) => category.key}
+      columns={[
+        {
+          id: "column-0",
+          header: "Category",
+          headClassName: cn(gridHead, "h-7 text-left"),
+          cellClassName: cn(gridCell, "bg-card"),
+          cell: (category) => (
+            <>
               <span aria-hidden className="mr-1">
                 {category.emoji}
               </span>
               {category.label}
-            </TableCell>
-            <TableCell className={cn(gridCell, "bg-card font-mono")}>
-              {category.entities.join(" · ")}
-            </TableCell>
-            <TableCell
-              className={cn(gridCell, "bg-card py-1 whitespace-normal")}
-            >
-              <div className="flex flex-wrap gap-1">
-                {category.classifierLabels.map((label) => (
-                  <Badge
-                    key={label}
-                    variant="outline"
-                    className="font-mono text-2xs"
-                  >
-                    {label}
-                  </Badge>
-                ))}
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+            </>
+          ),
+        },
+        {
+          id: "column-1",
+          header: "Entities",
+          headClassName: cn(gridHead, "h-7 text-left"),
+          cellClassName: cn(gridCell, "bg-card font-mono"),
+          cell: (category) => category.entities.join(" · "),
+        },
+        {
+          id: "column-2",
+          header: "Classifier labels (effective)",
+          headClassName: cn(gridHead, "h-7 text-left"),
+          cellClassName: cn(gridCell, "bg-card py-1 whitespace-normal"),
+          cell: (category) => (
+            <div className="flex flex-wrap gap-1">
+              {category.classifierLabels.map((label) => (
+                <Badge
+                  key={label}
+                  variant="outline"
+                  className="font-mono text-2xs"
+                >
+                  {label}
+                </Badge>
+              ))}
+            </div>
+          ),
+        },
+      ]}
+    />
   );
 }
 
@@ -710,23 +624,6 @@ export function EntityManifestGrid({
     [counts],
   );
   const totals = useMemo(schemaTotals, []);
-  // Row buttons live here so closing the panel can hand focus back to the
-  // row it described instead of dropping it with the unmounted panel.
-  const buttons = useRef(new Map<Entity, HTMLButtonElement>());
-  const closePanel = () => {
-    if (!selected) return;
-    buttons.current.get(selected)?.focus();
-    onSelect(null);
-  };
-  const onEscape = useEffectEvent(closePanel);
-  useEffect(() => {
-    if (!selected) return;
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) onEscape();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [selected]);
   const openEntity = (entity: Entity) => {
     onSheetChange("entities");
     onSelect(entity);
@@ -763,29 +660,7 @@ export function EntityManifestGrid({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="entities">
-          <div
-            className={cn(
-              "min-w-0",
-              selected && "xl:grid xl:grid-cols-[minmax(0,1fr)_24rem]",
-            )}
-          >
-            <SchemaTable
-              rows={rows}
-              selected={selected}
-              onSelect={onSelect}
-              buttons={buttons}
-            />
-            {selected && (
-              // eslint-disable-next-line cubby/no-shadow-utility -- The below-xl inspector floats over the workbench; desktop stays docked.
-              <aside className="z-40 overflow-y-auto border-border bg-card max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:w-[min(24rem,100vw)] max-xl:border-l max-xl:shadow-[var(--brand-elevation-popover)] xl:sticky xl:top-0 xl:max-h-[calc(100dvh-12rem)] xl:border-y xl:border-r">
-                <EntitySchemaPanel
-                  entity={selected}
-                  onSelect={onSelect}
-                  onClose={closePanel}
-                />
-              </aside>
-            )}
-          </div>
+          <SchemaTable rows={rows} selected={selected} onSelect={onSelect} />
         </TabsContent>
         <TabsContent value="overrides">
           <EntityOverrideTable onSelectEntity={openEntity} />

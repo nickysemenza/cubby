@@ -9,10 +9,7 @@ import { useId, useMemo, useState } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { renderOptionCell } from "~/entity/table/column-helpers";
-import {
-  ContributionGapsTable,
-  MoneyCell,
-} from "~/features/finance/household-contribution-format";
+import { ContributionGapsTable } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { KeyNumbers } from "~/ui/common/key-numbers";
@@ -23,14 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (
@@ -76,29 +66,30 @@ function AccountingChecks({ data }: { data: HouseholdContributionLedgerOut }) {
   ];
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-48">Check</TableHead>
-          <TableHead className="w-64 text-right">Result</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {checks.map((check) => (
-          <TableRow key={check.label}>
-            <TableCell>
-              <Row align="center" gap="xs">
-                <CheckMark ok={check.ok} />
-                <span>{check.label}</span>
-              </Row>
-            </TableCell>
-            <TableCell className="text-right font-mono text-2xs tabular-nums">
-              {check.value}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <StaticTable
+      rows={checks}
+      rowKey={(check) => check.label}
+      columns={[
+        {
+          id: "column-0",
+          header: "Check",
+          headClassName: "w-48",
+          cell: (check) => (
+            <Row align="center" gap="xs">
+              <CheckMark ok={check.ok} />
+              <span>{check.label}</span>
+            </Row>
+          ),
+        },
+        {
+          id: "column-1",
+          header: "Result",
+          headClassName: "w-64 text-right",
+          cellClassName: "text-right font-mono text-2xs tabular-nums",
+          cell: (check) => check.value,
+        },
+      ]}
+    />
   );
 }
 
@@ -165,51 +156,97 @@ export function HouseholdContributionLedgerReport({
             </span>
           </Row>
         </div>
-        <Table containerClassName="border border-border">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-40">Party</TableHead>
-              <TableHead className="w-28 text-right">Consumed</TableHead>
-              <TableHead className="w-32 text-right">Initial outlay</TableHead>
-              <TableHead className="w-24 text-right">Sent</TableHead>
-              <TableHead className="w-24 text-right">Received</TableHead>
-              <TableHead className="w-32 text-right">Contribution</TableHead>
-              <TableHead className="w-28 text-right">Position</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.parties.map((row) => (
-              <TableRow key={row.party.id}>
-                <TableCell>
-                  <Stack gap="tight" className="min-w-0">
-                    <span
-                      className="truncate font-medium"
-                      title={row.party.name}
-                    >
-                      {row.party.name}
+        <StaticTable
+          containerClassName="border border-border"
+          rows={data.parties}
+          rowKey={(row) => row.party.id}
+          columns={[
+            {
+              id: "column-0",
+              header: "Party",
+              headClassName: "w-40",
+              cell: (row) => (
+                <Stack gap="tight" className="min-w-0">
+                  <span className="truncate font-medium" title={row.party.name}>
+                    {row.party.name}
+                  </span>
+                  {renderOptionCell(
+                    row.party.kind,
+                    fieldEnumOptions("ledgerParty", "kind"),
+                  )}
+                  {row.internalMoves.count > 0 && (
+                    <span className="text-2xs text-muted-foreground tabular-nums">
+                      {countLabel(row.internalMoves.count, "internal move")} ·{" "}
+                      {formatCurrency(row.internalMoves.amount)}
                     </span>
-                    {renderOptionCell(
-                      row.party.kind,
-                      fieldEnumOptions("ledgerParty", "kind"),
-                    )}
-                    {row.internalMoves.count > 0 && (
-                      <span className="text-2xs text-muted-foreground tabular-nums">
-                        {countLabel(row.internalMoves.count, "internal move")} ·{" "}
-                        {formatCurrency(row.internalMoves.amount)}
-                      </span>
-                    )}
-                  </Stack>
-                </TableCell>
-                <MoneyCell value={row.consumed} />
-                <MoneyCell value={row.initiallyOutlaid} />
-                <MoneyCell value={row.transfersSent} />
-                <MoneyCell value={row.transfersReceived} />
-                <MoneyCell value={row.netContribution} strong />
-                <MoneyCell value={row.position} strong />
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                  )}
+                </Stack>
+              ),
+            },
+            {
+              id: "column-1",
+              header: "Consumed",
+              headClassName: "w-28 text-right",
+              cellClassName: "text-right font-mono text-xs tabular-nums",
+              cell: (row) =>
+                row.consumed === undefined
+                  ? null
+                  : formatCurrency(row.consumed),
+            },
+            {
+              id: "column-2",
+              header: "Initial outlay",
+              headClassName: "w-32 text-right",
+              cellClassName: "text-right font-mono text-xs tabular-nums",
+              cell: (row) =>
+                row.initiallyOutlaid === undefined
+                  ? null
+                  : formatCurrency(row.initiallyOutlaid),
+            },
+            {
+              id: "column-3",
+              header: "Sent",
+              headClassName: "w-24 text-right",
+              cellClassName: "text-right font-mono text-xs tabular-nums",
+              cell: (row) =>
+                row.transfersSent === undefined
+                  ? null
+                  : formatCurrency(row.transfersSent),
+            },
+            {
+              id: "column-4",
+              header: "Received",
+              headClassName: "w-24 text-right",
+              cellClassName: "text-right font-mono text-xs tabular-nums",
+              cell: (row) =>
+                row.transfersReceived === undefined
+                  ? null
+                  : formatCurrency(row.transfersReceived),
+            },
+            {
+              id: "column-5",
+              header: "Contribution",
+              headClassName: "w-32 text-right",
+              cellClassName:
+                "text-right font-mono text-xs tabular-nums font-semibold text-foreground",
+              cell: (row) =>
+                row.netContribution === undefined
+                  ? null
+                  : formatCurrency(row.netContribution),
+            },
+            {
+              id: "column-6",
+              header: "Position",
+              headClassName: "w-28 text-right",
+              cellClassName:
+                "text-right font-mono text-xs tabular-nums font-semibold text-foreground",
+              cell: (row) =>
+                row.position === undefined
+                  ? null
+                  : formatCurrency(row.position),
+            },
+          ]}
+        />
       </section>
 
       <section aria-labelledby={checksHeadingId}>

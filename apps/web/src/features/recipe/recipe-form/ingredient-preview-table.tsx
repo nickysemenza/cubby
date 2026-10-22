@@ -16,14 +16,7 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { Spinner } from "~/ui/primitives/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 import {
   Tooltip,
   TooltipContent,
@@ -184,159 +177,153 @@ export function IngredientPreviewTable({
         </Button>
       </Row>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className={showRaw ? "w-[30%]" : "w-1/2"}>
-              Ingredient
-            </TableHead>
-            <TableHead className={showRaw ? "w-[20%]" : "w-1/4"}>
-              Amount
-            </TableHead>
-            <TableHead className={showRaw ? "w-[16%]" : "w-1/4"}>
-              Modifier
-            </TableHead>
-            {showRaw && <TableHead className="w-[34%]">Raw</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {ingredientsWithMatch.map((item) => (
-            <IngredientRow
-              key={item.rowKey}
-              item={item}
-              displayImage={
-                item.match
-                  ? (displayImages[
-                      entityDisplayImageKey({
-                        entityKind: "ingredient",
-                        entityId: item.match.id,
-                      })
-                    ] ?? null)
-                  : null
-              }
-              showRaw={showRaw}
-              onCreateClick={() => handleCreateIngredient(item.parsed.name)}
-            />
-          ))}
-          {isLoadingIngredients && (
-            <TableRow>
-              <TableCell
-                colSpan={showRaw ? 4 : 3}
-                className="text-muted-foreground"
-              >
-                <Row align="center" gap="sm">
-                  <Spinner />
-                  Matching ingredients...
-                </Row>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+      <StaticTable
+        rows={ingredientsWithMatch}
+        rowKey={(item) => item.rowKey}
+        rowClassName={(item) =>
+          cn(
+            item.isLoading && "text-muted-foreground",
+            item.match && "bg-positive/10",
+            !item.match && !item.isLoading && "bg-warning/10",
+          )
+        }
+        columns={[
+          {
+            id: "ingredient",
+            header: "Ingredient",
+            headClassName: showRaw ? "w-[30%]" : "w-1/2",
+            cell: (item) => (
+              <IngredientNameCell
+                item={item}
+                displayImage={
+                  item.match
+                    ? (displayImages[
+                        entityDisplayImageKey({
+                          entityKind: "ingredient",
+                          entityId: item.match.id,
+                        })
+                      ] ?? null)
+                    : null
+                }
+                onCreateClick={() => handleCreateIngredient(item.parsed.name)}
+              />
+            ),
+          },
+          // A number the parser could not read stays visible before saving.
+          {
+            id: "amount",
+            header: "Amount",
+            headClassName: showRaw ? "w-[20%]" : "w-1/4",
+            cellClassName: "text-muted-foreground",
+            cell: (item) =>
+              item.parsed.amounts.length > 0 ? (
+                formatAmounts(item.parsed.amounts)
+              ) : item.parsed.parse_notes.unparsed_digit ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className="inline-flex cursor-help items-center gap-1 text-warning-ink" />
+                    }
+                  >
+                    <WarningIcon className="size-3.5" />
+                    <span className="text-xs">No amount read</span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    This line has a number, but the parser couldn't read a
+                    quantity from it. Check the line and add an amount before
+                    saving.
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <NoneValue />
+              ),
+          },
+          {
+            id: "modifier",
+            header: "Modifier",
+            headClassName: showRaw ? "w-[16%]" : "w-1/4",
+            cellClassName: "text-muted-foreground",
+            cell: (item) => item.parsed.modifier || <NoneValue />,
+          },
+          // The raw carve complements the parser's structured reading and wraps within its column.
+          {
+            id: "raw",
+            header: "Raw",
+            hidden: !showRaw,
+            headClassName: "w-[34%]",
+            cellClassName:
+              "text-xs leading-loose break-words whitespace-normal",
+            cell: (item) => (
+              <DecompositionView
+                rawLine={item.raw}
+                className="text-foreground"
+              />
+            ),
+          },
+        ]}
+      />
+      {isLoadingIngredients && (
+        <Row
+          align="center"
+          gap="sm"
+          className="px-2 py-1.5 text-muted-foreground"
+        >
+          <Spinner />
+          Matching ingredients...
+        </Row>
+      )}
     </>
   );
 }
 
-function IngredientRow({
+function IngredientNameCell({
   item,
   displayImage,
-  showRaw,
   onCreateClick,
 }: {
   item: ParsedIngredientWithMatch;
   displayImage: ImageUrlSummary | null;
-  showRaw: boolean;
   onCreateClick: () => void;
 }) {
   const isMatched = item.match !== null;
   const isLoading = item.isLoading;
-
   return (
-    <TableRow
-      className={cn(
-        isLoading && "text-muted-foreground",
-        isMatched && "bg-positive/10",
-        !isMatched && !isLoading && "bg-warning/10",
-      )}
-    >
-      <TableCell>
-        <Row align="center" gap="sm" className="min-w-0">
-          {isLoading ? (
-            <>
-              <Spinner className="text-muted-foreground" />
-              <span className="min-w-0 truncate">{item.parsed.name}</span>
-            </>
-          ) : isMatched && item.match ? (
-            <EntityRefLink
-              displayImage={displayImage}
-              entity="ingredient"
-              data={{
-                id: item.match.id,
-                name: item.match.name,
-              }}
-              truncate
-            />
-          ) : (
-            <>
-              <WarningCircleIcon className="size-4 text-warning" />
-              <span className="min-w-0 truncate text-warning-ink">
-                {item.parsed.name}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="size-6 p-0 text-warning hover:bg-warning/15 hover:text-warning"
-                onClick={onCreateClick}
-              >
-                <PlusIcon className="size-4" />
-              </Button>
-            </>
-          )}
-        </Row>
-      </TableCell>
-      {/* `unparsed_digit` means the line carried a number the parser couldn't
-          turn into an amount (a likely-missed quantity) — surfaced here, where
-          the amount would otherwise read as a bare "none", so it can be fixed
-          before saving. We key off `unparsed_digit` only; `fell_back` alone is
-          noisy (every legit name-only line falls back). */}
-      <TableCell className="text-muted-foreground">
-        {item.parsed.amounts.length > 0 ? (
-          formatAmounts(item.parsed.amounts)
-        ) : item.parsed.parse_notes.unparsed_digit ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span className="inline-flex cursor-help items-center gap-1 text-warning-ink" />
-              }
-            >
-              <WarningIcon className="size-3.5" />
-              <span className="text-xs">No amount read</span>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
-              This line has a number, but the parser couldn't read a quantity
-              from it. Check the line and add an amount before saving.
-            </TooltipContent>
-          </Tooltip>
+    <>
+      <Row align="center" gap="sm" className="min-w-0">
+        {isLoading ? (
+          <>
+            <Spinner className="text-muted-foreground" />
+            <span className="min-w-0 truncate">{item.parsed.name}</span>
+          </>
+        ) : isMatched && item.match ? (
+          <EntityRefLink
+            displayImage={displayImage}
+            entity="ingredient"
+            data={{
+              id: item.match.id,
+              name: item.match.name,
+            }}
+            truncate
+          />
         ) : (
-          <NoneValue />
+          <>
+            <WarningCircleIcon className="size-4 text-warning" />
+            <span className="min-w-0 truncate text-warning-ink">
+              {item.parsed.name}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="size-6 p-0 text-warning hover:bg-warning/15 hover:text-warning"
+              onClick={onCreateClick}
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          </>
         )}
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {item.parsed.modifier || <NoneValue />}
-      </TableCell>
-      {/* Raw carve: where each refined field came from in the source line. The
-            columns above carry the parser's *structured* reading (e.g. two
-            independent amounts from "1 cup (200g)"); the carve can't show that
-            split, so it complements the columns rather than replacing them.
-            `whitespace-normal` lets the mono line wrap instead of overflowing the
-            fixed-layout column; underlines clone across wraps (box-decoration). */}
-      {showRaw && (
-        <TableCell className="text-xs leading-loose break-words whitespace-normal">
-          <DecompositionView rawLine={item.raw} className="text-foreground" />
-        </TableCell>
-      )}
-    </TableRow>
+      </Row>
+    </>
   );
 }
 

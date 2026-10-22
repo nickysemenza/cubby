@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
@@ -13,16 +12,10 @@ import { viewsForEntity } from "~/entity/model/view-manifest";
 import { cn } from "~/lib/utils";
 import { Facts as SharedFacts } from "~/ui/common/facts";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
+import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Badge } from "~/ui/primitives/badge";
 import { buttonVariants } from "~/ui/primitives/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import {
   DETAIL_STATUS_LABEL,
@@ -207,51 +200,59 @@ function Overrides({ entity, full }: { entity: Entity; full?: boolean }) {
       </ul>
     );
   return (
-    <Table className="w-full table-fixed border-collapse text-sm">
-      <TableHeader>
-        <TableRow>
-          <TableHead className={cn(head, "w-[26%]")}>Override path</TableHead>
-          <TableHead className={cn(head, "w-[30%]")}>Declared</TableHead>
-          <TableHead className={cn(head, "w-[30%]")}>
-            Without override
-          </TableHead>
-          <TableHead className={cn(head, "w-[14%]")}>Outcome</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {overrides.map((override) => (
-          <TableRow key={override.path}>
-            <TableCell className={cn(cell, "font-mono text-2xs break-all")}>
-              {override.path}
-            </TableCell>
-            <TableCell className={cell}>
+    <StaticTable
+      className="w-full table-fixed border-collapse text-sm"
+      rows={overrides}
+      rowKey={(override) => override.path}
+      columns={[
+        {
+          id: "column-0",
+          header: "Override path",
+          headClassName: cn(head, "w-[26%]"),
+          cellClassName: cn(cell, "font-mono text-2xs break-all"),
+          cell: (override) => override.path,
+        },
+        {
+          id: "column-1",
+          header: "Declared",
+          headClassName: cn(head, "w-[30%]"),
+          cellClassName: cell,
+          cell: (override) => (
+            <pre className="max-h-48 overflow-auto font-mono text-2xs break-all whitespace-pre-wrap">
+              {override.declared}
+            </pre>
+          ),
+        },
+        {
+          id: "column-2",
+          header: "Without override",
+          headClassName: cn(head, "w-[30%]"),
+          cellClassName: cell,
+          cell: (override) =>
+            override.without === null ? (
+              <span className="text-2xs text-muted-foreground">
+                No valid value
+                {override.reason && (
+                  <span className="mt-0.5 block text-destructive">
+                    {override.reason}
+                  </span>
+                )}
+              </span>
+            ) : (
               <pre className="max-h-48 overflow-auto font-mono text-2xs break-all whitespace-pre-wrap">
-                {override.declared}
+                {override.without}
               </pre>
-            </TableCell>
-            <TableCell className={cell}>
-              {override.without === null ? (
-                <span className="text-2xs text-muted-foreground">
-                  No valid value
-                  {override.reason && (
-                    <span className="mt-0.5 block text-destructive">
-                      {override.reason}
-                    </span>
-                  )}
-                </span>
-              ) : (
-                <pre className="max-h-48 overflow-auto font-mono text-2xs break-all whitespace-pre-wrap">
-                  {override.without}
-                </pre>
-              )}
-            </TableCell>
-            <TableCell className={cell}>
-              <OutcomeBadge status={override.status} />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+            ),
+        },
+        {
+          id: "column-3",
+          header: "Outcome",
+          headClassName: cn(head, "w-[14%]"),
+          cellClassName: cell,
+          cell: (override) => <OutcomeBadge status={override.status} />,
+        },
+      ]}
+    />
   );
 }
 
@@ -272,56 +273,80 @@ function Relations({
       </p>
     );
   return (
-    <Table className="w-full table-auto border-collapse text-sm">
-      <TableHeader>
-        <TableRow>
-          <TableHead className={head}>Key</TableHead>
-          <TableHead className={head}>Target</TableHead>
-          <TableHead className={head} title="Cardinality">
-            Card.
-          </TableHead>
-          {full && <TableHead className={head}>Origin</TableHead>}
-          <TableHead className={head}>Detail table</TableHead>
-          {full && <TableHead className={head}>Filter</TableHead>}
-          {full && <TableHead className={head}>Notes</TableHead>}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {relationships.map((relation) => {
-          const detail = relationDetailStatus(entity, relation);
-          return (
-            <TableRow key={relation.key}>
-              <TableCell className={cn(cell, "font-mono")}>
-                {relation.key}
-              </TableCell>
-              <TableCell className={cell}>{target(relation.target)}</TableCell>
-              <TableCell className={cell}>{relation.cardinality}</TableCell>
-              {full && (
-                <TableCell className={cell}>
-                  {relation.derived ? "derived" : "declared"}
-                </TableCell>
-              )}
-              <TableCell
-                title={detail.reason}
-                className={cn(cell, relationStatusClass(detail.status))}
-              >
-                {DETAIL_STATUS_LABEL[detail.status]}
-              </TableCell>
-              {full && (
-                <TableCell className={cn(cell, "font-mono")}>
-                  {detail.descriptor ?? dash}
-                </TableCell>
-              )}
-              {full && (
-                <TableCell className={cn(cell, "text-muted-foreground")}>
-                  {detail.reason ?? relation.label}
-                </TableCell>
-              )}
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <StaticTable
+      className="w-full table-auto border-collapse text-sm"
+      rows={relationships}
+      rowKey={(relation) => relation.key}
+      columns={[
+        {
+          id: "column-0",
+          header: "Key",
+          headClassName: head,
+          cellClassName: cn(cell, "font-mono"),
+          cell: (relation) => relation.key,
+        },
+        {
+          id: "column-1",
+          header: "Target",
+          headClassName: head,
+          cellClassName: cell,
+          cell: (relation) => target(relation.target),
+        },
+        {
+          id: "column-2",
+          header: "Card.",
+          headProps: { className: head, title: "Cardinality" },
+          cellClassName: cell,
+          cell: (relation) => relation.cardinality,
+        },
+        {
+          id: "column-3",
+          header: "Origin",
+          hidden: !full,
+          headClassName: head,
+          cellClassName: cell,
+          cell: (relation) => (relation.derived ? "derived" : "declared"),
+        },
+        {
+          id: "column-4",
+          header: "Detail table",
+          headClassName: head,
+          cellProps: (relation) => {
+            const detail = relationDetailStatus(entity, relation);
+            return {
+              title: detail.reason,
+              className: cn(cell, relationStatusClass(detail.status)),
+            };
+          },
+          cell: (relation) => {
+            const detail = relationDetailStatus(entity, relation);
+            return DETAIL_STATUS_LABEL[detail.status];
+          },
+        },
+        {
+          id: "column-5",
+          header: "Filter",
+          hidden: !full,
+          headClassName: head,
+          cellClassName: cn(cell, "font-mono"),
+          cell: (relation) => {
+            const detail = relationDetailStatus(entity, relation);
+            return detail.descriptor ?? dash;
+          },
+        },
+        {
+          id: "column-6",
+          header: "Notes",
+          hidden: !full,
+          headClassName: head,
+          cellClassName: cn(cell, "text-muted-foreground"),
+          cell: (relation) => {
+            const detail = relationDetailStatus(entity, relation);
+            return detail.reason ?? relation.label;
+          },
+        },
+      ]}
+    />
   );
 }
 
@@ -330,62 +355,82 @@ function Filters({ entity }: { entity: Entity }) {
   if (filters.length === 0)
     return <p className="text-xs text-muted-foreground">No filters.</p>;
   return (
-    <Table className="w-full table-auto border-collapse text-sm">
-      <TableHeader>
-        <TableRow>
-          <TableHead className={head}>URL key</TableHead>
-          <TableHead className={head}>Kind</TableHead>
-          <TableHead className={head}>Field</TableHead>
-          <TableHead className={head}>Label</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {filters.map((filter) => (
-          <TableRow key={filter.urlKey}>
-            <TableCell className={cn(cell, "font-mono")}>
-              {filter.urlKey}
-            </TableCell>
-            <TableCell className={cn(cell, "font-mono")}>
-              {filter.kind}
-            </TableCell>
-            <TableCell className={cn(cell, "font-mono")}>
-              {filter.field ?? dash}
-            </TableCell>
-            <TableCell className={cell}>{filter.label ?? dash}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <StaticTable
+      className="w-full table-auto border-collapse text-sm"
+      rows={filters}
+      rowKey={(filter) => filter.urlKey}
+      columns={[
+        {
+          id: "column-0",
+          header: "URL key",
+          headClassName: head,
+          cellClassName: cn(cell, "font-mono"),
+          cell: (filter) => filter.urlKey,
+        },
+        {
+          id: "column-1",
+          header: "Kind",
+          headClassName: head,
+          cellClassName: cn(cell, "font-mono"),
+          cell: (filter) => filter.kind,
+        },
+        {
+          id: "column-2",
+          header: "Field",
+          headClassName: head,
+          cellClassName: cn(cell, "font-mono"),
+          cell: (filter) => filter.field ?? dash,
+        },
+        {
+          id: "column-3",
+          header: "Label",
+          headClassName: head,
+          cellClassName: cell,
+          cell: (filter) => filter.label ?? dash,
+        },
+      ]}
+    />
   );
 }
 
 function DetailSectionsTable({ entity }: { entity: Entity }) {
   const sections = metadataFor(entity).detail.sections;
   return (
-    <Table className="w-full table-auto border-collapse text-sm">
-      <TableHeader>
-        <TableRow>
-          <TableHead className={head}>Section</TableHead>
-          <TableHead className={head}>Kind</TableHead>
-          <TableHead className={head}>Title</TableHead>
-          <TableHead className={head}>Placement</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {sections.map((section) => (
-          <TableRow key={section.id}>
-            <TableCell className={cn(cell, "font-mono")}>
-              {section.id}
-            </TableCell>
-            <TableCell className={cn(cell, "font-mono")}>
-              {section.kind}
-            </TableCell>
-            <TableCell className={cell}>{section.title ?? dash}</TableCell>
-            <TableCell className={cell}>{section.placement}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <StaticTable
+      className="w-full table-auto border-collapse text-sm"
+      rows={sections}
+      rowKey={(section) => section.id}
+      columns={[
+        {
+          id: "column-0",
+          header: "Section",
+          headClassName: head,
+          cellClassName: cn(cell, "font-mono"),
+          cell: (section) => section.id,
+        },
+        {
+          id: "column-1",
+          header: "Kind",
+          headClassName: head,
+          cellClassName: cn(cell, "font-mono"),
+          cell: (section) => section.kind,
+        },
+        {
+          id: "column-2",
+          header: "Title",
+          headClassName: head,
+          cellClassName: cell,
+          cell: (section) => section.title ?? dash,
+        },
+        {
+          id: "column-3",
+          header: "Placement",
+          headClassName: head,
+          cellClassName: cell,
+          cell: (section) => section.placement,
+        },
+      ]}
+    />
   );
 }
 
@@ -424,47 +469,53 @@ export function EntitySchemaPanel({
 }) {
   const overrides = overridesFor(entity).length;
   const relations = extendedManifest(entity).relationships.length;
+  const metadata = metadataFor(entity);
+  const step = useTableRowStep();
   return (
-    <section aria-label={`${entity} schema`} className="space-y-4 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <Identity entity={entity} />
-        <button
-          type="button"
-          aria-label="Close panel"
-          onClick={onClose}
-          className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
-        >
-          <XIcon />
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        <Link
-          to="/entities/schema/$entity"
-          params={{ entity }}
-          className={buttonVariants({ variant: "outline", size: "sm" })}
-        >
-          Open schema page
-        </Link>
-        {isBrowserRoutedEntity(entity) && (
-          <Link
-            to={browserEntityDefinition(entity).routes.list}
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
-          >
-            Records
-            <ArrowSquareOutIcon />
-          </Link>
+    <SidePanel
+      label={`${entity} schema`}
+      title={entity}
+      icon={<EntityIcon entity={entity} className="size-5" />}
+      code={schemaRow(entity, undefined).code ?? undefined}
+      onClose={onClose}
+      onPrev={() => step(-1)}
+      onNext={() => step(1)}
+    >
+      <div className="space-y-4 p-3">
+        {metadata.description && (
+          <p className="text-xs text-muted-foreground">
+            {metadata.description}
+          </p>
         )}
+        <div className="flex flex-wrap gap-1.5">
+          <Link
+            to="/entities/schema/$entity"
+            params={{ entity }}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Open schema page
+          </Link>
+          {isBrowserRoutedEntity(entity) && (
+            <Link
+              to={browserEntityDefinition(entity).routes.list}
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              Records
+              <ArrowSquareOutIcon />
+            </Link>
+          )}
+        </div>
+        <SchemaFacts entity={entity} />
+        <section className="space-y-1.5">
+          <Heading title="Declaration overrides" count={overrides} />
+          <Overrides entity={entity} />
+        </section>
+        <section className="space-y-1.5">
+          <Heading title="Relations" count={relations} />
+          <Relations entity={entity} target={panelTarget(onSelect)} />
+        </section>
       </div>
-      <SchemaFacts entity={entity} />
-      <section className="space-y-1.5">
-        <Heading title="Declaration overrides" count={overrides} />
-        <Overrides entity={entity} />
-      </section>
-      <section className="space-y-1.5">
-        <Heading title="Relations" count={relations} />
-        <Relations entity={entity} target={panelTarget(onSelect)} />
-      </section>
-    </section>
+    </SidePanel>
   );
 }
 

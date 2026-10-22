@@ -25,14 +25,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section, Stack, Toolbar } from "~/ui/layout";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import {
   cropName,
@@ -134,38 +127,53 @@ function PracticeView({ crop }: { crop?: GardenCropKey }) {
           </div>
         ))}
       </div>
-      <Table className="hidden md:table">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[20%]">Crop</TableHead>
-            <TableHead className="w-[22%]">Starts</TableHead>
-            <TableHead className="w-[16%]">Succession</TableHead>
-            <TableHead className="w-[27%]">First harvest</TableHead>
-            <TableHead className="w-[15%]">Maturity basis</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map(({ key, practice }) => (
-            <TableRow key={key}>
-              <TableCell className="font-medium">{cropName(key)}</TableCell>
-              <TableCell className="whitespace-normal">
-                {practice.starts.map((start) => startLabels[start]).join(" · ")}
-              </TableCell>
-              <TableCell>
-                {practice.successionWeeks
-                  ? `Every ${practice.successionWeeks} weeks`
-                  : "—"}
-              </TableCell>
-              <TableCell className="whitespace-normal">
-                {maturityText(practice.maturity)}
-              </TableCell>
-              <TableCell className="whitespace-normal">
-                <MaturityBasis sourceId={practice.maturity?.source} />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <StaticTable
+        className="hidden md:table"
+        rows={rows}
+        rowKey={({ key }) => key}
+        columns={[
+          {
+            id: "column-0",
+            header: "Crop",
+            headClassName: "w-[20%]",
+            cellClassName: "font-medium",
+            cell: ({ key }) => cropName(key),
+          },
+          {
+            id: "column-1",
+            header: "Starts",
+            headClassName: "w-[22%]",
+            cellClassName: "whitespace-normal",
+            cell: ({ practice }) =>
+              practice.starts.map((start) => startLabels[start]).join(" · "),
+          },
+          {
+            id: "column-2",
+            header: "Succession",
+            headClassName: "w-[16%]",
+            cell: ({ practice }) =>
+              practice.successionWeeks
+                ? `Every ${practice.successionWeeks} weeks`
+                : "—",
+          },
+          {
+            id: "column-3",
+            header: "First harvest",
+            headClassName: "w-[27%]",
+            cellClassName: "whitespace-normal",
+            cell: ({ practice }) => maturityText(practice.maturity),
+          },
+          {
+            id: "column-4",
+            header: "Maturity basis",
+            headClassName: "w-[15%]",
+            cellClassName: "whitespace-normal",
+            cell: ({ practice }) => (
+              <MaturityBasis sourceId={practice.maturity?.source} />
+            ),
+          },
+        ]}
+      />
     </Section>
   );
 }

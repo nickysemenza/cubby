@@ -21,6 +21,7 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
@@ -173,55 +174,62 @@ function ProductMergeDecisions({
             flush
             className="hidden overflow-x-auto md:block"
           >
-            <table className="w-full min-w-[42rem] table-fixed border-collapse text-left text-xs">
-              <thead className="sticky top-0 bg-card text-muted-foreground">
-                <tr>
-                  <th
-                    scope="col"
-                    className="sticky left-0 z-10 w-24 bg-card p-2"
-                  >
-                    Field
-                  </th>
-                  <th scope="col" className="p-2">
-                    Keep product
-                  </th>
-                  <th scope="col" className="p-2">
-                    Merge in
-                  </th>
-                  <th scope="col" className="w-30 p-2">
-                    Action
-                  </th>
-                  <th scope="col" className="p-2">
-                    Result
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDecisions.map((decision) => (
-                  <tr
-                    key={decision.field}
-                    className="border-t border-border align-top"
-                  >
-                    <th
-                      scope="row"
-                      className="sticky left-0 bg-card p-2 font-medium"
-                    >
-                      {decision.field}
-                    </th>
-                    <td className="p-2 break-words">{decision.keeper}</td>
-                    <td className="p-2 break-words">{decision.incoming}</td>
-                    <td className="p-2">
-                      <Badge variant={MERGE_ACTION[decision.action].variant}>
-                        {MERGE_ACTION[decision.action].label}
-                      </Badge>
-                    </td>
-                    <td className="p-2 font-medium break-words">
-                      {decision.result}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <StaticTable
+              headClassName="sticky top-0 bg-card text-muted-foreground"
+              className="w-full min-w-[42rem] table-fixed border-collapse text-left text-xs"
+              rows={visibleDecisions}
+              rowKey={(decision) => decision.field}
+              rowClassName={() => "border-t border-border align-top"}
+              columns={[
+                {
+                  id: "column-0",
+                  header: "Field",
+                  rowHeader: true,
+                  headProps: {
+                    scope: "col",
+                    className: "sticky left-0 z-10 w-24 bg-card p-2",
+                  },
+                  cellProps: () => ({
+                    scope: "row",
+                    className: "sticky left-0 bg-card p-2 font-medium",
+                  }),
+                  cell: (decision) => decision.field,
+                },
+                {
+                  id: "column-1",
+                  header: "Keep product",
+                  headProps: { scope: "col", className: "p-2" },
+                  cellClassName: "p-2 break-words whitespace-normal",
+                  cell: (decision) => decision.keeper,
+                },
+                {
+                  id: "column-2",
+                  header: "Merge in",
+                  headProps: { scope: "col", className: "p-2" },
+                  cellClassName: "p-2 break-words whitespace-normal",
+                  cell: (decision) => decision.incoming,
+                },
+                {
+                  id: "column-3",
+                  header: "Action",
+                  headProps: { scope: "col", className: "w-30 p-2" },
+                  cellClassName: "p-2",
+                  cell: (decision) => (
+                    <Badge variant={MERGE_ACTION[decision.action].variant}>
+                      {MERGE_ACTION[decision.action].label}
+                    </Badge>
+                  ),
+                },
+                {
+                  id: "column-4",
+                  header: "Result",
+                  headProps: { scope: "col", className: "p-2" },
+                  cellClassName:
+                    "p-2 font-medium break-words whitespace-normal",
+                  cell: (decision) => decision.result,
+                },
+              ]}
+            />
           </Panel>
           <p className="text-2xs text-muted-foreground">
             Only fields with a value are shown. Kept values win; empty fields

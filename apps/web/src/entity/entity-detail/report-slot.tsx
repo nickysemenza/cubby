@@ -34,13 +34,9 @@ import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Progress } from "~/ui/primitives/progress";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Table as UiTable,
-} from "~/ui/primitives/table";
+  StaticTable,
+  type StaticTableColumn,
+} from "~/ui/primitives/static-table";
 
 import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
 import { RecordsBlockView, RecordsDetailActions } from "./records-block";
@@ -201,49 +197,35 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
   const figures = figureColumns(block);
   return (
     <Stack gap="xs">
-      <UiTable>
-        <TableHeader>
-          <TableRow>
-            {block.columns.map((column, index) => (
-              <TableHead
-                key={column}
-                className={cn(
-                  "h-8 whitespace-normal",
-                  figures[index] && "w-24 text-right",
-                )}
+      <StaticTable
+        rows={block.rows}
+        rowKey={(row) => row.id}
+        columns={block.columns.map<
+          StaticTableColumn<(typeof block.rows)[number]>
+        >((column, index) => ({
+          id: column,
+          header: column,
+          headClassName: cn(
+            "h-8 whitespace-normal",
+            figures[index] && "w-24 text-right",
+          ),
+          cellClassName: cn(
+            "align-top break-words whitespace-normal",
+            figures[index] && "text-right font-mono tabular-nums",
+          ),
+          cell: (row) =>
+            index === 0 && row.ref ? (
+              <Link
+                {...entityDetailLink(row.ref.entity, row.ref.id)}
+                className="text-primary underline-offset-2 hover:underline"
               >
-                {column}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {block.rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.cells.map((cell, index) => (
-                <TableCell
-                  key={block.columns[index] ?? index}
-                  className={cn(
-                    "align-top break-words whitespace-normal",
-                    figures[index] && "text-right font-mono tabular-nums",
-                  )}
-                >
-                  {index === 0 && row.ref ? (
-                    <Link
-                      {...entityDetailLink(row.ref.entity, row.ref.id)}
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
-                      {cell}
-                    </Link>
-                  ) : (
-                    <ShortcodeProse>{cell}</ShortcodeProse>
-                  )}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </UiTable>
+                {row.cells[index]}
+              </Link>
+            ) : (
+              <ShortcodeProse>{row.cells[index] ?? ""}</ShortcodeProse>
+            ),
+        }))}
+      />
       {block.truncated ? (
         <Description size="xs">Showing the first rows only.</Description>
       ) : null}

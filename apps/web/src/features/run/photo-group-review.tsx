@@ -92,15 +92,8 @@ import {
 } from "~/ui/primitives/dropdown-menu";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
+import { StaticTable } from "~/ui/primitives/static-table";
 import { StatusText } from "~/ui/primitives/status-text";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
 import {
   Tooltip,
   TooltipContent,
@@ -2804,123 +2797,127 @@ function PhotoTable({
     >
       {/* Bounded region: a 1,000-photo run scrolls here, not the page. */}
       <Panel tone="default" flush className="max-h-[70vh] overflow-auto">
-        <Table>
-          <TableHeader className="sticky top-0 z-10 bg-card">
-            <TableRow>
-              <TableHead className="w-10">#</TableHead>
-              <TableHead>Original</TableHead>
-              <TableHead>Cutout</TableHead>
-              <TableHead>Import</TableHead>
-              <TableHead>Analysis</TableHead>
-              <TableHead>Description</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {images.map((photo) => {
-              const snippet =
-                photo.description ??
-                photo.recognizedText?.split("\n")[0] ??
-                null;
-              return (
-                <TableRow key={photo.id}>
-                  <TableCell className="font-mono text-2xs text-muted-foreground tabular-nums">
-                    {photo.position ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <a
-                      href={`/images/${encodeURIComponent(photo.id)}`}
-                      aria-label={`Open photo ${photo.id}`}
-                    >
-                      <PhotoThumb image={photo} size={48} />
-                    </a>
-                  </TableCell>
-                  <TableCell>
-                    {photo.cutoutUrl ? (
-                      <Image
-                        src={photo.cutoutUrl}
-                        alt={`Cutout of ${photo.id}`}
-                        displayWidth={48}
-                        className="size-12 rounded-md border border-border bg-muted object-contain"
-                      />
+        <StaticTable
+          rows={images}
+          rowKey={(photo) => photo.id}
+          headClassName="sticky top-0 z-10 bg-card"
+          columns={[
+            {
+              id: "column-0",
+              header: "#",
+              headClassName: "w-10",
+              cellClassName:
+                "font-mono text-2xs text-muted-foreground tabular-nums",
+              cell: (photo) => photo.position ?? "—",
+            },
+            {
+              id: "column-1",
+              header: "Original",
+              cell: (photo) => (
+                <a
+                  href={`/images/${encodeURIComponent(photo.id)}`}
+                  aria-label={`Open photo ${photo.id}`}
+                >
+                  <PhotoThumb image={photo} size={48} />
+                </a>
+              ),
+            },
+            {
+              id: "column-2",
+              header: "Cutout",
+              cell: (photo) =>
+                photo.cutoutUrl ? (
+                  <Image
+                    src={photo.cutoutUrl}
+                    alt={`Cutout of ${photo.id}`}
+                    displayWidth={48}
+                    className="size-12 rounded-md border border-border bg-muted object-contain"
+                  />
+                ) : (
+                  <span className="text-2xs text-muted-foreground">None</span>
+                ),
+            },
+            {
+              id: "column-3",
+              header: "Import",
+              cell: (photo) => (
+                <Stack gap="tight">
+                  <Badge variant={RUN_TARGET_STATE_VARIANT[photo.targetState]}>
+                    {RUN_TARGET_STATE_LABEL[photo.targetState]}
+                  </Badge>
+                  {groupByImage.get(photo.id) ? (
+                    <span className="max-w-40 truncate font-mono text-2xs text-muted-foreground">
+                      {groupByImage.get(photo.id)}
+                    </span>
+                  ) : null}
+                </Stack>
+              ),
+            },
+            {
+              id: "column-4",
+              header: "Analysis",
+              cell: (photo) => (
+                <Stack gap="tight">
+                  <Badge
+                    variant={
+                      photo.localAnalysisReady ? "positive" : "secondary"
+                    }
+                    title={
+                      photo.localAnalysisReady
+                        ? "Device Vision analysis received"
+                        : "Optional device Vision analysis has not arrived"
+                    }
+                  >
+                    {photo.localAnalysisReady ? (
+                      <CheckCircleIcon className="size-3" aria-hidden="true" />
                     ) : (
-                      <span className="text-2xs text-muted-foreground">
-                        None
-                      </span>
+                      <ClockIcon className="size-3" aria-hidden="true" />
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <Stack gap="tight">
-                      <Badge
-                        variant={RUN_TARGET_STATE_VARIANT[photo.targetState]}
-                      >
-                        {RUN_TARGET_STATE_LABEL[photo.targetState]}
-                      </Badge>
-                      {groupByImage.get(photo.id) ? (
-                        <span className="max-w-40 truncate font-mono text-2xs text-muted-foreground">
-                          {groupByImage.get(photo.id)}
-                        </span>
-                      ) : null}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack gap="tight">
-                      <Badge
-                        variant={
-                          photo.localAnalysisReady ? "positive" : "secondary"
-                        }
-                        title={
-                          photo.localAnalysisReady
-                            ? "Device Vision analysis received"
-                            : "Optional device Vision analysis has not arrived"
-                        }
-                      >
-                        {photo.localAnalysisReady ? (
-                          <CheckCircleIcon
-                            className="size-3"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <ClockIcon className="size-3" aria-hidden="true" />
-                        )}
-                        Device:{" "}
-                        {photo.localAnalysisReady ? "Done" : "Not received"}
-                      </Badge>
-                      <ProcessingBadge
-                        label="Cutout"
-                        state={photo.cutout}
-                        reason={photo.cutoutReason}
-                      />
-                      <ProcessingBadge
-                        label="AI description"
-                        state={photo.describe}
-                        reason={photo.describeReason}
-                      />
-                      {photo.describeReason ? (
-                        <span className="max-w-56 text-2xs break-words text-destructive">
-                          {photo.describeReason}
-                        </span>
-                      ) : null}
-                    </Stack>
-                  </TableCell>
-                  <TableCell className="max-w-96 whitespace-normal">
-                    {snippet ? (
-                      <p
-                        className="line-clamp-2 text-xs text-muted-foreground"
-                        title={snippet}
-                      >
-                        <ShortcodeProse>{snippet}</ShortcodeProse>
-                      </p>
-                    ) : (
-                      <span className="text-2xs text-muted-foreground">
-                        Not described yet
-                      </span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                    Device: {photo.localAnalysisReady ? "Done" : "Not received"}
+                  </Badge>
+                  <ProcessingBadge
+                    label="Cutout"
+                    state={photo.cutout}
+                    reason={photo.cutoutReason}
+                  />
+                  <ProcessingBadge
+                    label="AI description"
+                    state={photo.describe}
+                    reason={photo.describeReason}
+                  />
+                  {photo.describeReason ? (
+                    <span className="max-w-56 text-2xs break-words text-destructive">
+                      {photo.describeReason}
+                    </span>
+                  ) : null}
+                </Stack>
+              ),
+            },
+            {
+              id: "column-5",
+              header: "Description",
+              cellClassName: "max-w-96 whitespace-normal",
+              cell: (photo) => {
+                const snippet =
+                  photo.description ??
+                  photo.recognizedText?.split("\n")[0] ??
+                  null;
+                return snippet ? (
+                  <p
+                    className="line-clamp-2 text-xs text-muted-foreground"
+                    title={snippet}
+                  >
+                    <ShortcodeProse>{snippet}</ShortcodeProse>
+                  </p>
+                ) : (
+                  <span className="text-2xs text-muted-foreground">
+                    Not described yet
+                  </span>
+                );
+              },
+            },
+          ]}
+        />
       </Panel>
     </Section>
   );

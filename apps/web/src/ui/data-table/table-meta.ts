@@ -219,6 +219,10 @@ export interface ServerTotals {
 }
 
 export interface CubbyTableMeta {
+  /** All rows are loaded: filter counts may be computed from this table's row model. */
+  completeLocalData?: boolean;
+  /** Primary search for a bounded, non-entity list; its key hosts a text accessor. */
+  primarySearch?: { key: string; placeholder: string };
   /** Bounded server contracts can narrow the shared pager choices. */
   pageSizeOptions?: readonly number[];
   serverTotals?: ServerTotals;

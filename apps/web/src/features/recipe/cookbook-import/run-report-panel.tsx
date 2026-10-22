@@ -18,14 +18,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import {
   type ChunkRow,
@@ -274,56 +267,75 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
 
         {calls.length > 0 && (
           <div className="max-h-64 overflow-auto">
-            <Table className="table-auto">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Purpose</TableHead>
-                  <TableHead>Chunk</TableHead>
-                  <TableHead className="text-right">Latency</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                  <TableHead className="text-right">
-                    Charged / standard
-                  </TableHead>
-                  <TableHead>Outcome</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {calls.map((call, index) => (
-                  <TableRow key={`${call.chunk_id}:${call.seq ?? index}`}>
-                    <TableCell className="font-mono text-2xs">
-                      {call.model}
-                    </TableCell>
-                    <TableCell className="text-2xs">
+            <StaticTable
+              className="table-auto"
+              rows={calls}
+              rowKey={(call, index) => `${call.chunk_id}:${call.seq ?? index}`}
+              columns={[
+                {
+                  id: "column-0",
+                  header: "Model",
+                  cellClassName: "font-mono text-2xs",
+                  cell: (call) => call.model,
+                },
+                {
+                  id: "column-1",
+                  header: "Purpose",
+                  cellClassName: "text-2xs",
+                  cell: (call) => (
+                    <>
                       {call.purpose ?? ""}
                       {call.attempt !== undefined && call.attempt > 1
                         ? ` #${call.attempt}`
                         : ""}
-                    </TableCell>
-                    <TableCell className="font-mono text-2xs">
-                      {call.chunk_id}
-                    </TableCell>
-                    <TableCell className="text-right text-2xs tabular-nums">
-                      {call.cached
-                        ? "cached"
-                        : call.latency_ms !== undefined
-                          ? `${Math.round(call.latency_ms)}ms`
-                          : ""}
-                    </TableCell>
-                    <TableCell className="text-right text-2xs tabular-nums">
-                      {call.status ?? ""}
-                    </TableCell>
-                    <TableCell className="text-right text-2xs tabular-nums">
-                      <AiCost cost={call} />
-                    </TableCell>
-                    <TableCell className="text-2xs">
+                    </>
+                  ),
+                },
+                {
+                  id: "column-2",
+                  header: "Chunk",
+                  cellClassName: "font-mono text-2xs",
+                  cell: (call) => call.chunk_id,
+                },
+                {
+                  id: "column-3",
+                  header: "Latency",
+                  headClassName: "text-right",
+                  cellClassName: "text-right text-2xs tabular-nums",
+                  cell: (call) =>
+                    call.cached
+                      ? "cached"
+                      : call.latency_ms !== undefined
+                        ? `${Math.round(call.latency_ms)}ms`
+                        : "",
+                },
+                {
+                  id: "column-4",
+                  header: "Status",
+                  headClassName: "text-right",
+                  cellClassName: "text-right text-2xs tabular-nums",
+                  cell: (call) => call.status ?? "",
+                },
+                {
+                  id: "column-5",
+                  header: "Charged / standard",
+                  headClassName: "text-right",
+                  cellClassName: "text-right text-2xs tabular-nums",
+                  cell: (call) => <AiCost cost={call} />,
+                },
+                {
+                  id: "column-6",
+                  header: "Outcome",
+                  cellClassName: "text-2xs",
+                  cell: (call) => (
+                    <>
                       {call.outcome?.outcome ?? ""}
                       {call.truncated ? " · truncated" : ""}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </>
+                  ),
+                },
+              ]}
+            />
           </div>
         )}
       </Stack>
