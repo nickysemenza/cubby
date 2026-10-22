@@ -6,11 +6,12 @@ import {
   type RunStepKey,
   type StepRunPurpose,
 } from "@cubby/schemas/run-fields";
-import type { RunStepMeta } from "@cubby/schemas/run-step";
+import type { RunStepMeta, RunStepPageSample } from "@cubby/schemas/run-step";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { withTransactionDatabase } from "~/server/db/helpers";
+import { measurePage } from "~/server/generic/jobs/page-work";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 import type { JobClaim } from "~/server/generic/jobs/repo/jobs";
 import type { JobHandler } from "~/server/generic/jobs/types";
@@ -86,7 +87,12 @@ export function routineStepHandler<P extends RoutineStepPurpose>(
       const cursor = routineCursor.parse(claim.cursor ?? {});
       const first = !cursor.boundary;
       const boundary = cursor.boundary ?? new Date().toISOString();
-      const page = await driver.page(db, cursor.at ?? null, boundary);
+      const selected = await measurePage((work) =>
+        work.time("selection", () =>
+          driver.page(db, cursor.at ?? null, boundary),
+        ),
+      );
+      const page = selected.result;
       if (!page)
         return { page: { done: true, result: { outcome: "unavailable" } } };
       const scanned = cursor.scanned ?? 0;
@@ -122,13 +128,18 @@ export function routineStepHandler<P extends RoutineStepPurpose>(
               input: pass.input(key),
               keep: runId,
             });
-          const tallies = (await page.publish?.(tx)) ?? {};
+          const published = await measurePage((work) =>
+            work.time("publication", async () =>
+              page.publish ? await page.publish(tx) : undefined,
+            ),
+          );
           if (runId)
             await recordRoutinePage(tx, runId, {
               purpose,
               key,
               scanned: page.scanned,
-              tallies,
+              tallies: published.result ?? {},
+              sample: pageSample(selected.sample, published.sample),
               done,
             });
           return done
@@ -189,6 +200,21 @@ async function openRoutineRun<P extends RoutineStepPurpose>(
   });
 }
 
+/** One routine page's selection and publication, measured apart. */
+function pageSample(
+  selection: RunStepPageSample | null,
+  publication: RunStepPageSample | null,
+): RunStepPageSample | null {
+  if (!selection || !publication) return selection ?? publication;
+  return {
+    timings: { ...selection.timings, ...publication.timings },
+    queries:
+      selection.queries === null || publication.queries === null
+        ? null
+        : selection.queries + publication.queries,
+  };
+}
+
 async function recordRoutinePage<P extends RoutineStepPurpose>(
   tx: Database,
   runId: RunId,
@@ -197,6 +223,7 @@ async function recordRoutinePage<P extends RoutineStepPurpose>(
     key: RunStepKey<P>;
     scanned: number;
     tallies: Record<string, number>;
+    sample: RunStepPageSample | null;
     done: boolean;
   },
 ) {
@@ -214,6 +241,7 @@ async function recordRoutinePage<P extends RoutineStepPurpose>(
     tallies.removed = (tallies.removed ?? 0) + step.found - done;
   const meta: RunStepMeta = {
     tallies,
+    ...(page.sample && { page: page.sample }),
     action: page.done
       ? null
       : (runStepDeclaration(page.purpose, page.key)?.action ?? null),

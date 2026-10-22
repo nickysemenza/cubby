@@ -1,9 +1,9 @@
 import type { JobState, JobWaitReason } from "@cubby/schemas/job";
+import type { RunStepPageSample } from "@cubby/schemas/run-step";
 import { BACKGROUND_QUEUE_CONSUMER } from "@cubby/shared/background-queue";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 
 import type { LimitBinding, LimitEntry } from "~/contracts/job.contract";
-import type { RunStepPageSample } from "~/contracts/run-detail.contract";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
@@ -21,14 +21,14 @@ import {
   TRANSFER_PAIR_PUBLISH_CONCURRENCY,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { MAX_ACTIVE_AI_REFRESH_RUNS } from "~/server/domains/run/repo/ai-refresh-admission";
+import { STATEMENT_SPENDING_PREPARATION_CONCURRENCY } from "~/server/domains/transaction-import/repo/statement-spending";
 import { STATEMENT_PUBLISH_CONCURRENCY } from "~/server/domains/transaction-import/repo/statement-suggestions";
-
-import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "./limits";
+import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
   DEFAULT_JOB_MAX_ATTEMPTS,
   JOB_LEASE_MS,
   JOB_RETRY_BACKOFF,
-} from "./repo/jobs";
+} from "~/server/generic/jobs/repo/jobs";
 
 /**
  * Every limit that can set a Run's speed, read from the constant or config
@@ -190,6 +190,17 @@ export const LIMITS_CATALOG = [
       "apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts STATEMENT_PUBLISH_CONCURRENCY",
     stepKeys: ["statement_generate"],
     phase: "publication",
+  },
+  {
+    key: "page.statement_preparation",
+    label: "Statement spending preparation concurrency",
+    scope: "step page",
+    value: STATEMENT_SPENDING_PREPARATION_CONCURRENCY,
+    unit: "at once",
+    source:
+      "apps/web/src/server/domains/transaction-import/repo/statement-spending.ts STATEMENT_SPENDING_PREPARATION_CONCURRENCY",
+    stepKeys: ["statement_generate"],
+    phase: "preparation",
   },
   {
     key: "gateway.inflight",

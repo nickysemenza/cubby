@@ -18,6 +18,7 @@ type JsonValue = RunStepInput["boundary"];
 
 import type { Database } from "~/server/db";
 import { setJobStepKey } from "~/server/generic/jobs/context";
+import { measurePage, type PageWork } from "~/server/generic/jobs/page-work";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   claimWorkflowRun,
@@ -101,9 +102,12 @@ export type StepCounter = (context: StepContext) => Promise<{
   boundary: JsonValue | null;
 }>;
 
+/** A page also records where its time went (`RunStep.meta.page`). */
+export type StepPageContext = StepContext & { work: PageWork };
+
 export type StepDriver = {
   count?: StepCounter;
-  page(context: StepContext): Promise<StepPage>;
+  page(context: StepPageContext): Promise<StepPage>;
 };
 
 /** The ordered declarations and drivers one Run pages; tests pass their own. */
@@ -295,12 +299,15 @@ export async function advanceStepRun(
     );
   }
   const started = Date.now();
-  const page = await entry.driver.page(context(step));
+  const { result: page, sample } = await measurePage((work) =>
+    entry.driver.page({ ...context(step), work }),
+  );
   if (!(await claimWorkflowRun(db, params, "id")))
     return lostAfterPage(db, owner);
   return recordStepPage(db, owner, step, {
     declaration: entry.declaration,
     page,
+    sample,
     started,
     retrying,
     attempt: params.attempt,
@@ -316,6 +323,7 @@ async function recordStepPage(
   input: {
     declaration: RunStepDeclaration;
     page: StepPage;
+    sample: RunStepMeta["page"] | null;
     started: number;
     retrying: boolean;
     attempt: number;
@@ -369,6 +377,7 @@ async function recordStepPage(
       lastPageMs: elapsed,
       totalMs: (step.meta?.timing?.totalMs ?? 0) + elapsed,
     },
+    ...(input.sample && { page: input.sample }),
     work: stepWork(
       step,
       input.declaration,

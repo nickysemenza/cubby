@@ -803,7 +803,7 @@ speed, imported from the constant or config that enforces it:
 - drain pages, time and batch;
 - lease and heartbeat;
 - attempts and backoff;
-- step page caps and in-page publication concurrency;
+- step page caps and in-page preparation and publication concurrency;
 - AI Gateway in-flight, rate and deadline;
 - AI refresh slots;
 - the funding window;
@@ -825,6 +825,21 @@ Change a value at its source, never in the catalog.
   - otherwise the page's own work sets the pace ("preparation 61% of page time
     · 106 queries/page").
 - **No sample.** Without a sample the verdict is "Unknown — no recent samples".
+
+Step pages record their own sample through `measurePage`
+(`server/generic/jobs/page-work.ts`). Executed steps get it as
+`StepPageContext.work`; routine passes are measured by `routineStepHandler`
+(selection, then publication).
+
+- **Phases.** A driver times a phase with `work.time` or adds the timings its
+  repository already measured with `work.add`. Statement generation passes the
+  same selection, preparation, publication and application times it logs.
+- **Concurrency.** Peaks are `min(cap, items)`, the workers
+  `forEachConcurrently` starts.
+- **Queries.** The page runs inside `withDatabaseOperationMetrics`, so
+  `queries` counts the traced pool's statements. Zero counted means the page ran
+  outside the traced pool and stores null ("not measured").
+- **Unmeasured drivers.** A page that records no phase stores no sample.
 
 ### Error tracking and traces
 

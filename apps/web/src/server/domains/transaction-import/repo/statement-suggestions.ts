@@ -78,6 +78,7 @@ import {
   automaticRuleStamp,
   matchStatementRules,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -1739,6 +1740,8 @@ export async function generateStatementSuggestionPage(
     runId: string | null;
     limit?: number;
     scope?: StatementSuggestionScope;
+    /** A Run step's page recorder; receives the same timings the log line carries. */
+    work?: PageWork;
   },
 ): Promise<{
   found: number;
@@ -1820,16 +1823,28 @@ export async function generateStatementSuggestionPage(
       }
     }
   }
+  const timings = {
+    selection: Math.round(selectedAt - startedAt),
+    preparation: Math.round(preparedAt - selectedAt),
+    publication: Math.round(publishedAt - preparedAt),
+    application: Math.round(performance.now() - publishedAt),
+  };
   log.info("Statement generation page", {
     charges: charges.length,
     proposals: proposals.length,
     published,
     unchanged,
     failed: failed.length,
-    selectionMs: Math.round(selectedAt - startedAt),
-    preparationMs: Math.round(preparedAt - selectedAt),
-    publicationMs: Math.round(publishedAt - preparedAt),
-    applicationMs: Math.round(performance.now() - publishedAt),
+    selectionMs: timings.selection,
+    preparationMs: timings.preparation,
+    publicationMs: timings.publication,
+    applicationMs: timings.application,
+  });
+  input.work?.add({
+    timings,
+    concurrency: {
+      publication: peakWorkers(STATEMENT_PUBLISH_CONCURRENCY, proposals.length),
+    },
   });
   return {
     found: charges.length,

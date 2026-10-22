@@ -227,6 +227,7 @@ const transferPairScan: StepDriversFor<"sweep">["transfer_pair_scan"] = {
       scope,
       after: scanCursor.parse(step.cursor ?? null),
       createdBefore: cutoff(context),
+      work: context.work,
     });
     const seedFailures = page.failed.filter((failure) =>
       failure.ref?.startsWith("transfer_pair_seed:"),
@@ -272,6 +273,7 @@ const transferPairRetire: StepDriversFor<"sweep">["transfer_pair_retire"] = {
       scope: scopeOf(run, "transfer_pair"),
       after: { kind: "retire", after },
       createdBefore: cutoff(context),
+      work: context.work,
     });
     return {
       kind: "progress",
@@ -350,7 +352,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
     ),
     boundary: null,
   }),
-  page: async ({ db, run, step }) => {
+  page: async ({ db, run, step, work }) => {
     const scope = scopeOf(run, "statement_transaction");
     const cursor = statementCursor.parse(step.cursor ?? null) ?? {
       after: null,
@@ -360,6 +362,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
       after: cursor.after,
       runId: run.id,
       scope,
+      work,
     });
     // Labels the next step needs are computed while generation waits on I/O.
     const { precomputeStatementSuggestionLabels } =

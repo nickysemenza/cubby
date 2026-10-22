@@ -65,6 +65,7 @@ import {
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -1546,8 +1547,12 @@ export async function generateTransferPairSuggestionsPage(
     maxBytes?: number;
     /** A Sweep step's frozen population boundary. */
     createdBefore?: string | null;
+    /** A Run step's page recorder: selection, preparation and publication. */
+    work?: PageWork;
   },
 ): Promise<TransferPairGenerationPage> {
+  const time = <T>(phase: string, run: () => Promise<T>) =>
+    input.work ? input.work.time(phase, run) : run();
   const scope = input.scope ?? {};
   const limit = Math.max(
     1,
@@ -1579,20 +1584,22 @@ export async function generateTransferPairSuggestionsPage(
   if (after.kind === "retire") {
     // Include inactive history identities so a committed retirement cannot
     // shift this page's counts or continuation when its acknowledgement is lost.
-    const { rows } = await unwrapDb(db).execute<{
-      id: string;
-      createdAt: string;
-      pairKey: string;
-      active: boolean;
-      status: string;
-    }>(sql`
+    const { rows } = await time("selection", () =>
+      unwrapDb(db).execute<{
+        id: string;
+        createdAt: string;
+        pairKey: string;
+        active: boolean;
+        status: string;
+      }>(sql`
       SELECT s.id::text AS id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
         s.data->>'pairKey' AS "pairKey", s.active, s.status
       FROM "AssessmentState" s
       WHERE ${retireScope(scope, input.createdBefore)}
         ${after.after ? sql`AND (s."createdAt", s.id) > (${after.after.createdAt}::timestamp, ${after.after.id}::uuid)` : sql``}
       ORDER BY s."createdAt", s.id LIMIT ${limit + 1}
-    `);
+    `),
+    );
     const selected: typeof rows = [];
     for (const row of rows.slice(0, limit)) {
       const bytes = encoder.encode(
@@ -1608,53 +1615,65 @@ export async function generateTransferPairSuggestionsPage(
       rows.length > selected.length && last
         ? { kind: "retire", after: { createdAt: last.createdAt, id: last.id } }
         : null;
-    await forEachConcurrently(
-      selected,
-      TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
-      async (row) => {
-        if (!row.active || row.status !== suggestionStatus.enum.pending) {
-          page.reasons.inactive++;
-          return;
-        }
-        try {
-          // Absence is verified now, not inferred from an earlier seed page.
-          // Matching preparation holds no publication transaction open.
-          const current = await buildTransferPair(db, row.pairKey);
-          if (
-            current &&
-            inScope(current, scope) &&
-            pairSeedKeys(current, scope).length
-          ) {
-            page.reasons.still_candidate++;
+    input.work?.add({
+      timings: {},
+      concurrency: {
+        publication: peakWorkers(
+          TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
+          selected.length,
+        ),
+      },
+    });
+    await time("publication", () =>
+      forEachConcurrently(
+        selected,
+        TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
+        async (row) => {
+          if (!row.active || row.status !== suggestionStatus.enum.pending) {
+            page.reasons.inactive++;
             return;
           }
-          const retired = await withTransactionDatabase(db, async (tx) => {
-            await assertWorkflowEffect(tx);
-            await getDb(tx).execute(pairLock(row.pairKey));
-            const retiredRows = await transitionAssessmentStates(
-              tx,
-              and(
-                eq(assessmentState.id, row.id),
-                eq(assessmentState.active, true),
-                eq(assessmentState.status, "pending"),
-              ),
-              { active: false, status: "superseded" },
-              { kind: "transfer_pair_out_of_scope" },
+          try {
+            // Absence is verified now, not inferred from an earlier seed page.
+            // Matching preparation holds no publication transaction open.
+            const current = await buildTransferPair(db, row.pairKey);
+            if (
+              current &&
+              inScope(current, scope) &&
+              pairSeedKeys(current, scope).length
+            ) {
+              page.reasons.still_candidate++;
+              return;
+            }
+            const retired = await withTransactionDatabase(db, async (tx) => {
+              await assertWorkflowEffect(tx);
+              await getDb(tx).execute(pairLock(row.pairKey));
+              const retiredRows = await transitionAssessmentStates(
+                tx,
+                and(
+                  eq(assessmentState.id, row.id),
+                  eq(assessmentState.active, true),
+                  eq(assessmentState.status, "pending"),
+                ),
+                { active: false, status: "superseded" },
+                { kind: "transfer_pair_out_of_scope" },
+              );
+              return retiredRows.length;
+            });
+            page.retired += retired;
+          } catch (error) {
+            if (isWorkflowInterrupted(error)) throw error;
+            page.failed.push(
+              transferPairFailure(`transfer_pair:${row.pairKey}`, error),
             );
-            return retiredRows.length;
-          });
-          page.retired += retired;
-        } catch (error) {
-          if (isWorkflowInterrupted(error)) throw error;
-          page.failed.push(
-            transferPairFailure(`transfer_pair:${row.pairKey}`, error),
-          );
-        }
-      },
+          }
+        },
+      ),
     );
     return page;
   }
 
+  const selectionStarted = performance.now();
   const following = await nextTransferPairSeeds(db, {
     after: after.seed ?? after.afterSeed,
     limit: limit + 1,
@@ -1671,6 +1690,7 @@ export async function generateTransferPairSuggestionsPage(
     db,
     seeds.slice(0, limit),
   );
+  const preparationStarted = performance.now();
   for (const [index, seed] of seeds.entries()) {
     if (index >= limit || page.found >= limit) {
       page.next = { kind: "discover", afterSeed, seed: null, afterPair: null };
@@ -1734,26 +1754,40 @@ export async function generateTransferPairSuggestionsPage(
     page.seeds++;
     afterSeed = seed;
   }
-  await forEachConcurrently(
-    publications,
-    TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
-    async (pair) => {
-      try {
-        const outcome = await publishTransferPair(
-          db,
-          pair,
-          ruleProducer(input.runId),
-        );
-        if (outcome === "published") page.published++;
-        else if (outcome === "suppressed") page.reasons.suppressed++;
-        else page.unchanged++;
-      } catch (error) {
-        if (isWorkflowInterrupted(error)) throw error;
-        page.failed.push(
-          transferPairFailure(`transfer_pair:${pair.judgment.key}`, error),
-        );
-      }
+  input.work?.add({
+    timings: {
+      selection: preparationStarted - selectionStarted,
+      preparation: performance.now() - preparationStarted,
     },
+    concurrency: {
+      publication: peakWorkers(
+        TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
+        publications.length,
+      ),
+    },
+  });
+  await time("publication", () =>
+    forEachConcurrently(
+      publications,
+      TRANSFER_PAIR_PUBLICATION_CONCURRENCY,
+      async (pair) => {
+        try {
+          const outcome = await publishTransferPair(
+            db,
+            pair,
+            ruleProducer(input.runId),
+          );
+          if (outcome === "published") page.published++;
+          else if (outcome === "suppressed") page.reasons.suppressed++;
+          else page.unchanged++;
+        } catch (error) {
+          if (isWorkflowInterrupted(error)) throw error;
+          page.failed.push(
+            transferPairFailure(`transfer_pair:${pair.judgment.key}`, error),
+          );
+        }
+      },
+    ),
   );
   return page;
 }
