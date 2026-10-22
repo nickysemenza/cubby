@@ -8,7 +8,7 @@ import { expect, test } from "./support/e2e-test";
 
 // `seedStaplePlanningPrerequisite` plans "<name> meal" on 2026-09-09, so the
 // week of 2026-09-16 is the following one.
-const NEXT_WEEK = "/meals?view=calendar&period=week&week=2026-09-16";
+const NEXT_WEEK = "/meals?view=calendar&period=week&calendarDate=2026-09-16";
 
 test("copy last week plans the previous week's meals into the week shown", async ({
   page,
@@ -45,7 +45,7 @@ test("a meal is duplicated from its calendar inspector", async ({
 
   await gotoAuthenticatedPage(
     page,
-    "/meals?view=calendar&period=week&week=2026-09-09",
+    "/meals?view=calendar&period=week&calendarDate=2026-09-09",
   );
   await mealChip.click();
   await page.getByRole("button", { name: "Duplicate", exact: true }).click();

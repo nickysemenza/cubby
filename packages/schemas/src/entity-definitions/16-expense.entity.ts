@@ -260,6 +260,12 @@ export default defineEntity({
         "table",
         {
           kind: "slot",
+          id: "calendar",
+          label: "Calendar",
+          searchKeys: ["period", "calendarDate"],
+        },
+        {
+          kind: "slot",
           id: "analytics",
           label: "Analytics",
           searchKeys: [

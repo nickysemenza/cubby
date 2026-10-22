@@ -144,9 +144,15 @@ export const getMealsByDateRange = async (
   db: Database,
   from: string,
   to: string,
+  condition?: SQL,
 ): Promise<MealOut[]> => {
   const rows = await getDb(db).query.meal.findMany({
-    where: and(gte(meal.date, from), lte(meal.date, to), notDeleted(meal)),
+    where: and(
+      gte(meal.date, from),
+      lte(meal.date, to),
+      notDeleted(meal),
+      condition,
+    ),
     orderBy: (m, { asc }) => [asc(m.date), asc(m.sortOrder), asc(m.createdAt)],
     ...relations.meal.full,
   });
@@ -208,7 +214,7 @@ export const getUpcomingMealSummary = async (
 // declaration order IS clock order (the calendar sorts a day by it), so
 // `array_position` over that tuple is the same ranking `mealTypeRank`
 // applies client-side. Unslotted meals sort last in both directions.
-const mealScaffold = listScaffold("meal", meal, {
+export const mealScaffold = listScaffold("meal", meal, {
   derived: {
     mealType: sql`array_position(${sql.raw(
       `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,

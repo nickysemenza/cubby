@@ -388,20 +388,27 @@ const taskList = slotsFrom(() =>
 
 /** `ListSlotTable`: every declared list view's lazy fill. */
 const listSlots = {
-  expense: { analytics: expenseList("analytics") },
+  expense: {
+    calendar: expenseList("calendar"),
+    analytics: expenseList("analytics"),
+  },
   location: {
     gallery: locationList("gallery"),
     visualizations: locationList("visualizations"),
   },
   meal: { calendar: mealList("calendar"), nutrition: mealList("nutrition") },
-  planting: { schedule: plantingList("schedule") },
+  planting: {
+    calendar: plantingList("calendar"),
+    schedule: plantingList("schedule"),
+  },
   productCategory: { hierarchy: productCategoryList("hierarchy") },
   project: {
+    calendar: projectList("calendar"),
     overview: projectList("overview"),
     schedule: projectList("schedule"),
     analytics: projectList("analytics"),
   },
-  task: { agenda: taskList("agenda") },
+  task: { calendar: taskList("calendar"), agenda: taskList("agenda") },
 } satisfies ListSlotTable;
 
 const headerAction = <E extends GenericDetailEntity>(

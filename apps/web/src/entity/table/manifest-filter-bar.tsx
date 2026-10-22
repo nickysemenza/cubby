@@ -2,15 +2,12 @@ import type { ColumnFiltersState } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
 import { z } from "zod";
 
+import type { ListSearch } from "~/entity/entity-list/list-slot-types";
 import {
   type FilterSpec,
   manifestFilterFields,
 } from "~/entity/filter-manifest";
-import {
-  decodeFilters,
-  encodeFilters,
-  type FilterSearch,
-} from "~/entity/filters";
+import { decodeFilters, encodeFilters } from "~/entity/filters";
 import { cn } from "~/lib/utils";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
@@ -23,7 +20,7 @@ interface ManifestFilterBarProps {
   /** Runtime picklists keyed by each spec's `optionsKey`. */
   filterOptions?: RuntimeFilterOptions;
   /** Current route search params. */
-  search: FilterSearch;
+  search: ListSearch;
   onSearchChange: (params: Record<string, string | undefined>) => void;
   className?: string;
 }
@@ -48,7 +45,12 @@ export function ManifestFilterBar({
   className,
 }: ManifestFilterBarProps) {
   const fields = useMemo(
-    () => manifestFilterFields(specs, filterOptions),
+    () =>
+      manifestFilterFields(specs, filterOptions).map((field) => ({
+        ...field,
+        unsupportedReason: specs.find((spec) => spec.columnId === field.key)
+          ?.unsupportedReason,
+      })),
     [specs, filterOptions],
   );
   const externalFilters = useMemo(

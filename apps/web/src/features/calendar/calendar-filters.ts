@@ -1,38 +1,48 @@
 import {
-  type CalendarFiltersInput,
   calendarFiltersInput,
+  type CalendarFiltersInput,
 } from "@cubby/schemas/calendar";
 
 import {
   buildFiltersFromManifest,
+  compileFilterCodec,
   filterGetterFromSearch,
 } from "~/entity/filters";
 
-import { calendarFilterSpecs } from "./calendar-filter-specs";
-import { calendarSearchSchema } from "./calendar-search";
+import {
+  calendarEntityFilterSpecs,
+  calendarFilterKey,
+  calendarKinds,
+} from "./calendar-filter-specs";
 
 export type CalendarFilters = CalendarFiltersInput;
-type CalendarSearch = import("zod").z.output<typeof calendarSearchSchema>;
 
-/**
- * URL search params → the filter half of `calendar.range`'s input.
- *
- * Reads through the same `decodeFilters` the chip bar renders from, so the
- * visible chips and the query can't disagree about what the URL says.
- */
-export function buildCalendarFilters(search: CalendarSearch): CalendarFilters {
-  const filters = calendarFiltersInput.parse(
-    buildFiltersFromManifest(
-      calendarFilterSpecs,
-      filterGetterFromSearch(calendarFilterSpecs, search),
-    ),
+export function buildCalendarFilters(
+  search: import("~/entity/entity-list/list-slot-types").ListSearch,
+): CalendarFilters {
+  const filters = Object.fromEntries(
+    calendarKinds.flatMap((kind) => {
+      const specs = calendarEntityFilterSpecs[kind]!;
+      const sourceSearch = Object.fromEntries(
+        compileFilterCodec(specs).keys.map((key) => [
+          key,
+          search[calendarFilterKey(kind, key)],
+        ]),
+      );
+      const values = buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, sourceSearch),
+      );
+      return Object.values(values).some((value) => value !== undefined)
+        ? [[kind, values]]
+        : [];
+    }),
   );
-  // Always subtree-expanded, with no spec and no URL key: a project's calendar
-  // BAR is already the subtree-folded window, so scoping to a parent without
-  // its descendants would draw a span covering dates whose tasks and expenses
-  // are hidden — a contradiction on the same pixels. This is a property of the
-  // view, not a choice the user should have to make. (The expense ledger
-  // exposes `?subprojects=` because it is deep-linked from a project summary
-  // and has to reconcile against it; the calendar is not.)
-  return filters.projectId ? { ...filters, includeSubProjects: true } : filters;
+  return calendarFiltersInput.parse({
+    kinds:
+      typeof search.kinds === "string" && search.kinds
+        ? search.kinds.split(",")
+        : undefined,
+    filters,
+  });
 }

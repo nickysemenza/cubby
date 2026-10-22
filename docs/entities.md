@@ -1879,8 +1879,39 @@ Chips join values with "or" (or "and" under Match all); an inactive chip reads
 There are no per-filter meta-options (`all`, `either`), boolean AND/OR/NOT
 trees, cross-filter OR, or typed search syntax: any-of, Match all, and Exclude
 cover household questions, and a rare cross-filter one is a second query or
-the agent's. The Work queue and calendar pages read their own pipelines, not
-the entity list.
+the agent's. Calendar sources reuse their entity list scaffolds, including
+prepared derived predicates and related scopes. Work queue declares its
+computed-row filters and grouping through `defineSourceList`; it retains its
+staged SQL population rather than inventing a storage entity.
+
+### Calendar list presentations
+
+`calendarSources` in `packages/schemas/src/calendar.ts` declares the combined
+calendar's five sources and date projections: Meal and Expense dates, Task due
+ranges, subtree-folded Project windows, and Planting lifecycle milestones.
+Each has a Calendar list slot filled by the same `entityCalendar` renderer.
+Switching between table and calendar retains ordinary entity filter URL state;
+calendar navigation uses `period` and `calendarDate`. Undated matches remain in
+the table and produce no calendar entries. Existing move permissions apply in
+both entry points: Meals and Tasks can move, only planned Expenses can move,
+and Projects and Planting milestones are read-only.
+
+The combined Calendar namespaces each entity's declared filters by source
+(`task.status`, `expense.future`, and so on). Every active filter narrows the
+whole population, so a Task-only filter excludes the other sources; filters
+from two different sources have no matches. There is no implicit shared status
+or date meaning across entities. The source's scaffold selects membership before
+calendar hydration and layout. Project date windows still fold over the whole
+tree before only matching projects are emitted. Expense membership uses the
+ordinary allocation-aware list predicates; displayed amounts and daily sums use
+whole Expense costs, as the table does, rather than allocation-scoped shares.
+
+Calendar layout is already arranged by date; table grouping stays in URL state
+and is unavailable with a reason in calendar mode. The existing Schedule mode
+keeps Task and Planting lanes, including its existing undated scheduling rows.
+Other source filters remain in URL state, disabled with a reason and suspended
+until returning to the date grid. Calendar range and schedule reads take nested
+source filter records through POST, shared by web and the native client.
 
 Every declared filter is a list Filters-menu entry. One no list column hosts
 (a relation scope such as expenses' `productId`) gets its field from the
@@ -2441,6 +2472,14 @@ any-of: Me (mine or Either), Either, a member (routed to them only), and No
 value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity.work_queue`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
+
+`workQueueList` owns the computed source's filter and grouping declarations.
+Type, Waiting for, Source, Kind, Vendor and Next action can group; Check, Date
+and Amount carry unsupported reasons. Group keys are filter values, with absent
+values last. Filter to this uses the declared filter when it selects exactly the
+section; Next action and member-specific routing sections have no exact filter
+adapter. Grouping never moves source filters, routing, or the view predicate
+across the population stages: view counts are computed before the active view.
 
 The shared population query materializes routed candidates within each SQL
 statement, after source/kind/vendor narrowing and before eligibility/search. This keeps

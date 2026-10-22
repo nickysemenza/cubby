@@ -265,7 +265,7 @@ function HeaderMenu<TData extends RowData>({
   const sorted = column.getIsSorted();
   const canFilter = column.columnDef.meta?.filterConfig !== undefined;
   const groupChoice = meta?.grouping?.choices.find(
-    (choice) => choice.columnId === column.id,
+    (choice) => choice.columnId === column.id && !choice.reason,
   );
   const grouped =
     groupChoice !== undefined && meta?.grouping?.active === groupChoice.key;

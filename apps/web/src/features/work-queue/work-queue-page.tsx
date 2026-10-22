@@ -1,20 +1,23 @@
 import { dataCheckLabel } from "@cubby/schemas/data-quality";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import {
   workQueueGapChecks,
   workQueueGapViews,
+  workQueueGroupChoices,
   workQueueHouseholdInput,
-  workQueueKindSchema,
-  workQueueSourceSchema,
+  workQueueKindOptions,
+  workQueueList,
+  workQueueRecordTypeOptions,
+  workQueueSourceOptions,
   workQueueSortSchema,
   type workQueueOutSchema,
-  type WorkQueueGroup,
   type WorkQueueKind,
   type WorkQueueMember,
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
-import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -142,21 +145,7 @@ type QueueTablePage = Omit<QueuePage, "items" | "meta"> & {
 };
 const helper = createCubbyColumnHelper<QueueTableRow>();
 const PREVIEW_OPTIONS = { responsiveInspector: true };
-const FILTER_SPECS: readonly FilterSpecCore[] = [
-  { columnId: "name", urlKey: "query", kind: "text" },
-  { columnId: "view", kind: "text" },
-  { columnId: "entity", kind: "multiselect" },
-  {
-    columnId: "waitingFor",
-    kind: "multiselect",
-    currentMember: true,
-    nullable: { field: "waitingForPresence", label: "waiting for" },
-  },
-  { columnId: "source", kind: "multiselect" },
-  { columnId: "kind", kind: "multiselect" },
-  { columnId: "reason", field: "check", urlKey: "check", kind: "multiselect" },
-  { columnId: "vendor", kind: "multiselect" },
-];
+const FILTER_SPECS: readonly FilterSpecCore[] = workQueueList.filters;
 /** Next action, date, source and kind stay one Columns-menu toggle away. */
 const HIDDEN_COLUMNS = {
   kind: false,
@@ -256,18 +245,9 @@ const KIND_ICONS = {
   repair: <WrenchIcon />,
   awaiting_posting: <ClockIcon />,
 } satisfies Record<WorkQueueKind, ReactNode>;
-const KIND_OPTIONS = workQueueKindSchema.options.map((value) => ({
-  value,
-  label: humanize(value),
-  icon: KIND_ICONS[value],
-}));
-const SOURCE_OPTIONS = workQueueSourceSchema.options.map((value) => ({
-  value,
-  label: humanize(value),
-}));
-const TYPE_OPTIONS = shortcodeEntities.map((value) => ({
-  value,
-  label: entitySummary[value].singular,
+const KIND_OPTIONS = workQueueKindOptions.map((option) => ({
+  ...option,
+  icon: KIND_ICONS[option.value],
 }));
 
 // The check filter offers exactly the checks a gap row can carry; the entity
@@ -298,31 +278,30 @@ const FILTER_FIELDS: readonly FilterBarField[] = [
   },
 ];
 
-/** Projected values the server sections by, ahead of the sort. */
-const GROUPS = [
-  { key: "recordType", columnId: "entity", label: "Type" },
-  { key: "waitingFor", columnId: "waitingFor", label: "Waiting for" },
-  { key: "nextAction", columnId: "nextAction", label: "Next action" },
-] as const satisfies readonly {
-  key: WorkQueueGroup;
-  columnId: string;
-  label: string;
-}[];
-const groupChoice = (
-  group: (typeof GROUPS)[number],
-): GroupConfig["choice"] => ({
-  key: group.key,
-  label: group.label,
-  noValueLabel: "None",
-  reason: null,
-  value: { kind: "derived", options: null },
-  filter: null,
-  levels: 0,
-  levelReason: `${group.label} is a flat section, not a hierarchy.`,
-  multiple: false,
-  dateKind: null,
-  buckets: [],
-});
+/** The declared choices the read sections by; a choice's header is its
+ * filter's column, else the column named like the choice (Next action). */
+const GROUP_MENU = workQueueList.grouping.map((choice) => ({
+  key: choice.key,
+  columnId: choice.filter?.columnId ?? choice.key,
+  label: choice.label,
+  reason: choice.reason,
+}));
+/**
+ * A section's key is its filter's value. A member's section holds work routed
+ * only to them, but the member filter also matches work they share with
+ * another member, so only Either and Unresolved filter to exactly a section.
+ */
+const sectionFilter = (
+  choice: GroupConfig["choice"],
+  group: ListGroupSummary,
+) => {
+  const key = group.path[0];
+  if (!choice.filter || key === undefined) return undefined;
+  if (key === FILTER_NONE && !choice.filter.noValue) return undefined;
+  if (choice.key === "waitingFor" && key !== "either" && key !== FILTER_NONE)
+    return undefined;
+  return { id: choice.filter.columnId, value: [key] };
+};
 
 /** The row's own Open or Review, beside the rule's details. */
 function WorkRowActions({ work }: { work: QueueTableRow }) {
@@ -381,7 +360,7 @@ function queueColumns(
           filterConfig: {
             placeholder: "Filter type",
             filterType: "multiselect",
-            options: TYPE_OPTIONS,
+            options: workQueueRecordTypeOptions,
           },
         }),
       }),
@@ -519,11 +498,11 @@ function queueColumns(
     add(
       createSelectColumn(helper, "source", {
         header: "Source",
-        options: SOURCE_OPTIONS,
+        options: workQueueSourceOptions,
         filterConfig: {
           placeholder: "Filter source",
           filterType: "multiselect",
-          options: SOURCE_OPTIONS,
+          options: workQueueSourceOptions,
         },
       }),
     );
@@ -618,7 +597,8 @@ function WorkQueue() {
         to: ".",
         search: (prev) => ({
           ...prev,
-          group: GROUPS.find((choice) => choice.key === next)?.key,
+          group: workQueueGroupChoices.find((choice) => choice.key === next)
+            ?.key,
         }),
         replace: true,
       }),
@@ -636,20 +616,37 @@ function WorkQueue() {
     initialColumnVisibility: HIDDEN_COLUMNS,
     filterFields: FILTER_FIELDS,
     scrollRestorationId: "work-queue",
-    grouping: { choices: GROUPS, active: group ?? null, onChange: setGroup },
+    grouping: {
+      choices: GROUP_MENU,
+      active: group ?? null,
+      onChange: setGroup,
+    },
   });
   const groups = firstPage?.meta.groups ?? NO_GROUPS;
-  const activeGroup = GROUPS.find((choice) => choice.key === group);
+  const activeGroup = workQueueGroupChoices.find(
+    (choice) => choice.key === group,
+  );
+  const { setColumnFilters } = tableState;
   const groupConfig = useMemo<GroupConfig | undefined>(
     () =>
       activeGroup
         ? {
-            choice: groupChoice(activeGroup),
+            choice: activeGroup,
             groups,
             memberships: list.memberships ?? [],
+            canFilter: (section) =>
+              sectionFilter(activeGroup, section) !== undefined,
+            onFilter: (section) => {
+              const filter = sectionFilter(activeGroup, section);
+              if (filter)
+                setColumnFilters((previous) => [
+                  ...previous.filter(({ id }) => id !== filter.id),
+                  filter,
+                ]);
+            },
           }
         : undefined,
-    [activeGroup, groups, list.memberships],
+    [activeGroup, groups, list.memberships, setColumnFilters],
   );
   const rows = table.getRowModel().rows;
   const selectedRows = table.getFilteredSelectedRowModel().rows;

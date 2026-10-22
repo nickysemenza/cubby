@@ -1,6 +1,7 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 
 import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
+import { entityCalendar } from "~/features/calendar/entity-calendar";
 
 import { ProjectScheduleListSlot } from "./project-schedule";
 import { ProjectsDashboard } from "./projects-dashboard";
@@ -12,6 +13,7 @@ const ProjectAnalyticsSlot: ListSlotComponent = () => (
   <ProjectsDashboard view="analytics" />
 );
 export const projectListSlots = {
+  calendar: entityCalendar("project"),
   overview: ProjectOverviewSlot,
   schedule: ProjectScheduleListSlot,
   analytics: ProjectAnalyticsSlot,

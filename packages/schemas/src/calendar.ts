@@ -7,14 +7,19 @@ import {
   projectShortcode,
   expenseShortcode,
   taskShortcode,
-  vendorShortcode,
 } from "./identifiers";
-import { oneOrMany, presenceFilter } from "./pagination";
+import { mealFilterFields, type MealOut } from "./meal";
+import { plantingFilterFields } from "./planting";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { nutritionTotals } from "./nutrition";
 import { plantingOut } from "./planting";
 import {
   plainDate,
+  taskFilterFields,
+  expenseFilterFields,
+  type ExpenseOut,
+  type TaskOut,
+  projectFilterFields,
   projectKindSchema,
   projectStatusSchema,
   taskOut,
@@ -151,52 +156,73 @@ export const calendarItem = z.discriminatedUnion("kind", [
 ]);
 export type CalendarItem = z.infer<typeof calendarItem>;
 
-/**
- * Server-side calendar filters.
- *
- * **The cross-kind rule.** A field prefixed with an item kind constrains ONLY
- * rows of that kind; rows of every other kind pass through untouched. That is
- * why these are `taskStatus` / `expenseFuture` / `projectStatus` rather than a
- * bare `status` / `future` — the name IS the scope. Without it, picking a task
- * status would read as a filter that also deletes every meal and expense from
- * the month, which is not what anyone means by it. `kinds` is the only switch
- * that removes a whole kind, and it does so by skipping the read.
- *
- * The one deliberately cross-kind pair is `projectId` /
- * `projectPresenceFilter`; see repo/calendar.ts for what it does to meals,
- * which have no project relation at all.
- *
- * Deliberately NOT named `calendarFilterFields`-as-an-entity-map: the scanner
- * in filter-application.integration.test only adopts a `*FilterFields` export
- * whose prefix parses as an `Entity`, and "calendar" doesn't — so this stays a
- * composable fragment, like `auditDateFilterFields`.
- */
-export const calendarFilterFields = {
-  kinds: z.array(calendarItemKind).nonempty().optional(),
-
-  /**
-   * Cross-kind: scopes tasks and expenses by their `projectId` and narrows
-   * project spans to the selection. Meals are treated as permanently
-   * unassigned rows — see repo/calendar.ts.
-   */
-  projectId: oneOrMany(projectShortcode).optional(),
-  projectPresenceFilter: presenceFilter,
-  includeSubProjects: z.boolean().optional(),
-
-  taskStatus: oneOrMany(taskStatusSchema).optional(),
-  taskTrade: oneOrMany(tradeSchema).optional(),
-
-  expenseVendorId: oneOrMany(vendorShortcode).optional(),
-  expenseVendorPresenceFilter: presenceFilter,
-  expenseFuture: z.boolean().optional(),
-
-  projectStatus: oneOrMany(projectStatusSchema).optional(),
-  projectKind: oneOrMany(projectKindSchema).optional(),
-  projectKindPresenceFilter: presenceFilter,
+/** Each source uses its ordinary list filter contract. Active source filters
+ * intersect source membership: a task filter excludes non-task sources. */
+const calendarListFilterFields = {
+  searchQuery: z.string().trim().min(1).max(100).optional(),
+  ids: z.array(z.string()).max(500).optional(),
 };
 
-export const calendarFiltersInput = z.object(calendarFilterFields);
+export const calendarFilterFields = {
+  kinds: z.array(calendarItemKind).nonempty().optional(),
+  filters: z
+    .object({
+      meal: z
+        .object({ ...mealFilterFields, ...calendarListFilterFields })
+        .strict()
+        .optional(),
+      task: z
+        .object({ ...taskFilterFields, ...calendarListFilterFields })
+        .strict()
+        .optional(),
+      expense: z
+        .object({ ...expenseFilterFields, ...calendarListFilterFields })
+        .strict()
+        .optional(),
+      project: z
+        .object({ ...projectFilterFields, ...calendarListFilterFields })
+        .strict()
+        .optional(),
+      planting: z
+        .object({ ...plantingFilterFields, ...calendarListFilterFields })
+        .strict()
+        .optional(),
+    })
+    .strict()
+    .optional(),
+};
+
+/** The combined calendar's declared sources and date projections. */
+export const calendarSources = {
+  meal: { dates: ["date"] },
+  task: { dates: ["dueDate", "dueEndDate"] },
+  expense: { dates: ["date"] },
+  project: { projection: "subtree-date-windows" },
+  planting: { dates: ["sowedOn", "transplantedOn", "finishedOn"] },
+} as const satisfies {
+  meal: { dates: readonly (keyof MealOut)[] };
+  task: { dates: readonly (keyof TaskOut)[] };
+  expense: { dates: readonly (keyof ExpenseOut)[] };
+  project: { projection: "subtree-date-windows" };
+  planting: { dates: readonly (keyof z.infer<typeof plantingOut>)[] };
+};
+
+export const calendarFiltersInput = z.object(calendarFilterFields).strict();
 export type CalendarFiltersInput = z.infer<typeof calendarFiltersInput>;
+
+export const calendarSourceMatches = (
+  kind: CalendarItemKind,
+  input: CalendarFiltersInput,
+): boolean =>
+  (!input.kinds || input.kinds.includes(kind)) &&
+  Object.entries(input.filters ?? {}).every(
+    ([source, filters]) =>
+      source === kind ||
+      !filters ||
+      !Object.entries(filters).some(
+        ([key, value]) => value !== undefined && !key.startsWith("includeSub"),
+      ),
+  );
 
 export const calendarRangeInput = z
   .object({
@@ -204,6 +230,7 @@ export const calendarRangeInput = z
     endDateExclusive: plainDate,
     ...calendarFilterFields,
   })
+  .strict()
   .refine((value) => value.startDate < value.endDateExclusive, {
     message: "endDateExclusive must be after startDate",
     path: ["endDateExclusive"],

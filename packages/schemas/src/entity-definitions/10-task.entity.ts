@@ -163,6 +163,12 @@ export default defineEntity({
       },
       views: [
         "table",
+        {
+          kind: "slot",
+          id: "calendar",
+          label: "Calendar",
+          searchKeys: ["period", "calendarDate"],
+        },
         { kind: "slot", id: "agenda", label: "Next" },
         {
           kind: "board",

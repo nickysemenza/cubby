@@ -29,6 +29,8 @@ import { generatedEntityFilters } from "./generated/entity-filter-bindings.gen";
 import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
 
 export interface FilterSpec extends FilterSpecCore {
+  unsupportedReason?: string;
+  group?: string;
   placeholder: string;
   options?: PickerOption[];
   optionsKey?: string;
@@ -243,7 +245,7 @@ const specFilterConfig = (
           icon: <EntityIcon entity={reference} className="size-3.5" />,
         }
       : {}),
-    group: filterGroup(spec, entity),
+    group: spec.group ?? filterGroup(spec, entity),
     ...(isFreeText(spec, runtimeOptions) ? { freeText: true } : {}),
     ...(spec.exclusiveGroup ? { exclusiveGroup: spec.exclusiveGroup } : {}),
     options: resolveSpecOptions(spec, runtimeOptions),

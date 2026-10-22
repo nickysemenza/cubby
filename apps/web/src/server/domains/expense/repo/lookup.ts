@@ -12,12 +12,7 @@ import {
   notDeleted,
   relations,
 } from "~/server/db/helpers";
-import {
-  expense,
-  project,
-  purchase,
-  spendingCategory,
-} from "~/server/db/schema";
+import { expense, project, spendingCategory } from "~/server/db/schema";
 import {
   expenseDerivedValueSql,
   expenseSelectionForWhere,
@@ -60,22 +55,6 @@ import {
   expenseResolutionFields,
   expenseMediaFields,
 } from "./helpers";
-
-/** Lift a Purchase predicate into the Expense selection. Deleted purchases must
- * not let expenses match their former vendor or other charge attributes. */
-const chargeIdsWhere = (db: Database, inner: SQL) =>
-  getDb(db)
-    .select({ id: purchase.id })
-    .from(purchase)
-    .where(and(notDeleted(purchase), inner));
-
-export const chargeCondition = (
-  db: Database,
-  inner: SQL | undefined,
-): SQL | undefined =>
-  inner === undefined
-    ? undefined
-    : inArray(expense.purchaseId, chargeIdsWhere(db, inner));
 
 export const resolveExpenseProjectAllocationScope = async (
   db: Database,
@@ -201,7 +180,7 @@ const allocationShares = listPrepare(async (_db, values) => ({
 
 // Allocation-backed sorts use one grouped lookup and retain the plain root
 // FROM; the product and purchase sorts compile from their declared paths.
-const expenseScaffold = listScaffold("expense", expense, {
+export const expenseScaffold = listScaffold("expense", expense, {
   derived: rowDerived,
   rows: {
     allocationShares: allocationShares.rows(

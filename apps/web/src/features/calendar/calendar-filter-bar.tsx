@@ -1,11 +1,18 @@
-import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
-import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { referenceFilterOptionsKey } from "~/entity/filter-manifest";
+import { useDeferredEntityRosters } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { ManifestFilterBar } from "~/entity/table/manifest-filter-bar";
 
 import {
   calendarFilterSpecs,
   calendarScheduleFilterSpecs,
 } from "./calendar-filter-specs";
+
+const CALENDAR_REFERENCES = calendarFilterSpecs.flatMap((spec) => {
+  const key = referenceFilterOptionsKey(spec);
+  return key && spec.referenceEntity
+    ? [{ key, target: spec.referenceEntity }]
+    : [];
+});
 
 interface CalendarFilterBarProps {
   search: Readonly<Record<string, string | undefined>>;
@@ -19,12 +26,7 @@ export function CalendarFilterBar({
   onSearchChange,
   mode = "calendar",
 }: CalendarFilterBarProps) {
-  const projectOptions = useDeferredFilterOptions("project");
-  const vendorOptions = useDeferredFilterOptions("vendor");
-  const filterOptions = useFilterOptions({
-    project: projectOptions,
-    vendor: vendorOptions,
-  });
+  const filterOptions = useDeferredEntityRosters(CALENDAR_REFERENCES);
 
   return (
     <ManifestFilterBar

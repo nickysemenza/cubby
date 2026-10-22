@@ -2,6 +2,7 @@ import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 import { lazy, Suspense } from "react";
 
 import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
+import { entityCalendar } from "~/features/calendar/entity-calendar";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 // The analytics view is entirely Nivo charts and its tab is unmounted until
@@ -19,5 +20,6 @@ const ExpenseAnalyticsSlot: ListSlotComponent = () => (
 );
 
 export const expenseListSlots = {
+  calendar: entityCalendar("expense"),
   analytics: ExpenseAnalyticsSlot,
 } satisfies Record<ListSlotId<"expense">, ListSlotComponent>;

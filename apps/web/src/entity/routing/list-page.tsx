@@ -96,7 +96,7 @@ const VIEW_ICONS = {
   timeline: CalendarCheckIcon,
 } satisfies Record<"table" | "shelf" | "timeline", Icon>;
 
-const TIMELINE_GROUP_REASON = "Timeline is already arranged by date.";
+const TIMELINE_GROUP_REASON = "This view is already arranged by date.";
 
 /** A hierarchy level's menu label: 1 is the top level. */
 const groupLevelLabel = (level: number) =>
@@ -193,7 +193,8 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { view } = resolveListView(entity, search);
   const choices = generatedEntityListFields[entity].grouping;
   if (choices.length === 0) return null;
-  const timeline = view === "timeline";
+  const timeline =
+    view === "timeline" || (typeof view === "object" && view.id === "calendar");
   const dimensions = timeline ? [] : (listGroupBy(search) ?? []);
   const apply = (next: ListGroupBy[]) =>
     navigate({ groupBy: next.length ? next : undefined });

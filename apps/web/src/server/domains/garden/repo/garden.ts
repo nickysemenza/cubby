@@ -866,7 +866,7 @@ export const updateGardenEntry = defineMutationWriter({
     }),
 });
 
-const plantingScaffold = listScaffold("planting", planting, {
+export const plantingScaffold = listScaffold("planting", planting, {
   derived: {
     activeSpan: [
       sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)})`,

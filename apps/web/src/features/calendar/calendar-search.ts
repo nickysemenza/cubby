@@ -1,8 +1,11 @@
 import { z } from "zod";
 
+import { compileFilterCodec } from "~/entity/filters";
 import { urlStringParam } from "~/lib/search-params";
 
-const dateParam = z
+import { calendarFilterSpecs } from "./calendar-filter-specs";
+
+export const calendarDateParam = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .optional()
@@ -18,48 +21,18 @@ const calendarViewPeriodParam = z
   .optional()
   .catch(undefined);
 
-/**
- * Filter params are {@link urlStringParam}, not `z.string()`.
- *
- * TanStack JSON-parses every search param, so `?future=true` arrives as the
- * BOOLEAN `true` — and a bare `z.string()` rejects it straight into
- * `.catch(undefined)`, leaving an unfiltered calendar that reads as a real
- * answer. The expense `future` filter roster's values are literally `"true"` / `"false"`,
- * so this is the live case, not a hypothetical one.
- *
- * Keys must match `calendarFilterSpecs`' URL keys exactly — a strict `z.object`
- * strips anything it doesn't declare, so an undeclared key would be written to
- * the URL and removed again before the bar could read it back.
- * `calendar-filter-specs.unit.test.ts` asserts the two stay in step.
- */
+/** Filter URL keys follow their source declarations. */
 export const calendarSearchSchema = z.object({
   period: calendarViewPeriodParam,
-  date: dateParam,
-  day: dateParam,
-  kinds: urlStringParam,
-  project: urlStringParam,
-  taskStatus: urlStringParam,
-  taskTrade: urlStringParam,
-  vendor: urlStringParam,
-  future: urlStringParam,
-  projectStatus: urlStringParam,
-  projectKinds: urlStringParam,
+  date: calendarDateParam,
+  day: calendarDateParam,
+  ...Object.fromEntries(
+    compileFilterCodec(calendarFilterSpecs).keys.map((key) => [
+      key,
+      urlStringParam,
+    ]),
+  ),
 });
-
-/**
- * Every key must appear here, or `stripSearchParams` leaves a cleared filter
- * in the URL forever.
- */
-export const calendarSearchDefaults = {
-  period: undefined,
-  date: undefined,
-  day: undefined,
-  kinds: undefined,
-  project: undefined,
-  taskStatus: undefined,
-  taskTrade: undefined,
-  vendor: undefined,
-  future: undefined,
-  projectStatus: undefined,
-  projectKinds: undefined,
-} as const;
+export const calendarSearchDefaults = Object.fromEntries(
+  Object.keys(calendarSearchSchema.shape).map((key) => [key, undefined]),
+);

@@ -1,3 +1,4 @@
+import { humanize } from "@cubby/shared";
 import { z } from "zod";
 import { ledgerPartyRefOut } from "./ledger-party-fields";
 
@@ -22,6 +23,13 @@ import {
   presenceFilter,
 } from "./pagination";
 import { problemRowSchema } from "./problems";
+import {
+  defineSourceList,
+  sourceGroupChoice,
+  supportedGroupChoices,
+  supportedGroupKeys,
+  unsupportedGroupChoice,
+} from "./source-list";
 
 export const workQueueMemberSchema = ledgerPartyRefOut;
 
@@ -238,12 +246,112 @@ export const workQueuePageInput = z.object({
   sort: workQueueSortSchema.optional(),
 });
 
+export const workQueueKindOptions = workQueueKindSchema.options.map(
+  (value) => ({ value, label: humanize(value) }),
+);
+export const workQueueSourceOptions = workQueueSourceSchema.options.map(
+  (value) => ({ value, label: humanize(value) }),
+);
+/** A row's record type; Problems and Suggestion family rows have none. */
+export const workQueueRecordTypeOptions = shortcodeEntities.map((value) => ({
+  value,
+  label: entitySummary[value].singular,
+}));
+
+/**
+ * The household queue's filters and Group by choices. A section's key is the
+ * value its choice's filter selects, so "Filter to this" narrows the read to
+ * that section; the read projects each choice's key and label.
+ */
+export const workQueueList = defineSourceList({
+  filters: [
+    { columnId: "name", urlKey: "query", kind: "text" },
+    { columnId: "view", kind: "text" },
+    { columnId: "entity", kind: "multiselect" },
+    {
+      columnId: "waitingFor",
+      kind: "multiselect",
+      currentMember: true,
+      nullable: { field: "waitingForPresence", label: "waiting for" },
+    },
+    { columnId: "source", kind: "multiselect" },
+    { columnId: "kind", kind: "multiselect" },
+    {
+      columnId: "reason",
+      field: "check",
+      urlKey: "check",
+      kind: "multiselect",
+    },
+    { columnId: "vendor", kind: "multiselect" },
+  ],
+  grouping: [
+    sourceGroupChoice({
+      key: "recordType",
+      label: "Type",
+      noValueLabel: "Problem",
+      filter: { columnId: "entity", noValue: false },
+      options: workQueueRecordTypeOptions,
+    }),
+    sourceGroupChoice({
+      key: "waitingFor",
+      label: "Waiting for",
+      noValueLabel: "Unresolved",
+      filter: { columnId: "waitingFor", noValue: true },
+    }),
+    sourceGroupChoice({
+      key: "source",
+      label: "Source",
+      filter: { columnId: "source", noValue: false },
+      options: workQueueSourceOptions,
+    }),
+    sourceGroupChoice({
+      key: "kind",
+      label: "Kind",
+      filter: { columnId: "kind", noValue: false },
+      options: workQueueKindOptions,
+    }),
+    sourceGroupChoice({
+      key: "vendor",
+      label: "Vendor",
+      noValueLabel: "No vendor",
+      filter: { columnId: "vendor", noValue: false },
+    }),
+    sourceGroupChoice({
+      key: "nextAction",
+      label: "Next action",
+      filter: null,
+    }),
+    unsupportedGroupChoice({
+      key: "check",
+      label: "Check",
+      reason:
+        "A row can fail several checks, and each row belongs to one section.",
+    }),
+    unsupportedGroupChoice({
+      key: "date",
+      label: "Date",
+      reason:
+        "Work dates belong to different record types; sort by Date instead.",
+    }),
+    unsupportedGroupChoice({
+      key: "amount",
+      label: "Amount",
+      reason: "Amounts have no sections; sort by Amount instead.",
+    }),
+  ],
+});
+
 /** Projected values the household queue can section by, ahead of its sort. */
-export const workQueueGroupSchema = z.enum([
-  "recordType",
-  "waitingFor",
-  "nextAction",
-]);
+export const workQueueGroupChoices = supportedGroupChoices(workQueueList);
+export const workQueueGroupSchema = z
+  .enum(supportedGroupKeys(workQueueList))
+  .describe(
+    `Unsupported: ${workQueueList.grouping
+      .flatMap((choice) =>
+        choice.reason === null ? [] : [`${choice.key}: ${choice.reason}`],
+      )
+      .join(" ")}`,
+  );
 
 /** Household UI filters select routing metadata; they confer no source access. */
 export const workQueueHouseholdInput = workQueuePageInput.extend({

@@ -1,11 +1,39 @@
+import {
+  calendarSourceMatches,
+  calendarFiltersInput,
+} from "@cubby/schemas/calendar";
 import { describe, expect, it } from "vitest";
 
+import { buildCalendarFilters } from "./calendar-filters";
 import {
   calendarSearchDefaults,
   calendarSearchSchema,
 } from "./calendar-search";
 
 describe("calendar search params", () => {
+  it("preserves source exclusions and exact scope through the route codec", () => {
+    const filters = buildCalendarFilters(
+      calendarSearchSchema.parse({
+        "task.projectIdExclude": "PRJ-2345",
+        "task.includeSubProjects": "false",
+      }),
+    );
+    expect(filters.filters?.task).toMatchObject({
+      projectIdExclude: ["PRJ-2345"],
+      includeSubProjects: false,
+    });
+    expect(calendarSourceMatches("task", filters)).toBe(true);
+    expect(calendarSourceMatches("meal", filters)).toBe(false);
+    expect(
+      calendarSourceMatches(
+        "meal",
+        calendarFiltersInput.parse({
+          filters: { task: { includeSubProjects: false } },
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it("accepts linkable calendar filters and selected dates", () => {
     expect(
       calendarSearchSchema.parse({
@@ -13,14 +41,14 @@ describe("calendar search params", () => {
         date: "2026-07-01",
         day: "2026-07-14",
         kinds: "meal,task",
-        projectKinds: "renovation,garden",
+        "project.kinds": "renovation,garden",
       }),
     ).toMatchObject({
       period: "week",
       date: "2026-07-01",
       day: "2026-07-14",
       kinds: "meal,task",
-      projectKinds: "renovation,garden",
+      "project.kinds": "renovation,garden",
     });
   });
 
@@ -28,8 +56,10 @@ describe("calendar search params", () => {
     // `?future=true` arrives as the BOOLEAN true. A bare z.string() would drop
     // it into `.catch(undefined)`, leaving an unfiltered calendar that reads as
     // a real answer — the exact hole `urlStringParam` exists to close.
-    expect(calendarSearchSchema.parse({ future: true })).toMatchObject({
-      future: "true",
+    expect(
+      calendarSearchSchema.parse({ "expense.future": true }),
+    ).toMatchObject({
+      "expense.future": "true",
     });
   });
 

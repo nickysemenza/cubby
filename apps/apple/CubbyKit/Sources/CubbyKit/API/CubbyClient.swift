@@ -705,8 +705,9 @@ public actor CubbyClient {
     public func mealCalendar(from start: String, to end: String) async throws -> CalendarRangeOut {
         try await perform {
             try await api.calendar_range(
-                query: .init(
-                    startDate: start, endDateExclusive: end, kinds: [.meal])
+                body: .json(
+                    .init(
+                        startDate: start, endDateExclusive: end, kinds: [.meal]))
             ).ok.body.json
         }
     }

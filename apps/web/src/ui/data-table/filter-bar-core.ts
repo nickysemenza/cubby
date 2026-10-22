@@ -51,6 +51,7 @@ export type FilterFieldConfig = {
   min?: number;
   max?: number;
   description?: string;
+  unsupportedReason?: string;
   /** Offers Match any | Match all (multi-valued fields only). */
   matchAll?: boolean;
   /** A multiselect with no roster: its values are typed, comma-separated. */

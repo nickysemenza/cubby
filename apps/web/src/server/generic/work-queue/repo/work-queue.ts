@@ -37,9 +37,12 @@ import {
   workQueueGapChecks,
   workQueueGapViews,
   workQueueHouseholdInput,
+  workQueueKindOptions,
   workQueueKindSchema,
+  workQueueList,
+  workQueueRecordTypeOptions,
+  workQueueSourceOptions,
   workQueueSourceSchema,
-  workQueueSortableFields,
   workQueueSortSchema,
   workWaitingForSchema,
   workQueueOutSchema,
@@ -129,17 +132,41 @@ const members = workWaitingForSchema.options[1].shape.kind.value;
 const unresolved = workWaitingForSchema.options[2].shape.kind.value;
 
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
-/** A grouped read's section for rows without a value (no next action). */
-const WORK_QUEUE_NO_GROUP_LABEL = "None";
-/** Each Group by sections on the same value its column sorts by. */
-const GROUP_SORTS = {
-  recordType: "entity",
-  waitingFor: "waitingFor",
-  nextAction: "nextAction",
-} as const satisfies Record<
-  WorkQueueGroup,
-  (typeof workQueueSortableFields)[number]
->;
+const optionLabel = (
+  column: SQL,
+  options: readonly { value: string; label: string }[],
+) =>
+  sql`CASE ${column} ${sql.join(
+    options.map(({ value, label }) => sql`WHEN ${value} THEN ${label}`),
+    sql` `,
+  )} END`;
+const vendorColumn = (column: "shortcode" | "name") =>
+  sql`(SELECT v.${sql.identifier(column)} FROM "Vendor" v WHERE v.id = eligible.vendor_id AND v."deletedAt" IS NULL)`;
+const ownerColumn = (column: "shortcode" | "name") =>
+  sql`(SELECT string_agg(member.${sql.identifier(column)}, ', ' ORDER BY member.${sql.identifier(column)}) FROM members member WHERE member.id = ANY(eligible.owners))`;
+/** Each choice's section key is the value its declared filter selects (a
+ * record type, `either`, a source, a vendor code); a null key is the choice's
+ * no-value section. Several members' work is one section keyed by their codes. */
+const GROUP_SECTIONS = {
+  recordType: {
+    key: sql`entity`,
+    label: optionLabel(sql`entity`, workQueueRecordTypeOptions),
+  },
+  waitingFor: {
+    key: sql`CASE waiting_kind WHEN ${either} THEN ${either}::text WHEN ${members} THEN ${ownerColumn("shortcode")} END`,
+    label: sql`CASE waiting_kind WHEN ${either} THEN 'Either' WHEN ${members} THEN ${ownerColumn("name")} END`,
+  },
+  source: {
+    key: sql`source`,
+    label: optionLabel(sql`source`, workQueueSourceOptions),
+  },
+  kind: { key: sql`kind`, label: optionLabel(sql`kind`, workQueueKindOptions) },
+  vendor: { key: vendorColumn("shortcode"), label: vendorColumn("name") },
+  nextAction: {
+    key: sql`nullif("nextAction", '')`,
+    label: sql`nullif("nextAction", '')`,
+  },
+} satisfies Record<WorkQueueGroup, { key: SQL; label: SQL }>;
 type Candidate = Pick<WorkQueueRow, "source" | "kind" | "nextAction"> & {
   reason: string | SQL;
 };
@@ -782,7 +809,8 @@ async function queryWorkQueue(
   const facts = (["amount", "date", "vendor"] as const).filter(
     (fact) =>
       sorts.some((sort) => sort.orderBy === fact) ||
-      (fact === "vendor" && input.vendor !== undefined),
+      (fact === "vendor" &&
+        (input.vendor !== undefined || input.group === "vendor")),
   );
   const candidateConditions: SQL[] = [];
   const sources = oneOrManyValues(input.source);
@@ -910,17 +938,27 @@ async function queryWorkQueue(
     waitingFor: sql`CASE waiting_kind WHEN ${either} THEN 'Either' WHEN ${unresolved} THEN 'Unresolved' ELSE (SELECT string_agg(member.name, ', ' ORDER BY member.name, member.shortcode) FROM members member WHERE member.id = ANY(eligible.owners)) END`,
     amount: sql`amount`,
     date: sql`date`,
-    vendor: sql`(SELECT v.name FROM "Vendor" v WHERE v.id = eligible.vendor_id AND v."deletedAt" IS NULL)`,
+    vendor: vendorColumn("name"),
   };
-  // A grouped read orders by its section first, so loaded rows are a prefix
-  // of the summary's sections; an empty value is the trailing no-value section.
-  const groupExpression = input.group
-    ? sql`nullif(${sortExpressions[GROUP_SORTS[input.group]]}, '')`
-    : undefined;
+  // A grouped read orders by its section first, in the summary's order (by
+  // label, the no-value section last), so loaded rows are a prefix of its
+  // sections.
+  const section = input.group ? GROUP_SECTIONS[input.group] : undefined;
+  const sectionLabel =
+    section && sql`coalesce(nullif(${section.label}, ''), ${section.key})`;
+  const noValueLabel = workQueueList.grouping.find(
+    (choice) => choice.key === input.group,
+  )?.noValueLabel;
   // Every sort places nulls last in both directions; name and key break ties.
   const orderBy = sql.join(
     [
-      ...(groupExpression ? [sql`${groupExpression} ASC NULLS LAST`] : []),
+      ...(section
+        ? [
+            sql`(${section.key}) IS NULL ASC`,
+            sql`${sectionLabel} ASC`,
+            sql`${section.key} ASC`,
+          ]
+        : []),
       ...sorts.map(
         (sort) =>
           sql`${sortExpressions[sort.orderBy]} ${sort.direction === "desc" ? sql`DESC` : sql`ASC`} NULLS LAST`,
@@ -989,10 +1027,10 @@ async function queryWorkQueue(
         )}
       ) FROM filtered routed) AS "viewCounts",
       ${
-        groupExpression
-          ? sql`(SELECT coalesce(jsonb_agg(to_jsonb(sections) ORDER BY sections.key = ${FILTER_NONE}, sections.key), '[]'::jsonb) FROM (
-              SELECT coalesce(section, ${FILTER_NONE}::text) AS key, coalesce(section, ${WORK_QUEUE_NO_GROUP_LABEL}::text) AS label, count(*)::int AS count
-              FROM (SELECT ${groupExpression} AS section FROM eligible) sectioned GROUP BY section
+        section
+          ? sql`(SELECT coalesce(jsonb_agg(to_jsonb(sections) ORDER BY sections.key = ${FILTER_NONE}, sections.label, sections.key), '[]'::jsonb) FROM (
+              SELECT coalesce(section, ${FILTER_NONE}::text) AS key, coalesce(label, ${noValueLabel}::text) AS label, count(*)::int AS count
+              FROM (SELECT ${section.key} AS section, ${sectionLabel} AS label FROM eligible) sectioned GROUP BY section, label
             ) sections)`
           : sql`NULL::jsonb`
       } AS groups,
