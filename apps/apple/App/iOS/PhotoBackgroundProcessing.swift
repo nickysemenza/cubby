@@ -9,7 +9,8 @@ enum PhotoBackgroundProcessing {
     static let identifier = "com.nickysemenza.cubby.photo-matching"
 
     static func register() {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
+        // The launch closure inherits MainActor; nil would deliver it on a background queue.
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { task in
             guard let task = task as? BGProcessingTask else { return }
             Task { @MainActor in await handle(task) }
         }
@@ -76,7 +77,8 @@ enum LibrarySyncBackgroundProcessing {
     static let identifier = "com.nickysemenza.cubby.library-sync"
 
     static func register() {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
+        // The launch closure inherits MainActor; nil would deliver it on a background queue.
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { task in
             guard let task = task as? BGProcessingTask else { return }
             Task { @MainActor in await handle(task) }
         }
