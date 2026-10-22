@@ -7,7 +7,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useSyncExternalStore } from "react";
 
-import type { RunDecision } from "~/contracts/run-detail.contract";
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
