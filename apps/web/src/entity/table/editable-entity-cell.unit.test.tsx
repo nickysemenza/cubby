@@ -159,9 +159,9 @@ describe("EditableEntityCell", () => {
     expect(parentClick).not.toHaveBeenCalled();
   });
 
-  it("saves on pick (no ✓ confirm) and shows the new item optimistically", async () => {
+  it("saves on pick (no ✓ confirm) and displays the canonical prop after save", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(
+    const { rerender } = render(
       <EditableEntityCell
         value={PANTRY}
         onSave={onSave}
@@ -182,9 +182,20 @@ describe("EditableEntityCell", () => {
     });
     expect(onSave).toHaveBeenCalledWith("loc-2");
 
-    await waitFor(() => {
-      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    });
+    await waitFor(() =>
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("display")).toHaveTextContent("Pantry");
+
+    rerender(
+      <EditableEntityCell
+        value={FRIDGE}
+        onSave={onSave}
+        SearchProvider={StubSearchProvider}
+        label="location"
+        renderValue={renderValue}
+      />,
+    );
     expect(screen.getByTestId("display")).toHaveTextContent("Fridge");
   });
 
@@ -218,7 +229,7 @@ describe("EditableEntityCell", () => {
 
   it("clearable: the explicit clear control saves null immediately", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(
+    const { rerender } = render(
       <EditableEntityCell
         value={PANTRY}
         onSave={onSave}
@@ -238,9 +249,18 @@ describe("EditableEntityCell", () => {
     });
     expect(onSave).toHaveBeenCalledWith(null);
 
-    await waitFor(() => {
-      expect(screen.getByTestId("display")).toHaveTextContent("None");
-    });
+    expect(screen.getByTestId("display")).toHaveTextContent("Pantry");
+    rerender(
+      <EditableEntityCell
+        value={null}
+        onSave={onSave}
+        SearchProvider={StubSearchProvider}
+        label="location"
+        clearable
+        renderValue={renderValue}
+      />,
+    );
+    expect(screen.getByTestId("display")).toHaveTextContent("None");
   });
 
   it("not clearable: has no clear control and reselecting is a no-op", async () => {
@@ -302,7 +322,7 @@ describe("EditableEntityCell", () => {
           resolveSave = resolve;
         }),
     );
-    render(
+    const { rerender } = render(
       <EditableEntityCell
         value={PANTRY}
         onSave={onSave}
@@ -316,6 +336,7 @@ describe("EditableEntityCell", () => {
     openCombobox();
     clickDropdownItem("Fridge");
     expect(onSave).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("display")).toHaveTextContent("Pantry");
 
     // Second pick while the first save is pending: jsdom doesn't enforce the
     // pointer-events gate, so this exercises the hard ref guard in commit().
@@ -327,9 +348,20 @@ describe("EditableEntityCell", () => {
     expect(onSave).toHaveBeenCalledTimes(1);
 
     resolveSave?.();
-    await waitFor(() => {
-      expect(screen.getByTestId("display")).toHaveTextContent("Fridge");
-    });
+    await waitFor(() =>
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("display")).toHaveTextContent("Pantry");
+    rerender(
+      <EditableEntityCell
+        value={FRIDGE}
+        onSave={onSave}
+        SearchProvider={StubSearchProvider}
+        label="location"
+        renderValue={renderValue}
+      />,
+    );
+    expect(screen.getByTestId("display")).toHaveTextContent("Fridge");
   });
 
   it("filterItems hides excluded items from the dropdown", () => {

@@ -3,7 +3,7 @@ import type {
   MutationFunction,
   UseMutationOptions,
 } from "@tanstack/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +18,10 @@ import type {
   StandardAction,
   StandardEntity,
 } from "~/entity/entity-contracts";
+import {
+  mutationReceipt,
+  settleReceiptProjection,
+} from "~/integrations/tanstack-query/receipt-reconciliation";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 type ActionSuccess<TData> = ReactNode | ((data: TData) => ReactNode);
@@ -44,7 +48,7 @@ function isActionErrorFactory<TError extends Error>(
 interface ActionPresentation<TData, TError extends Error> {
   success?: ActionSuccess<TData>;
   successToastId?: string;
-  /** Completion work is part of the mutation lifetime (for example suggestion receipts). */
+  /** Runs after acceptance; failures are reported separately from the saved write. */
   onSuccess?: (data: TData) => void | Promise<void>;
   /** See `ActionError` — a static string is a prefix, not the full title. */
   error?: ActionError<TError>;
@@ -62,7 +66,14 @@ function showSuccess<TData>(
       successToastId === undefined ? undefined : { id: successToastId },
     );
   }
-  return onSuccess?.(data);
+  // Follow-up UI work cannot hold or fail an accepted write.
+  try {
+    void Promise.resolve(onSuccess?.(data)).catch((error) => {
+      showErrorToast(error, "Saved, but follow-up work failed");
+    });
+  } catch (error) {
+    showErrorToast(error, "Saved, but follow-up work failed");
+  }
 }
 
 function showError<TError extends Error>(
@@ -144,10 +155,15 @@ export function useEntityActionMutation<
   /** Test seam: a local operation adapter in place of the Start transport. */
   mutationPort?: EntityMutationPort;
 }) {
+  const queryClient = useQueryClient();
   const commands = useEntityActionCommands(entity, { mutationPort });
   const executors = {
     create: async (data) => await commands.createAction(data, intent),
-    update: async (variables) => await commands.updateAction(variables, intent),
+    update: async (variables) => {
+      const result = await commands.updateAction(variables, intent);
+      await settleReceiptProjection(queryClient, mutationReceipt(result));
+      return result;
+    },
     delete: async (variables) => await commands.deleteAction(variables),
     bulkUpdate: async (variables) => await commands.bulkUpdateAction(variables),
   } satisfies EntityActionExecutors<E>;
@@ -160,11 +176,9 @@ export function useEntityActionMutation<
     EntityActionVariables<E, A>
   >({
     ...actionOptions,
-    // The command owns serialization; sharing its scope here deadlocks the
-    // outer mutation against the inner one it awaits. Task refresh is owned
-    // by that same command, so the presentation layer must not repeat it.
+    // The semantic command owns receipt reconciliation and invalidation.
     scope: undefined,
-    meta: entity === "task" ? { entity } : actionOptions.meta,
+    meta: { entity },
     mutationFn: execute,
     onSuccess: (data) =>
       showSuccess(

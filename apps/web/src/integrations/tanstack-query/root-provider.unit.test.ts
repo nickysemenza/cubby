@@ -1,3 +1,4 @@
+import { QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -56,15 +57,85 @@ async function invalidatedTagsFor<Variables>(
 }
 
 describe("root MutationCache invalidation", () => {
-  it("disables ambient browser revalidation for cached queries", () => {
-    const { queryClient } = getContext();
-    expect(queryClient.getDefaultOptions().queries?.refetchOnMount).toBe(false);
-    expect(queryClient.getDefaultOptions().queries?.refetchOnWindowFocus).toBe(
-      false,
-    );
-    expect(queryClient.getDefaultOptions().queries?.refetchOnReconnect).toBe(
-      false,
-    );
+  it("publishes a canonical receipt across views without awaiting refresh and evicts inactive baselines", async () => {
+    const { queryClient: client } = getContext();
+    const key = ["synthetic-task-page"];
+    const detail = ["synthetic-task-detail"];
+    const inactive = ["synthetic-task-baseline"];
+    const id = "TSK-AAAA";
+    const gate = Promise.withResolvers<{
+      items: { id: string; status: string }[];
+    }>();
+    client.setQueryData(key, { items: [{ id, status: "todo" }] });
+    client.setQueryDefaults(detail, { meta: { cacheTags: [["task"]] } });
+    client.setQueryData(detail, { id, status: "todo" });
+    client.getQueryCache().build(client, {
+      queryKey: inactive,
+      meta: { cacheTags: [["task"]] },
+      queryFn: async () => null,
+    });
+    const observer = new QueryObserver(client, {
+      queryKey: key,
+      meta: { cacheTags: [["task"]], silentErrors: true },
+      queryFn: () => gate.promise,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    const unrelatedKey = ["synthetic-other-view"];
+    client.setQueryData(unrelatedKey, {
+      id: "PRD-AAAA",
+      name: "Synthetic item",
+    });
+    const unrelated = client.getQueryCache().find({ queryKey: unrelatedKey });
+    const readFailure = new Error("Synthetic unrelated refresh failed");
+    await client
+      .fetchQuery({
+        queryKey: unrelatedKey,
+        staleTime: 0,
+        meta: { silentErrors: true },
+        queryFn: async () => {
+          throw readFailure;
+        },
+      })
+      .catch(() => undefined);
+    unrelated?.invalidate();
+    try {
+      const receipt = {
+        action: "update",
+        entity: "task",
+        item: { id, status: "done" },
+        appliedFields: ["status"],
+        sideEffects: {},
+      };
+      const saved = await client
+        .getMutationCache()
+        .build(client, {
+          mutationFn: async () => receipt,
+          meta: {
+            operation: "entity.mutate",
+            entity: "task",
+            invalidates: entityRipple("task"),
+          },
+        })
+        .execute({ id, data: { status: "done" } });
+      expect(saved).toEqual(receipt);
+      expect(client.getQueryState(unrelatedKey)?.error).toBe(readFailure);
+      expect(client.getQueryState(unrelatedKey)?.isInvalidated).toBe(true);
+      expect(client.getQueryData(key)).toEqual({
+        items: [{ id, status: "done" }],
+      });
+      expect(client.getQueryState(key)?.fetchStatus).toBe("fetching");
+      expect(client.getQueryState(inactive)).toBeUndefined();
+      expect(client.getQueryState(detail)).toBeUndefined();
+      gate.reject(new Error("Synthetic refresh failed after commit"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(client.getQueryData(key)).toEqual({
+        items: [{ id, status: "done" }],
+      });
+      expect(client.getQueryState(key)?.status).toBe("error");
+    } finally {
+      unsubscribe();
+      client.clear();
+    }
   });
 
   it("uses a descriptor's static tag list", async () => {

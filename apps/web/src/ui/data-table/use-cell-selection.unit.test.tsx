@@ -6,9 +6,12 @@ import {
   screen,
 } from "@testing-library/react";
 import { createPortal } from "react-dom";
-import { describe, expect, it } from "vitest";
+import { Toaster, toast } from "sonner";
+import { describe, expect, it, vi } from "vitest";
 
+import { textCellData, type PasteFieldValues } from "./cell-data";
 import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import { attachCubbyColumnMeta } from "./table-meta";
 import { useCellSelection } from "./use-cell-selection";
 
 interface TestRow {
@@ -63,6 +66,80 @@ describe("useCellSelection", () => {
     expect(result.current.selection.getSelection()).toEqual({
       anchor: { row: 0, col: 0 },
       focus: { row: 1, col: 1 },
+    });
+  });
+
+  it("retries only failed rows against their original identities after reordering", async () => {
+    const saveCell = vi.fn(async () => {});
+    const saveRow = vi.fn(
+      async (_row: TestRow, _values: PasteFieldValues) => {},
+    );
+    saveRow.mockRejectedValueOnce(new Error("write refused"));
+    const alpha = textCellData<TestRow>("text", (row) => row.alpha, saveCell);
+    const beta = textCellData<TestRow>("text", (row) => row.beta, saveCell);
+    alpha.rowWrite = { field: "alpha", save: saveRow };
+    beta.rowWrite = { field: "beta", save: saveRow };
+    const editableColumns = helper.columns([
+      helper.accessor("alpha", {
+        id: "alpha",
+        meta: attachCubbyColumnMeta({ cellData: alpha }),
+      }),
+      helper.accessor("beta", {
+        id: "beta",
+        meta: attachCubbyColumnMeta({ cellData: beta }),
+      }),
+    ]);
+    let selectCell = () => {};
+    function Harness({ rows }: { rows: TestRow[] }) {
+      const table = useCubbyTable({
+        data: rows,
+        columns: editableColumns,
+        getRowId: (row) => row.id,
+      });
+      const selection = useCellSelection({
+        enabled: true,
+        rows: table.getRowModel().rows,
+        table,
+        scrollToFlatRow: noopScroll,
+      });
+      selectCell = () =>
+        table.selectCellRange({
+          anchorRowId: "row-a",
+          anchorColumnId: "alpha",
+          focusRowId: "row-a",
+          focusColumnId: "alpha",
+        });
+      return (
+        <>
+          <div data-testid="table" {...selection.containerProps} />
+          <Toaster />
+        </>
+      );
+    }
+    const { rerender } = render(<Harness rows={data} />);
+    act(() => selectCell());
+    const container = screen.getByTestId("table");
+    fireEvent.mouseDown(container);
+    fireEvent.paste(container, {
+      clipboardData: { getData: () => "New A1\tNew B1\nNew A2\tNew B2" },
+    });
+    const retry = await screen.findByRole("button", {
+      name: "Retry failed rows",
+    });
+    expect(saveRow).toHaveBeenCalledTimes(2);
+    expect(saveCell).not.toHaveBeenCalled();
+    expect(screen.getByText(/Row 1, alpha: write refused/)).toBeVisible();
+    rerender(<Harness rows={[...data].reverse()} />);
+    await act(async () => {
+      fireEvent.click(retry);
+    });
+    expect(saveRow).toHaveBeenCalledTimes(3);
+    expect(saveRow).toHaveBeenLastCalledWith(data[0], {
+      alpha: "New A1",
+      beta: "New B1",
+    });
+    act(() => {
+      toast.dismiss();
     });
   });
 

@@ -22,7 +22,7 @@ import type {
   CopiedGrid,
   PasteOp,
 } from "./cell-clipboard-model";
-import type { ColumnCellData } from "./cell-data";
+import type { ColumnCellData, PasteFieldValues } from "./cell-data";
 
 /**
  * Build a rectangular `CopiedGrid` from the TanStack row model. `rows` is
@@ -100,22 +100,25 @@ export function isOpUnchanged(
   return JSON.stringify(source.json) === JSON.stringify(currentJson);
 }
 
+interface PasteRowError {
+  row: number;
+  ops: PasteOp[];
+  fields: { col: number; field: string | undefined; message: string }[];
+}
+
 export interface PasteRunResult {
-  /** Ops that saved successfully — used to flash the target cells. */
+  /** Only confirmed writes may flash or disappear from a retry. */
   updatedOps: PasteOp[];
+  failedOps: PasteOp[];
+  rowErrors: PasteRowError[];
   updated: number;
-  /** Dropped as identical to the current value (silent). */
   unchanged: number;
   failed: number;
-  /** One message per failed op (via the injected `formatError`). */
   errors: string[];
 }
 
-/**
- * Run a paste plan's ops: drop unchanged writes, then execute the rest with
- * bounded concurrency, capturing per-op errors (never rejecting the batch).
- * Pure boundary — `formatError` (the hook passes `getErrorMessage`) keeps this
- * alias-free.
+/** Validate every changed field before dispatching one semantic command per row.
+ * Concurrency is across rows; a failed row never prevents successful siblings.
  */
 export async function runPastePlan<TRow>(params: {
   ops: readonly PasteOp[];
@@ -126,47 +129,106 @@ export async function runPastePlan<TRow>(params: {
 }): Promise<PasteRunResult> {
   const { ops, rows, columnCellData, formatError, concurrency = 5 } = params;
   const updatedOps: PasteOp[] = [];
-  const errors: string[] = [];
-  let updated = 0;
+  const failedOps: PasteOp[] = [];
+  const rowErrors: PasteRowError[] = [];
   let unchanged = 0;
   let failed = 0;
-
-  const attempts: PasteOp[] = [];
+  const byRow = new Map<number, PasteOp[]>();
   for (const op of ops) {
-    const cellData = columnCellData[op.col] ?? null;
-    const row = rows[op.row];
-    if (!cellData?.applyPaste || row === undefined) continue;
-    const currentJson = cellData.getCopyPayload(row)?.json ?? null;
-    if (isOpUnchanged(op.source, currentJson)) {
-      unchanged++;
-      continue;
-    }
-    attempts.push(op);
+    const rowOps = byRow.get(op.row) ?? [];
+    rowOps.push(op);
+    byRow.set(op.row, rowOps);
   }
 
-  // The worker never rejects (per-op try/catch), so pMap never short-circuits.
   await pMap(
-    attempts,
-    async (op) => {
-      const cellData = columnCellData[op.col] ?? null;
-      const row = rows[op.row];
-      if (!cellData?.applyPaste || row === undefined) return;
-      try {
-        await cellData.applyPaste(row, {
-          json: op.source.json,
-          text: op.source.text,
+    [...byRow],
+    async ([rowIndex, rowOps]) => {
+      const row = rows[rowIndex];
+      if (row === undefined) return;
+      const attempts = rowOps.filter((op) => {
+        const data = columnCellData[op.col];
+        if (!data?.applyPaste) return false;
+        if (isOpUnchanged(op.source, data.getCopyPayload(row)?.json ?? null)) {
+          unchanged++;
+          return false;
+        }
+        return true;
+      });
+      const first = attempts[0];
+      if (!first) return;
+      const firstData = columnCellData[first.col];
+      const rowWrite = firstData?.rowWrite;
+      const fields: PasteRowError["fields"] = [];
+      const values: PasteFieldValues = {};
+      const fail = (op: PasteOp, message: string) =>
+        fields.push({
+          col: op.col,
+          field: columnCellData[op.col]?.rowWrite?.field,
+          message,
         });
-        updated++;
-        updatedOps.push(op);
-      } catch (err) {
-        failed++;
-        errors.push(formatError(err));
+      // A collection of independent cell saves is never an atomic row command.
+      if (
+        rowOps.length > 1 &&
+        (!rowWrite ||
+          rowOps.some((op) => {
+            const data = columnCellData[op.col];
+            return !data?.preparePaste || data.rowWrite?.save !== rowWrite.save;
+          }))
+      ) {
+        for (const op of attempts)
+          fail(op, "Multi-cell paste requires a shared row update command");
+      } else if (rowWrite) {
+        for (const op of attempts) {
+          const data = columnCellData[op.col];
+          try {
+            if (!data?.preparePaste || !data.rowWrite) {
+              throw new Error("Column does not support row paste preparation");
+            }
+            values[data.rowWrite.field] = data.preparePaste({
+              json: op.source.json,
+              text: op.source.text,
+            });
+          } catch (error) {
+            fail(op, formatError(error));
+          }
+        }
       }
+      if (fields.length === 0) {
+        try {
+          if (rowWrite) await rowWrite.save(row, values);
+          else
+            await firstData?.applyPaste?.(row, {
+              json: first.source.json,
+              text: first.source.text,
+            });
+          updatedOps.push(...attempts);
+          return;
+        } catch (error) {
+          for (const op of attempts) fail(op, formatError(error));
+        }
+      }
+      failed += attempts.length;
+      failedOps.push(...rowOps);
+      rowErrors.push({ row: rowIndex, ops: rowOps, fields });
     },
     { concurrency: Math.max(concurrency, 1) },
   );
 
-  return { updatedOps, updated, unchanged, failed, errors };
+  const errors = rowErrors.flatMap(({ row, fields }) =>
+    fields.map(
+      ({ col, field, message }) =>
+        `Row ${row + 1}, ${field ?? `column ${col + 1}`}: ${message}`,
+    ),
+  );
+  return {
+    updatedOps,
+    failedOps,
+    rowErrors,
+    updated: updatedOps.length,
+    unchanged,
+    failed,
+    errors,
+  };
 }
 
 type PasteToastVariant = "success" | "warning" | "error" | "info";

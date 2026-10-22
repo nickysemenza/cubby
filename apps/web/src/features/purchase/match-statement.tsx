@@ -75,6 +75,20 @@ export function MatchStatementDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  // Each review visit owns its chosen transaction and editable allocation rows.
+  // Reopening must not reuse either the prior draft or a pre-save candidate.
+  return open ? (
+    <MatchStatementReview purchaseId={purchaseId} onOpenChange={onOpenChange} />
+  ) : null;
+}
+
+function MatchStatementReview({
+  purchaseId,
+  onOpenChange,
+}: {
+  purchaseId: string;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [selected, setSelected] = useState<FinancialTransactionOut | null>(
     null,
   );
@@ -82,9 +96,13 @@ export function MatchStatementDialog({
   const queryClient = useQueryClient();
   const candidatesQuery = useQuery({
     ...purchaseOperations.settlementCandidates.queryOptions({ purchaseId }),
-    enabled: open,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
-  const review = candidatesQuery.data;
+  const review =
+    candidatesQuery.fetchStatus === "idle" && candidatesQuery.isSuccess
+      ? candidatesQuery.data
+      : undefined;
   const update = useMutation(
     financeOperations.allocateSettlement.mutationOptions(),
   );
@@ -157,18 +175,17 @@ export function MatchStatementDialog({
       setSaveError(error instanceof Error ? error.message : String(error));
       return;
     }
-    await invalidateOperationTags(
+    void invalidateOperationTags(
       queryClient,
       entityRipple("financialTransaction"),
       { removeInactive: true },
     );
     onOpenChange(false);
-    setSelected(null);
   };
 
   return (
     <Overlay
-      open={open}
+      open
       onOpenChange={onOpenChange}
       title="Match statement activity"
       description="Review unallocated charges and refunds near this order. Allocate the full statement amount across Purchases before saving."
@@ -181,8 +198,12 @@ export function MatchStatementDialog({
         onClick: saveAllocation,
       }}
     >
-      {candidatesQuery.isPending ? (
-        <Description>Checking statement activity…</Description>
+      {candidatesQuery.isPending || candidatesQuery.fetchStatus !== "idle" ? (
+        <Description>
+          {candidatesQuery.fetchStatus === "paused"
+            ? "Waiting for a connection to check statement activity…"
+            : "Checking statement activity…"}
+        </Description>
       ) : null}
       {candidatesQuery.isError ? (
         <Description>{String(candidatesQuery.error)}</Description>

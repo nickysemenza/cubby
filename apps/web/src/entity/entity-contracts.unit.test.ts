@@ -85,6 +85,17 @@ describe("kernel browser transport", () => {
     await expect(observer.mutate({ ids: ["PRD-4K7M"] })).resolves.toEqual({
       deleted: 1,
       sideEffects: {},
+      receipt: {
+        action: "delete",
+        entity: "product",
+        deletedReferences: [
+          { entity: "product", id: "PRD-4K7M" },
+          { entity: "image", id: "IMG-2F9Q" },
+          { entity: "image", id: "IMG-8J3W" },
+        ],
+        affectedEdges: [],
+        sideEffects: {},
+      },
     });
     expect(adapter.commands).toEqual([
       {

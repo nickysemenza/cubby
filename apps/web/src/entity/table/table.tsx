@@ -1,5 +1,6 @@
-import "../../ui/data-table/table.css";
 import type { Entity } from "@cubby/schemas/entity";
+
+import "../../ui/data-table/table.css";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
@@ -21,6 +22,7 @@ import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -290,9 +292,20 @@ function TableStatus<TItem extends RowData>({
 }): ReactNode {
   if (isLoading || !hydrated) return null;
   if (error) {
-    return <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />;
+    return rows.length > 0 ? (
+      <QueryRefreshStatus
+        refreshing={false}
+        error={error}
+        onRetry={refreshControls?.onRefresh}
+      />
+    ) : (
+      <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />
+    );
   }
-  if (rows.length) return null;
+  if (rows.length)
+    return (
+      <QueryRefreshStatus refreshing={refreshControls?.isRefreshing ?? false} />
+    );
   if (emptyState) return emptyState;
 
   return <TableEmptyState entity={entity} table={table} />;

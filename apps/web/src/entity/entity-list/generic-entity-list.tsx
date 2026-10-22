@@ -205,11 +205,13 @@ function useListColumns(
       // the generated entity's update roster.
       onSave: (newValue: string, row: BaseListRow) =>
         onSaveField(row, identity.titleField, newValue),
+      saveFields: onSaveField.row,
     };
   }, [identity, onSaveField, parts.list?.nameEditable]);
   const columns = useMemo(() => {
     const declared = createEntityDisplayColumns(entity, helper, overrides, {
       onSaveField,
+      onSaveFields: onSaveField?.row,
     });
     const composed = compose
       ? assertSpecialistColumnProvenance(entity, declared, compose(declared))

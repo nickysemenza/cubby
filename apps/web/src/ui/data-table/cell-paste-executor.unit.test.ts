@@ -1,10 +1,9 @@
 import { sleep } from "@cubby/shared/retry";
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
 
 import type { CellJsonValue } from "./cell-clipboard";
 import type { CellRect, CopiedCell, PasteOp } from "./cell-clipboard-model";
-import type { ColumnCellData } from "./cell-data";
+import { numberCellData, textCellData, type ColumnCellData } from "./cell-data";
 import {
   alignExternalGrid,
   buildCopyGrid,
@@ -19,49 +18,16 @@ interface Row {
   qty: number | null;
 }
 
-/** Text column cellData whose copy payload is the row's `name`. */
 function nameCol(
-  save?: (row: Row, v: string | null) => Promise<void>,
+  save?: (row: Row, value: string | null) => Promise<void>,
 ): ColumnCellData<Row> {
-  return {
-    kind: "text",
-    getCopyPayload: (row) =>
-      row.name == null || row.name === ""
-        ? null
-        : { text: row.name, json: row.name },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const parsed = z.string().safeParse(json);
-          const raw = parsed.success ? parsed.data : (text ?? "");
-          const next = raw.trim() === "" ? null : raw.trim();
-          await save(row, next);
-          return next;
-        }
-      : undefined,
-  };
+  return textCellData<Row>("text", (row) => row.name, save);
 }
 
-/** Number column cellData over `qty`. */
 function qtyCol(
-  save?: (row: Row, v: number | null) => Promise<void>,
+  save?: (row: Row, value: number | null) => Promise<void>,
 ): ColumnCellData<Row> {
-  return {
-    kind: "number",
-    getCopyPayload: (row) =>
-      row.qty == null ? null : { text: String(row.qty), json: row.qty },
-    applyPaste: save
-      ? async (row, { json, text }) => {
-          const parsed = z.number().safeParse(json);
-          const num = parsed.success
-            ? parsed.data
-            : Number.parseFloat(text ?? "");
-          if (Number.isNaN(num))
-            throw new Error("Pasted value is not a number");
-          await save(row, num);
-          return num;
-        }
-      : undefined,
-  };
+  return numberCellData<Row>("number", (row) => row.qty, save);
 }
 
 const rows: Row[] = [
@@ -223,7 +189,7 @@ describe("runPastePlan", () => {
     });
     expect(result.updated).toBe(0);
     expect(result.failed).toBe(1);
-    expect(result.errors).toEqual(["boom"]);
+    expect(result.errors).toEqual(["Row 1, column 2: boom"]);
     expect(result.updatedOps).toHaveLength(0);
   });
 
@@ -238,6 +204,86 @@ describe("runPastePlan", () => {
     });
     expect(result.updated).toBe(1);
     expect(saveName).toHaveBeenCalledTimes(1);
+  });
+
+  it("validates whole rows before one dispatch and preserves successful siblings", async () => {
+    const saveCell = vi.fn(async () => {});
+    const saveRow = vi.fn(async () => {});
+    const name = textCellData<Row>("text", (row) => row.name, saveCell);
+    const qty = numberCellData<Row>("number", (row) => row.qty, saveCell);
+    name.rowWrite = { field: "name", save: saveRow };
+    qty.rowWrite = { field: "qty", save: saveRow };
+    const result = await runPastePlan({
+      ops: [
+        op(0, 0, { kind: "text", text: "Changed", json: undefined }),
+        op(0, 1, { kind: "number", text: "invalid", json: undefined }),
+        op(1, 0, { kind: "text", text: "Valid", json: undefined }),
+        op(1, 1, { kind: "number", text: "7", json: undefined }),
+      ],
+      rows,
+      columnCellData: [name, qty],
+      formatError: (e) => (e instanceof Error ? e.message : String(e)),
+    });
+    expect(saveCell).not.toHaveBeenCalled();
+    expect(saveRow).toHaveBeenCalledExactlyOnceWith(rows[1], {
+      name: "Valid",
+      qty: 7,
+    });
+    expect(result.updatedOps.map(({ row, col }) => [row, col])).toEqual([
+      [1, 0],
+      [1, 1],
+    ]);
+    expect(result.failed).toBe(2);
+    expect(result.rowErrors).toEqual([
+      {
+        row: 0,
+        ops: expect.any(Array),
+        fields: [
+          { col: 1, field: "qty", message: "Pasted value is not a number" },
+        ],
+      },
+    ]);
+    expect(result.failedOps.map(({ row }) => row)).toEqual([0, 0]);
+  });
+
+  it("rejects unsupported multi-cell rows before any single-cell writes", async () => {
+    const save = vi.fn(async () => {});
+    const result = await runPastePlan({
+      ops: [
+        op(0, 0, { kind: "text", text: "Changed", json: undefined }),
+        op(0, 1, { kind: "number", text: "7", json: undefined }),
+      ],
+      rows,
+      columnCellData: [nameCol(save), qtyCol(save)],
+      formatError: String,
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(result.failed).toBe(2);
+    expect(result.errors[0]).toContain("Row 1");
+  });
+
+  it("keeps unchanged columns in a failed row retry so unsupported rows cannot become single-cell writes", async () => {
+    const save = vi.fn(async () => {});
+    const columnCellData = [nameCol(save), qtyCol(save)];
+    const result = await runPastePlan({
+      ops: [
+        op(0, 0, { kind: "text", text: "Changed", json: "Changed" }),
+        op(0, 1, { kind: "number", text: "1", json: 1 }),
+      ],
+      rows,
+      columnCellData,
+      formatError: String,
+    });
+    expect(result.unchanged).toBe(1);
+    expect(result.failed).toBe(1);
+    const retried = await runPastePlan({
+      ops: result.failedOps,
+      rows,
+      columnCellData,
+      formatError: String,
+    });
+    expect(retried.failed).toBe(1);
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("respects the concurrency limit", async () => {

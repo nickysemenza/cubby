@@ -50,8 +50,23 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     this.retained.clear();
   }
   /** Same-scope refreshes retain completed values, never in-flight reads. */
-  retain(previous: ProgressiveListSession<T>) {
+  retain(
+    previous: ProgressiveListSession<T>,
+    deferredFields: readonly string[] = [],
+  ) {
     this.patches = new Map(previous.patches);
+    // A confirmed full-record read can publish deferred values into base rows.
+    // Carry those forward before a later base response omits deferred keys.
+    for (const page of previous.pages) {
+      for (const row of page) {
+        const canonical = listReadRowSchema.parse(row);
+        const patch: ListReadRow = { ...this.patches.get(row.id), id: row.id };
+        for (const field of deferredFields) {
+          if (field in canonical) patch[field] = canonical[field];
+        }
+        this.patches.set(row.id, patch);
+      }
+    }
     this.retained = new Set(previous.retained);
     for (const [key, state] of previous.states)
       if (state.state === "ready") this.retained.add(key);
@@ -88,7 +103,9 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
       page.flatMap((row) => {
         if (seen.has(row.id)) return [];
         seen.add(row.id);
-        return [{ ...row, ...this.patches.get(row.id) }];
+        // Confirmed core fields must win over retained enrichment from an
+        // earlier read. Deferred keys absent from the base still stay visible.
+        return [{ ...this.patches.get(row.id), ...row }];
       }),
     );
   }

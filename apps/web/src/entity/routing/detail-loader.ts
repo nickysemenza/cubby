@@ -34,7 +34,12 @@ export async function ensureDetailRecord<
   // A segment that is not a shortcode at all (a retired route such as
   // `/inventory/session`) is a 404, not a validation error from the query.
   if (requested && !parseShortcode(requested.shortcode)) throw notFound();
-  const record = await queryClient.ensureQueryData(options);
+  const invalidated = queryClient.getQueryState(
+    options.queryKey,
+  )?.isInvalidated;
+  const record = invalidated
+    ? await queryClient.fetchQuery({ ...options, staleTime: 0 })
+    : await queryClient.ensureQueryData(options);
   if (!record) throw notFound();
   if (!requested) return;
   const identified = identifiedRecord.safeParse(record);

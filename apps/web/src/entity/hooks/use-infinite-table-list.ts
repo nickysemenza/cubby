@@ -4,7 +4,11 @@ import type {
   ListGroupSummary,
   ListNesting,
 } from "@cubby/schemas/pagination";
-import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
 import {
@@ -215,6 +219,7 @@ export function useInfiniteTableList<
   TData,
   TPage
 >): UseInfiniteTableListReturn<TData, TPage> {
+  const queryClient = useQueryClient();
   const { firstPageOptions, pageOptions, scopedPlan, infiniteQueryKey, scope } =
     useInfiniteTableListPlan({
       queryOptions,
@@ -310,12 +315,12 @@ export function useInfiniteTableList<
   }
   const latestStateRef = useRef({
     hasNextPage: hasNextPage ?? false,
-    isTransitioning: isPlaceholderData,
+    isTransitioning: isPlaceholderData || isRefetching || Boolean(error),
     pages: infiniteData?.pages,
   });
   latestStateRef.current = {
     hasNextPage: hasNextPage ?? false,
-    isTransitioning: isPlaceholderData,
+    isTransitioning: isPlaceholderData || isRefetching || Boolean(error),
     pages: infiniteData?.pages,
   };
 
@@ -323,7 +328,10 @@ export function useInfiniteTableList<
   // isFetchingNextPage. Serialize at the callback boundary as well as asking
   // TanStack Query not to cancel/restart an in-flight next-page request.
   const requestNextPage = useCallback((): Promise<FetchResult | null> => {
+    const current = queryClient.getQueryState(infiniteQueryKey);
     if (
+      (current?.fetchStatus === "fetching" && !nextPageInFlightRef.current) ||
+      current?.status === "error" ||
       latestStateRef.current.isTransitioning ||
       !latestStateRef.current.hasNextPage
     ) {
@@ -338,7 +346,7 @@ export function useInfiniteTableList<
     });
     nextPageInFlightRef.current = request;
     return request;
-  }, [fetchNextPage]);
+  }, [fetchNextPage, infiniteQueryKey, queryClient]);
 
   const guardedFetchNextPage = useCallback(() => {
     void requestNextPage();
@@ -378,7 +386,8 @@ export function useInfiniteTableList<
       fetchNextPage: guardedFetchNextPage,
       // Placeholder rows belong to the previous query. Never use their page
       // metadata to fetch into the new query while its first page is pending.
-      hasNextPage: !isPlaceholderData && (hasNextPage ?? false),
+      hasNextPage:
+        !isPlaceholderData && !isRefetching && !error && (hasNextPage ?? false),
       isFetchingNextPage,
       isTransitioning: isPlaceholderData,
       loadAllPages,
@@ -388,6 +397,8 @@ export function useInfiniteTableList<
       hasNextPage,
       isFetchingNextPage,
       isPlaceholderData,
+      isRefetching,
+      error,
       loadAllPages,
     ],
   );

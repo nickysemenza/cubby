@@ -419,7 +419,7 @@ describe("EntityRelationTable", () => {
           action: "update",
           entity: "task",
           item: { id: task.id, status: "done" },
-          appliedFields: [],
+          appliedFields: ["status"],
           sideEffects: {},
         };
       },
@@ -447,8 +447,8 @@ describe("EntityRelationTable", () => {
       id: task.id,
       data: { status: "done" },
     });
-    // The cell shows the saved pick at once; the list re-read is the root
-    // MutationCache's fan-out (root-provider), outside this harness.
-    expect(await screen.findByText("Done")).toBeVisible();
+    // This injected cache runtime does not reconcile receipts; canonical row
+    // publication is covered through the real root MutationCache.
+    expect(await screen.findByText("Not started")).toBeVisible();
   });
 });

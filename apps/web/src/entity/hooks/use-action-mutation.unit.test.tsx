@@ -19,9 +19,8 @@ afterEach(() => {
   harness.dispose();
 });
 
-// Suggestion receipts run after the remote write. The mutation must not settle
-// early: callers use its pending state and returned promise to guard dismissal.
-it("awaits caller success work before resolving and clearing pending", async () => {
+// Advisory post-save work must not hold editor completion after acceptance.
+it("finishes an accepted write while caller follow-up work is still pending", async () => {
   let complete: () => void = () => undefined;
   const receipt = new Promise<void>((resolve) => {
     complete = resolve;
@@ -49,8 +48,8 @@ it("awaits caller success work before resolving and clearing pending", async () 
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
-  expect(settled).not.toHaveBeenCalled();
-  expect(result.current.isPending).toBe(true);
+  expect(settled).toHaveBeenCalledTimes(1);
+  expect(result.current.isPending).toBe(false);
   await act(async () => {
     complete();
     await write;

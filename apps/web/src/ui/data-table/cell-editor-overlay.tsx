@@ -3,6 +3,10 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 
+export const CellEditorPendingContext = React.createContext<
+  (pending: boolean) => void
+>(() => undefined);
+
 /**
  * Fixed-position style covering an anchor cell, Notion-style: slightly
  * outset from the anchor rect, at least as wide, clamped to the viewport.
@@ -114,6 +118,7 @@ export function CellEditorOverlay({
   children: React.ReactNode;
 }) {
   const overlayRef = React.useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = React.useState(false);
   const style = useAnchoredOverlayStyle(anchorEl, overlayRef);
 
   // Document-level Escape: focus can legitimately sit OUTSIDE the overlay
@@ -163,6 +168,7 @@ export function CellEditorOverlay({
     <div
       ref={overlayRef}
       data-slot="cell-editor-overlay"
+      aria-busy={saving}
       style={style}
       className="w-max border bg-popover px-2 py-1"
       onClick={(e) => e.stopPropagation()}
@@ -176,7 +182,14 @@ export function CellEditorOverlay({
         if (e.key === "Escape") onRequestCancel();
       }}
     >
-      {children}
+      <CellEditorPendingContext value={setSaving}>
+        {children}
+      </CellEditorPendingContext>
+      {saving && (
+        <output className="block py-1 text-xs text-muted-foreground">
+          Saving…
+        </output>
+      )}
     </div>,
     globalThis.document.body,
   );

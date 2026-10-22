@@ -16,8 +16,6 @@ export type {
 } from "./query-policy";
 
 export interface CubbyOperationMeta extends Record<string, unknown> {
-  /** Presence holds mutation completion through invalidation of its saved result. */
-  invalidationCompletion?: { removeInactive?: boolean };
   transport?: OperationTransport;
   operation?: string;
   entity?: string;

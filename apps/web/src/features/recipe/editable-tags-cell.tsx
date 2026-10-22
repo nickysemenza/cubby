@@ -10,24 +10,18 @@ import { Button } from "~/ui/primitives/button";
 import {
   useCellEditState,
   useEditorCommit,
-  useOptimisticDisplayValue,
 } from "../../entity/table/editable-cell";
 import type { CellClipboardSpec } from "../../ui/data-table/cell-clipboard";
 import { CellEditTrigger } from "../../ui/data-table/cell-edit-trigger";
 import { CellEditorOverlay } from "../../ui/data-table/cell-editor-overlay";
 import { TagInput } from "./recipe-form/tag-input";
 
-/**
- * Order-sensitive array equality for the optimistic display value. Must be a
- * module-level stable reference (see `useOptimisticDisplayValue`) — the default
- * reference equality would never release the optimistic array. Tags are a
- * normalized, order-preserving vocabulary, so a join compare is sufficient.
- */
-const tagsEqual = (a: string[] | null, b: string[] | null): boolean => {
-  if (a === b) return true;
-  if (a == null || b == null) return false;
-  return a.length === b.length && a.join("\0") === b.join("\0");
-};
+const tagsEqual = (a: string[] | null, b: string[] | null): boolean =>
+  a === b ||
+  (a !== null &&
+    b !== null &&
+    a.length === b.length &&
+    a.every((tag, index) => tag === b[index]));
 
 /** Normalize an edited tag list to the saved value: empty → null (clears). */
 function toSaved(tags: string[]): string[] | null {
@@ -57,11 +51,8 @@ export function EditableTagsCell({
   renderValue,
   clipboard,
 }: EditableTagsCellProps) {
-  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(
-    value,
-    tagsEqual,
-  );
-  const edit = useCellEditState<string[] | null>(clipboard, setOptimisticValue);
+  const displayValue = value;
+  const edit = useCellEditState(clipboard);
 
   return (
     <>
@@ -82,10 +73,7 @@ export function EditableTagsCell({
             seedText={edit.seedText}
             onSave={onSave}
             onCancel={edit.cancel}
-            onCommit={(nextValue) => {
-              setOptimisticValue(nextValue);
-              edit.cancel();
-            }}
+            onCommit={edit.cancel}
           />
         </CellEditorOverlay>
       )}

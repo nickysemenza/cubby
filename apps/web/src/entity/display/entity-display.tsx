@@ -57,6 +57,7 @@ import {
 import type { CellClipboardSpec } from "~/ui/data-table/cell-clipboard";
 import {
   type ColumnCellData,
+  type PasteFieldValues,
   booleanCellData,
   dateCellData,
   entityCellData,
@@ -1748,6 +1749,8 @@ export function createEntityDisplayColumns<TRecord extends object>(
      * specialized renderer can fill, instead of failing on them.
      */
     skipSpecialized?: boolean;
+    /** One semantic update for every pasted field in a row. */
+    onSaveFields?: (row: TRecord, values: PasteFieldValues) => Promise<void>;
     /** Manifest-backed scalar write. The list owner supplies the typed entity mutation. */
     onSaveField?: (
       row: TRecord,
@@ -1769,7 +1772,23 @@ export function createEntityDisplayColumns<TRecord extends object>(
     >
   )[entity];
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
-  const { only, skipSpecialized, onSaveField } = options;
+  const { only, skipSpecialized, onSaveFields } = options;
+  const onSaveField =
+    options.onSaveField ??
+    (onSaveFields
+      ? (
+          row: TRecord,
+          field: string,
+          value: string | number | boolean | null,
+        ) => onSaveFields(row, { [field]: value })
+      : undefined);
+  const withRowWrite = <TSaved,>(
+    field: string,
+    data: ColumnCellData<TRecord, TSaved>,
+  ): ColumnCellData<TRecord, TSaved> =>
+    onSaveFields && data.applyPaste
+      ? { ...data, rowWrite: { field, save: onSaveFields } }
+      : data;
   const titleField = entitySummary[entity].titleField;
   const updateFields: readonly string[] = entityFieldModels[entity].update;
   const listFields = orderedListFields(entity);
@@ -1837,9 +1856,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
           row: TRecord,
           value: string | number | boolean | null,
         ) => onSaveField?.(row, field.key, value) ?? Promise.resolve();
-        const cellData = dateCellData<TRecord>(
-          startOf,
-          startEditable ? saveStart : undefined,
+        const cellData = withRowWrite(
+          field.key,
+          dateCellData<TRecord>(startOf, startEditable ? saveStart : undefined),
         );
         add(
           createEditableAccessorColumn(helper, startOf, {
@@ -1979,12 +1998,15 @@ export function createEntityDisplayColumns<TRecord extends object>(
           const [item] = readReferenceField(row, field)?.items ?? [];
           return item ? { id: item.id, name: item.name ?? item.id } : null;
         };
-        const cellData = entityCellData<TRecord, string>(
-          referenceEntity,
-          (id) => id,
-          getItem,
-          (row, id) => save(row, id),
-          field.nullable ? (row) => save(row, null) : undefined,
+        const cellData = withRowWrite(
+          field.key,
+          entityCellData<TRecord, string>(
+            referenceEntity,
+            (id) => id,
+            getItem,
+            (row, id) => save(row, id),
+            field.nullable ? (row) => save(row, null) : undefined,
+          ),
         );
         add(
           helper.accessor((record) => getItem(record)?.id ?? null, {
@@ -2162,7 +2184,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 mobile: toMobileColumnMeta(field.display.mobile),
                 numeric: control.kind === "number" ? true : undefined,
               },
-              cellData,
+              cellData: withRowWrite(field.key, cellData),
               renderValue: (row) =>
                 renderCompactFieldValue(entity, row, field, {
                   singleLine: true,

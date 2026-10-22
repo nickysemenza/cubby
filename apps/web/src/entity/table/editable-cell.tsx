@@ -23,6 +23,7 @@ import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-appl
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { CellEditorPendingContext } from "~/ui/data-table/cell-editor-overlay";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -144,7 +145,6 @@ interface EditableCellCommonProps<T> {
 type EditableTextCellProps = EditableCellCommonProps<string> & {
   config: EditableTextConfig;
   /** Shared record state owns committed values after an awaited save. */
-  retainCommittedValue?: boolean;
 };
 
 type EditableNumberCellProps = EditableCellCommonProps<number> & {
@@ -241,7 +241,6 @@ export function EditableCell(props: EditableCellProps) {
         onSave={props.onSave}
         config={config}
         parseValue={(value) => value}
-        retainCommittedValue={props.retainCommittedValue}
         renderValue={props.renderValue}
         clipboard={props.clipboard}
         trigger={props.trigger ?? "wrap"}
@@ -324,8 +323,6 @@ export function useCellEditState<TSaved = void>(
   };
 }
 
-const referenceEquals = <T,>(a: T | null, b: T | null) => a === b;
-
 type EditTriggerMode = "wrap" | "pencil" | "pencil-wrap";
 
 function EditableDisplay<TSaved>({
@@ -382,30 +379,6 @@ function EditableDisplay<TSaved>({
   );
 }
 
-export function useOptimisticDisplayValue<T>(
-  value: T | null,
-  isEqual: (a: T | null, b: T | null) => boolean = referenceEquals,
-  retainCommittedValue = true,
-) {
-  const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
-    undefined,
-  );
-
-  useEffect(() => {
-    if (optimisticValue !== undefined && isEqual(value, optimisticValue)) {
-      setOptimisticValue(undefined);
-    }
-  }, [value, optimisticValue, isEqual]);
-
-  return {
-    displayValue:
-      retainCommittedValue && optimisticValue !== undefined
-        ? optimisticValue
-        : value,
-    setOptimisticValue,
-  };
-}
-
 /**
  * The one commit body shared by every inline editor (input / select / date /
  * amount / entity / tags). Owns the mid-save lifecycle: an `isPending` flag for
@@ -431,6 +404,11 @@ export function useEditorCommit<T>(args: {
   const { onSave, onCommit, onCancel } = args;
   const notifications = useContext(EditorNotificationContext);
   const [isPending, setIsPending] = useState(false);
+  const reportPending = useContext(CellEditorPendingContext);
+  useEffect(() => {
+    reportPending(isPending);
+    return () => reportPending(false);
+  }, [isPending, reportPending]);
   const pendingRef = useRef(false);
 
   const commit = useCallback(
@@ -472,7 +450,6 @@ function EditableInputCellInternal<T>({
   clipboard,
   trigger,
   autoOpen,
-  retainCommittedValue = true,
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
@@ -482,14 +459,9 @@ function EditableInputCellInternal<T>({
   clipboard?: CellClipboardSpec<T | null>;
   trigger: EditTriggerMode;
   autoOpen: boolean;
-  retainCommittedValue?: boolean;
 }) {
-  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(
-    value,
-    referenceEquals,
-    retainCommittedValue,
-  );
-  const edit = useCellEditState(clipboard, setOptimisticValue);
+  const displayValue = value;
+  const edit = useCellEditState(clipboard);
 
   useEffect(() => {
     if (autoOpen) edit.open();
@@ -527,10 +499,7 @@ function EditableInputCellInternal<T>({
             parseValue={parseValue}
             seedText={edit.seedText}
             onCancel={edit.cancel}
-            onCommit={(nextValue) => {
-              setOptimisticValue(nextValue);
-              edit.cancel();
-            }}
+            onCommit={edit.cancel}
           />
         </CellEditorOverlay>
       )}
@@ -721,8 +690,8 @@ function EditableSelectCellInternal({
   trigger: EditTriggerMode;
   autoOpen: boolean;
 }) {
-  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
-  const edit = useCellEditState(clipboard, setOptimisticValue);
+  const displayValue = value;
+  const edit = useCellEditState(clipboard);
 
   useEffect(() => {
     if (autoOpen) edit.open();
@@ -752,10 +721,7 @@ function EditableSelectCellInternal({
             clearable={clearable}
             suggest={suggest}
             onCancel={edit.cancel}
-            onCommit={(nextValue) => {
-              setOptimisticValue(nextValue);
-              edit.cancel();
-            }}
+            onCommit={edit.cancel}
           />
         </CellEditorOverlay>
       )}
@@ -855,8 +821,8 @@ function EditableDateCellInternal({
   trigger: EditTriggerMode;
   autoOpen: boolean;
 }) {
-  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
-  const edit = useCellEditState(clipboard, setOptimisticValue);
+  const displayValue = value;
+  const edit = useCellEditState(clipboard);
 
   useEffect(() => {
     if (autoOpen) edit.open();
@@ -891,10 +857,7 @@ function EditableDateCellInternal({
             placeholder={placeholder}
             initialText={edit.seedText ?? undefined}
             onCancel={edit.cancel}
-            onCommit={(nextValue) => {
-              setOptimisticValue(nextValue);
-              edit.cancel();
-            }}
+            onCommit={edit.cancel}
           />
         </CellEditorOverlay>
       )}
@@ -999,21 +962,9 @@ export function EditableAmountCell({
 }: EditableAmountCellProps) {
   const [editingValue, setEditingValue] = useState(amount.value);
   const [editingUnit, setEditingUnit] = useState(amount.unit);
-  const [optimisticAmount, setOptimisticAmount] = useState<Amount | undefined>(
-    undefined,
-  );
-  const edit = useCellEditState(clipboard, setOptimisticAmount);
-
-  const displayAmount = optimisticAmount ?? amount;
-
-  const onCommit = useCallback(
-    (next: Amount) => {
-      setOptimisticAmount(next);
-      edit.cancel();
-    },
-    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
-    [edit.cancel],
-  );
+  const edit = useCellEditState(clipboard);
+  const displayAmount = amount;
+  const onCommit = edit.cancel;
   const { isPending, commit } = useEditorCommit<Amount>({
     onSave,
     onCommit,
@@ -1021,12 +972,12 @@ export function EditableAmountCell({
   });
 
   const startEditing = useCallback(() => {
-    const current = optimisticAmount ?? amount;
+    const current = amount;
     setEditingValue(current.value);
     setEditingUnit(current.unit);
     edit.open();
     // oxlint-disable-next-line react/exhaustive-deps -- edit.open is a stable callback
-  }, [amount, optimisticAmount]);
+  }, [amount]);
 
   const save = useCallback(async () => {
     const newAmount = { value: editingValue, unit: editingUnit.trim() };
@@ -1035,16 +986,6 @@ export function EditableAmountCell({
         newAmount.value === amount.value && newAmount.unit === amount.unit,
     });
   }, [editingValue, editingUnit, amount, commit]);
-
-  useEffect(() => {
-    if (
-      optimisticAmount &&
-      amount.value === optimisticAmount.value &&
-      amount.unit === optimisticAmount.unit
-    ) {
-      setOptimisticAmount(undefined);
-    }
-  }, [amount, optimisticAmount]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

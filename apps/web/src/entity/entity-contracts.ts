@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import {
   countPrimaryDeletedReferences,
-  entityMutationScope,
   parseEntityWriteResult,
 } from "~/entity/entity-mutation";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
@@ -85,8 +84,6 @@ function mutationMeta(entity: ShortcodeEntity): CubbyOperationMeta {
     operation: "entity.mutate",
     entity,
     invalidates: entityRipple(entity),
-    invalidationCompletion:
-      entity === "task" ? { removeInactive: true } : undefined,
   };
 }
 
@@ -98,7 +95,6 @@ export function bulkUpdateMutationOptionsFactory(
   return () => ({
     mutationKey: ["operation", "entity.mutate", entity, "bulkUpdate"],
     meta: mutationMeta(entity),
-    scope: entityMutationScope(entity),
     mutationFn: async (variables: { ids: string[]; data: unknown }) => {
       const result = await executeEntityMutationCommand(
         entity,
@@ -110,6 +106,7 @@ export function bulkUpdateMutationOptionsFactory(
       return {
         updated: result.updatedReferences.length,
         sideEffects: result.sideEffects,
+        receipt: result,
       };
     },
   });
@@ -122,7 +119,6 @@ function mutationBase<E extends StandardEntity>(
   return {
     mutationKey: ["operation", "entity.mutate", entity, action],
     meta: mutationMeta(entity),
-    scope: entityMutationScope(entity),
   };
 }
 
@@ -184,12 +180,14 @@ export function entityMutationOptionsFactory<E extends StandardEntity>(
         return {
           deleted: countPrimaryDeletedReferences(result),
           sideEffects: result.sideEffects,
+          receipt: result,
         };
       }
       if (result.action === "bulkUpdate") {
         return {
           updated: result.updatedReferences.length,
           sideEffects: result.sideEffects,
+          receipt: result,
         };
       }
       throw new Error("Entity mutation result did not match its command");

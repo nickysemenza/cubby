@@ -6,19 +6,18 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { readPathValue } from "~/entity/read-path";
 import { runHref } from "~/entity/routing/purchase-import-links";
 import { workflowCommandOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { showErrorToast } from "~/ui/feedback/error-details";
 
 /** One catalog-backed executor; mutation scope serializes actual operation effects. */
 export function useWorkflowCommand({
   scope,
   onResult,
-  invalidationCompletion,
 }: {
   scope?: { id: string };
   onResult?: (value: {
     request: WorkflowCommandRequest;
     result: unknown;
   }) => void | Promise<void>;
-  invalidationCompletion?: { removeInactive?: boolean };
 } = {}) {
   const queryClient = useQueryClient();
   return useActionMutation({
@@ -29,11 +28,21 @@ export function useWorkflowCommand({
         const options = {
           mutationFn: async (body: WorkflowCommandRequest["body"]) => {
             const result = await declared.mutationFn(body);
-            await onResult?.({ request, result });
+            try {
+              // Synchronous receipt patches precede invalidation; follow-up work
+              // cannot turn an accepted transport write into a retryable failure.
+              const followUp = onResult?.({ request, result });
+              if (followUp)
+                void followUp.catch((error: unknown) =>
+                  showErrorToast(error, "Saved, but follow-up work failed"),
+                );
+            } catch (error) {
+              showErrorToast(error, "Saved, but follow-up work failed");
+            }
             return result;
           },
           mutationKey: declared.mutationKey,
-          meta: { ...declared.meta, invalidationCompletion },
+          meta: declared.meta,
           scope,
           onError: () => undefined,
         };

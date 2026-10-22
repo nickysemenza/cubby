@@ -308,7 +308,7 @@ export function FindSuggestionsDialog({
           onClick: async () => {
             if (!input) return;
             const { runId } = await run.sweep.call(input);
-            await invalidateOperationTags(queryClient, ripple.runOnly);
+            void invalidateOperationTags(queryClient, ripple.runOnly);
             onOpenChange(false);
             onStarted(runId);
           },

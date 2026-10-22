@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect } from "react";
 
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 
 import { PreviewDeleted, PreviewLoading } from "./manifest-card";
 
@@ -16,6 +17,7 @@ export function PreviewQuery<T>({
     data: T | undefined;
     isLoading: boolean;
     isError: boolean;
+    isRefetching?: boolean;
     error?: unknown;
     refetch: () => Promise<PreviewRefetchResult>;
   };
@@ -39,5 +41,14 @@ export function PreviewQuery<T>({
     );
   }
   if (!query.data) return <PreviewDeleted label={label} />;
-  return children(query.data);
+  return (
+    <>
+      <QueryRefreshStatus
+        refreshing={query.isRefetching ?? false}
+        error={query.isError ? query.error : undefined}
+        onRetry={() => void query.refetch()}
+      />
+      {children(query.data)}
+    </>
+  );
 }

@@ -55,7 +55,10 @@ export function useProgressiveList<T extends { id: string }>({
       `${scope}:${firstPage?.meta.pageIndex}:${refreshing}:${readGeneration}`,
     );
     if (previousSession.current?.scope === scope)
-      next.retain(previousSession.current.session);
+      next.retain(
+        previousSession.current.session,
+        firstPage?.deferredGroups?.flatMap((group) => group.fields) ?? [],
+      );
     previousSession.current = { scope, session: next };
     return next;
   }, [firstPage, scope, refreshing, readGeneration]);

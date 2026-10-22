@@ -28,16 +28,7 @@ import {
 } from "../../ui/data-table/cell-frame";
 import { useRowActive } from "../../ui/data-table/row-activity";
 import type { SearchProviderProps } from "../picker/with-search-hook";
-import {
-  useCellEditState,
-  useEditorCommit,
-  useOptimisticDisplayValue,
-} from "./editable-cell";
-
-const itemIdEquals = <TId extends string>(
-  a: ComboboxItem<TId> | null,
-  b: ComboboxItem<TId> | null,
-) => a?.id === b?.id;
+import { useCellEditState, useEditorCommit } from "./editable-cell";
 
 export interface EditableEntityCellProps<TId extends string> {
   /** Current related entity as a combobox item (null = unset). */
@@ -88,11 +79,8 @@ export function EditableEntityCell<TId extends string>({
   clipboard,
   suggest,
 }: EditableEntityCellProps<TId>) {
-  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(
-    value,
-    itemIdEquals,
-  );
-  const edit = useCellEditState(clipboard, setOptimisticValue);
+  const displayValue = value;
+  const edit = useCellEditState(clipboard);
   const rowActive = useRowActive();
   const dense = useDenseCell();
 
@@ -110,10 +98,7 @@ export function EditableEntityCell<TId extends string>({
         filterItems={filterItems}
         suggest={suggest}
         onCancel={edit.cancel}
-        onCommit={(nextValue) => {
-          setOptimisticValue(nextValue);
-          edit.cancel();
-        }}
+        onCommit={edit.cancel}
       />
     </CellEditorOverlay>
   );

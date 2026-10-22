@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
+import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { PullToRefresh } from "~/ui/primitives/pull-to-refresh";
 
@@ -118,11 +119,15 @@ export function MobileListScreen<TItem extends RowData>({
         />
       )}
 
-      {Boolean(error) && (
-        <div className="py-6">
-          <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />
-        </div>
-      )}
+      {table.getRowModel().rows.length > 0 ? (
+        <QueryRefreshStatus
+          refreshing={refreshControls?.isRefreshing ?? false}
+          error={error}
+          onRetry={refreshControls?.onRefresh}
+        />
+      ) : error ? (
+        <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />
+      ) : null}
       {isLoading || !hydrated ? (
         <MobileCardSkeletonList {...mobileListLayout(table)} />
       ) : error && table.getRowModel().rows.length === 0 ? null : (
