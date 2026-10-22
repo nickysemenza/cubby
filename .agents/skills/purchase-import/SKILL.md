@@ -94,16 +94,11 @@ checksums, replay, money conservation and unresolved-identity review still apply
    cancelled, returned, partly shipped or a specific variant, and before
    asking the member: the order page is the authoritative record, and an
    email's later silence is not.
-2. For a statement CSV, use `/statement-rows/import` or parse the export in the
-   MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use
-   deterministic adapters; other CSVs need a reviewed column, account, source,
-   and amount-direction mapping. Keep the raw file out of prompts and the
-   repository. Save normalized nonzero StatementRows in bounded batches with a
-   stable file fingerprint; count zero-value rows separately. Submit transaction
-   candidates to `finance_read.preview_import` and create only approved
-   `ready_to_create` FinancialTransactions with an explicit kind. Repeated
-   exports replay without another charge. A source row remains evidence until
-   its account and transaction have been resolved.
+2. For Monarch MCP transactions or statement exports, use
+   [financial-evidence-import](../financial-evidence-import/SKILL.md). That skill
+   owns client parsing, complete source enumeration, normalization and bounded
+   `statement_rows.record` calls. Cubby owns scheduling, matching and booking;
+   financial intake does not chain agent transaction/Expense writes.
 3. Take own-item and label photos directly on iPhone/Mac or upload a
    `photo_inventory` run. The [photo-inventory-import
    skill](../photo-inventory-import/SKILL.md) proposes groups for review and

@@ -18,8 +18,8 @@ import {
   financialSpendingRequest,
 } from "./financial-booking";
 
-/** Bump with any statement label prompt/model-policy change; retained votes carry this revision. */
-export const STATEMENT_LABEL_REVISION = "2026-10-20.1";
+/** Bump with prompt, model-policy or advice eligibility changes; retained votes carry this revision. */
+export const STATEMENT_LABEL_REVISION = "2026-10-21.1";
 
 export const statementTransactionAction = z.enum([
   "create",
@@ -117,7 +117,7 @@ export const statementTransactionCreate = z.object({
     history: null,
     storedValue: false,
   }),
-  status: financialTransactionProviderStatus,
+  status: status.extract(["observed", "pending", "posted"]),
   amount: z.number(),
   transactionDate: plainDate.nullable(),
   postedDate: plainDate.nullable(),
@@ -130,9 +130,10 @@ export const statementTransactionCreate = z.object({
 
 export const statementTransactionJudgment = z.object({
   recommended: statementTransactionAction,
+  reviewReason: z.string().nullable().default(null),
   accountId: z.uuid(),
   statementDate: plainDate,
-  providerStatus: financialTransactionProviderStatus,
+  providerStatus: financialTransactionProviderStatus.nullable(),
   create: statementTransactionCreate.nullable(),
   candidates: z.array(statementTransactionCandidate),
   supersede: z
@@ -256,8 +257,9 @@ export const statementSuggestionOut = z.object({
       }),
     )
     .default([]),
-  providerStatus: financialTransactionProviderStatus,
+  providerStatus: financialTransactionProviderStatus.nullable(),
   recommended: statementTransactionAction,
+  reviewReason: z.string().nullable().default(null),
   clean: z.boolean(),
   create: statementTransactionCreate.omit({ sourceRef: true }).nullable(),
   matchedTransactionId: financialTransactionShortcode.optional(),

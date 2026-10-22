@@ -128,7 +128,7 @@ describe("consolidated household ledger", () => {
       },
     );
     const [
-      pending,
+      voidEvidence,
       wrongAmount,
       wrongParty,
       secondPositive,
@@ -137,7 +137,7 @@ describe("consolidated household ledger", () => {
       insertWithShortcode(ctx.db, "financialTransaction", {
         accountId: memberAccount.id,
         kind: "account_transfer",
-        status: "pending",
+        status: "void",
         amount: 12,
         transactionDate: "2026-08-20",
       }),
@@ -224,7 +224,7 @@ describe("consolidated household ledger", () => {
           ctx.actor,
         ),
       ).rejects.toThrow(message);
-    await expectInvalidEvidence([pending], "posted, unallocated");
+    await expectInvalidEvidence([voidEvidence], "observed, pending, or posted");
     await expectInvalidEvidence([wrongAmount], "match the transfer amount");
     await expectInvalidEvidence([wrongParty], "endpoint party");
     await expectInvalidEvidence([outflow, secondPositive], "one positive");
@@ -233,7 +233,7 @@ describe("consolidated household ledger", () => {
       "distinct financial accounts",
       { fromPartyId: member.output.id, toPartyId: member.output.id },
     );
-    await expectInvalidEvidence([allocated], "posted, unallocated");
+    await expectInvalidEvidence([allocated], "be unallocated");
     const transfer = await createLedgerTransfer(
       ctx.db,
       {

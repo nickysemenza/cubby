@@ -244,8 +244,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "run.control": { method: "controlRun", doc: null },
   "run.retryStep": { method: "retryRunStep", doc: null },
   "run.commitPrepared": { method: "commitPreparedImport", doc: null },
-  "statementRow.commitCsv": { method: "commitStatementCsv", doc: null },
-  "statementRow.previewCsv": { method: "previewStatementCsv", doc: null },
 } as const satisfies Readonly<
   Record<string, Readonly<{ method: string; doc: string | null }>>
 >;

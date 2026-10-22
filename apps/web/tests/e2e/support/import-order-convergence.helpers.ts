@@ -1,3 +1,5 @@
+import { recordStatementRowsOut } from "@cubby/schemas/statement-row";
+import type { ConvergenceNames } from "../../../tooling/convergence-harness";
 import { startOperation } from "./start-operation";
 import { entityApi } from "./entity-api";
 import {
@@ -51,16 +53,56 @@ import {
   syntheticOrderIds,
   wardrobePhotos,
 } from "../../../tooling/convergence-harness";
-import { chooseOption, gotoAuthenticatedPage } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 
-type EvidenceSource = "gmail" | "retailer" | "photo" | "csv";
+type EvidenceSource = "gmail" | "retailer" | "photo" | "statement";
 /** The browser owns reviewed reconciliation after statement booking, photo
  * approval and destination navigation. PostgreSQL exercises all six arrival
  * orders; this journey also guards the crowded Problems sample. */
 export const BROWSER_SOURCE_ORDERS = [
-  ["csv", "photo", "retailer", "gmail"],
+  ["statement", "photo", "retailer", "gmail"],
 ] as const satisfies readonly (readonly EvidenceSource[])[];
+
+/** Record normalized evidence, then explicitly approve its transaction through the kernel. */
+export async function recordReviewedConvergenceStatement(
+  page: Page,
+  db: Awaited<ReturnType<typeof createEvidenceHarnessContext>>["db"],
+  names: ConvergenceNames,
+  accountId: string,
+) {
+  const { source, ...row } = names.statementRow;
+  const fingerprint = `synthetic-statement-${names.token}`;
+  const recorded = await startOperation(page.request, "statementRow.record", {
+    import: { source, label: fingerprint, fingerprint, dateKind: "posted" },
+    rows: [row],
+    complete: false,
+  });
+  expect(recorded.ok(), await recorded.text()).toBe(true);
+  const result = recordStatementRowsOut.parse(recorded.body);
+  expect(result.inserted).toBe(1);
+  if (!result.batchId) throw new Error("Recorded statement batch missing");
+  const evidence = await getDb(db).query.statementRow.findFirst({
+    where: and(
+      eq(schema.statementRow.source, source),
+      eq(schema.statementRow.batchId, result.batchId),
+      notDeleted(schema.statementRow),
+    ),
+  });
+  if (!evidence) throw new Error("Normalized statement evidence missing");
+  const created = await entityApi(page.request).create("financialTransaction", {
+    accountId,
+    amount: -row.providerAmount,
+    merchant: row.merchant,
+    rawDescription: row.rawDescription,
+    sourceCategory: row.sourceCategory,
+    kind: "purchase",
+    status: "posted",
+    postedDate: row.statementDate,
+    sourceRefs: [{ source, externalId: evidence.externalId }],
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+}
 
 /** Itemization that arrives after a booked aggregate stays a `conflict` until
  * the member reviews it: prepare the replacement through the reconciliation
@@ -426,32 +468,7 @@ export async function createConvergenceHarness(
   }
 
   async function statement() {
-    await gotoAuthenticatedPage(page, "/statement-rows/import");
-    await page.getByLabel("Statement CSV file").setInputFiles({
-      name: `${token}.csv`,
-      mimeType: "text/csv",
-      buffer: Buffer.from(names.statementCsv),
-    });
-    await page
-      .getByRole("checkbox", {
-        name: `Record SYNTHETIC ORDER ${token}`,
-        exact: true,
-      })
-      .check();
-    await chooseOption(
-      page,
-      page.getByLabel(`Transaction kind for SYNTHETIC ORDER ${token}`, {
-        exact: true,
-      }),
-      "purchase",
-    );
-    await page
-      .getByRole("button", {
-        name: "Save rows and create 1 reviewed transactions",
-        exact: true,
-      })
-      .click();
-    await expect(page.getByText(/1 transactions created/)).toBeVisible();
+    await recordReviewedConvergenceStatement(page, db, names, card.id);
     const transaction = await database.query.financialTransaction.findFirst({
       where: and(
         eq(schema.financialTransaction.accountId, cardId),
@@ -551,7 +568,7 @@ export async function createConvergenceHarness(
       categoryShortcode: category.id,
     });
   return {
-    sources: { gmail, retailer, photo, csv: statement },
+    sources: { gmail, retailer, photo, statement },
     settle,
     projection,
     productName,

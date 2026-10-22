@@ -45,7 +45,7 @@ import {
   unwrapDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
+import { assessmentState, financialTransaction } from "~/server/db/schema";
 import {
   previewFinancialStatementImport,
   prepareFinancialStatementPreview,
@@ -91,7 +91,7 @@ const pendingStatementState = sql`${assessmentState.family} = ${assessmentFamily
 const stateData = z.record(z.string(), z.json());
 
 /** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
-export const STATEMENT_SUGGESTION_REVISION = "2026-10-20.1";
+export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
 /**
  * Bump when only bulk-acceptability changes. Labels ride on top of the
  * evidence fingerprint, so a stricter clean rule would otherwise leave
@@ -125,6 +125,7 @@ type Observation = {
   chargeKey: string;
   rowPosition: number | null;
   providerTransactionId: string | null;
+  providerAccountId: string | null;
   accountDescriptor: string;
   statementDate: string;
   providerAmount: number;
@@ -134,6 +135,7 @@ type Observation = {
   sourceCategory: string | null;
   providerStatus: "posted" | "pending" | null;
   providerNotes: string | null;
+  withdrawnAt: string | null;
   accountId: string | null;
   createdAt: string;
   importFingerprint: string;
@@ -194,7 +196,7 @@ async function nextUnmatchedCharges(
   const filters = [
     ...(importId
       ? [
-          sql`seen.id IN (SELECT m."statementRowId" FROM ${statementImportMembers} m WHERE m."importId" = ${importId}::uuid)`,
+          sql`(seen.id IN (SELECT m."statementRowId" FROM ${statementImportMembers} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
         ]
       : []),
     ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),
@@ -208,9 +210,20 @@ async function nextUnmatchedCharges(
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
     SELECT cs.source, cs."chargeKey" FROM ${state} cs
     WHERE NOT cs.ignored AND NOT cs.superseded
-      AND (cs.shortcode IS NULL OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
+      AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM "StatementRow" head
+        WHERE head.source=cs.source AND head."chargeKey"=cs."chargeKey" AND head.current
+          AND head."withdrawnAt" IS NULL AND head.amount <> 0 AND head."deletedAt" IS NULL))
+        OR EXISTS (SELECT 1 FROM "FinancialTransaction" changed
+          JOIN "StatementRow" head ON head.source=cs.source AND head."chargeKey"=cs."chargeKey"
+          WHERE changed.shortcode=cs.shortcode AND changed."deletedAt" IS NULL
+            AND head.current AND head."deletedAt" IS NULL
+            AND ((head."withdrawnAt" IS NOT NULL AND changed.status <> ${financialTransactionStatus.enum.void}) OR
+              (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR round(changed.amount::numeric,2) <> round(head.amount::numeric,2)
+                OR (head."providerStatus" = ${statementRowProviderStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.posted} OR changed."postedDate" IS DISTINCT FROM head."statementDate"))
+                OR (head."providerStatus" = ${statementRowProviderStatus.enum.pending} AND changed.status <> ${financialTransactionStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.pending} OR changed."transactionDate" IS DISTINCT FROM head."statementDate"))))))
+        OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
         WHERE ft.shortcode = cs.shortcode AND ft."deletedAt" IS NULL
-          AND ft.status = ${financialTransactionStatus.enum.posted}
+          AND ft.status IN (${financialTransactionStatus.enum.posted}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.observed})
           AND ft.kind IN (${financialTransactionKind.enum.purchase},${financialTransactionKind.enum.refund},${financialTransactionKind.enum.fee})
           AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
               WHERE allocation."transactionId" = ft.id AND allocation."deletedAt" IS NULL)
@@ -253,15 +266,15 @@ async function loadObservations(
     Record<string, string | number | Date | null>
   >(sql`
     SELECT r.id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
-      r."rowPosition", r."providerTransactionId", r."accountDescriptor",
+      r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
       r."statementDate", r."providerAmount", r.amount, r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus",
-      r."providerNotes", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
+      r."providerNotes", r."withdrawnAt", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
     FROM "StatementRow" r
     JOIN "StatementImport" si ON si.id = r."batchId"
     WHERE r."deletedAt" IS NULL
       AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})
-    ORDER BY r."createdAt" DESC, r.id
+    ORDER BY r.current DESC, r."lastObservedAt" DESC, r."createdAt" DESC, r.id
   `);
   return rows.map((row) => ({
     id: String(row.id),
@@ -273,6 +286,8 @@ async function loadObservations(
       row.providerTransactionId === null
         ? null
         : String(row.providerTransactionId),
+    providerAccountId:
+      row.providerAccountId === null ? null : String(row.providerAccountId),
     accountDescriptor: String(row.accountDescriptor),
     statementDate: plainDateOf(row.statementDate),
     providerAmount: Number(row.providerAmount),
@@ -287,6 +302,7 @@ async function loadObservations(
         : financialTransactionProviderStatus.parse(row.providerStatus),
     providerNotes:
       row.providerNotes === null ? null : String(row.providerNotes),
+    withdrawnAt: row.withdrawnAt === null ? null : String(row.withdrawnAt),
     accountId: row.accountId === null ? null : String(row.accountId),
     createdAt:
       row.createdAt instanceof Date
@@ -297,8 +313,7 @@ async function loadObservations(
 }
 
 /** The newest observation with a physical position names the charge's settlement ref. */
-const canonicalObservation = (observations: Observation[]) =>
-  observations.find((row) => row.rowPosition !== null) ?? observations[0]!;
+const canonicalObservation = (observations: Observation[]) => observations[0]!;
 
 const previewRowFor = (
   charge: ChargeRef,
@@ -316,6 +331,7 @@ const previewRowFor = (
   importFingerprint: row.importFingerprint,
   ...(row.rowPosition === null ? {} : { rowPosition: row.rowPosition }),
   providerTransactionId: row.providerTransactionId,
+  providerAccountId: row.providerAccountId,
   ...(row.providerStatus ? { providerStatus: row.providerStatus } : {}),
 });
 
@@ -506,7 +522,7 @@ async function claimedCandidates(
       SELECT refs.key, refs."transactionId", refs."chargeKey",
         r.source, ${chargeKeyOf("r")}
       FROM refs JOIN "StatementRow" r ON r.source = refs.source
-        AND ${chargeKeyOf("r")} = refs."externalId" AND r."deletedAt" IS NULL
+        AND r."legacyReference" = refs."externalId" AND r."deletedAt" IS NULL
     ),
     -- An ignored or superseded charge was set aside by the member, so it no
     -- longer claims the transaction holding its ref.
@@ -635,7 +651,11 @@ const diffFor = (
     status: string;
     postedDate: string | null;
   },
-  row: { amount: number; status: "posted" | "pending"; date: string },
+  row: {
+    amount: number;
+    status: "observed" | "posted" | "pending";
+    date: string;
+  },
 ) => {
   const fields: StatementTransactionCandidate["diff"] = [];
   if (cents(candidate.amount) !== cents(row.amount)) fields.push("amount");
@@ -650,6 +670,55 @@ const diffFor = (
  * transactions as they stand. Generation publishes them; apply recomputes them
  * and refuses when the fingerprint moved.
  */
+function sourceCorrectionReason(
+  priorTransaction:
+    | Pick<
+        typeof financialTransaction.$inferSelect,
+        "amount" | "status" | "transactionDate" | "postedDate"
+      >
+    | undefined,
+  canonical: Pick<
+    Observation,
+    "amount" | "withdrawnAt" | "providerStatus" | "statementDate"
+  >,
+): string | null {
+  return priorTransaction?.status === "void" && canonical.withdrawnAt === null
+    ? "The source charge reappeared after its booking was retired. Review its FinancialTransaction and Expenses individually."
+    : priorTransaction &&
+        canonical.withdrawnAt !== null &&
+        priorTransaction.status !== "void"
+      ? "The provider withdrew this charge. Automatic correction is unavailable or paused; review its FinancialTransaction and Expenses individually."
+      : priorTransaction &&
+          canonical.withdrawnAt === null &&
+          cents(Number(priorTransaction.amount)) !== cents(canonical.amount)
+        ? "The provider amount changed. Automatic correction is unavailable or paused; review its FinancialTransaction, allocations and Expenses individually."
+        : priorTransaction &&
+            canonical.withdrawnAt === null &&
+            sourceLifecycleDiffers(priorTransaction, canonical)
+          ? "The source status or date changed. Automatic correction is unavailable; review its FinancialTransaction and dated booking individually."
+          : null;
+}
+
+function sourceLifecycleDiffers(
+  transaction: Pick<
+    typeof financialTransaction.$inferSelect,
+    "status" | "transactionDate" | "postedDate"
+  >,
+  observation: Pick<Observation, "providerStatus" | "statementDate">,
+) {
+  if (observation.providerStatus === "posted")
+    return (
+      transaction.status !== "posted" ||
+      transaction.postedDate !== observation.statementDate
+    );
+  return (
+    observation.providerStatus === "pending" &&
+    transaction.status !== "posted" &&
+    (transaction.status !== "pending" ||
+      transaction.transactionDate !== observation.statementDate)
+  );
+}
+
 export async function buildChargeProposals(
   db: Database,
   charges: readonly ChargeRef[],
@@ -662,7 +731,7 @@ export async function buildChargeProposals(
   }
   const grouped = charges.flatMap((charge) => {
     const rows = byCharge.get(chargeId(charge));
-    return rows?.length && rows[0]!.providerAmount !== 0
+    return rows?.length
       ? [{ charge, observations: rows, canonical: canonicalObservation(rows) }]
       : [];
   });
@@ -679,6 +748,22 @@ export async function buildChargeProposals(
   const matchedByCharge = new Map(
     matchedCharges.map((row) => [chargeId(row), row.shortcode]),
   );
+  const { rows: acceptedRows } = matchedByCharge.size
+    ? await unwrapDb(db).execute<{
+        shortcode: string;
+        amount: number;
+        status: typeof financialTransaction.$inferSelect.status;
+        transactionDate: string | null;
+        postedDate: string | null;
+      }>(sql`
+    SELECT ft.shortcode, ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
+    WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${sql.join(
+      [...matchedByCharge.values()].map((code) => sql`${code}`),
+      sql`,`,
+    )})
+  `)
+    : { rows: [] };
+  const accepted = new Map(acceptedRows.map((row) => [row.shortcode, row]));
   const preparation = await prepareFinancialStatementPreview(db);
   const preview = await previewFinancialStatementImport(
     db,
@@ -687,10 +772,15 @@ export async function buildChargeProposals(
         previewRowFor(charge, canonical),
       ),
     },
-    undefined,
     {
       candidatePolicy: "suggestion",
       preparation,
+      retainedRefs: new Map(
+        grouped.map(({ charge, canonical }) => [
+          chargeId(charge),
+          canonical.externalId,
+        ]),
+      ),
       accountHints: new Map(
         grouped.flatMap(({ charge, observations: rows }) => {
           const stored = rows.find((row) => row.accountId)?.accountId;
@@ -788,8 +878,17 @@ export async function buildChargeProposals(
       continue;
     const accountId = ids.get(row.accountId);
     if (!accountId) continue;
-    const providerStatus =
-      canonical.providerStatus === "pending" ? "pending" : "posted";
+    const matchedCode = matchedByCharge.get(chargeId(charge));
+    if (
+      !matchedCode &&
+      (canonical.withdrawnAt !== null || canonical.providerAmount === 0)
+    )
+      continue;
+    const priorTransaction = matchedCode
+      ? accepted.get(matchedCode)
+      : undefined;
+    const reviewReason = sourceCorrectionReason(priorTransaction, canonical);
+    const effectiveStatus = canonical.providerStatus ?? "observed";
     const statementAmount = row.proposed.amount;
     const candidates: StatementTransactionCandidate[] =
       row.existingTransactions.flatMap((existing) => {
@@ -806,7 +905,7 @@ export async function buildChargeProposals(
                 rawDescription: existing.rawDescription,
                 diff: diffFor(existing, {
                   amount: statementAmount,
-                  status: providerStatus,
+                  status: effectiveStatus,
                   date: canonical.statementDate,
                 }),
                 label: null,
@@ -819,7 +918,7 @@ export async function buildChargeProposals(
     // A posted row may settle a hold this ledger recorded, at a different
     // amount or date than the nearby rule admits.
     const holds =
-      providerStatus === "posted"
+      effectiveStatus === "posted"
         ? pendingTransactions.filter(
             (pending) =>
               pending.accountId === accountId &&
@@ -899,7 +998,6 @@ export async function buildChargeProposals(
       transfer,
     });
     const chargeSiblings = siblings.get(chargeId(charge)) ?? [];
-    const matchedCode = matchedByCharge.get(chargeId(charge));
     const recommended = matchedCode
       ? "book"
       : hold
@@ -909,20 +1007,21 @@ export async function buildChargeProposals(
           : "create";
     const judgment: StatementTransactionJudgment = {
       recommended,
+      reviewReason,
       accountId,
       statementDate: canonical.statementDate,
-      providerStatus,
+      providerStatus: canonical.providerStatus,
       create: {
         kind: decision.kind,
         kindSource: decision.kindSource,
         votes: decision.votes,
         counterparty: decision.counterparty,
-        status: providerStatus,
+        status: effectiveStatus,
         amount: statementAmount,
         transactionDate:
-          providerStatus === "pending" ? canonical.statementDate : null,
+          effectiveStatus !== "posted" ? canonical.statementDate : null,
         postedDate:
-          providerStatus === "posted" ? canonical.statementDate : null,
+          effectiveStatus === "posted" ? canonical.statementDate : null,
         merchant: canonical.merchant,
         rawDescription: canonical.rawDescription,
         sourceCategory: canonical.sourceCategory,
@@ -945,7 +1044,11 @@ export async function buildChargeProposals(
       ...(matchedCode && { matchedTransactionId: ids.get(matchedCode) }),
     };
     judgment.spending = await prepareStatementSpending(db, judgment);
-    if (recommended === "book" && judgment.spending?.status === "deferred")
+    if (
+      !reviewReason &&
+      recommended === "book" &&
+      judgment.spending?.status === "deferred"
+    )
       continue;
     judgment.clean = isClean(judgment, statementAmount);
     proposals.push(await finishProposal(charge, canonical, rows, judgment));
@@ -958,9 +1061,9 @@ export function isClean(
   judgment: StatementTransactionJudgment,
   statementAmount: number,
 ): boolean {
-  if (judgment.siblings.length) return false;
+  if (judgment.reviewReason || judgment.siblings.length) return false;
   if (
-    judgment.create?.status === "posted" &&
+    judgment.create !== null &&
     ["purchase", "refund", "fee"].includes(judgment.create.kind) &&
     judgment.spending?.status !== "ready" &&
     judgment.spending?.status !== "already_booked"
@@ -1120,6 +1223,7 @@ async function buildHoldVoidProposalsForHolds(
       proposals.push(
         await finishProposal(charge, canonical, rows, {
           recommended: "void",
+          reviewReason: null,
           accountId: hold.accountId,
           statementDate: canonical.statementDate,
           providerStatus: "pending",
@@ -1154,7 +1258,7 @@ async function loadObservationsById(db: Database, rowIds: readonly string[]) {
   return all.filter((row) => rowIds.includes(row.id));
 }
 
-/** The import proving the hold vanished: newer, same account, past the window, without it. */
+/** Only explicit persisted withdrawal proof establishes a vanished hold. */
 async function laterCoveringImport(
   db: Database,
   input: {
@@ -1166,27 +1270,16 @@ async function laterCoveringImport(
   },
 ): Promise<string | null> {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
-    SELECT si.id FROM "StatementImport" si
-    WHERE si."deletedAt" IS NULL AND si.source = ${input.source}
-      AND si."createdAt" > ${input.after}::timestamptz
-      AND EXISTS (
-        SELECT 1 FROM ${statementImportMembers} m
-        JOIN "StatementRow" r ON r.id = m."statementRowId" AND r."deletedAt" IS NULL
-        WHERE m."importId" = si.id AND r."accountDescriptor" = ${input.accountDescriptor}
-          AND r."statementDate" >= ${input.coveredThrough}::date + ${PENDING_POST_WINDOW_DAYS}::int
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM ${statementImportMembers} m
-        JOIN "StatementRow" held ON held.id = m."statementRowId" AND held."deletedAt" IS NULL
-        JOIN "StatementRow" seen ON seen.source = held.source AND seen."deletedAt" IS NULL
-          AND ${chargeKeyOf("seen")} = ${chargeKeyOf("held")}
-        JOIN ${statementImportMembers} ms ON ms."statementRowId" = seen.id AND ms."importId" = si.id
-        WHERE held.id IN (${sql.join(
-          input.rowIds.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )})
-      )
-    ORDER BY si."createdAt", si.id
+    SELECT DISTINCT si.id FROM "StatementImport" si
+    JOIN "StatementRow" head ON head."withdrawalImportId" = si.id
+    JOIN "StatementRow" held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
+    WHERE si."deletedAt" IS NULL AND si.source=${input.source} AND si."completedAt" IS NOT NULL
+      AND si.coverage->>${"visibility"}=${"all"} AND head.current AND head."withdrawnAt" IS NOT NULL
+      AND head."deletedAt" IS NULL AND held."deletedAt" IS NULL
+      AND held.id IN (${sql.join(
+        input.rowIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
     LIMIT 1
   `);
   return rows[0] ? String(rows[0].id) : null;
@@ -1235,6 +1328,11 @@ export type PublishOutcome =
  * dismissal (suppression) holds forever, an unchanged fingerprint is left
  * alone, and anything else is retired before the new one takes the charge.
  */
+const isSettledBooking = (judgment: StatementTransactionJudgment) =>
+  !judgment.reviewReason &&
+  judgment.recommended === "book" &&
+  judgment.spending?.status === "already_booked";
+
 export async function publishChargeProposal(
   db: Database,
   proposal: ChargeProposal,
@@ -1311,10 +1409,7 @@ export async function publishChargeProposal(
       `);
       if (settled.length) return { outcome: "settled", labelsReused: 0 };
     }
-    if (
-      proposal.judgment.recommended === "book" &&
-      proposal.judgment.spending?.status === "already_booked"
-    ) {
+    if (isSettledBooking(proposal.judgment)) {
       const fresh = await prepareStatementSpending(tx, proposal.judgment);
       if (fresh?.status === "already_booked") {
         await transitionAssessmentStates(
@@ -1370,6 +1465,7 @@ export async function publishChargeProposal(
       // still gets a fresh fingerprint and current apply-time validation.
       const inputs = canonicalJson(statementLabelInputs(proposal.judgment));
       const reusable = prior.find((row) => {
+        if (proposal.judgment.reviewReason) return false;
         if (
           row.needsLabel !== "false" ||
           row.producer?.kind !== "model" ||
@@ -1506,16 +1602,23 @@ export async function publishChargeProposal(
           statementDate: judgment.statementDate,
           amount: judgment.create?.amount ?? proposal.canonical.amount,
           recommended: judgment.recommended,
+          reviewReason: judgment.reviewReason,
           clean: judgment.clean,
           refs: proposal.refs,
+          headRef: proposal.canonical.externalId,
           evidenceFingerprint: proposal.evidenceFingerprint,
           // Rule output awaits the decision model's labels: candidate
           // identity, and the kind and counterparty of every create.
-          needsLabel: producer.kind === "rule" && judgment.create !== null,
+          needsLabel:
+            producer.kind === "rule" &&
+            judgment.create !== null &&
+            !judgment.reviewReason,
           applicationPending: producer.kind === "model",
           ...(applicationOrder && { applicationOrder }),
           ...(checkpoint && { labelCheckpoint: checkpoint }),
-          ...automaticRuleStamp(matchStatementRules(judgment)),
+          ...automaticRuleStamp(
+            judgment.reviewReason ? [] : matchStatementRules(judgment),
+          ),
         },
       },
     );

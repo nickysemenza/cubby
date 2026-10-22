@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { FinancialStatementImportRow } from "@cubby/schemas/financial-transaction";
+import { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
 import type {
@@ -18,6 +17,7 @@ import {
   statementRowMatchState,
   statementRowOut,
 } from "@cubby/schemas/statement-row";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -31,13 +31,11 @@ import {
 } from "~/server/db/helpers";
 import {
   financialAccount,
-  financialTransaction,
   statementImport,
   statementImportRow,
   statementRow,
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
-import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import {
   CHARGE_STATE,
   LIVE_REFS,
@@ -53,15 +51,9 @@ import {
   normalizeMerchant,
 } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { createAppError } from "~/server/errors/app-error";
-import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
-import {
-  ensureExternalSources,
-  assertSettlementRefsAvailable,
-  replaceSettlementRefs,
-  settlementRefsFor,
-} from "~/server/generic/entity-links/repo/entity-external-ids";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 // `cs` carries the charge-level state: repeated observations of one charge
 // inherit each other's ignore, supersession and match.
@@ -120,6 +112,11 @@ const columns = {
   rowPosition: statementRow.rowPosition,
   providerTransactionId: statementRow.providerTransactionId,
   legacyExternalId: statementRow.legacyExternalId,
+  chargeKey: statementRow.chargeKey,
+  current: statementRow.current,
+  withdrawnAt: sql<Date | null>`${statementRow.withdrawnAt} AT TIME ZONE 'UTC'`,
+  providerAccountId: statementRow.providerAccountId,
+  providerData: statementRow.providerData,
   accountDescriptor: statementRow.accountDescriptor,
   statementDate: statementRow.statementDate,
   amount: statementRow.amount,
@@ -171,6 +168,7 @@ const toOut = (row: StatementRowRow): StatementRowOut =>
     statementDate: asPlainDate(row.statementDate),
     createdAt: asDate(row.createdAt),
     updatedAt: asDate(row.updatedAt),
+    withdrawnAt: row.withdrawnAt === null ? null : asDate(row.withdrawnAt),
     amount: Number(row.amount),
     providerAmount: Number(row.providerAmount),
     accountId: row.accountShortcode
@@ -368,57 +366,6 @@ const storedRowCount = async (
   return Number(result.rows[0]?.count ?? 0);
 };
 
-/**
- * Before #1894 the CSV normalizer kept only the last four mask digits, and
- * those exports are not retained, so stored rows cannot be migrated. A
- * positioned replay of the same occurrence that carries the complete mask
- * ending in exactly those four digits is the same account.
- */
-function upgradesTruncatedMask(stored: string, incoming: string): boolean {
-  const truncated = stored.match(/^(.*) \(\.\.\.(\d{4})\)$/u);
-  const complete = incoming.match(/^(.*) \(\.\.\.(\d{5,})\)$/u);
-  return (
-    !!truncated &&
-    !!complete &&
-    truncated[1] === complete[1] &&
-    complete[2]!.endsWith(truncated[2]!)
-  );
-}
-
-function assertImmutableStatementOccurrence(
-  saved: Pick<
-    typeof statementRow.$inferSelect,
-    | "externalId"
-    | "accountDescriptor"
-    | "statementDate"
-    | "providerAmount"
-    | "rawDescription"
-    | "providerTransactionId"
-    | "providerStatus"
-    | "merchant"
-    | "sourceCategory"
-    | "providerNotes"
-  >,
-  incoming: RecordStatementRowsInput["rows"][number],
-) {
-  if (
-    incoming.rowPosition !== undefined &&
-    (saved.accountDescriptor !== incoming.accountDescriptor ||
-      saved.statementDate !== incoming.statementDate ||
-      saved.providerAmount !== incoming.providerAmount ||
-      saved.rawDescription !== incoming.rawDescription ||
-      saved.providerTransactionId !== incoming.providerTransactionId ||
-      saved.providerStatus !== incoming.providerStatus ||
-      saved.merchant !== incoming.merchant ||
-      saved.sourceCategory !== incoming.sourceCategory ||
-      saved.providerNotes !== incoming.providerNotes)
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `Statement occurrence ${saved.externalId} has conflicting immutable evidence. Review the file mapping.`,
-    );
-}
-
 async function insertStatementEvidence(
   tx: DrizzleTransaction,
   rows: (typeof statementRow.$inferInsert)[],
@@ -443,7 +390,7 @@ async function insertStatementEvidence(
  * worth it: it surfaces the mistake at 500 rows instead of 15,000 — and a
  * `dryRun` or CSV preview surfaces it before any of them.
  */
-export function statementSignWarning(
+function statementSignWarning(
   rows: ReadonlyArray<{ providerAmount: number }>,
 ): string | null {
   const positive = rows.filter((row) => row.providerAmount > 0).length;
@@ -456,9 +403,379 @@ export function statementSignWarning(
     : null;
 }
 
+type RecordedMember = Pick<
+  typeof statementRow.$inferSelect,
+  | "id"
+  | "legacyExternalId"
+  | "chargeKey"
+  | "rowPosition"
+  | "externalId"
+  | "providerTransactionId"
+>;
+
+function retainedCollectionObservation({
+  priorMembers,
+  row,
+  externalId,
+  legacyExternalId,
+}: {
+  priorMembers: readonly RecordedMember[];
+  row: RecordStatementRowsInput["rows"][number];
+  externalId: string;
+  legacyExternalId: string;
+}) {
+  // Physical identity wins even when historical keys were mispositioned.
+  // The immutable-evidence check must refuse a conflict, never guess by content.
+  const exact = priorMembers.find((prior) => prior.externalId === externalId);
+  if (exact) return exact;
+  const candidates = priorMembers.filter((prior) =>
+    row.rowPosition !== undefined
+      ? prior.rowPosition === row.rowPosition
+      : prior.providerTransactionId === null &&
+        (prior.legacyExternalId ?? prior.externalId) === legacyExternalId,
+  );
+  const [candidate] = candidates;
+  if (
+    candidates.length > 1 ||
+    (candidate &&
+      row.rowPosition === undefined &&
+      candidate.rowPosition !== null) ||
+    (!candidate &&
+      row.rowPosition !== undefined &&
+      priorMembers.some(
+        (prior) =>
+          prior.rowPosition === null &&
+          prior.providerTransactionId === null &&
+          (prior.legacyExternalId ?? prior.externalId) === legacyExternalId,
+      ))
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Retained collection observations require distinct physical positions to resolve their identity.",
+    );
+  return candidate;
+}
+
+/** Source identity and immutable observation derivation are independent of booking. */
+async function prepareStatementObservations(
+  tx: DrizzleTransaction,
+  input: RecordStatementRowsInput,
+  observedAt: Date,
+  priorMembers: readonly RecordedMember[],
+) {
+  const { source } = input.import;
+  const providerIds = input.rows.flatMap((row) =>
+    row.providerTransactionId ? [row.providerTransactionId] : [],
+  );
+  const previousProviderRows = providerIds.length
+    ? await unwrapDb(tx)
+        .select()
+        .from(statementRow)
+        .where(
+          and(
+            eq(statementRow.source, source),
+            inArray(statementRow.providerTransactionId, providerIds),
+            notDeleted(statementRow),
+          ),
+        )
+    : [];
+  const retainedAccountIds = previousProviderRows.length
+    ? await unwrapDb(tx)
+        .select({
+          chargeKey: statementRow.chargeKey,
+          providerAccountId: statementRow.providerAccountId,
+        })
+        .from(statementRow)
+        .where(
+          and(
+            eq(statementRow.source, source),
+            inArray(statementRow.chargeKey, [
+              ...new Set(previousProviderRows.map((prior) => prior.chargeKey)),
+            ]),
+          ),
+        )
+    : [];
+  const accounts = previousProviderRows.length
+    ? await unwrapDb(tx)
+        .select({
+          id: financialAccount.id,
+          aliases: financialAccount.sourceAliases,
+        })
+        .from(financialAccount)
+        .where(notDeleted(financialAccount))
+    : [];
+  const normalizedAlias = (value: string) =>
+    value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+  const coverage = input.import.coverage;
+  if (
+    coverage &&
+    input.rows.some(
+      (row) =>
+        (row.providerAccountId ?? row.accountDescriptor) !== coverage.account ||
+        row.statementDate < coverage.from ||
+        row.statementDate > coverage.to,
+    )
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Every observation must belong to the declared account and date window.",
+    );
+  const rows = [];
+  for (const row of [...input.rows].sort(
+    (a, b) => (a.rowPosition ?? 0) - (b.rowPosition ?? 0),
+  )) {
+    const legacyExternalId = await statementRowExternalId({
+      source,
+      account: row.accountDescriptor,
+      date: row.statementDate,
+      amount: row.providerAmount,
+      originalStatement: row.rawDescription,
+    });
+    const collectionObservation = `v3:${await sha256Hex(JSON.stringify([source, "unpositioned", input.import.fingerprint, legacyExternalId]))}`;
+    const providerAccountId = row.providerAccountId ?? null;
+    let chargeKey = row.providerTransactionId
+      ? `provider:${await sha256Hex(JSON.stringify([source, providerAccountId ?? row.accountDescriptor, row.providerTransactionId]))}`
+      : row.rowPosition !== undefined
+        ? await statementRowOccurrenceId(
+            source,
+            input.import.fingerprint,
+            row.rowPosition,
+          )
+        : collectionObservation;
+    if (row.providerTransactionId) {
+      const predecessors = previousProviderRows.filter((prior) => {
+        if (prior.providerTransactionId !== row.providerTransactionId)
+          return false;
+        // An old null account ID cannot bridge past a later known account.
+        const knownIds = new Set(
+          retainedAccountIds
+            .filter((retained) => retained.chargeKey === prior.chargeKey)
+            .flatMap((retained) =>
+              retained.providerAccountId ? [retained.providerAccountId] : [],
+            ),
+        );
+        if (
+          knownIds.size > 1 ||
+          (providerAccountId !== null &&
+            [...knownIds].some((id) => id !== providerAccountId))
+        )
+          return false;
+        if (providerAccountId && prior.providerAccountId)
+          return providerAccountId === prior.providerAccountId;
+        if (
+          normalizedAlias(prior.accountDescriptor) ===
+          normalizedAlias(row.accountDescriptor)
+        )
+          return true;
+        return (
+          providerAccountId !== null &&
+          accounts.some((account) => {
+            const aliases = financialAccountSourceAliases.parse(
+              account.aliases,
+            );
+            return (
+              aliases.some(
+                (alias) =>
+                  alias.source === source &&
+                  alias.externalAccountId === providerAccountId,
+              ) &&
+              (prior.accountId === account.id ||
+                aliases.some(
+                  (alias) =>
+                    alias.source === source &&
+                    normalizedAlias(alias.alias) ===
+                      normalizedAlias(prior.accountDescriptor),
+                ))
+            );
+          })
+        );
+      });
+      const keys = [...new Set(predecessors.map((prior) => prior.chargeKey))];
+      if (keys.length > 1)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "This provider identity has ambiguous historical account evidence; resolve its charge identity before importing a revision.",
+        );
+      if (keys[0]) chargeKey = keys[0];
+    }
+    let externalId = row.providerTransactionId
+      ? `v3:${await sha256Hex(
+          canonicalJson({
+            chargeKey,
+            providerAccountId,
+            accountDescriptor: row.accountDescriptor,
+            date: row.statementDate,
+            amount: row.providerAmount,
+            merchant: row.merchant,
+            description: row.rawDescription,
+            category: row.sourceCategory,
+            status: row.providerStatus,
+            notes: row.providerNotes,
+            data: row.providerData ?? null,
+          }),
+        )}`
+      : row.rowPosition !== undefined
+        ? await statementRowOccurrenceId(
+            source,
+            input.import.fingerprint,
+            row.rowPosition,
+          )
+        : collectionObservation;
+    if (!row.providerTransactionId) {
+      const retained = retainedCollectionObservation({
+        priorMembers,
+        row,
+        externalId,
+        legacyExternalId,
+      });
+      if (retained) {
+        externalId = retained.externalId;
+        chargeKey = retained.chargeKey;
+      }
+    }
+    rows.push({
+      ...row,
+      source,
+      externalId,
+      chargeKey,
+      legacyExternalId,
+      providerAccountId,
+      providerTransactionId: row.providerTransactionId ?? null,
+      providerData: row.providerData ?? null,
+      amount: -row.providerAmount,
+      current: true,
+      lastObservedAt: observedAt,
+    });
+  }
+  if (
+    new Set(rows.map((row) => row.chargeKey)).size !== rows.length ||
+    new Set(rows.map((row) => row.externalId)).size !== rows.length
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Repeated indistinguishable observations require distinct physical positions.",
+    );
+  if (
+    rows.some((row) =>
+      priorMembers.some(
+        (prior) =>
+          prior.chargeKey === row.chargeKey &&
+          prior.externalId !== row.externalId,
+      ),
+    )
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "One collection cannot contain contradictory revisions of the same provider record.",
+    );
+  return rows;
+}
+
+/** Completion and source absence are persisted proofs, independent of booking. */
+async function completeEvidenceCollection(
+  tx: DrizzleTransaction,
+  input: RecordStatementRowsInput,
+  batchId: string,
+  existingBatch:
+    | Pick<typeof statementImport.$inferSelect, "completedAt">
+    | undefined,
+  rows: Awaited<ReturnType<typeof prepareStatementObservations>>,
+  rowCountStored: number,
+  observedAt: Date,
+) {
+  const { source } = input.import;
+  let completed = existingBatch?.completedAt != null;
+  if (input.complete) {
+    if (
+      !input.import.coverage ||
+      input.import.rowCountDeclared === null ||
+      rowCountStored !== input.import.rowCountDeclared
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Completion requires explicit account/window coverage and every declared observation, including zero-value records.",
+      );
+    completed = true;
+    await unwrapDb(tx)
+      .update(statementImport)
+      .set({ completedAt: new Date() })
+      .where(eq(statementImport.id, batchId));
+  }
+  let withdrawn = 0;
+  const withdrawnChargeKeys: string[] = [];
+  if (input.confirmedWithdrawals.length) {
+    const coverage = input.import.coverage;
+    if (
+      !completed ||
+      !coverage ||
+      coverage.visibility !== "all" ||
+      rowCountStored !== input.import.rowCountDeclared
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Withdrawals require a completed, rechecked account window.",
+      );
+    const candidates = await unwrapDb(tx)
+      .select()
+      .from(statementRow)
+      .where(
+        and(
+          eq(statementRow.source, source),
+          eq(statementRow.current, true),
+          notDeleted(statementRow),
+          inArray(
+            statementRow.providerTransactionId,
+            input.confirmedWithdrawals,
+          ),
+          sql`COALESCE(${statementRow.providerAccountId}, ${statementRow.accountDescriptor}) = ${coverage.account}`,
+        ),
+      );
+    for (const row of candidates) {
+      if (
+        row.statementDate < coverage.from ||
+        row.statementDate > coverage.to ||
+        row.lastObservedAt > observedAt ||
+        rows.some(
+          (incoming) =>
+            incoming.providerTransactionId === row.providerTransactionId,
+        ) ||
+        (
+          await unwrapDb(tx)
+            .select({ id: statementImportRow.statementRowId })
+            .from(statementImportRow)
+            .where(
+              and(
+                eq(statementImportRow.importId, batchId),
+                eq(statementImportRow.statementRowId, row.id),
+              ),
+            )
+            .limit(1)
+        ).length
+      )
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "The claimed removal is still observed, newer, or outside this collection's scope.",
+        );
+      if (row.withdrawnAt === null) {
+        await unwrapDb(tx)
+          .update(statementRow)
+          .set({
+            withdrawnAt: observedAt,
+            withdrawalImportId: batchId,
+            lastObservedAt: observedAt,
+          })
+          .where(eq(statementRow.id, row.id));
+        withdrawn += 1;
+        withdrawnChargeKeys.push(row.chargeKey);
+      }
+    }
+  }
+  return { completed, withdrawn, withdrawnChargeKeys };
+}
+
 /**
- * Record provider rows verbatim. Not an importer: it creates no account, no
- * transaction and no link, and makes no match. The server derives every
+ * Retain source observations and guarded corrections to existing automatic bookings.
+ * New transaction discovery runs through the existing Sweep. The server derives every
  * `externalId` so a client cannot mint an identity that disagrees with the one
  * settlement-reference matching depends on.
  *
@@ -468,293 +785,313 @@ export function statementSignWarning(
 export async function recordStatementRows(
   db: Database,
   input: RecordStatementRowsInput,
-  // Unused: StatementRow has no `AuditEntityKind` — see deleteStatementRows.
-  _actor: ActorContext,
+  actor: ActorContext,
 ) {
   const { source } = input.import;
-  for (const row of input.rows) {
-    if (row.reviewedLegacyAccountDescriptor === undefined) continue;
-    const mask = row.accountDescriptor.match(
-      /(?:\(\.\.\.(\d+)\)|\.\.\.(\d+))$/u,
-    );
-    const digits = mask?.[1] ?? mask?.[2];
-    if (
-      row.rowPosition !== undefined ||
-      !digits ||
-      row.reviewedLegacyAccountDescriptor !==
-        `${row.accountDescriptor} (...${digits})`
-    )
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Reviewed legacy membership requires exactly one repeated identical account mask and no physical occurrence position.",
-      );
-  }
-  const rows = await Promise.all(
-    input.rows.map(async (row) => ({
-      ...row,
-      providerTransactionId: row.providerTransactionId ?? null,
-      source,
-      externalId:
-        row.rowPosition !== undefined
-          ? await statementRowOccurrenceId(
-              source,
-              input.import.fingerprint,
-              row.rowPosition,
-            )
-          : await statementRowExternalId({
-              source,
-              account:
-                row.reviewedLegacyAccountDescriptor ?? row.accountDescriptor,
-              date: row.statementDate,
-              amount: row.providerAmount,
-              originalStatement: row.rawDescription,
-            }),
-      legacyExternalId: await statementRowExternalId({
-        source,
-        account: row.accountDescriptor,
-        date: row.statementDate,
-        amount: row.providerAmount,
-        originalStatement: row.rawDescription,
-      }),
-      // Cubby's convention is outflow-positive; providers sign charges negative.
-      amount: -row.providerAmount,
-    })),
-  );
-
-  // Legacy callers without physical positions retain the frozen v1 contract.
-  // CSV positions distinguish identical purchases in the same export.
-  const idCounts = new Map<string, number>();
-  for (const row of rows)
-    idCounts.set(row.externalId, (idCounts.get(row.externalId) ?? 0) + 1);
-  const indistinguishableDuplicates = rows.length - idCounts.size;
-  const rowsOmitted =
-    input.import.rowCountDeclared === null
-      ? null
-      : input.import.rowCountDeclared - rows.length;
-
-  const signWarning = statementSignWarning(rows);
-
-  return withTransaction(db, async (tx) => {
-    const [existingBatch] = await unwrapDb(tx)
-      .select({ id: statementImport.id })
-      .from(statementImport)
-      .where(
-        and(
-          eq(statementImport.source, source),
-          eq(statementImport.fingerprint, input.import.fingerprint),
-          notDeleted(statementImport),
-        ),
-      )
-      .limit(1);
-
-    // Which of these identities the ledger already holds, and under whose
-    // batch. `ON CONFLICT DO NOTHING` answers neither question — it reports a
-    // count of rows that landed, and the three ways a row can fail to land
-    // have three different remedies.
-    const distinctIds = [...idCounts.keys()];
-    const canonicalIds = rows
-      .filter((row) => row.reviewedLegacyAccountDescriptor !== undefined)
-      .map((row) => row.legacyExternalId);
-    const stored = await unwrapDb(tx)
-      .select({
-        id: statementRow.id,
-        externalId: statementRow.externalId,
-        batchId: statementRow.batchId,
-        accountDescriptor: statementRow.accountDescriptor,
-        statementDate: statementRow.statementDate,
-        providerAmount: statementRow.providerAmount,
-        rawDescription: statementRow.rawDescription,
-        providerTransactionId: statementRow.providerTransactionId,
-        providerStatus: statementRow.providerStatus,
-        merchant: statementRow.merchant,
-        sourceCategory: statementRow.sourceCategory,
-        providerNotes: statementRow.providerNotes,
-      })
-      .from(statementRow)
-      .where(
-        and(
-          eq(statementRow.source, source),
-          inArray(statementRow.externalId, [
-            ...new Set([...distinctIds, ...canonicalIds]),
-          ]),
-          notDeleted(statementRow),
-        ),
-      );
-    for (const row of rows) {
-      if (row.reviewedLegacyAccountDescriptor === undefined) continue;
-      const target = stored.find(
-        (saved) => saved.externalId === row.externalId,
-      );
-      if (
-        !target ||
-        target.accountDescriptor !== row.reviewedLegacyAccountDescriptor ||
-        target.statementDate !== row.statementDate ||
-        target.providerAmount !== row.providerAmount ||
-        target.rawDescription !== row.rawDescription ||
-        [...stored, ...rows].some(
-          (saved) => saved.externalId === row.legacyExternalId,
-        )
-      )
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Reviewed legacy membership target is missing, conflicts with the source evidence, or has a competing canonical row.",
-        );
-    }
-    const maskUpgrades: { id: string; from: string; to: string }[] = [];
-    for (const saved of stored) {
-      const incoming = rows.find((row) => row.externalId === saved.externalId);
-      if (!incoming) continue;
-      if (
-        incoming.rowPosition !== undefined &&
-        upgradesTruncatedMask(
-          saved.accountDescriptor,
-          incoming.accountDescriptor,
-        )
-      ) {
-        assertImmutableStatementOccurrence(saved, {
-          ...incoming,
-          accountDescriptor: saved.accountDescriptor,
-        });
-        maskUpgrades.push({
-          id: saved.id,
-          from: saved.accountDescriptor,
-          to: incoming.accountDescriptor,
-        });
-        continue;
-      }
-      assertImmutableStatementOccurrence(saved, incoming);
-    }
-    const existingMembership = existingBatch
-      ? (
-          await unwrapDb(tx).execute<{ rowId: string }>(sql`
-          SELECT "statementRowId" AS "rowId" FROM ${statementImportMembers} member
-          WHERE member."importId" = ${existingBatch.id}
-        `)
-        ).rows
-      : [];
-    const memberIds = new Set(existingMembership.map((row) => row.rowId));
-    const alreadyInThisBatch = stored.filter((row) =>
-      memberIds.has(row.id),
-    ).length;
-    const alreadyInAnotherBatch = stored.length - alreadyInThisBatch;
-    const novel = distinctIds.length - stored.length;
-
-    if (input.dryRun) {
-      return {
-        batchId: existingBatch?.id ?? null,
-        batchCreated: false,
-        dryRun: true,
-        inserted: novel,
-        unchanged: rows.length - novel,
-        alreadyInThisBatch,
-        alreadyInAnotherBatch,
-        indistinguishableDuplicates,
-        rowsOmitted,
-        rowCountStored: existingBatch
-          ? await storedRowCount(tx, existingBatch.id)
-          : 0,
-        maskUpgrades: maskUpgrades.length,
-        signWarning,
-      };
-    }
-
-    // Every `source` names a registered ExternalSource (FK); a new provider
-    // registers on its first import.
-    await ensureExternalSources(tx, [source]);
-    const batchId =
-      existingBatch?.id ??
-      (
-        await unwrapDb(tx)
-          .insert(statementImport)
-          .values({
-            source,
-            label: input.import.label,
-            fingerprint: input.import.fingerprint,
-            dateKind: input.import.dateKind,
-            rowCountDeclared: input.import.rowCountDeclared,
-            notes: input.import.notes,
-          })
-          .returning({ id: statementImport.id })
-      )[0]?.id;
-    if (!batchId)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Failed to create statement import batch.",
-      );
-
-    // `legacyExternalId` stays hashed over the truncated descriptor: it is the
-    // charge key settlement refs and other observations already join on.
-    for (const upgrade of maskUpgrades) {
-      const updated = await unwrapDb(tx)
-        .update(statementRow)
-        .set({ accountDescriptor: upgrade.to, updatedAt: new Date() })
+  return withTransaction(
+    db,
+    async (tx) => {
+      // One source's current heads and completed snapshots advance together.
+      await lockFinancialEvidenceKeys(tx, "transaction-ref", [
+        `intake:${source}`,
+      ]);
+      const [existingBatch] = await unwrapDb(tx)
+        .select({
+          id: statementImport.id,
+          observedAt: statementImport.observedAt,
+          coverage: statementImport.coverage,
+          rowCountDeclared: statementImport.rowCountDeclared,
+          completedAt: statementImport.completedAt,
+        })
+        .from(statementImport)
         .where(
           and(
-            eq(statementRow.id, upgrade.id),
-            eq(statementRow.accountDescriptor, upgrade.from),
-            notDeleted(statementRow),
+            eq(statementImport.source, source),
+            eq(statementImport.fingerprint, input.import.fingerprint),
+            notDeleted(statementImport),
           ),
         )
-        .returning({ id: statementRow.id });
-      if (updated.length !== 1)
+        .limit(1);
+      const observedAt = input.import.observedAt
+        ? new Date(input.import.observedAt)
+        : (existingBatch?.observedAt ?? new Date());
+      if (
+        existingBatch &&
+        (existingBatch.observedAt.getTime() !== observedAt.getTime() ||
+          canonicalJson(jsonSnapshot.parse(existingBatch.coverage)) !==
+            canonicalJson(input.import.coverage ?? null) ||
+          existingBatch.rowCountDeclared !== input.import.rowCountDeclared)
+      )
         throw createAppError(
           "CONSTRAINT_VIOLATION",
-          `Statement row ${upgrade.id} changed during its account mask upgrade from ${upgrade.from} to ${upgrade.to}; ${updated.length} rows matched.`,
+          "An evidence collection's scope, time and declared count are immutable. Resume its original request.",
         );
-    }
-
-    if (maskUpgrades.length) await recordContextRefresh(tx, "StatementRow", []);
-    const insertable = rows.filter(
-      (row) => row.reviewedLegacyAccountDescriptor === undefined,
-    );
-    const inserted = await insertStatementEvidence(
-      tx,
-      insertable.map(
-        ({ reviewedLegacyAccountDescriptor: _reviewed, ...row }) => ({
-          ...row,
-          batchId,
-        }),
-      ),
-    );
-
-    // Re-read after conflict handling: another export may have retained the row.
-    const retained = await unwrapDb(tx)
-      .select({ id: statementRow.id })
-      .from(statementRow)
-      .where(
-        and(
-          eq(statementRow.source, source),
-          inArray(statementRow.externalId, distinctIds),
-          notDeleted(statementRow),
+      const priorMembers = existingBatch
+        ? await unwrapDb(tx)
+            .select({
+              id: statementRow.id,
+              legacyExternalId: statementRow.legacyExternalId,
+              chargeKey: statementRow.chargeKey,
+              rowPosition: statementRow.rowPosition,
+              externalId: statementRow.externalId,
+              providerTransactionId: statementRow.providerTransactionId,
+            })
+            .from(statementImportRow)
+            .innerJoin(
+              statementRow,
+              eq(statementRow.id, statementImportRow.statementRowId),
+            )
+            .where(eq(statementImportRow.importId, existingBatch.id))
+        : [];
+      const rows = await prepareStatementObservations(
+        tx,
+        input,
+        observedAt,
+        priorMembers,
+      );
+      const ids = rows.map((row) => row.externalId);
+      const stored = ids.length
+        ? await unwrapDb(tx)
+            .select()
+            .from(statementRow)
+            .where(
+              and(
+                eq(statementRow.source, source),
+                inArray(statementRow.externalId, ids),
+                notDeleted(statementRow),
+              ),
+            )
+        : [];
+      for (const incoming of rows) {
+        const saved = stored.find(
+          (row) => row.externalId === incoming.externalId,
+        );
+        if (
+          saved &&
+          [
+            saved.accountDescriptor !== incoming.accountDescriptor,
+            saved.statementDate !== incoming.statementDate,
+            saved.providerAmount !== incoming.providerAmount,
+            saved.rawDescription !== incoming.rawDescription,
+            saved.providerTransactionId !== incoming.providerTransactionId,
+          ].some(Boolean)
+        )
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "An observation identity cannot change its original evidence.",
+          );
+      }
+      const heads = rows.length
+        ? await unwrapDb(tx)
+            .select()
+            .from(statementRow)
+            .where(
+              and(
+                eq(statementRow.source, source),
+                inArray(
+                  statementRow.chargeKey,
+                  rows.map((row) => row.chargeKey),
+                ),
+                eq(statementRow.current, true),
+                notDeleted(statementRow),
+              ),
+            )
+        : [];
+      const novel = rows.filter(
+        (row) => !stored.some((saved) => saved.externalId === row.externalId),
+      );
+      const revised = rows.filter((row) =>
+        heads.some(
+          (head) =>
+            head.chargeKey === row.chargeKey &&
+            (head.externalId !== row.externalId || head.withdrawnAt !== null) &&
+            head.lastObservedAt <= observedAt,
         ),
       );
-    await unwrapDb(tx)
-      .insert(statementImportRow)
-      .values(
-        retained.map((row) => ({ importId: batchId, statementRowId: row.id })),
+      const memberIds = new Set(priorMembers.map((row) => row.id));
+      if (
+        existingBatch?.completedAt &&
+        (novel.length || stored.some((row) => !memberIds.has(row.id)))
       )
-      .onConflictDoNothing({
-        target: [
-          statementImportRow.importId,
-          statementImportRow.statementRowId,
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "A completed collection cannot admit additional observations; start a new collection.",
+        );
+      const refreshed = rows.filter((row) =>
+        heads.some(
+          (head) =>
+            head.chargeKey === row.chargeKey &&
+            head.externalId === row.externalId &&
+            head.withdrawnAt === null &&
+            head.lastObservedAt < observedAt,
+        ),
+      );
+      const alreadyInThisBatch = stored.filter((row) =>
+        memberIds.has(row.id),
+      ).length;
+      const base = {
+        batchId: existingBatch?.id ?? null,
+        batchCreated: false,
+        dryRun: input.dryRun,
+        inserted: novel.length,
+        unchanged: rows.length - novel.length,
+        alreadyInThisBatch,
+        alreadyInAnotherBatch: stored.length - alreadyInThisBatch,
+        rowCountStored: priorMembers.length,
+        completed: existingBatch?.completedAt != null,
+        revised: revised.length,
+        refreshed: refreshed.length,
+        withdrawn: 0,
+        correctionReviews: [],
+        signWarning: statementSignWarning(rows),
+      };
+      if (input.dryRun) return base;
+      await ensureExternalSources(tx, [source]);
+      const batchId =
+        existingBatch?.id ??
+        (
+          await unwrapDb(tx)
+            .insert(statementImport)
+            .values({
+              source,
+              label: input.import.label,
+              fingerprint: input.import.fingerprint,
+              dateKind: input.import.dateKind,
+              rowCountDeclared: input.import.rowCountDeclared,
+              notes: input.import.notes,
+              observedAt,
+              coverage: input.import.coverage ?? null,
+            })
+            .returning({ id: statementImport.id })
+        )[0]?.id;
+      if (!batchId)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Failed to record financial evidence collection.",
+        );
+      for (const row of rows) {
+        const newer = heads.some(
+          (head) =>
+            head.chargeKey === row.chargeKey &&
+            (head.lastObservedAt > observedAt ||
+              (head.withdrawnAt !== null && head.withdrawnAt >= observedAt)),
+        );
+        if (newer) row.current = false;
+        else
+          await unwrapDb(tx)
+            .update(statementRow)
+            .set({ current: false })
+            .where(
+              and(
+                eq(statementRow.source, source),
+                eq(statementRow.chargeKey, row.chargeKey),
+                eq(statementRow.current, true),
+                sql`${statementRow.externalId} <> ${row.externalId}`,
+              ),
+            );
+      }
+      if (novel.length)
+        await insertStatementEvidence(
+          tx,
+          novel.map((row) => {
+            const head = heads.find((head) => head.chargeKey === row.chargeKey);
+            return {
+              ...row,
+              batchId,
+              legacyReference:
+                head?.legacyReference ??
+                (row.chargeKey === row.legacyExternalId
+                  ? row.legacyExternalId
+                  : null),
+              accountId: head?.accountId ?? null,
+              disposition: head?.disposition ?? "open",
+              dispositionReason: head?.dispositionReason ?? null,
+              dispositionNote: head?.dispositionNote ?? null,
+            };
+          }),
+        );
+      for (const row of rows.filter((candidate) => candidate.current))
+        await unwrapDb(tx)
+          .update(statementRow)
+          .set({
+            current: true,
+            withdrawnAt: null,
+            withdrawalImportId: null,
+            lastObservedAt: observedAt,
+          })
+          .where(
+            and(
+              eq(statementRow.source, source),
+              eq(statementRow.externalId, row.externalId),
+              sql`${statementRow.lastObservedAt} <= ${observedAt.toISOString()} AND (${statementRow.withdrawnAt} IS NULL OR ${statementRow.withdrawnAt} < ${observedAt.toISOString()}) AND (${statementRow.lastObservedAt} < ${observedAt.toISOString()} OR NOT ${statementRow.current} OR ${statementRow.withdrawnAt} IS NOT NULL)`,
+            ),
+          );
+      const retained = ids.length
+        ? await unwrapDb(tx)
+            .select({ id: statementRow.id })
+            .from(statementRow)
+            .where(
+              and(
+                eq(statementRow.source, source),
+                inArray(statementRow.externalId, ids),
+                notDeleted(statementRow),
+              ),
+            )
+        : [];
+      if (retained.length)
+        await unwrapDb(tx)
+          .insert(statementImportRow)
+          .values(
+            retained.map((row) => ({
+              importId: batchId,
+              statementRowId: row.id,
+            })),
+          )
+          .onConflictDoNothing({
+            target: [
+              statementImportRow.importId,
+              statementImportRow.statementRowId,
+            ],
+          });
+      const rowCountStored = await storedRowCount(tx, batchId);
+      const { completed, withdrawn, withdrawnChargeKeys } =
+        await completeEvidenceCollection(
+          tx,
+          input,
+          batchId,
+          existingBatch,
+          rows,
+          rowCountStored,
+          observedAt,
+        );
+      if (novel.length || revised.length || withdrawn)
+        await recordContextRefresh(tx, "StatementRow", []);
+      const { reconcileRecordedFinancialEvidence } =
+        await import("./statement-evidence-correction");
+      const correctionReviews = await reconcileRecordedFinancialEvidence(
+        databaseForTransaction(tx),
+        source,
+        [
+          ...new Set([
+            ...revised.map((row) => row.chargeKey),
+            ...refreshed.map((row) => row.chargeKey),
+            ...withdrawnChargeKeys,
+          ]),
         ],
-      });
-
-    return {
-      batchId,
-      batchCreated: !existingBatch,
-      dryRun: false,
-      inserted: inserted.length,
-      unchanged: rows.length - inserted.length,
-      alreadyInThisBatch,
-      alreadyInAnotherBatch,
-      indistinguishableDuplicates,
-      rowsOmitted,
-      rowCountStored: await storedRowCount(tx, batchId),
-      maskUpgrades: maskUpgrades.length,
-      signWarning,
-    };
-  });
+        actor,
+      );
+      return {
+        ...base,
+        batchId,
+        batchCreated: !existingBatch,
+        rowCountStored,
+        completed,
+        withdrawn,
+        correctionReviews,
+      };
+    },
+    { isolationLevel: "serializable" },
+  );
 }
 
 /**
@@ -823,14 +1160,14 @@ export async function findStatementRowDrift(
     createdAt: StatementRowSqlValue;
   }>(sql`
     WITH eligible AS (
-      SELECT id, source, "accountDescriptor", "statementDate", "providerAmount", "createdAt"
+      SELECT id, source, "chargeKey", "accountDescriptor", "statementDate", "providerAmount", "createdAt"
       FROM "StatementRow" WHERE ${where}
     ), drifted AS (
       SELECT a.source, a."accountDescriptor", a."statementDate", a."providerAmount",
              min(least(a."createdAt", b."createdAt")) AS "firstSeen",
              bool_or(${unsharedPair}) AS "crossBatch"
       FROM eligible a
-      JOIN eligible b ON a.id < b.id
+      JOIN eligible b ON a.id < b.id AND a."chargeKey" <> b."chargeKey"
         AND a.source = b.source AND a."accountDescriptor" = b."accountDescriptor"
         AND a."statementDate" = b."statementDate" AND a."providerAmount" = b."providerAmount"
       GROUP BY a.source, a."accountDescriptor", a."statementDate", a."providerAmount"
@@ -1052,7 +1389,9 @@ export async function listStatementImports(db: Database, source?: string) {
       fingerprint: statementImport.fingerprint,
       dateKind: statementImport.dateKind,
       rowCountDeclared: statementImport.rowCountDeclared,
-      notes: statementImport.notes,
+      observedAt: statementImport.observedAt,
+      completedAt: statementImport.completedAt,
+      coverage: statementImport.coverage,
       createdAt: statementImport.createdAt,
       updatedAt: statementImport.updatedAt,
       rowCountStored: sql<number>`(
@@ -1073,79 +1412,4 @@ export async function listStatementImports(db: Database, source?: string) {
     data: rows.map((row) => statementImportOut.parse(row)),
     count: rows.length,
   };
-}
-
-/** A reviewed observation adds evidence without replacing any existing source
- * reference or changing canonical date, amount, or posting status. */
-export async function attachStatementObservation(
-  db: Database,
-  row: FinancialStatementImportRow,
-  transactionCode: FinancialTransactionShortcode,
-  actor: ActorContext,
-) {
-  return withTransaction(db, async (tx) => {
-    const scopedDb = databaseForTransaction(tx);
-    const transactionId = await resolveOrThrow(
-      scopedDb,
-      "financialTransaction",
-      transactionCode,
-    );
-    const externalId =
-      row.importFingerprint && row.rowPosition !== undefined
-        ? await statementRowOccurrenceId(
-            row.source,
-            row.importFingerprint,
-            row.rowPosition,
-          )
-        : await statementRowExternalId(row);
-    await lockFinancialEvidenceKeys(tx, "transaction-ref", [
-      `${row.source}\0${externalId}`,
-    ]);
-    await tx
-      .select({ id: financialTransaction.id })
-      .from(financialTransaction)
-      .where(
-        and(
-          eq(financialTransaction.id, transactionId),
-          notDeleted(financialTransaction),
-        ),
-      )
-      .for("update");
-    const preview = await previewFinancialStatementImport(scopedDb, {
-      rows: [row],
-    });
-    const candidate = preview.rows[0];
-    if (
-      !candidate?.existingTransactionIds.includes(transactionCode) ||
-      (candidate.status !== "possible_existing" &&
-        candidate.status !== "already_recorded")
-    )
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "The selected transaction is no longer a candidate for this statement observation. Review again.",
-      );
-    const ref = candidate.proposed.sourceRef;
-    const existing =
-      (await settlementRefsFor(tx, [transactionId])).get(transactionId) ?? [];
-    if (
-      existing.some(
-        (saved) =>
-          saved.source === ref.source && saved.externalId === ref.externalId,
-      )
-    )
-      return false;
-    await assertSettlementRefsAvailable(tx, [ref], transactionId);
-    await replaceSettlementRefs(tx, transactionId, [...existing, ref]);
-    await tx
-      .update(financialTransaction)
-      .set({ updatedAt: new Date() })
-      .where(eq(financialTransaction.id, transactionId));
-    await logAuditEntry(tx, actor, {
-      entityKind: "financialTransaction",
-      entityId: transactionId,
-      action: "update",
-      changes: { sourceRefs: { from: existing, to: [...existing, ref] } },
-    });
-    return true;
-  });
 }

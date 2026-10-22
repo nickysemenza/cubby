@@ -15,6 +15,7 @@ import {
   financialTransaction,
   ledgerParty,
 } from "~/server/db/schema";
+import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 export type PairingRow = {
@@ -92,7 +93,7 @@ export function buildFinancialTransferPairSuggestions(
                 to: negative.party,
                 reasons: [
                   "equal and opposite amount",
-                  "posted within the requested date window",
+                  "dated within the requested date window",
                   "different financial accounts",
                 ],
               };
@@ -129,6 +130,10 @@ const noLiveAllocations = sql`NOT EXISTS (
     AND allocation."deletedAt" IS NULL
 )`;
 
+const eligibleStatus = inArray(financialTransaction.status, [
+  ...transferEvidenceStatuses,
+]);
+
 const pairingColumns = {
   id: financialTransaction.id,
   shortcode: financialTransaction.shortcode,
@@ -139,7 +144,7 @@ const pairingColumns = {
   partyShortcode: ledgerParty.shortcode,
   partyName: ledgerParty.name,
   partyKind: ledgerParty.kind,
-  eligible: sql<boolean>`(${financialTransaction.status} = 'posted' AND ${noLiveAllocations} AND ${financialTransaction.ledgerTransferId} IS NULL)`,
+  eligible: sql<boolean>`(${eligibleStatus} AND ${noLiveAllocations} AND ${financialTransaction.ledgerTransferId} IS NULL)`,
 } as const;
 
 type DbPairingRow = {
@@ -240,7 +245,7 @@ export async function suggestFinancialTransferPairs(
     .where(
       and(
         notDeleted(financialTransaction),
-        eq(financialTransaction.status, "posted"),
+        eligibleStatus,
         isNull(financialTransaction.ledgerTransferId),
         gte(effectiveDate, dateStart),
         lte(effectiveDate, dateEnd),

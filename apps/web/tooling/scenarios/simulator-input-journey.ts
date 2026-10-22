@@ -1,13 +1,12 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { deflateSync } from "node:zlib";
 import type { Pool } from "pg";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { pollUntil } from "@cubby/shared/retry";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
-import { testUserId } from "@cubby/schemas/testing";
 import { imageId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -21,12 +20,7 @@ import {
   completeDescribeImageJobs,
   listDescribeImageJobs,
 } from "../convergence-harness";
-import {
-  buildKernelContext,
-  buildScenarioDatabase,
-  createFixtureWithContext,
-} from "./context";
-import { buildEntity } from "../factories/build";
+import { buildScenarioDatabase } from "./context";
 
 type Run = (
   command: string,
@@ -93,7 +87,7 @@ function syntheticPhotoPNG(index: number, batchIdentity: string): Buffer {
   ]);
 }
 
-/** Files and the authorized Photos Library are synthetic inputs. CSV and image stage/PUT/finalize,
+/** The authorized Photos Library contains synthetic inputs. Image stage/PUT/finalize,
  * proposed-group review and approval all execute in the installed iOS app. */
 export async function createSimulatorInputJourney(input: {
   pool: Pool;
@@ -109,39 +103,8 @@ export async function createSimulatorInputJourney(input: {
 }) {
   const db = buildScenarioDatabase(input.pool);
   const database = getDb(db);
-  const kernel = buildKernelContext(db, testUserId(input.userId));
-  const member = await database.query.ledgerParty.findFirst({
-    where: and(
-      eq(schema.ledgerParty.userId, kernel.auth.userId),
-      eq(schema.ledgerParty.kind, "member"),
-      notDeleted(schema.ledgerParty),
-    ),
-  });
-  if (!member) throw new Error("Synthetic simulator member missing");
-  const card = await createFixtureWithContext(
-    kernel,
-    "financialAccount",
-    buildEntity("financialAccount", {
-      name: "Synthetic Input Card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      ledgerPartyId: member.shortcode,
-      sourceAliases: [
-        {
-          source: "monarch",
-          alias: "Synthetic Input Card",
-          externalAccountId: null,
-        },
-      ],
-    }),
-  );
-
   const inputs = path.join(input.artifacts, "inputs");
   mkdirSync(inputs, { recursive: true });
-  const csv = path.join(inputs, "synthetic-input-statement.csv");
-  writeFileSync(
-    csv,
-    "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id\n2026-09-12,Synthetic Input Outfitters,Clothing,Synthetic Input Card,SYNTHETIC INPUT ORDER,,-42.50,synthetic-input-posted\n",
-  );
   const imageInputs = Array.from({ length: 25 }, (_, index) => {
     const filename = path.join(inputs, `synthetic-input-shirt-${index}.png`);
     writeFileSync(
@@ -291,8 +254,8 @@ export async function createSimulatorInputJourney(input: {
     );
   };
   return {
-    inputs: [csv, ...imageInputs],
-    async installInputs(appDocuments: string) {
+    inputs: imageInputs,
+    async installInputs() {
       await input.run("xcrun", [
         "simctl",
         "privacy",
@@ -301,8 +264,6 @@ export async function createSimulatorInputJourney(input: {
         "photos",
         APPLE_APP_IDENTITIES.production.bundleIdentifier,
       ]);
-      mkdirSync(appDocuments, { recursive: true });
-      copyFileSync(csv, path.join(appDocuments, path.basename(csv)));
       await input.run("xcrun", [
         "simctl",
         "addmedia",
@@ -311,37 +272,6 @@ export async function createSimulatorInputJourney(input: {
       ]);
     },
     async execute() {
-      let transaction: string | null = null;
-      if (!input.photoOnly) {
-        await replay("input-statement-open");
-        await replay("input-statement-files", "yaml");
-        await replay("input-statement");
-        const transactions = await database.query.financialTransaction.findMany(
-          {
-            where: notDeleted(schema.financialTransaction),
-          },
-        );
-        if (transactions.length !== 1 || transactions[0]?.amount !== 42.5)
-          throw new Error(
-            "Native CSV decision did not create exactly the reviewed transaction",
-          );
-        transaction = transactions[0].shortcode;
-        const account = await database.query.financialAccount.findFirst({
-          where: eq(schema.financialAccount.shortcode, card.id),
-        });
-        if (!account || transactions[0].accountId !== account.id)
-          throw new Error(
-            "Native statement used a different explicit account identity",
-          );
-        if (
-          (
-            await database.query.expense.findMany({
-              where: notDeleted(schema.expense),
-            })
-          ).length
-        )
-          throw new Error("CSV source intake auto-booked an Expense");
-      }
       await replay("input-photo-open");
       await selectNewestPhotoBatch();
       await replay("input-photo");
@@ -479,7 +409,6 @@ export async function createSimulatorInputJourney(input: {
           "Native photo import or approval auto-booked Expense or Inventory",
         );
       if (
-        input.photoOnly &&
         (
           await database.query.financialTransaction.findMany({
             where: notDeleted(schema.financialTransaction),
@@ -494,8 +423,6 @@ export async function createSimulatorInputJourney(input: {
         evidence,
         JSON.stringify(
           {
-            account: input.photoOnly ? null : card.id,
-            transaction,
             photoRun: run.shortcode,
             imageSha256s: [...digests].sort(),
             photoCount: images.length,
@@ -506,9 +433,7 @@ export async function createSimulatorInputJourney(input: {
             products: products.length,
             expenseAutoWrites: 0,
             inventoryAutoWrites: 0,
-            input: input.photoOnly
-              ? "actual authorized Photos Library grid"
-              : "actual Files CSV + authorized Photos Library grid",
+            input: "actual authorized Photos Library grid",
             decision: "actual native review + approval",
             model: "supplied external descriptions/grouping",
           },

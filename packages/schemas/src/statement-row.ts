@@ -8,75 +8,7 @@ import {
   financialTransactionShortcode,
 } from "./identifiers";
 import { numericRangeFields, plainDate } from "./base-entity";
-import {
-  financialStatementImportPreviewOut,
-  financialTransactionKind,
-  merchantVendorInference,
-} from "./financial-transaction";
-
-export const statementCsvColumnMapping = z.strictObject({
-  source: z.string(),
-  account: z.string(),
-  accountColumn: z.string(),
-  date: z.string(),
-  amount: z.string(),
-  description: z.string(),
-  merchant: z.string(),
-  category: z.string(),
-  notes: z.string(),
-  direction: z.string(),
-  status: z.string(),
-  pendingValue: z.string(),
-  chargeValue: z.string(),
-  creditValue: z.string(),
-  sign: z.enum(["charges-negative", "charges-positive", "direction-column"]),
-});
-
-export const statementCsvFileInput = z.object({
-  fileName: z.string().min(1),
-  text: z.string().min(1).max(5_000_000),
-  mapping: statementCsvColumnMapping.optional(),
-  previewOffset: z.number().int().nonnegative().optional(),
-});
-export type StatementCsvFileInput = z.infer<typeof statementCsvFileInput>;
-
-export type StatementCsvColumnMapping = z.infer<
-  typeof statementCsvColumnMapping
->;
-
-export const statementCsvPreviewOut = z.object({
-  headers: z.array(z.string()),
-  needsMapping: z.boolean(),
-  /** Server-guessed columns for an unfamiliar file; clients prefill from it. */
-  suggestedMapping: statementCsvColumnMapping.nullable(),
-  /** Advisory: the first batch looks like an un-normalized all-positive export. */
-  signWarning: z.string().nullable(),
-  source: z.string().nullable(),
-  totalRows: z.number().int(),
-  pendingRows: z.number().int(),
-  zeroValueRows: z.number().int(),
-  previewOffset: z.number().int(),
-  hasMore: z.boolean(),
-  preview: financialStatementImportPreviewOut.nullable(),
-});
-
-export const statementCsvCommitInput = statementCsvFileInput.extend({
-  selected: z.array(
-    z.object({
-      key: z.string(),
-      kind: financialTransactionKind.optional(),
-      transactionId: financialTransactionShortcode.optional(),
-    }),
-  ),
-});
-export type StatementCsvCommitInput = z.infer<typeof statementCsvCommitInput>;
-
-export const statementCsvCommitOut = z.object({
-  transactions: z.number().int(),
-  attached: z.number().int(),
-  evidence: z.number().int(),
-  alreadyPresent: z.number().int(),
-});
+import { merchantVendorInference } from "./financial-transaction";
 
 /**
  * The provider-statement ledger: what the card statements said, stored verbatim
@@ -137,7 +69,9 @@ export const statementImportOut = z.object({
   dateKind: statementDateKind,
   rowCountDeclared: z.number().int().nullable(),
   rowCountStored: z.number().int(),
-  notes: z.string().nullable(),
+  observedAt: z.date(),
+  completedAt: z.date().nullable(),
+  coverage: z.json().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -156,6 +90,11 @@ export const statementRowOut = z.object({
   rowPosition: z.number().int().positive().nullable().default(null),
   providerTransactionId: z.string().nullable().default(null),
   legacyExternalId: z.string().nullable().default(null),
+  chargeKey: z.string(),
+  current: z.boolean(),
+  withdrawnAt: z.date().nullable(),
+  providerAccountId: z.string().nullable(),
+  providerData: z.json().nullable(),
 
   accountDescriptor: z.string(),
   statementDate: plainDate,
@@ -226,6 +165,16 @@ export const statementImportInput = z.strictObject({
   fingerprint: z.string().min(1),
   dateKind: statementDateKind.default("unknown"),
   rowCountDeclared: z.number().int().nonnegative().nullable().default(null),
+  observedAt: z.iso.datetime().optional(),
+  coverage: z
+    .strictObject({
+      account: z.string().min(1),
+      from: plainDate,
+      to: plainDate,
+      visibility: z.enum(["all", "visible"]),
+    })
+    .refine((value) => value.from <= value.to, "Coverage dates are reversed")
+    .optional(),
   notes: z.string().nullable().default(null),
 });
 export type StatementImportInput = z.infer<typeof statementImportInput>;
@@ -236,15 +185,17 @@ export type StatementImportInput = z.infer<typeof statementImportInput>;
  * with the one `sourceRefs` matching depends on.
  */
 export const statementRowInput = z.strictObject({
-  reviewedLegacyAccountDescriptor: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      "Reviewed membership-only repair: the retained legacy account descriptor repeats the same complete trailing mask once. Requires an existing v1 row; never creates a row, changes provider evidence, or resolves an account. Cannot accompany rowPosition.",
-    ),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
+  providerAccountId: z
+    .string()
+    .min(1)
+    .nullable()
+    .optional()
+    .describe(
+      "Opaque upstream account ID scoped to the provider; not a Cubby FinancialAccount shortcode.",
+    ),
+  providerData: z.json().nullable().optional(),
   accountDescriptor: z.string().min(1),
   statementDate: plainDate,
   /**
@@ -272,7 +223,6 @@ export const recordStatementRowsInput = z.strictObject({
   import: statementImportInput,
   rows: z
     .array(statementRowInput)
-    .min(1)
     .max(STATEMENT_ROW_RECORD_MAX_ROWS)
     .refine((rows) => {
       const positions = rows.flatMap((row) =>
@@ -289,6 +239,11 @@ export const recordStatementRowsInput = z.strictObject({
    * offline and query for the results. Ask the server instead.
    */
   dryRun: z.boolean().default(false),
+  complete: z.boolean().default(false),
+  confirmedWithdrawals: z
+    .array(z.string().min(1))
+    .max(STATEMENT_ROW_RECORD_MAX_ROWS)
+    .default([]),
 });
 export type RecordStatementRowsInput = z.infer<typeof recordStatementRowsInput>;
 
@@ -301,18 +256,17 @@ export const recordStatementRowsOut = z.object({
   unchanged: z.number().int(),
   alreadyInThisBatch: z.number().int(),
   alreadyInAnotherBatch: z.number().int(),
-  /**
-   * Repeated identities in a legacy payload with no physical row positions.
-   * CSV occurrences use v2 identities and preserve identical purchases.
-   */
-  indistinguishableDuplicates: z.number().int(),
-  rowsOmitted: z.number().int().nullable(),
   rowCountStored: z.number().int(),
-  /**
-   * Stored pre-#1894 `(...last4)` descriptors a positioned replay upgrades (or,
-   * on a dry run, would upgrade) to the complete provider mask.
-   */
-  maskUpgrades: z.number().int(),
+  completed: z.boolean(),
+  revised: z.number().int(),
+  refreshed: z.number().int(),
+  withdrawn: z.number().int(),
+  correctionReviews: z.array(
+    z.object({
+      transactionId: financialTransactionShortcode,
+      reason: z.string(),
+    }),
+  ),
   /**
    * Set when the batch looks un-normalized — the signature of a Copilot or
    * Apple Card export submitted verbatim.

@@ -24,8 +24,14 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
-import { getDb } from "~/server/db/helpers";
-import { assessmentState, spendingCategory } from "~/server/db/schema";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  assessmentState,
+  expense,
+  financialTransaction,
+  financialTransactionAllocation,
+  spendingCategory,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
@@ -223,7 +229,7 @@ const accept = async (
     where: eq(spendingCategory.name, "Synthetic statement spending"),
   });
   const needsBooking =
-    suggestion.create?.status === "posted" &&
+    suggestion.create !== null &&
     ["purchase", "refund", "fee"].includes(suggestion.create.kind) &&
     suggestion.spending?.status !== "ready" &&
     suggestion.spending?.status !== "already_booked";
@@ -390,7 +396,7 @@ describe("statement Transaction suggestions", () => {
       source: string;
       chargeKey: string;
     }>(
-      sql`SELECT source, COALESCE("legacyExternalId", "externalId") AS "chargeKey" FROM "StatementRow" WHERE "deletedAt" IS NULL`,
+      sql`SELECT source, "chargeKey" FROM "StatementRow" WHERE "deletedAt" IS NULL`,
     );
     const charges = rows.map(({ source, chargeKey }) => ({
       source,
@@ -418,20 +424,31 @@ describe("statement Transaction suggestions", () => {
   // unchanged evidence.
   it("publishes one suggestion per charge and inherits decisions across observations", async () => {
     await card(ctx);
-    const grocery = rowInput();
+    const grocery = rowInput({
+      providerTransactionId: "synthetic-grocery-record",
+    });
     const coffee = rowInput({
+      providerTransactionId: "synthetic-coffee-record",
       providerAmount: -6.25,
       merchant: "Example Cafe",
       rawDescription: "EXAMPLE CAFE",
       sourceCategory: "Coffee Shops",
     });
     await record(ctx, [grocery, coffee]);
-    // The full-history re-export observes both charges again.
+    // Changed provider memos retain distinct observations of the same charges.
     await record(
       ctx,
       [
-        { ...grocery, rowPosition: 10 },
-        { ...coffee, rowPosition: 11 },
+        {
+          ...grocery,
+          rowPosition: 10,
+          providerNotes: "Synthetic reexport memo",
+        },
+        {
+          ...coffee,
+          rowPosition: 11,
+          providerNotes: "Synthetic reexport memo",
+        },
       ],
       { fingerprint: "fp-suggest-2" },
     );
@@ -497,6 +514,65 @@ describe("statement Transaction suggestions", () => {
       active: true,
     });
   });
+
+  // Equal content in independent delta collections cannot inherit another
+  // occurrence's settlement or ignore decision without an upstream identity.
+  it.each(["settled", "ignored"] as const)(
+    "keeps an identical ID-less delta observation actionable after the other is %s",
+    async (decision) => {
+      await card(ctx);
+      const observed = rowInput({ rowPosition: undefined });
+      await record(ctx, [observed], { fingerprint: "synthetic-idless-first" });
+      const [first] = (await listStatementRows(ctx.db, {})).data;
+      await record(ctx, [observed], { fingerprint: "synthetic-idless-second" });
+      const [second] = (
+        await listStatementRows(ctx.db, {
+          importFingerprint: "synthetic-idless-second",
+        })
+      ).data;
+      expect(second!.legacyExternalId).toBe(first!.legacyExternalId);
+      expect(second!.chargeKey).not.toBe(first!.chargeKey);
+      expect(second!.externalId).not.toBe(first!.externalId);
+      await generate(ctx);
+      const pending = await suggestions(ctx);
+      expect(pending).toHaveLength(2);
+      const reviewed = pending.find(
+        (row) => row.chargeKey === first!.chargeKey,
+      )!;
+      if (decision === "settled") {
+        await accept(ctx, reviewed);
+      } else {
+        await updateStatementRows(
+          ctx.db,
+          {
+            selector: {
+              source: first!.source,
+              externalIds: [first!.externalId],
+            },
+            data: {
+              disposition: "ignored",
+              dispositionReason: "not_modeled",
+              dispositionNote: "Synthetic observation reviewed independently.",
+            },
+          },
+          ctx.actor,
+        );
+      }
+      await generate(ctx);
+      const after = (await listStatementRows(ctx.db, {})).data;
+      expect(after.find((row) => row.id === first!.id)).toMatchObject({
+        matchState: decision === "settled" ? "matched" : "ignored",
+      });
+      expect(after.find((row) => row.id === second!.id)).toMatchObject({
+        matchState: "unmatched",
+        transactionId: null,
+        disposition: "open",
+      });
+      expect(await suggestions(ctx)).toMatchObject([
+        { chargeKey: second!.chargeKey },
+      ]);
+    },
+  );
 
   // Failure modes: the settlement-ref trigger supersedes the suggestion being
   // applied; a second accept creates a twin; the row stays unmatched.
@@ -609,9 +685,8 @@ describe("statement Transaction suggestions", () => {
     expect(await suggestions(ctx)).toEqual([]);
   });
 
-  // Failure modes: a hold's posted twin (tip added, later date) becomes a
-  // second transaction; the pending row stays on the worklist.
-  it("supersedes a recorded hold with its posted row", async () => {
+  // A same-amount posted twin must reuse the hold's booking and clear its work.
+  it("supersedes a booked hold with its same-amount posted row", async () => {
     await card(ctx);
     await record(ctx, [
       rowInput({
@@ -635,7 +710,7 @@ describe("statement Transaction suggestions", () => {
       ctx,
       [
         rowInput({
-          providerAmount: -48,
+          providerAmount: -40,
           statementDate: "2026-05-03",
           rawDescription: "EXAMPLE BISTRO",
           sourceCategory: "Restaurants & Bars",
@@ -663,6 +738,18 @@ describe("statement Transaction suggestions", () => {
       "EXAMPLE BISTRO": "matched",
       "EXAMPLE BISTRO PENDING": "superseded",
     });
+    expect(
+      await getDb(ctx.db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .where(notDeleted(expense)),
+    ).toEqual([{ cost: 40 }]);
+    expect(
+      await getDb(ctx.db)
+        .select({ amount: financialTransactionAllocation.amount })
+        .from(financialTransactionAllocation)
+        .where(notDeleted(financialTransactionAllocation)),
+    ).toEqual([{ amount: 40 }]);
   });
 
   it("continues statement generation after an item publication failure with a stable retry frontier", async () => {
@@ -680,7 +767,7 @@ describe("statement Transaction suggestions", () => {
       source: string;
       chargeKey: string;
     }>(sql`
-      SELECT source, COALESCE("legacyExternalId", "externalId") AS "chargeKey"
+      SELECT source, "chargeKey"
       FROM "StatementRow" WHERE "deletedAt" IS NULL ORDER BY source, "chargeKey"
     `);
     const removeFailure = await rejectStatementPublication(
@@ -751,119 +838,81 @@ describe("statement Transaction suggestions", () => {
     }
   });
 
-  it("continues vanished hold generation after an item publication failure with a stable retry frontier", async () => {
-    await card(ctx);
-    await record(
-      ctx,
-      Array.from({ length: 7 }, (_, index) =>
-        rowInput({
-          providerStatus: "pending",
-          providerAmount: -(100 + index * 25),
-          statementDate: "2026-05-01",
-          rawDescription: `SYNTHETIC VANISHED HOLD ${index}`,
-          merchant: `Synthetic Hold Merchant ${index}`,
-        }),
-      ),
-      { fingerprint: "synthetic-seven-holds" },
-    );
-    await generate(ctx);
-    for (const hold of await suggestions(ctx)) await accept(ctx, hold);
-    await record(
-      ctx,
-      [
-        rowInput({
-          statementDate: "2026-05-12",
-          rawDescription: "SYNTHETIC HOLD COVERAGE",
-          providerAmount: -1,
-        }),
+  // Retired spending must not silently stay hidden when positive source
+  // evidence returns; ordinary discovery owns the durable recovery review.
+  it("publishes review when current evidence supports a retired transaction", async () => {
+    const account = (await card(ctx)).output;
+    await record(ctx, [
+      rowInput({ providerTransactionId: "synthetic-reappeared-charge" }),
+    ]);
+    const [observation] = (await listStatementRows(ctx.db, {})).data;
+    if (!observation) throw new Error("Missing synthetic source observation");
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "void",
+      amount: 42.5,
+      transactionDate: "2026-05-04",
+      sourceRefs: [
+        { source: observation.source, externalId: observation.externalId },
       ],
-      { fingerprint: "synthetic-seven-holds-coverage" },
-    );
-    const { rows: holds } = await getDb(ctx.db).execute<{
-      id: string;
-      chargeKey: string;
-    }>(sql`
-      SELECT ft.id::text AS id, COALESCE(sr."legacyExternalId", sr."externalId") AS "chargeKey"
-      FROM "FinancialTransaction" ft
-      JOIN "EntityExternalId" fx ON fx."entityId" = ft.id AND fx.kind = 'settlement_ref' AND fx."deletedAt" IS NULL
-      JOIN "StatementRow" sr ON sr.source = fx.source AND sr."externalId" = fx."externalId" AND sr."deletedAt" IS NULL
-      WHERE ft."deletedAt" IS NULL ORDER BY ft.id
-    `);
-    const removeFailure = await rejectStatementPublication(
-      ctx,
-      holds[0]!.chargeKey,
-    );
-    try {
-      const first = await generateStatementHoldVoidPage(ctx.db, {
-        after: null,
-        runId: null,
-        limit: 5,
-      });
-      expect(first).toMatchObject({
-        found: 5,
-        processed: 5,
-        published: 4,
-        unchanged: 0,
-        next: holds[4]!.id,
-      });
-      expect(first.failed).toHaveLength(1);
-      expect(first.failed[0]!.message).toContain(
-        "Synthetic statement publication failure",
-      );
-      const repeated = await generateStatementHoldVoidPage(ctx.db, {
-        after: null,
-        runId: null,
-        limit: 5,
-      });
-      expect(repeated).toMatchObject({
-        found: 5,
-        processed: 5,
-        published: 0,
-        unchanged: 4,
-        next: first.next,
-      });
-      expect(repeated.failed).toHaveLength(1);
-      expect(
-        await generateStatementHoldVoidPage(ctx.db, {
-          after: first.next,
-          runId: null,
-          limit: 5,
-        }),
-      ).toMatchObject({
-        found: 2,
-        processed: 2,
-        published: 2,
-        failed: [],
-        next: null,
-      });
-      await getDb(ctx.db).execute(
-        sql`DELETE FROM "SyntheticStatementPublicationFailure"`,
-      );
-      expect(
-        await generateStatementHoldVoidPage(ctx.db, {
-          after: null,
-          runId: null,
-          limit: 5,
-        }),
-      ).toMatchObject({
-        found: 5,
-        processed: 5,
-        published: 1,
-        unchanged: 4,
-        failed: [],
-        next: first.next,
-      });
-      expect(
-        (await suggestions(ctx)).filter((row) => row.recommended === "void"),
-      ).toHaveLength(7);
-    } finally {
-      await removeFailure();
-    }
+    });
+    await generate(ctx);
+    const rows = await suggestions(ctx);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      clean: false,
+      reviewReason: expect.any(String),
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .where(notDeleted(expense)),
+    ).toEqual([]);
+    await generate(ctx);
+    expect(await suggestions(ctx)).toHaveLength(1);
   });
 
-  // Failure modes: a hold that vanished keeps its pending transaction forever;
-  // a void is offered before a covering export exists.
-  it("proposes voiding a hold a later export no longer contains", async () => {
+  // A refused lifecycle-only correction must survive the intake response as
+  // ordinary review work, even when amount and booked money are unchanged.
+  it("keeps a refused same-amount posted revision in durable review", async () => {
+    await card(ctx);
+    const source = rowInput({
+      providerTransactionId: "synthetic-lifecycle-review",
+      providerStatus: "pending",
+    });
+    await record(ctx, [source], { observedAt: "2026-06-01T00:00:00Z" });
+    await generate(ctx);
+    const [proposal] = await suggestions(ctx);
+    if (!proposal) throw new Error("Missing synthetic booking proposal");
+    await accept(ctx, proposal);
+    const before = await getDb(ctx.db)
+      .select({ cost: expense.cost })
+      .from(expense)
+      .where(notDeleted(expense));
+    await record(
+      ctx,
+      [{ ...source, providerStatus: "posted", statementDate: "2026-05-05" }],
+      {
+        fingerprint: "synthetic-lifecycle-later",
+        observedAt: "2026-06-02T00:00:00Z",
+      },
+    );
+    await generate(ctx);
+    expect(await suggestions(ctx)).toMatchObject([
+      { clean: false, reviewReason: expect.any(String) },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .where(notDeleted(expense)),
+    ).toEqual(before);
+  });
+
+  // Partial exports do not establish source-confirmed absence or authorize voids.
+  it("keeps a booked hold when a later partial export omits it", async () => {
     await card(ctx);
     await record(
       ctx,
@@ -903,28 +952,38 @@ describe("statement Transaction suggestions", () => {
       runId: null,
       limit: 1,
     });
-    expect(holds).toMatchObject({ processed: 1, published: 1 });
-    expect(holds.next).not.toBeNull();
-    expect(
-      await generateStatementHoldVoidPage(ctx.db, {
-        after: holds.next,
-        runId: null,
-        limit: 1,
-      }),
-    ).toMatchObject({ processed: 0, published: 0, next: null });
-    const voids = (await suggestions(ctx)).filter(
-      (row) => row.recommended === "void",
-    );
-    expect(voids).toHaveLength(1);
-    expect(await stateOf(ctx, voids[0]!.assessmentId)).toMatchObject({
-      status: "pending",
-      active: true,
+    expect(holds).toMatchObject({
+      processed: 1,
+      published: 0,
+      next: expect.any(String),
     });
-    await accept(ctx, voids[0]!);
-    const transaction = await getDb(ctx.db).execute<{ status: string }>(
-      sql`SELECT status FROM "FinancialTransaction" WHERE shortcode = ${voids[0]!.voidTransactionId}`,
-    );
-    expect(transaction.rows[0]?.status).toBe("void");
+    expect(
+      (await suggestions(ctx)).filter((row) => row.recommended === "void"),
+    ).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          status: financialTransaction.status,
+          amount: financialTransaction.amount,
+        })
+        .from(financialTransaction)
+        .where(notDeleted(financialTransaction)),
+    ).toEqual([{ status: "pending", amount: 300 }]);
+    expect(
+      await getDb(ctx.db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .where(notDeleted(expense)),
+    ).toEqual([{ cost: 300 }]);
+    expect(
+      (await listStatementRows(ctx.db, {})).data.find(
+        (row) => row.rawDescription === "EXAMPLE HOTEL HOLD",
+      ),
+    ).toMatchObject({
+      current: true,
+      withdrawnAt: null,
+      matchState: "matched",
+    });
   });
 
   // Failure modes: a firmed-up descriptor from another export is two clean
@@ -1015,16 +1074,18 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
-  // A pending hold needs kind/counterparty labels, never a spending decision.
+  // A non-spending transfer needs labels, never a spending decision.
   it("finishes settlement-only labels without reserving spending allowance", async () => {
     const queue = captureBackgroundQueue();
     try {
       await card(ctx);
-      await record(ctx, [rowInput({ providerStatus: "pending" })]);
+      await record(ctx, [
+        rowInput({ providerStatus: "pending", sourceCategory: "Transfer" }),
+      ]);
       await generate(ctx);
       const result = await runStatementLabels(ctx.db, {
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-        port: answering({ kind: "purchase", counterparty: "business" }),
+        port: answering({ kind: "account_transfer", counterparty: "business" }),
         spendingAdvice: async () => {
           throw new Error(
             "Settlement-only evidence cannot request spending advice",
@@ -1146,7 +1207,9 @@ describe("statement Transaction suggestions", () => {
             rawDescription: `SYNTHETIC FANOUT CANDIDATE ${index}`,
             sourceRefs: [],
           });
-        const observed = rowInput();
+        const observed = rowInput({
+          providerTransactionId: "synthetic-checkpoint-record",
+        });
         await record(ctx, [observed]);
         await generate(ctx);
         const runId = await ensureRun(ctx.db, ctx.actor, {
@@ -1227,7 +1290,9 @@ describe("statement Transaction suggestions", () => {
   // model again; the rebuilt judgment still uses the current evidence fence.
   it("keeps labels across a re-Sweep with unchanged model inputs", async () => {
     await card(ctx);
-    const observed = rowInput();
+    const observed = rowInput({
+      providerTransactionId: "synthetic-reused-label-record",
+    });
     await record(ctx, [observed]);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
@@ -1343,7 +1408,9 @@ describe("statement Transaction suggestions", () => {
         rawDescription: "SYNTHETIC PREVIOUS CANDIDATE",
         sourceRefs: [],
       });
-      const observed = rowInput();
+      const observed = rowInput({
+        providerTransactionId: "synthetic-model-input-record",
+      });
       await record(ctx, [observed]);
       await generate(ctx);
       await label(
@@ -1790,15 +1857,24 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
-  it("precomputes published evidence across a mutation window and rebuilds before normal publication", async () => {
+  it("skips superseded evidence and publishes fresh labels for the revised charge", async () => {
     await card(ctx);
-    const original = rowInput({ merchant: "Synthetic generated evidence" });
+    const original = rowInput({
+      providerTransactionId: "synthetic-revised-charge",
+      merchant: "Synthetic generated evidence",
+    });
     await record(ctx, [original]);
     await generate(ctx);
     const [before] = await suggestions(ctx);
     await record(
       ctx,
-      [{ ...original, merchant: "Synthetic changed evidence" }],
+      [
+        {
+          ...original,
+          providerAmount: -48,
+          merchant: "Synthetic changed evidence",
+        },
+      ],
       { fingerprint: "synthetic-speculation-mutation" },
     );
     const answer = answering({ kind: "purchase", counterparty: "business" });
@@ -1810,24 +1886,29 @@ describe("statement Transaction suggestions", () => {
       runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
       port: async (request) => {
         speculativeQuestions++;
-        expect(request.state).toContain("Synthetic generated evidence");
-        expect(request.state).not.toContain("Synthetic changed evidence");
         return answer(request);
       },
     });
     expect(computed).toMatchObject({
-      computed: 1,
+      computed: 0,
       failed: [],
-      labels: { generated: 3 },
+      labels: { generated: 0 },
     });
-    expect(speculativeQuestions).toBe(2);
-    expect(await suggestions(ctx)).toEqual([before]);
-    const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
-      ctx.db,
-      1,
-    );
-    expect(saved!.checkpoint?.judgment.create?.merchant).toBe(
-      "Synthetic generated evidence",
+    expect(speculativeQuestions).toBe(0);
+    expect(await suggestions(ctx)).toEqual([]);
+    expect(
+      await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
+    ).toEqual([]);
+    expect(
+      (await listStatementRows(ctx.db, {})).data.map(({ current, amount }) => ({
+        current,
+        amount,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { current: false, amount: 42.5 },
+        { current: true, amount: 48 },
+      ]),
     );
     const stale = await label(ctx, async () => {
       throw new Error("Fresh evidence must be regenerated before publication");
@@ -1835,11 +1916,11 @@ describe("statement Transaction suggestions", () => {
     expect(stale).toMatchObject({
       labelled: 0,
       completed: 0,
-      stale: 1,
+      stale: 0,
       failed: [],
       labels: { generated: 0 },
     });
-    expect(await suggestions(ctx)).toEqual([before]);
+    expect(await suggestions(ctx)).toEqual([]);
     await generate(ctx);
     let freshQuestions = 0;
     const published = await label(ctx, async (request) => {
@@ -1854,9 +1935,13 @@ describe("statement Transaction suggestions", () => {
       labels: { generated: 3, reused: 0 },
     });
     expect(freshQuestions).toBe(2);
-    expect((await suggestions(ctx))[0]!.create?.merchant).toBe(
-      "Synthetic changed evidence",
-    );
+    const [fresh] = await suggestions(ctx);
+    expect(fresh).toMatchObject({
+      chargeKey: before!.chargeKey,
+      amount: 48,
+      create: { merchant: "Synthetic changed evidence", amount: 48 },
+    });
+    expect(fresh!.fingerprint).not.toBe(before!.fingerprint);
   });
 
   it.each([
@@ -2035,7 +2120,9 @@ describe("statement Transaction suggestions", () => {
 
   it("rejects model publication when generation replaces its evidence during computation", async () => {
     await card(ctx);
-    const original = rowInput();
+    const original = rowInput({
+      providerTransactionId: "synthetic-mid-label-record",
+    });
     await record(ctx, [original]);
     await generate(ctx);
     let moved = false;
@@ -2100,7 +2187,9 @@ describe("statement Transaction suggestions", () => {
   // charges remain unlabelled; retrying asks only for those unfinished charges.
   it("keeps existing labels when a re-Sweep is interrupted mid-label", async () => {
     await card(ctx);
-    const original = rowInput();
+    const original = rowInput({
+      providerTransactionId: "synthetic-interrupted-record",
+    });
     await record(ctx, [original]);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
@@ -2327,7 +2416,11 @@ describe("statement Transaction suggestions", () => {
     "lets a %s charge's transaction go to the charge under review",
     async (decision) => {
       await card(ctx);
-      await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })]);
+      const originalInput = rowInput({
+        providerTransactionId: "synthetic-set-aside-record",
+        rawDescription: "EXAMPLE CAFE 0001",
+      });
+      await record(ctx, [originalInput]);
       await record(
         ctx,
         [
@@ -2343,9 +2436,11 @@ describe("statement Transaction suggestions", () => {
         (row) => row.rawDescription === "EXAMPLE CAFE 0001",
       );
       await accept(ctx, older!);
-      await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })], {
-        fingerprint: "fp-older-again",
-      });
+      await record(
+        ctx,
+        [{ ...originalInput, providerNotes: "Synthetic set-aside revision" }],
+        { fingerprint: "fp-older-again" },
+      );
       const rowsOf = async (search: string) =>
         (await listStatementRows(ctx.db, { search })).data;
       const olderRows = await rowsOf("EXAMPLE CAFE 0001");
@@ -2359,9 +2454,7 @@ describe("statement Transaction suggestions", () => {
       )!;
       // Another observation of the same charge, not the one the ref names.
       expect(reobserved.externalId).not.toBe(original.externalId);
-      expect(reobserved.legacyExternalId ?? reobserved.externalId).toBe(
-        original.legacyExternalId ?? original.externalId,
-      );
+      expect(reobserved.chargeKey).toBe(original.chargeKey);
       await updateStatementRows(
         ctx.db,
         {

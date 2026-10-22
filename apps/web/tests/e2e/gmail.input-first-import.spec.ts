@@ -30,7 +30,10 @@ import {
   selectComboboxItem,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { applyReviewedSourceReconciliation } from "./support/import-order-convergence.helpers";
+import {
+  applyReviewedSourceReconciliation,
+  recordReviewedConvergenceStatement,
+} from "./support/import-order-convergence.helpers";
 
 // Failure boundaries: OAuth callback must persist its real account, mailbox
 // original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
@@ -285,42 +288,20 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
 
   let purchaseCode: string | undefined;
   async function statement() {
-    await gotoAuthenticatedPage(page, "/statement-rows/import");
-    await page.getByLabel("Statement CSV file").setInputFiles({
-      name: `${token}.csv`,
-      mimeType: "text/csv",
-      buffer: Buffer.from(names.statementCsv),
-    });
-    await expect(
-      page.getByText(new RegExp(escapeRegExp(`${names.name} card`))).first(),
-    ).toBeVisible();
-    await page
-      .getByRole("checkbox", {
-        name: `Record SYNTHETIC ORDER ${token}`,
-        exact: true,
-      })
-      .check();
-    await chooseOption(
+    await recordReviewedConvergenceStatement(
       page,
-      page.getByLabel(`Transaction kind for SYNTHETIC ORDER ${token}`, {
-        exact: true,
-      }),
-      "purchase",
+      db,
+      names,
+      prerequisites.card.id,
     );
-    await page
-      .getByRole("button", {
-        name: "Save rows and create 1 reviewed transactions",
-        exact: true,
-      })
-      .click();
-    await expect(page.getByText(/1 transactions created/u)).toBeVisible();
     const transaction = await database.query.financialTransaction.findFirst({
       where: and(
         eq(schema.financialTransaction.accountId, cardId),
         notDeleted(schema.financialTransaction),
       ),
     });
-    if (!transaction) throw new Error("CSV approval created no transaction");
+    if (!transaction)
+      throw new Error("Reviewed statement created no transaction");
     await gotoAuthenticatedPage(
       page,
       `/financial-transactions/${transaction.shortcode}`,

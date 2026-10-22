@@ -120,6 +120,44 @@ queue message, and failed or manually paused Jobs remain visible without being
 automatically restarted. The migration runner owns the transaction; do not run
 it alongside Actions or another operator.
 
+## Financial evidence cutover
+
+`0005_thin_blink` follows the unified-Jobs migration and shares its writer hold
+and queue-drain prerequisites above. Deploy the matching Worker and updated
+clients together: financial CSV upload operations are removed. Agents parse
+exports with the `financial-evidence-import` skill and submit normalized rows.
+Keep automatic deployment held until this coordinated cutover is ready.
+
+Rehearse both migrations on an isolated production copy. Compare complete
+preexisting FinancialTransaction, allocation, Expense, attribution, and external
+reference payloads before and after; totals alone do not prove preservation.
+Verify one current head per explicit source charge, retained first-import
+memberships, migrated Suggestion suppression ownership, and no invented
+completed account windows. Retained ID-less observations stay independent;
+equal amount/date/description is only a reconciliation candidate.
+
+Historical file coverage requires a physical occurrence mapping, including
+zero rows, source bytes, parsed metadata, signed totals, and preserved legacy
+memberships. Registered fingerprints or membership counts alone are insufficient
+where previous imports were partial or accumulated overlapping memberships.
+Rehearse any one-off evidence repair and require unchanged preexisting rows and
+financial lineage inside its transaction. Do not call an export a completed
+provider window or create Expenses merely to close its count discrepancy.
+
+After deployment, start an existing Sweep for `statement_transaction` and
+`transfer_pair` over the retained historical accounts without a recent-date
+filter. Exact evidence replay deliberately schedules no new work, so a
+historical data-only repair needs this explicit discovery pass. Follow its Run
+and budget state, review ambiguous identities against existing Expenses, and
+report unmatched/unbooked work by year. Evidence coverage alone does not satisfy
+historical spending reconciliation.
+
+After deployment, verify a normalized intake and exact replay, a fresh source
+revision, paused automatic spending, and visible correction review. Confirm
+pending or unknown evidence stays honestly labeled. Withdrawals require a
+completed, all-visibility account window plus persisted source recheck; a limited
+Monarch response cannot authorize them. Resume writers only after these checks.
+
 ## Baseline consolidation
 
 Neon is the only persistent application database; dev and CI databases are

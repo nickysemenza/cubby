@@ -7,7 +7,6 @@ enum Route: Hashable {
     case auditHistory
     case photosLibrary
     case browseCatalog
-    case statementCsvImport
     case graph(EntityRef?)
     case nutrition(day: String)
     /// A device-local `BackgroundActivity`'s own detail, resolved by id against whatever is

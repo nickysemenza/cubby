@@ -64,7 +64,7 @@ export async function assertAutomaticRuleOn(
   db: Database,
   key: AutomaticRuleKey,
   stamp: string,
-  assessmentId: string,
+  assessmentId: string | null,
 ) {
   const rule = AUTOMATIC_RULES[key];
   if (rule.execution !== "member_switch") {
@@ -85,6 +85,10 @@ export async function assertAutomaticRuleOn(
         target: [automaticRule.family, automaticRule.ruleKey],
       });
   } else {
+    if (assessmentId === null)
+      throw new Error(
+        "A member-switched automatic rule requires its retained Assessment.",
+      );
     const [prediction] = await getDb(db)
       .select({ judgment: assessment.judgment })
       .from(assessment)

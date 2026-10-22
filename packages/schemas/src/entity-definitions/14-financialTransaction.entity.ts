@@ -669,6 +669,7 @@ export default defineEntity(
                 label: "Expected",
                 color: "neutral-status",
               },
+              { value: "observed", label: "Observed", color: "neutral-status" },
               {
                 value: "pending",
                 label: "Pending",
@@ -1355,6 +1356,7 @@ export default defineEntity(
           schemaFromRead: true,
           options: [
             { value: "expected", label: "Expected" },
+            { value: "observed", label: "Observed" },
             { value: "pending", label: "Pending" },
             { value: "posted", label: "Posted" },
             { value: "void", label: "Void" },

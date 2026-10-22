@@ -210,7 +210,107 @@ it("carries populated history and pending paid work into the unified job cutover
       ])
     ).rows;
 
+    // Source identity migration must preserve dismissed ownership while keeping
+    // coexisting ID-less physical occurrences independently actionable.
+    const evidenceImportId = "00000000-0000-4000-8000-000000000980";
+    const evidenceRowId = "00000000-0000-4000-8000-000000000981";
+    const evidenceTwinId = "00000000-0000-4000-8000-000000000982";
+    const evidenceAssessmentId = "00000000-0000-4000-8000-000000000983";
+    const legacyRef = `v1:${"a".repeat(64)}`;
+    const observationRef = `v2:${"b".repeat(64)}`;
+    const twinRef = `v2:${"c".repeat(64)}`;
+    await client.query(
+      `INSERT INTO "ExternalSource" (slug,label) VALUES ('synthetic-bank','Synthetic bank')`,
+    );
+    await client.query(
+      `INSERT INTO "StatementImport" (id,source,label,fingerprint) VALUES ($1,'synthetic-bank','Synthetic retained collection','synthetic-retained-collection')`,
+      [evidenceImportId],
+    );
+    for (const [id, ref, position] of [
+      [evidenceRowId, observationRef, 1],
+      [evidenceTwinId, twinRef, 2],
+    ]) {
+      await client.query(
+        `INSERT INTO "StatementRow" (id,"batchId",source,"externalId","legacyExternalId","rowPosition","accountDescriptor","statementDate",amount,"providerAmount","rawDescription") VALUES ($1,$2,'synthetic-bank',$3,$4,$5,'Synthetic account','2026-05-01',25,-25,'SYNTHETIC SAME PURCHASE')`,
+        [id, evidenceImportId, ref, legacyRef, position],
+      );
+    }
+    await client.query(
+      `INSERT INTO "Assessment" (id,"publicationKey",family,subject,judgment,evidence) VALUES ($1,'synthetic-evidence-suppression','statement_transaction',$2,'{}','{}')`,
+      [
+        evidenceAssessmentId,
+        JSON.stringify({
+          kind: "statement_transaction",
+          recordId: evidenceRowId,
+          source: "synthetic-bank",
+          chargeKey: legacyRef,
+        }),
+      ],
+    );
+    await client.query(
+      `INSERT INTO "AssessmentState" (id,entity,"recordId",family,status,data,suppression) VALUES ($1,'statementRow',$2,'statement_transaction','rejected',$3,'{"reason":"synthetic-dismissal"}')`,
+      [
+        evidenceAssessmentId,
+        evidenceRowId,
+        JSON.stringify({ source: "synthetic-bank", chargeKey: legacyRef }),
+      ],
+    );
+    const retainedEvidence = (
+      await client.query(
+        `SELECT id,"externalId","legacyExternalId","rowPosition",amount,"providerAmount",disposition FROM "StatementRow" ORDER BY id`,
+      )
+    ).rows;
+
     await migrateDatabase(db);
+
+    expect(
+      (
+        await client.query(
+          `SELECT id,"externalId","legacyExternalId","rowPosition",amount,"providerAmount",disposition FROM "StatementRow" ORDER BY id`,
+        )
+      ).rows,
+    ).toEqual(retainedEvidence);
+    expect(
+      (
+        await client.query(
+          `SELECT "chargeKey",current,"legacyReference" FROM "StatementRow" ORDER BY id`,
+        )
+      ).rows,
+    ).toEqual([
+      { chargeKey: observationRef, current: true, legacyReference: legacyRef },
+      { chargeKey: twinRef, current: true, legacyReference: null },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT status,active,suppression,data->>'chargeKey' AS owner FROM "AssessmentState" WHERE id=$1`,
+          [evidenceAssessmentId],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        status: "rejected",
+        active: false,
+        suppression: { reason: "synthetic-dismissal" },
+        owner: observationRef,
+      },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int AS count FROM "StatementImportRow" WHERE "importId"=$1`,
+          [evidenceImportId],
+        )
+      ).rows,
+    ).toEqual([{ count: 2 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT "completedAt" FROM "StatementImport" WHERE id=$1`,
+          [evidenceImportId],
+        )
+      ).rows,
+    ).toEqual([{ completedAt: null }]);
 
     expect(
       (

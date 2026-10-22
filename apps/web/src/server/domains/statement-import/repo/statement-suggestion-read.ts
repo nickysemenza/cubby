@@ -1,9 +1,6 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
-import {
-  financialTransactionKind,
-  financialTransactionStatus,
-} from "@cubby/schemas/financial-transaction";
+import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   statementSuggestionOut,
@@ -31,8 +28,7 @@ import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/revie
 import { isClean } from "./statement-suggestions";
 
 const currentClean = sql`coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (
-  a.judgment->${"create"}->>${"status"} IS DISTINCT FROM ${financialTransactionStatus.enum.posted}
-  OR a.judgment->${"create"}->>${"kind"} NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.refund}, ${financialTransactionKind.enum.fee})
+  a.judgment->${"create"}->>${"kind"} NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.refund}, ${financialTransactionKind.enum.fee})
   OR a.judgment->${"spending"}->>${"status"} IN (${"ready" satisfies FinancialSpendingPlan["status"]}, ${"already_booked" satisfies FinancialSpendingPlan["status"]}))), false)`;
 
 /** Record-level scope the cross-family list pushes into SQL. */
@@ -88,6 +84,7 @@ export async function statementSuggestionKeys(
     fingerprint: string | null;
     clean: boolean;
     recommended: string;
+    reviewReason: string | null;
     labelSame: string | null;
     labelConfidence: string | null;
     createdAt: Date | string;
@@ -107,6 +104,7 @@ export async function statementSuggestionKeys(
   }>(sql`
     SELECT s.id, s.fingerprint, (${currentClean}) AS clean,
       ${suggestionField("recommended")} AS recommended,
+      a.judgment->>${"reviewReason"} AS "reviewReason",
       first_candidate.label->>${"same"} AS "labelSame",
       first_candidate.label->>${"confidence"} AS "labelConfidence",
       a."createdAt", a.judgment->>'statementDate' AS "statementDate",
@@ -187,7 +185,7 @@ export async function readStatementSuggestions(
       SELECT matched.id, observed.source, ${chargeKeyOf("observed")} AS "chargeKey"
       FROM matched JOIN ${LIVE_REFS} refs ON refs.shortcode = matched.shortcode
       JOIN "StatementRow" observed ON observed.source = refs.source
-        AND (observed."externalId" = refs."externalId" OR ${chargeKeyOf("observed")} = refs."externalId")
+        AND (observed."externalId" = refs."externalId" OR observed."legacyReference" = refs."externalId")
         AND observed."deletedAt" IS NULL
     )
     SELECT DISTINCT members.id, r.source, r."sourceCategory"
@@ -281,6 +279,7 @@ export async function readStatementSuggestions(
       sourceCategories: categories.get(row.id) ?? [],
       providerStatus: judgment.providerStatus,
       recommended: judgment.recommended,
+      reviewReason: judgment.reviewReason,
       clean: isClean(judgment, judgment.create?.amount ?? 0),
       spending: judgment.spending,
       matchedTransactionId:

@@ -322,7 +322,7 @@ describe("financial repositories — critical invariants", () => {
           {
             source: "monarch",
             alias: "Citi Double Cash (...1702)",
-            externalAccountId: null,
+            externalAccountId: "synthetic-provider-account-a",
           },
           // The same card as a second provider labels it. Alias resolution is
           // per-source, so without this a copilot row for this account resolves
@@ -352,11 +352,38 @@ describe("financial repositories — critical invariants", () => {
     const first = await previewFinancialStatementImport(ctx.db, {
       rows: [row],
     });
+    // Equal account labels cannot override contradictory provider account IDs.
+    const scopedAccounts = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "synthetic-scope-a",
+          providerAccountId: "synthetic-provider-account-a",
+        },
+        {
+          ...row,
+          key: "synthetic-scope-b",
+          providerAccountId: "synthetic-provider-account-b",
+          originalStatement: "SYNTHETIC OTHER ACCOUNT",
+        },
+      ],
+    });
+    expect(scopedAccounts.rows[0]?.accountId).toBe(createdAccount.id);
+    expect(scopedAccounts.rows[1]).toMatchObject({
+      status: "unresolved_account",
+      accountId: null,
+    });
     expect(first.rows[0]).toMatchObject({
       status: "ready_to_create",
       accountId: createdAccount.id,
       provisionalAccount: null,
-      proposed: { amount: 54.29, kind: "purchase", status: "posted" },
+      proposed: {
+        amount: 54.29,
+        kind: "purchase",
+        status: "observed",
+        transactionDate: "2026-07-31",
+        postedDate: null,
+      },
     });
     expect(first.rows[0]?.existingTransactionIds).toEqual([]);
 
@@ -382,6 +409,70 @@ describe("financial repositories — critical invariants", () => {
         notes: proposed.notes,
       },
     );
+    const scopedSecondAccount = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Synthetic scoped second account", [
+          {
+            source: "monarch",
+            alias: "Synthetic second source account",
+            externalAccountId: "synthetic-provider-account-b",
+          },
+        ]),
+        ctx.actor,
+      )
+    ).output;
+    const scopedLegacy = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "synthetic-legacy-b",
+          providerAccountId: "synthetic-provider-account-b",
+        },
+      ],
+    });
+    expect(scopedLegacy.rows[0]?.accountId).toBe(scopedSecondAccount.id);
+    expect(scopedLegacy.rows[0]?.existingTransactionIds).toEqual([]);
+    expect(scopedLegacy.rows[0]?.status).not.toBe("already_recorded");
+    const rejectedLegacy = await previewFinancialStatementImport(ctx.db, {
+      rows: [{ ...row, providerAccountId: "synthetic-provider-account-c" }],
+    });
+    expect(rejectedLegacy.rows[0]).toMatchObject({
+      status: "unresolved_account",
+      existingTransactionIds: [],
+    });
+    // Provider transaction IDs are unique within accounts, not across them.
+    const reusedProviderIds = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "synthetic-reused-a",
+          importFingerprint: "synthetic-account-scoped-ids",
+          rowPosition: 1,
+          providerTransactionId: "synthetic-reused-provider-id",
+          providerAccountId: "synthetic-provider-account-a",
+        },
+        {
+          ...row,
+          key: "synthetic-reused-b",
+          account: "Synthetic second source account",
+          importFingerprint: "synthetic-account-scoped-ids",
+          rowPosition: 2,
+          providerTransactionId: "synthetic-reused-provider-id",
+          providerAccountId: "synthetic-provider-account-b",
+        },
+      ],
+    });
+    expect(reusedProviderIds.rows.map((item) => item.accountId)).toEqual([
+      createdAccount.id,
+      scopedSecondAccount.id,
+    ]);
+    expect(
+      reusedProviderIds.rows.every(
+        (item) => item.status !== "indistinguishable_duplicate",
+      ),
+    ).toBe(true);
+
     const laterExport = await previewFinancialStatementImport(ctx.db, {
       rows: [{ ...row, merchant: "Amazon.com", category: "Other" }],
     });

@@ -1,3 +1,5 @@
+import { recordStatementRowsOut } from "@cubby/schemas/statement-row";
+import { startOperation } from "./support/start-operation";
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
@@ -18,16 +20,15 @@ import {
 } from "./fixtures/core";
 import {
   chooseOption,
-  escapeRegExp,
   gotoAuthenticatedPage,
   gotoDetailActions,
 } from "./support/e2e-helpers";
 import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source";
 import { expect, test } from "./support/e2e-test";
 
-// Signed refund/group allocations must conserve actual CSV activity without
+// Signed refund/group allocations must conserve actual statement activity without
 // auto-booking Expense, duplicating retries, or creating owned Inventory.
-test("reviews CSV charge groups and refunds against captured retailer orders", async ({
+test("reviews statement charge groups and refunds against captured retailer orders", async ({
   page,
   e2eRuntime,
 }) => {
@@ -60,59 +61,93 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     refund: `SYNTHETIC REFUND ${token}`,
     held: `SYNTHETIC CARD PAYMENT ${token}`,
   };
-  const csv = {
-    name: `${token}.csv`,
-    mimeType: "text/csv",
-    buffer: Buffer.from(
-      [
-        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id",
-        `2026-09-12,${names.name},Clothing,${names.statementAccount},${descriptions.charge},,-85.00,${token}-charge`,
-        `2026-09-14,${names.name},Refund,${names.statementAccount},${descriptions.refund},,15.00,${token}-refund`,
-        `2026-09-15,Synthetic Card Payment,Credit Card Payment,${names.statementAccount},${descriptions.held},,85.00,${token}-held`,
-      ].join("\n"),
-    ),
+  const statementInput = {
+    import: {
+      source: "monarch",
+      label: `Synthetic settlement ${token}`,
+      fingerprint: token,
+      dateKind: "posted",
+    },
+    rows: [
+      {
+        providerTransactionId: `${token}-charge`,
+        accountDescriptor: names.statementAccount,
+        statementDate: "2026-09-12",
+        providerAmount: -85,
+        merchant: names.name,
+        rawDescription: descriptions.charge,
+        sourceCategory: "Clothing",
+      },
+      {
+        providerTransactionId: `${token}-refund`,
+        accountDescriptor: names.statementAccount,
+        statementDate: "2026-09-14",
+        providerAmount: 15,
+        merchant: names.name,
+        rawDescription: descriptions.refund,
+        sourceCategory: "Refund",
+      },
+      {
+        providerTransactionId: `${token}-held`,
+        accountDescriptor: names.statementAccount,
+        statementDate: "2026-09-15",
+        providerAmount: 85,
+        merchant: "Synthetic Card Payment",
+        rawDescription: descriptions.held,
+        sourceCategory: "Credit Card Payment",
+      },
+    ],
+    complete: false,
   };
   const expenseCountBefore = (
     await database.query.expense.findMany({ where: notDeleted(schema.expense) })
   ).length;
-  await gotoAuthenticatedPage(page, "/statement-rows/import");
-  await page.getByLabel("Statement CSV file").setInputFiles(csv);
-  await expect(
-    page.getByText(new RegExp(escapeRegExp(`${names.name} card`))).first(),
-  ).toBeVisible();
-  for (const kind of ["charge", "refund"] as const) {
-    await page
-      .getByRole("checkbox", {
-        name: `Record ${descriptions[kind]}`,
-        exact: true,
-      })
-      .check();
-    await chooseOption(
-      page,
-      page.getByLabel(`Transaction kind for ${descriptions[kind]}`, {
-        exact: true,
-      }),
-      kind === "charge" ? "purchase" : "refund",
-    );
-  }
-  await expect(
-    page.getByRole("checkbox", {
-      name: `Record ${descriptions.held}`,
-      exact: true,
-    }),
-  ).not.toBeChecked();
+  const recorded = await startOperation(
+    page.request,
+    "statementRow.record",
+    statementInput,
+  );
+  expect(recorded.ok(), await recorded.text()).toBe(true);
+  const result = recordStatementRowsOut.parse(recorded.body);
+  expect(result.inserted).toBe(3);
+  if (!result.batchId) throw new Error("Recorded statement batch missing");
   expect(
     await database.query.financialTransaction.findMany({
       where: eq(schema.financialTransaction.accountId, cardId),
     }),
   ).toHaveLength(0);
-  await page
-    .getByRole("button", {
-      name: "Save rows and create 2 reviewed transactions",
-      exact: true,
-    })
-    .click();
-  await expect(page.getByText(/2 transactions created/u)).toBeVisible();
+  // These fixture decisions explicitly approve two kinds; the payment remains evidence only.
+  for (const decision of [
+    { description: descriptions.charge, kind: "purchase" },
+    { description: descriptions.refund, kind: "refund" },
+  ] as const) {
+    const evidence = await database.query.statementRow.findFirst({
+      where: and(
+        eq(schema.statementRow.source, statementInput.import.source),
+        eq(schema.statementRow.batchId, result.batchId),
+        eq(schema.statementRow.rawDescription, decision.description),
+        notDeleted(schema.statementRow),
+      ),
+    });
+    if (!evidence) throw new Error("Normalized settlement evidence missing");
+    const created = await entityApi(page.request).create(
+      "financialTransaction",
+      {
+        accountId: prerequisites.card.id,
+        amount: -evidence.providerAmount,
+        merchant: evidence.merchant,
+        rawDescription: evidence.rawDescription,
+        sourceCategory: evidence.sourceCategory,
+        kind: decision.kind,
+        status: "posted",
+        postedDate: evidence.statementDate,
+        sourceRefs: [
+          { source: evidence.source, externalId: evidence.externalId },
+        ],
+      },
+    );
+    expect(created.ok(), await created.text()).toBe(true);
+  }
   const transactions = await database.query.financialTransaction.findMany({
     where: and(
       eq(schema.financialTransaction.accountId, cardId),
@@ -279,6 +314,21 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     name: "Match statement activity",
     exact: true,
   });
+  const saveAllocation = async () => {
+    // The live allocation check precedes the write; wait for that write before
+    // timing the dialog close and its dependent query invalidations.
+    const saved = page.waitForResponse((response) =>
+      response
+        .url()
+        .endsWith("/operations/financialTransaction.allocateSettlement"),
+    );
+    await dialog
+      .getByRole("button", { name: "Save allocation", exact: true })
+      .click();
+    const response = await saved;
+    expect(response.ok(), await response.text()).toBe(true);
+    await expect(dialog).toHaveCount(0);
+  };
   await dialog.getByRole("button").filter({ hasText: "$85.00" }).click();
   await expect(
     dialog.getByRole("textbox", { name: "Purchase code 1" }),
@@ -292,10 +342,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
   ).toBeDisabled();
   expect(await allocationRows()).toHaveLength(0);
   await dialog.getByRole("spinbutton", { name: "Amount 2" }).fill("42.50");
-  await dialog
-    .getByRole("button", { name: "Save allocation", exact: true })
-    .click();
-  await expect(dialog).toHaveCount(0);
+  await saveAllocation();
   expect((await allocationRows()).map((row) => row.amount)).toEqual([
     42.5, 42.5,
   ]);
@@ -347,10 +394,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
   ).toBeDisabled();
   expect(await allocationRows()).toEqual(acceptedChargeAllocations);
   await dialog.getByRole("spinbutton", { name: "Amount 1" }).fill("-15.00");
-  await dialog
-    .getByRole("button", { name: "Save allocation", exact: true })
-    .click();
-  await expect(dialog).toHaveCount(0);
+  await saveAllocation();
   expect(
     (await allocationRows()).map((row) => row.amount).sort((a, b) => a - b),
   ).toEqual([-15, 42.5, 42.5]);
@@ -375,15 +419,16 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       ),
     }),
   ).toHaveLength(0);
-  await gotoAuthenticatedPage(page, "/statement-rows/import");
-  await page.getByLabel("Statement CSV file").setInputFiles(csv);
-  await expect(
-    page.getByText(new RegExp(escapeRegExp(`${names.name} card`))).first(),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Save 3 source rows", exact: true })
-    .click();
-  await expect(page.getByText(/0 transactions created/u)).toBeVisible();
+  const replay = await startOperation(
+    page.request,
+    "statementRow.record",
+    statementInput,
+  );
+  expect(replay.ok(), await replay.text()).toBe(true);
+  expect(recordStatementRowsOut.parse(replay.body)).toMatchObject({
+    inserted: 0,
+    alreadyInThisBatch: 3,
+  });
   expect(
     await database.query.financialTransaction.findMany({
       where: and(

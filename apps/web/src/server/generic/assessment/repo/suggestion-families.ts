@@ -338,6 +338,7 @@ const statementStrength = (key: {
       : "weak";
 
 const otherTransaction = (row: StatementSuggestionOut) => {
+  if (row.matchedTransactionId) return row.matchedTransactionId;
   if (row.recommended === "attach" && row.candidates[0])
     return row.candidates[0].transactionId;
   if (row.recommended === "supersede" && row.supersedeTransactionId)
@@ -401,7 +402,9 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
         fingerprint: row.fingerprint,
         clean: row.clean,
         strength: statementStrength(row),
-        impact: statementImpact[row.recommended],
+        impact: row.reviewReason
+          ? [{ kind: "caution", label: row.reviewReason }]
+          : statementImpact[row.recommended],
         createdAt: row.createdAt,
         columns: {
           date: row.statementDate,
@@ -454,7 +457,9 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
                   { kind: "text", text: row.merchant ?? row.rawDescription },
                 ],
                 // Dismissal suppresses the charge permanently.
-                actions: verbs("accept", "correct", "dismiss"),
+                actions: row.reviewReason
+                  ? verbs("dismiss")
+                  : verbs("accept", "correct", "dismiss"),
                 evidence: row,
               }),
             ],
@@ -478,6 +483,7 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
       // Labels ride on top of the evidence fingerprint, so a create labelled
       // clean under an earlier rule still passes the apply-time check.
       // Accept clean re-reads today's rule instead of the stored flag.
+      if (row.evidence.reviewReason) return null;
       const { recommended, create, transfer, transferPair } = row.evidence;
       if (
         recommended === "create" &&

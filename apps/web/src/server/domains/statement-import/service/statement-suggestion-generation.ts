@@ -1,10 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { createLogger } from "@cubby/worker-tracing";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-
-const log = createLogger("statement-suggestions");
 
 /**
  * Generate suggestions for one import's charges as a routine Sweep for the
@@ -16,20 +12,12 @@ export async function scheduleStatementSuggestions(
   actor: ActorContext,
 ): Promise<void> {
   const { startSweep } = await import("~/server/domains/run/service/sweep");
-  try {
-    await startSweep(
-      db,
-      { ...actor, runId: null },
-      {
-        trigger: "scheduled",
-        families: [{ family: "statement_transaction", scope: { importId } }],
-      },
-    );
-  } catch (error) {
-    // The rows are recorded either way; a Sweep that could not launch is
-    // failed with the raw reason on its own Run, and Find suggestions reruns it.
-    log.error("Statement suggestion Sweep failed to start", {
-      error: scrubErrorMessage(String(error)),
-    });
-  }
+  await startSweep(
+    db,
+    { ...actor, runId: null },
+    {
+      trigger: "scheduled",
+      families: [{ family: "statement_transaction", scope: { importId } }],
+    },
+  );
 }

@@ -214,7 +214,9 @@ export function statementTransactionPatch(
   const selected = new Set(application.fields);
   return {
     ...(selected.has("amount") && { amount: create.amount }),
-    ...(selected.has("status") && { status: judgment.providerStatus }),
+    ...(selected.has("status") && {
+      status: judgment.providerStatus ?? "observed",
+    }),
     ...((selected.has("postedDate") ||
       (selected.has("status") && judgment.providerStatus === "posted")) && {
       postedDate: judgment.statementDate,

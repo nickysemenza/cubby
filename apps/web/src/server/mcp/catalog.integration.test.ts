@@ -1,7 +1,9 @@
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
+import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -13,6 +15,7 @@ import { aiAnalysis, photoRunImage } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { syntheticMailImportRun } from "~/server/domains/purchase-import/service/gmail/execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -121,6 +124,51 @@ describe("MCP catalog", () => {
       description: "Synthetic red boot",
     });
     expect(JSON.stringify(result)).not.toContain(analysis!.id);
+  });
+
+  // A dry run of an existing collection once scheduled automatic financial work.
+  // The public operation boundary, unlike a repository-only test, owns that intent.
+  it("keeps dry runs and unchanged evidence replays free of financial Jobs", async () => {
+    const input = recordStatementRowsInput.parse({
+      import: {
+        source: "monarch",
+        fingerprint: "synthetic-pure-replay",
+        label: "Synthetic collection",
+        rowCountDeclared: 1,
+      },
+      rows: [
+        {
+          accountDescriptor: "Synthetic account",
+          statementDate: "2026-09-01",
+          providerAmount: -12,
+          rawDescription: "SYNTHETIC PURE REPLAY",
+        },
+      ],
+    });
+    await recordStatementRows(ctx.db, input, ctx.actor);
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const snapshot = async () =>
+      (
+        await getDb(ctx.db).execute(sql`
+      SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Job") AS jobs,
+        (SELECT count(*) FROM "Assessment") AS assessments,
+        (SELECT coalesce(sum(cost),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
+    `)
+      ).rows;
+    const before = await snapshot();
+    for (const dryRun of [true, false]) {
+      const response = await callMcpTool(
+        createMcpServer(),
+        "statement_rows",
+        { action: "record", ...input, dryRun },
+        kernelRequestContext(kernel),
+        { entityKernel: kernel },
+      );
+      expect(response.isError).not.toBe(true);
+      expect(await snapshot()).toEqual(before);
+    }
   });
 
   it("runs one happy-path action through every tool", async () => {

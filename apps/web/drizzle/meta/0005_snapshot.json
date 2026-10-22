@@ -1,6 +1,6 @@
 {
-  "id": "39ebad0a-bec9-4ea0-9d56-d41fd2d5f122",
-  "prevId": "2f626b6a-e892-4b5d-9f35-cbdba76baff0",
+  "id": "35c4b96b-89b8-4591-8347-3e913271db5d",
+  "prevId": "39ebad0a-bec9-4ea0-9d56-d41fd2d5f122",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -19265,6 +19265,25 @@
           "primaryKey": false,
           "notNull": false
         },
+        "observedAt": {
+          "name": "observedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "coverage": {
+          "name": "coverage",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -19508,6 +19527,57 @@
           "primaryKey": false,
           "notNull": false
         },
+        "legacyReference": {
+          "name": "legacyReference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chargeKey": {
+          "name": "chargeKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()::text"
+        },
+        "current": {
+          "name": "current",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "withdrawnAt": {
+          "name": "withdrawnAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "withdrawalImportId": {
+          "name": "withdrawalImportId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastObservedAt": {
+          "name": "lastObservedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "providerAccountId": {
+          "name": "providerAccountId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "providerData": {
+          "name": "providerData",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "accountDescriptor": {
           "name": "accountDescriptor",
           "type": "text",
@@ -19686,6 +19756,27 @@
           "method": "btree",
           "with": {}
         },
+        "StatementRow_source_charge_idx": {
+          "name": "StatementRow_source_charge_idx",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "chargeKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "StatementRow_batchId_idx": {
           "name": "StatementRow_batchId_idx",
           "columns": [
@@ -19835,6 +19926,19 @@
           "onDelete": "no action",
           "onUpdate": "cascade"
         },
+        "StatementRow_withdrawalImportId_StatementImport_id_fk": {
+          "name": "StatementRow_withdrawalImportId_StatementImport_id_fk",
+          "tableFrom": "StatementRow",
+          "tableTo": "StatementImport",
+          "columnsFrom": [
+            "withdrawalImportId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "StatementRow_accountId_FinancialAccount_id_fk": {
           "name": "StatementRow_accountId_FinancialAccount_id_fk",
           "tableFrom": "StatementRow",
@@ -19896,7 +20000,7 @@
         },
         "StatementRow_externalId_format_check": {
           "name": "StatementRow_externalId_format_check",
-          "value": "\"StatementRow\".\"externalId\" ~ '^v[12]:[0-9a-f]{64}$'"
+          "value": "\"StatementRow\".\"externalId\" ~ '^v[123]:[0-9a-f]{64}$'"
         }
       },
       "isRLSEnabled": false

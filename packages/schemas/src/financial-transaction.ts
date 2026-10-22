@@ -415,6 +415,14 @@ export const financialStatementImportRow = z.strictObject({
   importFingerprint: z.string().min(1).optional(),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
+  providerAccountId: z
+    .string()
+    .min(1)
+    .nullable()
+    .optional()
+    .describe(
+      "Opaque upstream account ID scoped to the provider; not a Cubby FinancialAccount shortcode.",
+    ),
   providerStatus: financialTransactionProviderStatus.optional(),
   key: z.string().min(1),
   source: externalIdSource
@@ -466,9 +474,9 @@ const financialStatementImportProposedTransaction = z.object({
   sourceRef: financialTransactionSourceRef,
   amount: nonZeroAmount,
   kind: financialTransactionKind,
-  status: z.literal("posted"),
+  status: financialTransactionStatus.extract(["observed", "pending", "posted"]),
   transactionDate: plainDate.nullable(),
-  postedDate: plainDate,
+  postedDate: plainDate.nullable(),
   merchant: z.string().nullable(),
   rawDescription: z.string().nullable(),
   sourceCategory: z.string().nullable(),

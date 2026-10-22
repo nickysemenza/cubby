@@ -23,7 +23,7 @@ agent sessions over MCP.
 - **Where is X?** A location tree (house → room → shelf → bin) with printable
   QR labels, and barcode scanning and deliberate recount passes in the native app.
 - **Orders and receipts.** Import retailer orders, receipt photos, order emails
-  and statement CSVs, then reconcile purchases against card charges
+  and financial provider evidence, then reconcile purchases against card charges
   (`purchase-import`).
 - **Belongings from photos.** Photograph a closet or a shelf, review the
   proposed products, then create inventory (`photo-inventory-import`,

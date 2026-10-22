@@ -223,9 +223,9 @@ describe("settlement from retained order evidence", () => {
     });
   });
 
-  // Pending authorization and a payment set smaller than the printed total are
-  // insufficient proof of a complete settlement, even when every line matches.
-  it("keeps a pending authorization unallocated until the charge posts", async () => {
+  // Complete retained receipt evidence can settle a pending charge once; posting
+  // later must not allocate or book it a second time.
+  it("settles a supported pending authorization and replays its posted revision", async () => {
     const { card, run } = await world();
     const pending = await charge(card.id, {
       amount: 27,
@@ -237,7 +237,9 @@ describe("settlement from retained order evidence", () => {
       total: 27,
       payments: [{ amount: 27, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
-    expect(await allocationsFor([purchaseId])).toEqual([]);
+    expect(await allocationsFor([purchaseId])).toEqual([
+      { transactionId: pending.id, purchaseId, amount: 27 },
+    ]);
     await getDb(ctx.db)
       .update(financialTransaction)
       .set({ status: "posted" })

@@ -32,7 +32,7 @@ import { updateFinancialTransaction } from "./financial-transaction";
 
 // Failure modes: accepting bank evidence adds zero spend; retries mint another
 // Expense; a nearby receipt is double-booked; a missing owner or an unmatched
-// refund silently passes; a pending hold books spending before it posts.
+// refund silently passes; unknown posting status blocks classified spending.
 describe("shared spending booking", () => {
   const ctx = withTestDb();
   async function fixture() {
@@ -307,9 +307,8 @@ describe("shared spending booking", () => {
       /Invalid input/,
     );
   });
-  // Legacy retained settlement could allocate holds; allocation discovery must
-  // not turn a settlement-only hold into an unresolvable spending proposal.
-  it("defers an already allocated legacy pending hold before checking booking lineage", async () => {
+  // A posting-status change must preserve the existing booking and its money.
+  it("recognizes an already booked pending hold without duplicating Expenses", async () => {
     const { transaction, advice } = await fixture();
     const request = { transactionId: transaction.output.id, advice };
     const plan = await previewFinancialSpending(ctx.db, request);
@@ -318,29 +317,15 @@ describe("shared spending booking", () => {
       .update(transactionTable)
       .set({ status: "pending", postedDate: null })
       .where(eq(transactionTable.shortcode, transaction.output.id));
-    expect((await previewFinancialSpending(ctx.db, request)).status).toBe(
-      "deferred",
-    );
+    const replay = await previewFinancialSpending(ctx.db, request);
+    expect(replay.status).toBe("already_booked");
+    await commitFinancialSpending(ctx.db, replay, ctx.actor);
     expect(
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
     ).toEqual([{ cost: 42.5 }]);
   });
-  it("defers pending spending and non-spending kinds without creating Expenses", async () => {
+  it("books pending and observed spending while deferring non-spending kinds", async () => {
     const { transaction, advice } = await fixture();
-    await updateFinancialTransaction(
-      ctx.db,
-      transaction.output.id,
-      { status: "pending" },
-      ctx.actor,
-    );
-    expect(
-      (
-        await previewFinancialSpending(ctx.db, {
-          transactionId: transaction.output.id,
-          advice,
-        })
-      ).status,
-    ).toBe("deferred");
     for (const kind of [
       "account_transfer",
       "credit_card_payment",
@@ -362,6 +347,37 @@ describe("shared spending booking", () => {
       ).toBe("deferred");
     }
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    const request = { transactionId: transaction.output.id, advice };
+    for (const status of ["pending", "observed"] as const) {
+      await updateFinancialTransaction(
+        ctx.db,
+        transaction.output.id,
+        { status, kind: "purchase", amount: 42.5, postedDate: null },
+        ctx.actor,
+      );
+      expect((await previewFinancialSpending(ctx.db, request)).status).toBe(
+        "ready",
+      );
+    }
+    await commitFinancialSpending(
+      ctx.db,
+      await previewFinancialSpending(ctx.db, request),
+      ctx.actor,
+    );
+    const replay = await previewFinancialSpending(ctx.db, request);
+    expect(replay.status).toBe("already_booked");
+    await commitFinancialSpending(ctx.db, replay, ctx.actor);
+    expect(
+      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+    ).toEqual([{ cost: 42.5 }]);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          status: transactionTable.status,
+          postedDate: transactionTable.postedDate,
+        })
+        .from(transactionTable),
+    ).toEqual([{ status: "observed", postedDate: null }]);
   });
   it("books a posted fee through the shared writer", async () => {
     const { transaction, advice } = await fixture();

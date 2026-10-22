@@ -48,7 +48,10 @@ A Source Claim accepts a provider row ID only as write-time key material. The se
   absolute amount, dated the earlier leg, and links both legs as evidence. It
   refuses, as data naming the record, mismatched signs or amounts, a single
   account, an unowned account, or a leg that already evidences a transfer. A
-  same-owner pair becomes an internal move.
+  same-owner pair becomes an internal move. Observed, pending, and posted
+  transactions can evidence a transfer; expected or void transactions cannot.
+  Pairing and acceptance preserve each leg's status and transaction/posted dates;
+  an unknown posting state stays observed, with no invented posted date.
 - Review household-global positions and project-local initial funding, consumption, and gaps.
 
 Project kind never implies attribution. Project reports include both recorded and

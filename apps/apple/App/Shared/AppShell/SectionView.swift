@@ -59,7 +59,6 @@ struct RouteDestinationView: View {
         case .auditHistory: AuditHistoryView()
         case .photosLibrary: PhotosRootView()
         case .browseCatalog: BrowseRootView()
-        case .statementCsvImport: StatementCsvImportView()
         case .graph(let root): GraphWorkspaceView(initialRoot: root)
         case .nutrition(let day): DailyNutritionView(day: day)
         case .localActivity(let id): LocalActivityDetailView(id: id)

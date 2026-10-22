@@ -98,6 +98,8 @@ export type FinancialStatementPreviewOptions = {
    * apply, so both sides agree on what a candidate is.
    */
   candidatePolicy?: "import" | "suggestion";
+  /** Server-owned retained observations, never supplied by a client. */
+  retainedRefs?: ReadonlyMap<string, string>;
   /** Server-only: a stored StatementRow account outranks alias/last4 resolution, keyed by row key. */
   accountHints?: ReadonlyMap<string, string>;
   /** One synchronous preparation scope; never retain across model latency or another page. */
@@ -149,7 +151,6 @@ type FinancialStatementPreviewPreparation = Awaited<
 export async function previewFinancialStatementImport(
   db: Database,
   input: FinancialStatementImportPreviewInput,
-  duplicateProviderIds?: ReadonlySet<string>,
   options: FinancialStatementPreviewOptions = {},
 ): Promise<FinancialStatementImportPreviewOut> {
   const suggestionPolicy = options.candidatePolicy === "suggestion";
@@ -157,14 +158,16 @@ export async function previewFinancialStatementImport(
     input.rows.map((row) => statementRowExternalId(row)),
   );
   const sourceRefIds = await Promise.all(
-    input.rows.map((row, index) =>
-      row.importFingerprint && row.rowPosition !== undefined
-        ? statementRowOccurrenceId(
-            row.source,
-            row.importFingerprint,
-            row.rowPosition,
-          )
-        : legacyIds[index]!,
+    input.rows.map(
+      (row, index) =>
+        options.retainedRefs?.get(row.key) ??
+        (row.importFingerprint && row.rowPosition !== undefined
+          ? statementRowOccurrenceId(
+              row.source,
+              row.importFingerprint,
+              row.rowPosition,
+            )
+          : legacyIds[index]!),
     ),
   );
   const dates = uniq(
@@ -180,6 +183,7 @@ export async function previewFinancialStatementImport(
         .select({
           source: statementRow.source,
           providerTransactionId: statementRow.providerTransactionId,
+          providerAccountId: statementRow.providerAccountId,
           externalId: statementRow.externalId,
         })
         .from(statementRow)
@@ -304,6 +308,34 @@ export async function previewFinancialStatementImport(
       const stored = parsedAccounts.find((account) => account.id === hinted);
       if (stored) return stored;
     }
+    if (row.providerAccountId) {
+      const scoped = parsedAccounts.filter((account) =>
+        account.sourceAliases.some(
+          (alias) =>
+            alias.source === row.source &&
+            alias.externalAccountId === row.providerAccountId,
+        ),
+      );
+      if (scoped.length) return scoped.length === 1 ? scoped[0] : undefined;
+      // Descriptor fallback cannot overrule a known provider account scope.
+      const conflictingAlias = parsedAccounts.some((account) =>
+        account.sourceAliases.some(
+          (alias) =>
+            alias.source === row.source &&
+            canonical(alias.alias) === canonical(row.account) &&
+            alias.externalAccountId !== null &&
+            alias.externalAccountId !== row.providerAccountId,
+        ),
+      );
+      const conflictingRecord = observations.some(
+        (observation) =>
+          observation.source === row.source &&
+          observation.providerTransactionId === row.providerTransactionId &&
+          observation.providerAccountId !== null &&
+          observation.providerAccountId !== row.providerAccountId,
+      );
+      if (conflictingAlias || conflictingRecord) return undefined;
+    }
     const descriptor = canonical(row.account);
     const aliasMatches = parsedAccounts.filter((account) =>
       account.sourceAliases.some(
@@ -343,12 +375,13 @@ export async function previewFinancialStatementImport(
       (fingerprintCounts.get(externalId) ?? 0) > 1) ||
     Boolean(
       row.providerTransactionId &&
-      (duplicateProviderIds?.has(row.providerTransactionId) ||
-        input.rows.filter(
-          (other) =>
-            other.source === row.source &&
-            other.providerTransactionId === row.providerTransactionId,
-        ).length > 1),
+      input.rows.filter(
+        (other) =>
+          other.source === row.source &&
+          other.providerTransactionId === row.providerTransactionId &&
+          (other.providerAccountId ?? canonical(other.account)) ===
+            (row.providerAccountId ?? canonical(row.account)),
+      ).length > 1,
     )
       ? "indistinguishable_duplicate"
       : recorded > 0
@@ -364,25 +397,29 @@ export async function previewFinancialStatementImport(
     const sourceRef = { source: row.source, externalId };
     const normalizedAmount = -row.amount;
     const kind = row.kind ?? (normalizedAmount > 0 ? "purchase" : "refund");
-    const proposed = {
-      sourceRef,
-      amount: normalizedAmount,
-      kind,
-      status: "posted" as const,
-      transactionDate: null,
-      postedDate: row.date,
-      merchant: row.merchant,
-      rawDescription: row.originalStatement,
-      sourceCategory: row.category,
-      notes: row.notes,
-    };
+    const proposed: FinancialStatementImportPreviewOut["rows"][number]["proposed"] =
+      {
+        sourceRef,
+        amount: normalizedAmount,
+        kind,
+        status: row.providerStatus ?? "observed",
+        transactionDate: row.providerStatus === "posted" ? null : row.date,
+        postedDate: row.providerStatus === "posted" ? row.date : null,
+        merchant: row.merchant,
+        rawDescription: row.originalStatement,
+        sourceCategory: row.category,
+        notes: row.notes,
+      };
     const account = accountFor(row);
-    const exactOccurrence = parsedTransactions.filter((transaction) =>
-      transaction.sourceRefs.some(
-        (ref) =>
-          ref.source === sourceRef.source &&
-          ref.externalId === sourceRef.externalId,
-      ),
+    const exactOccurrence = parsedTransactions.filter(
+      (transaction) =>
+        (!row.providerAccountId ||
+          (account && transaction.accountId === account.id)) &&
+        transaction.sourceRefs.some(
+          (ref) =>
+            ref.source === sourceRef.source &&
+            ref.externalId === sourceRef.externalId,
+        ),
     );
     const providerMatches =
       account && row.providerTransactionId
@@ -395,6 +432,10 @@ export async function previewFinancialStatementImport(
                     observation.source === row.source &&
                     observation.providerTransactionId ===
                       row.providerTransactionId &&
+                    (row.providerAccountId === undefined ||
+                      row.providerAccountId === null ||
+                      observation.providerAccountId ===
+                        row.providerAccountId) &&
                     observation.source === ref.source &&
                     observation.externalId === ref.externalId,
                 ),
@@ -482,7 +523,9 @@ export async function previewFinancialStatementImport(
           )
     ).filter(
       (transaction) =>
-        !belongsToAnotherOccurrence(transaction) &&
+        // Historical collections can retain surplus or mispositioned membership.
+        // Discovery must keep a claimed settlement visible for identity review.
+        (suggestionPolicy || !belongsToAnotherOccurrence(transaction)) &&
         !(suggestionPolicy && transaction.status === "void"),
     );
 

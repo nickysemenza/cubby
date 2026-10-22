@@ -81,9 +81,10 @@ export const AUTOMATIC_RULES = {
     match: (judgment) => {
       const only = soleCandidate(judgment);
       return Boolean(
+        !judgment.reviewReason &&
         judgment.recommended === "attach" &&
         (!(
-          judgment.create?.status === "posted" &&
+          judgment.create &&
           ["purchase", "refund", "fee"].includes(judgment.create.kind)
         ) ||
           judgment.clean) &&
@@ -106,10 +107,12 @@ export const AUTOMATIC_RULES = {
     family: "statement_transaction",
     execution: "import_clean",
     description:
-      "Book clean posted spending from imports automatically by default. Pause to leave future clean spending suggestions pending for review.",
+      "Book clean supported spending from imports automatically by default. Pause to leave future clean spending suggestions pending for review.",
     revision: () => STATEMENT_SUGGESTION_REVISION,
     match: (judgment) =>
-      judgment.clean && judgment.spending?.status === "ready",
+      !judgment.reviewReason &&
+      judgment.clean &&
+      judgment.spending?.status === "ready",
     application: () => ({ kind: "accept_as_is" }),
   },
 } satisfies { [K in AutomaticRuleKey]: Declaration<FamilyOf<K>> };

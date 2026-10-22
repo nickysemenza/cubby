@@ -12,10 +12,6 @@ import {
   statementRowListOut,
   statementRowSummaryInput,
   statementRowSummaryOut,
-  statementCsvCommitInput,
-  statementCsvCommitOut,
-  statementCsvFileInput,
-  statementCsvPreviewOut,
 } from "@cubby/schemas/statement-row";
 import {
   statementSuggestionPreviewInput,
@@ -34,26 +30,6 @@ export const statementRowContract = defineContract("statementRow", {
     transport: "post",
     input: statementSuggestionPreviewInput,
     output: statementSuggestionPreviewOut,
-  }),
-  previewCsv: query({
-    mcp: {
-      omit: "deferred_capability",
-      note: "Parses a statement CSV with the shared parser",
-    },
-    native: "Preview local statement CSV in Apple apps using the shared parser",
-    input: statementCsvFileInput,
-    output: statementCsvPreviewOut,
-    cache: { tags: [] },
-  }),
-  commitCsv: mutation({
-    mcp: {
-      omit: "deferred_capability",
-      note: "Assigns accounts and creates FinancialTransactions or attaches observations; statement_rows.record only records evidence",
-    },
-    native: "Confirm statement CSV rows from Apple apps",
-    input: statementCsvCommitInput,
-    output: statementCsvCommitOut,
-    invalidates: ["statementRow", "financialTransaction"],
   }),
   record: mutation({
     input: recordStatementRowsInput,

@@ -20,6 +20,7 @@ import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-par
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { acceptFinancialTransferPair } from "./financial-transfer-accept";
+import { suggestFinancialTransferPairs } from "./financial-transfer-pairing";
 
 describe("acceptFinancialTransferPair", () => {
   const ctx = withTestDb("mcp");
@@ -45,7 +46,7 @@ describe("acceptFinancialTransferPair", () => {
     amount: number,
     date: string,
     ledgerTransferId: EntityId<"ledgerTransfer"> | null = null,
-    status: "posted" | "pending" = "posted",
+    status: typeof financialTransaction.$inferSelect.status = "posted",
   ) => {
     const row = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId,
@@ -53,7 +54,7 @@ describe("acceptFinancialTransferPair", () => {
       status,
       amount,
       transactionDate: date,
-      postedDate: date,
+      postedDate: status === "posted" ? date : null,
       ledgerTransferId,
     });
     return parseShortcodeFor("financialTransaction", row.shortcode);
@@ -133,12 +134,19 @@ describe("acceptFinancialTransferPair", () => {
       account("Synthetic closed checking", memberB.id),
     ]);
     const out = await transaction(accountA.id, 60, "2026-05-02");
-    const pendingIn = await transaction(
+    const voidIn = await transaction(
       accountB.id,
       -60,
       "2026-05-03",
       null,
-      "pending",
+      "void",
+    );
+    const expectedIn = await transaction(
+      accountB.id,
+      -60,
+      "2026-05-03",
+      null,
+      "expected",
     );
     const allocatedIn = await transaction(accountB.id, -60, "2026-05-03");
     const bookedIn = await transaction(accountB.id, -60, "2026-05-03");
@@ -176,7 +184,8 @@ describe("acceptFinancialTransferPair", () => {
     const transfersBefore = await liveTransferCount();
     const linkedBefore = await linkedTransactionCount();
     const cases: Array<[typeof out, RegExp]> = [
-      [pendingIn, new RegExp(`${pendingIn} is pending`)],
+      [voidIn, new RegExp(`${voidIn} is void`)],
+      [expectedIn, new RegExp(`${expectedIn} is expected`)],
       [allocatedIn, new RegExp(`${allocatedIn} has 1 live allocation`)],
       [bookedIn, new RegExp(`${bookedIn} has 1 live booked Expense`)],
       [
@@ -198,15 +207,47 @@ describe("acceptFinancialTransferPair", () => {
     expect(await linkedTransactionCount()).toBe(linkedBefore);
   });
 
-  it("creates one audited transfer linking both legs, dated the earlier leg", async () => {
+  it("creates one audited transfer from pending and observed legs, preserving status and dates", async () => {
     const memberA = await party("Synthetic payer", "member");
     const household = await party("Synthetic household", "household");
     const [accountA, accountB] = await Promise.all([
       account("Synthetic personal", memberA.id),
       account("Synthetic joint", household.id),
     ]);
-    const out = await transaction(accountA.id, 75.5, "2026-04-05");
-    const inn = await transaction(accountB.id, -75.5, "2026-04-03");
+    const out = await transaction(
+      accountA.id,
+      75.5,
+      "2026-04-05",
+      null,
+      "pending",
+    );
+    const inn = await transaction(
+      accountB.id,
+      -75.5,
+      "2026-04-03",
+      null,
+      "observed",
+    );
+
+    const pairing = await suggestFinancialTransferPairs(ctx.db, {
+      transactionIds: [out, inn],
+      maxDateDistanceDays: 5,
+      maxCandidatesPerTransaction: 3,
+    });
+    expect(pairing.status).toBe("proposed");
+    expect(pairing.suggestions).toHaveLength(2);
+    for (const suggestion of pairing.suggestions) {
+      expect(suggestion).toMatchObject({
+        status: "proposed",
+        candidates: [
+          {
+            outflowTransactionId: out,
+            inflowTransactionId: inn,
+            dateDistanceDays: 2,
+          },
+        ],
+      });
+    }
 
     const result = await acceptFinancialTransferPair(
       ctx.db,
@@ -229,12 +270,31 @@ describe("acceptFinancialTransferPair", () => {
       .where(eq(ledgerTransfer.shortcode, result.transferId));
     expect(transfer).toBeDefined();
     const legs = await unwrapDb(ctx.db)
-      .select({ shortcode: financialTransaction.shortcode })
+      .select({
+        shortcode: financialTransaction.shortcode,
+        status: financialTransaction.status,
+        transactionDate: financialTransaction.transactionDate,
+        postedDate: financialTransaction.postedDate,
+      })
       .from(financialTransaction)
       .where(eq(financialTransaction.ledgerTransferId, transfer!.id));
-    expect(legs.map((leg) => leg.shortcode).sort()).toEqual(
-      [out, inn].map(String).sort(),
+    expect(legs).toEqual(
+      expect.arrayContaining([
+        {
+          shortcode: out,
+          status: "pending",
+          transactionDate: "2026-04-05",
+          postedDate: null,
+        },
+        {
+          shortcode: inn,
+          status: "observed",
+          transactionDate: "2026-04-03",
+          postedDate: null,
+        },
+      ]),
     );
+    expect(legs).toHaveLength(2);
     const audits = await unwrapDb(ctx.db)
       .select({ action: auditLog.action })
       .from(auditLog)

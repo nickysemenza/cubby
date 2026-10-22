@@ -48,6 +48,7 @@ import { assessment, assessmentState } from "~/server/db/schema";
 import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
+import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
 import {
   CHARGE_STATE,
   chargeKeyOf,
@@ -247,7 +248,7 @@ const amountIn = (column: SQL, amounts: readonly number[]) =>
   )})`;
 
 /**
- * Posted transactions no LedgerTransfer, Purchase allocation or booked
+ * Supported observed transactions no LedgerTransfer, Purchase allocation or booked
  * Expense claims: the recorded legs an accept writer would take.
  */
 async function loadTransactionLegs(
@@ -298,7 +299,10 @@ async function loadTransactionLegs(
     SELECT ft.id, ft.shortcode, ft."accountId", ft.amount, ${day}::text AS date,
       ft.kind, ft.merchant, ft."rawDescription", ft."sourceCategory", ft.notes
     FROM "FinancialTransaction" ft
-    WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.posted}
+    WHERE ft."deletedAt" IS NULL AND ft.status IN (${sql.join(
+      transferEvidenceStatuses.map((status) => sql`${status}`),
+      sql`, `,
+    )})
       AND ft."ledgerTransferId" IS NULL AND ${day} IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM "FinancialTransactionAllocation" fta
@@ -351,8 +355,12 @@ const observationRow = z.object({
   source: z.string(),
   externalId: z.string(),
   chargeKey: z.string(),
+  legacyReference: z.string().nullable(),
+  current: z.boolean(),
+  withdrawnAt: z.string().nullable(),
   rowPosition: z.coerce.number().nullable(),
   providerTransactionId: z.string().nullable(),
+  providerAccountId: z.string().nullable(),
   accountDescriptor: z.string(),
   statementDate: z.string(),
   providerAmount: z.coerce.number(),
@@ -384,11 +392,12 @@ const previewRowFor = (
   importFingerprint: row.importFingerprint,
   ...(row.rowPosition === null ? {} : { rowPosition: row.rowPosition }),
   providerTransactionId: row.providerTransactionId,
+  providerAccountId: row.providerAccountId,
   ...(row.providerStatus ? { providerStatus: row.providerStatus } : {}),
 });
 
 /**
- * Unmatched, posted statement charges whose account resolves as the
+ * Current unmatched statement charges whose account resolves as the
  * statement family resolves it. Charge identity is the source's own; two
  * sources' observations of one movement stay two charges, which the overlap
  * rule holds back until statement review converges them.
@@ -435,7 +444,8 @@ async function loadStatementLegs(
     z.input<typeof observationRow>
   >(sql`
     SELECT r.id::text AS id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
-      r."rowPosition", r."providerTransactionId", r."accountDescriptor",
+      r."legacyReference", r.current, r."withdrawnAt"::text AS "withdrawnAt",
+      r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
       r."statementDate"::text AS "statementDate", r."providerAmount", r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus", r."providerNotes",
       r."accountId"::text AS "accountId", si.fingerprint AS "importFingerprint",
@@ -454,12 +464,11 @@ async function loadStatementLegs(
     byCharge.set(key, [...(byCharge.get(key) ?? []), row]);
   }
   const charges = [...byCharge.values()].flatMap((observations) => {
-    // The newest observation with a physical position names the charge.
-    const canonical =
-      observations.find((row) => row.rowPosition !== null) ?? observations[0]!;
+    const canonical = observations.find((row) => row.current);
     if (
-      canonical.providerAmount === 0 ||
-      canonical.providerStatus === "pending"
+      !canonical ||
+      canonical.withdrawnAt !== null ||
+      canonical.providerAmount === 0
     )
       return [];
     const amount = -canonical.providerAmount;
@@ -479,7 +488,6 @@ async function loadStatementLegs(
           previewRowFor(charge, canonical),
         ),
       },
-      undefined,
       {
         candidatePolicy: "suggestion",
         accountHints: new Map(
@@ -518,15 +526,19 @@ async function loadStatementLegs(
         recordedKind: null,
         providerCategory: canonical.sourceCategory,
         ...entry.signals,
-        // Every observation's ref and the charge's frozen v1 hash, so any
-        // later re-export of this charge matches the created transaction.
+        // Explicit retained aliases are settlement references; a provider charge
+        // key groups observations but never becomes a fabricated source ref.
         refs: uniqBy(
           [
             ...observations.map((obs) => ({
               source: obs.source,
               externalId: obs.externalId,
             })),
-            { source: charge.source, externalId: charge.chargeKey },
+            ...observations.flatMap((obs) =>
+              obs.legacyReference
+                ? [{ source: obs.source, externalId: obs.legacyReference }]
+                : [],
+            ),
           ],
           (ref) => `${ref.source}\0${ref.externalId}`,
         ).sort((a, b) => a.externalId.localeCompare(b.externalId)),
@@ -1327,7 +1339,10 @@ async function nextTransferPairSeeds(
   const { rows } = await unwrapDb(db).execute<{ key: string }>(sql`
     SELECT key FROM (
       SELECT 'ftx:' || ft.shortcode AS key FROM "FinancialTransaction" ft
-      WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.posted}
+      WHERE ft."deletedAt" IS NULL AND ft.status IN (${sql.join(
+        transferEvidenceStatuses.map((status) => sql`${status}`),
+        sql`, `,
+      )})
         AND ft."ledgerTransferId" IS NULL
         AND COALESCE(ft."postedDate", ft."transactionDate") IS NOT NULL
         AND (ft.kind IN (${sql.join(
@@ -1774,6 +1789,31 @@ export async function findTransferPairForCharge(
  * cash pair is never clean, so it needs a member's own review. Every refusal
  * rolls back the created legs.
  */
+/** A source observation establishes posting only when it explicitly says so. */
+async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
+  if (leg.origin === "cash") return financialTransactionStatus.enum.posted;
+  if (!leg.charge)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A new transfer leg requires retained source identity.",
+    );
+  const { rows } = await unwrapDb(db).execute<{ providerStatus: unknown }>(sql`
+    SELECT "providerStatus" FROM "StatementRow" WHERE source=${leg.charge.source}
+      AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND "deletedAt" IS NULL
+  `);
+  if (rows.length !== 1)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The transfer's current source observation changed. Review again.",
+    );
+  return (
+    financialTransactionProviderStatus
+      .nullable()
+      .parse(rows[0]!.providerStatus) ??
+    financialTransactionStatus.enum.observed
+  );
+}
+
 export async function applyTransferPair(
   db: Database,
   context: EntityKernelContext,
@@ -1832,6 +1872,7 @@ export async function applyTransferPair(
 
     const create = async (leg: TransferPairLeg) => {
       if (leg.transactionId) return leg.transactionId;
+      const status = await currentStatementStatus(txDb, leg);
       if (leg.charge)
         await updateStatementRows(
           txDb,
@@ -1852,10 +1893,11 @@ export async function applyTransferPair(
           accountId: leg.accountId,
           purchaseId: null,
           kind: leg.kind,
-          status: "posted",
+          status,
           amount: leg.amount,
-          transactionDate: leg.origin === "cash" ? leg.date : null,
-          postedDate: leg.date,
+          transactionDate:
+            status !== "posted" || leg.origin === "cash" ? leg.date : null,
+          postedDate: status === "posted" ? leg.date : null,
           merchant: leg.merchant,
           rawDescription: leg.description,
           sourceCategory: leg.signals.providerCategory,

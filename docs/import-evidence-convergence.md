@@ -3,9 +3,14 @@
 Bank transactions are evidence; Expenses are the spending ledger. Statement
 imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
-Clean posted purchases and fees book spending automatically; uncertain work
-remains in the shared Suggestions queue. Pending holds book no Expenses until
-posted. Transfers, card payments and ordinary income remain settlement-only.
+Clean purchases and fees book spending automatically; uncertain work
+remains in the shared Suggestions queue. Pending or unknown provider status
+does not prevent an otherwise supported booking. Spending advice is generated
+for pending and observed spending under the same eligibility as posted spending.
+Label-policy revisions invalidate checkpoints when advice eligibility changes.
+Unknown status is retained
+as null on evidence and observed on the FinancialTransaction, never fabricated
+as posted. Transfers, card payments and ordinary income remain settlement-only.
 Booking links recorded Expenses or creates one bare Purchase and one lump
 Expense. Purchases created from bank evidence have no invented itemization,
 order identifier or printed total. New bare Purchases use the account's live
@@ -44,8 +49,8 @@ reviewed fields; clients cannot submit replacement model evidence.
 
 Existing Purchase settlement reuses the retained-payment matcher: exact cents,
 card/tender and owner evidence, the existing posting window, and a complete
-unique conserved set. Retained settlement matches posted charges only; a
-pending authorization remains unallocated until posted. Weaker same-Vendor candidates within fourteen days,
+unique conserved set. The same evidence checks apply to pending and
+observed charges; status alone neither proves identity nor prevents settlement. Weaker same-Vendor candidates within fourteen days,
 including tips, partial payments, splits and combined charges, need review;
 amount/date coincidence never proves identity. Refunds require supported
 original-Purchase evidence independently of that weak-candidate window. Reuse
@@ -168,46 +173,80 @@ aggregate reimbursement to its original Purchase or retire an unchanged
 aggregate and attach its bank evidence to a reviewed transfer. Edited,
 itemized, or source-claimed lines require individual review.
 
-CSV identity preserves each physical nonzero occurrence, including identical
-rows; zero-valued placeholder rows are counted, not saved. Stable provider identifiers are retained; historical
-identity aliases remain recognized. A date/amount/status change is a reviewed
-candidate attachment, not an automatic merge. Ambiguous same-amount transactions
-remain separate candidates. Source rows and their original dates stay intact.
+## Normalized financial evidence intake
 
-Export coverage records every retained statement identity observed in that
-export, independently of which export first inserted its row. Replaying an
-overlapping export adds membership evidence without moving original rows,
-changing provider values, or creating transactions. Partial exports remain
-incomplete; a dry run records no membership. Historical migration seeds only
-known first-ingesting memberships; other exports require original-source replay.
-Original first ownership remains membership proof through the deployment
-window. Drift excludes row pairs known to coexist in any export, even when
-another export first retained one. Retired import bookkeeping retains that
-coexistence evidence; live coverage still excludes deleted statement rows.
-Legacy identities cannot establish distinct
-physical occurrences by themselves.
+Claude/Codex use the [financial-evidence-import skill](../.agents/skills/financial-evidence-import/SKILL.md)
+to read Monarch MCP or parse Monarch, Mint, Copilot and Apple Card exports
+locally. Cubby accepts normalized observations through `statement_rows.record`;
+the application has no financial CSV parser, upload, mapping, preview/commit,
+native file picker or CSV CLI. USDA parsing and expense report exports are
+independent of financial intake.
 
-A provider charge is every observation sharing one v1 identity: repeated
-exports record new occurrence rows for the same money. An ignore, supersession
-or live settlement ref on any observation settles the whole charge, so match
-state and unmatched counts are per charge. Statement Transaction suggestions
-propose, one per unmatched charge, creating a transaction, attaching to an
-existing one (same account, same cents, within three days, whatever the
-descriptor), superseding a recorded hold with its posted row (posted at or up
-to the larger of 25% or $20 above the hold, within seven days), or voiding a
-vanished hold. Enabled clean import booking applies current clean spending
-plans as described above. Other work waits for review except through the
-`statement_transaction.attach` Automatic rule ([ADR 0016
-amendment](adr/0016-shared-assessments-and-feedback.md#amendment-sweeps-the-suggestions-page-and-automatic-rules-2026-10)):
-once a member turns it on, an attach to the sole candidate, with no possible
-twin, at the same cents and labelled the same charge with high confidence by a
-decision model whose own reviewed matches are eligible, applies without review
-outside its audit sample, and never copies statement fields onto the
-transaction. A create is refused while any candidate the member has not
-rejected remains. A same-amount charge from another export is a possible
-firmed-up twin and is never bulk-acceptable. Decision-model labels rank
-candidates and choose a fallback kind; on their own they never authorize an
-attach or suppress a create.
+Keep every source observation and original description. Provider identity is
+scoped to its source and account; immutable revisions retain one explicit
+charge key. Provider status is optional metadata. ID-less file occurrences
+retain physical positions, including distinct identical rows and zero-value
+records. Separate ID-less observations remain independent across collections;
+content equality alone cannot establish that they are one charge. Zero evidence cannot create spending. Historical reference strings
+remain accepted links, with one explicit charge owning a legacy alias; the
+alias alone never spreads an ignore or settlement to coexisting charges.
+Cross-provider equality proposes reconciliation rather than establishing identity.
+
+A collection owns its immutable observation time, declared count and optional
+account/date/visibility scope. Chunks resume that collection. Membership is
+independent of first ownership, and migration preserves known memberships
+without inventing complete historical windows. Completing a source pull
+requires exhaustive enumeration and equality between declared and retained
+counts, including zeros. A page or visible-only query cannot establish absence.
+The skill must identify unsupported accounts, including Monarch connections
+excluded by its MCP, rather than reporting them current.
+
+Evidence, memberships, revisions and the existing Sweep's Job intent commit in
+one transaction; waking happens after commit. Corrections recheck the existing
+automatic spending switch under its transaction lock; pausing it blocks money
+changes and retirement as well as new booking. Scheduling failure rolls admission
+back. The outer DB-only snapshot write uses bounded retries for serialization
+conflicts, including late derived-refresh Job contention, rebuilding evidence and
+Sweep admission together on each attempt. Dry runs and unchanged replays create
+no work; existing Jobs own interrupted
+execution recovery. A new collection can advance observation time without
+changing the original source record; `refreshed` counts those new observations
+of existing facts. Completed collections reject additional membership. A reappearing
+withdrawn charge stays in review rather than silently recreating retired spending. After verified historical backfill, routine
+Monarch pulls overlap two weeks; refresh older windows deliberately when needed.
+
+Collection rosters return metadata without bulk-loading retained source notes or
+archives. Recording retries read only the immutable collection header, so a large
+historical archive does not repeat on every bounded chunk.
+
+Source-confirmed withdrawals require a completed all-visibility account/window
+and an explicit recheck. The retained current head records its withdrawal and
+proof collection. Old observations cannot reactivate it; only newer positive
+evidence can. A later-dated export alone never proves disappearance.
+
+Cubby reconciles accepted revisions in one snapshot transaction. An automatic
+amount correction or withdrawal requires the original automatic-decision and
+Expense-lineage fingerprints, one unchanged generated lump, unchanged allocation
+and member shares, no itemization, claims or attached independent evidence, and
+current corroboration that agrees. Amount corrections update the transaction,
+allocation and Expense together. Withdrawal retires the generated Expense
+through supported writers, voids the transaction and retains references and
+history. Edited, itemized or conflicting bookings stay in the existing Suggestions
+queue for individual FinancialTransaction/Expense review; recording source
+changes never silently overwrites them. A source date revision that changes the
+booking's effective funding date requires individual review of dated allocations
+and Expenses. Status/date-only refusals remain durable Suggestions even when the
+amount is unchanged; supported posting updates may proceed when the effective
+funding date stays unchanged.
+
+Suggestions remain one per actionable charge. Matching a source observation is
+separate from booking Expenses. Existing candidates must be rejected before a
+new transaction can be created. Historical collection membership may include surplus or mispositioned evidence.
+It cannot by itself dismiss an existing settlement candidate during Suggestions
+discovery; ambiguous identity remains review work before new spending. Descriptor/amount/date coincidence is advisory;
+a different source's observation does not become a second charge merely because
+its text differs. Existing clean-booking and measured attach rules retain their
+own authority and revalidate current evidence before writing.
 
 A repeated statement Sweep keeps labels for the same source and charge key
 when the statement model inputs and the candidate identities/model inputs
@@ -224,24 +263,13 @@ or settled charges remain excluded. Generation and label pages commit per
 charge, so interruption preserves reusable labels and completed publications.
 Acceptance always validates the current broader evidence fingerprint.
 
-The vanished-hold void is the one
-bounded absence judgment: it applies only to a transaction recorded from rows
-the provider itself marked pending, with no posted twin, after a later export
-of that account covers dates seven days past the hold without containing it,
-and it voids rather than deletes, keeping the refs. Absence never proves a
-posted charge did not happen.
-
 Provider account masks retain all supplied digits, including non-card masks
 longer than four digits. An account name already containing that mask does not
 receive a second suffix. These descriptors participate in statement identity;
 normalization must not truncate them into a different account reference.
-Rows recorded before complete masks carry a `(...last4)` suffix, unless the
-account name already contained those four digits (`Card 4821`), in which case
-the name was stored with no suffix. A positioned replay of a suffixed
-occurrence whose complete mask ends in those four digits upgrades the stored
-descriptor in place and reports it in `maskUpgrades`; its charge key keeps the
-original hash. A different trailing mask, an unpositioned row, or a suffixless
-pre-change name still raises the immutable-evidence conflict on replay.
+Historical descriptor spelling and reference strings remain retained. New
+normalization must preserve complete masks; a changed descriptor is not grounds
+to rewrite accepted transaction identity or an old observation.
 
 Retailer preparation can explicitly target an orderless Purchase. Receipt
 itemization that changes recorded lines proposes `reconcile_source_order`
@@ -288,27 +316,26 @@ changed original bindings.
 ## Validation boundaries
 
 `import-order-convergence.integration.test.ts` exercises a Latin square plus
-two seeded arrival orders of Gmail, retailer, photo, and CSV evidence against
+two seeded arrival orders of Gmail, retailer, photo, and normalized financial evidence against
 PostgreSQL through
 the same writers the routes dispatch: real normalization, persistence,
-retailer preparation/commit, photo staging/finalization/review, CSV intake,
+retailer preparation/commit, photo staging/finalization/review, normalized intake,
 booking, finding resolution, and order-mail linking.
 `import-order-convergence.spec.ts` retains two browser orders: statement-first
 requires reviewed receipt reconciliation; receipt-first links existing
-itemization. Both retain signed photo upload, photo review approval, CSV browser
-intake, and vendor-to-Purchase-to-Product navigation. The statement-first case
+itemization. Both retain signed photo upload, photo review approval, normalized evidence recording, and vendor-to-Purchase-to-Product navigation. The statement-first case
 also retains the Problems fix beyond the overview's first twelve findings.
 The PostgreSQL matrix owns sampled source-ordering coverage. Only external
 classifier/image-description output is deterministic. Both assert the final Product, inventory ownership, Expense,
 Purchase allocation, and original source edges; neither seeds the economic
 graph or repair it at the end.
 
-`pnpm test:e2e:sim -- --headless --statement-csv` drives a real Swift CLI
-file through shared OpenAPI preview and reviewed commit. It checks read-only
-preview, repeated physical rows, exact replay, changed-byte refusal, ambiguous
-settlement-date attachment, and no implicit Expense or Inventory writes. The
-CLI is a loopback test harness; native UI acceptance still exercises file
-selection, presentation, and approval.
+The normalized evidence PostgreSQL contracts retain replay, complete-window
+admission, distinct occurrences, immutable revisions and monotonic withdrawal.
+The MCP catalog regression verifies that dry runs and unchanged replays create
+no Runs, Jobs, assessments or money. Financial correction contracts verify
+atomic amounts, allocations, attribution preservation and guarded retirement.
+Obsolete web/native CSV selection and preview tests are removed with that UI.
 
 `finance-evidence-journey.spec.ts` covers reviewed spending, reimbursements,
 corrections, transfer conversion, and refusal after edits.
@@ -321,7 +348,7 @@ The Mac runner is documented in
 [mac-import-e2e.md](../apps/web/tooling/mac-import-e2e.md). It builds and signs a
 separate app identity, uses fixture account/browser state, and records each
 exercised boundary independently. A successful build does not establish
-native intake, capture, photo approval, or CSV save. Locked-host or authentication failures must remain failed milestones.
+native capture, photo approval, or product import. Locked-host or authentication failures must remain failed milestones.
 Live Gmail authorization, live retailer changes, and physical iPhone photo
 quality remain distinct from deterministic import convergence.
 

@@ -1,4 +1,5 @@
 import { statementRowContract } from "~/contracts/statement-row.contract";
+import { withSnapshotWriteDatabase } from "~/server/db/helpers";
 import {
   deleteStatementRows,
   findStatementRowDrift,
@@ -11,35 +12,37 @@ import {
 import { previewStatementSuggestion } from "~/server/domains/statement-import/repo/statement-suggestion-preview";
 import { scheduleStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-generation";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import {
-  commitStatementCsv,
-  previewStatementCsv,
-} from "~/server/workflows/statement-csv-import";
-
 export const statementRowHandlers = implementOperationDomain(
   statementRowContract,
   {
     previewSuggestion: (context, input) =>
       previewStatementSuggestion(context.db, input),
-    previewCsv: (context, input) =>
-      previewStatementCsv(context.db, context.actorContext, input),
-    commitCsv: (context, input) =>
-      commitStatementCsv(context.db, context.actorContext, input),
-    record: async (context, input) => {
-      const recorded = await recordStatementRows(
+    record: (context, input) =>
+      withSnapshotWriteDatabase(
         context.db,
-        input,
-        context.actorContext,
-      );
-      // New evidence may settle, or need, a transaction.
-      if (recorded.batchId)
-        await scheduleStatementSuggestions(
-          context.db,
-          recorded.batchId,
-          context.actorContext,
-        );
-      return recorded;
-    },
+        async (db) => {
+          const result = await recordStatementRows(
+            db,
+            input,
+            context.actorContext,
+          );
+          if (
+            !input.dryRun &&
+            result.batchId &&
+            (result.inserted ||
+              result.revised ||
+              result.refreshed ||
+              result.withdrawn)
+          )
+            await scheduleStatementSuggestions(
+              db,
+              result.batchId,
+              context.actorContext,
+            );
+          return result;
+        },
+        { isolationLevel: "serializable" },
+      ),
     list: (context, input) =>
       listStatementRows(
         context.db,
