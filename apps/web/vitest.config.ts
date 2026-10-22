@@ -516,6 +516,8 @@ export default defineConfig({
             ],
             pool: "forks",
             testTimeout: 30_000,
+            // Group 0 projects must share one worker cap.
+            maxWorkers: groupZeroMaxWorkers,
             sequence: { groupOrder: 0 },
           },
         },
@@ -525,6 +527,7 @@ export default defineConfig({
             name: "packages",
             root: join(import.meta.dirname, "../.."),
             include: ["packages/*/src/**/*.test.ts"],
+            maxWorkers: groupZeroMaxWorkers,
             sequence: { groupOrder: 0 },
           },
         },
@@ -551,6 +554,9 @@ export default defineConfig({
             testTimeout: 30_000,
             hookTimeout: 30_000,
             fileParallelism: false,
+            // One reused workerd runner measured 9s against 21s with a fresh
+            // runner per file; the suite passes under shuffled file orders.
+            isolate: false,
             retry: serviceRetry,
             sequence: { groupOrder: 5 },
           },

@@ -152,6 +152,7 @@ lines.push(
 );
 for (const runner of ["vitest", "playwright"] as const) {
   const own = records.filter((record) => record.runner === runner);
+  if (own.length === 0) continue;
   const count = (state: TestRecord["state"]) =>
     own.filter((record) => record.state === state).length;
   lines.push(

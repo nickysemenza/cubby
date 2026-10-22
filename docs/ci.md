@@ -587,6 +587,12 @@ links remain in Git history.
   parallelizes internally. Concurrent full runs caused contention and timeouts.
 - Cache dependency artifacts when build savings exceed transfer costs. Store
   and `node_modules` caching lost to registry installation.
+- `vitest doctor` (local, non-PostgreSQL projects, one run each) favoured
+  `isolate: false` (−14%) and more workers. The worker gain needs more cores
+  than a hosted runner has; `worker-safety` must stay isolated. Only the
+  `workers` project measured a reliable per-project gain (21 s to 9 s), and
+  `scripts`/`packages` stayed within noise. `vmThreads`/`vmForks` fail the
+  process and file-system tooling tests.
 
 ## Operational checks
 

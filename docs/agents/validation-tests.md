@@ -41,6 +41,10 @@ For a same-kind fixture cohort without intermediate reads, use
 settles the frontier after the cohort commits. This keeps background publication
 from repeatedly processing partially created fixture cohorts. Simulator product
 fixtures also settle the derived frontier before search-based native journeys begin.
+After a browser write, call `drainDerivedRefreshFrontier(db)` before a direct
+serializable fixture import such as `recordSourceTransactionRecords`. The
+offline search pump can otherwise update the shared refresh Job under the
+import's snapshot and fail it intermittently.
 For a mixed-entity prerequisite graph, use `createFixtureGraph` with its supplied
 kernel writer. It commits the graph and settles projections once; keep fixtures
 with intermediate browser reads outside that transaction.
