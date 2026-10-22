@@ -1687,10 +1687,12 @@ the policy directly. Input and output schemas still validate every call.
 Cache-tag rosters read the generated entity keys and image policy directly;
 they do not initialize the full entity manifest to enumerate those keys.
 
-`generated/commands.gen.ts` carries plain workflow-command metadata and lazy
-loaders for the owning domain. Report rendering reads labels, confirmations,
-and input declarations without importing every command's schemas. Execution
-loads and validates the actual body inside the existing pending/error flow.
+`generated/commands.gen.ts` carries plain workflow-command metadata and one
+lazy boundary to `generated/command-runtime.gen.ts`, which owns command dispatch
+and imports the relevant domain catalogs together. Report rendering reads
+labels, confirmations, and input declarations without importing the command
+runtime. Execution loads and validates the actual body inside the existing
+pending/error flow.
 Deferred specialized actions use `useDeferredActionMutation`, whose inner
 TanStack mutation retains operation metadata, key, scope and retry ownership;
 its outer mutation supplies loading state and presentation only.
