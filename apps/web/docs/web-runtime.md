@@ -7,6 +7,9 @@ hook-result defaults use module-level constants (not `= []`/`{}`), and
 query-key, clipboard, form-field, database, merge, and shortcode helpers over
 hand-rolled equivalents; raw mutation is reserved for the documented dynamic
 invalidation/inline-error/multi-mutation cases.
+Router subscriptions select the scalar or derived value a component consumes;
+components that genuinely consume the full dynamic search state retain it.
+Do not enable global structural sharing merely to narrow scalar subscriptions.
 Pass the displayed selection as mutation variables at the action boundary.
 Queries stay passive on remount. When a write closes an editor, await
 `invalidateOperationTags` with `removeInactive` so navigation cannot reuse that

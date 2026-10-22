@@ -10,6 +10,10 @@ contracts so the observed failure reaches the intended guard.
 
 ## Signal and speed
 
+Small Router subscription and pending-state refinements reuse affected workflow
+regressions rather than adding a dedicated browser capability. Document any
+deliberately unretained interaction permutation when removing its test.
+
 Choose the cheapest boundary that can expose the failure. Classify individual
 cases in mixed service-backed suites: SQL elsewhere in a file does not make
 every assertion an integration check. Before moving a case, read its destination

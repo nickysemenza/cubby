@@ -60,10 +60,12 @@ export function CreateDialogAction({
     // caller's validator accepts the shared optional `create` field.
     routeNavigate(options as never);
   };
-  const search = z
-    .object({ create: z.boolean().optional() })
-    .parse(useSearch({ strict: false }));
-  const openedFromUrl = search.create === true;
+  const openedFromUrl = useSearch({
+    strict: false,
+    select: (search) =>
+      z.object({ create: z.boolean().optional() }).parse(search).create ===
+      true,
+  });
   // Two sources, deliberately. The button opens through local state so a click
   // is instant and needs nothing from the router — routing the click through a
   // navigation made opening depend on the router being ready, a needless

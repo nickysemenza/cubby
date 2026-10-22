@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/activities")({
 });
 
 function ActivitiesPage() {
-  const { q } = Route.useSearch();
+  const q = Route.useSearch({ select: (search) => search.q });
   const navigate = Route.useNavigate();
   return (
     <ApplicationDirectory

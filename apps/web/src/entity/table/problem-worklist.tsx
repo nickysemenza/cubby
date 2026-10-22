@@ -64,10 +64,12 @@ export function ProblemWorklistStatus({
   filters: ColumnFiltersState;
   sorting: SortingState;
 }) {
-  const search = z
-    .object({ worklist: z.string().optional() })
-    .parse(useSearch({ strict: false }));
-  const state = problemWorklistState(entity, search.worklist, filters, sorting);
+  const worklist = useSearch({
+    strict: false,
+    select: (search) =>
+      z.object({ worklist: z.string().optional() }).parse(search).worklist,
+  });
+  const state = problemWorklistState(entity, worklist, filters, sorting);
   if (!state) return null;
   return (
     <Badge variant={state.exact ? "secondary" : "outline"} className="shrink-0">
