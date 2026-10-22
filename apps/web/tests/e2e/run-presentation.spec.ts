@@ -91,9 +91,9 @@ test("related Runs show account labels and shared quality", async ({
       exact: true,
     }),
   ).toHaveAttribute("href", `/vendor-accounts/${account.shortcode}`);
-  // Completed records retain their score and spoken quality status.
+  // Completion history does not waive missing display media.
   await expect(row.locator('[data-cell-col="dataQuality"]')).toHaveText(
-    "100, Complete",
+    "99, Needs data",
   );
   await openCellExplanation(row, "How quality is determined");
   await expect(
@@ -108,7 +108,7 @@ test("related Runs show account labels and shared quality", async ({
     .getByRole("row")
     .filter({ hasText: "Synthetic reference vendor" });
   await expect(listRow.locator('[data-cell-col="dataQuality"]')).toHaveText(
-    "100, Complete",
+    "99, Needs data",
   );
 });
 

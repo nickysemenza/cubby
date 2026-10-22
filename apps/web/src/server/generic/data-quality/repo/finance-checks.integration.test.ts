@@ -72,10 +72,12 @@ describe("data quality: finance and project entities", () => {
     expect(gapChecks).toContain("project_kind");
     expect(gapChecks).toContain("project_start_date");
     // `not_started` has no actual start to record.
-    expect(hydrated.get(notStarted.entityId)?.gaps).toEqual([]);
+    expect(
+      hydrated.get(notStarted.entityId)?.gaps.map((gap) => gap.check),
+    ).toEqual(["project_display_image"]);
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "project_display_image" }],
     });
   });
 
@@ -108,12 +110,12 @@ describe("data quality: finance and project entities", () => {
     ]);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).not.toContain("task_due_range");
-    expect(hydrated.get(gap.entityId)?.status).toBe("complete");
+    expect(hydrated.get(gap.entityId)?.status).toBe("needs_data");
     // The project's default trade is the task's effective trade.
     expect(gapChecks).not.toContain("task_trade");
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "task_display_image" }],
     });
   });
 
@@ -324,8 +326,8 @@ describe("data quality: finance and project entities", () => {
     expect(gapChecks).toContain("financial_account_ledger_party");
     expect(gapChecks).toContain("financial_account_confirmed");
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "financialaccount_display_image" }],
     });
   });
 
@@ -444,8 +446,8 @@ describe("data quality: finance and project entities", () => {
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("wish_candidate");
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "wish_display_image" }],
     });
   });
 
@@ -516,10 +518,10 @@ describe("data quality: finance and project entities", () => {
       completeId,
     ]);
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
-    expect(gapChecks).toEqual(["planting_location"]);
+    expect(gapChecks).toEqual(["planting_location", "planting_display_image"]);
     expect(hydrated.get(completeId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "planting_display_image" }],
     });
   });
 
@@ -586,8 +588,8 @@ describe("data quality: finance and project entities", () => {
       "garden_entry_harvest_amount",
     );
     expect(hydrated.get(completeId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "gardenentry_display_image" }],
     });
   });
 
@@ -621,15 +623,15 @@ describe("data quality: finance and project entities", () => {
     ]);
     // A guest party is never expected to map to a financial account.
     expect(hydrated.get(guest.entityId)).toMatchObject({
-      score: null,
-      status: "not_assessed",
-      gaps: [],
+      score: 99,
+      status: "needs_data",
+      gaps: [{ check: "ledgerparty_display_image" }],
     });
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("ledger_party_financial_account");
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "ledgerparty_display_image" }],
     });
   });
 
@@ -707,8 +709,8 @@ describe("data quality: finance and project entities", () => {
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("ledger_transfer_transaction");
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "ledgertransfer_display_image" }],
     });
   });
 });
