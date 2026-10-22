@@ -779,6 +779,38 @@ because the `AI` binding supplies Worker-identity authentication.
 
 ### Inline Job logs and limits
 
+Run detail shows a Plan table from `RUN_KINDS` in
+`packages/schemas/src/activity-fields.ts`, filtered by the Run's selected
+families. It lists steps in declaration order with purpose, scope, input count,
+state and results. Inputs are counted at step start; unstarted steps never read
+as zero-input work. Stored steps outside the current declaration/selection are
+shown separately as historical execution history, not future planned work.
+Scope summaries describe selected accounts/imports without exposing source IDs.
+A Sweep selecting exactly transfer pairs and statements is named Financial
+reconciliation; its stored purpose remains `sweep`.
+
+Step ETA uses at least three consecutive progress intervals (up to twelve),
+including elapsed queue and handoff time between observations. The displayed
+range spans observed per-item durations with a margin and rounds outwards to
+minutes, hours or days. Confidence is low with fewer than six observations or
+more than threefold variation, otherwise moderate; this is an observed range,
+not a statistical confidence interval. A cheap latest page cannot replace the
+other observed durations. Phase changes and retry resets clear observations;
+old samples without interval history, unknown input totals, stale progress,
+pauses and capacity waits do not produce a current ETA. Later steps without
+estimates keep the overall ETA unknown rather than inheriting the current
+step's pace. No blended overall percentage is inferred from different inputs.
+
+Decision facets distinguish Ready to apply from Applied: readiness means the
+current pending recommendation has passed checks and can be reviewed/applied;
+only Applied means the change was recorded. Both counts remain visible at zero.
+Multiple possible matches names competing candidates; other pending evidence
+issues read Needs review. Replaced and No longer current explain why an old
+recommendation cannot be acted on. Evidence starts with a plain-language
+explanation of each blocker; raw blocker keys, reasons and apply refusal detail
+remain available in Raw diagnostics. Presentation never clears a blocker or
+changes a recommendation's applicability.
+
 A Run's Diagnostics section and an Image's or Location's Jobs slot read one
 Job's raw Worker lines through `job.logs`
 (`server/generic/jobs/service/job-logs.ts`). It calls the Workers

@@ -102,7 +102,8 @@ export function RunStepStrip({
         {later ? (
           <span className="text-xs text-muted-foreground">
             Later steps count their inputs when they start, so there is no
-            overall percentage.
+            overall percentage. Overall ETA: Unknown — later steps have not been
+            estimated.
           </span>
         ) : null}
       </div>

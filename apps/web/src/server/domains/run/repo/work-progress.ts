@@ -92,9 +92,6 @@ export function sampleRunWork(
   const compatible = (sample: RunWorkSample) =>
     sample.phase === items.phase && sample.unit === items.unit;
   const same = previous && compatible(previous.current);
-  const prior = same
-    ? previous.current
-    : [...(previous?.completed ?? [])].reverse().find(compatible);
   const baseline =
     same && !input.reset && items.processed >= previous.current.processed
       ? previous.current
@@ -104,10 +101,18 @@ export function sampleRunWork(
     (baseline ? Date.parse(baseline.sampledAt) : input.startedAt.getTime());
   const processed =
     items.processed - (baseline?.processed ?? input.baselineProcessed ?? 0);
+  const intervals = [
+    ...(!input.reset && baseline ? (baseline.intervals ?? []) : []),
+    ...(processed > 0 && elapsed > 0
+      ? [{ processed, elapsedMs: elapsed }]
+      : []),
+  ].slice(-12);
   const ratePerSecond =
-    processed > 0 && elapsed > 0
-      ? (processed * 1_000) / elapsed
-      : (prior?.ratePerSecond ?? null);
+    intervals.length >= 3
+      ? (intervals.reduce((sum, interval) => sum + interval.processed, 0) *
+          1000) /
+        intervals.reduce((sum, interval) => sum + interval.elapsedMs, 0)
+      : null;
   const sampledAt =
     same && processed === 0 && !input.reset
       ? previous.current.sampledAt
@@ -116,7 +121,13 @@ export function sampleRunWork(
           : input.sampledAt
         ).toISOString();
   return {
-    current: { ...items, ratePerSecond, sampledAt, finished: input.finished },
+    current: {
+      ...items,
+      ratePerSecond,
+      sampledAt,
+      finished: input.finished,
+      intervals,
+    },
     completed: previous
       ? same
         ? previous.completed

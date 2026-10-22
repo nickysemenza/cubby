@@ -8,9 +8,11 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useSyncExternalStore } from "react";
 
 import type { RunDecision } from "~/contracts/run-detail.contract";
+import { ReportBlocks } from "~/entity/entity-detail/report-slot";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
+import { runPlanBlocks } from "~/lib/run-plan";
 import type { KeyNumber } from "~/ui/common/key-numbers";
 import { RecordList } from "~/ui/common/record-list";
 import {
@@ -20,7 +22,7 @@ import {
 
 import { JobDiagnostics } from "../job/job-diagnostics";
 import { DecisionLedger } from "./decision-ledger";
-import { type DecisionPresenter, presenterFor } from "./decision-presenters";
+import { decisionFacetCounts, presenterFor } from "./decision-presenters";
 import { RunStepStrip } from "./run-step-strip";
 import {
   type BreakdownGroup,
@@ -68,21 +70,6 @@ function useRunFacet(runId: string) {
   return [facet, setFacet] as const;
 }
 
-/** Facet counts in the presenter's order, for the header figures and funnel. */
-function facetCounts(
-  rows: readonly RunDecision[],
-  presenter: DecisionPresenter,
-) {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    const key = presenter.facetOf(row).key;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return presenter.facets
-    .filter((def) => counts.has(def.key))
-    .map((def) => ({ ...def, count: counts.get(def.key) ?? 0 }));
-}
-
 const scrollTo = (id: string) =>
   document
     .getElementById(id)
@@ -103,7 +90,7 @@ function useRunDetail(record: RunOut) {
     refetchInterval: polling,
   });
   const overview = steps.data
-    ? runOverview(steps.data, jobs.data, Date.now())
+    ? runOverview(steps.data, jobs.data, Date.now(), record.input)
     : null;
   // The family whose ledger the page shows: the latest started step's results.
   const family: AssessmentFamily | null =
@@ -122,7 +109,7 @@ function useRunDetail(record: RunOut) {
   });
   const presenter = family ? presenterFor(family) : null;
   const rows = decisions.data?.rows ?? [];
-  const facets = presenter ? facetCounts(rows, presenter) : [];
+  const facets = presenter ? decisionFacetCounts(rows, presenter) : [];
   return { steps, jobs, overview, family, decisions, presenter, rows, facets };
 }
 
@@ -245,6 +232,13 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
   return (
     <div className="grid gap-4">
       <RunStepStrip overview={overview} figures={figures} />
+      <ReportBlocks
+        blocks={runPlanBlocks({
+          purpose: record.purpose,
+          input: record.input,
+          steps: steps.data?.steps ?? [],
+        })}
+      />
       <RunStepTimeline
         steps={overview.steps}
         speed={speed}
@@ -279,10 +273,6 @@ export function RunDecisions({ record }: { record: RunOut }) {
             onRetry: () => void decisions.refetch(),
           }}
         />
-      ) : rows.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No {presenter.noun} yet. They appear as the step publishes them.
-        </p>
       ) : (
         <DecisionLedger
           rows={rows}

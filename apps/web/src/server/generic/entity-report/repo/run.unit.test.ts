@@ -818,7 +818,9 @@ describe("liveProgressBlocks", () => {
     expect(blocks).toContainEqual(
       expect.objectContaining({
         kind: "progress",
-        detail: expect.stringContaining("Phase ETA"),
+        detail: expect.stringContaining(
+          "Step ETA: Unknown — rate paused or stale",
+        ),
       }),
     );
   });
