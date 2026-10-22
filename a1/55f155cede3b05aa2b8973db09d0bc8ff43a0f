@@ -1,0 +1,19 @@
+apps/web/tests/e2e/suggestions.spec.ts
+  s_2450a56ef36b89::t_9299149cae9e1b 664-667
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a155f155cede3b05aa2b8973db09d0bc8ff43a0f",
+  "prompts": {},
+  "sessions": {
+    "s_2450a56ef36b89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16584-b2c2-7271-b133-d6271b3882f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
