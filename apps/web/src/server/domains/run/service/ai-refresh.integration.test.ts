@@ -65,7 +65,7 @@ import {
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  settleDerivedRefreshForDiscovery,
+  drainDerivedRefreshFrontier,
   withJobFixtureExecution,
   reconcileDerivedRefreshInputs,
 } from "~/server/testing/background-queue";
@@ -957,7 +957,7 @@ describe("targeted prompt refresh", () => {
           .where(eq(suggestion.id, applied!.id));
       }
       await reconcileDerivedRefreshInputs(ctx.db);
-      await settleDerivedRefreshForDiscovery(ctx.db);
+      await drainDerivedRefreshFrontier(ctx.db);
       const ordinary = categoryPorts(0.95);
       const decisionPort = vi.fn(ordinary.suggestPorts.decisionPort);
       const ports = {
@@ -1037,7 +1037,7 @@ describe("targeted prompt refresh", () => {
       verdict: "wrong",
       intent: "history",
     });
-    await settleDerivedRefreshForDiscovery(ctx.db);
+    await drainDerivedRefreshFrontier(ctx.db);
     const historicalFeedback = await getDb(ctx.db)
       .select()
       .from(feedback)
@@ -1384,7 +1384,7 @@ describe("targeted prompt refresh", () => {
         ),
       );
     expect(evaluation).toBeDefined();
-    await settleDerivedRefreshForDiscovery(ctx.db);
+    await drainDerivedRefreshFrontier(ctx.db);
     const measured = await countTestDbQueries(() =>
       executeAiRefreshTarget(ctx.db, evaluation!.id, {
         context: kernelCtx(ctx),
@@ -1436,7 +1436,7 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-bounded-connections", {
       enabled: true,
     });
-    await settleDerivedRefreshForDiscovery(ctx.db);
+    await drainDerivedRefreshFrontier(ctx.db);
     const { runId } = await scheduleConnectionRefresh(
       ctx.db,
       { entityKind: "product", entityId: source.id },

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluationRequest, email, run } from "~/server/db/schema";
+import { aiEvaluationRequest, email, run, job } from "~/server/db/schema";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
@@ -206,14 +206,12 @@ describe("durable member reclassification recovery", () => {
       FOR EACH ROW EXECUTE FUNCTION synthetic_receipt_failure()`),
     );
     try {
-      await expect(
-        reclassifyEmails(
-          ctx.db,
-          { ids: [first.shortcode, second.shortcode] },
-          ctx.actor,
-          { triage: f.triage, relevance: f.relevance },
-        ),
-      ).rejects.toThrow(/Failed query/iu);
+      await reclassifyEmails(
+        ctx.db,
+        { ids: [first.shortcode, second.shortcode] },
+        ctx.actor,
+        { triage: f.triage, relevance: f.relevance },
+      );
     } finally {
       await db.execute(
         sql.raw('DROP TRIGGER synthetic_receipt_failure ON "Run"'),
@@ -234,8 +232,12 @@ describe("durable member reclassification recovery", () => {
       recorded!.shortcode,
       f.owner,
     );
-    expect(recorded?.status).toBe("failed");
-    expect(recorded?.dispatchError).toContain("Synthetic checkpoint failure");
+    const [execution] = await db
+      .select()
+      .from(job)
+      .where(eq(job.key, `run:${recorded!.id}`));
+    expect(execution?.state).toBe("failed");
+    expect(execution?.error).toContain("Synthetic checkpoint failure");
     expect(recovered?.receipts).toMatchObject({
       complete: true,
       results: [{ id: first.shortcode }, { id: second.shortcode }],

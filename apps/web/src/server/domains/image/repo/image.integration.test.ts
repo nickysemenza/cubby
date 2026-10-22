@@ -1,3 +1,4 @@
+import { buildActorContext } from "@cubby/schemas/context";
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
@@ -9,7 +10,6 @@ import { getImageByIdSchema } from "@cubby/schemas/image";
 import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import { testShortcode } from "@cubby/schemas/testing";
-import { generateShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -39,6 +39,7 @@ import {
   upsertCookbook,
 } from "~/server/domains/cookbook/repo/cookbook";
 import { markImageUploadedWorkflow } from "~/server/domains/image/operations/image.server";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   makeCookbookExtraction,
@@ -97,38 +98,23 @@ const mkActorUser = (db: Database) =>
     email: `${uniqRunLabel("actor")}@example.test`,
   });
 
-/**
- * A live `photo_inventory` `Run`, with the actor snapshot columns the
- * table requires (mirrors `mkRun` in
- * `problems/detectors-integrity.integration.test.ts`, trimmed to what the
- * image-filter tests need).
- */
 const mkPhotoInventoryRun = async (db: Database) => {
   const party = await mkLedgerParty(db);
-  const [partySnapshot, actor] = await Promise.all([
-    getDb(db)
-      .select({
-        shortcode: ledgerParty.shortcode,
-        name: ledgerParty.name,
-        kind: ledgerParty.kind,
-      })
-      .from(ledgerParty)
-      .where(eq(ledgerParty.id, party.id))
-      .then((rows) => rows[0]!),
-    mkActorUser(db),
-  ]);
-  return insertAndReturn(db, runTable, {
-    shortcode: generateShortcode("run"),
-    purpose: "photo_inventory",
-    trigger: "manual",
-    ledgerPartyId: party.id,
-    actorUserId: userId.parse(actor.id),
-    actorName: actor.name,
-    actorEmail: actor.email,
-    actorLedgerPartyShortcode: partySnapshot.shortcode,
-    actorLedgerPartyName: partySnapshot.name,
-    actorLedgerPartyKind: partySnapshot.kind,
+  const actor = await mkActorUser(db);
+  await getDb(db)
+    .update(ledgerParty)
+    .set({ userId: userId.parse(actor.id) })
+    .where(eq(ledgerParty.id, party.id));
+  const id = await ensureRun(
+    db,
+    buildActorContext(userId.parse(actor.id), "web"),
+    { purpose: "photo_inventory", trigger: "manual", execution: false },
+  );
+  const run = await getDb(db).query.run.findFirst({
+    where: eq(runTable.id, id),
   });
+  if (!run) throw new Error("Expected photo inventory Run");
+  return run;
 };
 
 const mkRunTargetRow = (

@@ -10,6 +10,7 @@ import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
 import {
   aiExecutionOwner,
   liveAiRequestRun,
+  PENDING_AI_STATES,
 } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -36,19 +37,14 @@ export async function claimAiEvaluation(
     aiEvaluationJobInput.parse(execution.claim.input).evaluationId !== id
   )
     throw new Error("AI evaluation execution requires its universal Job claim");
-  await assertCurrentJob(db);
   return withTransactionDatabase(db, async (tx) => {
+    // Hold Job ownership through the evaluation write and its commit.
+    await assertCurrentJob(tx);
     const [existing] = await getDb(tx)
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, id));
-    if (
-      !existing ||
-      !["queued", "running", "retry_wait", "result_ready"].includes(
-        existing.state,
-      )
-    )
-      return null;
+    if (!existing || !PENDING_AI_STATES.includes(existing.state)) return null;
     if (
       existing.executionKind === "ai_refresh" &&
       !(await readAiRefreshActivation(tx))?.enabled
@@ -67,7 +63,12 @@ export async function claimAiEvaluation(
         runId: owner.id,
         updatedAt: new Date(),
       })
-      .where(eq(aiEvaluation.id, id))
+      .where(
+        and(
+          eq(aiEvaluation.id, id),
+          inArray(aiEvaluation.state, PENDING_AI_STATES),
+        ),
+      )
       .returning();
     return row
       ? {

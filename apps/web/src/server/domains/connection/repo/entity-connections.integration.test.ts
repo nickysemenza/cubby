@@ -24,6 +24,7 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createProductFixture,
   createProductIdentityFixture,
@@ -395,10 +396,7 @@ describe("stored connection evidence", () => {
       .from(assessment)
       .where(eq(assessment.id, proposal.review.assessmentId));
     if (!state) throw new Error("Missing synthetic Assessment");
-    await getDb(ctx.db)
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, item.entityId));
+    await deleteThroughKernel(ctx.db, ctx.actor, "product", [item.id]);
     await expect(
       withTransactionDatabase(ctx.db, async (db) =>
         applyEntityConnection(

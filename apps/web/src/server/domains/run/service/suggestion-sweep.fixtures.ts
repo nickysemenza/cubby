@@ -171,6 +171,15 @@ export async function seedPending(
   return { runId, id: saved.id };
 }
 
+/** Eligibility follows current field inputs; historical state need not be rewritten. */
+export async function isSuggestionReviewable(db: Database, id: string) {
+  const { listSuggestions } =
+    await import("~/server/generic/assessment/repo/suggestion-review");
+  return (await listSuggestions(db, { minConfidence: 0 })).some(
+    (row) => row.id === id,
+  );
+}
+
 export async function suggestionStatus(db: Database, id: string) {
   const [row] = await getDb(db)
     .select({ status: suggestionTable.status })

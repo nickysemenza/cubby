@@ -2,7 +2,7 @@ import type { ExpenseFlowSankeyOut } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertAndReturn, unwrapDb } from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import {
   type expense,
   expenseAttribution,
@@ -11,6 +11,7 @@ import {
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations.server";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { expenseFlowSankey } from "./flow-sankey";
 
@@ -42,14 +43,15 @@ const linkValue = (
 
 describe("expenseFlowSankey", () => {
   it("splits by funder weights, nets Credits within a path, and reconciles to the filtered net", async () => {
-    const [first, second] = await Promise.all(
-      ["LPY-FL01", "LPY-FL02"].map((shortcode, index) =>
-        insertAndReturn(ctx.db, ledgerParty, {
-          name: `Synthetic funder ${index + 1}`,
-          shortcode,
-          kind: "member",
-        }),
-      ),
+    const [first, second] = await insertEntityFixtures(
+      ctx.db,
+      ledgerParty,
+      "ledgerParty",
+      ["LPY-FL01", "LPY-FL02"].map((shortcode, index) => ({
+        name: `Synthetic funder ${index + 1}`,
+        shortcode,
+        kind: "member",
+      })),
     );
     if (!first || !second) throw new Error("Expected two funders");
     const renovation = await insertWithShortcode(ctx.db, "project", {
@@ -161,14 +163,15 @@ describe("expenseFlowSankey", () => {
   });
 
   it("keeps each Expense's ledger funder cents when one share rounds across paths", async () => {
-    const funders = await Promise.all(
-      ["LPY-FL11", "LPY-FL12"].map((shortcode, index) =>
-        insertAndReturn(ctx.db, ledgerParty, {
-          name: `Synthetic split funder ${index + 1}`,
-          shortcode,
-          kind: "member",
-        }),
-      ),
+    const funders = await insertEntityFixtures(
+      ctx.db,
+      ledgerParty,
+      "ledgerParty",
+      ["LPY-FL11", "LPY-FL12"].map((shortcode, index) => ({
+        name: `Synthetic split funder ${index + 1}`,
+        shortcode,
+        kind: "member",
+      })),
     );
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic flow vendor",

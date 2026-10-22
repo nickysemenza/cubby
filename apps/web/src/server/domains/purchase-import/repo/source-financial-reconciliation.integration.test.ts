@@ -22,6 +22,7 @@ import {
 } from "~/server/db/schema";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -301,7 +302,11 @@ describe("accepted source financial reconciliation", () => {
           reviewedFingerprint: fingerprint,
         });
         await patchRunFindingData(ctx.db, finding.id, {
-          proposedFix: { ...fix, reviewedFingerprint: fingerprint, review },
+          proposedFix: jsonSnapshot.parse({
+            ...fix,
+            reviewedFingerprint: fingerprint,
+            review,
+          }),
         });
       }
       const before = {

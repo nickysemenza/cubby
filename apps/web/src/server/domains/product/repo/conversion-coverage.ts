@@ -7,10 +7,7 @@ import { z } from "zod";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
-import {
-  repositoryQueries as getDb,
-  repositoryQueries as unwrapDb,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   product,
   productConversionCoverage,
@@ -161,17 +158,6 @@ export const writeProductConversionCoverageProjection = async (
         computedAt: now,
       },
     });
-};
-
-export const markProductConversionCoverageStale = async (
-  db: Database | DrizzleTransaction,
-  productIds: readonly ProductId[],
-): Promise<void> => {
-  if (productIds.length === 0) return;
-  await unwrapDb(db)
-    .update(productConversionCoverage)
-    .set({ status: "stale" })
-    .where(inArray(productConversionCoverage.productId, [...productIds]));
 };
 
 /** Kit and ingredient effects converge through the broad conversions pass. */

@@ -1,13 +1,20 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { claimAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import {
   getDb,
   runBeforeCommitDatabase,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
+import { aiEvaluation, job } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import { withJobExecution } from "../context";
 import { drainDueJobs } from "../service/jobs";
@@ -33,6 +40,128 @@ describe("durable jobs", () => {
       input: {},
       invalidate: true,
     });
+
+  const evaluationClaim = async (result: { synthetic: string } | null) => {
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic claim target" }),
+      ctx.actor,
+    );
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const evaluation = await enqueueAiEvaluation(ctx.db, {
+      runId,
+      executionKind: "suggestion_sweep",
+      shareKey: null,
+      feature: "field-suggestion",
+      target: {
+        kind: "field",
+        entity: "product",
+        recordId: item.entityId,
+        field: "categoryId",
+        assessmentIds: [],
+      },
+      provenance: {
+        dependencies: [],
+        inputFingerprint: "synthetic-input",
+        optionFingerprint: "synthetic-options",
+        model: null,
+      },
+      snapshot: {},
+      state: result ? "result_ready" : "queued",
+      result,
+    });
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, `ai-evaluation:${evaluation.id}`));
+    if (!saved) throw new Error("Expected evaluation Job");
+    const claimed = await claimJob(ctx.db, saved.id);
+    if (!claimed) throw new Error("Expected evaluation Job claim");
+    return { evaluation, claimed };
+  };
+
+  it.each(["cancelled", "obsolete"] as const)(
+    "does not revive an AI evaluation made %s while its claim waits",
+    async (state) => {
+      const result =
+        state === "cancelled" ? null : { synthetic: "paid model result" };
+      const { evaluation, claimed } = await evaluationClaim(result);
+      let pending: ReturnType<typeof claimAiEvaluation> | undefined;
+      try {
+        await withTransactionDatabase(ctx.db, async (holder) => {
+          await getDb(holder)
+            .select()
+            .from(aiEvaluation)
+            .where(eq(aiEvaluation.id, evaluation.id))
+            .for("update");
+          const pid = await getDb(holder).execute<{ pid: number }>(
+            sql`SELECT pg_backend_pid() AS pid`,
+          );
+          const holderPid = pid.rows[0]?.pid;
+          if (!holderPid) throw new Error("Expected evaluation lock holder");
+          pending = withJobExecution(ctx.db, claimed, () =>
+            claimAiEvaluation(ctx.db, evaluation.id),
+          );
+          pending.catch(() => undefined);
+          await expect
+            .poll(async () => {
+              const waiting = await getDb(ctx.db).execute<{
+                waiting: boolean;
+              }>(sql`SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity
+                WHERE ${holderPid}::int = ANY(pg_blocking_pids(pid))
+                  AND query ILIKE '%AiEvaluation%'
+              ) AS waiting`);
+              return waiting.rows[0]?.waiting;
+            })
+            .toBe(true);
+          // The waiting claim must retain Job ownership until its transaction ends.
+          await expect(
+            withTransactionDatabase(ctx.db, async (probe) => {
+              await getDb(probe)
+                .select()
+                .from(job)
+                .where(eq(job.id, claimed.id))
+                .for("update", { noWait: true });
+            }),
+          ).rejects.toMatchObject({ cause: { code: "55P03" } });
+          await getDb(holder)
+            .update(aiEvaluation)
+            .set({ state })
+            .where(eq(aiEvaluation.id, evaluation.id));
+        });
+        expect(await pending).toBeNull();
+        expect(
+          (
+            await getDb(ctx.db)
+              .select()
+              .from(aiEvaluation)
+              .where(eq(aiEvaluation.id, evaluation.id))
+          )[0],
+        ).toMatchObject({ state, result });
+      } finally {
+        await Promise.allSettled(pending ? [pending] : []);
+      }
+    },
+  );
+
+  it("reuses a paid AI result under its current Job claim", async () => {
+    const result = { synthetic: "paid model result" };
+    const { evaluation, claimed } = await evaluationClaim(result);
+    expect(
+      await withJobExecution(ctx.db, claimed, () =>
+        claimAiEvaluation(ctx.db, evaluation.id),
+      ),
+    ).toMatchObject({
+      state: "result_ready",
+      result,
+      attemptToken: claimed.leaseToken,
+    });
+  });
 
   // Publication installs an outer commit fence. Completing its own Job must
   // happen after that fence, while output and acknowledgement remain atomic.

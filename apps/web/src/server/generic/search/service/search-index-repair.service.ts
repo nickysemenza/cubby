@@ -13,16 +13,15 @@ import {
   readSearchRepairJobs,
 } from "../repo/search-index-repair";
 
-export const createSearchIndexRepairCounters =
-  (): SearchIndexRepairCounters => ({
-    scanned: 0,
-    orphaned: 0,
-    missing: 0,
-    stale: 0,
-    retired: 0,
-    rebuilt: 0,
-    published: 0,
-  });
+const createSearchIndexRepairCounters = (): SearchIndexRepairCounters => ({
+  scanned: 0,
+  orphaned: 0,
+  missing: 0,
+  stale: 0,
+  retired: 0,
+  rebuilt: 0,
+  published: 0,
+});
 
 /** Explicit repair schedules the ordinary family Jobs; the stream only reads them. */
 export async function* repairSearchIndex(

@@ -95,6 +95,7 @@ export interface PhotoImportRouteAdapter {
 }
 
 export interface PhotoImportCommitPorts {
+  publishBackgroundTasks: typeof publishBackgroundTasks;
   getImages: typeof getImportImageRows;
   lockImages: typeof lockImportImageRows;
   getObject: typeof getS3Object;
@@ -111,6 +112,7 @@ export interface PhotoImportCommitPorts {
 }
 
 export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
+  publishBackgroundTasks,
   getImages: getImportImageRows,
   lockImages: lockImportImageRows,
   getObject: getS3Object,
@@ -523,7 +525,7 @@ export async function commitPhotoImport(
         ({ analysis }) => analysis !== null,
       );
       if (freshlyUploaded.length > 0) {
-        await publishBackgroundTasks(
+        await ports.publishBackgroundTasks(
           transactionDb,
           buildImageMetadataExtractionTasks(
             freshlyUploaded

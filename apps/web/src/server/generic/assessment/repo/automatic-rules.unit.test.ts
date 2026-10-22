@@ -62,13 +62,13 @@ describe("statement_transaction.attach", () => {
   const rule = AUTOMATIC_RULES["statement_transaction.attach"];
 
   it("matches a free candidate and skips one another charge settles", () => {
-    expect(rule.match(judgment(false))).toEqual({ model: "synthetic" });
-    expect(rule.match(judgment(true))).toBeUndefined();
+    expect(rule.match(judgment(false))).toBe(true);
+    expect(rule.match(judgment(true))).toBe(false);
   });
   it("does not let a transaction-only legacy purchase attach authorize spending", () => {
     const legacy = judgment(false);
     legacy.create!.kind = "purchase";
-    expect(rule.match(legacy)).toBeUndefined();
+    expect(rule.match(legacy)).toBe(false);
   });
 });
 

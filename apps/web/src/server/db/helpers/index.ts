@@ -28,8 +28,6 @@ export {
   applyImageOrder,
   associatePendingImages,
   batchUpdateWithCaseWhen,
-  FindOrCreateConflictError,
-  findOrCreate,
   imageJoinBindings,
   insertAndReturn,
   nextImageSortOrder,

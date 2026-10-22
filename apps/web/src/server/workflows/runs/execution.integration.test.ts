@@ -1,68 +1,51 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  cancelJob,
+  claimJob,
+  enqueueJob,
+  retryJob,
+} from "~/server/generic/jobs/repo/jobs";
 
 import { assertWorkflowEffect, withWorkflowExecution } from "./execution";
 
 describe("Workflow effect admission", () => {
   const ctx = withTestDb();
 
-  // A memoized earlier guard cannot authorize a later effect after cancellation,
-  // or attempt replacement, including a retry of the same callback.
-  it("rechecks current authority inside every publication transaction", async () => {
+  // Workflow context must retain the Job fence across cancellation and replacement.
+  it("rechecks current Job authority inside every publication transaction", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",
       trigger: "manual",
       status: "running",
     });
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        progress: {
-          attempt: 1,
-          total: 0,
-          done: 0,
-          applied: 0,
-          queued: 0,
-          failed: 0,
-          diagnostics: [],
-        },
-      })
-      .where(eq(run.id, runId));
+    const saved = await enqueueJob(ctx.db, {
+      key: `run:${runId}`,
+      kind: "run.execute",
+      input: { runId, purpose: "maintenance" },
+      runId,
+    });
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Synthetic Workflow Job was not claimed");
     const publish = () =>
       withTransactionDatabase(ctx.db, async (tx) => {
         await assertWorkflowEffect(tx);
         await getDb(tx).execute(sql`SELECT 1`);
       });
-    await withWorkflowExecution({ runId, attempt: 1 }, async () => {
-      await expect(publish()).resolves.toBeUndefined();
-      await getDb(ctx.db)
-        .update(run)
-        .set({ status: "failed" })
-        .where(eq(run.id, runId));
-      await expect(publish()).rejects.toMatchObject({ reason: "cancelled" });
-      await getDb(ctx.db)
-        .update(run)
-        .set({
-          status: "running",
-          progress: {
-            attempt: 2,
-            total: 0,
-            done: 0,
-            applied: 0,
-            queued: 0,
-            failed: 0,
-            diagnostics: [],
-          },
-        })
-        .where(eq(run.id, runId));
-      await expect(publish()).rejects.toMatchObject({ reason: "superseded" });
-    });
-    // Interactive writers have their own authority and do not inherit a Run.
+    await withJobExecution(ctx.db, claim, () =>
+      withWorkflowExecution({ runId, attempt: claim.generation }, async () => {
+        await expect(publish()).resolves.toBeUndefined();
+        await cancelJob(ctx.db, saved.id);
+        await expect(publish()).rejects.toThrow(/obsolete/);
+        await retryJob(ctx.db, saved.id);
+        await expect(publish()).rejects.toThrow(/obsolete/);
+      }),
+    );
     await expect(publish()).resolves.toBeUndefined();
   });
 });

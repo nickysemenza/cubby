@@ -800,7 +800,7 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   detail: 0,
   heroAction: 0,
   detailSlot: 2,
-  listSlot: 1,
+  listSlot: 0,
   sectionAction: 0,
   structuredField: 0,
 } as const satisfies Record<NativeCoverageKind, number>;

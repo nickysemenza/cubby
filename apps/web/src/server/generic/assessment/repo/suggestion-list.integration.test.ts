@@ -169,7 +169,11 @@ describe("cross-family Suggestion list", () => {
       (await listSuggestionPage(ctx.db, { family: "statement_transaction" }))
         .items,
     ).toHaveLength(1);
-    await getDb(ctx.db).update(statementRow).set({ disposition: "ignored" });
+    await getDb(ctx.db).update(statementRow).set({
+      disposition: "ignored",
+      dispositionReason: "not_modeled",
+      dispositionNote: "Synthetic unmodeled charge",
+    });
     expect(
       (await listSuggestionPage(ctx.db, { family: "statement_transaction" }))
         .items,

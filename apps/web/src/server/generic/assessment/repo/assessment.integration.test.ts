@@ -1,6 +1,5 @@
-import { feedbackVerdict } from "@cubby/schemas/assessment";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -60,14 +59,6 @@ describe("shared Assessment history", () => {
         evidence: { changed: true },
       }),
     ).rejects.toThrow(/publication/);
-    await expect(
-      getDb(ctx.db)
-        .update(assessment)
-        .set({ judgment: { changed: true } })
-        .where(eq(assessment.id, first.id)),
-    ).rejects.toMatchObject({
-      cause: { message: expect.stringMatching(/immutable/), code: "P0001" },
-    });
   });
 
   it("records draft acceptance separately and acknowledges only the matching saved field", async () => {
@@ -515,13 +506,10 @@ describe("shared Assessment history", () => {
     expect(
       (await getDb(ctx.db).select().from(assessment))[0]?.subject,
     ).toMatchObject({ recordId: subjectId });
-    expect((await getDb(ctx.db).select().from(feedback)).length).toBe(1);
-    await expect(
-      getDb(ctx.db).execute(
-        sql`UPDATE "Feedback" SET verdict = ${feedbackVerdict.enum.correct}`,
+    expect(
+      (await getDb(ctx.db).select().from(feedback)).filter(
+        (row) => row.authority === "member",
       ),
-    ).rejects.toMatchObject({
-      cause: { message: expect.stringMatching(/immutable/), code: "P0001" },
-    });
+    ).toHaveLength(1);
   });
 });

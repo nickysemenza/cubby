@@ -95,7 +95,8 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
   });
 
   let now = Date.now();
-  const date = vi.spyOn(Date, "now").mockImplementation(() => now);
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(now);
   const advice = vi
     .spyOn(spendingAdvice, "adviseSpending")
     .mockImplementation(async (_db, { judgment }) =>
@@ -154,6 +155,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
   const wait = async (ms: number) => {
     waits++;
     now += ms;
+    vi.setSystemTime(now);
   };
   try {
     const runId = await startSweep(ctx.db, ctx.actor, {
@@ -197,6 +199,6 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
   } finally {
     egress.mockRestore();
     advice.mockRestore();
-    date.mockRestore();
+    vi.useRealTimers();
   }
 }, 30_000);

@@ -71,7 +71,7 @@ describe("image job retry budget", () => {
   const makeDue = (jobId: string) =>
     getDb(ctx.db)
       .update(durableJob)
-      .set({ availableAt: sql`now()` })
+      .set({ availableAt: new Date(0) })
       .where(eq(durableJob.key, `image-processing:${jobId}`));
   const devicePull = () =>
     claimImageProcessingJob(ctx.db, {

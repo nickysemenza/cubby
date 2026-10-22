@@ -27,6 +27,7 @@ import {
   startGuardedPhotoCoordinator,
   startPhotoInventoryRun,
 } from "~/server/domains/purchase-import/repo/run-service";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -125,7 +126,11 @@ describe("photo run lifecycle", () => {
         kind: "member" as const,
         userId: ctx.actor.userId,
       }));
-    const id = parseEntityId("run", crypto.randomUUID());
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "photo_inventory",
+      trigger: "manual",
+      execution: false,
+    });
     const runInput: PhotoInventoryRunInput = {
       kind: "photo_inventory",
       processor: input.processor,
@@ -139,10 +144,8 @@ describe("photo run lifecycle", () => {
       ],
     };
     const [run] = await getDb(ctx.db)
-      .insert(runTable)
-      .values({
-        id,
-        shortcode: generateShortcode("run"),
+      .update(runTable)
+      .set({
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Lifecycle Tester",
@@ -158,6 +161,7 @@ describe("photo run lifecycle", () => {
         status: "running",
         input: runInput,
       })
+      .where(eq(runTable.id, id))
       .returning();
     if (!run) throw new Error("fixture: run not created");
     const images = await Promise.all(

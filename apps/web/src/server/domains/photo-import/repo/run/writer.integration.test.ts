@@ -16,6 +16,7 @@ import {
   dataExceptionRecord,
 } from "~/server/db/schema";
 import { getProductByShortcode } from "~/server/domains/product/repo/crud";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -49,12 +50,14 @@ describe("commitPhotoGroup", () => {
     party: Awaited<ReturnType<typeof seedMember>>,
     overrides: Partial<typeof runTable.$inferInsert> = {},
   ) => {
-    const id = parseEntityId("run", crypto.randomUUID());
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "photo_inventory",
+      trigger: "manual",
+      execution: false,
+    });
     const [run] = await getDb(ctx.db)
-      .insert(runTable)
-      .values({
-        id,
-        shortcode: generateShortcode("run"),
+      .update(runTable)
+      .set({
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Wardrobe Tester",
@@ -68,6 +71,7 @@ describe("commitPhotoGroup", () => {
         status: "running",
         ...overrides,
       })
+      .where(eq(runTable.id, id))
       .returning();
     if (!run) throw new Error("fixture: run not created");
     return run;

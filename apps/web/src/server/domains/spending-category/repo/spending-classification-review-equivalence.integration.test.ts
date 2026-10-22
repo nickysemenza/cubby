@@ -11,11 +11,21 @@ import {
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import {
+  expense as expenseTable,
+  product as productTable,
+  productCategory,
+  project as projectTable,
+  purchase,
+  spendingCategory,
+  vendor,
+} from "~/server/db/schema";
 import {
   expenseSpendingCategoryResolutionSql,
   type ExpenseSpendingCategoryResolutionDraft,
@@ -24,6 +34,8 @@ import {
   loadExpenseJointAllocations,
   type ExpenseJointAllocationRow,
 } from "~/server/domains/expense/repo/expense-project-allocation";
+import type { EntityPayloadValues } from "~/server/entity-kernel/repo/entity-identity-writer";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { previewSpendingClassificationReview } from "./spending-classification-review";
 
@@ -76,20 +88,18 @@ function random(seed: number) {
   return { next, pick };
 }
 
-// Every row of a table lists the same columns; an absent one would insert
-// NULL over its default.
-async function insertRows(db: Database, table: string, rows: object[]) {
-  const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+async function insertRows<T extends PgTable>(
+  db: Database,
+  table: T,
+  kind: SeededEntity,
+  rows: readonly EntityPayloadValues<T>[],
+) {
   for (let start = 0; start < rows.length; start += 1000) {
-    const chunk = JSON.stringify(rows.slice(start, start + 1000));
-    await unwrapDb(db).execute(
-      sql`INSERT INTO ${sql.identifier(table)} (${sql.join(
-        keys.map((key) => sql.identifier(key)),
-        sql`, `,
-      )}) SELECT ${sql.join(
-        keys.map((key) => sql`r.${sql.identifier(key)}`),
-        sql`, `,
-      )} FROM json_populate_recordset(NULL::${sql.identifier(table)}, ${chunk}::json) r`,
+    await insertEntityFixtures(
+      db,
+      table,
+      kind,
+      rows.slice(start, start + 1000),
     );
   }
 }
@@ -107,7 +117,7 @@ async function seedTaxonomy(db: Database, { next, pick }: Random) {
     ...identity("spendingCategory", index),
     name: `Synthetic spend ${index}`,
   }));
-  await insertRows(db, "SpendingCategory", spend);
+  await insertRows(db, spendingCategory, "spendingCategory", spend);
   const food = await unwrapDb(db).query.productCategory.findFirst({
     where: (category, { eq }) => eq(category.feature, "food"),
   });
@@ -155,7 +165,7 @@ async function seedTaxonomy(db: Database, { next, pick }: Random) {
       }
     }
   }
-  await insertRows(db, "ProductCategory", categories);
+  await insertRows(db, productCategory, "productCategory", categories);
   return { spend, categories, leaves, nonFoodLeaves, groups };
 }
 
@@ -163,7 +173,7 @@ type Line = {
   purchaseId: PurchaseId | null;
   productId: ProductId | null;
   cost: number | null;
-  lineKind: string;
+  lineKind: (typeof expenseTable.$inferInsert)["lineKind"];
   spendingCategoryId: SpendingCategoryId | null;
   projectId: ProjectId | null;
 };
@@ -195,7 +205,7 @@ async function seedEdgeBaskets(
     ...identity("project", index),
     name: `Synthetic project ${index}`,
   }));
-  await insertRows(db, "Project", projects);
+  await insertRows(db, projectTable, "project", projects);
   const project = (index: number) => at(projects, index % projects.length).id;
   const merged = at(spend, 3).id;
   const basketKinds = [
@@ -220,13 +230,14 @@ async function seedEdgeBaskets(
   }));
   await insertRows(
     db,
-    "Purchase",
+    purchase,
+    "purchase",
     baskets.map(({ kind: _kind, ...row }) => row),
   );
   baskets.forEach(({ id: purchaseId, kind }, index) => {
     const principal = (cost: number, line: Partial<Line> = {}) =>
       expense({ purchaseId, productId: pick(products).id, cost, ...line });
-    const adjustment = (lineKind: string, cost: number) =>
+    const adjustment = (lineKind: Line["lineKind"], cost: number) =>
       expense({
         purchaseId,
         lineKind,
@@ -270,7 +281,7 @@ async function seedReviewGraph(db: Database) {
     manufacturer: "Synthetic",
     categoryId: index < 4 ? at(leaves, index) : at(nonFoodLeaves, index - 4),
   }));
-  await insertRows(db, "Product", products);
+  await insertRows(db, productTable, "product", products);
   const profiles = ["unspecified", "mixed_retail", "food_retail"] as const;
   const vendors = profiles.map((spendingProfile, index) => ({
     ...identity("vendor", index),
@@ -278,7 +289,7 @@ async function seedReviewGraph(db: Database) {
     spendingProfile,
     defaultSpendingCategoryId: index === 1 ? at(spend, 8).id : null,
   }));
-  await insertRows(db, "Vendor", vendors);
+  await insertRows(db, vendor, "vendor", vendors);
   const purchases = Array.from({ length: 4 }, (_, index) => ({
     ...identity("purchase", index),
     vendorId: at(vendors, index % vendors.length).id,
@@ -286,7 +297,7 @@ async function seedReviewGraph(db: Database) {
     spendingCategoryId: index === 0 ? at(spend, 2).id : null,
     spendingCategoryOrigin: index === 0 ? "manual" : "legacy",
   }));
-  await insertRows(db, "Purchase", purchases);
+  await insertRows(db, purchase, "purchase", purchases);
   const mergedCategory = at(spend, 3).id;
   const inheritedVendor = {
     ...identity("vendor", vendors.length),
@@ -294,7 +305,7 @@ async function seedReviewGraph(db: Database) {
     spendingProfile: "food_retail",
     defaultSpendingCategoryId: mergedCategory,
   };
-  await insertRows(db, "Vendor", [inheritedVendor]);
+  await insertRows(db, vendor, "vendor", [inheritedVendor]);
   const mappedCategory = {
     ...identity("productCategory", taxonomy.categories.length),
     name: "Synthetic merge mapped category",
@@ -302,14 +313,14 @@ async function seedReviewGraph(db: Database) {
     spendingCategoryMode: "mapped",
     spendingCategoryId: mergedCategory,
   };
-  await insertRows(db, "ProductCategory", [mappedCategory]);
+  await insertRows(db, productCategory, "productCategory", [mappedCategory]);
   const mappedProduct = {
     ...identity("product", products.length),
     name: "Synthetic merge mapped product",
     manufacturer: "Synthetic",
     categoryId: mappedCategory.id,
   };
-  await insertRows(db, "Product", [mappedProduct]);
+  await insertRows(db, productTable, "product", [mappedProduct]);
   // Separate Purchases prevent another matching Expense override from
   // masking a missing Vendor, Purchase or mapped-category scope predicate.
   const mergePaths = Array.from({ length: 3 }, (_, index) => ({
@@ -319,10 +330,13 @@ async function seedReviewGraph(db: Database) {
     spendingCategoryId: index === 1 ? mergedCategory : null,
     spendingCategoryOrigin: index === 1 ? "manual" : "legacy",
   }));
-  await insertRows(db, "Purchase", mergePaths);
+  await insertRows(db, purchase, "purchase", mergePaths);
   const expenses: (ReturnType<typeof identity<"expense">> &
-    Line & { name: string; date: string; costType: string; trade: string })[] =
-    [];
+    Line &
+    Pick<
+      typeof expenseTable.$inferInsert,
+      "name" | "date" | "costType" | "trade"
+    >)[] = [];
   const expense = (line: Partial<Line>) => {
     const row = {
       ...identity("expense", expenses.length),
@@ -337,7 +351,7 @@ async function seedReviewGraph(db: Database) {
       spendingCategoryId: null,
       projectId: null,
       ...line,
-    };
+    } satisfies (typeof expenses)[number];
     expenses.push(row);
     return row;
   };
@@ -365,7 +379,7 @@ async function seedReviewGraph(db: Database) {
     firstPurchase: purchases.length + mergePaths.length,
     expense,
   });
-  await insertRows(db, "Expense", expenses);
+  await insertRows(db, expenseTable, "expense", expenses);
   return { ...taxonomy, products, vendors, expenses, mergeExpenses };
 }
 

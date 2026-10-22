@@ -16,7 +16,7 @@ import {
 } from "~/server/workflows/runs/contract";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
-export const runJobInput = z.object({
+const runJobInput = z.object({
   runId: runEntityId,
   purpose: z.enum(WORKFLOW_RUN_PURPOSES),
 });

@@ -15,7 +15,7 @@ import { recordStatementRows } from "~/server/domains/statement-import/repo/stat
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
-  settleDerivedRefreshForDiscovery,
+  drainDerivedRefreshFrontier,
   withJobFixtureExecution,
 } from "~/server/testing/background-queue";
 
@@ -229,7 +229,7 @@ describe("Sweeps", () => {
     });
     await createRepoEntity(ctx, "project", { name: "Synthetic shed repair" });
     await createRepoEntity(ctx, "project", { name: "Synthetic fence repair" });
-    await settleDerivedRefreshForDiscovery(ctx.db);
+    await drainDerivedRefreshFrontier(ctx.db);
     const families = [
       {
         family: "recommendation" as const,
@@ -309,7 +309,7 @@ describe("Sweeps", () => {
       enabled: true,
     });
     await createRepoEntity(ctx, "project", { name: "Synthetic gutter repair" });
-    await settleDerivedRefreshForDiscovery(ctx.db);
+    await drainDerivedRefreshFrontier(ctx.db);
     const runId = await startSweep(ctx.db, ctx.actor, {
       trigger: "scheduled",
       families: [

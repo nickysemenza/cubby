@@ -15,7 +15,6 @@ export type WorkflowRunPurpose = (typeof WORKFLOW_RUN_PURPOSES)[number];
 
 export {
   isStepRunPurpose,
-  STEP_RUN_PURPOSES,
   type StepRunPurpose,
 } from "@cubby/schemas/run-fields";
 

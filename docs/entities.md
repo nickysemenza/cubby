@@ -1496,19 +1496,14 @@ the write. Normal write bodies expose one final-output reader through
 projected create/update readers. A declared writer without that capability is
 refused when bindings load. Mandatory mutation snapshots and domain work run
 before the final reader; requesting a reference skips only response hydration.
-Explicit unchanged
-writes capture a durable root even when no audit diff exists, so background
-processing can retire pending advice for that write intent. The fallback checks
-this update's transaction enrollments, including released savepoints, rather
-than depending on optional audit-receipt collection; audited writes do not
-receive a second fallback capture.
-Publication fences lock the expected input revision without rewriting its row;
-unchanged background checks must not invalidate a serializable save's snapshot.
-Field advice fences use the target's point revision and shared input epochs.
-An inherited target/basis or same-kind basis reference retains its own-kind
-epoch for ancestor values and referenced labels;
-ordinary scalar advice does not become stale when an unrelated row of the same
-kind is accepted. Connection discovery keeps its broader corpus epochs.
+Explicit unchanged writes still capture broad refresh intent, while unchanged
+inputs preserve existing review eligibility. The fallback checks this update's
+transaction enrollments, including released savepoints, rather than optional
+audit-receipt collection; audited writes do not receive a second fallback capture.
+Publication fences lock and reread the authoritative target, declared basis,
+direct references and backing rows. They do not rewrite an input revision or
+read corpus epochs. Each connection endpoint owns discovery for its own snapshot;
+candidate evidence separately fences both endpoints before publication or apply.
 
 Partial updates preserve omitted fields. Scalar patching rejects undeclared
 keys, skips unchanged rows, and audits changes in the same transaction;
@@ -2112,7 +2107,8 @@ edge and gets the toggle like any other.
 
 Searchable entities use persisted `SearchDocument` rows for lexical search and
 embedding input. Authoritative mutations record broad Job intent in the same
-transaction as the save. Queue delivery, app-open and cron only wake the shared
+transaction as the save. A best-effort queue wake is sent after commit; a lost
+wake leaves the intent available to app-open and cron. Those signals wake the shared
 Job drain. Reads serve persisted projections and never initiate repairs.
 
 The five `refresh.family` Jobs cover search, recipes, conversions, embeddings
@@ -3079,7 +3075,7 @@ substituted for a leaf decision. Ancestors of the current category stay suppress
 as correction offers. Weaker live proposals stay
 behind the cell's mark. Percentages describe model confidence, not a
 guarantee of correctness. Accept shows local saving feedback; completed row
-enrichment stays visible throughout same-query refreshes. A changed target, declared basis or backing field supersedes its older pending Suggestions, and a later sweep supersedes prior pending rows
+enrichment stays visible throughout same-query refreshes. A changed target, declared basis or backing field makes its older pending Suggestions ineligible on reads; historical state rows may remain pending, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
 review.
 

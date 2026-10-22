@@ -32,6 +32,7 @@ import { answering } from "~/server/domains/statement-import/repo/statement-deci
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { reviewAssessment } from "./assessment-review";
@@ -145,7 +146,16 @@ describe("transfer pairs in the global queue", () => {
       .parse(owner?.progress);
     let outcome: Awaited<ReturnType<typeof advanceStepRun>> | undefined;
     for (let page = 0; page < 5; page++) {
-      outcome = await advanceStepRun(ctx.db, { runId, attempt });
+      outcome = await withJobFixtureExecution(
+        ctx.db,
+        {
+          key: `run:${runId}`,
+          kind: "run.execute",
+          input: { runId, purpose: "sweep" },
+          runId,
+        },
+        () => advanceStepRun(ctx.db, { runId, attempt }),
+      );
       if (outcome.kind !== "continue") break;
     }
     expect(outcome?.kind).toBe("finished");

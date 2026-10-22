@@ -21,6 +21,7 @@ import {
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { productPairFingerprint } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import {
   publishProductPair,
   prepareProductPairPublication,
@@ -262,6 +263,10 @@ describe("product match queue", () => {
     expect(await queueFor(photo.id)).toEqual([]);
     await publishProductPair(ctx.db, {
       productIds: [photo.entityId, bought.entityId],
+      fingerprint: await productPairFingerprint(ctx.db, [
+        photo.entityId,
+        bought.entityId,
+      ]),
       source: "detector",
       evidence: "Synthetic retained identity",
       sourceUrls: [],
@@ -622,7 +627,7 @@ describe("product match review surfaces", () => {
     (await Promise.all(names.map(make))).sort((a, b) =>
       a.entityId < b.entityId ? -1 : 1,
     );
-  const publishDetected = (
+  const publishDetected = async (
     pair: readonly { entityId: Awaited<ReturnType<typeof make>>["entityId"] }[],
     input: { evidence: string; actionable: boolean; conflict: boolean },
   ) =>
@@ -630,7 +635,10 @@ describe("product match review surfaces", () => {
       productIds: [pair[0]!.entityId, pair[1]!.entityId],
       source: "detector",
       sourceUrls: [],
-      fingerprint: `synthetic-${input.evidence}`,
+      fingerprint: await productPairFingerprint(ctx.db, [
+        pair[0]!.entityId,
+        pair[1]!.entityId,
+      ]),
       ...input,
     });
 

@@ -424,7 +424,7 @@ describe("Suggestion review", () => {
     await acceptSuggestion(ctx.db, context, { id: row.id });
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await suggestionStatus(ctx.db, row.id)).toBe("applied");
-    expect(await suggestionStatus(ctx.db, sibling.id)).toBe("superseded");
+    expect(await suggestionStatus(ctx.db, sibling.id)).toBe("pending");
     expect(await productCategoryId(ctx.db, product.id)).toBe(
       taxonomyId(SUGGESTED_CATEGORY),
     );

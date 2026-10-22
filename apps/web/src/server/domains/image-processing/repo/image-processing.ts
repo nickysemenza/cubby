@@ -790,30 +790,6 @@ export async function backOffImageProcessingLease(
   });
 }
 
-/** Each job's state and last raw error, for a caller that just ran them. */
-export async function readImageProcessingJobStates(
-  db: Database,
-  jobIds: readonly string[],
-) {
-  if (!jobIds.length) return [];
-  return getDb(db)
-    .select({
-      id: imageProcessingJob.id,
-      state: imageProcessingJob.state,
-      lastError: imageProcessingJob.lastError,
-      availableAt: durableJob.availableAt,
-    })
-    .from(imageProcessingJob)
-    .leftJoin(
-      durableJob,
-      eq(
-        durableJob.key,
-        sql`'image-processing:' || ${imageProcessingJob.id}::text`,
-      ),
-    )
-    .where(inArray(imageProcessingJob.id, [...jobIds]));
-}
-
 /** Bounded maintenance retry; old result/runtime remains immutable history. */
 export async function retryFailedImageProcessingJobs(
   db: Database,

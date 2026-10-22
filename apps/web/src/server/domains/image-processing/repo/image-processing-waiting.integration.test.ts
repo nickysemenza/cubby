@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -47,7 +47,7 @@ describe("waiting for a device records no attempt", () => {
   const makeDue = (jobId: string) =>
     getDb(ctx.db)
       .update(durableJob)
-      .set({ availableAt: sql`now()` })
+      .set({ availableAt: new Date(0) })
       .where(eq(durableJob.key, `image-processing:${jobId}`));
   const attemptsOf = (jobId: string) =>
     getDb(ctx.db)

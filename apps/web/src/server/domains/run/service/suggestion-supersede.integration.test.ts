@@ -29,6 +29,7 @@ import {
   seedPending,
   startSuggestionSweep,
   suggestionStatus,
+  isSuggestionReviewable,
 } from "./suggestion-sweep.fixtures";
 
 /** Seeds a pending Suggestion, performs one write, returns the Suggestion id. */
@@ -144,7 +145,9 @@ describe("Suggestion supersede", () => {
     async ({ act, expected }) => {
       const id = await act(ctx);
       await reconcileDerivedRefreshInputs(ctx.db);
-      expect(await suggestionStatus(ctx.db, id)).toBe(expected);
+      expect(await isSuggestionReviewable(ctx.db, id)).toBe(
+        expected === "pending",
+      );
     },
   );
 
@@ -201,10 +204,10 @@ describe("Suggestion supersede", () => {
     await reconcileDerivedRefreshInputs(ctx.db);
     expect(
       await Promise.all(
-        assessmentIds.map((id) => suggestionStatus(ctx.db, id)),
+        assessmentIds.map((id) => isSuggestionReviewable(ctx.db, id)),
       ),
-      // A Purchase epoch conservatively retires advice for unchanged siblings too.
-    ).toEqual(["superseded", "superseded", "superseded"]);
+      // Backing Purchase fields remain part of the live review fence.
+    ).toEqual([false, false, false]);
   });
 
   it("supersedes an earlier pending suggestion when a newer sweep evaluates the same field", async () => {

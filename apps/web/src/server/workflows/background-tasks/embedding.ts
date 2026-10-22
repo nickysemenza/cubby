@@ -47,7 +47,7 @@ export const productionEmbeddingRefreshPort: EmbeddingRefreshPort = {
 };
 export type EmbeddingRefreshResult = { outcome: "pending" | "unconfigured" };
 
-export const embeddingJobInput = z.object({
+const embeddingJobInput = z.object({
   entityKind: searchableEntitySchema,
   entityId: z.uuid(),
   hash: z.string(),

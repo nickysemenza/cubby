@@ -5,6 +5,7 @@ import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
+  drainRecipeRefreshJobs,
 } from "~/server/testing/background-queue";
 import {
   createIngredientFixture,
@@ -61,6 +62,7 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
 
     await drainDerivedRefreshFrontier(ctx.db);
     await service.recomputeQueued([recipe.entityId]);
+    await drainRecipeRefreshJobs(ctx.db, service);
     expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([]);
     await recomputeRecipesForPriceAffectedProducts(
       ctx.db,
@@ -70,8 +72,7 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
     );
 
     await drainDerivedRefreshFrontier(ctx.db);
-    expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([
-      recipe.entityId,
-    ]);
+    await drainRecipeRefreshJobs(ctx.db, service);
+    expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([]);
   });
 });

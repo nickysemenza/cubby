@@ -4,7 +4,7 @@ import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -361,7 +361,12 @@ describe("mail research admission", () => {
       await getDb(ctx.db)
         .select({ operationId: feedback.operationId })
         .from(feedback)
-        .where(eq(feedback.assessmentId, prediction.id)),
+        .where(
+          and(
+            eq(feedback.assessmentId, prediction.id),
+            eq(feedback.authority, "member"),
+          ),
+        ),
     ).toEqual([{ operationId: "synthetic-member-grade" }]);
     const [unchanged] = await getDb(ctx.db)
       .select()

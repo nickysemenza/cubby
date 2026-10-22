@@ -1,7 +1,11 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
+import { withInvocationDb } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { job } from "~/server/db/schema";
 import type {
   CalDavResource,
   CalendarProjection,
@@ -11,6 +15,7 @@ import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
 
 import { executeCalDavWrite, loadCalDavProjection } from "./calendar-caldav";
+import { scheduleCalendarFeedDirty } from "./client";
 
 const expectedResource = (
   projection: CalendarProjection,
@@ -175,4 +180,95 @@ describe("CalDAV canonical mutation seam", () => {
       }),
     ).rejects.toMatchObject({ status: 412 });
   });
+});
+
+describe("durable calendar dirty-mark fallback", () => {
+  const ctx = withTestDb();
+  afterEach(() => {
+    setCfEnv(undefined);
+    vi.useRealTimers();
+  });
+  it("logs once and stops after every retry fails", async () =>
+    withInvocationDb(ctx.databaseUrl, async () => {
+      vi.useFakeTimers();
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
+        // SILENT: assertion target only, not the code under test.
+      });
+      const markDirty = vi
+        .fn()
+        .mockRejectedValue(new Error("stub RPC failure"));
+      setCfEnv(
+        fromPartial<Env>({
+          CALENDAR_FEED: { getByName: () => ({ markDirty }) },
+          BACKGROUND_QUEUE: { sendBatch: vi.fn().mockResolvedValue(undefined) },
+        }),
+      );
+
+      const tasks: Promise<unknown>[] = [];
+      await runWithExecutionCtx(
+        { waitUntil: (task) => tasks.push(task) },
+        async () => {
+          scheduleCalendarFeedDirty("test.write");
+        },
+        "https://cubby.example",
+      );
+      await vi.advanceTimersByTimeAsync(250);
+      await vi.advanceTimersByTimeAsync(750);
+      await tasks[0];
+
+      expect(markDirty).toHaveBeenCalledTimes(3);
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError).toHaveBeenCalledWith(
+        "[calendar-feed] failed to mark snapshot dirty",
+        expect.objectContaining({
+          reason: "test.write",
+          attempt: 2,
+          error: expect.objectContaining({ message: "stub RPC failure" }),
+        }),
+      );
+      consoleError.mockRestore();
+    }));
+  it("retains the dirty-mark Job when its queue wake fails", async () =>
+    withInvocationDb(ctx.databaseUrl, async () => {
+      vi.useFakeTimers();
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
+        // SILENT: assertion target only, not the code under test.
+      });
+      const markDirty = vi
+        .fn()
+        .mockRejectedValue(new Error("stub RPC failure"));
+      const sendBatch = vi.fn().mockRejectedValue(new Error("queue down"));
+      setCfEnv(
+        fromPartial<Env>({
+          CALENDAR_FEED: { getByName: () => ({ markDirty }) },
+          BACKGROUND_QUEUE: { sendBatch },
+        }),
+      );
+
+      const tasks: Promise<unknown>[] = [];
+      await runWithExecutionCtx(
+        { waitUntil: (task) => tasks.push(task) },
+        async () => {
+          scheduleCalendarFeedDirty("test.write");
+        },
+        "https://cubby.example",
+      );
+      await vi.advanceTimersByTimeAsync(250);
+      await vi.advanceTimersByTimeAsync(750);
+
+      await expect(tasks[0]).resolves.toBeUndefined();
+      expect(consoleError).toHaveBeenCalledWith(
+        "[jobs] wake failed; cron will drain committed jobs",
+        expect.objectContaining({
+          source: "calendar-feed.mark-dirty-fallback",
+          error: expect.objectContaining({ message: "queue down" }),
+        }),
+      );
+      expect(
+        (await getDb(ctx.db).select().from(job)).some(
+          (row) => row.kind === "calendar-feed.mark-dirty",
+        ),
+      ).toBe(true);
+      consoleError.mockRestore();
+    }));
 });

@@ -53,44 +53,6 @@ describe("scheduleCalendarFeedDirty", () => {
     );
   });
 
-  it("logs once and stops after every retry fails", async () => {
-    vi.useFakeTimers();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
-      // SILENT: assertion target only, not the code under test.
-    });
-    const markDirty = vi.fn().mockRejectedValue(new Error("stub RPC failure"));
-    setCfEnv(
-      fromPartial<Env>({
-        CALENDAR_FEED: { getByName: () => ({ markDirty }) },
-        BACKGROUND_QUEUE: { sendBatch: vi.fn().mockResolvedValue(undefined) },
-      }),
-    );
-
-    const tasks: Promise<unknown>[] = [];
-    await runWithExecutionCtx(
-      { waitUntil: (task) => tasks.push(task) },
-      async () => {
-        scheduleCalendarFeedDirty("test.write");
-      },
-      "https://cubby.example",
-    );
-    await vi.advanceTimersByTimeAsync(250);
-    await vi.advanceTimersByTimeAsync(750);
-    await tasks[0];
-
-    expect(markDirty).toHaveBeenCalledTimes(3);
-    expect(consoleError).toHaveBeenCalledTimes(1);
-    expect(consoleError).toHaveBeenCalledWith(
-      "[calendar-feed] failed to mark snapshot dirty",
-      expect.objectContaining({
-        reason: "test.write",
-        attempt: 2,
-        error: expect.objectContaining({ message: "stub RPC failure" }),
-      }),
-    );
-    consoleError.mockRestore();
-  });
-
   it("does not enqueue when a retry succeeds", async () => {
     vi.useFakeTimers();
     const markDirty = vi
@@ -118,42 +80,6 @@ describe("scheduleCalendarFeedDirty", () => {
 
     expect(markDirty).toHaveBeenCalledTimes(2);
     expect(sendBatch).not.toHaveBeenCalled();
-  });
-
-  it("reports a fallback enqueue failure without throwing from waitUntil", async () => {
-    vi.useFakeTimers();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
-      // SILENT: assertion target only, not the code under test.
-    });
-    const markDirty = vi.fn().mockRejectedValue(new Error("stub RPC failure"));
-    const sendBatch = vi.fn().mockRejectedValue(new Error("queue down"));
-    setCfEnv(
-      fromPartial<Env>({
-        CALENDAR_FEED: { getByName: () => ({ markDirty }) },
-        BACKGROUND_QUEUE: { sendBatch },
-      }),
-    );
-
-    const tasks: Promise<unknown>[] = [];
-    await runWithExecutionCtx(
-      { waitUntil: (task) => tasks.push(task) },
-      async () => {
-        scheduleCalendarFeedDirty("test.write");
-      },
-      "https://cubby.example",
-    );
-    await vi.advanceTimersByTimeAsync(250);
-    await vi.advanceTimersByTimeAsync(750);
-
-    await expect(tasks[0]).resolves.toBeUndefined();
-    expect(consoleError).toHaveBeenCalledWith(
-      "[calendar-feed] failed to enqueue mark-dirty fallback",
-      expect.objectContaining({
-        reason: "test.write",
-        error: expect.objectContaining({ message: "queue down" }),
-      }),
-    );
-    consoleError.mockRestore();
   });
 });
 

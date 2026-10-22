@@ -947,9 +947,7 @@ describe("liveProgressBlocks", () => {
       title: "Attempt 2 · Job 00000000-0000-4000-8000-000000000002",
       lines: [{ text: "Job running" }],
     });
-    expect(recordsOf(running, "Job").rows[0]).not.toHaveProperty(
-      "externalLink",
-    );
+    expect(recordsOf(running, "Job").rows[0]?.externalLink).toBeUndefined();
     expect(
       liveProgressBlocks(RUN_ID, { ...progress, workflow: null }).some(
         (block) => block.kind === "records" && block.title === "Job",

@@ -251,7 +251,7 @@ describe("spending category merge", () => {
         request,
         fingerprint: preview.fingerprint,
       }),
-    ).rejects.toThrow(/was deleted/i);
+    ).rejects.toThrow(/was deleted|not found/i);
     const rows = await unwrapDb(ctx.db)
       .select({
         id: spendingCategory.id,

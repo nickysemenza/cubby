@@ -8,7 +8,7 @@ import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertAndReturn, unwrapDb } from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import {
   expenseAttribution,
   financialAccount,
@@ -16,8 +16,34 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { loadExpenseAllocations } from "./allocation";
+
+async function insertParty(
+  db: Parameters<typeof insertEntityFixtures>[0],
+  values: typeof ledgerParty.$inferInsert,
+) {
+  const [row] = await insertEntityFixtures(db, ledgerParty, "ledgerParty", [
+    values,
+  ]);
+  if (!row) throw new Error("Synthetic party fixture was not inserted");
+  return row;
+}
+
+async function insertAccount(
+  db: Parameters<typeof insertEntityFixtures>[0],
+  values: typeof financialAccount.$inferInsert,
+) {
+  const [row] = await insertEntityFixtures(
+    db,
+    financialAccount,
+    "financialAccount",
+    [values],
+  );
+  if (!row) throw new Error("Synthetic account fixture was not inserted");
+  return row;
+}
 
 describe("loadExpenseAllocations SQL arithmetic", () => {
   const ctx = withTestDb("mcp");
@@ -33,7 +59,7 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
           { name: "First beneficiary", shortcode: "LPY-AL01" },
           { name: "Second beneficiary", shortcode: "LPY-AL02" },
         ].map((row) =>
-          insertAndReturn(ctx.db, ledgerParty, {
+          insertParty(ctx.db, {
             ...row,
             kind: "guest",
           }),
@@ -91,12 +117,12 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
 
   it("uses LedgerParty shortcode, rather than UUID, for a tied leftover cent", async () => {
     const [first, second] = await Promise.all([
-      insertAndReturn(ctx.db, ledgerParty, {
+      insertParty(ctx.db, {
         name: "Later shortcode",
         shortcode: "LPY-ZZZZ",
         kind: "member",
       }),
-      insertAndReturn(ctx.db, ledgerParty, {
+      insertParty(ctx.db, {
         name: "Earlier shortcode",
         shortcode: "LPY-AAAA",
         kind: "member",
@@ -192,7 +218,7 @@ describe("loadExpenseAllocations derived funders", () => {
     name: string,
     ledgerPartyId: LedgerPartyId | null,
   ) =>
-    insertAndReturn(ctx.db, financialAccount, {
+    insertAccount(ctx.db, {
       name,
       shortcode,
       identity: { kind: "cash" },
@@ -203,7 +229,7 @@ describe("loadExpenseAllocations derived funders", () => {
     name: string,
     shortcode: string,
     kind: LedgerPartyKind,
-  ) => insertAndReturn(ctx.db, ledgerParty, { name, shortcode, kind });
+  ) => insertParty(ctx.db, { name, shortcode, kind });
 
   const fundersOf = async (expenseId: ExpenseId) =>
     (await loadExpenseAllocations(ctx.db, { asOf: "2026-08-10" })).filter(
@@ -287,7 +313,7 @@ describe("loadExpenseAllocations derived funders", () => {
       mkParty("Before boundary", "LPY-FPBF", "member"),
       mkParty("After boundary", "LPY-FPAF", "member"),
     ]);
-    const account = await insertAndReturn(ctx.db, financialAccount, {
+    const account = await insertAccount(ctx.db, {
       name: "Dated card",
       shortcode: "FAC-FPDC",
       identity: { kind: "cash" },
@@ -439,12 +465,12 @@ describe("loadExpenseAllocations assumed-household beneficiaries", () => {
     });
 
   it("defaults to the household party, and an explicit row still wins", async () => {
-    const household = await insertAndReturn(ctx.db, ledgerParty, {
+    const household = await insertParty(ctx.db, {
       name: "The household",
       shortcode: "LPY-HHLD",
       kind: "household",
     });
-    const member = await insertAndReturn(ctx.db, ledgerParty, {
+    const member = await insertParty(ctx.db, {
       name: "A member",
       shortcode: "LPY-MEMB",
       kind: "member",

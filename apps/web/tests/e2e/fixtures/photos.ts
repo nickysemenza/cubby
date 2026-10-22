@@ -19,6 +19,8 @@ import {
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { getDb } from "~/server/db/helpers";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -27,7 +29,12 @@ import {
   seedProductCategoryPrerequisite,
   seedLocationPrerequisite,
 } from "./catalog";
-import { getFixtureDb, fixtureUserId, ensureMemberParty } from "./core";
+import {
+  getFixtureDb,
+  fixtureUserId,
+  ensureMemberParty,
+  createEvidenceHarnessContext,
+} from "./core";
 
 export async function seedPhotoReviewProcessingFailure(
   imageCode: ImageShortcode,
@@ -40,9 +47,8 @@ export async function seedPhotoReviewProcessingFailure(
     .from(schema.image)
     .where(eq(schema.image.shortcode, imageCode));
   if (!row?.sha256) throw new Error("Synthetic photo needs a content hash");
-  await getDb(db)
-    .insert(schema.imageProcessingJob)
-    .values({
+  await insertEntityFixtures(db, schema.imageProcessingJob, "imageJob", [
+    {
       shortcode: generateShortcode("imageJob"),
       imageId: parseEntityId("image", row.id),
       kind,
@@ -53,7 +59,8 @@ export async function seedPhotoReviewProcessingFailure(
           ? IMAGE_DESCRIPTION_PROCESSOR_REVISION
           : IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
       lastError: reason,
-    });
+    },
+  ]);
 }
 
 export async function seedPhotoReviewLabelText(
@@ -142,12 +149,12 @@ export async function seedActiveResearchHistory(
   childTrigger: "discovery" | "ephemeral" = "discovery",
 ) {
   const db = getFixtureDb();
-  const actorUserId = await fixtureUserId(page);
+  const { actor } = await createEvidenceHarnessContext(page);
   const party = await ensureMemberParty(page, name);
   const vendor = await insertWithShortcode(db, "vendor", { name });
   const values = {
     ledgerPartyId: party.id,
-    actorUserId,
+    actorUserId: actor.userId,
     actorName: "Synthetic member",
     actorEmail: "synthetic@example.test",
     actorLedgerPartyShortcode: party.shortcode,
@@ -156,28 +163,41 @@ export async function seedActiveResearchHistory(
     vendorId: vendor.id,
     startedAt: new Date(),
   };
+  const rootId = await ensureRun(db, actor, {
+    purpose: "mail_discovery",
+    trigger: "manual",
+    execution: false,
+  });
   const [root] = await getDb(db)
-    .insert(schema.run)
-    .values({
+    .update(schema.run)
+    .set({
       ...values,
-      shortcode: generateShortcode("run"),
       purpose: "mail_discovery",
       trigger: "manual",
       status: "completed",
       endedAt: new Date(),
     })
+    .where(eq(schema.run.id, rootId))
     .returning();
   if (!root) throw new Error("Expected synthetic research root");
+  const childId = await ensureRun(db, actor, {
+    purpose: "mail_import",
+    trigger: childTrigger,
+    parentRunId: rootId,
+    execution: false,
+  });
   const [child] = await getDb(db)
-    .insert(schema.run)
-    .values({
+    .update(schema.run)
+    .set({
       ...values,
-      shortcode: generateShortcode("run"),
       purpose: "mail_import",
       trigger: childTrigger,
       status: "running",
       parentRunId: root.id,
+      // Ephemeral admission completes the Run; this history needs active work.
+      endedAt: null,
     })
+    .where(eq(schema.run.id, childId))
     .returning();
   if (!child) throw new Error("Expected synthetic research child");
   return {
@@ -209,14 +229,18 @@ export async function seedActivityHistory(
   objectStorageUrl: string,
 ) {
   const db = getFixtureDb();
-  const actorUserId = await fixtureUserId(page);
+  await ensureMemberParty(page, name);
+  const { actor } = await createEvidenceHarnessContext(page);
   const source = await uploadSyntheticImage(name, objectStorageUrl);
   const database = getDb(db);
+  const parentId = await ensureRun(db, actor, {
+    purpose: "background",
+    trigger: "manual",
+    execution: false,
+  });
   const [parent] = await database
-    .insert(schema.run)
-    .values({
-      shortcode: generateShortcode("run"),
-      actorUserId,
+    .update(schema.run)
+    .set({
       actorName: "Synthetic member",
       actorEmail: "synthetic@example.test",
       purpose: "background",
@@ -225,36 +249,45 @@ export async function seedActivityHistory(
       startedAt: new Date(),
       endedAt: new Date(),
     })
+    .where(eq(schema.run.id, parentId))
     .returning();
   if (!parent) throw new Error("Activity fixture parent not created");
-  const [job] = await database
-    .insert(schema.imageProcessingJob)
-    .values({
-      shortcode: generateShortcode("imageJob"),
-      imageId: parseEntityId("image", source.id),
-      kind: "describe_image",
-      sourceContentHash: "a".repeat(64),
-      processorRevision: 1,
-      state: "failed",
-      attempts: 1,
-      lastError: "Synthetic provider failure",
-      runId: parent.id,
-    })
-    .returning();
+  const [job] = await insertEntityFixtures(
+    db,
+    schema.imageProcessingJob,
+    "imageJob",
+    [
+      {
+        shortcode: generateShortcode("imageJob"),
+        imageId: parseEntityId("image", source.id),
+        kind: "describe_image",
+        sourceContentHash: "a".repeat(64),
+        processorRevision: 1,
+        state: "failed",
+        attempts: 1,
+        lastError: "Synthetic provider failure",
+        runId: parent.id,
+      },
+    ],
+  );
   if (!job) throw new Error("Activity fixture job not created");
-  const [standalone] = await database
-    .insert(schema.imageProcessingJob)
-    .values({
-      shortcode: generateShortcode("imageJob"),
-      imageId: parseEntityId("image", source.id),
-      kind: "subject_lift",
-      sourceContentHash: "a".repeat(64),
-      processorRevision: 1,
-      state: "failed",
-      attempts: 0,
-      lastError: "Synthetic standalone failure",
-    })
-    .returning();
+  const [standalone] = await insertEntityFixtures(
+    db,
+    schema.imageProcessingJob,
+    "imageJob",
+    [
+      {
+        shortcode: generateShortcode("imageJob"),
+        imageId: parseEntityId("image", source.id),
+        kind: "subject_lift",
+        sourceContentHash: "a".repeat(64),
+        processorRevision: 1,
+        state: "failed",
+        attempts: 0,
+        lastError: "Synthetic standalone failure",
+      },
+    ],
+  );
   if (!standalone)
     throw new Error("Activity fixture standalone job not created");
   await database.insert(schema.imageProcessingAttempt).values({
@@ -319,21 +352,25 @@ export async function seedPagedActivityHistory(name: string, count: number) {
       contentType: "image/png",
       size: 100,
     });
-    const [job] = await database
-      .insert(schema.imageProcessingJob)
-      .values({
-        shortcode: generateShortcode("imageJob"),
-        imageId: parseEntityId("image", image.id),
-        kind: "describe_image",
-        sourceContentHash: "b".repeat(64),
-        processorRevision: 1,
-        state: "failed",
-        attempts: index === 0 ? count : 0,
-        lastError: "Synthetic paged failure",
-        submissionId: submission.id,
-        createdAt: minutesAgo(index + 1),
-      })
-      .returning();
+    const [job] = await insertEntityFixtures(
+      db,
+      schema.imageProcessingJob,
+      "imageJob",
+      [
+        {
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", image.id),
+          kind: "describe_image",
+          sourceContentHash: "b".repeat(64),
+          processorRevision: 1,
+          state: "failed",
+          attempts: index === 0 ? count : 0,
+          lastError: "Synthetic paged failure",
+          submissionId: submission.id,
+          createdAt: minutesAgo(index + 1),
+        },
+      ],
+    );
     if (!job) throw new Error("Paged activity job not created");
     jobs.push(job);
   }
@@ -489,7 +526,8 @@ export async function seedPhotoGroupReviewRun(
  */
 export async function seedRunHistoryDefaults(page: Page, name: string) {
   const db = getFixtureDb();
-  const actorUserId = await fixtureUserId(page);
+  await ensureMemberParty(page, name);
+  const { actor } = await createEvidenceHarnessContext(page);
   const database = getDb(db);
   const insertRun = async (
     label: string,
@@ -500,18 +538,24 @@ export async function seedRunHistoryDefaults(page: Page, name: string) {
       name: label,
       website: "https://example.test",
     });
-    await database.insert(schema.run).values({
-      shortcode: generateShortcode("run"),
-      actorUserId,
-      actorName: "Synthetic member",
-      actorEmail: "synthetic@example.test",
+    const id = await ensureRun(db, actor, {
       purpose,
       trigger,
-      vendorId: vendor.id,
-      status: "completed",
-      startedAt: new Date(),
-      endedAt: new Date(),
+      execution: false,
     });
+    await database
+      .update(schema.run)
+      .set({
+        actorName: "Synthetic member",
+        actorEmail: "synthetic@example.test",
+        purpose,
+        trigger,
+        vendorId: vendor.id,
+        status: "completed",
+        startedAt: new Date(),
+        endedAt: new Date(),
+      })
+      .where(eq(schema.run.id, id));
     return label;
   };
   return {
@@ -538,11 +582,15 @@ export async function seedMailImportReportRun(page: Page, name: string) {
     status: "completed",
     orderMailId: original.id,
   });
+  const { actor } = await createEvidenceHarnessContext(page);
+  const id = await ensureRun(db, actor, {
+    purpose: "mail_import",
+    trigger: "manual",
+    execution: false,
+  });
   const [run] = await getDb(db)
-    .insert(schema.run)
-    .values({
-      shortcode: generateShortcode("run"),
-      actorUserId: await fixtureUserId(page),
+    .update(schema.run)
+    .set({
       actorName: "Synthetic member",
       actorEmail: "synthetic@example.test",
       ledgerPartyId: member.id,
@@ -564,6 +612,7 @@ export async function seedMailImportReportRun(page: Page, name: string) {
       updated: 1,
       skipped: 1,
     })
+    .where(eq(schema.run.id, id))
     .returning({ shortcode: schema.run.shortcode });
   if (!run) throw new Error("Synthetic mail-import report Run was not created");
   return run.shortcode;

@@ -17,11 +17,24 @@ import {
   createProductionRefreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
 
-/** Explicit provider-free fixture settlement uses the production search Job. */
-export async function drainDerivedRefreshFrontier(
+const searchDrains = new WeakMap<Database, Promise<void>>();
+
+/** Fixture seeding and the offline E2E pump share one real Job drain per handle. */
+export function drainDerivedRefreshFrontier(
   db: Database,
   maxPages = 10_000,
 ): Promise<void> {
+  const existing = searchDrains.get(db);
+  if (existing) return existing;
+  const pending = drainSearchJobs(db, maxPages).finally(() =>
+    searchDrains.delete(db),
+  );
+  searchDrains.set(db, pending);
+  return pending;
+}
+
+async function drainSearchJobs(db: Database, maxPages: number): Promise<void> {
+  const deadline = performance.now() + 30_000;
   for (let page = 0; page < maxPages; page++) {
     const [pending] = await getDb(db)
       .select()
@@ -32,6 +45,11 @@ export async function drainDerivedRefreshFrontier(
       throw new Error(
         `Synthetic search refresh stopped: ${pending.error ?? pending.state}`,
       );
+    // Explicit fixture settlement does not wait for the scheduler's backoff clock.
+    await getDb(db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, pending.id));
     const outcome = await advanceJob(db, pending.id, {
       "refresh.family": refreshFamilyHandler,
     });
@@ -39,8 +57,14 @@ export async function drainDerivedRefreshFrontier(
       throw new Error(
         "Synthetic search publication failed; inspect its retained Job.error",
       );
-    if (outcome === "skipped")
-      throw new Error("Synthetic search Job is not due");
+    if (outcome === "skipped") {
+      // Another runtime can already own the same durable Job; wait for its fenced publication.
+      if (performance.now() >= deadline)
+        throw new Error(
+          `Synthetic search Job did not settle: ${pending.state}`,
+        );
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
   }
   throw new Error(`Synthetic search refresh exceeded ${maxPages} pages`);
 }
@@ -81,8 +105,6 @@ export async function drainRecipeRefreshJobs(
   }
   throw new Error(`Synthetic recipe refresh exceeded ${maxPages} pages`);
 }
-
-export const settleDerivedRefreshForDiscovery = drainDerivedRefreshFrontier;
 
 /** Exercise broad raw-SQL catch-up without manufacturing old frontier rows. */
 export async function reconcileDerivedRefreshInputs(

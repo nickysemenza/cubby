@@ -11,6 +11,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { entityEmbedding, job } from "~/server/db/schema";
 import { countUnembeddedEntities } from "~/server/domains/maintenance/service/maintenance.service";
+import { productPairFingerprint } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -216,6 +217,10 @@ describe("semantic search background tasks", () => {
     );
     await publishProductPair(ctx.db, {
       productIds: [source.entityId, duplicate.entityId],
+      fingerprint: await productPairFingerprint(ctx.db, [
+        source.entityId,
+        duplicate.entityId,
+      ]),
       source: "detector",
       actionable: true,
       evidence: "Synthetic retained exact identity",
@@ -239,6 +244,10 @@ describe("semantic search background tasks", () => {
     });
     await publishProductPair(ctx.db, {
       productIds: [source.entityId, duplicate.entityId],
+      fingerprint: await productPairFingerprint(ctx.db, [
+        source.entityId,
+        duplicate.entityId,
+      ]),
       source: "detector",
       actionable: true,
       evidence: "Synthetic retained exact identity",
@@ -403,7 +412,7 @@ describe("semantic search background tasks", () => {
       );
     expect(selected).toBeDefined();
     expect(selected ? index.vectors.get(selected.id)?.values : null).toEqual(
-      Array.from(new Float32Array(vectorFor(0.9))),
+      vectorFor(0.9),
     );
   });
 

@@ -33,7 +33,7 @@ export interface PhysicalVectorMatch {
   id: string;
   similarity: number;
 }
-export interface StoredVector {
+interface StoredVector {
   id: string;
   entityKind: SearchableEntity;
   values: number[];

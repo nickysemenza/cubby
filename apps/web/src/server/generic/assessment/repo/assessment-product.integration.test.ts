@@ -60,6 +60,7 @@ import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/asses
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 const identityPort: DecisionPort = async () => ({
@@ -598,20 +599,37 @@ describe("stored Product identity pairs", () => {
         },
       })
       .where(eq(aiEvaluation.id, evaluation.id));
-    const claimed = await claimAiEvaluation(ctx.db, evaluation.id);
+    const claimed = await withJobFixtureExecution(
+      ctx.db,
+      {
+        key: `ai-evaluation:${evaluation.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: evaluation.id },
+      },
+      () => claimAiEvaluation(ctx.db, evaluation.id),
+    );
     await activateAiRefresh(ctx.db, "synthetic-current-policy", {
       enabled: true,
       manifest,
     });
     await expect(
-      publishAiEvaluation(
+      withJobFixtureExecution(
         ctx.db,
-        evaluation.id,
-        claimed!.attemptToken!,
-        async (transactionDb) => {
-          await publishProductIdentity(transactionDb, { pairs: [] });
-          return {};
+        {
+          key: `ai-evaluation:${evaluation.id}`,
+          kind: "ai.evaluation",
+          input: { evaluationId: evaluation.id },
         },
+        () =>
+          publishAiEvaluation(
+            ctx.db,
+            evaluation.id,
+            claimed!.attemptToken!,
+            async (transactionDb) => {
+              await publishProductIdentity(transactionDb, { pairs: [] });
+              return {};
+            },
+          ),
       ),
     ).rejects.toThrow(/obsolete/);
     expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(0);
@@ -650,7 +668,17 @@ describe("stored Product identity pairs", () => {
     );
     expect(targets).toHaveLength(2);
     for (const target of targets)
-      expect(await executeAiRefreshTarget(ctx.db, target.id, ports)).toBe(true);
+      expect(
+        await withJobFixtureExecution(
+          ctx.db,
+          {
+            key: `ai-evaluation:${target.id}`,
+            kind: "ai.evaluation",
+            input: { evaluationId: target.id },
+          },
+          () => executeAiRefreshTarget(ctx.db, target.id, ports),
+        ),
+      ).toBe(true);
     const pairs = await listProductMatchRows(ctx.db);
     expect(pairs).toHaveLength(1);
     expect(pairs[0]).toMatchObject({ actionable: true, conflict: false });

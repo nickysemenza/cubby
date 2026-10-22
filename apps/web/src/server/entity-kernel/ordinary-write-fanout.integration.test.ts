@@ -1,7 +1,7 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { buildKernelContext } from "tooling/scenarios/context";
 import {
   countTestDbQueries,
@@ -11,7 +11,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { ingredient as ingredientTable } from "~/server/db/schema";
+import {
+  entityLink,
+  ingredient as ingredientTable,
+  product,
+} from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createWish } from "~/server/domains/wish/repo";
 import { executeEntity } from "~/server/entity-kernel";
@@ -19,6 +23,7 @@ import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
+  insertEntityFixtures,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import {
@@ -105,13 +110,35 @@ describe("ordinary scalar write fanout", () => {
       },
       ctx.actor,
     );
-    await getDb(ctx.db).execute(sql`
-      WITH candidates AS (
-        INSERT INTO "Product" (shortcode,name,manufacturer,"categoryId")
-        SELECT left(original.shortcode,3) || '-SYN-CANDIDATE-' || n, 'Synthetic candidate ' || n, 'Synthetic maker', original."categoryId"
-        FROM "Product" original CROSS JOIN generate_series(1,1000) n WHERE original.id=${candidate.entityId}::uuid RETURNING id
-      ) INSERT INTO "EntityLink" (kind,"fromKind","fromEntityId","toKind","toEntityId")
-        SELECT 'wishCandidate',${entitySchema.enum.wish},${wish.entityId}::uuid,${entitySchema.enum.product},id FROM candidates`);
+    const original = await getDb(ctx.db).query.product.findFirst({
+      where: eq(product.id, candidate.entityId),
+    });
+    if (!original) throw new Error("Expected candidate Product");
+    const candidates = await insertEntityFixtures(
+      ctx.db,
+      product,
+      "product",
+      Array.from({ length: 1000 }, (_, index) => ({
+        shortcode: `PRD-SYN-CANDIDATE-${index + 1}`,
+        name: `Synthetic candidate ${index + 1}`,
+        manufacturer: "Synthetic maker",
+        categoryId: original.categoryId,
+      })),
+    );
+    await getDb(ctx.db)
+      .insert(entityLink)
+      .values(
+        candidates.map(
+          (candidate) =>
+            ({
+              kind: "wishCandidate",
+              fromKind: entitySchema.enum.wish,
+              fromEntityId: wish.entityId,
+              toKind: entitySchema.enum.product,
+              toEntityId: candidate.id,
+            }) satisfies typeof entityLink.$inferInsert,
+        ),
+      );
     const context = buildKernelContext(ctx.db, testUserId(TEST_USER_ID));
     const rename = await countTestDbQueries(() =>
       executeEntity(context, {

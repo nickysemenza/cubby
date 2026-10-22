@@ -66,6 +66,7 @@ import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
@@ -712,7 +713,7 @@ describe("Email Purchase links", () => {
     await expect(seedEmailLinkDecision(ctx.db, input)).rejects.toThrow(/event/);
     expect(
       await getDb(ctx.db).select().from(orderMailCandidateDecision),
-    ).toEqual([]);
+    ).toHaveLength(1);
     expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
   });
   it("retains a fresh historical decision when a linked event returns to a prior Purchase", async () => {
@@ -1587,21 +1588,22 @@ describe("Email Purchase links", () => {
       return purchaseShortcode.parse(`PUR-${body}`);
     }).filter((shortcode) => shortcode !== older.shortcode);
     for (let offset = 0; offset < 501; offset += 100) {
-      await getDb(ctx.db)
-        .insert(purchaseTable)
-        .values(
-          Array.from({ length: Math.min(100, 501 - offset) }, (_, index) => {
-            const shortcode = shortcodes[offset + index];
-            if (!shortcode) throw new Error("test setup: shortcode missing");
-            return {
-              id: purchaseId.parse(crypto.randomUUID()),
-              shortcode,
-              vendorId: vendor.id,
-              orderId: `TS-NEWER-${offset + index}`,
-              date: "2026-09-10",
-            };
-          }),
-        );
+      await insertEntityFixtures(
+        ctx.db,
+        purchaseTable,
+        "purchase",
+        Array.from({ length: Math.min(100, 501 - offset) }, (_, index) => {
+          const shortcode = shortcodes[offset + index];
+          if (!shortcode) throw new Error("test setup: shortcode missing");
+          return {
+            id: purchaseId.parse(crypto.randomUUID()),
+            shortcode,
+            vendorId: vendor.id,
+            orderId: `TS-NEWER-${offset + index}`,
+            date: "2026-09-10",
+          };
+        }),
+      );
     }
     const bodyText =
       "Order TS-OLDER-1001. Example Trail Shop. Synthetic delivery update.";

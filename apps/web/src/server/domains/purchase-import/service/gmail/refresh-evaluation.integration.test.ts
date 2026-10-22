@@ -17,6 +17,7 @@ import {
   executeAiRefreshTarget,
 } from "~/server/domains/run/service/ai-refresh";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { publishGmailEvidence } from "../../repo/gmail/admitted-source";
@@ -61,33 +62,50 @@ describe("Email prompt refresh publication", () => {
       .from(aiEvaluation)
       .where(sql`${aiEvaluation.target}->>'recordId' = ${item.id}`);
     expect(evaluation).toBeDefined();
-    const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
+    const claimed = await withJobFixtureExecution(
+      ctx.db,
+      {
+        key: `ai-evaluation:${evaluation!.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: evaluation!.id },
+      },
+      () => claimAiEvaluation(ctx.db, evaluation!.id),
+    );
     expect(claimed?.attemptToken).toBeTruthy();
     await expect(
-      publishGmailEvidence(
+      withJobFixtureExecution(
         ctx.db,
         {
-          ledgerPartyId: party.id,
-          mailboxId,
-          messageId: item.messageId,
-          expected: item,
-          executionPolicy: "classification_only",
-          recordHandlingReceipt: false,
-          evaluation: { id: evaluation!.id, token: claimed!.attemptToken! },
+          key: `ai-evaluation:${evaluation!.id}`,
+          kind: "ai.evaluation",
+          input: { evaluationId: evaluation!.id },
         },
-        async (tx) => {
-          await getDb(tx)
-            .update(email)
-            .set({ classificationReason: "Synthetic tentative change" })
-            .where(eq(email.id, item.id));
-          await activateAiRefresh(ctx.db, "synthetic-aba-disabled", {
-            enabled: false,
-          });
-          await activateAiRefresh(ctx.db, "synthetic-aba-reenabled", {
-            enabled: true,
-          });
-          return { synthetic: true };
-        },
+        () =>
+          publishGmailEvidence(
+            ctx.db,
+            {
+              ledgerPartyId: party.id,
+              mailboxId,
+              messageId: item.messageId,
+              expected: item,
+              executionPolicy: "classification_only",
+              recordHandlingReceipt: false,
+              evaluation: { id: evaluation!.id, token: claimed!.attemptToken! },
+            },
+            async (tx) => {
+              await getDb(tx)
+                .update(email)
+                .set({ classificationReason: "Synthetic tentative change" })
+                .where(eq(email.id, item.id));
+              await activateAiRefresh(ctx.db, "synthetic-aba-disabled", {
+                enabled: false,
+              });
+              await activateAiRefresh(ctx.db, "synthetic-aba-reenabled", {
+                enabled: true,
+              });
+              return { synthetic: true };
+            },
+          ),
       ),
     ).rejects.toMatchObject({ cause: { code: "40001" } });
     expect(
@@ -243,7 +261,15 @@ describe("Email prompt refresh publication", () => {
       .from(aiEvaluation)
       .where(emailRefreshTarget);
     expect(evaluation).toBeDefined();
-    await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+    await withJobFixtureExecution(
+      ctx.db,
+      {
+        key: `ai-evaluation:${evaluation!.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: evaluation!.id },
+      },
+      () => executeAiRefreshTarget(ctx.db, evaluation!.id, ports),
+    );
     expect(triage).not.toHaveBeenCalled();
     expect(relevance).toHaveBeenCalledOnce();
     const [saved] = await getDb(ctx.db)
