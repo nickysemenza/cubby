@@ -1,0 +1,25 @@
+apps/web/src/server/testing/repo.fixtures.ts
+  s_033c97ccc35358::t_207687e97c2871 717-719
+apps/web/tests/e2e/suggestions.spec.ts
+  s_033c97ccc35358::t_00cf127e6735be 719-720
+apps/web/tooling/factories/base-world.ts
+  s_033c97ccc35358::t_e702e836f422ba 9,14-17,51-63
+apps/web/tooling/test-setup.ts
+  s_033c97ccc35358::t_e362eac4e571f9 168-169,172-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4347fb571a45709d014c399d5c4b6e44e4fe6d54",
+  "prompts": {},
+  "sessions": {
+    "s_033c97ccc35358": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60bf3a4f-d655-4028-9f82-d84fe59d64b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
