@@ -1,0 +1,35 @@
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.ts
+  s_033c97ccc35358::t_6f3890b524a098 68,1550-1551,1554-1555,1587-1594,1601-1602,1618-1633,1636-1667,1669-1671,1676,1693,1757-1760,1762-1790
+apps/web/src/server/domains/run/repo/routine-run.ts
+  s_033c97ccc35358::t_4632fab1ac9781 9,14,90-95,131-135,141-142,203-217,226,244
+apps/web/src/server/domains/run/service/step-run.ts
+  s_033c97ccc35358::t_b4496c27a7994b 21,105-107,110,302-304,310,326,380
+apps/web/src/server/domains/run/service/sweep.ts
+  s_033c97ccc35358::t_a9377b129112b7 230,276,355,365
+apps/web/src/server/domains/transaction-import/repo/statement-spending.ts
+  s_033c97ccc35358::t_9e40556751b57f 87-92,107-118
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts
+  s_033c97ccc35358::t_b8187615d3bcd2 81,1743-1744,1826-1831,1838-1847
+apps/web/src/server/generic/jobs/limits-catalog.ts
+  s_033c97ccc35358::t_fc5790720bac53 2,24,26,31,194-204
+apps/web/src/server/generic/jobs/page-work.ts
+  s_033c97ccc35358::t_ce64b5f64ec0c3 1-62
+docs/infrastructure.md
+  s_033c97ccc35358::t_ba73b6288ffcc2 806,829-843
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e5283eca8693cfce373867eee3cf1ce31dfe5b4c",
+  "prompts": {},
+  "sessions": {
+    "s_033c97ccc35358": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60bf3a4f-d655-4028-9f82-d84fe59d64b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
