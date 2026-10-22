@@ -51,7 +51,8 @@ Start streams   →  cancellable workflow streams
   `packages/shared/golden-vectors/display-format.json`.
   Physical conversions share density and nutrition mappings, but use one
   product's package mappings per route. Conflicting package interpretations
-  remain unknown. Costing keeps the selected conversion path with its result;
+  remain unknown even when needs share one authored unit; only absent conversion
+  routes allow availability to fall back to that unit. Costing keeps the selected conversion path with its result;
   recipe recursion marks the root before expanding sub-recipes. Needs and meal
   calculations share the same validated yield-ratio conversion.
 - `pnpm wasm` prepares three packages through the shared

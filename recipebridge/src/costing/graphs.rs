@@ -47,6 +47,8 @@ struct PackageGraph {
     graph: OnceCell<MeasureGraph>,
 }
 
+pub(crate) struct AmbiguousPackage;
+
 /// Density, food, and nutrient edges are shared. A route may use the package
 /// edges of one product at a time. When a need has no product identity, all
 /// reachable package interpretations must agree before it is a known quantity.
@@ -140,34 +142,45 @@ impl ProductGraphs {
         target: MeasureKind,
     ) -> Option<ResolvedConversion> {
         resolve_with_fallback(amounts, |amount| {
-            if let Some(resolved) = convert(amount, self.shared_graph(), target.clone()) {
-                return Some(resolved);
-            }
-            let mut selected: Option<ResolvedConversion> = None;
-            for (index, product) in self.products.iter().enumerate() {
-                if product.pairs.is_empty() {
-                    continue;
-                }
-                if let Some(candidate) = convert(amount, self.product_graph(index)?, target.clone())
-                {
-                    // The unit engine has already rounded both results to its
-                    // public precision, so distinct values are real ambiguity.
-                    if selected
-                        .as_ref()
-                        .is_some_and(|chosen| chosen.measure != candidate.measure)
-                    {
-                        return None;
-                    }
-                    selected = Some(candidate);
-                }
-            }
-            selected
+            self.resolve_amount(amount, target.clone()).ok().flatten()
         })
     }
 
-    pub fn weight(&self, amount: &Measure) -> Option<Measure> {
-        self.resolve(std::slice::from_ref(amount), MeasureKind::Weight)
-            .map(|value| value.measure)
+    fn resolve_amount(
+        &self,
+        amount: &Measure,
+        target: MeasureKind,
+    ) -> Result<Option<ResolvedConversion>, AmbiguousPackage> {
+        if let Some(resolved) = convert(amount, self.shared_graph(), target.clone()) {
+            return Ok(Some(resolved));
+        }
+        let mut selected: Option<ResolvedConversion> = None;
+        for (index, product) in self.products.iter().enumerate() {
+            if product.pairs.is_empty() {
+                continue;
+            }
+            let Some(graph) = self.product_graph(index) else {
+                continue;
+            };
+            if let Some(candidate) = convert(amount, graph, target.clone()) {
+                // The unit engine has rounded both results to public precision.
+                if selected
+                    .as_ref()
+                    .is_some_and(|chosen| chosen.measure != candidate.measure)
+                {
+                    return Err(AmbiguousPackage);
+                }
+                selected = Some(candidate);
+            }
+        }
+        Ok(selected)
+    }
+
+    /// Distinguish absent mappings from conflicting package interpretations so
+    /// availability can retain authored-unit fallback only for absent routes.
+    pub fn weight(&self, amount: &Measure) -> Result<Option<Measure>, AmbiguousPackage> {
+        self.resolve_amount(amount, MeasureKind::Weight)
+            .map(|value| value.map(|resolved| resolved.measure))
     }
 
     /// Inventory has a known product identity, while shared density and food

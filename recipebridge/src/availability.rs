@@ -246,14 +246,22 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
 
     // Convert each need to weight. Gram basis only when EVERY need converts, so
     // contributions are summable in one unit (the gram-first rule).
-    let weights: Vec<Option<Measure>> = group
+    let weight_results: Vec<_> = group
         .needs
         .iter()
         .map(|n| graphs.weight(&n.amount.to_measure()))
         .collect();
+    let ambiguous = weight_results.iter().any(Result::is_err);
+    let weights: Vec<Option<Measure>> = weight_results
+        .into_iter()
+        .map(Result::ok)
+        .map(Option::flatten)
+        .collect();
     let all_weight = !weights.is_empty() && weights.iter().all(Option::is_some);
 
-    let basis = if all_weight {
+    let basis = if ambiguous {
+        Basis::Incoherent
+    } else if all_weight {
         // all_weight ⇒ every entry is Some, so the first weight's unit is the basis.
         match weights.iter().flatten().next() {
             Some(m) => Basis::Weight(m.unit().to_str().into_owned()),
@@ -718,6 +726,11 @@ mod tests {
             assert_eq!(result.status, WAvailabilityStatus::Ok);
 
             // No ingredient-level interpretation of one package is justified.
+            group.needs = vec![need(2.0, "each", 0)];
+            let result = evaluate_group(&group);
+            assert_eq!(result.need_value, None);
+            assert_eq!(result.status, WAvailabilityStatus::Unconvertible);
+
             group.needs = vec![need(1.0, "each", 0), need(100.0, "g", 1)];
             let result = evaluate_group(&group);
             assert_eq!(result.need_value, None);
