@@ -1,57 +1,52 @@
-import { fileURLToPath } from "node:url";
+import type { Page } from "@playwright/test";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { createEntityFixture } from "./fixtures/core";
 import {
-  chooseOption,
-  gotoAuthenticatedPage,
-  openProductFromPalette,
-  waitForAppHydration,
-  waitForFormHydration,
-} from "./support/e2e-helpers";
+  seedImagePrerequisite,
+  attachProductImagePrerequisite,
+} from "./fixtures/photos";
 import {
   seedDetectedLabelNutrition,
   readStoredLabelNutrition,
 } from "./fixtures/label-nutrition";
 import { expect, test } from "./support/e2e-test";
 
-const labelPhoto = fileURLToPath(
-  new URL("./fixtures/synthetic-wardrobe-label.png", import.meta.url),
-);
-
-test("detected label nutrition stays editable and requires Save before replacing Product nutrition", async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
+async function seedLabelReview(page: Page, objectStorageUrl: string) {
   const name = `E2E label panel ${Date.now()}`;
-  await gotoAuthenticatedPage(page, "/products?create=true");
-  await waitForFormHydration(page);
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
-  await dialog.getByRole("heading", { name: "Nutrition", exact: true }).click();
-  await dialog.getByText(/^Package label/).click();
-  await dialog.getByLabel("Serving size, as printed (g)").fill("30");
-  await dialog.getByLabel("Calories (kcal)", { exact: true }).fill("90");
-  await dialog.getByLabel("Total Fat (g)", { exact: true }).fill("2");
-  await dialog
-    .getByLabel("Source", { exact: true })
-    .fill("Synthetic prior label");
-  await chooseOption(page, dialog.getByLabel("Attach as"), "Label photo");
-  await dialog.getByLabel("Choose image").setInputFiles(labelPhoto);
-  await expect(
-    dialog.getByRole("button", { name: "Remove synthetic-wardrobe-label.png" }),
-  ).toBeVisible();
-  await expect(dialog.getByText("Uploading...", { exact: true })).toHaveCount(
-    0,
+  // Product/photo creation is covered by product-photo-first.spec.ts.
+  const product = await createEntityFixture(page, "product", {
+    name,
+    labelNutrition: {
+      servingGrams: 30,
+      nutrients: { kcal: 90, fat: 2 },
+      source: "Synthetic prior label",
+    },
+  });
+  const label = await seedImagePrerequisite(
+    "synthetic-wardrobe-label",
+    objectStorageUrl,
   );
-  await expect(page.getByText("Photo added.", { exact: true })).toBeVisible();
-  await dialog.getByRole("button", { name: /^Create$/ }).click();
-  await expect(dialog).not.toBeVisible();
-  await openProductFromPalette(page, name);
+  await attachProductImagePrerequisite(page, label.id, product.id, "label");
+  // The fixture derives its mutation Origin from the page; JSON needs no app hydration.
+  await page.goto("/api/auth/get-session");
   const imageCode = await seedDetectedLabelNutrition(page, name);
-  await page.reload();
-  await waitForAppHydration(page);
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  const dialog = page.getByRole("dialog");
   const review = page.getByRole("button", {
     name: "Review detected nutrition",
     exact: true,
   });
+  return { name, imageCode, dialog, review };
+}
+
+test("detected label nutrition previews inferred values and Cancel preserves current nutrition", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const { name, dialog, review } = await seedLabelReview(
+    page,
+    e2eRuntime.objectStorageUrl,
+  );
   await review.click();
   await expect(
     dialog.getByRole("img", { name: "Source nutrition panel" }),
@@ -78,6 +73,16 @@ test("detected label nutrition stays editable and requires Save before replacing
     nutrients: { kcal: 90, fat: 2 },
     source: "Synthetic prior label",
   });
+});
+
+test("detected label nutrition stays editable and Save persists the panel evidence", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const { name, imageCode, dialog, review } = await seedLabelReview(
+    page,
+    e2eRuntime.objectStorageUrl,
+  );
   await review.click();
   await dialog.getByRole("heading", { name: "Nutrition", exact: true }).click();
   await dialog.getByLabel("Serving size, as printed (g)").fill("45");

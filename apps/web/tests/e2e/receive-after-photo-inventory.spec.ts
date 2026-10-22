@@ -4,7 +4,6 @@ import { inventoryEntry } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { upsertAgentProductMatch } from "~/server/domains/product/repo/match/product-match-candidate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   gotoDetailActions,
@@ -13,13 +12,9 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import {
-  createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
-import {
-  seedLocationPrerequisite,
-  seedProductPrerequisite,
-} from "./fixtures/catalog";
 
 // Failure modes: an imported purchase's Product that is probably the same item
 // as photo-counted stock is received blindly (double count); the dialog's
@@ -31,38 +26,42 @@ test("receiving after a photo import writes nothing until additional units are c
   const { db } = await createEvidenceHarnessContext(page);
   const photoName = uniqueName(testInfo, "Synthetic photographed jacket");
   const boughtName = uniqueName(testInfo, "Synthetic jacket order line");
-  const closet = await seedLocationPrerequisite(
-    page,
-    uniqueName(testInfo, "Synthetic closet"),
-  );
   const shelfName = uniqueName(testInfo, "Synthetic receiving shelf");
-  await seedLocationPrerequisite(page, shelfName);
-  const photo = await seedProductPrerequisite(page, { name: photoName });
-  const bought = await seedProductPrerequisite(page, { name: boughtName });
-  await createEntityFixture(page, "inventory", {
-    productId: photo.id,
-    locationId: closet.id,
-    amount: { value: 1, unit: "each" },
-  });
-  const vendor = await insertWithShortcode(db, "vendor", {
-    name: uniqueName(testInfo, "Synthetic outfitter"),
-  });
-  const purchase = await insertWithShortcode(db, "purchase", {
-    vendorId: vendor.id,
-    date: "2026-09-01",
-  });
-  const line = await insertWithShortcode(db, "expense", {
-    lineKind: "principal",
-    name: uniqueName(testInfo, "Synthetic jacket line"),
-    cost: 80,
-    date: "2026-09-01",
-    // Raw inserts skip validation; a tradeless principal line would fail the
-    // global live-trade check for every later write in this shared database.
-    trade: "other",
-    costType: "materials",
-    purchaseId: purchase.id,
-    productId: await resolveOrThrow(db, "product", bought.id),
-  });
+  const { photo, bought, purchase, line } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const closet = await create("location", {
+        name: uniqueName(testInfo, "Synthetic closet"),
+        type: "room",
+      });
+      await create("location", { name: shelfName, type: "room" });
+      const photo = await create("product", { name: photoName });
+      const bought = await create("product", { name: boughtName });
+      await create("inventory", {
+        productId: photo.id,
+        locationId: closet.id,
+        amount: { value: 1, unit: "each" },
+      });
+      const vendor = await create("vendor", {
+        name: uniqueName(testInfo, "Synthetic outfitter"),
+      });
+      const purchase = await create("purchase", {
+        vendorId: vendor.id,
+        date: "2026-09-01",
+      });
+      const line = await create("expense", {
+        lineKind: "principal",
+        name: uniqueName(testInfo, "Synthetic jacket line"),
+        cost: 80,
+        date: "2026-09-01",
+        trade: "other",
+        costType: "materials",
+        purchaseId: purchase.id,
+        productId: bought.id,
+      });
+      return { photo, bought, purchase, line };
+    },
+  );
   await upsertAgentProductMatch(db, {
     productIds: [
       await resolveOrThrow(db, "product", bought.id),
@@ -83,7 +82,7 @@ test("receiving after a photo import writes nothing until additional units are c
     name: "Receive into inventory...",
   });
   const dialog = page.getByRole("dialog", { name: "Receive into Inventory" });
-  await gotoDetailActions(page, `/expenses/${line.shortcode}`, receiveButton);
+  await gotoDetailActions(page, `/expenses/${line.id}`, receiveButton);
   await receiveButton.click();
 
   // The photo-counted match comes first, with a link to the directed review.
@@ -144,7 +143,7 @@ test("receiving after a photo import writes nothing until additional units are c
   // received now count as existing stock: the default is again "nothing new".
   await gotoDetailActions(
     page,
-    `/purchases/${purchase.shortcode}`,
+    `/purchases/${purchase.id}`,
     page.getByRole("button", { name: "Receive into inventory..." }),
   );
   await page.getByRole("button", { name: "Receive into inventory..." }).click();
