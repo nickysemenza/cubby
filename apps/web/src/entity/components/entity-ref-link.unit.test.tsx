@@ -16,6 +16,7 @@ import {
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { Facts } from "~/ui/common/facts";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 
 import { EntityRefLink } from "./entity-ref-link";
 
@@ -42,6 +43,25 @@ const seededProductImage = (id: string) =>
 
 describe("EntityRefLink inline variant", () => {
   const product = { id: "PRD-TEST", name: "Test product" };
+
+  it("keeps identity links to one name even when stacked context is requested", () => {
+    renderLink(
+      <DenseCellContext value={{ linksTo: null, identity: true }}>
+        <EntityRefLink
+          entity="product"
+          data={{ ...product, manufacturer: "Synthetic manufacturer" }}
+          displayImage={null}
+          stacked
+          wrap
+          context="Synthetic context"
+        />
+      </DenseCellContext>,
+    );
+    expect(screen.getByRole("link", { name: "Test product" })).toBeVisible();
+    expect(
+      screen.queryByText(/Synthetic manufacturer|Synthetic context/),
+    ).not.toBeInTheDocument();
+  });
 
   it("renders the explicitly supplied canonical image", () => {
     renderLink(

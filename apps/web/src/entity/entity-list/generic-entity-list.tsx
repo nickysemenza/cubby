@@ -377,9 +377,7 @@ function ServerListBody({
             "displayImages",
             ...(entitySummary[entity].list.shelf?.subtitle ?? []),
           ]
-        : entitySummary[entity].list.titleSubtitle
-          ? (entitySummary[entity].list.shelf?.subtitle ?? [])
-          : []),
+        : []),
     ],
     [
       entity,

@@ -718,9 +718,9 @@ Every listable entity receives the shared List (`table`) and Cards (`shelf`)
 presentations without requiring stored photos. Existing first-view defaults
 remain unchanged. Cards use the declared title and `list.shelfSubtitleOverride`
 fields, falling back to declared mobile subtitle metadata when no shelf
-caption is specified; missing captions stay absent. `list.titleSubtitle: true` puts the same
-caption under the table's identity column as a muted second line inside the
-32px row (Vendor, Purchase, Product, Inventory and Expense opt in). Server-resolved display
+caption is specified; missing captions stay absent. Web RTable name cells always
+show one line with no subtitle; `list.titleSubtitle` applies only to native
+presentation. Server-resolved display
 images are reused, with an entity icon when no image is available. Exceptional
 list projections use explicit adapters rather than per-card detail requests.
 Compact is the same card presentation with screen-local density state, not a

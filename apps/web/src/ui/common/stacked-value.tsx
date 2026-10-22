@@ -6,18 +6,23 @@ import { cn } from "~/lib/utils";
 /**
  * Set inside a desktop table cell, where values take their dense form: dates,
  * timestamps and entity links stack in two lines and a quality score drops
- * its "/100". Phone cards, ledgers and prose keep their one-line forms;
+ * its "/100". Identity cells always retain a single name line. Phone cards, ledgers and prose keep their one-line forms;
  * another surface opts in with the component's `stacked` prop. `linksTo` is
  * the entity whose icon the column header already paints.
  */
 export const DenseCellContext = createContext<{
   linksTo: Entity | null;
+  /** RTable identity columns never add secondary lines or wrap the name. */
+  identity?: boolean;
 } | null>(null);
+
+export const useIdentityCell = () =>
+  useContext(DenseCellContext)?.identity === true;
 
 /** Whether a value takes its dense form: `stacked` if given, else in a cell. */
 export function useDenseCell(stacked?: boolean) {
   const cell = useContext(DenseCellContext);
-  return stacked ?? cell !== null;
+  return cell?.identity ? false : (stacked ?? cell !== null);
 }
 
 /** The entity whose icon this cell's column header paints, if any. */
@@ -54,6 +59,7 @@ export function StackedValue({
   /** Relative dates can cross a clock boundary between SSR and hydration. */
   suppressSecondaryHydrationWarning?: boolean;
 }) {
+  const identity = useIdentityCell();
   return (
     <span className={cn("block min-w-0", className)} title={title}>
       <span
@@ -63,7 +69,7 @@ export function StackedValue({
       >
         {primary}
       </span>
-      {secondary != null && secondary !== "" && (
+      {!identity && secondary != null && secondary !== "" && (
         <span
           data-stacked-line=""
           data-cell-spill-text={secondarySpillText}

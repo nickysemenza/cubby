@@ -28,6 +28,7 @@ import {
   STACKED_SECONDARY_CLASS,
   useDenseCell,
   useHeaderEntity,
+  useIdentityCell,
 } from "~/ui/common/stacked-value";
 
 import { PreviewRefLink } from "./leaf";
@@ -272,6 +273,7 @@ export function InlineRefLink(props: InlineRefLinkProps) {
   } = props;
   const { id, name, metadata, mark, trailing } = inlineSpec(props);
   const dense = useDenseCell(stacked);
+  const identity = useIdentityCell();
   const emoji = z
     .object({ emoji: z.string().nullish() })
     .parse(props.data).emoji;
@@ -281,7 +283,9 @@ export function InlineRefLink(props: InlineRefLinkProps) {
   const hoisted = useHeaderEntity() === entity && displayImage === null;
   const resolvedEmoji = useResolvedRecordEmoji(entity, id, emoji, hoisted);
   const generic = hoisted && !resolvedEmoji;
-  const detail = [context, metadata].filter(Boolean).join(" · ");
+  const detail = identity
+    ? ""
+    : [context, metadata].filter(Boolean).join(" · ");
 
   return (
     <PreviewRefLink
@@ -335,7 +339,7 @@ export function InlineRefLink(props: InlineRefLinkProps) {
             className={cn(
               nameClass,
               compact && "max-w-32 truncate",
-              truncate && "truncate",
+              (truncate || identity) && "truncate",
             )}
           >
             {name}

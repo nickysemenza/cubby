@@ -9,6 +9,7 @@ import {
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { StackedValue } from "../../ui/common/stacked-value";
 import { CellEditTrigger } from "../../ui/data-table/cell-edit-trigger";
 import {
   createRowActivityStore,
@@ -77,6 +78,37 @@ function desktopRowProps(row: Row<TestRow>, overrides: RowOverrides = {}) {
 }
 
 describe("DesktopDataRow", () => {
+  it.each([true, false])(
+    "keeps secondary values only in non-identity cells (identity: %s)",
+    (identity) => {
+      const { result } = renderHook(() =>
+        useTestTable(
+          () => (
+            <StackedValue
+              primary="Synthetic name"
+              secondary="Synthetic context"
+            />
+          ),
+          {
+            id: "name",
+            meta: identity ? { entityColumnRole: "identity" } : {},
+          },
+        ),
+      );
+      render(
+        <table>
+          <tbody>
+            <DesktopDataRow
+              {...desktopRowProps(result.current.getRow("PRD-TEST"))}
+            />
+          </tbody>
+        </table>,
+      );
+      expect(screen.getByText("Synthetic name")).toBeVisible();
+      expect(screen.queryByText("Synthetic context") !== null).toBe(!identity);
+    },
+  );
+
   const inspectableProvenance = {
     kind: "derived",
     sources: [

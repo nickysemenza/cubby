@@ -10,11 +10,11 @@ import type { ListGroupState } from "~/entity/hooks/progressive-list";
 import { DeferredListValue } from "./deferred-list-value";
 
 /** A list row as a caption reads it: its id and whichever fields it names. */
-export const captionRowSchema = z.looseObject({ id: z.string() });
+const captionRowSchema = z.looseObject({ id: z.string() });
 
 /**
  * A record's caption is the first declared `shelf.subtitle` field with a
- * value (a shelf card's subtitle, a table title's second line),
+ * value (a shelf card's subtitle),
  * rendered through its declared format — a price reads as money, a category
  * as its label.
  */
@@ -23,14 +23,13 @@ export function recordCaption(
   row: z.infer<typeof captionRowSchema>,
   options: {
     enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
-    excludeListFields?: boolean;
   } = {},
 ): ReactNode {
   const subtitle = entitySummary[entity].list.shelf?.subtitle ?? [];
   const fields = entityFieldModels[entity].fields;
   for (const key of subtitle) {
     const field = fields.find((candidate) => candidate.key === key);
-    if (!field || (options.excludeListFields && field.display.list)) continue;
+    if (!field) continue;
     const state = options.enrichmentState?.(row.id, field.readKey ?? field.key);
     if (state && state.state !== "ready")
       return (

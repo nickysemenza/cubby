@@ -232,7 +232,11 @@ function DesktopDataCell<TItem extends RowData>({
         <div className="min-w-0">
           <CellKeyProvider value={cellKey}>
             <DenseCellContext
-              value={{ linksTo: cell.column.columnDef.meta?.linksTo ?? null }}
+              value={{
+                linksTo: cell.column.columnDef.meta?.linksTo ?? null,
+                identity:
+                  cell.column.columnDef.meta?.entityColumnRole === "identity",
+              }}
             >
               <ProposalCount record={cell.row.original} field={cell.column.id}>
                 <RecordFieldSuggestion
