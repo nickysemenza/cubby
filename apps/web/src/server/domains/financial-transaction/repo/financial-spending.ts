@@ -376,7 +376,7 @@ function spendingVendors(
   names: readonly string[],
   page?: FinancialSpendingPage,
 ) {
-  const key = canonicalJson(names);
+  const key = canonicalJson([...names]);
   const cached = page?.vendors.get(key);
   if (cached) return cached;
   const lookup = names.length
