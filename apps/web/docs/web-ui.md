@@ -135,6 +135,10 @@ fact explicitly from inline custom properties, gives the identity a
 each row's `dt` (visually hidden beside the header) so phones and assistive
 tech read them.
 
+Table identity captions omit fields with dedicated list columns. Shelf subtitles
+must name the canonical field (`categoryId`, for example), rather than its hydrated
+object (`category`), so the shared exclusion recognizes the same value.
+
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column
 metadata must not remount a focused row or header checkbox.

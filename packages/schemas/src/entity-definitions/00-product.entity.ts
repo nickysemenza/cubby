@@ -620,7 +620,7 @@ export default defineEntity(
             format: "currency",
           },
         ],
-        shelfSubtitleOverride: ["price", "category"],
+        shelfSubtitleOverride: ["price", "categoryId"],
         extraActions: ["addToInventory", "discard", "printLabels"],
         timeline: { fields: ["purchaseDate"] },
       },
