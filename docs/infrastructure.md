@@ -854,12 +854,11 @@ Change a value at its source, never in the catalog.
   `rate_limit`, `device`) and a retry backoff each name their limit.
 - **Due Jobs.** A due Job is held by drain capacity, counted with its same-kind
   Jobs ahead.
-- **Running pages.** A running step reads its last page sample (`RunStep.meta.page`):
-  - a page near the drain budget is cut by it;
-  - a phase whose peak in-flight work reaches its cap is "concurrency N of N
-    busy";
-  - otherwise the page's own work sets the pace ("preparation 61% of page time
-    · 106 queries/page").
+- **Running pages.** Measured phase timings identify the largest share of page
+  work ("preparation 61% of page time · 106 queries/page"). A concurrency
+  peak reaching its cap does not establish contention. The drain checks its
+  time budget between pages; exceeding it does not explain why an indivisible
+  page was slow. Without phase timings, the diagnostic keeps that cause unknown.
 - **No sample.** Without a sample the verdict is "Unknown — no recent samples".
 
 Step pages record their own sample through `measurePage`
