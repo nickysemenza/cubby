@@ -6,6 +6,8 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { upsertCookbookInput } from "@cubby/schemas/import-recipe";
 import { plainDate } from "@cubby/schemas/base-entity";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { saveMealFoodInput } from "@cubby/schemas/meal";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -285,6 +287,36 @@ async function seedConnectedHousehold(
     },
     ledgerPartyId: memberCode,
   });
+  await recordSourceTransactionRecords(
+    db,
+    recordSourceTransactionRecordsInput.parse({
+      import: {
+        source: "synthetic-bank",
+        label: "Cedar Checking export",
+        fingerprint: "cedar-checking-export",
+        coverage: {
+          account: "Cedar Checking",
+          from: day(-2),
+          to: day(-2),
+          visibility: "all",
+        },
+        dateKind: "posted",
+        rowCountDeclared: 1,
+      },
+      rows: [
+        {
+          rowPosition: 1,
+          accountDescriptor: "Cedar Checking",
+          statementDate: day(-2),
+          providerAmount: -24,
+          rawDescription: "CEDAR MARKET",
+          providerStatus: "posted",
+        },
+      ],
+      complete: true,
+    }),
+    context.actorContext,
+  );
   const cash = await create("financialAccount", {
     name: "Cedar Cash",
     ledgerPartyId: otherMemberCode,

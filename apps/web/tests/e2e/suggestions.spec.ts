@@ -84,7 +84,7 @@ async function ensureSystemUser(db: Db) {
 
 /** Synthetic Monarch rows on one account alias. */
 const recordRows =
-  (page: Page, alias: string) =>
+  (page: Page, alias: string, db: Db) =>
   async (
     fingerprint: string,
     rows: Partial<SourceTransactionRecordInput>[],
@@ -110,9 +110,9 @@ const recordRows =
       },
     );
     expect(response.ok(), await response.text()).toBe(true);
-    return recordSourceTransactionRecordsOut
-      .extend({ batchId: z.string() })
-      .parse(response.body).batchId;
+    const receipt = recordSourceTransactionRecordsOut.parse(response.body);
+    if (!receipt.batchId) throw new Error("Transaction import missing");
+    return resolveOrThrow(db, "transactionImport", receipt.batchId);
   };
 
 const suggestionsTable = (page: Page) =>
@@ -336,7 +336,11 @@ test("Suggestions lists every family with named records and category pills, and 
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
   });
-  const importId = await recordRows(page, alias)(alias, [
+  const importId = await recordRows(
+    page,
+    alias,
+    db,
+  )(alias, [
     {
       statementDate: "2026-05-11",
       providerAmount: -17.25,
@@ -526,7 +530,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const hardware = `${alias} HARDWARE 0441`;
   const hold = `${alias} HOLD`;
   const cafe = `${alias} CAFE`;
-  const record = recordRows(page, alias);
+  const record = recordRows(page, alias, db);
   const importId = await record(alias, [
     {
       statementDate: "2026-05-12",

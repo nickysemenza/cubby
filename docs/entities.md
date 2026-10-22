@@ -1429,9 +1429,11 @@ kernel's progressive list, whether or not the browser writes the entity
 where rows come from. Its repository then implements `listRead`. Only a
 generated index feeds inline relation tables. The **CRUD roster**
 (`generatedBrowserCrudEntities`) is the list-roster entities with create and
-update contracts; mutation results and the generic editor key on it. Bulk edit
+update contracts; mutation results key on it. Bulk edit
 uses the derived bulk roster across all mutable shortcode entities, including
-update-only entities such as imported Cookbooks.
+update-only entities such as imported Cookbooks. The generic editor accepts
+entities with declared create or update intents; an update-only entity exposes
+no create operation.
 
 Complete client vocabularies use `entityListBaseFor`'s projected infinite read:
 each page loads base rows and only the declared enrichment groups the consumer

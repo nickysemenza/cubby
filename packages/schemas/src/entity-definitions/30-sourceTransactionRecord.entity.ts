@@ -489,7 +489,9 @@ export default defineEntity({
         },
         kind: "json",
         nullable: true,
-        display: {},
+        display: {
+          detailLabelPath: "vendorInference.candidates[].vendorName",
+        },
         validation: {
           read: merchantVendorInference.nullable(),
           create: null,
