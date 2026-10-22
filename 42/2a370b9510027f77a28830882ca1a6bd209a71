@@ -1,0 +1,21 @@
+apps/web/tests/e2e/gmail.input-first-import.spec.ts
+  s_d04e55f8362046::t_428a398bac28a8 1,346-359,361-375,474-478,481-486,488-496
+apps/web/tests/e2e/gmail.input-first-settlement.spec.ts
+  s_d04e55f8362046::t_c04f0796cf6dd4 1,15-17,24,168-169,174,177-182,191,233-239,261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "422a370b9510027f77a28830882ca1a6bd209a71",
+  "prompts": {},
+  "sessions": {
+    "s_d04e55f8362046": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a165dc-2abb-7671-aae0-8cec2ac283bc",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
