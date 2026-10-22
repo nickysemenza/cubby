@@ -42,6 +42,9 @@ A Source Claim accepts a provider row ID only as write-time key material. The se
 - Create, update, or delete a Ledger Transfer between parties, including reimbursements and same-party internal moves.
 - List and get Ledger Parties and Ledger Transfers for review, including their own browser list and detail pages under Finance.
 - Pair statement evidence to a transfer without treating mirrored rows as separate transfers.
+  Discovery checks category/kind eligibility together for each bounded page;
+  eligible seeds retain independent evidence previews and complete competing
+  pools, so batching does not weaken ambiguity checks or change page cursors.
 - Accept a suggested transfer pair (`finance.accept_transfer_pair`, or Accept on
   the transaction's Work queue row): one transaction creates the Ledger Transfer
   from the outflow account's owner to the inflow account's owner, for the
