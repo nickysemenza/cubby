@@ -372,6 +372,14 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
           failed: retried.failed.length,
         },
         errors: retried.failed,
+        tallies: {
+          published: retried.published,
+          labelsReused: retried.labelsReused,
+        },
+        reasons: {
+          unchanged: retried.unchanged,
+          out_of_scope: retried.skipped,
+        },
         meta: { retryRefs: retryRefs.slice(refs.length) },
         done: refs.length === retryRefs.length,
       };

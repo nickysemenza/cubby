@@ -1010,7 +1010,7 @@ function transferPreparation(
     preview,
     pool(filter: Pick<LegFilter, "amountsCents" | "from" | "to">) {
       const key = canonicalJson({
-        amountsCents: filter.amountsCents ?? null,
+        amountsCents: filter.amountsCents ? [...filter.amountsCents] : null,
         from: filter.from ?? null,
         to: filter.to ?? null,
       });

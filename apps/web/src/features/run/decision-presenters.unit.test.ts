@@ -145,6 +145,7 @@ describe("Run decision outcomes", () => {
       "transfer_pair_label",
     ]);
     expect(overview.current?.phase).toBe("not_started");
+    expect(overview.current?.total).toBeNull();
     expect(overview.current?.rate).toBeNull();
   });
 });

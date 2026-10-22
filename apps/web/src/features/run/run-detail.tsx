@@ -90,7 +90,7 @@ function useRunDetail(record: RunOut) {
     refetchInterval: polling,
   });
   const overview = steps.data
-    ? runOverview(steps.data, jobs.data, Date.now(), record.input)
+    ? runOverview(steps.data, jobs.data, Date.now(), steps.data.input)
     : null;
   // The family whose ledger the page shows: the latest started step's results.
   const family: AssessmentFamily | null =
@@ -235,7 +235,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       <ReportBlocks
         blocks={runPlanBlocks({
           purpose: record.purpose,
-          input: record.input,
+          input: steps.data?.input,
           steps: steps.data?.steps ?? [],
         })}
       />

@@ -1755,6 +1755,46 @@ export async function regenerateCharges(
     await publishChargeProposal(db, proposal, ruleProducer(null));
 }
 
+/** Admit a retry in its current scope before repairing any projection. */
+async function admitRetriedCharge(
+  db: Database,
+  charge: ChargeRef,
+  scope: StatementSuggestionScope,
+) {
+  const observations = await loadObservations(db, [charge]);
+  if (!observations.length)
+    throw new Error("Retained charge identity was not found");
+  if (scope.importId || scope.since) {
+    const { rows } = await getDb(db).execute(sql`
+      SELECT 1 FROM "SourceTransactionRecord" r WHERE r."deletedAt" IS NULL
+        AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
+        ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
+        ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
+      LIMIT 1
+    `);
+    if (!rows.length) return false;
+  }
+  if (scope.accountIds?.length) {
+    const preparation = await prepareFinancialStatementPreview(db);
+    const stored = observations.find((row) => row.accountId)?.accountId;
+    const preview = await previewFinancialTransactionImport(
+      db,
+      {
+        rows: [previewRowFor(charge, canonicalObservation(observations))],
+      },
+      {
+        preparation,
+        candidatePolicy: "suggestion",
+        accountHints: new Map(stored ? [[chargeId(charge), stored]] : []),
+      },
+    );
+    const account = preview.rows[0]?.accountId;
+    const id = account ? preparation.ids.get(account) : null;
+    if (!id || !scope.accountIds.includes(id)) return false;
+  }
+  return true;
+}
+
 /** Re-admit only retained failed charges through the ordinary current-evidence planner. */
 export async function retryStatementGenerationRefs(
   db: Database,
@@ -1768,6 +1808,9 @@ export async function retryStatementGenerationRefs(
   const failed: RunStepError[] = [];
   let done = 0;
   let skipped = 0;
+  let published = 0;
+  let labelsReused = 0;
+  let unchanged = 0;
   // Keep the same bounded page size even for a large historical failure set.
   for (
     let offset = 0;
@@ -1788,30 +1831,22 @@ export async function retryStatementGenerationRefs(
       return [];
     });
     if (!charges.length) continue;
-    const retained = new Set(
-      (await loadObservations(db, charges)).map(chargeId),
-    );
     const admitted: ChargeRef[] = [];
     for (const charge of charges) {
       const ref = `charge:${chargeId(charge)}`;
-      if (!retained.has(chargeId(charge))) {
-        failed.push(
-          statementGenerationFailure(
-            ref,
-            new Error("Retained charge identity was not found"),
-          ),
-        );
-        continue;
-      }
       try {
-        await withTransactionDatabase(db, async (tx) => {
+        const inScope = await withTransactionDatabase(db, async (tx) => {
           await assertWorkflowEffect(tx);
           await getDb(tx).execute(
             sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`}, 0))`,
           );
+          if (!(await admitRetriedCharge(tx, charge, input.scope ?? {})))
+            return false;
           await retireSettledChargeAdvice(tx, charge);
+          return true;
         });
-        admitted.push(charge);
+        if (inScope) admitted.push(charge);
+        else skipped++;
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
         failed.push(statementGenerationFailure(ref, error));
@@ -1825,11 +1860,14 @@ export async function retryStatementGenerationRefs(
       retryCharges: admitted,
       work: input.work,
     });
+    published += page.published;
+    labelsReused += page.labelsReused;
+    unchanged += page.unchanged;
     failed.push(...page.failed);
     skipped += page.outOfScope;
     done += page.processed - page.failed.length - page.outOfScope;
   }
-  return { done, skipped, failed };
+  return { done, skipped, failed, published, labelsReused, unchanged };
 }
 
 /** One generation page: deterministic, safe to repeat, resumable at `next`. */

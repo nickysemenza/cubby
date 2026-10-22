@@ -46,7 +46,8 @@ const PAGE_SIZE = 25;
 
 const reportHeaderReader = createEntityReader<
   Pick<typeof runTable.$inferSelect, "purpose" | "status" | "input">,
-  Pick<RunOut, "purpose" | "status" | "input">,
+  Pick<RunOut, "purpose" | "status"> &
+    Pick<typeof runTable.$inferSelect, "input">,
   "run"
 >({
   entity: "run",
@@ -91,7 +92,7 @@ const runBase = reportDependency(async (execution) => {
     detail,
     status: runStatus.parse((detail ?? header).status),
     purpose: (detail ?? header).purpose,
-    input: (detail ?? header).input,
+    input: header.input,
   };
 });
 

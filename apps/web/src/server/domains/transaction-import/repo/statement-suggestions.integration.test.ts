@@ -46,6 +46,7 @@ import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/assessment/repo/suggestion-list";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
@@ -828,7 +829,13 @@ describe("statement Transaction suggestions", () => {
           failure.ref ? [failure.ref] : [],
         ),
       });
-      expect(recovered).toEqual({ done: 1, skipped: 0, failed: [] });
+      expect(recovered).toMatchObject({
+        done: 1,
+        skipped: 0,
+        failed: [],
+        published: 1,
+        unchanged: 0,
+      });
       expect(
         await retryStatementGenerationRefs(ctx.db, {
           runId: null,
@@ -836,7 +843,7 @@ describe("statement Transaction suggestions", () => {
             failure.ref ? [failure.ref] : [],
           ),
         }),
-      ).toEqual({ done: 1, skipped: 0, failed: [] });
+      ).toMatchObject({ done: 1, skipped: 0, failed: [] });
       const missing = await retryStatementGenerationRefs(ctx.db, {
         runId: null,
         refs: ["charge:synthetic:missing"],
@@ -871,6 +878,7 @@ describe("statement Transaction suggestions", () => {
       status: "posted",
       amount: 42.5,
       transactionDate: "2026-05-04",
+      postedDate: "2026-05-04",
       sourceRefs: [
         { source: observation.source, externalId: observation.externalId },
       ],
@@ -879,18 +887,44 @@ describe("statement Transaction suggestions", () => {
     await getDb(ctx.db)
       .update(assessmentState)
       .set({ active: true, status: "pending" })
-      .where(eq(assessmentState.id, pending.id));
+      .where(eq(assessmentState.id, pending.assessmentId));
     const charge = {
       source: observation.source,
       chargeKey: observation.chargeKey,
     };
     expect(await buildChargeProposals(ctx.db, [charge])).toEqual([]);
+    const other = await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic other account",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [],
+    });
+    const outside = await retryStatementGenerationRefs(ctx.db, {
+      runId: null,
+      scope: {
+        accountIds: [
+          await resolveOrThrow(ctx.db, "financialAccount", other.output.id),
+        ],
+      },
+      refs: [`charge:${charge.source}:${charge.chargeKey}`],
+    });
+    expect(outside).toMatchObject({
+      done: 0,
+      skipped: 1,
+      failed: [],
+      published: 0,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ active: assessmentState.active })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, pending.assessmentId)),
+    ).toEqual([{ active: true }]);
     expect(
       await retryStatementGenerationRefs(ctx.db, {
         runId: null,
         refs: [`charge:${charge.source}:${charge.chargeKey}`],
       }),
-    ).toEqual({ done: 1, skipped: 0, failed: [] });
+    ).toMatchObject({ done: 1, skipped: 0, failed: [] });
     expect(
       await getDb(ctx.db)
         .select({
@@ -898,7 +932,7 @@ describe("statement Transaction suggestions", () => {
           status: assessmentState.status,
         })
         .from(assessmentState)
-        .where(eq(assessmentState.id, pending.id)),
+        .where(eq(assessmentState.id, pending.assessmentId)),
     ).toEqual([{ active: false, status: "superseded" }]);
     expect(
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),

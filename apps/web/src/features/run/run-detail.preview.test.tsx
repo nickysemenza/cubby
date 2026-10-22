@@ -27,13 +27,6 @@ const run = {
   id: "RUN-4K7M",
   status: "running",
   purpose: "sweep",
-  input: {
-    kind: "sweep",
-    families: [
-      { family: "transfer_pair", scope: {} },
-      { family: "statement_transaction", scope: {} },
-    ],
-  },
 } as RunOut;
 
 const step = (
@@ -61,6 +54,13 @@ const step = (
 });
 
 const steps: RunDetailStepsOut = {
+  input: {
+    kind: "sweep",
+    families: [
+      { family: "transfer_pair", scope: {} },
+      { family: "statement_transaction", scope: {} },
+    ],
+  },
   purpose: "sweep",
   status: "running",
   steps: [

@@ -3,7 +3,6 @@ import {
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import type { JobWaitReason } from "@cubby/schemas/job";
-import type { RunOut } from "@cubby/schemas/run";
 import {
   runStepDeclaration,
   type RunStepInputMode,
@@ -231,7 +230,8 @@ function stepCounts(
   const processed = step.done + step.failed + step.skipped + removed;
   const total =
     mode === "count"
-      ? (meta.input?.total ?? step.found)
+      ? (meta.input?.total ??
+        (step.pages > 0 || step.startedAt ? step.found : null))
       : mode === "estimate"
         ? (meta.input?.total ?? null)
         : null;
@@ -354,7 +354,7 @@ export function runOverview(
   detail: RunDetailStepsOut,
   jobs: JobListOut | undefined,
   now: number,
-  input: RunOut["input"],
+  input: RunDetailStepsOut["input"],
 ): RunOverview {
   const primary = jobs?.primary ?? null;
   const steps = declaredRunSteps(detail.purpose, input).map(
