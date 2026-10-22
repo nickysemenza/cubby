@@ -1,3 +1,4 @@
+import { performOperation } from "./support/dispatch-wire";
 import { entityApi } from "./support/entity-api";
 import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source";
 import { z } from "zod";
@@ -342,36 +343,36 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
     await expect(
       page.getByText(new RegExp(escapeRegExp(`${names.name} card`))).first(),
     ).toBeVisible();
-    await page
-      .getByRole("button", {
-        name: purchaseCode ? "Link settlement" : "Record Expense",
-        exact: true,
-      })
-      .click();
-    await expect
-      .poll(async () => {
-        const allocation =
-          await database.query.financialTransactionAllocation.findFirst({
-            where: and(
-              eq(
-                schema.financialTransactionAllocation.transactionId,
-                transaction.id,
-              ),
-              notDeleted(schema.financialTransactionAllocation),
-            ),
-          });
-        if (!allocation) return undefined;
-        const purchase = await database.query.purchase.findFirst({
-          where: and(
-            eq(schema.purchase.id, allocation.purchaseId),
-            eq(schema.purchase.vendorId, vendorId),
-            notDeleted(schema.purchase),
+    await performOperation(page, "financialTransaction.commitBooking", () =>
+      page
+        .getByRole("button", {
+          name: purchaseCode ? "Link settlement" : "Record Expense",
+          exact: true,
+        })
+        .click(),
+    );
+    const allocation =
+      await database.query.financialTransactionAllocation.findFirst({
+        where: and(
+          eq(
+            schema.financialTransactionAllocation.transactionId,
+            transaction.id,
           ),
-        });
-        purchaseCode = purchase?.shortcode;
-        return purchaseCode;
-      })
-      .toBeTruthy();
+          notDeleted(schema.financialTransactionAllocation),
+        ),
+      });
+    expect(allocation).toBeDefined();
+    const purchase =
+      allocation &&
+      (await database.query.purchase.findFirst({
+        where: and(
+          eq(schema.purchase.id, allocation.purchaseId),
+          eq(schema.purchase.vendorId, vendorId),
+          notDeleted(schema.purchase),
+        ),
+      }));
+    purchaseCode = purchase?.shortcode;
+    expect(purchaseCode).toBeTruthy();
   }
   const productId = await resolveOrThrow(db, "product", product.id);
   const aliasId = await resolveOrThrow(db, "product", duplicate.id);
@@ -470,39 +471,29 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
       name: "Approve and import",
       exact: true,
     });
-    await confirmation
-      .getByRole("button", { name: "Approve and import", exact: true })
-      .click();
+    await performOperation(page, "run.commitPrepared", () =>
+      confirmation
+        .getByRole("button", { name: "Approve and import", exact: true })
+        .click(),
+    );
     await expect(confirmation).toHaveCount(0);
     if (purchaseCode) {
-      // Preparation writes a finding outside the open Run's query cache.
-      // A fresh direct link reads it immediately instead of waiting for the
-      // original Run's polling interval after a same-document hash change.
-      const reconciliationPage = await page.context().newPage();
-      try {
-        await applyReviewedSourceReconciliation(reconciliationPage, {
-          db,
-          baseURL: e2eRuntime.baseURL,
-          purchaseCode,
-          productCode: product.id,
-        });
-      } finally {
-        await reconciliationPage.close();
-      }
+      await applyReviewedSourceReconciliation(page, {
+        db,
+        baseURL: e2eRuntime.baseURL,
+        purchaseCode,
+        productCode: product.id,
+      });
     }
-    await expect
-      .poll(async () => {
-        const purchase = await database.query.purchase.findFirst({
-          where: and(
-            eq(schema.purchase.vendorId, vendorId),
-            eq(schema.purchase.orderId, names.orderId),
-            notDeleted(schema.purchase),
-          ),
-        });
-        purchaseCode = purchase?.shortcode;
-        return purchaseCode;
-      })
-      .toBeTruthy();
+    const purchase = await database.query.purchase.findFirst({
+      where: and(
+        eq(schema.purchase.vendorId, vendorId),
+        eq(schema.purchase.orderId, names.orderId),
+        notDeleted(schema.purchase),
+      ),
+    });
+    purchaseCode = purchase?.shortcode;
+    expect(purchaseCode).toBeTruthy();
   }
   await statement();
   await retailer();

@@ -1,7 +1,7 @@
+import { performOperation } from "./support/dispatch-wire";
 import { recordSourceTransactionRecordsOut } from "@cubby/schemas/source-transaction-record";
 import { startOperation } from "./support/start-operation";
 import { entityApi } from "./support/entity-api";
-import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
@@ -12,30 +12,24 @@ import { setMemberLoginParty } from "~/server/http/member-login";
 import {
   convergenceNames,
   createConvergenceFixtures,
+  importBrowserOrder,
+  sha256Hex,
+  syntheticOrderIds,
 } from "../../tooling/convergence-harness";
 import {
   createFixtureGraph,
   createEvidenceHarnessContext,
   ensureMemberParty,
 } from "./fixtures/core";
-import {
-  chooseOption,
-  gotoAuthenticatedPage,
-  gotoDetailActions,
-} from "./support/e2e-helpers";
-import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source";
+import { gotoDetailActions, openDetailActions } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // Signed refund/group allocations must conserve actual statement activity without
 // auto-booking Expense, duplicating retries, or creating owned Inventory.
 test("reviews statement charge groups and refunds against captured retailer orders", async ({
   page,
-  e2eRuntime,
 }) => {
   test.setTimeout(180_000);
-  const provider = e2eRuntime.googleProvider;
-  if (!provider)
-    throw new Error("Retailer extraction requires its local provider");
   const token = `settlement-${Date.now()}`;
   const names = convergenceNames(token);
   const { db, actor } = await createEvidenceHarnessContext(page);
@@ -171,106 +165,22 @@ test("reviews statement charge groups and refunds against captured retailer orde
       where: notDeleted(schema.expense),
     }),
   ).toHaveLength(expenseCountBefore);
-  const email = z
-    .object({ user: z.object({ email: z.email() }) })
-    .parse(await (await page.request.get("/api/auth/get-session")).json())
-    .user.email;
+  // Captured extraction and browser approval are covered by gmail.input-first-import.
+  // Seed the same production prepare/commit writers; this journey owns settlement review.
   const purchaseCodes: string[] = [];
   for (const index of [0, 1]) {
     const orderToken = `${token}-${index}`;
     const orderNames = convergenceNames(orderToken);
-    const url = `https://${names.host}/orders/${orderNames.orderId}`;
-    const sku = `SYN-SKU-${orderToken}`;
-    const productUrl = `https://${names.host}/products/${sku}`;
-    provider.configure({
-      email,
-      message: {
-        id: `synthetic-unused-${orderToken}`,
-        payload: { headers: [] },
-      },
-      classification: { events: [] },
-      extraction: {
-        url,
-        output: {
-          status: "ready",
-          reason: null,
-          detail: null,
-          candidate: {
-            ...orderNames.retailerCandidate,
-            merchant: names.name,
-            lines: [
-              {
-                title: orderNames.productName,
-                amount: 42.5,
-                lineKind: "principal",
-                costType: null,
-                sku,
-                quantity: 1,
-                productUrl,
-                imageUrl: null,
-                seller: null,
-              },
-            ],
-          },
-        },
-      },
-    });
-    const allowlist = await entityApi(page.request).update(
-      "vendor",
-      prerequisites.vendor.id,
-      { browserDomains: [names.host] },
-      { headers: { Origin: e2eRuntime.baseURL } },
-    );
-    expect(allowlist.ok(), await allowlist.text()).toBe(true);
-    const run = await prepareCapturedRetailerOrder({
-      db,
+    await importBrowserOrder(db, {
       actor,
-      runtime: e2eRuntime,
       vendorId: prerequisites.vendor.id,
-      token: orderToken,
-      url,
-      productUrl,
-      expectedProductText: sku,
-      retailerPages: {
-        [url]: `<title>Synthetic order detail</title><main><h1>${orderNames.orderId}</h1><p>Ordered September 10, 2026. Delivered. USD 42.50</p><p>${orderNames.productName} SKU ${sku} quantity1</p><a href="${productUrl}">Product page</a></main>`,
-        [productUrl]: `<main>${orderNames.productName} SKU ${sku} USD42.50</main>`,
-      },
+      ids: syntheticOrderIds(orderToken),
+      externalKey: `synthetic-settlement:${orderToken}`,
+      checksum: sha256Hex(orderToken),
+      extractionRevision: "synthetic-settlement-v1",
+      candidate: { ...orderNames.retailerCandidate, merchant: names.name },
+      resolveProduct: async () => undefined,
     });
-    await gotoAuthenticatedPage(page, `/runs/${run.publicId}#work`);
-    const approve = page.getByRole("button", {
-      name: "Approve and import",
-      exact: true,
-    });
-    await expect(approve).toBeDisabled();
-    await chooseOption(
-      page,
-      page.getByLabel(`Product decision for ${orderNames.productName}`, {
-        exact: true,
-      }),
-      "Create a new Product",
-    );
-    await expect(approve).toBeDisabled();
-    await chooseOption(
-      page,
-      page.getByLabel("Trade for imported expenses", { exact: true }),
-      "Other",
-    );
-    await expect(approve).toBeEnabled();
-    await approve.click();
-    const confirmation = page.getByRole("dialog", {
-      name: "Approve and import",
-      exact: true,
-    });
-    await confirmation
-      .getByRole("button", { name: "Approve and import", exact: true })
-      .click();
-    await expect(confirmation).toHaveCount(0);
-    // Each captured order is a member's own import Run; wait for its committed result.
-    await expect(
-      page.getByText("Prepared import approved and committed.", {
-        exact: true,
-      }),
-    ).toBeVisible();
     const purchase = await database.query.purchase.findFirst({
       where: and(
         eq(schema.purchase.vendorId, vendorId),
@@ -278,8 +188,7 @@ test("reviews statement charge groups and refunds against captured retailer orde
         notDeleted(schema.purchase),
       ),
     });
-    if (!purchase)
-      throw new Error("Reviewed captured order created no Purchase");
+    if (!purchase) throw new Error("Committed order created no Purchase");
     purchaseCodes.push(purchase.shortcode);
   }
   const purchases = await database.query.purchase.findMany({
@@ -321,16 +230,14 @@ test("reviews statement charge groups and refunds against captured retailer orde
   const saveAllocation = async () => {
     // The live allocation check precedes the write; wait for that write before
     // timing the dialog close and its dependent query invalidations.
-    const saved = page.waitForResponse((response) =>
-      response
-        .url()
-        .endsWith("/operations/financialTransaction.allocateSettlement"),
+    await performOperation(
+      page,
+      "financialTransaction.allocateSettlement",
+      () =>
+        dialog
+          .getByRole("button", { name: "Save allocation", exact: true })
+          .click(),
     );
-    await dialog
-      .getByRole("button", { name: "Save allocation", exact: true })
-      .click();
-    const response = await saved;
-    expect(response.ok(), await response.text()).toBe(true);
     await expect(dialog).toHaveCount(0);
   };
   await dialog.getByRole("button").filter({ hasText: "$85.00" }).click();
@@ -351,11 +258,7 @@ test("reviews statement charge groups and refunds against captured retailer orde
     42.5, 42.5,
   ]);
   const acceptedChargeAllocations = await allocationRows();
-  await gotoDetailActions(
-    page,
-    `/purchases/${firstCode}#financial-settlement`,
-    page.getByRole("button", { name: "Match statement activity", exact: true }),
-  );
+  await openDetailActions(page);
   await page
     .getByRole("button", { name: "Match statement activity", exact: true })
     .click();
