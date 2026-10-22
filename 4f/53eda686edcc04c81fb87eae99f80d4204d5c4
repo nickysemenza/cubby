@@ -1,0 +1,65 @@
+.github/workflows/ci.yaml
+  s_eeef2ac4fa7615::t_5d2f4fe9a2850b 388,413-414,417,424-425,435,446,453
+apps/web/project.json
+  s_eeef2ac4fa7615::t_2673bdaa1339c1 83-85
+apps/web/src/lib/http-api/generator-artifacts.unit.test.ts
+  s_eeef2ac4fa7615::t_20635f7d20f181 28
+apps/web/tooling/build-cf.unit.test.ts
+  s_eeef2ac4fa7615::t_14bdb9fda6d883 25-27
+apps/web/tooling/checks/check-client-bundle.unit.test.ts
+  s_eeef2ac4fa7615::t_91f7a4945dd2b3 33,73
+apps/web/tooling/checks/check-server-closure.unit.test.ts
+  s_eeef2ac4fa7615::t_ee89f62d254d44 16
+apps/web/tooling/checks/read-performance-operations.unit.test.ts
+  s_eeef2ac4fa7615::t_fb7343a051bc84 371,466
+apps/web/tooling/ci-report/summary.ts
+  s_eeef2ac4fa7615::t_1ef233dff59fd4 8-10,33-34,49-51,83-85,97-101
+apps/web/tooling/db-baseline.integration.test.ts
+  s_eeef2ac4fa7615::t_f4cd00b731eb69 65
+apps/web/tooling/db-migrate.unit.test.ts
+  s_eeef2ac4fa7615::t_c96d8f13da0ecb 21-23
+apps/web/tooling/dev/corpus-template.integration.test.ts
+  s_eeef2ac4fa7615::t_0494d6e36ea52a 88,99,133,179-180
+apps/web/tooling/dev/corpus-template.unit.test.ts
+  s_eeef2ac4fa7615::t_086c5170da1f87 53,77,92,127
+apps/web/tooling/dev/storage.unit.test.ts
+  s_eeef2ac4fa7615::t_d4ae1c3dc143ea 48-49
+apps/web/tooling/e2e-run-bundle.unit.test.ts
+  s_eeef2ac4fa7615::t_199d28242ddc7e 21
+apps/web/tooling/entity-declaration-import-boundary.unit.test.ts
+  s_eeef2ac4fa7615::t_ac0a3c51769932 34-36
+apps/web/tooling/entity-generator.unit.test.ts
+  s_eeef2ac4fa7615::t_011866881edcf2 76
+apps/web/tooling/mac-fixture-identity.unit.test.ts
+  s_eeef2ac4fa7615::t_797a7f92d81763 18
+apps/web/tooling/mac-owned-process.unit.test.ts
+  s_eeef2ac4fa7615::t_6a54ad3a7752af 23
+apps/web/tooling/scenarios/corpus.integration.test.ts
+  s_eeef2ac4fa7615::t_55f6bdad4b1033 154
+apps/web/tooling/web-build-provenance.unit.test.ts
+  s_eeef2ac4fa7615::t_5d60cacd936c03 27,38-39
+apps/web/vitest.config.ts
+  s_eeef2ac4fa7615::t_fabc57ce8a30ef 274
+docs/agents/validation-tests.md
+  s_eeef2ac4fa7615::t_8e11f34f9e0b04 129-132
+docs/ci.md
+  s_eeef2ac4fa7615::t_4d1ea7ffe9f963 417-418,422-423
+packages/usda/src/release/builder/build-release.test.ts
+  s_eeef2ac4fa7615::t_4294d75c873bf2 230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4f53eda686edcc04c81fb87eae99f80d4204d5c4",
+  "prompts": {},
+  "sessions": {
+    "s_eeef2ac4fa7615": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96cf421e-31d0-4e4a-9fa3-bcaf218e9b61",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
