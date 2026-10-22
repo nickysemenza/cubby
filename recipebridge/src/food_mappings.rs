@@ -308,8 +308,7 @@ pub fn product_mappings(product: &WProductInput) -> Vec<WUnitMapping> {
 /// collide: every product's `1 each = <size>` normalizes onto the one
 /// `whole ↔ g` edge, and the graph keeps only the last one written. So
 /// `package` edges stay per-product for price and physical conversion, while
-/// `shared` edges are ingredient-level
-/// and always merged.
+/// `shared` edges are ingredient-level and always merged.
 pub(crate) struct ProductPairs {
     /// Stored rows that mention a bare count (`each`/`whole`): the product's
     /// own package. Never food-derived — a USDA `1 whole = 50 g` portion

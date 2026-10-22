@@ -1279,8 +1279,8 @@ impl<'a> Engine<'a> {
 
 /// Direct one-amount resolution through the same ingredient context as recipe
 /// rows. Meal food entries are not recipes: this seam deliberately bypasses
-/// row classification and the consumption model while sharing product graph
-/// merging, label/USDA mappings, and per-product cheapest-price isolation.
+/// row classification and the consumption model while sharing label/USDA
+/// mappings, package isolation, and cheapest-price selection.
 pub(crate) fn resolve_mapped_food(
     amount: &WAmount,
     products: &[WProductInput],

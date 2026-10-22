@@ -107,7 +107,8 @@ struct ValueFormatTests {
     @Test func amountMatchesTheSharedVectors() throws {
         for vector in try GoldenVectors.decode(File.self, named: "display-format").amount {
             #expect(
-                ValueFormat.amount(unit: vector.unit, value: vector.value, upperValue: vector.upper) == vector.out,
+                ValueFormat.amount(unit: vector.unit, value: vector.value, upperValue: vector.upper)
+                    == vector.out,
                 "\(vector.unit) \(vector.value)")
         }
     }

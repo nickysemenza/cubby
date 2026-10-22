@@ -29,11 +29,6 @@ pub(crate) fn resolve(base: Option<&Url>, raw: &str) -> Option<String> {
     matches!(resolved.scheme(), "http" | "https").then(|| resolved.to_string())
 }
 
-/// Browser-page exclusions, including accessibility-hidden content.
-pub(crate) fn is_hidden(element: &ElementRef) -> bool {
-    is_visually_hidden(element) || element.value().attr("aria-hidden") == Some("true")
-}
-
 /// Visual and inert-content exclusions, independent of accessibility exposure.
 pub(crate) fn is_visually_hidden(element: &ElementRef) -> bool {
     let value = element.value();
@@ -132,11 +127,6 @@ pub(crate) fn truncate_utf8(value: &mut String, max: usize) {
     value.truncate(cut);
 }
 
-/// What a reader sees in an element, collapsed to one line.
-pub(crate) fn visible_text(element: ElementRef) -> String {
-    visible_text_with_visibility(element, is_hidden)
-}
-
 pub(crate) fn visible_text_with_visibility(
     element: ElementRef,
     hidden: fn(&ElementRef) -> bool,
@@ -146,20 +136,9 @@ pub(crate) fn visible_text_with_visibility(
     collapse(&out)
 }
 
-/// A clickable element's label. A table row reads as its first visible cell
-/// (an order number, say), not every column run together.
+/// An anchor's text label, falling back to its accessibility label.
 pub(crate) fn link_label(element: ElementRef) -> String {
-    let label = if element.value().name() == "tr" {
-        element
-            .children()
-            .filter_map(ElementRef::wrap)
-            .filter(|cell| matches!(cell.value().name(), "td" | "th"))
-            .map(visible_text)
-            .find(|text| !text.is_empty())
-            .unwrap_or_default()
-    } else {
-        collapse(&element.text().collect::<String>())
-    };
+    let label = collapse(&element.text().collect::<String>());
     if label.is_empty() {
         collapse(element.value().attr("aria-label").unwrap_or_default())
     } else {
