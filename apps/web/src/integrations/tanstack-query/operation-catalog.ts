@@ -459,7 +459,6 @@ function buildSubscriptionDescriptor<
       const streamOptions = {
         operation: id,
         kind: "mutation" as const,
-        url: `/api/workflow-stream/${id}`,
         input,
         eventSchema: definition.event,
       };

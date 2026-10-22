@@ -11,7 +11,7 @@ For what Cubby is and how its entities fit together, see the
 TanStack Start  →  Entity Kernel  →  Repo  →  Database
 Start workflows ───────────────↗
 MCP / jobs      ───────────────↗
-JSONL routes    →  cancellable workflow streams
+Start streams   →  cancellable workflow streams
 ```
 
 - Entity declarations in `packages/schemas/src/entity-definitions/*.entity.ts`

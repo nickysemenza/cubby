@@ -1625,7 +1625,7 @@ mixes queries and mutations, so read-only tools stay auto-approvable. MCP
 invokes `executeEntity` through the kernel verbs of the `entity` (writes) and
 `entity_read` (reads) tools and publishes their machine-readable contract at
 `entities://catalog`. MCP, jobs, repositories, entity modules, and kernel tests must
-not import browser transport modules. Operation adapters and typed JSONL stream routes are the only transport
+not import browser transport modules. Operation adapters and typed Start streams are the only transport
 seams; business behavior remains in the operation modules.
 
 ## Browser cache policy

@@ -2,7 +2,7 @@
  * Shared event shape for server-side streaming bulk operations.
  *
  * A bulk workflow does all the work server-side in one request and yields these
- * events over a typed JSONL route. The client drains them with `useBulkStream`
+ * events over a typed Start stream. The client drains them with `useBulkStream`
  * (`for await`) to drive a progress bar.
  *
  * `Item` is an optional per-unit payload (e.g. which card succeeded/failed), so a

@@ -1,8 +1,6 @@
-import superjson from "superjson";
 import type { z } from "zod";
 
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import { REQUEST_ID_HEADER } from "~/lib/request-id";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { withErrorReporting } from "~/server/errors/report-error";
@@ -10,7 +8,12 @@ import { actorSpanAttributes } from "~/server/http/request-context";
 import type { Workload } from "~/server/http/workload";
 import { observeOperation } from "~/server/observability/observed-request";
 import { getRequestId } from "~/server/observability/tracing";
-import type { PublicStartOperationError } from "~/server/operation-runtime/start-operation.contract";
+import {
+  type PublicStartOperationError,
+  type StartOperationResult,
+  type UnparsedStartOperationData,
+  unparsedStartOperationDataSchema,
+} from "~/server/operation-runtime/start-operation.contract";
 import {
   type AuthenticatedStartOperationContext,
   authenticateStartOperation,
@@ -19,34 +22,20 @@ import {
   throwIfStartOperationAborted,
 } from "~/server/operation-runtime/start-operation.server";
 
-type StreamFrame =
-  | { kind: "event"; payload: ReturnType<typeof superjson.serialize> }
-  | { kind: "error"; error: PublicStartOperationError };
+export type WorkflowStream = ReadableStream<
+  StartOperationResult<UnparsedStartOperationData>
+>;
 
-const encoder = new TextEncoder();
-const encodeFrame = (frame: StreamFrame) =>
-  encoder.encode(`${JSON.stringify(frame)}\n`);
-
-/**
- * A one-frame NDJSON body. The browser reader treats a lone error frame exactly
- * like an error frame mid-stream, so a request that fails before any work
- * starts still surfaces as a `StartOperationError` rather than an HTTP status
- * the caller has to translate.
- */
-export const workflowStreamErrorResponse = (
+/** Keep diagnostic envelopes: Start's thrown Error transport preserves only message. */
+export const workflowStreamError = (
   error: PublicStartOperationError,
-): Response =>
-  new Response(encodeFrame({ kind: "error", error }), {
-    headers: {
-      "cache-control": "private, no-store",
-      "content-type": "application/x-ndjson; charset=utf-8",
+): WorkflowStream =>
+  new ReadableStream({
+    start(controller) {
+      controller.enqueue({ ok: false, error });
+      controller.close();
     },
   });
-
-const hasSameOrigin = (request: Request) => {
-  const origin = request.headers.get("origin");
-  return origin === null || origin === new URL(request.url).origin;
-};
 
 export interface WorkflowStreamRuntime {
   authenticate: typeof authenticateStartOperation;
@@ -60,12 +49,10 @@ const productionWorkflowStreamRuntime = {
   recordDatabaseWrite,
 } satisfies WorkflowStreamRuntime;
 
-export async function workflowStreamResponse<
-  InputSchema extends z.ZodType,
-  Event,
->(
+export async function workflowStream<InputSchema extends z.ZodType, Event>(
   options: {
     request: Request;
+    input: UnparsedStartOperationData;
     operation: StartOperationIdOfKind<"subscription">;
     inputSchema: InputSchema;
     eventSchema: z.ZodType<Event>;
@@ -77,20 +64,14 @@ export async function workflowStreamResponse<
     ) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
   },
   runtime: WorkflowStreamRuntime = productionWorkflowStreamRuntime,
-): Promise<Response> {
-  if (!hasSameOrigin(options.request)) {
-    return new Response("Cross-origin workflow streams are not allowed", {
-      status: 403,
-    });
-  }
-
+): Promise<WorkflowStream> {
   const abortController = new AbortController();
   const signal = AbortSignal.any([
     options.request.signal,
     abortController.signal,
   ]);
   let mutationStarted = false;
-  const stream = new ReadableStream<Uint8Array>({
+  return new ReadableStream({
     start(controller) {
       void withErrorReporting(async () => {
         // Authentication and input parsing happen INSIDE the span, the same
@@ -124,8 +105,7 @@ export async function workflowStreamResponse<
 
               actorVerified = true;
               stage = "input";
-              const rawInput = superjson.parse(await options.request.text());
-              const input = options.inputSchema.parse(rawInput);
+              const input = options.inputSchema.parse(options.input);
 
               stage = "run";
               mutationStarted = true;
@@ -135,12 +115,10 @@ export async function workflowStreamResponse<
                 stage = "output";
                 const parsed = options.eventSchema.parse(event);
                 await runtime.recordDatabaseWrite(options.operation);
-                controller.enqueue(
-                  encodeFrame({
-                    kind: "event",
-                    payload: superjson.serialize(parsed),
-                  }),
-                );
+                controller.enqueue({
+                  ok: true,
+                  data: unparsedStartOperationDataSchema.parse(parsed),
+                });
                 stage = "run";
               }
             },
@@ -157,9 +135,7 @@ export async function workflowStreamResponse<
                 headers: options.request.headers,
               },
             );
-            controller.enqueue(
-              encodeFrame({ kind: "error", error: normalized.publicError }),
-            );
+            controller.enqueue({ ok: false, error: normalized.publicError });
           }
         } finally {
           if (mutationStarted)
@@ -173,13 +149,4 @@ export async function workflowStreamResponse<
       if (mutationStarted) await runtime.recordDatabaseWrite(options.operation);
     },
   });
-
-  const headers = new Headers({
-    "cache-control": "private, no-store",
-    "content-type": "application/x-ndjson; charset=utf-8",
-    "x-content-type-options": "nosniff",
-  });
-  const requestId = getRequestId(options.request.headers);
-  if (requestId) headers.set(REQUEST_ID_HEADER, requestId);
-  return new Response(stream, { headers });
 }
