@@ -935,6 +935,60 @@ const parseLegKey = (key: string) => {
   return null;
 };
 
+/** Reject non-transfer seeds together; eligible seeds still hydrate independently
+ * so preview duplicate checks and complete competing pools remain unchanged. */
+async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
+  const parsed = keys.map(parseLegKey);
+  const codes = parsed.flatMap((leg) => (leg?.code ? [leg.code] : []));
+  const charges = parsed.flatMap((leg) => (leg?.charge ? [leg.charge] : []));
+  const selections = [
+    ...(codes.length
+      ? [
+          sql`SELECT 'ftx:' || ft.shortcode AS key, ft.amount,
+          ft.kind AS "recordedKind", ft."sourceCategory"
+        FROM "FinancialTransaction" ft
+        WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${sql.join(
+          codes.map((code) => sql`${code}`),
+          sql`, `,
+        )})`,
+        ]
+      : []),
+    ...(charges.length
+      ? [
+          sql`SELECT 'stmt:' || r.source || ':' || r."chargeKey" AS key,
+          -r."providerAmount" AS amount, NULL::text AS "recordedKind", r."sourceCategory"
+        FROM "StatementRow" r
+        WHERE r.current AND r."deletedAt" IS NULL
+          AND (r.source, r."chargeKey") IN (${sql.join(
+            charges.map(
+              (charge) => sql`(${charge.source}, ${charge.chargeKey})`,
+            ),
+            sql`, `,
+          )})`,
+        ]
+      : []),
+  ];
+  if (!selections.length) return new Set<string>();
+  const { rows } = await unwrapDb(db).execute<{
+    key: string;
+    amount: string | number;
+    recordedKind: string | null;
+    sourceCategory: string | null;
+  }>(sql.join(selections, sql` UNION ALL `));
+  return new Set(
+    rows.flatMap((row) =>
+      isSeed({
+        recordedKind: row.recordedKind
+          ? financialTransactionKind.parse(row.recordedKind)
+          : null,
+        ...categorySignals(row.sourceCategory, Number(row.amount)),
+      })
+        ? [row.key]
+        : [],
+    ),
+  );
+}
+
 async function discover(
   db: Database,
   seeds: Seeds,
@@ -1525,12 +1579,20 @@ export async function generateTransferPairSuggestionsPage(
   page.next = { kind: "retire", after: null };
   if (!seeds.length) return page;
   const accounts = await loadAccounts(db);
+  const potentialSeeds = await potentialTransferSeeds(
+    db,
+    seeds.slice(0, limit),
+  );
   for (const [index, seed] of seeds.entries()) {
     if (index >= limit || page.found >= limit) {
       page.next = { kind: "discover", afterSeed, seed: null, afterPair: null };
       break;
     }
     page.processed++;
+    if (!potentialSeeds.has(seed)) {
+      afterSeed = seed;
+      continue;
+    }
     let pairs: Pair[];
     try {
       pairs = (

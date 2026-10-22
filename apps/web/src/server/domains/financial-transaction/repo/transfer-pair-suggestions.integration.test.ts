@@ -13,7 +13,7 @@ import {
 } from "@cubby/schemas/transfer-pair-suggestion";
 import { eq, isNull, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -265,6 +265,36 @@ describe("transfer-pair suggestions", () => {
         judgment.outflow.accountId === accountId ||
         judgment.inflow.accountId === accountId,
     );
+
+  it("filters ordinary spending seeds in one page without per-record hydration", async () => {
+    const member = await owner("Synthetic batch member");
+    const checking = await account("Synthetic batch checking", member);
+    await transaction(checking, 10, "2026-05-04", {
+      kind: "purchase",
+      sourceCategory: "Shopping",
+    });
+    await statement(
+      [20, 30, 40].map((amount) => ({
+        account: "Synthetic batch checking",
+        date: "2026-05-04",
+        amount,
+        description: "SYNTHETIC SHOP",
+        category: "Shopping",
+      })),
+    );
+    const single = await countTestDbQueries(() =>
+      generateTransferPairSuggestionsPage(ctx.db, { runId: null, limit: 1 }),
+    );
+    const batch = await countTestDbQueries(() =>
+      generateTransferPairSuggestionsPage(ctx.db, { runId: null, limit: 4 }),
+    );
+    expect(single.result.processed).toBe(1);
+    expect(batch.result.processed).toBe(4);
+    expect(batch.result.found).toBe(0);
+    expect(batch.result.failed).toEqual([]);
+    expect(batch.queryCount).toBe(single.queryCount);
+    expect(await pending()).toEqual([]);
+  });
 
   it("resumes bounded discovery with complete competitors and verifies absence only after coverage", async () => {
     const member = await owner("Synthetic paging member");
