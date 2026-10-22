@@ -2,8 +2,7 @@ import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
-import { env } from "~/env";
-import { auth } from "~/lib/auth";
+import { getAuth } from "~/lib/auth";
 import { APP_ORIGIN, MCP_RESOURCE } from "~/lib/auth-constants";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -19,6 +18,7 @@ import {
   verifyPurchaseAgentOAuthState,
 } from "~/server/domains/purchase-import/repo/agent-auth";
 import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/repo/run-service";
+import { getAuthSecret } from "~/server/http/auth-configuration";
 import {
   createRequestContext,
   requireActor,
@@ -74,7 +74,7 @@ const callbackDependencies: CallbackDependencies = {
   },
   async exchangeCode(request, code, verifier) {
     return tokenResponse.parse(
-      await auth.api.oauth2Token({
+      await getAuth().api.oauth2Token({
         headers: request.headers,
         body: {
           grant_type: "authorization_code",
@@ -99,7 +99,7 @@ const callbackDependencies: CallbackDependencies = {
       await import("~/server/domains/purchase-import/repo/dispatch")
     ).recordRunDispatchAttempt(db, input),
   verifyState(token) {
-    return verifyPurchaseAgentOAuthState(token, env.BETTER_AUTH_SECRET);
+    return verifyPurchaseAgentOAuthState(token, getAuthSecret());
   },
 };
 

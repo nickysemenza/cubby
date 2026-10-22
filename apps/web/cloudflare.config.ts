@@ -27,6 +27,28 @@ const workflowPlatformLimits = z
     ),
   );
 
+// Read identity bytes rather than importing the runtime module: config imports
+// are denied by the Cloudflare Vite plugin's Worker loader.
+const workerIdentity: typeof import("./worker-identity.json") = JSON.parse(
+  readFileSync(new URL("./worker-identity.json", import.meta.url), "utf8"),
+);
+const identityName = <T extends object>(record: T) => {
+  const names = Object.keys(record);
+  const name = names[0];
+  if (names.length !== 1 || name === undefined)
+    throw new Error("Worker identity must contain exactly one name");
+  return name;
+};
+const workerQueueNames = {
+  background: identityName(workerIdentity.queues.background),
+  telemetry: identityName(workerIdentity.queues.telemetry),
+  purchaseAgent: identityName(workerIdentity.queues.purchaseAgent),
+};
+const workerCronSchedules = {
+  backgroundRecovery: identityName(workerIdentity.crons.backgroundRecovery),
+  dailyMaintenance: identityName(workerIdentity.crons.dailyMaintenance),
+};
+
 // Existing names and lifecycle tombstones preserve stored Durable Object namespaces.
 export const productionWorker = defineWorker({
   name: "cubby",
@@ -68,11 +90,12 @@ export const productionWorker = defineWorker({
     htmlHandling: "none",
   },
   domains: ["cubby.nickysemenza.com"],
-  // Queue delivery only wakes durable Jobs; cron recovers missed wakeups.
+  // Background delivery wakes durable Jobs; other queues own their payloads.
+  // The minute cron recovers missed Job wakeups.
   triggers: [
-    triggers.scheduled({ schedule: "* * * * *" }),
+    triggers.scheduled({ schedule: workerCronSchedules.backgroundRecovery }),
     triggers.scheduled({
-      schedule: "0 12 * * *",
+      schedule: workerCronSchedules.dailyMaintenance,
     }),
 
     triggers.queue({
@@ -80,20 +103,20 @@ export const productionWorker = defineWorker({
       maxBatchTimeout: 0,
       maxConcurrency: 2,
       maxRetries: 3,
-      name: "cubby-background",
+      name: workerQueueNames.background,
     }),
     triggers.queue({
       maxBatchSize: 100,
       maxBatchTimeout: 5,
       maxConcurrency: 1,
       maxRetries: 3,
-      name: "cubby-telemetry",
+      name: workerQueueNames.telemetry,
     }),
     triggers.queue({
       maxBatchSize: 10,
       maxBatchTimeout: 5,
       maxRetries: 3,
-      name: "cubby-purchase-agent",
+      name: workerQueueNames.purchaseAgent,
     }),
   ],
   env: {
@@ -129,13 +152,13 @@ export const productionWorker = defineWorker({
       name: "cubby-openai-text-embedding-3-small-1536",
     }),
     BACKGROUND_QUEUE: bindings.queue({
-      name: "cubby-background",
+      name: workerQueueNames.background,
     }),
     TELEMETRY_QUEUE: bindings.queue({
-      name: "cubby-telemetry",
+      name: workerQueueNames.telemetry,
     }),
     PURCHASE_AGENT_QUEUE: bindings.queue({
-      name: "cubby-purchase-agent",
+      name: workerQueueNames.purchaseAgent,
     }),
     AI_GATEWAY_EGRESS: bindings.durableObject({
       worker: "cubby",

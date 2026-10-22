@@ -1,5 +1,6 @@
 // Type-only RPC contracts keep global Worker environment inference isolated from
-// runtime implementations. worker-environment.d.ts checks this map against exports.
+// runtime implementations. ConfiguredWorkerRpc checks live config declarations;
+// config-runtime-boundary.test.ts checks the entry module's actual re-export names.
 import type { Rpc } from "@cloudflare/workers-types";
 
 import type { ChatGptPlanRpc } from "./ai/chatgpt/rpc";
@@ -44,7 +45,7 @@ export interface WorkerRpc {
 type Worker = typeof import("../../cloudflare.config").productionWorker;
 type LiveExport = {
   [E in keyof Worker["exports"]]: Worker["exports"][E] extends {
-    state: "deleted";
+    state: "deleted" | "renamed" | "transferred";
   }
     ? never
     : E;

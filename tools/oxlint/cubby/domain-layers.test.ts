@@ -205,7 +205,15 @@ test("platform and generic code never reach a domain's service or operations", (
   );
 });
 
-test("http, mcp, and workflows import like operations and stay importable", () => {
+test("http, mcp, worker, and workflows import like operations and stay importable", () => {
+  assert.equal(
+    violation(
+      `${S}/worker/http.ts`,
+      `${S}/domains/calendar/service/feed`,
+      false,
+    ),
+    undefined,
+  );
   assert.equal(
     violation(
       `${S}/http/request-services.ts`,

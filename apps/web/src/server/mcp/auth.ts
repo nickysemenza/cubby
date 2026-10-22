@@ -2,13 +2,13 @@ import { userId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
-import { env } from "~/env";
-import { auth } from "~/lib/auth";
+import { getAuth } from "~/lib/auth";
 import { MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
 import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
   verifyPurchaseAgentDelegation,
 } from "~/server/domains/purchase-import/repo/agent-auth";
+import { getAuthSecret } from "~/server/http/auth-configuration";
 
 import {
   createMcpTokenVerifier,
@@ -38,7 +38,7 @@ const log = createLogger("mcp-auth");
  * once deployed. Reading the key set directly is also simply better: no HTTP
  * round trip on the MCP hot path.
  */
-const fetchJwks = () => auth.api.getJwks();
+const fetchJwks = () => getAuth().api.getJwks();
 
 /**
  * Stable identity for better-auth's JWKS cache. Without it, a function-based
@@ -78,7 +78,7 @@ export const verifyMcpToken = async (request: Request) => {
   if (authorization?.startsWith("Bearer ")) {
     const token = authorization.slice("Bearer ".length).trim();
     const delegation = token
-      ? await verifyPurchaseAgentDelegation(token, env.BETTER_AUTH_SECRET)
+      ? await verifyPurchaseAgentDelegation(token, getAuthSecret())
       : null;
     if (delegation) {
       return {

@@ -8,7 +8,7 @@ import type { ESTree } from "@oxlint/plugins";
  *
  * Server: a role is the path segment after `domains/<x>/` or `generic/<x>/`
  * (`repo`, `service`, `operations`, as a folder or a `<role>.ts` file). The
- * entry points `http/`, `mcp/`, and `workflows/` import like `operations` but
+ * entry points `http/`, `mcp/`, `worker/`, and `workflows/` import like `operations` but
  * are imported as platform infrastructure. Roles
  * import only the same or a lower role (`operations` → `service` → `repo` →
  * `db`), in any domain; `ai/repo/` ranks as `repo`. `repo` never imports
@@ -36,7 +36,8 @@ const ROLE_PATH =
   /^apps\/web\/src\/server\/(domains|generic)\/([^/]+)\/(repo|service|operations)(?:[./]|$)/u;
 const EXEMPT = /\.(?:test|spec)\.tsx?$|\.fixtures\.tsx?$|\.live-eval\.ts$/u;
 
-const ENTRY_PATH = /^apps\/web\/src\/server\/(?:http|mcp|workflows)(?:[./]|$)/u;
+const ENTRY_PATH =
+  /^apps\/web\/src\/server\/(?:http|mcp|worker|workflows)(?:[./]|$)/u;
 
 const isRole = (value: string | undefined): value is Role =>
   value === "repo" || value === "service" || value === "operations";

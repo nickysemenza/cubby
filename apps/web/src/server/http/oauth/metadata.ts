@@ -1,4 +1,4 @@
-import { auth } from "~/lib/auth";
+import { getAuth } from "~/lib/auth";
 import { MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "~/lib/auth-constants";
 
 /**
@@ -31,11 +31,11 @@ export function preflightHandler() {
  * Serve a better-auth discovery document from a root-level `/.well-known/…`
  * alias by replaying the request at its canonical path under the auth handler.
  *
- * Not `oauthProviderAuthServerMetadata(auth)`: that helper calls `auth.api.*`
+ * Not `oauthProviderAuthServerMetadata(auth)`: that helper calls `getAuth().api.*`
  * directly, which never populates `ctx.baseURL`, so every endpoint in the
  * document comes back as a bare path (`/oauth2/authorize`) instead of an
  * absolute URL — RFC 8414 requires absolute, and clients choke on it. Going
- * through `auth.handler` gets better-auth's own per-request origin inference,
+ * through `getAuth().handler` gets better-auth's own per-request origin inference,
  * which is also what keeps dev and prod working off one code path.
  */
 function proxyToAuthHandler(canonicalPath: string) {
@@ -43,7 +43,7 @@ function proxyToAuthHandler(canonicalPath: string) {
     const url = new URL(request.url);
     url.pathname = canonicalPath;
     return withCors(
-      await auth.handler(
+      await getAuth().handler(
         new Request(url, { method: request.method, headers: request.headers }),
       ),
     );

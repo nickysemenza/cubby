@@ -1,4 +1,4 @@
-import { auth } from "~/lib/auth";
+import { getAuth } from "~/lib/auth";
 import {
   createRequestContext,
   requireActor,
@@ -8,7 +8,10 @@ import { dispatchStartOperation } from "~/server/operation-runtime/start-operati
 import { createHttpApiHandler } from "./http-api-handler";
 
 export const handleHttpOperation = createHttpApiHandler({
-  auth: auth.api,
+  auth: {
+    getSession: (options) => getAuth().api.getSession(options),
+    verifyApiKey: (options) => getAuth().api.verifyApiKey(options),
+  },
   context: async (options) => requireActor(await createRequestContext(options)),
   dispatch: dispatchStartOperation,
 });

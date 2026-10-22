@@ -341,22 +341,37 @@ native PostgreSQL installation remain owned by their existing runners.
 
 ## Deployment (`apps/web` on Workers)
 
-| File                                                              | Purpose                                                    |
-| ----------------------------------------------------------------- | ---------------------------------------------------------- |
-| [apps/web/src/cf-server.ts](../apps/web/src/cf-server.ts)         | Worker entry; wraps requests in `withRequestDb()`          |
-| [apps/web/src/server/db.ts](../apps/web/src/server/db.ts)         | Request pools and scoped background pool cleanup           |
-| [packages/wasm/workerd.js](../packages/wasm/workerd.js)           | Shared WASM initialization for production and test Workers |
-| [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts) | Bindings, vars, compat flags, secret names                 |
+| File                                                              | Purpose                                                       |
+| ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| [apps/web/src/cf-server.ts](../apps/web/src/cf-server.ts)         | Platform Adapter; SDK wrapping, event handlers and DO exports |
+| [apps/web/src/server/db.ts](../apps/web/src/server/db.ts)         | Request pools and scoped background pool cleanup              |
+| [packages/wasm/workerd.js](../packages/wasm/workerd.js)           | Shared WASM initialization for production and test Workers    |
+| [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts) | Bindings, vars, compat flags, secret names                    |
 
 - **Hyperdrive.** Both bindings use one Neon origin. Account-side configuration
   and reconstruction live in [infrastructure](infrastructure.md#postgresql-and-hyperdrive);
   application read/freshness timing is owned by
   `apps/web/src/server/db/freshness/hyperdrive-cache-policy.ts`. Missing freshness state or a
   timeout falls back to strong reads.
-- **Background tasks are self-contained queue messages** on
-  `cubby-background`. There is no execution table and no dead-letter queue.
-  - Every handler re-checks its row's own freshness marker, so redelivery is a
-    no-op.
+- **Worker invocation ownership.** `server/worker/http.ts` owns explicit protocol
+  dispatch, lazy request DB scope and response-body observation; `queue.ts` owns
+  known-queue selection and awaited consumer completion; `scheduled.ts` owns cron
+  selection and attempt-all failure propagation. Binding access is invocation-scoped
+  with `withCfEnv`; authentication reads current bindings and caches only matching
+  configuration values, including the current signing secret. It does not mutate
+  `process.env` or retain a module-initialized auth policy. Response-independent work uses `afterResponse`, while required
+  durable work remains in Jobs/Queues/DOs. Successful WebSocket upgrades are returned
+  verbatim; ordinary responses, including socket refusals, receive correlation.
+  Keep feature imports at their protocol/event owner. Dynamic syntax alone does not
+  establish emitted size or startup savings.
+- **Deployment identities.** `apps/web/worker-identity.json` owns queue names and cron
+  expressions. Config reads its bytes to avoid making runtime modules Vite-denied
+  configuration dependencies. Runtime/local adapters use `server/worker-identity.ts`.
+  Keep resource IDs, binding declarations, placement and DO lifecycle in native config;
+  generated Env inference remains authoritative. DO named exports preserve namespaces.
+- **Background queue messages wake durable Jobs** on `cubby-background`. The minute
+  recovery cron repairs missed wakes; domain consumers retain per-message ack/retry.
+  Unknown transport queues are rejected before message parsing or DB access.
   - Daily maintenance is a `maintenance` Run (cron `scheduled`, the Problems
     card's Run now `manual`; one active pass at a time) whose steps
     (`domains/maintenance/service/maintenance-run.ts`) drain every backlog page
