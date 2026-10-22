@@ -2397,6 +2397,14 @@ and emit no migration.
 
 Compact entity facts, including board cards, use the shared quality value and lazy field explanation; they never summarize the quality object as a field count.
 
+Every scored entity receives a shared, unscored display-image check. Without a
+usable direct or declared related image, its score is capped at 99; this check
+cannot be waived with a DataException. It uses the thumbnail resolver's presence
+predicate, so deleted images, PDFs, failed renders and unavailable files do not
+qualify. Existing weighted image checks still own their domain requirements.
+Entities without applicable weighted checks remain unassessed when the image
+check passes; an absent image supplies the unresolved 99 cap.
+
 Product price checks share catalog price evidence for filtering and a scoped
 numeric projection for quality hydration. Applicability, missing-value checks,
 and exception fingerprints read the same projection during hydration. Both

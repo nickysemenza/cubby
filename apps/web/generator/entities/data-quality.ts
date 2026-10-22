@@ -1,3 +1,4 @@
+import { displayImageQualityCheck } from "../../../../packages/schemas/src/entity-definitions/data-quality-image.ts";
 import { dataQuality } from "../../../../packages/schemas/src/data-quality-shape.ts";
 import {
   EntityDeclarationError,
@@ -152,10 +153,13 @@ export const compileDataQuality = (
     throw new EntityDeclarationError(
       `${context}.capabilities.dataQuality needs model.sort (the score is a sort).`,
     );
-  const checks = raw.checks.map((check) => ({
-    ...check,
-    kind: policyGapKinds[check.id] ?? check.kind,
-  }));
+  const checks = [
+    ...raw.checks.map((check) => ({
+      ...check,
+      kind: policyGapKinds[check.id] ?? check.kind,
+    })),
+    displayImageQualityCheck(entityKey),
+  ];
   const ids = checks.map((check) => check.id);
   if (new Set(ids).size !== ids.length)
     throw new EntityDeclarationError(

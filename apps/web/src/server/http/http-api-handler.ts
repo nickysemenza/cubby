@@ -1,7 +1,7 @@
 import { userId } from "@cubby/schemas/identifiers";
 import { isAppRoute, type AppRoute, type AppRouter } from "@ts-rest/core";
 import {
-  fetchRequestHandler,
+  createFetchHandler,
   type RouterImplementation,
   TsRestHttpError,
   type TsRestRequest,
@@ -480,6 +480,17 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
     });
   };
 
+  const fetchHandler = createFetchHandler(httpContract, router, {
+    responseValidation: false,
+    requestMiddleware: [normalizeQueryLists],
+    errorHandler,
+    responseHandlers: [
+      (response) => {
+        response.headers.set("Cache-Control", "no-store");
+      },
+    ],
+  });
+
   return async function handleHttpOperation(
     incoming: Request,
   ): Promise<Response> {
@@ -514,24 +525,6 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
           },
         },
       );
-    return withErrorReporting(
-      () =>
-        fetchRequestHandler({
-          request,
-          contract: httpContract,
-          router,
-          options: {
-            responseValidation: false,
-            requestMiddleware: [normalizeQueryLists],
-            errorHandler,
-            responseHandlers: [
-              (response) => {
-                response.headers.set("Cache-Control", "no-store");
-              },
-            ],
-          },
-        }),
-      request.headers,
-    );
+    return withErrorReporting(() => fetchHandler(request), request.headers);
   };
 }

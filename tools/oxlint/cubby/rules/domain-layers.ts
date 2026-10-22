@@ -8,7 +8,7 @@ import type { ESTree } from "@oxlint/plugins";
  *
  * Server: a role is the path segment after `domains/<x>/` or `generic/<x>/`
  * (`repo`, `service`, `operations`, as a folder or a `<role>.ts` file). The
- * entry points `http/`, `mcp/`, and `workflows/` import like `operations` but
+ * entry points `http/`, `mcp/`, `worker/`, and `workflows/` import like `operations` but
  * are imported as platform infrastructure. Roles
  * import only the same or a lower role (`operations` → `service` → `repo` →
  * `db`), in any domain; `ai/repo/` ranks as `repo`. `repo` never imports
@@ -36,7 +36,8 @@ const ROLE_PATH =
   /^apps\/web\/src\/server\/(domains|generic)\/([^/]+)\/(repo|service|operations)(?:[./]|$)/u;
 const EXEMPT = /\.(?:test|spec)\.tsx?$|\.fixtures\.tsx?$|\.live-eval\.ts$/u;
 
-const ENTRY_PATH = /^apps\/web\/src\/server\/(?:http|mcp|workflows)(?:[./]|$)/u;
+const ENTRY_PATH =
+  /^apps\/web\/src\/server\/(?:http|mcp|worker|workflows)(?:[./]|$)/u;
 
 const isRole = (value: string | undefined): value is Role =>
   value === "repo" || value === "service" || value === "operations";
@@ -74,6 +75,7 @@ export function targetPath(
   filename: string,
   source: string,
 ): string | undefined {
+  if (source === "@cubby/recipebridge/worker") return `${SERVER}wasm`;
   if (source.startsWith("~/")) return posix.join(SRC, source.slice(2));
   if (source.startsWith("./") || source.startsWith("../"))
     return posix.normalize(posix.join(posix.dirname(filename), source));
@@ -86,7 +88,8 @@ type LayerMessage =
   | "serviceDb"
   | "platformUpward"
   | "uiUpward"
-  | "entityUpward";
+  | "entityUpward"
+  | "workerWasm";
 
 export function violation(
   from: string,
@@ -115,6 +118,7 @@ export function violation(
     if (isDb(from) && toRole) return "upward";
     return;
   }
+  if (/^apps\/web\/src\/server\/wasm(?:\.ts)?$/u.test(to)) return "workerWasm";
   if (typeOnly) return;
   if (
     from.startsWith(`${SRC}ui/`) &&
@@ -147,6 +151,8 @@ export const domainLayersRule = defineRule({
         'ui/ may not import "{{source}}": shared UI stays independent of entity and feature code.',
       entityUpward:
         'entity/ may not import "{{source}}": the entity platform stays independent of feature folders.',
+      workerWasm:
+        'Worker WASM capabilities ("{{source}}") belong in src/server; use ~/lib/wasm for browser-safe compute.',
     },
   },
   create(context) {

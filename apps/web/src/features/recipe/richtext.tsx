@@ -16,7 +16,7 @@ import { tryFormatAmount } from "../../ui/text/format-amount";
 export function parseRichTextSafe(
   text: string,
   ingredientNames: string[],
-): WRichItem[] {
+): ReadonlyDeep<WRichItem[]> {
   try {
     return wasm.parse_rich_text(text, ingredientNames);
   } catch {

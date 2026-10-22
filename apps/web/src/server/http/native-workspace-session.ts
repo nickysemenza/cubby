@@ -1,4 +1,4 @@
-import { auth } from "~/lib/auth";
+import { getAuth } from "~/lib/auth";
 
 /** Browser authority comes only from the supplied native credential, never an
  * ambient cookie from a different account. The signed token stays HttpOnly. */
@@ -11,6 +11,7 @@ export async function nativeWorkspaceSession(request: Request) {
       status: 401,
       headers,
     });
+  const auth = getAuth();
   const session = await auth.api.getSession({
     headers: new Headers({ Authorization: `Bearer ${bearer}` }),
     query: { disableCookieCache: true, disableRefresh: true },

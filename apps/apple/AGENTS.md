@@ -203,7 +203,8 @@ None is committed; edit the generator or its inputs, never the output. A missing
   same code as web (WASM) and native (UniFFI `format_*` in `cubby-ffi`, wrapped by `CubbyKit`
   `ValueFormat`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
   `ListTotalsSummary` only prints them. The Rust tests read `display-format.json`
-  directly; `DisplayFormatTests` and the web `display-format.unit.test.ts` are binding checks. Only
+  directly; Swift `DisplayFormatTests` / `ValueFormatTests` and web
+  `display-format.unit.test.ts` / `format-amount.unit.test.ts` check the bindings. Only
   `plainDate` stays per platform (no timezone database in Rust; `DisplayFormat.plainDate` /
   `formatCalendarDay`) and timestamps stay locale-aware platform code. Never format a catalog value
   with `.formatted()` in a view, and never re-implement a rule in Swift or TypeScript: edit the

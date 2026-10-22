@@ -1,6 +1,6 @@
 /** Failure: workerd's WASM instantiation compacts Email HTML differently from
  * Node, so production triage reads a view no Node test exercised. */
-import { compact_email_html } from "@cubby/recipebridge";
+import { compact_email_html } from "@cubby/recipebridge/worker";
 import { describe, expect, it } from "vitest";
 
 import {

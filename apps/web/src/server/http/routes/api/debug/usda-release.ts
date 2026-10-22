@@ -1,7 +1,7 @@
 import { userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 
-import { auth } from "~/lib/auth";
+import { getAuth } from "~/lib/auth";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { db } from "~/server/db";
@@ -29,11 +29,11 @@ async function timed<T>(fn: () => PromiseLike<T>) {
 async function authenticate(request: Request): Promise<Response | null> {
   let actor: RequestActor | null = null;
   if (request.headers.has("x-api-key")) {
-    actor = await verifyHttpApiKeyActor(request, auth.api);
+    actor = await verifyHttpApiKeyActor(request, getAuth().api);
   } else {
     const session = await authenticateHttpSession({
       headers: request.headers,
-      getSession: auth.api.getSession,
+      getSession: getAuth().api.getSession,
     });
     if (session.response)
       actor = {

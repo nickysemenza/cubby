@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, vi } from "vitest";
+import { toast } from "sonner";
 
 import { configureBrowserTestEnvironment } from "~/lib/test/browser-harness";
 
@@ -40,6 +41,9 @@ afterEach(() => {
   const errors: unknown[] = [];
   for (const step of [
     () => cleanup(),
+    // Sonner keeps notifications outside the React tree. A later Toaster must
+    // not replay another test's entity links without their query providers.
+    () => toast.dismiss(),
     () => document.body.replaceChildren(),
     () => localStorage.clear(),
     () => sessionStorage.clear(),

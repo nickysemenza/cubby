@@ -476,19 +476,21 @@ describe("Email data quality", () => {
         .get(id(row))
         ?.gaps.map((gap) => gap.check)
         .sort();
-    expect(gaps(unrelated)).toEqual([]);
+    expect(gaps(unrelated)).toEqual(["email_display_image"]);
     expect(gaps(related)).toEqual([
+      "email_display_image",
       "email_not_imported",
       "email_original_missing",
       "email_preview_missing",
       "email_relevance_unreviewed",
     ]);
     expect(gaps(retained)).toEqual([
+      "email_display_image",
       "email_not_imported",
       "email_preview_missing",
       "email_relevance_unreviewed",
     ]);
-    expect(gaps(linked)).toEqual([]);
+    expect(gaps(linked)).toEqual(["email_display_image"]);
 
     const reviewQueue = await listEmailsRead(
       ctx.db,

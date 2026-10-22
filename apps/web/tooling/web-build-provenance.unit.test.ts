@@ -255,10 +255,13 @@ describe("web build freshness", () => {
   });
   // The cookbook package is built by its own crate and bundled only by the
   // client; editing either must not reuse the previous bundle.
-  it("tracks the cookbook wasm crate and its package", () => {
+  it("tracks the cookbook crate, runtime adapter, and built package", () => {
     const { root, put } = fixture();
     writeWebBuildProvenance(root);
-    put("recipebridge/cookbook/src/lib.rs", "pub fn changed() {}");
+    put("cookbook-wasm/src/lib.rs", "pub fn changed() {}");
+    expect(readWebBuildProvenance(root).matchesSource).toBe(false);
+    writeWebBuildProvenance(root);
+    put("packages/wasm/workerd.js", "export const changed = true;");
     expect(readWebBuildProvenance(root).matchesSource).toBe(false);
     writeWebBuildProvenance(root);
     put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm", "rebuilt");

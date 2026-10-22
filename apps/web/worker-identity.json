@@ -1,0 +1,18 @@
+{
+  "queues": {
+    "background": {
+      "cubby-background": "background"
+    },
+    "telemetry": {
+      "cubby-telemetry": "telemetry"
+    }
+  },
+  "crons": {
+    "backgroundRecovery": {
+      "* * * * *": true
+    },
+    "dailyMaintenance": {
+      "0 12 * * *": true
+    }
+  }
+}

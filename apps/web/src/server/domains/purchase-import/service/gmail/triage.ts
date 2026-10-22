@@ -1,11 +1,10 @@
-import type { WCompactEmail } from "@cubby/recipebridge";
+import type { WCompactEmail } from "@cubby/recipebridge/worker";
 import type {
   MailboxClassification,
   MailboxClassificationDecision,
   MailTriageIncompleteReason,
 } from "@cubby/schemas/mailbox-research";
 
-import { wasm } from "~/lib/wasm";
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 import { MAILBOX_TRIAGE_FEATURE } from "~/server/ai/policy/features";
 import { droppedBodyParts } from "~/server/domains/purchase-import/repo/gmail/normalize";
@@ -14,6 +13,7 @@ import type {
   GmailMessagePart,
   GmailNormalizedMessage,
 } from "~/server/domains/purchase-import/repo/gmail/types";
+import { wasm } from "~/server/wasm";
 
 export type MailTriage = (content: string) => Promise<MailboxClassification>;
 

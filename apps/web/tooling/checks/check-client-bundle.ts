@@ -51,7 +51,7 @@ export async function assertNoServerCodeInClient(
 // is, so match on an export name in the binary instead.
 const WASM_EXCLUSIONS = [
   { directory: "Worker", forbidden: "open_book" },
-  { directory: "client", forbidden: "compact_browser_page" },
+  { directory: "client", forbidden: "compact_email_html" },
 ] as const;
 
 export async function assertWasmSplit(

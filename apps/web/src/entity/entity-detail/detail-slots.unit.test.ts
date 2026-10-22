@@ -74,17 +74,16 @@ describe("Run detail slots", () => {
     ).toEqual(["live-progress", ...expected]);
   });
 
-  // Steps, Decisions and Diagnostics lead a step-ledger Run in place of the
-  // generic progress report; any Run the universal Job executes shows its
-  // Diagnostics.
+  // Steps, Decisions and Diagnostics lead a step-ledger Run; any Run the
+  // universal Job executes shows its Diagnostics.
   it.each<[RunOut["purpose"], string[]]>([
-    ["sweep", ["steps", "decisions", "diagnostics", "import-timeline"]],
-    ["suggestion_sweep", ["diagnostics", "live-progress"]],
-    ["mail_import", ["live-progress"]],
+    ["sweep", ["steps", "decisions", "diagnostics"]],
+    ["suggestion_sweep", ["diagnostics"]],
+    ["mail_import", []],
   ])("a %s run leads with %j", (purpose, expected) => {
-    expect(applying(purpose, "completed").slice(0, expected.length)).toEqual(
-      expected,
-    );
+    expect(
+      applying(purpose, "completed").slice(0, expected.length + 1),
+    ).toEqual([...expected, "live-progress"]);
   });
 
   it.each<[RunOut["purpose"]]>([

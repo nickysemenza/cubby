@@ -20,11 +20,12 @@ import {
 import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
+import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
 import type {
   PurchaseDispatchEnvironment,
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
+import { getAuthSecret } from "~/server/http/auth-configuration";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
 
 /** The MCP endpoint the delegation bearer's audience names. */
@@ -43,17 +44,18 @@ function withHostDatabase<T>(
   ) => Promise<T>,
 ): Promise<T> {
   assertNotInMaintenance(env);
-  setCfEnv(env);
-  return runWithExecutionCtx(ctx, async () => {
-    const { db, withInvocationDb } = await import("~/server/db");
-    return withInvocationDb(env.HYPERDRIVE.connectionString, async () =>
-      fn(
-        db,
-        await import("../repo/run-service"),
-        await import("~/server/domains/run/repo/operation"),
-      ),
-    );
-  });
+  return withCfEnv(env, () =>
+    runWithExecutionCtx(ctx, async () => {
+      const { db, withInvocationDb } = await import("~/server/db");
+      return withInvocationDb(env.HYPERDRIVE.connectionString, async () =>
+        fn(
+          db,
+          await import("../repo/run-service"),
+          await import("~/server/domains/run/repo/operation"),
+        ),
+      );
+    }),
+  );
 }
 
 const ADMISSION_ATTEMPTS = 3;
@@ -264,7 +266,7 @@ export function runServicesFor(
             userId: scope.actorUserId,
             grantId: grant.id,
             generation: stampedGeneration(body),
-            secret: env.BETTER_AUTH_SECRET,
+            secret: getAuthSecret(),
           })}`,
         );
         return handleMcpHttpRequest(

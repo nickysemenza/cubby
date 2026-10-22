@@ -1,4 +1,4 @@
-import { parse_scraped_recipe } from "@cubby/recipebridge";
+import { parse_scraped_recipe } from "@cubby/recipebridge/worker";
 import { describe, expect, it } from "vitest";
 
 import { scrapedToImportRecipe } from "./scraper";

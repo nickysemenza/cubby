@@ -1,4 +1,3 @@
-import { env } from "~/env";
 import { APP_ORIGIN } from "~/lib/auth-constants";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import {
@@ -9,6 +8,7 @@ import {
   purchaseAgentOAuthCookie,
   purchaseAgentConnectionRedirect,
 } from "~/server/domains/purchase-import/repo/agent-auth";
+import { getAuthSecret } from "~/server/http/auth-configuration";
 import {
   createRequestContext,
   requireActor,
@@ -28,7 +28,7 @@ export const handlers: HttpRouteHandlers<Record<never, never>, "GET"> = {
         state,
         verifier,
         userId: context.auth.userId,
-        secret: env.BETTER_AUTH_SECRET,
+        secret: getAuthSecret(),
       });
       const authorizeUrl = purchaseAgentAuthorizeURL({ state, challenge });
 

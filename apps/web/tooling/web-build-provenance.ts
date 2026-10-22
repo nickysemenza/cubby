@@ -91,10 +91,7 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
   // dot-prefixed assets. The provenance stamp lives outside this tree.
   const files = [
     ...walkFiles(outputRoot),
-    ...filesUnder(path.join(repoRoot, "packages/wasm/worker")),
-    ...filesUnder(path.join(repoRoot, "packages/wasm/browser")),
-    ...filesUnder(path.join(repoRoot, "packages/wasm/cookbook")),
-    ...filesUnder(path.join(repoRoot, "packages/wasm/package.json")),
+    ...filesUnder(path.join(repoRoot, "packages/wasm")),
   ].sort();
   return {
     fingerprint: digestFiles(repoRoot, files),
@@ -121,6 +118,7 @@ const WEB_BUILD_SOURCE = {
     "apps/web/*.{ts,json,jsonc,toml,html}",
     "packages/**",
     "recipebridge/**",
+    "cookbook-wasm/**",
     "scripts/**",
     ...BUNDLED_MARKDOWN,
     "*.{json,jsonc,yaml,yml,toml,lock}",

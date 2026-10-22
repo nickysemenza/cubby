@@ -7,10 +7,12 @@
 
 use scraper::{ElementRef, Html, Node, Selector};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
-use crate::page::{
+use crate::html::{
     collapse, image_source, is_block, is_visually_hidden, link_label, resolve, select,
     truncate_utf8, visible_text_with_visibility,
 };
@@ -24,8 +26,8 @@ const MAX_MICRODATA_PROPS: usize = 60;
 const MAX_CUES: usize = 200;
 const MAX_PREHEADER_BYTES: usize = 1024;
 
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WEmailLink {
     pub href: String,
     pub text: String,
@@ -35,8 +37,8 @@ pub struct WEmailLink {
     pub url_cues: Vec<String>,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WEmailImage {
     pub src: String,
     pub alt: String,
@@ -47,8 +49,8 @@ pub struct WEmailImage {
 }
 
 /// Purchase cues and how many distinct ones fell past the cue bound.
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WPurchaseCues {
     pub cues: Vec<String>,
     /// Distinct cues past the bound. A caller cannot check these against its
@@ -56,8 +58,8 @@ pub struct WPurchaseCues {
     pub omitted: u32,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Debug, PartialEq)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WCompactEmail {
     /// Readable body: data tables as `cell | cell` rows, layout tables
     /// flattened, footer and unsubscribe lines last.
@@ -197,7 +199,7 @@ fn is_footer_line(line: &str) -> bool {
 /// line with any footer phrase counts as nothing, even when it opens with
 /// content: undercounting only sends an image-heavy message to review, while
 /// counting footer prose would let a missed receipt stand as unrelated.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn readable_chars(text: &str) -> u32 {
     let count = text
         .lines()
@@ -691,7 +693,7 @@ fn contains_token(haystack: &str, needle: &str) -> bool {
 /// they appear, then receipt phrases in lowercase. A caller checks each one
 /// against its final view (case-insensitively) to tell whether a bound clipped
 /// purchase evidence.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn purchase_cues(text: &str) -> WPurchaseCues {
     let lower = text.to_lowercase();
     let mut seen = std::collections::HashSet::new();
@@ -846,7 +848,7 @@ fn microdata(document: &Html) -> Vec<String> {
         .collect()
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn compact_email_html(html: &str) -> WCompactEmail {
     let document = Html::parse_document(html);
 

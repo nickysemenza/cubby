@@ -2,6 +2,10 @@
 
 [Validation policy](validation.md) owns test selection, failure-first evidence,
 retention, delivery, and delegated check results. This page owns runtime traps.
+The UI project shares module state between files. Its shared teardown clears
+Sonner notifications as well as React trees: unmounting a Toaster leaves its
+notifications available to the next test.
+
 Keep pure logic imported by Node tests in alias-free `.ts` files. Temporary
 subprocess workspaces declare their module type explicitly, matching the consumer.
 

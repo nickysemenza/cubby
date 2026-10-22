@@ -1,9 +1,29 @@
 import { bindings, defineWorker, triggers, type WorkerConfig } from "cf/config";
+import { readFileSync } from "node:fs";
 import type { DevProfile } from "../dev-services/dev-profile.ts";
 
 /** Reuse binding declarations, with checkout-local targets and no production triggers. */
 export function localWorker(production: WorkerConfig, profile: DevProfile) {
+  // Read bytes so runtime metadata stays outside the config dependency denylist.
+  const identity: typeof import("../../worker-identity.json") = JSON.parse(
+    readFileSync(
+      new URL("../../worker-identity.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const queueIdentities = identity.queues;
   const name = `cubby-dev-${profile.id}`;
+  const suffix = (identity: Record<string, string>) => {
+    const values = Object.values(identity);
+    const value = values[0];
+    if (values.length !== 1 || value === undefined)
+      throw new Error("Worker queue identity must contain exactly one name");
+    return value;
+  };
+  const queues = {
+    background: `${name}-${suffix(queueIdentities.background)}`,
+    telemetry: `${name}-${suffix(queueIdentities.telemetry)}`,
+  };
   const env = { ...production.env };
   for (const key of ["AI", "VECTORIZE", "HYPERDRIVE", "HYPERDRIVE_CACHED"])
     delete env[key];
@@ -24,14 +44,14 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
     },
     triggers: [
       triggers.queue({
-        name: `${name}-background`,
+        name: queues.background,
         maxBatchSize: 1,
         maxBatchTimeout: 0,
         maxConcurrency: 1,
         maxRetries: 0,
       }),
       triggers.queue({
-        name: `${name}-telemetry`,
+        name: queues.telemetry,
         maxBatchSize: 100,
         maxBatchTimeout: 5,
         maxConcurrency: 1,
@@ -56,8 +76,8 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
       }),
       LOCAL_DEV_STORAGE: bindings.r2({ name: `${name}-storage` }),
       USDA_RELEASES: bindings.r2({ name: `${name}-usda-releases` }),
-      BACKGROUND_QUEUE: bindings.queue({ name: `${name}-background` }),
-      TELEMETRY_QUEUE: bindings.queue({ name: `${name}-telemetry` }),
+      BACKGROUND_QUEUE: bindings.queue({ name: queues.background }),
+      TELEMETRY_QUEUE: bindings.queue({ name: queues.telemetry }),
 
       ...(profile.integration && {
         AI: bindings.ai({ dev: { remote: true } }),

@@ -393,10 +393,11 @@ describe("purchase evidence policy", () => {
         ])
       ).get(transaction.entityId);
     const required = await quality();
-    // An item-lined order missing a Product is one gap: the products axis,
-    // not itemization too.
+    // Missing Product identity affects the products axis, not itemization.
+    // Display media remains a separate requirement.
     expect(required?.gaps.map((gap) => gap.check)).toEqual([
       "financial_transaction_products",
+      "financialtransaction_display_image",
     ]);
     expect(required?.score).toBeLessThan(100);
     await unwrapDb(ctx.db).execute(
@@ -405,7 +406,10 @@ describe("purchase evidence policy", () => {
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "SpendingCategory" SET "productExpectation" = 'not_expected' WHERE id = ${category.id}`,
     );
-    expect(await quality()).toMatchObject({ score: 100, gaps: [] });
+    expect(await quality()).toMatchObject({
+      score: 99,
+      gaps: [{ check: "financialtransaction_display_image" }],
+    });
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "FinancialTransaction" SET kind = 'account_transfer' WHERE id = ${transaction.entityId}`,
     );
@@ -414,6 +418,7 @@ describe("purchase evidence policy", () => {
     expect(transferQuality?.score).toBeLessThanOrEqual(49);
     expect(transferQuality?.gaps.map((gap) => gap.check)).toEqual([
       "financial_transaction_allocation_integrity",
+      "financialtransaction_display_image",
     ]);
   });
 
@@ -501,7 +506,10 @@ describe("purchase evidence policy", () => {
       ).get(transaction.entityId);
       expect(quality).toMatchObject(
         role === "reimbursement"
-          ? { score: 100, gaps: [] }
+          ? {
+              score: 99,
+              gaps: [{ check: "financialtransaction_display_image" }],
+            }
           : { status: "needs_data" },
       );
       expect(quality?.gaps.map((gap) => gap.check)).toEqual(

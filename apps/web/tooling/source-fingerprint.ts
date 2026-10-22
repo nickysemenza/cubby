@@ -35,7 +35,10 @@ const EXCLUDED_PARTS = new Set([
 
 function excludedSource(file: string): boolean {
   return (
-    file.startsWith("packages/wasm/") ||
+    (file.startsWith("packages/wasm/") &&
+      !["packages/wasm/package.json", "packages/wasm/workerd.js"].includes(
+        file,
+      )) ||
     file
       .split("/")
       .some(

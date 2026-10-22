@@ -1,3 +1,4 @@
+import { displayImageQualityCheck } from "./data-quality-image";
 import {
   colorTokenSchema,
   enumIconSchema,
@@ -2976,7 +2977,11 @@ type OwnCheckId<D> = D extends {
     dataQuality: { checks: readonly { id: infer Id extends string }[] };
   };
 }
-  ? Id
+  ?
+      | Id
+      | (D extends { key: infer K extends string }
+          ? `${Lowercase<K>}_display_image`
+          : never)
   : never;
 export type ReadSchemaFacts<D> = Readonly<{
   ownDataCheck: z.ZodEnum<{ [Id in OwnCheckId<D>]: Id }>;
@@ -3004,13 +3009,18 @@ type ValidDeclaration<T> = T &
 
 /** Own check ids are shared with canonical projections and the generated global catalog. */
 export function ownDataCheckSchema<
-  const D extends Pick<EntityDeclaration, "capabilities">,
+  const D extends Pick<EntityDeclaration, "key" | "capabilities">,
 >(declaration: D): ReadSchemaFacts<D>["ownDataCheck"] {
-  const ids =
-    declaration.capabilities.dataQuality?.checks.map((check) => check.id) ?? [];
+  const quality = declaration.capabilities.dataQuality;
+  const ids = quality
+    ? [
+        ...quality.checks.map((check) => check.id),
+        displayImageQualityCheck(declaration.key).id,
+      ]
+    : [];
   if (new Set(ids).size !== ids.length)
     throw new Error("capabilities.dataQuality.checks contains duplicate ids.");
-  // SAFETY: the enum is constructed exclusively from this declaration's own literal check IDs.
+  // SAFETY: ids combine the declaration's literal checks with its derived display-image check.
   return z.enum(ids) as ReadSchemaFacts<D>["ownDataCheck"];
 }
 

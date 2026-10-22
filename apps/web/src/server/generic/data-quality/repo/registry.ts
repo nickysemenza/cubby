@@ -69,8 +69,12 @@ export interface EntityChecks<E extends ScoredEntity, T extends ScoredTable> {
   derivedRead?(ids: SQL): SQL;
   /** One row per entityId for bulk filters and score sorting, before paging. */
   filterRead?(): SQL;
-  /** Exhaustive against the generated per-entity check union. */
-  checks: { readonly [C in DataCheckOf<E>]: CheckBinding<T> };
+  /** Domain checks are exhaustive; entryFor supplies the shared display-image check. */
+  checks: {
+    readonly [
+      C in Exclude<DataCheckOf<E>, `${Lowercase<E>}_display_image`>
+    ]: CheckBinding<T>;
+  };
   /**
    * How a related scored entity's row (by its id) links to this row, for the
    * manifest's `related` roll-up: `relatedGaps`, `relatedExceptions`, and the

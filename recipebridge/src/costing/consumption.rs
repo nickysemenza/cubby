@@ -8,6 +8,7 @@
 
 use ingredient::usage::IngredientUsage;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
 
 /// Fraction of a fried dish's (raw) batter weight that ends up absorbed as oil
@@ -32,7 +33,8 @@ pub const MARINADE_RETAINED_FRACTION: f64 = 0.15;
 /// Where one measure (cost, weight, or nutrients) of a row resolves from.
 /// Serializes to the zod `componentSource` union: `{kind:"own-full"}`,
 /// `{kind:"basis-fraction",fraction}`, … — the frozen explain wire contract.
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum ComponentSource {
     /// The row's own amount, as written.
@@ -48,7 +50,8 @@ pub enum ComponentSource {
 }
 
 /// How a row's three measures resolve (the zod `plan` object).
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct PlanTrio {
     pub cost: ComponentSource,
     pub weight: ComponentSource,

@@ -294,11 +294,7 @@ const detailSlots = {
       () => named(import("~/features/run/run-detail"), "RunDiagnostics"),
       (run) => isExecutedRunPurpose(run.purpose),
     ),
-    // A step-ledger Run's strip and timeline replace the generic progress report on web.
-    "live-progress": runReportSlot(
-      "live-progress",
-      (run) => !isStepRunPurpose(run.purpose),
-    ),
+    "live-progress": runReportSlot("live-progress"),
     "import-controls": slot(
       () =>
         named(

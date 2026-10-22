@@ -120,8 +120,8 @@ describe("combined entity records", () => {
       qualityStatus: quality?.status,
     });
     expect(first.items[0]).toMatchObject({
-      quality: null,
-      qualityStatus: "not_assessed",
+      quality: 99,
+      qualityStatus: "needs_data",
     });
     expect(second.items[0]?.quality).toBeGreaterThanOrEqual(0);
     expect(second.items[0]?.quality).toBeLessThan(100);
@@ -182,13 +182,13 @@ describe("combined entity records", () => {
       q: identity!.shortcode,
     });
     expect((await listEntityRecords(ctx.db, input)).items).toMatchObject([
-      { id: identity!.shortcode, quality: 100, qualityStatus: "complete" },
+      { id: identity!.shortcode, quality: 99, qualityStatus: "needs_data" },
     ]);
     expect(
-      await listEntityRecords(ctx.db, { ...input, qualityMin: 100 }),
+      await listEntityRecords(ctx.db, { ...input, qualityMin: 99 }),
     ).toMatchObject({ items: [{ id: identity!.shortcode }], totalCount: 1 });
     expect(
-      await listEntityRecords(ctx.db, { ...input, qualityMax: 99 }),
+      await listEntityRecords(ctx.db, { ...input, qualityMax: 98 }),
     ).toMatchObject({ items: [], totalCount: 0 });
 
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

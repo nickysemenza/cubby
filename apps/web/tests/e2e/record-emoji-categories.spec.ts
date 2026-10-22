@@ -1,3 +1,5 @@
+import { seedImagePrerequisite } from "./fixtures/photos";
+import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -344,7 +346,10 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
   }
 });
 
-test("unassessed quality remains visible in phone cards", async ({ page }) => {
+test("unassessed quality remains visible in phone cards", async ({
+  page,
+  e2eRuntime,
+}) => {
   await page.setViewportSize({ width: 402, height: 874 });
   const name = `Synthetic planned quality ${Date.now()}`;
   await createEntityFixture(page, "expense", {
@@ -355,8 +360,27 @@ test("unassessed quality remains visible in phone cards", async ({ page }) => {
     costType: "services",
     trade: "other",
   });
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const vendor = await createEntityFixture(page, "vendor", {
+    name: "Synthetic planned vendor",
+  });
+  const purchase = await createEntityFixture(page, "purchase", {
+    vendorId: vendor.id,
+    date: "2026-01-01",
+  });
+  const image = await seedImagePrerequisite(
+    "planned-quality-cover",
+    e2eRuntime.objectStorageUrl,
+  );
+  // Borrowed receipt media does not enable the Product identity check.
+  await attachExistingImageToEntity(
+    db,
+    { imageId: image.id, targetId: purchase.id },
+    actor,
+  );
   await createEntityFixture(page, "expense", {
     name,
+    purchaseId: purchase.id,
     future: true,
     cost: null,
     date: null,

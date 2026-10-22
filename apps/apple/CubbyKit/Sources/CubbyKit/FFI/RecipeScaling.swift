@@ -33,9 +33,7 @@ public enum RecipeScaling {
     /// The amount at `factor`, with its authored unit spelling kept.
     public static func scale(_ amount: IngredientParser.Amount, by factor: Double) -> IngredientParser.Amount
     {
-        let scaled = CubbyFFI.scaleAmount(
-            unit: amount.unit, value: amount.value, upperValue: amount.upperValue, factor: factor)
-        return IngredientParser.Amount(value: scaled.value, upperValue: scaled.upperValue, unit: scaled.unit)
+        IngredientParser.Amount(CubbyFFI.scaleAmount(amount: amount.ffi, factor: factor))
     }
 }
 

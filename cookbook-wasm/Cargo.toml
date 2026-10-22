@@ -1,0 +1,26 @@
+[package]
+# The package name sets wasm-pack's output file names
+# (`recipebridge_cookbook.js`, `_bg.wasm`) that `@cubby/recipebridge/cookbook`
+# resolves to, so it keeps the name it had under recipebridge/.
+name = "recipebridge-cookbook"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+# EPUB cookbook extraction as its own wasm package (`@cubby/recipebridge/cookbook`).
+# Only the browser's cookbook import loads it, so its ~1 MB stays out of the
+# Worker and out of every other page's recipebridge download.
+[lib]
+crate-type = ["cdylib"]
+
+# The whole pipeline (open, chunk, model calls through a JavaScript transport,
+# validation, assembly, references) lives upstream in `cookbook::wasm`; this
+# crate only re-exports it. Target-gated so a native workspace build compiles
+# an empty crate, and no native features (reqwest, fs) reach the wasm build.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+console_error_panic_hook.workspace = true
+cookbook = { workspace = true, features = ["wasm"] }
+
+[lints]
+workspace = true

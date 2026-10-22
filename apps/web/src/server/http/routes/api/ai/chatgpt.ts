@@ -3,7 +3,7 @@ import { userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 import { z } from "zod";
 
-import { auth } from "~/lib/auth";
+import { getAuth } from "~/lib/auth";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { requireChatGptPlan } from "~/server/ai/chatgpt/client";
@@ -27,11 +27,11 @@ async function handle(
     let actor: RequestActor | null = null;
     const headers = new Headers({ "Cache-Control": "private, no-store" });
     if (request.headers.has("x-api-key")) {
-      actor = await verifyHttpApiKeyActor(request, auth.api);
+      actor = await verifyHttpApiKeyActor(request, getAuth().api);
     } else {
       const authenticated = await authenticateHttpSession({
         headers: request.headers,
-        getSession: auth.api.getSession,
+        getSession: getAuth().api.getSession,
       });
       authenticated.headers.forEach((value, name) =>
         headers.append(name, value),
