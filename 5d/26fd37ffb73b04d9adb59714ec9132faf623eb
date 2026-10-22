@@ -1,0 +1,25 @@
+apps/web/src/server/domains/financial-transaction/repo/financial-spending.integration.test.ts
+  s_2450a56ef36b89::t_085fe67323cc28 7,39,43,49,59,84,95,99,170,179,197,202,243-247,430,454,518,522,542,546,602,626,648,652,664,672,723,727,733
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_2450a56ef36b89::t_5cb4ab14bfff00 98-106
+apps/web/tests/e2e/bulk-edit.spec.ts
+  s_2450a56ef36b89::t_db017f150dd3d5 13,89-96
+apps/web/tests/e2e/declared-record-lists.spec.ts
+  s_2450a56ef36b89::t_2f47eed3c9a762 10,169-174,176-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5d26fd37ffb73b04d9adb59714ec9132faf623eb",
+  "prompts": {},
+  "sessions": {
+    "s_2450a56ef36b89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16584-b2c2-7271-b133-d6271b3882f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

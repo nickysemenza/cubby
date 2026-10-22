@@ -1,0 +1,25 @@
+apps/web/tooling/ci-report/summary.ts
+  s_eeef2ac4fa7615::t_fad18b43689cfd 155
+apps/web/vitest.config.ts
+  s_eeef2ac4fa7615::t_f858a2f02a6e97 519-520,530,557-559
+docs/agents/validation-tests.md
+  s_eeef2ac4fa7615::t_37ed71f1076771 44-47
+docs/ci.md
+  s_eeef2ac4fa7615::t_85e7de48e3b41e 590-595
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95f18394894c88a364f0380f4f3b3e52d2de3feb",
+  "prompts": {},
+  "sessions": {
+    "s_eeef2ac4fa7615": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96cf421e-31d0-4e4a-9fa3-bcaf218e9b61",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
