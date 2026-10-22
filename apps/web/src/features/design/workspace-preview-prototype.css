@@ -1,0 +1,25 @@
+/* Preview-scoped treatment; shared suggestion actions and disclosures stay intact. */
+.targeted-suggestion {
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--foreground) 75%,
+    var(--action-change)
+  );
+  border-block: 1px solid
+    color-mix(in srgb, var(--action-change) 25%, transparent);
+  background: var(--action-change-surface);
+  padding: var(--brand-space-2) var(--brand-space-3);
+}
+.targeted-suggestion .suggestion-proposal > span.font-medium {
+  color: var(--action-change);
+  font-size: 0.875rem;
+}
+.targeted-suggestion .suggestion-evidence > div {
+  border-color: color-mix(in srgb, var(--action-change) 25%, transparent);
+}
+.targeted-activity.ledger[data-ledger="records"] {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+.targeted-activity.ledger > .ledger-row > [data-ledger-slot="trailing"] {
+  grid-column: 3 / -1;
+}

@@ -9,6 +9,7 @@ import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/csr/SlidersHor
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { TreeStructureIcon } from "@phosphor-icons/react/dist/csr/TreeStructure";
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { Page } from "~/entity/page/page";
 import { ComponentsLine } from "~/features/design/components/design-section";
@@ -42,6 +43,7 @@ import { PickerSection } from "~/features/design/sections/picker-section";
 import { RecordsSection } from "~/features/design/sections/records-section";
 import { RTableSection } from "~/features/design/sections/rtable-section";
 import { ValuesSection } from "~/features/design/sections/values-section";
+import { WorkspacePreviewPrototype } from "~/features/design/workspace-preview-prototype";
 import { pageTitle } from "~/lib/page-title";
 import {
   IndexedSections,
@@ -50,6 +52,7 @@ import {
 import { Button } from "~/ui/primitives/button";
 
 export const Route = createFileRoute("/_authenticated/design")({
+  validateSearch: z.object({ preview: z.literal("workspace").optional() }),
   head: () => ({ meta: [{ title: pageTitle("Design system") }] }),
   component: DesignSystem,
 });
@@ -460,6 +463,8 @@ const GROUPS: IndexedSectionGroup[] = [
 ];
 
 function DesignSystem() {
+  const { preview } = Route.useSearch();
+  if (preview === "workspace") return <WorkspacePreviewPrototype />;
   return (
     <Page
       variant="detail"

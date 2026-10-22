@@ -70,7 +70,11 @@ Interactive design previews of existing workspaces run inside the actual
 controls. Do not recreate app chrome in generated mockups or prototype code;
 exploration changes only the explicitly requested content region. Prototype
 records are synthetic and writes stay in memory until production implementation
-is explicitly in scope.
+is explicitly in scope. Representative previews compose the existing shared
+controls and field renderers: keep rich record pickers, declared enum glyphs,
+inheritance context, suggestions, validation and date behavior. Change only the
+proposed arrangement or interaction; native dropdowns and hand-built imitations
+do not establish whether an existing Cubby workflow improves.
 
 `components.json` configures the shadcn Base UI/Mira family; local primitives
 are maintained in `src/ui/primitives`. Base UI owns accessible interaction,
