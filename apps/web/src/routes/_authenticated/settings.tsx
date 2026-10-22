@@ -61,7 +61,9 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 function SettingsPage() {
-  const { purchaseAgent } = Route.useSearch();
+  const purchaseAgent = Route.useSearch({
+    select: (search) => search.purchaseAgent,
+  });
   return (
     <Page variant="list" title="Settings">
       <IndexedSections

@@ -1,7 +1,12 @@
 import type { EntityRecommendationGroup } from "@cubby/schemas/entity-recommendations";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { useMutation, useMutationState, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
@@ -74,7 +79,11 @@ function RelatednessIndexPrompt({
           onClick={onRefresh}
         >
           <SparkleIcon className="size-3" />
-          {indexing ? "Indexing…" : "Index now"}
+          {refreshing
+            ? "Requesting index…"
+            : indexing
+              ? "Indexing…"
+              : "Index now"}
         </Button>
       </DetailAction>
     </Row>
@@ -139,8 +148,15 @@ export function RelatednessRail({
   useEffect(() => {
     setVisibleCount(12);
   }, [product.id]);
-  const { poll, relatednessQuery, refresh, group, status, indexing } =
-    useRelatednessActions(product.id, operations);
+  const {
+    poll,
+    relatednessQuery,
+    refresh,
+    refreshing,
+    group,
+    status,
+    indexing,
+  } = useRelatednessActions(product.id, operations);
   const items = group?.proposals ?? EMPTY_RELATED_PRODUCTS;
   const visibleItems = useMemo(
     () => items.slice(0, visibleCount),
@@ -156,10 +172,8 @@ export function RelatednessRail({
       <RelatednessIndexPrompt
         status={status}
         indexing={indexing}
-        refreshing={refresh.isPending}
-        onRefresh={() =>
-          refresh.mutate({ entityKind: "product", entityId: product.id })
-        }
+        refreshing={refreshing}
+        onRefresh={refresh}
       />
 
       {poll.timedOut && (
@@ -249,6 +263,7 @@ function useRelatednessActions(
   productId: ProductShortcode,
   operations: RelatednessRailOperations,
 ) {
+  const client = useQueryClient();
   const poll = useEmbeddingReadinessPoll(productId);
   const { refetchInterval, notifyStatus } = poll;
 
@@ -260,16 +275,18 @@ function useRelatednessActions(
     refetchInterval,
   });
   const refreshOptions = operations.requestEmbeddingRefresh.mutationOptions();
-  const outcomes = useMutationState({
-    filters: {
-      mutationKey: refreshOptions.mutationKey,
-      predicate: (mutation) => {
-        const input = z
-          .object({ entityId: z.string() })
-          .safeParse(mutation.state.variables);
-        return input.success && input.data.entityId === productId;
-      },
+  const filters = {
+    exact: true,
+    mutationKey: refreshOptions.mutationKey,
+    predicate: (mutation: import("@tanstack/react-query").Mutation) => {
+      const input = z
+        .object({ entityKind: z.literal("product"), entityId: z.string() })
+        .safeParse(mutation.state.variables);
+      return input.success && input.data.entityId === productId;
     },
+  };
+  const outcomes = useMutationState({
+    filters,
     select: (mutation) => ({
       status: mutation.state.status,
       submittedAt: mutation.state.submittedAt,
@@ -281,12 +298,9 @@ function useRelatednessActions(
     undefined,
   );
   const startPoll = poll.start;
-  const observedMutation = useRef(0);
-  const refresh = useMutation(
-    operations.requestEmbeddingRefresh.mutationOptions({
-      onSuccess: () => poll.start(),
-    }),
-  );
+  const observedMutation = useRef<number | undefined>(undefined);
+  const refreshing = outcomes.some((outcome) => outcome.status === "pending");
+  const refresh = useMutation(refreshOptions);
 
   const group = relatednessQuery.data?.groups.find(
     (candidate): candidate is ProductRecommendationGroup =>
@@ -296,7 +310,8 @@ function useRelatednessActions(
   useEffect(() => {
     if (
       latest?.status !== "success" ||
-      latest.submittedAt <= observedMutation.current
+      (observedMutation.current !== undefined &&
+        latest.submittedAt <= observedMutation.current)
     )
       return;
     observedMutation.current = latest.submittedAt;
@@ -313,27 +328,41 @@ function useRelatednessActions(
     notifyStatus(status);
   }, [status, notifyStatus, poll.isPolling]);
 
-  return { poll, relatednessQuery, refresh, group, status, indexing };
+  return {
+    poll,
+    relatednessQuery,
+    group,
+    status,
+    indexing,
+    refreshing,
+    refresh: () => {
+      // Observe the live cache before observers rerender after another control's click.
+      if (client.isMutating(filters) === 0)
+        refresh.mutate({ entityKind: "product", entityId: productId });
+    },
+  };
 }
 export function ProductRelatednessActions({
   productId,
 }: {
   productId: ProductShortcode;
 }) {
-  const { poll, relatednessQuery, refresh, status, indexing } =
+  const { poll, relatednessQuery, refresh, refreshing, status, indexing } =
     useRelatednessActions(productId, productionOperations);
   return (
     <>
       {status === "uncomputed" || status === "stale" ? (
         <Button
           variant="outline"
-          disabled={refresh.isPending || indexing}
-          onClick={() =>
-            refresh.mutate({ entityKind: "product", entityId: productId })
-          }
+          disabled={refreshing || indexing}
+          onClick={refresh}
         >
           <SparkleIcon />
-          {indexing ? "Indexing…" : "Index now"}
+          {refreshing
+            ? "Requesting index…"
+            : indexing
+              ? "Indexing…"
+              : "Index now"}
         </Button>
       ) : null}
       {poll.timedOut ? (

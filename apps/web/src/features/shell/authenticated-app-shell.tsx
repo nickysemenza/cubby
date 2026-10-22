@@ -105,7 +105,7 @@ export function AuthenticatedAppShell({
     false,
   );
   const expanded = !collapsed;
-  const pathname = useLocation().pathname;
+  const pathname = useLocation({ select: (location) => location.pathname });
   const routeDescriptor = resolveMobileRoute(pathname);
   const viewportSurface = routeDescriptor.presentation === "immersive";
   const keyboardOpen = useVirtualKeyboard();

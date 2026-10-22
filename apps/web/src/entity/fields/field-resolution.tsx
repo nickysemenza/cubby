@@ -386,7 +386,7 @@ function BoundFieldResolutionActions({
 }) {
   const commands = useEntityCommands(entity);
   const navigate = useNavigate();
-  const location = useLocation();
+  const pathname = useLocation({ select: (location) => location.pathname });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = async (patch: ResolutionPatch) => {
@@ -406,7 +406,7 @@ function BoundFieldResolutionActions({
         survivor &&
         survivor !== id &&
         isBrowserRoutedEntity(entity) &&
-        location.pathname.endsWith(`/${id}`)
+        pathname.endsWith(`/${id}`)
       )
         await navigate(entityDetailLink(entity, survivor));
     } catch (cause) {

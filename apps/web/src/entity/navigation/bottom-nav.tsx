@@ -91,8 +91,9 @@ function BottomNavItem({
 
 export function BottomNav() {
   const activeTo = useActiveTo();
-  const pathname = useLocation().pathname;
-  const activeTab = resolveMobileRoute(pathname).tab;
+  const activeTab = useLocation({
+    select: (location) => resolveMobileRoute(location.pathname).tab,
+  });
   const keyboardOpen = useVirtualKeyboard();
   const [isOpen, setIsOpen] = React.useState(false);
   const [moreMounted, setMoreMounted] = React.useState(false);
