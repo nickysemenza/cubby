@@ -10,7 +10,8 @@ import {
   seedTaskPrerequisite,
   seedUnlinkedExpensePrerequisite,
 } from "./fixtures/catalog";
-import { createEntityFixture } from "./fixtures/core";
+import { createEntityFixture, seedConcurrently } from "./fixtures/core";
+import { defaultPagination } from "~/ui/data-table/table-utils";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -69,6 +70,64 @@ test("task board multi-select bulk-edits status without touching other fields", 
       trade: "other",
     });
   }
+});
+
+// Cross exactly one default page boundary: the write must include the unloaded
+// record and preserve the filter scope without hydrating rows just to select.
+test("all matching selection bulk-edits unloaded tasks within the active scope", async ({
+  page,
+}) => {
+  test.slow();
+  const prefix = uniqueName("Complete matching tasks");
+  const count = defaultPagination.pageSize + 1;
+  const selected = await seedConcurrently(
+    Array.from({ length: count }, (_, index) => index),
+    (index) =>
+      seedTaskPrerequisite(page, {
+        name: `${prefix} ${index}`,
+        status: "in_progress",
+      }),
+  );
+  const outside = await seedTaskPrerequisite(page, {
+    name: uniqueName("Outside matching scope"),
+    status: "in_progress",
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?name=${encodeURIComponent(prefix)}`,
+  );
+  await page
+    .getByRole("table")
+    .getByRole("checkbox", { name: "Select all", exact: true })
+    .check();
+  const bar = page.locator("[data-bulk-action-bar]");
+  await expect(bar).toContainText(`${defaultPagination.pageSize} selected`);
+  await bar
+    .getByRole("button", { name: `Select all ${count}`, exact: true })
+    .click();
+  await expect(bar).toContainText(`${count} selected`);
+  await bar.getByRole("button", { name: "Bulk edit...", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
+  await page.getByRole("option", { name: "Done", exact: true }).click();
+  await dialog.getByRole("button", { name: "Update", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const response = await entityApi(page.request).list("task", {
+    filters: { ids: selected.map(({ id }) => id) },
+    pagination: { pageIndex: 0, pageSize: count },
+  });
+  expect(response.status()).toBe(200);
+  const result = z
+    .object({
+      items: z.array(z.object({ id: z.string(), status: z.string() })),
+    })
+    .parse(await response.json());
+  expect(result.items).toHaveLength(count);
+  expect(result.items.every(({ status }) => status === "done")).toBe(true);
+  expect(
+    await (await entityApi(page.request).get("task", outside.id)).json(),
+  ).toMatchObject({ status: "in_progress" });
 });
 
 test("plantings list bulk-edits status finished plus a date in one write", async ({
