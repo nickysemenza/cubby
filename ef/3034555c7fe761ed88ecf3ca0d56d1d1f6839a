@@ -1,0 +1,37 @@
+apps/web/tests/e2e/garden.spec.ts
+  s_a484f7a3d54cab::t_5bd3335095c002 1,20,34-48,99,101-105,119,133,135-141,148
+apps/web/tests/e2e/label-nutrition-review.spec.ts
+  s_a484f7a3d54cab::t_b5f3d7bcc90ee9 1-3,5-7,14,16-27,29-31,33-34,39-49,76-85
+apps/web/tests/e2e/meal-nutrition.spec.ts
+  s_a484f7a3d54cab::t_66fdee684cdcc2 1,13,74,76-94,110-123,151-165,167-173,198,200-209
+apps/web/tests/e2e/nutrition.spec.ts
+  s_a484f7a3d54cab::t_2b567199796096 12,19-22,47-63,93-100
+apps/web/tests/e2e/pantry-staples.spec.ts
+  s_a484f7a3d54cab::t_98917328f27736 1,23,33-49,65-70,74-87
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_a484f7a3d54cab::t_f44db34bed2c90 1,273,283-287,374,569,586-590,1042-1047,1052-1054,1057,1062-1093,1127-1138,1312,1314-1326,1340,1358-1364,1374,1398,1400-1413
+apps/web/tests/e2e/product-clarity.spec.ts
+  s_a484f7a3d54cab::t_059a493b21edae 15,77-158
+apps/web/tests/e2e/receive-after-photo-inventory.spec.ts
+  s_a484f7a3d54cab::t_7955304e8be5cd 15,29-30,32-63,85,146
+apps/web/tests/e2e/wardrobe-owner.spec.ts
+  s_a484f7a3d54cab::t_9480967cbd6388 6,297-313
+docs/agents/validation-tests.md
+  s_a484f7a3d54cab::t_bdaf1fdec2cf84 260-264,325-331
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ef3034555c7fe761ed88ecf3ca0d56d1d1f6839a",
+  "prompts": {},
+  "sessions": {
+    "s_a484f7a3d54cab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a165dc-151e-7b03-8320-aadba9f654e0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
