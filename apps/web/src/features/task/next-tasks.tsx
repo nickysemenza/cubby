@@ -168,7 +168,10 @@ function TaskRows({
               )}
             </TableCell>
             <TableCell>
-              <DateDisplay start={t.dueDate} end={t.dueEndDate} />
+              <DateDisplay
+                start={t.due?.start ?? null}
+                end={t.due?.end ?? null}
+              />
             </TableCell>
           </TableRow>
         ))}

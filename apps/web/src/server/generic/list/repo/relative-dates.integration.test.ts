@@ -1,3 +1,4 @@
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import { locationFiltersSchema } from "@cubby/schemas/location";
 import { plantingFiltersSchema } from "@cubby/schemas/planting";
 import {
@@ -251,7 +252,11 @@ describe("relative date tokens and date intervals", () => {
           plantId: crop.id,
           status: dates.finishedOn ? "finished" : "growing",
           notes: name,
-          ...dates,
+          season: dateRangeFromDates(
+            dates.sowedOn ?? null,
+            dates.finishedOn ?? null,
+          ),
+          transplantedOn: dates.transplantedOn,
         },
         TEST_ACTOR,
       );

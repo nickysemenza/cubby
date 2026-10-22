@@ -107,7 +107,7 @@ public enum PhotoEvidenceScorer {
                 return 0
             }
             let matches = policy.temporalFields.contains { field in
-                row.raw[field]?.stringValue?.hasPrefix(day) == true
+                row.raw.pathText(field)?.hasPrefix(day) == true
             }
             return matches ? temporalWeight : 0
         }()

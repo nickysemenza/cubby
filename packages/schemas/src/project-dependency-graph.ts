@@ -1,7 +1,7 @@
+import { storedDateRangeSchema } from "./date-range";
 import { z } from "zod";
 
 import { projectShortcode, taskShortcode } from "./identifiers";
-import { plainDate } from "./base-entity";
 
 export const projectGraphNodeId = z.union([projectShortcode, taskShortcode]);
 
@@ -11,8 +11,7 @@ const projectGraphNodeSchema = z.object({
   name: z.string(),
   status: z.string(),
   locations: z.array(z.string()).optional(),
-  dueDate: plainDate.nullable(),
-  dueEndDate: plainDate.nullable(),
+  due: storedDateRangeSchema.nullable(),
   parentId: projectGraphNodeId.nullable(),
   external: z.boolean(),
 });

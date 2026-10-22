@@ -39,6 +39,7 @@ const STATUS_OPTIONS = [
 const qualityField = (entityKey: string): EntityField => ({
   key: DATA_QUALITY_FIELD,
   kind: "json",
+  dateRange: null,
   nullable: false,
   label: "Quality",
   description: null,
@@ -172,6 +173,7 @@ export const compileDataQuality = (
   const dataGapsField: EntityField = {
     key: DATA_GAPS_FIELD,
     kind: "json",
+    dateRange: null,
     nullable: false,
     label: "Data gaps",
     description: null,

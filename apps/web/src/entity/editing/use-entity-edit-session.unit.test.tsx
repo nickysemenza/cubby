@@ -49,8 +49,7 @@ const request = (name = "saved") => ({
     id: "TSK-4K7M",
     name,
     status: "not_started" as const,
-    dueDate: "2026-08-20",
-    dueEndDate: null,
+    due: { start: "2026-08-20", end: null },
   },
 });
 
@@ -59,41 +58,71 @@ describe("useEntityEditSession", () => {
     const harness = createBrowserTestHarness();
     const { mutationPort } = financialAccountMutationPort();
     const { result, rerender } = renderHook(
-      ({ name, id, dueDate }) =>
+      ({ name, id, due }) =>
         useEntityEditSession(
           {
             ...request(name),
-            record: { ...request(name).record, id, dueDate },
+            record: { ...request(name).record, id, due },
           },
           { mutationPort },
         ),
       {
-        initialProps: { name: "saved", id: "TSK-4K7M", dueDate: "2026-08-20" },
+        initialProps: {
+          name: "saved",
+          id: "TSK-4K7M",
+          due: { start: "2026-08-20", end: null },
+        },
         wrapper: harness.wrapper,
       },
     );
     act(() => {
-      result.current.form.register("dueDate");
+      result.current.form.register("due");
       result.current.set("name", "draft name");
     });
-    rerender({ name: "server refresh", id: "TSK-4K7M", dueDate: "2026-08-22" });
+    rerender({
+      name: "server refresh",
+      id: "TSK-4K7M",
+      due: { start: "2026-08-22", end: null },
+    });
     expect(result.current.form.getValues("name")).toBe("draft name");
-    expect(result.current.form.getValues("dueDate")).toBe("2026-08-22");
+    expect(result.current.form.getValues("due")).toEqual({
+      start: "2026-08-22",
+      end: null,
+    });
     // An explicitly saved field acknowledges only its new persisted baseline.
     act(() =>
-      result.current.form.resetField("dueDate", { defaultValue: "2026-08-23" }),
+      result.current.form.resetField("due", {
+        defaultValue: { start: "2026-08-23", end: null },
+      }),
     );
+    act(() =>
+      result.current.form.setValue(
+        "due",
+        { start: "2026-08-25", end: "2026-08-27" },
+        { shouldDirty: true },
+      ),
+    );
+    expect(result.current.form.getValues("due")).toEqual({
+      start: "2026-08-25",
+      end: "2026-08-27",
+    });
     act(() => result.current.reset());
     expect(result.current.form.getValues("name")).toBe("server refresh");
-    expect(result.current.form.getValues("dueDate")).toBe("2026-08-23");
+    expect(result.current.form.getValues("due")).toEqual({
+      start: "2026-08-23",
+      end: null,
+    });
     act(() => result.current.set("name", "another draft"));
     rerender({
       name: "other saved task",
       id: "TSK-8K7M",
-      dueDate: "2026-08-24",
+      due: { start: "2026-08-24", end: null },
     });
     expect(result.current.form.getValues("name")).toBe("other saved task");
-    expect(result.current.form.getValues("dueDate")).toBe("2026-08-24");
+    expect(result.current.form.getValues("due")).toEqual({
+      start: "2026-08-24",
+      end: null,
+    });
     harness.dispose();
   });
 

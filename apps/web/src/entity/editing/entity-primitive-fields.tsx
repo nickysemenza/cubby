@@ -65,7 +65,7 @@ export function EntityEditFieldScopeProvider({
 }
 import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
 import { AliasesField } from "~/ui/forms/aliases-field";
-import { DateSpanField } from "~/ui/forms/date-span-field";
+import { DateRangeField } from "~/ui/forms/date-span-field";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import {
   NullableNumericField,
@@ -425,6 +425,22 @@ function renderPrimitiveField({
       />
     );
   }
+  if (control.kind === "dateRange") {
+    return (
+      <DateRangeField
+        key={field.key}
+        form={form}
+        name={name}
+        label={presentation.label}
+        clearable={field.nullable}
+        semantics={
+          "dateRange" in field
+            ? (field.dateRange?.semantics ?? "period")
+            : "period"
+        }
+      />
+    );
+  }
   if (control.kind === "date") {
     return (
       <EntityDateField
@@ -503,64 +519,6 @@ function renderPrimitiveField({
   );
 }
 
-type DateSpanPair = {
-  start: PrimitiveFieldModel;
-  end: PrimitiveFieldModel;
-  label: string;
-};
-
-function dateSpanPairs(
-  entity: Entity,
-  fields: readonly PrimitiveFieldModel[],
-): DateSpanPair[] {
-  return entitySummary[entity].spans.flatMap((span) => {
-    const start = fields.find((field) => field.key === span.start);
-    const end = fields.find((field) => field.key === span.end);
-    // Per-field suggestions and resolution policies retain their own editor.
-    return start?.control?.kind === "date" &&
-      end?.control?.kind === "date" &&
-      !start.control.suggest &&
-      !end.control.suggest &&
-      !start.resolution &&
-      !end.resolution &&
-      end.nullable
-      ? [{ start, end, label: span.label }]
-      : [];
-  });
-}
-
-function renderDateSpan(
-  pair: DateSpanPair,
-  form: UseFormReturn<FieldValues>,
-  paths: Readonly<Record<string, string>> = {},
-) {
-  return (
-    <div key={pair.start.key} className="space-y-1">
-      <DateSpanField
-        form={form}
-        startName={paths[pair.start.key] ?? pair.start.key}
-        endName={paths[pair.end.key] ?? pair.end.key}
-        label={pair.label}
-        clearable={pair.start.nullable && pair.end.nullable}
-      />
-      {[pair.start, pair.end]
-        .filter(
-          (field) => field.description || editorProvenance(field.provenance),
-        )
-        .map((field) => (
-          <div key={field.key}>
-            {field.description ? (
-              <p className="text-xs text-muted-foreground">
-                {field.description}
-              </p>
-            ) : null}
-            <FieldProvenance provenance={editorProvenance(field.provenance)} />
-          </div>
-        ))}
-    </div>
-  );
-}
-
 export function EntityPrimitiveFields({
   entity,
   mode,
@@ -614,15 +572,9 @@ export function EntityPrimitiveFields({
         (field) => field.control && field.control.kind !== "specialized",
       );
 
-  const spans = dateSpanPairs(entity, fields).filter(
-    (pair) => !options[pair.start.key] && !options[pair.end.key],
-  );
   return (
     <>
       {fields.map((field) => {
-        if (spans.some((pair) => pair.end.key === field.key)) return null;
-        const span = spans.find((pair) => pair.start.key === field.key);
-        if (span) return renderDateSpan(span, form, paths);
         const presentation = entityFieldPresentation(entity, field.key, mode);
         const fieldOptions = options[field.key] ?? {};
         const name = paths[field.key] ?? field.key;
@@ -1305,10 +1257,7 @@ export function EntityIntentFields({
   return (
     <>
       {groups.map((group, index) => {
-        const spans = dateSpanPairs(entity, group.fields);
         const renderField = (field: PrimitiveFieldModel) => {
-          const span = spans.find((pair) => pair.start.key === field.key);
-          if (span) return renderDateSpan(span, form);
           return renderIntentField({
             entity,
             field,
@@ -1319,10 +1268,7 @@ export function EntityIntentFields({
             scopedValueRecord,
           });
         };
-        const visibleFields = group.fields.filter(
-          (field) => !spans.some((pair) => pair.end.key === field.key),
-        );
-        const nodes = pairHalfWidthFields(visibleFields).map((row) =>
+        const nodes = pairHalfWidthFields(group.fields).map((row) =>
           row.length === 2 ? (
             <SideBySideFields key={`${row[0].key}-${row[1].key}`}>
               {renderField(row[0])}

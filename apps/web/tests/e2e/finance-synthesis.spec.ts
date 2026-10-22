@@ -81,7 +81,7 @@ test("cash flow spreads a live project's remaining estimate to its end date", as
     name,
     status: "in_progress",
     costEstimate: 1200,
-    endDate: end.toISOString().slice(0, 10),
+    dates: { start: null, end: end.toISOString().slice(0, 10) },
   });
 
   await gotoAuthenticatedPage(page, "/cash-flow");

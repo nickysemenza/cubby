@@ -64,7 +64,7 @@ export function TaskStatusBoard({
           projectShortcode: proj?.id ?? null,
           name: proj?.name ?? "Unknown project",
           emoji: proj?.emoji,
-          date: proj?.startDate ?? "",
+          date: proj?.dates?.start ?? "",
           breakdown: row,
           remaining: total,
         };

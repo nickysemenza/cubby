@@ -293,8 +293,8 @@ describe("BulkEditDialogBody", () => {
     },
     {
       entity: "planting" as const,
-      key: "finishedOn",
-      label: "Finished on",
+      key: "season",
+      label: "Season",
       action: "Clear",
       item: { id: "PLT-ABCD", name: "Seedlings" },
     },
@@ -395,7 +395,7 @@ describe("BulkEditDialogBody", () => {
     },
     {
       entity: "planting",
-      fieldKeys: ["status", "finishedOn", "locationId"],
+      fieldKeys: ["status", "season", "locationId"],
       item: { id: "PLT-1", name: "Tomato bed" },
       fieldLabel: "Status",
       optionLabel: "Finished",
@@ -511,7 +511,7 @@ describe("BulkEditDialogBody", () => {
       <BulkEditDialogBody
         entity="planting"
         items={[{ id: "PLT-1", name: "Tomato bed" }]}
-        fieldKeys={["status", "finishedOn", "locationId"]}
+        fieldKeys={["status", "season", "locationId"]}
         onOpenChange={vi.fn()}
         onSubmit={vi.fn()}
         isPending={false}

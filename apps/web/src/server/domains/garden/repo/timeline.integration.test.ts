@@ -67,8 +67,10 @@ describe("plantingTimeline guide bands", () => {
         plantId: crop.id,
         locationId: location.id,
         status,
-        sowedOn: status === "finished" ? "2026-01-01" : null,
-        finishedOn: status === "finished" ? "2026-02-01" : null,
+        season:
+          status === "finished"
+            ? { start: "2026-01-01", end: "2026-02-01" }
+            : null,
       };
       const planted = await createPlanting(ctx.db, input, TEST_ACTOR);
 

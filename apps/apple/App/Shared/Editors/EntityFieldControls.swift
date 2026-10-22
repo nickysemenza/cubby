@@ -54,7 +54,7 @@ struct EntityFieldControl: View {
                 }
             }
         }
-        if let error = model.fieldErrors[key] {
+        if let error = model.dateRangeErrors[key] ?? model.fieldErrors[key] {
             Text(error)
                 .font(.caption)
                 .foregroundStyle(FieldGuideTokens.destructive)
@@ -222,6 +222,8 @@ struct EntityFieldControl: View {
             }
         case .date:
             dateControl
+        case .dateRange:
+            dateRangeControl
         case .number:
             LabeledContent(label) {
                 TextField(
@@ -568,6 +570,51 @@ struct EntityFieldControl: View {
             )
             .labelsVisibility(field.nullable ? .hidden : .automatic)
         }
+    }
+
+    private var dateRangeControl: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Text(label).font(.fieldGuideLabel).foregroundStyle(.secondary)
+            dateRangeEndpoint("start", title: "Start")
+            dateRangeEndpoint("end", title: "End")
+        }
+    }
+
+    @ViewBuilder
+    private func dateRangeEndpoint(_ endpoint: String, title: String) -> some View {
+        let day = value[endpoint]?.stringValue
+        Toggle(
+            title,
+            isOn: Binding(
+                get: { day != nil },
+                set: { enabled in
+                    let other = endpoint == "start" ? "end" : "start"
+                    setDateRangeEndpoint(
+                        endpoint, day: enabled ? value[other]?.stringValue ?? PlainDate(.now).rawValue : nil)
+                })
+        )
+        .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).\(endpoint).enabled")
+        if let day {
+            DatePicker(
+                title,
+                selection: Binding(
+                    get: { PlainDate(rawValue: day).date() ?? .now },
+                    set: { setDateRangeEndpoint(endpoint, day: PlainDate($0).rawValue) }),
+                displayedComponents: .date
+            )
+            .accessibilityLabel("\(field.label) \(title.lowercased())")
+            .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).\(endpoint)")
+        }
+    }
+
+    private func setDateRangeEndpoint(_ endpoint: String, day: String?) {
+        var range = value.objectValue ?? [:]
+        range[endpoint] = day.map(JSONValue.string) ?? .null
+        // Empty ranges clear the field; every edit replaces the complete public value.
+        model.draft[key] =
+            range["start"]?.stringValue == nil && range["end"]?.stringValue == nil
+            ? .null : .object(["start": range["start"] ?? .null, "end": range["end"] ?? .null])
+        model.markEdited(key)
     }
 
     private func decode(_ value: JSONValue) -> Date? {

@@ -24,12 +24,11 @@ function proj(id: string, parentProjectId?: string): ProjectListItemOut {
       parentProjectId != null
         ? testShortcode("project", parentProjectId)
         : null,
-    startDate: null,
-    endDate: null,
+    dates: null,
     notes: null,
     googleDriveFolderUrl: null,
     notionPageUrl: null,
-    dates: {
+    dateWindow: {
       derivedStart: null,
       derivedEnd: null,
       effectiveStart: null,

@@ -102,7 +102,9 @@ export function CreateProjectFromTasksDialog({
               name: values.name,
               kind: values.kind,
               costEstimate: values.costEstimate,
-              startDate: values.startDate,
+              dates: values.startDate
+                ? { start: values.startDate, end: null }
+                : null,
             },
           })
         }

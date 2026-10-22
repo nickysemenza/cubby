@@ -38,8 +38,7 @@ describe("project list declared filters", () => {
     const desk = await createRepoEntity(ctx, "project", {
       name: "Parity desk",
       locations: ["Office"],
-      startDate: "2026-02-01",
-      endDate: "2026-02-28",
+      dates: { start: "2026-02-01", end: "2026-02-28" },
     });
     return {
       member: member.output,

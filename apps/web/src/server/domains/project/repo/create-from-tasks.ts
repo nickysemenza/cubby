@@ -73,8 +73,8 @@ export async function createProjectFromTasks(
       defaultTrade: projectInput.defaultTrade,
       costEstimate: projectInput.costEstimate,
       parentProjectId,
-      startDate: projectInput.startDate,
-      endDate: projectInput.endDate,
+      startDate: projectInput.dates?.start ?? null,
+      endDate: projectInput.dates?.end ?? null,
       emoji: projectInput.emoji ?? null,
       notes: projectInput.notes,
     });

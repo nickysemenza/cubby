@@ -241,8 +241,10 @@ export async function executeCalDavWrite(
       entity: "task",
       data: {
         name: event.summary,
-        dueDate: event.startDate,
-        dueEndDate: shiftDate(event.endDateExclusive, -1),
+        due: {
+          start: event.startDate,
+          end: shiftDate(event.endDateExclusive, -1),
+        },
         status: write.collection === "completed-tasks" ? "done" : "not_started",
         trade: event.trade,
         projectMode: "inherit",
@@ -287,8 +289,10 @@ export async function executeCalDavWrite(
         id: projection.id,
         data: {
           name: event.summary,
-          dueDate: event.startDate,
-          dueEndDate: shiftDate(event.endDateExclusive, -1),
+          due: {
+            start: event.startDate,
+            end: shiftDate(event.endDateExclusive, -1),
+          },
         },
       },
     );

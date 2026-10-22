@@ -505,7 +505,7 @@ export const projectListRead = async (
                   rollup: true,
                   spent: true,
                   taskProgress: true,
-                  dates: true,
+                  dateWindow: true,
                 }),
                 (row, loaded) => {
                   const own =
@@ -519,7 +519,7 @@ export const projectListRead = async (
                     },
                     spent: own.spent,
                     taskProgress: `${own.doneTaskCount}/${own.taskCount}`,
-                    dates:
+                    dateWindow:
                       loaded.dateWindows.get(row.id) ??
                       EMPTY_PROJECT_DATE_WINDOW,
                   };

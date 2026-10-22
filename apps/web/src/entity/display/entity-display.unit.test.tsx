@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { PlantingOut } from "@cubby/schemas/planting";
 import type { CellData } from "@tanstack/react-table";
 import {
   fireEvent,
@@ -440,9 +441,8 @@ describe("declared entity displays", () => {
       quantity: string | null;
       notes: string | null;
       plannedWindow: string | null;
-      sowedOn: string | null;
+      season: PlantingOut["season"];
       transplantedOn: string | null;
-      finishedOn: string | null;
     };
     const row: PlantingRow = {
       id: "PLT-TEST",
@@ -459,9 +459,8 @@ describe("declared entity displays", () => {
       quantity: null,
       notes: null,
       plannedWindow: null,
-      sowedOn: null,
+      season: null,
       transplantedOn: null,
-      finishedOn: null,
     };
     const onSaveField = vi.fn().mockResolvedValue(undefined);
     const columns = createEntityDisplayColumns(

@@ -379,10 +379,12 @@ export function UnifiedCalendar({
           intent: "schedule",
           id: item.id,
           data: {
-            dueDate: nextStart,
-            dueEndDate: wasRange
-              ? formatPlainDate(addDays(parsePlainDate(nextEndExclusive), -1))
-              : null,
+            due: {
+              start: nextStart,
+              end: wasRange
+                ? formatPlainDate(addDays(parsePlainDate(nextEndExclusive), -1))
+                : null,
+            },
           },
         });
       } else if (item.kind === "expense" && item.future) {

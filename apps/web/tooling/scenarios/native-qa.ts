@@ -119,8 +119,7 @@ export async function seedNativeQa(
   });
   const project = await createEntity(context, "project", {
     name: "Synthetic Kitchen Refresh",
-    startDate: "2026-05-01",
-    endDate: "2026-05-31",
+    dates: { start: "2026-05-01", end: "2026-05-31" },
   });
   const task = await createEntity(context, "task", {
     name: "Synthetic shelf liner",
@@ -220,7 +219,7 @@ async function seedScopedPlantingPicker(
       plantId: created.id,
       locationId,
       status: "growing",
-      sowedOn: "2026-05-01",
+      season: { start: "2026-05-01", end: null },
     });
   };
   const northPlanting = await plant("Synthetic Pea", north.id);

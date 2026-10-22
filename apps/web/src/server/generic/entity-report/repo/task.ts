@@ -29,7 +29,7 @@ export function taskBriefingReport(
           entity: "task",
           id: row.id,
           title: row.name,
-          trailing: row.dueEndDate ?? row.dueDate,
+          trailing: row.due?.end ?? row.due?.start ?? null,
           badges: [{ label: row.status.replaceAll("_", " ") }],
           lines:
             row.projectName && row.projectId

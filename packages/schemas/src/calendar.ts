@@ -1,3 +1,4 @@
+import { storedDateRangeSchema } from "./date-range";
 import { z } from "zod";
 import { dataQuality } from "./data-quality";
 import { money, moneyNullable } from "./money";
@@ -82,8 +83,7 @@ export const calendarTaskItem = z.object({
   ...calendarItemDates,
   interaction: z.literal("move"),
   /** Raw nullable task boundaries; start/end above are normalized for layout. */
-  dueDate: plainDate.nullable(),
-  dueEndDate: plainDate.nullable(),
+  due: storedDateRangeSchema.nullable(),
   status: taskStatusSchema,
   trade: tradeSchema,
   projectName: z.string().nullable(),
@@ -195,10 +195,10 @@ export const calendarFilterFields = {
 /** The combined calendar's declared sources and date projections. */
 export const calendarSources = {
   meal: { dates: ["date"] },
-  task: { dates: ["dueDate", "dueEndDate"] },
+  task: { dates: ["due"] },
   expense: { dates: ["date"] },
   project: { projection: "subtree-date-windows" },
-  planting: { dates: ["sowedOn", "transplantedOn", "finishedOn"] },
+  planting: { dates: ["season", "transplantedOn"] },
 } as const satisfies {
   meal: { dates: readonly (keyof MealOut)[] };
   task: { dates: readonly (keyof TaskOut)[] };

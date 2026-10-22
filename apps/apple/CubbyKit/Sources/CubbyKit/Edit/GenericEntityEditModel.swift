@@ -327,8 +327,30 @@ public final class GenericEntityEditModel {
         return visibleFields.filter { isRequired($0) && (draft[$0.key] ?? .null) == .null }.map(\.key)
     }
 
+    public var dateRangeErrors: [String: String] {
+        var errors: [String: String] = [:]
+        // Retained stored bounds may need correction, but an unrelated patch
+        // must not be blocked by a value it does not write.
+        let supplied = isCreate ? draft : ((try? patch().values) ?? [:])
+        for field in visibleFields where field.kind == .dateRange {
+            guard let value = supplied[field.key], value != .null else { continue }
+            let start = value["start"]?.stringValue
+            let end = value["end"]?.stringValue
+            if start == nil && end == nil {
+                errors[field.key] = "Choose at least one date or clear the range"
+            } else if [start, end].compactMap({ $0 }).contains(where: {
+                $0.count != 10 || DatePresentation.plainDate($0) == nil
+            }) {
+                errors[field.key] = "Enter a valid calendar date"
+            } else if let start, let end, start > end {
+                errors[field.key] = "Start must be on or before end"
+            }
+        }
+        return errors
+    }
+
     public var canSave: Bool {
-        guard !isSaving, !isLoading else { return false }
+        guard !isSaving, !isLoading, dateRangeErrors.isEmpty else { return false }
         switch mode {
         case .create:
             return missingRequiredKeys.isEmpty
@@ -351,7 +373,11 @@ public final class GenericEntityEditModel {
     public func save() async -> Bool {
         guard !isSaving else { return false }
         isSaving = true
-        fieldErrors = [:]
+        fieldErrors = dateRangeErrors
+        guard fieldErrors.isEmpty else {
+            isSaving = false
+            return false
+        }
         nestedErrors = [:]
         bannerError = nil
         defer { isSaving = false }

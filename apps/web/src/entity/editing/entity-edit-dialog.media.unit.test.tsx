@@ -194,7 +194,7 @@ describe("EntityEditDialog thrown submit errors", () => {
       id: testShortcode("task", "TSK-TEST"),
       name: "Laundry",
       status: "not_started",
-      dueDate: "2026-08-20",
+      due: { start: "2026-08-20", end: null },
     };
     const request: Omit<EntityEditRequest<"task", "update">, "surface"> & {
       intent: "schedule";

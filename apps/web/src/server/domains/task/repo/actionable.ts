@@ -264,10 +264,12 @@ function compareNext(
  * rather than the effective/range date), then `updatedAt` descending.
  */
 function compareLater(a: ActionableTaskOut, b: ActionableTaskOut): number {
-  if (a.dueDate !== b.dueDate) {
-    if (a.dueDate == null) return 1;
-    if (b.dueDate == null) return -1;
-    return a.dueDate.localeCompare(b.dueDate);
+  const aStart = a.due?.start ?? null;
+  const bStart = b.due?.start ?? null;
+  if (aStart !== bStart) {
+    if (aStart === null) return 1;
+    if (bStart === null) return -1;
+    return aStart.localeCompare(bStart);
   }
   return b.updatedAt.getTime() - a.updatedAt.getTime();
 }

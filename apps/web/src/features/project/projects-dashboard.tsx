@@ -456,9 +456,12 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
                 />
               </span>
             )}
-            {task.dueDate && (
+            {(task.due?.start ?? null) && (
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                <DateDisplay start={task.dueDate} end={task.dueEndDate} />
+                <DateDisplay
+                  start={task.due?.start ?? null}
+                  end={task.due?.end ?? null}
+                />
               </span>
             )}
           </Row>
@@ -658,12 +661,13 @@ export function ProjectCard({
             {formatCurrency(spent)} spent
           </Badge>
         )}
-        {(project.dates.effectiveStart || project.dates.effectiveEnd) && (
+        {(project.dateWindow.effectiveStart ||
+          project.dateWindow.effectiveEnd) && (
           <Badge variant="outline">
             <CalendarIcon className="size-3" />
             <DateDisplay
-              start={project.dates.effectiveStart}
-              end={project.dates.effectiveEnd}
+              start={project.dateWindow.effectiveStart}
+              end={project.dateWindow.effectiveEnd}
             />
           </Badge>
         )}

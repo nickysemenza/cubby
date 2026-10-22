@@ -223,6 +223,11 @@ interface EntityFieldResolutionObject {
 export type EntityField = Readonly<{
   key: string;
   kind: EntityFieldKind;
+  dateRange: {
+    readonly start: string;
+    readonly end: string;
+    readonly semantics: "deadline" | "period";
+  } | null;
   nullable: boolean;
   label: string;
   description: string | null;

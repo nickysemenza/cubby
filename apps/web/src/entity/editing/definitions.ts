@@ -594,13 +594,12 @@ const isBlank = (value: EntityEditValue): boolean => {
 
 /**
  * The intent's declared checks: `intents.required` fields that are blank and
- * `presentation.spans` whose end precedes its start. Both are data in the
- * entity declaration; only `options.validate` is entity-specific.
+ * the canonical field schemas validate compound values. Only
+ * `options.validate` is entity-specific.
  */
 const declaredIntentIssues = <E extends EditableEntity>(
   entity: E,
   semanticIntent: string,
-  fields: readonly string[],
   input: Parameters<NonNullable<EditIntent<E>["validate"]>>[0],
 ): readonly EntityEditIssue[] => {
   const { values } = input;
@@ -613,25 +612,8 @@ const declaredIntentIssues = <E extends EditableEntity>(
         source: "client",
       });
   }
-  const spans: readonly { start: string; end: string }[] =
-    entitySummary[entity].spans;
-  for (const { start, end } of spans) {
-    if (!fields.includes(start) || !fields.includes(end)) continue;
-    const from = z.string().min(1).safeParse(values[start]);
-    const to = z.string().min(1).safeParse(values[end]);
-    if (from.success && to.success && to.data < from.data)
-      issues.push({
-        field: end,
-        message: `${fieldLabel(entity, end)} must be on or after ${fieldLabel(entity, start)}.`,
-        source: "client",
-      });
-  }
   return issues;
 };
-
-const fieldLabel = (entity: EditableEntity, key: string): string =>
-  entityFieldModels[entity].fields.find((field) => field.key === key)?.label ??
-  key;
 
 /**
  * The canonical contract is the validator of record: run the entity's own
@@ -640,6 +622,7 @@ const fieldLabel = (entity: EditableEntity, key: string): string =>
  * editor (a non-zero amount, a posted transaction's date).
  */
 const parseCanonical = <T>(
+  entity: EditableEntity,
   parse: () => T,
 ):
   | { ok: true; value: T }
@@ -651,7 +634,13 @@ const parseCanonical = <T>(
     return {
       ok: false,
       issues: error.issues.map((issue) => ({
-        field: issue.path.length > 0 ? issue.path.join(".") : undefined,
+        field: entityFieldModels[entity].fields.some(
+          (field) => field.key === issue.path[0] && field.kind === "dateRange",
+        )
+          ? String(issue.path[0])
+          : issue.path.length > 0
+            ? issue.path.join(".")
+            : undefined,
         message: issue.message,
         source: "client" as const,
       })),
@@ -670,7 +659,7 @@ const makeIntent = <E extends EditableEntity>(
     fields,
     access: options.access ?? (() => editable),
     validate: (input) => [
-      ...declaredIntentIssues(entity, semanticIntent, fields, input),
+      ...declaredIntentIssues(entity, semanticIntent, input),
       ...(options.validate?.(input) ?? []),
     ],
     defaults: options.defaults,
@@ -684,7 +673,7 @@ const makeIntent = <E extends EditableEntity>(
       // edit submit. See `entities/editing/definitions.unit.test.ts`.
       const keys = Object.keys(data);
       if (operation === "create") {
-        const parsed = parseCanonical(() =>
+        const parsed = parseCanonical(entity, () =>
           parseEntityEditCreateInput(entity, data),
         );
         if (!parsed.ok) return { ok: false, issues: parsed.issues };
@@ -711,7 +700,7 @@ const makeIntent = <E extends EditableEntity>(
         };
       }
       if (operation === "update") {
-        const parsed = parseCanonical(() =>
+        const parsed = parseCanonical(entity, () =>
           parseEntityEditUpdateInput(entity, data),
         );
         if (!parsed.ok) return { ok: false, issues: parsed.issues };

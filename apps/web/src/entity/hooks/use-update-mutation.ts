@@ -12,6 +12,7 @@ import {
   type StandardEntity,
 } from "~/entity/entity-contracts";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import type { CellJsonValue } from "~/ui/data-table/cell-clipboard";
 import type { PasteFieldValues } from "~/ui/data-table/cell-data";
 
 import {
@@ -49,7 +50,7 @@ export function useUpdateMutation<E extends StandardEntity>({
 export type EntityFieldSave = (
   row: { id: string },
   field: string,
-  value: string | number | boolean | null,
+  value: CellJsonValue,
 ) => Promise<void>;
 type EntityRowSave = (
   row: { id: string },
@@ -81,7 +82,7 @@ export function useEntityFieldSave(
             async (
               row: { id: string },
               field: string,
-              value: string | number | boolean | null,
+              value: CellJsonValue,
             ) => {
               await update.mutateAsync({
                 id: row.id,

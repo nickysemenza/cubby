@@ -366,6 +366,9 @@ the full optional preview command. Auxiliary uploads its JSON report and browser
 failure attachments (`.vitest/attachments/`) before Worker tests can overwrite
 the shared report.
 
+The compound date editor owner verifies local drafts, atomic replace/clear and
+responsive nested popovers on desktop and phone.
+
 Shared list, table, card, detail and photo-review presentation capabilities have
 one owner here: populated/empty/loading states, responsive layout, overflow, focus and
 interaction state. Use actual declarations, column modules and renderers with

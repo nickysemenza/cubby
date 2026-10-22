@@ -3,9 +3,13 @@ import {
   type ScoredEntity,
   scoredEntities,
 } from "@cubby/schemas/data-quality";
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
@@ -197,6 +201,28 @@ export type ListReadOptions<Row> = {
 };
 
 const sourceRecord = z.record(z.string(), z.unknown());
+
+type DateRangeProjection = NonNullable<
+  EntityFieldModel["fields"][number]["dateRange"]
+> &
+  Pick<EntityFieldModel["fields"][number], "key">;
+
+function projectDateRanges(
+  source: z.infer<typeof sourceRecord>,
+  fields: readonly DateRangeProjection[],
+): z.infer<typeof sourceRecord> {
+  const output: z.infer<typeof sourceRecord> = {};
+  for (const { key, start, end } of fields) {
+    if (!Object.hasOwn(source, start) || !Object.hasOwn(source, end))
+      throw new Error(`Requested date columns were not loaded: ${key}`);
+    output[key] = dateRangeFromDates(
+      z.string().nullable().parse(source[start]),
+      z.string().nullable().parse(source[end]),
+    );
+  }
+  return output;
+}
+
 const sourceIdentity = z.object({ id: z.string(), shortcode: z.string() });
 
 /** Canonical fields own admission; batches retain their inferred result in a page-local closure. */
@@ -419,11 +445,21 @@ export function listReadPlan<Row>(
         ),
         Promise.all(admitted.map((binding) => binding.prepare?.(page))),
       ]);
+      const dateRanges = (model?.fields ?? []).flatMap((field) =>
+        "dateRange" in field &&
+        field.dateRange &&
+        Object.hasOwn(schema.shape, field.key) &&
+        !written.has(field.key) &&
+        wanted(projection, field.key)
+          ? [{ key: field.key, ...field.dateRange }]
+          : [],
+      );
       const mapped = await Promise.all(
         sources.map(async ({ row, source, identity }) => {
           const result: ListReadRow = {
             id: parseShortcodeFor(entity, identity.shortcode),
           };
+          Object.assign(result, projectDateRanges(source, dateRanges));
           for (const [key, validator] of Object.entries(schema.shape)) {
             if (
               !wanted(projection, key) ||

@@ -592,6 +592,7 @@ const compileFieldModel = (
     const compiled: EntityField = {
       key,
       kind: field.kind,
+      dateRange: field.dateRange,
       nullable: field.nullable,
       label: field.label ?? inferredFieldLabel(key, field.reference !== null),
       description: field.description,
@@ -909,6 +910,36 @@ const compileFieldModel = (
     }
   }
   const storedFields = new Set(storageKeys);
+  const claimedDates = new Set<string>();
+  for (const field of fields) {
+    if ((field.kind === "dateRange") !== (field.dateRange !== null))
+      throw new EntityDeclarationError(
+        `${context}.${field.key} must declare dateRange exactly for dateRange fields.`,
+      );
+    if (field.dateRange === null) continue;
+    for (const key of [field.dateRange.start, field.dateRange.end]) {
+      const source = fields.find((candidate) => candidate.key === key);
+      if (
+        !storedFields.has(key) ||
+        source?.kind !== "date" ||
+        !source.nullable ||
+        !storage.find((column) => column.key === key)?.nullable ||
+        claimedDates.has(key)
+      )
+        throw new EntityDeclarationError(
+          `${context}.${field.key}: ${key} must be an unclaimed nullable stored date.`,
+        );
+      if (
+        compiled.output.includes(key) ||
+        compiled.create.includes(key) ||
+        compiled.update.includes(key)
+      )
+        throw new EntityDeclarationError(
+          `${context}.${field.key}: endpoint ${key} is storage-only.`,
+        );
+      claimedDates.add(key);
+    }
+  }
   for (const field of fields) {
     const exposed =
       field.display.list || field.display.detail || field.control !== null;
@@ -921,7 +952,12 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${context}.${field.key} needs an explicit explanation readPath or projections.`,
       );
-    if (exposed && !storedFields.has(field.key) && field.provenance === null)
+    if (
+      exposed &&
+      !storedFields.has(field.key) &&
+      field.provenance === null &&
+      field.dateRange === null
+    )
       throw new EntityDeclarationError(
         `${context}.${field.key} is exposed without storage, a reference, or declared provenance.`,
       );
@@ -3047,11 +3083,28 @@ const validateImageRouting = (entity: CompiledEntity): void => {
     ["text", "text-array", "enum"],
     "candidateFields",
   );
-  validateFields(
-    routing.temporalFields,
-    ["date", "timestamp"],
-    "temporalFields",
-  );
+  if (new Set(routing.temporalFields).size !== routing.temporalFields.length)
+    throw new EntityDeclarationError(
+      `${context}.temporalFields contains duplicates.`,
+    );
+  for (const path of routing.temporalFields) {
+    const [root, endpoint, extra] = path.split(".");
+    const field = imagePolicyField(
+      entity,
+      root ?? path,
+      `${context}.temporalFields`,
+    );
+    const valid =
+      endpoint === undefined
+        ? field.kind === "date" || field.kind === "timestamp"
+        : field.kind === "dateRange" &&
+          (endpoint === "start" || endpoint === "end") &&
+          extra === undefined;
+    if (!valid || !entity.fieldModel.output.includes(field.key))
+      throw new EntityDeclarationError(
+        `${context}.temporalFields.${path} must read a public calendar date or timestamp.`,
+      );
+  }
   validateFields(
     routing.signals.ocrFields,
     ["text", "text-array"],

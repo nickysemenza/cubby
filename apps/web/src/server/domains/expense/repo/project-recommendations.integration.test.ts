@@ -41,8 +41,7 @@ describe("expense project recommendation evidence", () => {
     });
     const override = await createRepoEntity(ctx, "project", {
       name: "Explicit window",
-      startDate: "2024-06-01",
-      endDate: "2024-06-30",
+      dates: { start: "2024-06-01", end: "2024-06-30" },
     });
     const source = await createRepoEntity(ctx, "expense", {
       name: "Review this charge",
@@ -81,13 +80,11 @@ describe("expense project recommendation evidence", () => {
     const current = await createRepoEntity(ctx, "project", { name: "Current" });
     const preferred = await createRepoEntity(ctx, "project", {
       name: "Zulu exact product",
-      startDate: "2024-01-01",
-      endDate: "2024-12-31",
+      dates: { start: "2024-01-01", end: "2024-12-31" },
     });
     const other = await createRepoEntity(ctx, "project", {
       name: "Alpha trade",
-      startDate: "2024-06-01",
-      endDate: "2024-06-30",
+      dates: { start: "2024-06-01", end: "2024-06-30" },
     });
     const first = await createRepoEntity(ctx, "expense", {
       name: "Same product history",
@@ -165,8 +162,7 @@ describe("expense project recommendation evidence", () => {
     await createRepoEntity(ctx, "task", {
       name: "Dated work",
       projectId: project.output.id,
-      dueDate: "2024-06-01",
-      dueEndDate: "2024-06-30",
+      due: { start: "2024-06-01", end: "2024-06-30" },
       trade: "electrical",
     });
     const dated = await createRepoEntity(ctx, "expense", {

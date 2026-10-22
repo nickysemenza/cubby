@@ -1,3 +1,4 @@
+import { amount as amountSchema, type Amount } from "@cubby/schemas/codec";
 /**
  * Column-level cell data (copy/paste) — one source of truth for how a column's
  * value is copied and how a pasted value is applied.
@@ -23,8 +24,11 @@
  * reimplementation of either is what this module used to have, and it
  * corrupted saved data.
  */
-
-import { amount as amountSchema, type Amount } from "@cubby/schemas/codec";
+import {
+  dateRangeSchema,
+  dateRangeFromDates,
+  type CalendarDateRange,
+} from "@cubby/schemas/date-range";
 import type { CellData } from "@tanstack/react-table";
 import { z } from "zod";
 
@@ -142,6 +146,33 @@ export function textCellData<TData>(
       const raw = pastedString({ json, text });
       const next = raw.trim() === "" ? null : raw.trim();
       return next;
+    }, save),
+  };
+}
+
+/** Range clipboard values replace both bounds in one semantic write. */
+export function dateRangeCellData<TData>(
+  getValue: (row: TData) => CalendarDateRange | null,
+  save?: (row: TData, value: CalendarDateRange | null) => Promise<void>,
+): ColumnCellData<TData, CalendarDateRange | null> {
+  return {
+    kind: "dateRange",
+    getCopyPayload: (row) => {
+      const value = getValue(row);
+      return value === null
+        ? null
+        : { text: `${value.start ?? ""}..${value.end ?? ""}`, json: value };
+    },
+    ...pasteHandlers<TData, CalendarDateRange | null>(({ json, text }) => {
+      if (json !== undefined) return dateRangeSchema.nullable().parse(json);
+      const raw = (text ?? "").trim();
+      if (!raw) return null;
+      const [start, end, extra] = raw.split("..");
+      if (extra !== undefined)
+        throw new Error("Expected start..end calendar dates.");
+      return dateRangeSchema
+        .nullable()
+        .parse(dateRangeFromDates(start || null, end || null));
     }, save),
   };
 }

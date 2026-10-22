@@ -19,16 +19,16 @@ import {
 import { Description } from "~/ui/primitives/description";
 
 const milestoneFields = [
-  ["sowedOn", "Sowed"],
+  ["season.start", "Sowed"],
   ["transplantedOn", "Transplanted"],
-  ["finishedOn", "Finished"],
+  ["season.end", "Finished"],
 ] as const;
 
 /** Preserve one record row while rendering each known lifecycle date. */
 export function calendarScheduleRows(data: CalendarScheduleOut): ScheduleRow[] {
   const tasks: ScheduleRow[] = data.tasks.map((task) => {
-    const first = task.dueDate ?? task.dueEndDate;
-    const last = task.dueEndDate ?? task.dueDate;
+    const first = task.due?.start ?? null ?? task.due?.end ?? null;
+    const last = task.due?.end ?? null ?? task.due?.start ?? null;
     const segments: ScheduleSegment[] =
       first && last
         ? [
@@ -62,7 +62,12 @@ export function calendarScheduleRows(data: CalendarScheduleOut): ScheduleRow[] {
       .join(" · "),
     metaShort: planting.locationName ?? undefined,
     segments: milestoneFields.flatMap(([field, label]) => {
-      const date = planting[field];
+      const date =
+        field === "season.start"
+          ? planting.season?.start
+          : field === "season.end"
+            ? planting.season?.end
+            : planting[field];
       return date
         ? [
             {

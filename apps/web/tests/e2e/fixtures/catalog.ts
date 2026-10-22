@@ -32,8 +32,7 @@ export const seedTaskPrerequisite = (
   page: Page,
   opts: {
     name: string;
-    dueDate?: string;
-    dueEndDate?: string;
+    due?: EntityOverrides<"task">["due"];
     status?: TaskStatus;
     projectId?: string;
   },
@@ -41,8 +40,7 @@ export const seedTaskPrerequisite = (
   createEntityFixture(page, "task", {
     name: opts.name,
     trade: "other",
-    dueDate: opts.dueDate,
-    dueEndDate: opts.dueEndDate,
+    due: opts.due,
     status: opts.status,
     projectId: opts.projectId,
   });

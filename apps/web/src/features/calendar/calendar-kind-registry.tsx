@@ -165,8 +165,7 @@ const calendarKindRegistry = {
         id: item.id,
         name: item.title,
         status: item.status,
-        dueDate: item.dueDate ?? item.dueEndDate,
-        dueEndDate: item.dueDate ? item.dueEndDate : null,
+        due: item.due,
       },
     }),
     event: (item) => ({

@@ -17,7 +17,7 @@ test("Project Tasks group by status, latest due first, without a Project column"
       trade: "other",
       projectId: project.id,
       status,
-      dueDate: householdDaysFromNow(due),
+      due: { start: householdDaysFromNow(due), end: null },
     });
   await task("sooner", "in_progress", 3);
   await task("later", "in_progress", 20);

@@ -219,7 +219,15 @@ test("plantings list bulk-edits status finished plus a date in one write", async
 
   await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
   await page.getByRole("option", { name: "Finished", exact: true }).click();
-  await dialog.getByLabel("Finished on", { exact: true }).fill("2026-06-01");
+  await dialog
+    .getByRole("group", { name: "Season change" })
+    .getByRole("button", { name: "Set value" })
+    .click();
+  await dialog.getByRole("button", { name: "Season", exact: true }).click();
+  const seasonEnd = page.getByRole("textbox", { name: "Season end" });
+  await seasonEnd.fill("Jun 1, 2026");
+  await seasonEnd.press("Enter");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
 
   await dialog.getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog).not.toBeVisible();
@@ -231,7 +239,7 @@ test("plantings list bulk-edits status finished plus a date in one write", async
   );
   expect(await updated.json()).toMatchObject({
     status: "finished",
-    finishedOn: "2026-06-01",
+    season: { start: null, end: "2026-06-01" },
   });
 });
 

@@ -1,10 +1,10 @@
+import { dateRangeFromDates } from "@cubby/schemas/date-range";
 /**
  * The bounded work projection for Today's first decision. It shares the
  * recursive blocked-task CTE used by `task.summary`, but only returns the
  * four highest-priority ready tasks rather than hydrating the entire
  * actionable graph (including relationship and why-chain display fields).
  */
-
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TaskTodayBriefingOut } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
@@ -120,8 +120,7 @@ export async function getTaskTodayBriefing(
               id: parseShortcodeFor("task", row.id),
               name: row.name,
               status: row.status,
-              dueDate: row.dueDate,
-              dueEndDate: row.dueEndDate,
+              due: dateRangeFromDates(row.dueDate, row.dueEndDate),
               projectId: row.projectId
                 ? parseShortcodeFor("project", row.projectId)
                 : null,

@@ -77,6 +77,9 @@ nonisolated enum EntityFieldValue {
             return field.valueOptions?.first { $0.value == code }?.label ?? (present ? "Yes" : "No")
         }
         guard let value, value != .null else { return nil }
+        if field.kind == .dateRange {
+            return dateRange(value, semantics: field.dateRangeSemantics)
+        }
         switch field.format {
         case "currency", "signedCurrency": return money(value)
         case "plainDate": return value.stringValue.map { DatePresentation.plainDate($0)?.absolute ?? $0 }
@@ -175,6 +178,18 @@ nonisolated enum EntityFieldValue {
         }
         if let amount = number(value) { return ValueFormat.amount(unit: nil, value: amount) }
         return nil
+    }
+
+    static func dateRange(_ value: JSONValue, semantics: String?) -> String? {
+        func day(_ key: String) -> String? {
+            value[key]?.stringValue.map { DatePresentation.plainDate($0)?.absolute ?? $0 }
+        }
+        switch (day("start"), day("end")) {
+        case (let start?, let end?): return start == end ? start : "\(start) – \(end)"
+        case (let start?, nil): return semantics == "deadline" ? start : "From \(start)"
+        case (nil, let end?): return "Through \(end)"
+        case (nil, nil): return nil
+        }
     }
 
     static func date(_ value: JSONValue?) -> String? {

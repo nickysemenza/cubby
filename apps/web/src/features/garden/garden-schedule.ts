@@ -118,11 +118,11 @@ export function guideScheduleRows(
 
 const plantingSegments = (planting: PlantingOut): ScheduleSegment[] => {
   const segments: ScheduleSegment[] = [];
-  if (planting.sowedOn) {
+  if (planting.season?.start) {
     segments.push({
       id: `${planting.id}:sowed`,
-      label: `Sowed · ${planting.sowedOn}`,
-      startDate: planting.sowedOn,
+      label: `Sowed · ${planting.season?.start}`,
+      startDate: planting.season?.start,
       variant: "milestone",
     });
   }
@@ -143,11 +143,11 @@ const plantingSegments = (planting: PlantingOut): ScheduleSegment[] => {
       variant: "range",
     });
   }
-  if (planting.finishedOn) {
+  if (planting.season?.end) {
     segments.push({
       id: `${planting.id}:finished`,
-      label: `Finished · ${planting.finishedOn}`,
-      startDate: planting.finishedOn,
+      label: `Finished · ${planting.season?.end}`,
+      startDate: planting.season?.end,
       variant: "milestone",
     });
   }

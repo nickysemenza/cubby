@@ -4,20 +4,24 @@ import { lifecycleRows } from "./default-timeline";
 
 /** Minimal ordered-fallback lifecycle: two start candidates, one milestone, one end. */
 const lifecycle = {
-  start: ["sowedOn", "transplantedOn"],
+  start: ["season.start", "transplantedOn"],
   milestones: ["milestoneDate"],
-  end: "finishedOn",
+  end: "season.end",
 } as const;
 
 const window = { order: "desc" as const };
 
-const record = (fields: Record<string, string | null | undefined>) => ({
+const record = (
+  fields: Record<
+    string,
+    string | { start: string | null; end: string | null } | null | undefined
+  >,
+) => ({
   id: "PLT-TEST",
   displayImages: [],
-  sowedOn: null,
+  season: null,
   transplantedOn: null,
   milestoneDate: null,
-  finishedOn: null,
   ...fields,
 });
 
@@ -25,8 +29,8 @@ describe("lifecycleRows", () => {
   it.each([
     {
       name: "first start key set",
-      fields: { sowedOn: "2026-03-01" },
-      intervals: [{ start: "2026-03-01", end: null, confident: true }],
+      fields: { season: { start: "2026-03-01", end: "2026-06-01" } },
+      intervals: [{ start: "2026-03-01", end: "2026-06-01", confident: true }],
     },
     {
       name: "first start key null, second set: interval starts at the fallback, unconfident",

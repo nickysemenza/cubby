@@ -104,3 +104,10 @@ Full record routes show every declared section in one continuous native list, in
 The Contents toolbar control opens grouped headings with indented, expanded subsections. Native declarations do not carry web workspace groups, so generic records keep declared sections under Record in their existing reading order, followed by Relations and Provenance. iPhone presents a native sheet, iPad a native popover, and a Mac detail at least 700 points wide toggles an adjacent outline (smaller windows use a popover). Selecting a subsection closes Contents and scrolls the existing detail; scrolling marks the current subsection. Each target identity, focus binding, and geometry measurement belongs to one subsection header, while the enclosing section resolves body emptiness. Never attach those target modifiers to a multi-row Section. Use standard native controls without entrance animation. Run console and Image detail follow this rule; Run evidence and Connections remain isolated hosted routes.
 
 Image diagnostics remain visible in continuous detail, but Vision comparison and stored-analysis reconciliation begin only from the explicit Run diagnostics action. Leaving or cancelling releases the loading state so the action can be requested again. A Contents jump is consumed after its header receives focus; reconstructing a lazy header never replays a completed jump.
+
+## Compound calendar ranges
+
+Generic date-range fields edit Start and End with independent toggles and calendar-only
+pickers. Removing the last endpoint clears the whole field. Saves replace the complete
+range and reject reversed endpoints. Periods with one endpoint display “From” or “Through”;
+a deadline with only a start displays that date. Calendar days never become UTC instants.

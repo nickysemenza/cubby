@@ -1,4 +1,5 @@
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
+import { storedDateRangeSchema } from "@cubby/schemas/date-range";
 import { identifierEffects } from "@cubby/schemas/external-id";
 import { parseShortcode } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -7,6 +8,7 @@ import { sortBy } from "es-toolkit";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { categoryReference } from "~/entity/presentation/category-reference";
+import { dateSpanParts } from "~/lib/date-span";
 import { formatCount } from "~/lib/number-format";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
@@ -48,8 +50,21 @@ function isAuditString(value: AuditJsonValue | undefined): value is string {
   return typeof value === "string";
 }
 
+function dateRangeChangeLabel(
+  value: AuditJsonValue | undefined,
+): string | null {
+  const parsed = storedDateRangeSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const { start, end } = parsed.data;
+  if (start === null && end === null) return null;
+  const label = dateSpanParts(start, end, start ?? end ?? "1970-01-01").label;
+  return start === null ? `Through ${label}` : label;
+}
+
 function formatChangeValue(value: AuditJsonValue | undefined): string {
   if (value === null || value === undefined || value === "") return "(empty)";
+  const range = dateRangeChangeLabel(value);
+  if (range !== null) return range;
   const str =
     isAuditObject(value) || Array.isArray(value)
       ? JSON.stringify(value)
@@ -133,6 +148,8 @@ function formatLedgerValue(
   if (Array.isArray(value)) {
     return { text: countLabel(value.length, "item"), mono: true };
   }
+  const range = dateRangeChangeLabel(value);
+  if (range !== null) return { text: range, mono: false };
   if (!isAuditObject(value)) return null;
   // `Amount` is by far the most common object diff on the home feed — an
   // inventory quantity change is unreadable as raw JSON and obvious as "3 ea".

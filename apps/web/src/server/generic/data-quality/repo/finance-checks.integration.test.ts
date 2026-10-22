@@ -60,7 +60,7 @@ describe("data quality: finance and project entities", () => {
       name: "DQ project complete",
       kind: "furniture",
       status: "not_started",
-      startDate: "2026-01-01",
+      dates: { start: "2026-01-01", end: null },
     });
 
     const hydrated = await loadDataQualities(ctx.db, "project", [
@@ -94,10 +94,10 @@ describe("data quality: finance and project entities", () => {
     const complete = await createRepoEntity(ctx, "task", {
       name: "DQ task complete",
       trade: "electrical",
-      dueDate: "2026-09-01",
+      due: { start: "2026-09-01", end: null },
     });
 
-    // A due window end with no start is the only due-date gap.
+    // An end-only window is valid; it must not create a missing-start defect.
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "Task" SET "dueEndDate" = '2026-09-10' WHERE "id" = ${gap.entityId}`,
     );
@@ -107,7 +107,8 @@ describe("data quality: finance and project entities", () => {
       complete.entityId,
     ]);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
-    expect(gapChecks).toContain("task_due_date");
+    expect(gapChecks).not.toContain("task_due_range");
+    expect(hydrated.get(gap.entityId)?.status).toBe("complete");
     // The project's default trade is the task's effective trade.
     expect(gapChecks).not.toContain("task_trade");
     expect(hydrated.get(complete.entityId)).toMatchObject({
@@ -461,7 +462,11 @@ describe("data quality: finance and project entities", () => {
     );
     const gap = await createPlanting(
       ctx.db,
-      { plantId: crop.id, status: "growing", sowedOn: "2026-04-01" },
+      {
+        plantId: crop.id,
+        status: "growing",
+        season: { start: "2026-04-01", end: null },
+      },
       TEST_ACTOR,
     );
     const complete = await createPlanting(
@@ -470,7 +475,7 @@ describe("data quality: finance and project entities", () => {
         plantId: crop.id,
         locationId: bed.id,
         status: "growing",
-        sowedOn: "2026-04-01",
+        season: { start: "2026-04-01", end: null },
       },
       TEST_ACTOR,
     );
@@ -481,8 +486,7 @@ describe("data quality: finance and project entities", () => {
         plantId: crop.id,
         locationId: bed.id,
         status: "growing",
-        sowedOn: "2026-04-01",
-        finishedOn: "2026-05-01",
+        season: { start: "2026-04-01", end: "2026-05-01" },
         outcome: null,
       },
       TEST_ACTOR,

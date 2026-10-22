@@ -14,6 +14,7 @@ import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-p
 import { formatCurrency } from "~/lib/number-format";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { DateRangeField } from "~/ui/forms/date-span-field";
 import {
   FormWrapper,
   NullableNumericField,
@@ -220,17 +221,27 @@ function EditableCalendarItem({
         placeholder={item.kind === "meal" ? "Meal name (optional)" : "Name"}
         nullable={item.kind === "meal"}
       />
-      <PlainDateField
-        form={session.form}
-        name={item.kind === "task" ? "dueDate" : "date"}
-        label={item.kind === "task" ? "Due date" : "Date"}
-        {...fieldClearing(
-          edit.entity,
-          "date",
-          item.kind === "expense",
-          session.form.watch("cost"),
-        )}
-      />
+      {item.kind === "task" ? (
+        <DateRangeField
+          form={session.form}
+          name="due"
+          label="Due"
+          semantics="deadline"
+          clearable
+        />
+      ) : (
+        <PlainDateField
+          form={session.form}
+          name="date"
+          label="Date"
+          {...fieldClearing(
+            edit.entity,
+            "date",
+            item.kind === "expense",
+            session.form.watch("cost"),
+          )}
+        />
+      )}
       {item.kind === "meal" && (
         <FieldSuggestionProvider
           entity="meal"
@@ -259,11 +270,6 @@ function EditableCalendarItem({
       )}
       {item.kind === "task" && (
         <>
-          <PlainDateField
-            form={session.form}
-            name="dueEndDate"
-            label="Due through"
-          />
           <PickerField
             store="option"
             form={session.form}

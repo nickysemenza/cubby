@@ -159,7 +159,7 @@ test("a planting's generic pages: create, edit status, log a journal entry, and 
   ).toBeVisible();
 });
 
-test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred interval on the plantings Lifecycles timeline", async ({
+test("a bought seedling (transplantedOn only, no season start) gets an inferred interval on the plantings Lifecycles timeline", async ({
   page,
 }) => {
   const suffix = Date.now();
@@ -184,7 +184,7 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
     cropName,
   );
   // No Sowed fill — only Transplanted, the nursery-bought-plant case decision
-  // #1 covers: `lifecycle.start` falls back from `sowedOn` to `transplantedOn`.
+  // #1 covers: `lifecycle.start` falls back from `season.start` to `transplantedOn`.
   await dialog
     .getByLabel("Transplanted on", { exact: true })
     .fill("2026-03-01");
