@@ -314,6 +314,21 @@ test("reviews statement charge groups and refunds against captured retailer orde
     name: "Match statement activity",
     exact: true,
   });
+  const saveAllocation = async () => {
+    // The live allocation check precedes the write; wait for that write before
+    // timing the dialog close and its dependent query invalidations.
+    const saved = page.waitForResponse((response) =>
+      response
+        .url()
+        .endsWith("/operations/financialTransaction.allocateSettlement"),
+    );
+    await dialog
+      .getByRole("button", { name: "Save allocation", exact: true })
+      .click();
+    const response = await saved;
+    expect(response.ok(), await response.text()).toBe(true);
+    await expect(dialog).toHaveCount(0);
+  };
   await dialog.getByRole("button").filter({ hasText: "$85.00" }).click();
   await expect(
     dialog.getByRole("textbox", { name: "Purchase code 1" }),
@@ -327,10 +342,7 @@ test("reviews statement charge groups and refunds against captured retailer orde
   ).toBeDisabled();
   expect(await allocationRows()).toHaveLength(0);
   await dialog.getByRole("spinbutton", { name: "Amount 2" }).fill("42.50");
-  await dialog
-    .getByRole("button", { name: "Save allocation", exact: true })
-    .click();
-  await expect(dialog).toHaveCount(0);
+  await saveAllocation();
   expect((await allocationRows()).map((row) => row.amount)).toEqual([
     42.5, 42.5,
   ]);
@@ -382,10 +394,7 @@ test("reviews statement charge groups and refunds against captured retailer orde
   ).toBeDisabled();
   expect(await allocationRows()).toEqual(acceptedChargeAllocations);
   await dialog.getByRole("spinbutton", { name: "Amount 1" }).fill("-15.00");
-  await dialog
-    .getByRole("button", { name: "Save allocation", exact: true })
-    .click();
-  await expect(dialog).toHaveCount(0);
+  await saveAllocation();
   expect(
     (await allocationRows()).map((row) => row.amount).sort((a, b) => a - b),
   ).toEqual([-15, 42.5, 42.5]);
