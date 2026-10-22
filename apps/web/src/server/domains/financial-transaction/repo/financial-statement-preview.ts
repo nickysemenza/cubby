@@ -184,6 +184,7 @@ export async function previewFinancialStatementImport(
         .select({
           source: statementRow.source,
           providerTransactionId: statementRow.providerTransactionId,
+          providerAccountId: statementRow.providerAccountId,
           externalId: statementRow.externalId,
         })
         .from(statementRow)
@@ -308,6 +309,34 @@ export async function previewFinancialStatementImport(
       const stored = parsedAccounts.find((account) => account.id === hinted);
       if (stored) return stored;
     }
+    if (row.providerAccountId) {
+      const scoped = parsedAccounts.filter((account) =>
+        account.sourceAliases.some(
+          (alias) =>
+            alias.source === row.source &&
+            alias.externalAccountId === row.providerAccountId,
+        ),
+      );
+      if (scoped.length) return scoped.length === 1 ? scoped[0] : undefined;
+      // Descriptor fallback cannot overrule a known provider account scope.
+      const conflictingAlias = parsedAccounts.some((account) =>
+        account.sourceAliases.some(
+          (alias) =>
+            alias.source === row.source &&
+            canonical(alias.alias) === canonical(row.account) &&
+            alias.externalAccountId !== null &&
+            alias.externalAccountId !== row.providerAccountId,
+        ),
+      );
+      const conflictingRecord = observations.some(
+        (observation) =>
+          observation.source === row.source &&
+          observation.providerTransactionId === row.providerTransactionId &&
+          observation.providerAccountId !== null &&
+          observation.providerAccountId !== row.providerAccountId,
+      );
+      if (conflictingAlias || conflictingRecord) return undefined;
+    }
     const descriptor = canonical(row.account);
     const aliasMatches = parsedAccounts.filter((account) =>
       account.sourceAliases.some(
@@ -400,6 +429,10 @@ export async function previewFinancialStatementImport(
                     observation.source === row.source &&
                     observation.providerTransactionId ===
                       row.providerTransactionId &&
+                    (row.providerAccountId === undefined ||
+                      row.providerAccountId === null ||
+                      observation.providerAccountId ===
+                        row.providerAccountId) &&
                     observation.source === ref.source &&
                     observation.externalId === ref.externalId,
                 ),

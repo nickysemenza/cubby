@@ -125,6 +125,7 @@ type Observation = {
   chargeKey: string;
   rowPosition: number | null;
   providerTransactionId: string | null;
+  providerAccountId: string | null;
   accountDescriptor: string;
   statementDate: string;
   providerAmount: number;
@@ -217,7 +218,9 @@ async function nextUnmatchedCharges(
           WHERE changed.shortcode=cs.shortcode AND changed."deletedAt" IS NULL
             AND head.current AND head."deletedAt" IS NULL
             AND ((head."withdrawnAt" IS NOT NULL AND changed.status <> ${financialTransactionStatus.enum.void}) OR
-              (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR round(changed.amount::numeric,2) <> round(head.amount::numeric,2)))))
+              (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR round(changed.amount::numeric,2) <> round(head.amount::numeric,2)
+                OR (head."providerStatus" = ${statementRowProviderStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.posted} OR changed."postedDate" IS DISTINCT FROM head."statementDate"))
+                OR (head."providerStatus" = ${statementRowProviderStatus.enum.pending} AND changed.status <> ${financialTransactionStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.pending} OR changed."transactionDate" IS DISTINCT FROM head."statementDate"))))))
         OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
         WHERE ft.shortcode = cs.shortcode AND ft."deletedAt" IS NULL
           AND ft.status IN (${financialTransactionStatus.enum.posted}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.observed})
@@ -263,7 +266,7 @@ async function loadObservations(
     Record<string, string | number | Date | null>
   >(sql`
     SELECT r.id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
-      r."rowPosition", r."providerTransactionId", r."accountDescriptor",
+      r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
       r."statementDate", r."providerAmount", r.amount, r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus",
       r."providerNotes", r."withdrawnAt", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
@@ -283,6 +286,8 @@ async function loadObservations(
       row.providerTransactionId === null
         ? null
         : String(row.providerTransactionId),
+    providerAccountId:
+      row.providerAccountId === null ? null : String(row.providerAccountId),
     accountDescriptor: String(row.accountDescriptor),
     statementDate: plainDateOf(row.statementDate),
     providerAmount: Number(row.providerAmount),
@@ -326,6 +331,7 @@ const previewRowFor = (
   importFingerprint: row.importFingerprint,
   ...(row.rowPosition === null ? {} : { rowPosition: row.rowPosition }),
   providerTransactionId: row.providerTransactionId,
+  providerAccountId: row.providerAccountId,
   ...(row.providerStatus ? { providerStatus: row.providerStatus } : {}),
 });
 
@@ -666,9 +672,15 @@ const diffFor = (
  */
 function sourceCorrectionReason(
   priorTransaction:
-    | Pick<typeof financialTransaction.$inferSelect, "amount" | "status">
+    | Pick<
+        typeof financialTransaction.$inferSelect,
+        "amount" | "status" | "transactionDate" | "postedDate"
+      >
     | undefined,
-  canonical: Pick<Observation, "amount" | "withdrawnAt">,
+  canonical: Pick<
+    Observation,
+    "amount" | "withdrawnAt" | "providerStatus" | "statementDate"
+  >,
 ): string | null {
   return priorTransaction?.status === "void" && canonical.withdrawnAt === null
     ? "The source charge reappeared after its booking was retired. Review its FinancialTransaction and Expenses individually."
@@ -680,7 +692,31 @@ function sourceCorrectionReason(
           canonical.withdrawnAt === null &&
           cents(Number(priorTransaction.amount)) !== cents(canonical.amount)
         ? "The provider amount changed. Automatic correction is unavailable or paused; review its FinancialTransaction, allocations and Expenses individually."
-        : null;
+        : priorTransaction &&
+            canonical.withdrawnAt === null &&
+            sourceLifecycleDiffers(priorTransaction, canonical)
+          ? "The source status or date changed. Automatic correction is unavailable; review its FinancialTransaction and dated booking individually."
+          : null;
+}
+
+function sourceLifecycleDiffers(
+  transaction: Pick<
+    typeof financialTransaction.$inferSelect,
+    "status" | "transactionDate" | "postedDate"
+  >,
+  observation: Pick<Observation, "providerStatus" | "statementDate">,
+) {
+  if (observation.providerStatus === "posted")
+    return (
+      transaction.status !== "posted" ||
+      transaction.postedDate !== observation.statementDate
+    );
+  return (
+    observation.providerStatus === "pending" &&
+    transaction.status !== "posted" &&
+    (transaction.status !== "pending" ||
+      transaction.transactionDate !== observation.statementDate)
+  );
 }
 
 export async function buildChargeProposals(
@@ -717,8 +753,10 @@ export async function buildChargeProposals(
         shortcode: string;
         amount: number;
         status: typeof financialTransaction.$inferSelect.status;
+        transactionDate: string | null;
+        postedDate: string | null;
       }>(sql`
-    SELECT ft.shortcode, ft.amount, ft.status FROM "FinancialTransaction" ft
+    SELECT ft.shortcode, ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
     WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${sql.join(
       [...matchedByCharge.values()].map((code) => sql`${code}`),
       sql`,`,

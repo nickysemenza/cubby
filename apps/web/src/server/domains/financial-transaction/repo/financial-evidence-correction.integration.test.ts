@@ -28,7 +28,7 @@ describe("generated booking evidence corrections", () => {
   const verify: FinancialEvidenceCorrectionInput["verifyCurrentEvidence"] =
     () => Promise.resolve({ status: "verified" });
 
-  async function fixture() {
+  async function fixture(postedOnly = false) {
     const owner = await createRepoEntity(ctx, "ledgerParty", {
       kind: "member",
       name: "Synthetic correction member",
@@ -49,9 +49,10 @@ describe("generated booking evidence corrections", () => {
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
-      status: "observed",
+      status: postedOnly ? "posted" : "observed",
       amount: 25,
-      transactionDate: "2026-09-01",
+      transactionDate: postedOnly ? null : "2026-09-01",
+      postedDate: postedOnly ? "2026-09-01" : null,
       sourceRefs: [
         {
           source: "synthetic-bank",
@@ -194,6 +195,25 @@ describe("generated booking evidence corrections", () => {
       await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
     ).toEqual({ status: "unchanged", reason: "already_current" });
     expect(await lineage()).toEqual(corrected);
+  });
+
+  // A later posted date can cross funding periods; the original accepted
+  // attribution fingerprint cannot authorize money under the projected date.
+  it("routes a changed effective funding date to review without rewriting its booking", async () => {
+    const { input, money } = await fixture(true);
+    await getDb(ctx.db)
+      .update(statementRow)
+      .set({ providerStatus: "posted", statementDate: "2026-09-02" })
+      .where(eq(statementRow.externalId, input.externalId));
+    const before = await money();
+    expect(
+      await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
+    ).toEqual({
+      status: "review",
+      reason:
+        "The source date changed the booking's funding date. Review its dated allocations and Expenses individually.",
+    });
+    expect(await money()).toEqual(before);
   });
 
   it("refuses mismatched evidence and edited generated Expenses without changing money", async () => {

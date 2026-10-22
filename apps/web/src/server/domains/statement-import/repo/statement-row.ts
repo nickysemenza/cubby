@@ -405,8 +405,56 @@ function statementSignWarning(
 
 type RecordedMember = Pick<
   typeof statementRow.$inferSelect,
-  "id" | "legacyExternalId" | "chargeKey" | "rowPosition" | "externalId"
+  | "id"
+  | "legacyExternalId"
+  | "chargeKey"
+  | "rowPosition"
+  | "externalId"
+  | "providerTransactionId"
 >;
+
+function retainedCollectionObservation({
+  priorMembers,
+  row,
+  externalId,
+  legacyExternalId,
+}: {
+  priorMembers: readonly RecordedMember[];
+  row: RecordStatementRowsInput["rows"][number];
+  externalId: string;
+  legacyExternalId: string;
+}) {
+  // Physical identity wins even when historical keys were mispositioned.
+  // The immutable-evidence check must refuse a conflict, never guess by content.
+  const exact = priorMembers.find((prior) => prior.externalId === externalId);
+  if (exact) return exact;
+  const candidates = priorMembers.filter((prior) =>
+    row.rowPosition !== undefined
+      ? prior.rowPosition === row.rowPosition
+      : prior.providerTransactionId === null &&
+        (prior.legacyExternalId ?? prior.externalId) === legacyExternalId,
+  );
+  const [candidate] = candidates;
+  if (
+    candidates.length > 1 ||
+    (candidate &&
+      row.rowPosition === undefined &&
+      candidate.rowPosition !== null) ||
+    (!candidate &&
+      row.rowPosition !== undefined &&
+      priorMembers.some(
+        (prior) =>
+          prior.rowPosition === null &&
+          prior.providerTransactionId === null &&
+          (prior.legacyExternalId ?? prior.externalId) === legacyExternalId,
+      ))
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Retained collection observations require distinct physical positions to resolve their identity.",
+    );
+  return candidate;
+}
 
 /** Source identity and immutable observation derivation are independent of booking. */
 async function prepareStatementObservations(
@@ -428,6 +476,22 @@ async function prepareStatementObservations(
             eq(statementRow.source, source),
             inArray(statementRow.providerTransactionId, providerIds),
             notDeleted(statementRow),
+          ),
+        )
+    : [];
+  const retainedAccountIds = previousProviderRows.length
+    ? await unwrapDb(tx)
+        .select({
+          chargeKey: statementRow.chargeKey,
+          providerAccountId: statementRow.providerAccountId,
+        })
+        .from(statementRow)
+        .where(
+          and(
+            eq(statementRow.source, source),
+            inArray(statementRow.chargeKey, [
+              ...new Set(previousProviderRows.map((prior) => prior.chargeKey)),
+            ]),
           ),
         )
     : [];
@@ -482,6 +546,20 @@ async function prepareStatementObservations(
       const predecessors = previousProviderRows.filter((prior) => {
         if (prior.providerTransactionId !== row.providerTransactionId)
           return false;
+        // An old null account ID cannot bridge past a later known account.
+        const knownIds = new Set(
+          retainedAccountIds
+            .filter((retained) => retained.chargeKey === prior.chargeKey)
+            .flatMap((retained) =>
+              retained.providerAccountId ? [retained.providerAccountId] : [],
+            ),
+        );
+        if (
+          knownIds.size > 1 ||
+          (providerAccountId !== null &&
+            [...knownIds].some((id) => id !== providerAccountId))
+        )
+          return false;
         if (providerAccountId && prior.providerAccountId)
           return providerAccountId === prior.providerAccountId;
         if (
@@ -520,7 +598,7 @@ async function prepareStatementObservations(
         );
       if (keys[0]) chargeKey = keys[0];
     }
-    const externalId = row.providerTransactionId
+    let externalId = row.providerTransactionId
       ? `v3:${await sha256Hex(
           canonicalJson({
             chargeKey,
@@ -543,6 +621,18 @@ async function prepareStatementObservations(
             row.rowPosition,
           )
         : collectionObservation;
+    if (!row.providerTransactionId) {
+      const retained = retainedCollectionObservation({
+        priorMembers,
+        row,
+        externalId,
+        legacyExternalId,
+      });
+      if (retained) {
+        externalId = retained.externalId;
+        chargeKey = retained.chargeKey;
+      }
+    }
     rows.push({
       ...row,
       source,
@@ -736,6 +826,7 @@ export async function recordStatementRows(
               chargeKey: statementRow.chargeKey,
               rowPosition: statementRow.rowPosition,
               externalId: statementRow.externalId,
+              providerTransactionId: statementRow.providerTransactionId,
             })
             .from(statementImportRow)
             .innerJoin(

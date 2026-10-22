@@ -223,7 +223,11 @@ allocation and Expense together. Withdrawal retires the generated Expense
 through supported writers, voids the transaction and retains references and
 history. Edited, itemized or conflicting bookings stay in the existing Suggestions
 queue for individual FinancialTransaction/Expense review; recording source
-changes never silently overwrites them.
+changes never silently overwrites them. A source date revision that changes the
+booking's effective funding date requires individual review of dated allocations
+and Expenses. Status/date-only refusals remain durable Suggestions even when the
+amount is unchanged; supported posting updates may proceed when the effective
+funding date stays unchanged.
 
 Suggestions remain one per actionable charge. Matching a source observation is
 separate from booking Expenses. Existing candidates must be rejected before a

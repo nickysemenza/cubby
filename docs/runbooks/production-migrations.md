@@ -144,6 +144,14 @@ Rehearse any one-off evidence repair and require unchanged preexisting rows and
 financial lineage inside its transaction. Do not call an export a completed
 provider window or create Expenses merely to close its count discrepancy.
 
+After deployment, start an existing Sweep for `statement_transaction` and
+`transfer_pair` over the retained historical accounts without a recent-date
+filter. Exact evidence replay deliberately schedules no new work, so a
+historical data-only repair needs this explicit discovery pass. Follow its Run
+and budget state, review ambiguous identities against existing Expenses, and
+report unmatched/unbooked work by year. Evidence coverage alone does not satisfy
+historical spending reconciliation.
+
 After deployment, verify a normalized intake and exact replay, a fresh source
 revision, paused automatic spending, and visible correction review. Confirm
 pending or unknown evidence stays honestly labeled. Withdrawals require a

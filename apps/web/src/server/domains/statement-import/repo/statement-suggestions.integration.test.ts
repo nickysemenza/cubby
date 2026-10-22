@@ -874,6 +874,43 @@ describe("statement Transaction suggestions", () => {
     expect(await suggestions(ctx)).toHaveLength(1);
   });
 
+  // A refused lifecycle-only correction must survive the intake response as
+  // ordinary review work, even when amount and booked money are unchanged.
+  it("keeps a refused same-amount posted revision in durable review", async () => {
+    await card(ctx);
+    const source = rowInput({
+      providerTransactionId: "synthetic-lifecycle-review",
+      providerStatus: "pending",
+    });
+    await record(ctx, [source], { observedAt: "2026-06-01T00:00:00Z" });
+    await generate(ctx);
+    const [proposal] = await suggestions(ctx);
+    if (!proposal) throw new Error("Missing synthetic booking proposal");
+    await accept(ctx, proposal);
+    const before = await getDb(ctx.db)
+      .select({ cost: expense.cost })
+      .from(expense)
+      .where(notDeleted(expense));
+    await record(
+      ctx,
+      [{ ...source, providerStatus: "posted", statementDate: "2026-05-05" }],
+      {
+        fingerprint: "synthetic-lifecycle-later",
+        observedAt: "2026-06-02T00:00:00Z",
+      },
+    );
+    await generate(ctx);
+    expect(await suggestions(ctx)).toMatchObject([
+      { clean: false, reviewReason: expect.any(String) },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ cost: expense.cost })
+        .from(expense)
+        .where(notDeleted(expense)),
+    ).toEqual(before);
+  });
+
   // Partial exports do not establish source-confirmed absence or authorize voids.
   it("keeps a booked hold when a later partial export omits it", async () => {
     await card(ctx);

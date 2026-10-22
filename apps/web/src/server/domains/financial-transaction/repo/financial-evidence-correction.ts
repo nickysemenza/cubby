@@ -167,6 +167,9 @@ async function correctionAuthority(
   }
 }
 
+const isSameAmount = (amount: number | null, current: number) =>
+  amount !== null && cents(amount) === cents(current);
+
 const changesMoneyDirection = (amount: number | null, current: number) =>
   amount !== null && Math.sign(amount) !== Math.sign(current);
 
@@ -188,13 +191,26 @@ function sourceLifecycle(
   if (
     observation.providerStatus === "pending" &&
     row.status !== "posted" &&
-    row.status !== "pending"
+    (row.status !== "pending" ||
+      row.transactionDate !== observation.statementDate)
   )
     return {
       status: "pending" as const,
       transactionDate: observation.statementDate,
     };
   return {};
+}
+
+function changesFundingDate(
+  row: typeof financialTransaction.$inferSelect,
+  lifecycle: ReturnType<typeof sourceLifecycle>,
+) {
+  const projectedDate =
+    lifecycle.transactionDate ??
+    row.transactionDate ??
+    lifecycle.postedDate ??
+    row.postedDate;
+  return projectedDate !== (row.transactionDate ?? row.postedDate);
 }
 
 /**
@@ -364,7 +380,13 @@ export async function reconcileFinancialEvidenceCorrection(
           "A source revision changed the transaction's money direction.",
         );
       const lifecycle = sourceLifecycle(observation, row);
-      if (input.amount !== null && cents(input.amount) === cents(row.amount)) {
+      // Funding authority and generated Expense dates were accepted for the
+      // original effective date; a new date needs its own reviewed allocation.
+      if (changesFundingDate(row, lifecycle))
+        return review(
+          "The source date changed the booking's funding date. Review its dated allocations and Expenses individually.",
+        );
+      if (isSameAmount(input.amount, row.amount)) {
         if (hasSourceUpdates(refs.length, nextRefs.length, lifecycle)) {
           await updateFinancialTransaction(
             txDb,
