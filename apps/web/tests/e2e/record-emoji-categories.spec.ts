@@ -1,7 +1,5 @@
-import {
-  seedImagePrerequisite,
-  attachProductImagePrerequisite,
-} from "./fixtures/photos";
+import { seedImagePrerequisite } from "./fixtures/photos";
+import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -362,17 +360,27 @@ test("unassessed quality remains visible in phone cards", async ({
     costType: "services",
     trade: "other",
   });
-  const product = await createEntityFixture(page, "product", {
-    name: "Synthetic planned quality cover",
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const vendor = await createEntityFixture(page, "vendor", {
+    name: "Synthetic planned vendor",
+  });
+  const purchase = await createEntityFixture(page, "purchase", {
+    vendorId: vendor.id,
+    date: "2026-01-01",
   });
   const image = await seedImagePrerequisite(
     "planned-quality-cover",
     e2eRuntime.objectStorageUrl,
   );
-  await attachProductImagePrerequisite(page, image.id, product.id, "item");
+  // Borrowed receipt media does not enable the Product identity check.
+  await attachExistingImageToEntity(
+    db,
+    { imageId: image.id, targetId: purchase.id },
+    actor,
+  );
   await createEntityFixture(page, "expense", {
     name,
-    productId: product.id,
+    purchaseId: purchase.id,
     future: true,
     cost: null,
     date: null,
