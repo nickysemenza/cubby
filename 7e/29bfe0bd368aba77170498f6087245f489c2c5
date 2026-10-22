@@ -1,0 +1,25 @@
+apps/web/cloudflare.config.ts
+  s_033c97ccc35358::t_eb2c2753d1587d 100
+apps/web/src/features/job/job-diagnostics.tsx
+  s_033c97ccc35358::t_709f69e64bd199 374-376
+apps/web/src/server/generic/jobs/service/job-logs.ts
+  s_033c97ccc35358::t_171c99a1b95299 6,114-115,117
+docs/infrastructure.md
+  s_033c97ccc35358::t_5773bc472c4277 397-408,789-796
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7e29bfe0bd368aba77170498f6087245f489c2c5",
+  "prompts": {},
+  "sessions": {
+    "s_033c97ccc35358": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60bf3a4f-d655-4028-9f82-d84fe59d64b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
