@@ -33,6 +33,7 @@ import {
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
+import { createLogger } from "@cubby/worker-tracing";
 import { inArray, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -84,9 +85,13 @@ import {
 } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-import { prepareStatementSpending } from "./statement-spending";
+import {
+  prepareStatementSpending,
+  prepareStatementSpendingPage,
+} from "./statement-spending";
 
 const STATE = "AssessmentState";
+const log = createLogger("statement-suggestions");
 const pendingStatementState = sql`${assessmentState.family} = ${assessmentFamily.enum.statement_transaction} AND ${assessmentState.active} AND ${assessmentState.status} = ${suggestionStatus.enum.pending}`;
 const stateData = z.record(z.string(), z.json());
 
@@ -866,7 +871,12 @@ export async function buildChargeProposals(
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const pairsByCharge = await findTransferPairsForCharges(db, charges);
 
-  const proposals: ChargeProposal[] = [];
+  const pending: Array<{
+    charge: ChargeRef;
+    canonical: Observation;
+    rows: Observation[];
+    judgment: StatementTransactionJudgment;
+  }> = [];
   for (const { charge, observations: rows, canonical } of grouped) {
     const row = previewByKey.get(chargeId(charge));
     if (
@@ -1043,14 +1053,24 @@ export async function buildChargeProposals(
       clean: false,
       ...(matchedCode && { matchedTransactionId: ids.get(matchedCode) }),
     };
-    judgment.spending = await prepareStatementSpending(db, judgment);
+    pending.push({ charge, canonical, rows, judgment });
+  }
+  await prepareStatementSpendingPage(
+    db,
+    pending.map((proposal) => proposal.judgment),
+  );
+  const proposals: ChargeProposal[] = [];
+  for (const { charge, canonical, rows, judgment } of pending) {
     if (
-      !reviewReason &&
-      recommended === "book" &&
+      !judgment.reviewReason &&
+      judgment.recommended === "book" &&
       judgment.spending?.status === "deferred"
     )
       continue;
-    judgment.clean = isClean(judgment, statementAmount);
+    judgment.clean = isClean(
+      judgment,
+      judgment.create?.amount ?? canonical.amount,
+    );
     proposals.push(await finishProposal(charge, canonical, rows, judgment));
   }
   return proposals;
@@ -1738,6 +1758,7 @@ export async function generateStatementSuggestionPage(
       WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
     ),
   );
+  const startedAt = performance.now();
   const charges = await nextUnmatchedCharges(db, {
     after: input.after,
     limit,
@@ -1748,7 +1769,9 @@ export async function generateStatementSuggestionPage(
   let unchanged = 0;
   const failed: RunStepError[] = [];
   const accountIds = input.scope?.accountIds;
+  const selectedAt = performance.now();
   const built = await prepareStatementGenerationPage(db, charges, failed);
+  const preparedAt = performance.now();
   const proposals = accountIds?.length
     ? built.filter((proposal) =>
         accountIds.includes(proposal.judgment.accountId),
@@ -1781,6 +1804,7 @@ export async function generateStatementSuggestionPage(
       }
     },
   );
+  const publishedAt = performance.now();
   if (input.scope?.importId) {
     const { applyAutomaticRulesForCharge } =
       await import("~/server/generic/assessment/repo/automatic-rule-runtime");
@@ -1796,6 +1820,17 @@ export async function generateStatementSuggestionPage(
       }
     }
   }
+  log.info("Statement generation page", {
+    charges: charges.length,
+    proposals: proposals.length,
+    published,
+    unchanged,
+    failed: failed.length,
+    selectionMs: Math.round(selectedAt - startedAt),
+    preparationMs: Math.round(preparedAt - selectedAt),
+    publicationMs: Math.round(publishedAt - preparedAt),
+    applicationMs: Math.round(performance.now() - publishedAt),
+  });
   return {
     found: charges.length,
     published,
