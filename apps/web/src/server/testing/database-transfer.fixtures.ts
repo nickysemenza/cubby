@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { createPostgresPool } from "tooling/postgres-pool";
 
 import type { Database } from "~/server/db";
 import { createDatabase } from "~/server/db/database-runtime";
@@ -10,7 +10,7 @@ export async function measureDatabaseTransfer<T>(
   databaseUrl: string,
   read: (db: Database) => Promise<T>,
 ) {
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 4 });
+  const pool = createPostgresPool({ connectionString: databaseUrl, max: 4 });
   let largestValueBytes = 0;
   let totalBytes = 0;
   pool.on("connect", (client) =>
