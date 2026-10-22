@@ -9,14 +9,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Spinner } from "~/ui/primitives/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import { getSearchResultRoute } from "../../entity/presentation/search-utils";
 
@@ -30,43 +23,38 @@ function ResultTable({ title, items }: { title: string; items: SearchHit[] }) {
       <h2 className="mb-2 text-xs font-semibold text-muted-foreground">
         {title}
       </h2>
-      <Table className="table-auto">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Rank</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Match</TableHead>
-            <TableHead>Terms</TableHead>
-            <TableHead>Reason</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item, index) => (
-            <TableRow key={`${item.entityKind}:${item.id}`}>
-              <TableCell>{index + 1}</TableCell>
-              <TableCell>{item.entityKind}</TableCell>
-              <TableCell>
-                <SearchResultEntityLink item={item} />
-              </TableCell>
-              <TableCell>{item.matchKind ?? ""}</TableCell>
-              <TableCell className="whitespace-normal text-muted-foreground">
-                {item.matchTerms?.join(", ") ?? ""}
-              </TableCell>
-              <TableCell className="whitespace-normal text-muted-foreground">
-                {item.matchReason ?? ""}
-              </TableCell>
-            </TableRow>
-          ))}
-          {items.length === 0 ? (
-            <TableRow>
-              <TableCell className="text-muted-foreground" colSpan={7}>
-                No candidates
-              </TableCell>
-            </TableRow>
-          ) : null}
-        </TableBody>
-      </Table>
+      <StaticTable
+        className="table-auto"
+        emptyMessage="No candidates"
+        rows={items}
+        rowKey={(item) => `${item.entityKind}:${item.id}`}
+        columns={[
+          { id: "column-0", header: "Rank", cell: (_row0, index) => index + 1 },
+          { id: "column-1", header: "Type", cell: (item) => item.entityKind },
+          {
+            id: "column-2",
+            header: "Name",
+            cell: (item) => <SearchResultEntityLink item={item} />,
+          },
+          {
+            id: "column-3",
+            header: "Match",
+            cell: (item) => item.matchKind ?? "",
+          },
+          {
+            id: "column-4",
+            header: "Terms",
+            cellClassName: "whitespace-normal text-muted-foreground",
+            cell: (item) => item.matchTerms?.join(", ") ?? "",
+          },
+          {
+            id: "column-5",
+            header: "Reason",
+            cellClassName: "whitespace-normal text-muted-foreground",
+            cell: (item) => item.matchReason ?? "",
+          },
+        ]}
+      />
     </section>
   );
 }

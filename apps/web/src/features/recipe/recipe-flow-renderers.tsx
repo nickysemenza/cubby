@@ -385,6 +385,9 @@ function placementCoveringRow(
   );
 }
 
+// This is a dependency matrix: operation cells span the contiguous source
+// rows they consume, and covered coordinates have no cell. Keep its spatial
+// placement and selection renderer specialized rather than treating it as records.
 export function RecipeFlowTable({
   recipe,
   plan,

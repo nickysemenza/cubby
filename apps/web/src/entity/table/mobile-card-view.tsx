@@ -117,11 +117,17 @@ const TOUCH_TRIGGER_CLASS = cn(
 );
 
 /** Whether a click landed on a nested interactive control rather than open row space. */
-function isInteractiveTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    target.closest("a,button,input,select,textarea") !== null
+function isInteractiveTarget(
+  target: EventTarget | null,
+  row: HTMLElement,
+): boolean {
+  if (!(target instanceof Element) || !row.contains(target)) return true;
+  const control = target.closest(
+    "a,button,input,select,textarea,[role=checkbox],[role=switch],[role=button],[role=link]",
   );
+  // The row itself has role=button; only a nested control owns this gesture.
+  // Base UI checkboxes are spans, and icon targets can be SVG elements.
+  return control !== null && control !== row;
 }
 
 interface SubtitlePart {
@@ -474,7 +480,8 @@ function RowInteractiveDiv({
         activeClick
           ? (event) => {
               if (longPress.consumeClick()) return;
-              if (isInteractiveTarget(event.target)) return;
+              if (isInteractiveTarget(event.target, event.currentTarget))
+                return;
               activeClick();
             }
           : undefined
@@ -485,7 +492,8 @@ function RowInteractiveDiv({
               if (event.key !== "Enter" && event.key !== " ") return;
               // A nested control (edit trigger, checkbox, debug button)
               // handles its own activation; don't double-fire the row's.
-              if (isInteractiveTarget(event.target)) return;
+              if (isInteractiveTarget(event.target, event.currentTarget))
+                return;
               event.preventDefault();
               activeClick();
             }

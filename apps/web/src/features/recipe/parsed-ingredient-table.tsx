@@ -1,7 +1,7 @@
 import type { WAmount } from "@cubby/recipebridge";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import type { ReadonlyDeep } from "type-fest";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -9,7 +9,7 @@ import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { badgeVariants } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import {
   entityDisplayImageKey,
@@ -99,103 +99,127 @@ export function ParsedIngredientTable({
   const displayImages = useEntityDisplayImages(imageRefs);
   if (rows.length === 0) return null;
   return (
-    <Table className="table-auto">
-      <TableBody>
-        {rows.map(({ raw, parsed, link, rowKey }) => {
-          const name = parsed.name || raw;
-          const match = parsed.name
-            ? matchMap.get(parsed.name.toLowerCase())
-            : null;
-          // A line that resolves to another recipe in the book is never a new
-          // ingredient — it becomes a sub-recipe link — so the "will be created"
-          // warning would be describing something that does not happen.
-          const isNew = matchReady && !match && !link?.linkable;
-          const tint = cn(match && "bg-positive/10", isNew && "bg-warning/10");
-          return (
-            <Fragment key={rowKey}>
-              {/* Name/amount/modifier row pairs with its raw-line row below; suppress
-                  the border here so the divider only falls between items. */}
-              <TableRow className={cn("border-b-0", tint)}>
-                <TableCell className="align-top whitespace-normal">
-                  <Row as="span" wrap align="center" gap="xs">
-                    {match ? (
-                      <EntityRefLink
-                        displayImage={
-                          displayImages[
-                            entityDisplayImageKey({
-                              entityKind: "ingredient",
-                              entityId: match.id,
-                            })
-                          ] ?? null
-                        }
-                        entity="ingredient"
-                        data={match}
-                      />
-                    ) : (
-                      <Row as="span" align="center" gap="xs">
-                        {isNew && (
-                          <WarningCircleIcon className="size-3 shrink-0 text-warning" />
-                        )}
-                        <span className={isNew ? "text-warning-ink" : ""}>
-                          {name}
-                        </span>
-                        {isNew && onCreate ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="size-5 p-0 text-warning hover:bg-warning/15 hover:text-warning"
-                            onClick={() => onCreate(parsed.name)}
-                            title="Add to your library"
-                          >
-                            <PlusIcon className="size-3" />
-                          </Button>
-                        ) : (
-                          isNew && (
-                            <span
-                              className="text-warning-ink"
-                              title="Will be created on import"
-                            >
-                              · new
-                            </span>
-                          )
-                        )}
-                      </Row>
-                    )}
-                    {link && <SubRecipeChip link={link} />}
-                  </Row>
-                </TableCell>
-                <TableCell className="align-top text-muted-foreground">
-                  {parsed.amounts.length > 0
-                    ? formatAmounts(parsed.amounts)
-                    : ""}
-                </TableCell>
-                <TableCell className="align-top whitespace-normal text-muted-foreground">
-                  {parsed.modifier ?? ""}
-                </TableCell>
-              </TableRow>
-              <TableRow className={tint}>
-                <TableCell
-                  colSpan={2}
-                  className="pt-0 pb-1 text-2xs leading-tight whitespace-normal text-muted-foreground"
-                >
-                  {raw}
-                </TableCell>
-                <TableCell className="pt-0 pb-1 text-right align-top">
-                  <CopyCorpusButton
-                    rawLine={raw}
-                    name={parsed.name}
-                    amounts={parsed.amounts}
-                    modifier={parsed.modifier}
-                    label={undefined}
+    <StaticTable
+      className="table-auto"
+      hideHeader
+      rows={rows.flatMap(({ raw, parsed, link, rowKey }) => {
+        const name = parsed.name || raw;
+        const match = parsed.name
+          ? matchMap.get(parsed.name.toLowerCase())
+          : null;
+        // A line that resolves to another recipe in the book is never a new
+        // ingredient — it becomes a sub-recipe link — so the "will be created"
+        // warning would be describing something that does not happen.
+        const isNew = matchReady && !match && !link?.linkable;
+        const tint = cn(match && "bg-positive/10", isNew && "bg-warning/10");
+        const item = { raw, parsed, link, rowKey, name, match, isNew, tint };
+        return [
+          { ...item, sourceLine: false },
+          { ...item, sourceLine: true },
+        ];
+      })}
+      rowKey={(row) =>
+        row.rowKey + (row.sourceLine ? ":source" : ":ingredient")
+      }
+      rowClassName={(row) => cn(!row.sourceLine && "border-b-0", row.tint)}
+      columns={[
+        {
+          id: "ingredient",
+          header: "Ingredient",
+          cellProps: ({ sourceLine }) =>
+            sourceLine
+              ? {
+                  colSpan: 2,
+                  className:
+                    "pt-0 pb-1 text-2xs leading-tight whitespace-normal text-muted-foreground",
+                }
+              : { className: "align-top whitespace-normal" },
+          cell: ({ sourceLine, raw, parsed, link, name, match, isNew }) =>
+            sourceLine ? (
+              raw
+            ) : (
+              <Row as="span" wrap align="center" gap="xs">
+                {match ? (
+                  <EntityRefLink
+                    displayImage={
+                      displayImages[
+                        entityDisplayImageKey({
+                          entityKind: "ingredient",
+                          entityId: match.id,
+                        })
+                      ] ?? null
+                    }
+                    entity="ingredient"
+                    data={match}
                   />
-                </TableCell>
-              </TableRow>
-            </Fragment>
-          );
-        })}
-      </TableBody>
-    </Table>
+                ) : (
+                  <Row as="span" align="center" gap="xs">
+                    {isNew && (
+                      <WarningCircleIcon className="size-3 shrink-0 text-warning" />
+                    )}
+                    <span className={isNew ? "text-warning-ink" : ""}>
+                      {name}
+                    </span>
+                    {isNew && onCreate ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="size-5 p-0 text-warning hover:bg-warning/15 hover:text-warning"
+                        onClick={() => onCreate(parsed.name)}
+                        title="Add to your library"
+                      >
+                        <PlusIcon className="size-3" />
+                      </Button>
+                    ) : (
+                      isNew && (
+                        <span
+                          className="text-warning-ink"
+                          title="Will be created on import"
+                        >
+                          · new
+                        </span>
+                      )
+                    )}
+                  </Row>
+                )}
+                {link && <SubRecipeChip link={link} />}
+              </Row>
+            ),
+        },
+        {
+          id: "amount",
+          header: "Amount",
+          cellProps: ({ sourceLine }) =>
+            sourceLine
+              ? null
+              : { className: "align-top text-muted-foreground" },
+          cell: ({ parsed }) =>
+            parsed.amounts.length > 0 ? formatAmounts(parsed.amounts) : "",
+        },
+        {
+          id: "modifier",
+          header: "Modifier",
+          cellProps: ({ sourceLine }) => ({
+            className: sourceLine
+              ? "pt-0 pb-1 text-right align-top"
+              : "align-top whitespace-normal text-muted-foreground",
+          }),
+          cell: ({ sourceLine, raw, parsed }) =>
+            sourceLine ? (
+              <CopyCorpusButton
+                rawLine={raw}
+                name={parsed.name}
+                amounts={parsed.amounts}
+                modifier={parsed.modifier}
+                label={undefined}
+              />
+            ) : (
+              (parsed.modifier ?? "")
+            ),
+        },
+      ]}
+    />
   );
 }
 

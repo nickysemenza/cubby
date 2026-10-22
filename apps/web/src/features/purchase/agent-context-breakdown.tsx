@@ -9,13 +9,9 @@ import { useMemo } from "react";
 import { formatCompactCount, formatCount } from "~/lib/number-format";
 import { Disclosure } from "~/ui/layout/disclosure";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+  StaticTable,
+  type StaticTableColumn,
+} from "~/ui/primitives/static-table";
 
 import {
   contextCallsFromMessages,
@@ -160,58 +156,51 @@ export function AgentContextPerCall({
             {anyEstimated ? "; ≈ marks calls without reported usage" : null}.
           </p>
           <Disclosure summary="Show as table" className="mt-1 text-xs">
-            <Table
+            <StaticTable
               aria-label="Context per call table"
               containerClassName="mt-1"
               className="table-auto tabular-nums"
-            >
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="h-auto py-1 pr-2 pl-0">Call</TableHead>
-                  <TableHead className="h-auto px-2 py-1 text-right">
-                    Input
-                  </TableHead>
-                  <TableHead className="h-auto px-2 py-1 text-right">
-                    Cached
-                  </TableHead>
-                  {segments.map((segment) => (
-                    <TableHead
-                      key={segment.key}
-                      className="h-auto px-2 py-1 text-right"
-                    >
-                      {segment.label}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.call}>
-                    <TableHead
-                      scope="row"
-                      className="h-auto py-1 pr-2 pl-0 text-foreground"
-                    >
+              rows={rows}
+              rowKey={(row) => String(row.call)}
+              columns={[
+                {
+                  id: "call",
+                  header: "Call",
+                  rowHeader: true,
+                  headClassName: "h-auto py-1 pr-2 pl-0",
+                  cellClassName: "h-auto py-1 pr-2 pl-0 text-foreground",
+                  cell: (row) => (
+                    <>
                       Call {row.call}
                       {row.estimated ? " (estimated)" : null}
-                    </TableHead>
-                    <TableCell className="px-2 py-1 text-right">
-                      {formatCount(row.inputTokens)}
-                    </TableCell>
-                    <TableCell className="px-2 py-1 text-right">
-                      {formatCount(row.cachedTokens)}
-                    </TableCell>
-                    {segments.map((segment) => (
-                      <TableCell
-                        key={segment.key}
-                        className="px-2 py-1 text-right"
-                      >
-                        {formatCount(row.values[segment.key] ?? 0)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </>
+                  ),
+                },
+                {
+                  id: "input",
+                  header: "Input",
+                  headClassName: "h-auto px-2 py-1 text-right",
+                  cellClassName: "px-2 py-1 text-right",
+                  cell: (row) => formatCount(row.inputTokens),
+                },
+                {
+                  id: "cached",
+                  header: "Cached",
+                  headClassName: "h-auto px-2 py-1 text-right",
+                  cellClassName: "px-2 py-1 text-right",
+                  cell: (row) => formatCount(row.cachedTokens),
+                },
+                ...segments.map<StaticTableColumn<(typeof rows)[number]>>(
+                  (segment) => ({
+                    id: segment.key,
+                    header: segment.label,
+                    headClassName: "h-auto px-2 py-1 text-right",
+                    cellClassName: "px-2 py-1 text-right",
+                    cell: (row) => formatCount(row.values[segment.key] ?? 0),
+                  }),
+                ),
+              ]}
+            />
           </Disclosure>
         </div>
       </Disclosure>
@@ -295,53 +284,67 @@ export function AgentTokenAccounting({
               ? `${mismatched.length} ${mismatched.length === 1 ? "counter differs" : "counters differ"} between Cubby's usage records and pi's ledger.`
               : "Usage records may trail pi's ledger until the Run settles."}
         </p>
-        <Table
+        <StaticTable
           aria-label="Token accounting table"
           containerClassName="mt-1"
           className="table-auto text-xs tabular-nums"
-        >
-          <TableHeader>
-            <TableRow>
-              <TableHead className="h-auto py-1 pr-2 pl-0">Model</TableHead>
-              <TableHead className="h-auto px-2 py-1">Tokens</TableHead>
-              <TableHead className="h-auto px-2 py-1 text-right">
-                Recorded
-              </TableHead>
-              <TableHead className="h-auto px-2 py-1 text-right">pi</TableHead>
-              <TableHead className="h-auto px-2 py-1 text-right">
-                Difference
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => {
-              const difference = row.pi - row.recorded;
-              return (
-                <TableRow key={`${row.model}:${row.label}`}>
-                  <TableHead
-                    scope="row"
-                    className="h-auto py-1 pr-2 pl-0 font-mono text-foreground"
-                  >
-                    {row.model}
-                  </TableHead>
-                  <TableCell className="px-2 py-1">{row.label}</TableCell>
-                  <TableCell className="px-2 py-1 text-right">
-                    {formatCount(row.recorded)}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 text-right">
-                    {formatCount(row.pi)}
-                  </TableCell>
-                  <TableCell
-                    className={`px-2 py-1 text-right ${difference && settled ? "font-semibold text-destructive" : "text-muted-foreground"}`}
-                  >
+          rows={rows}
+          rowKey={(row) => `${row.model}:${row.label}`}
+          columns={[
+            {
+              id: "column-0",
+              header: "Model",
+              rowHeader: true,
+              headClassName: "h-auto py-1 pr-2 pl-0",
+              cellProps: () => ({
+                scope: "row",
+                className: "h-auto py-1 pr-2 pl-0 font-mono text-foreground",
+              }),
+              cell: (row) => row.model,
+            },
+            {
+              id: "column-1",
+              header: "Tokens",
+              headClassName: "h-auto px-2 py-1",
+              cellClassName: "px-2 py-1",
+              cell: (row) => row.label,
+            },
+            {
+              id: "column-2",
+              header: "Recorded",
+              headClassName: "h-auto px-2 py-1 text-right",
+              cellClassName: "px-2 py-1 text-right",
+              cell: (row) => formatCount(row.recorded),
+            },
+            {
+              id: "column-3",
+              header: "pi",
+              headClassName: "h-auto px-2 py-1 text-right",
+              cellClassName: "px-2 py-1 text-right",
+              cell: (row) => formatCount(row.pi),
+            },
+            {
+              id: "column-4",
+              header: "Difference",
+              headClassName: "h-auto px-2 py-1 text-right",
+              cellProps: (row) => {
+                const difference = row.pi - row.recorded;
+                return {
+                  className: `px-2 py-1 text-right ${difference && settled ? "font-semibold text-destructive" : "text-muted-foreground"}`,
+                };
+              },
+              cell: (row) => {
+                const difference = row.pi - row.recorded;
+                return (
+                  <>
                     {difference > 0 ? "+" : null}
                     {formatCount(difference)}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                  </>
+                );
+              },
+            },
+          ]}
+        />
       </Disclosure>
     </section>
   );

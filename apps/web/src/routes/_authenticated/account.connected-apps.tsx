@@ -1,13 +1,21 @@
+import type { ConnectedApp } from "@cubby/schemas/oauth";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { Page } from "~/entity/page/page";
+import RTable from "~/entity/table/table";
 import { OrphanedClientMaintenance } from "~/features/account/orphaned-client-maintenance";
 import { oauth } from "~/integrations/tanstack-query/generated/catalog/oauth.gen";
 import { pageTitle } from "~/lib/page-title";
 import { DateDisplay } from "~/ui/common/date-display";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import {
@@ -22,14 +30,6 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
 // above dynamic ones, so this wins over the better-auth-ui catch-all rather
@@ -93,76 +93,15 @@ function ConnectedAppsPage() {
           client) pointing at <code>/api/mcp</code> to authorize one.
         </p>
       ) : (
-        <Table className="table-auto">
-          <TableHeader>
-            <TableRow>
-              <TableHead>App</TableHead>
-              <TableHead>Scopes</TableHead>
-              <TableHead>Granted</TableHead>
-              <TableHead>Last active</TableHead>
-              <TableHead>Active tokens</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {apps.map((app) => (
-              <TableRow key={app.consentId}>
-                <TableCell>
-                  {/* block, not inline spans: Stack applies space-y, which
-                      does nothing to inline children — they'd run together. */}
-                  <Stack gap="tight">
-                    <div className="font-medium">
-                      {app.name ?? "Unnamed client"}
-                    </div>
-                    <div className="font-mono text-2xs text-muted-foreground">
-                      {app.clientId}
-                    </div>
-                  </Stack>
-                </TableCell>
-                <TableCell className="whitespace-normal">
-                  <Row gap="xs" wrap>
-                    {app.scopes.map((scope) => (
-                      <Badge key={scope} variant="secondary">
-                        {scope}
-                      </Badge>
-                    ))}
-                  </Row>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {app.grantedAt ? (
-                    <DateDisplay timestamp={app.grantedAt} stacked />
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {app.lastActiveAt ? (
-                    <DateDisplay timestamp={app.lastActiveAt} stacked />
-                  ) : (
-                    "never"
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-sm">
-                  {app.activeTokens}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() =>
-                      setPendingRevoke({
-                        consentId: app.consentId,
-                        label: app.name ?? app.clientId,
-                      })
-                    }
-                  >
-                    Revoke
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <ConnectedAppsTable
+          apps={apps}
+          onRevoke={(app) =>
+            setPendingRevoke({
+              consentId: app.consentId,
+              label: app.name ?? app.clientId,
+            })
+          }
+        />
       )}
 
       <OrphanedClientMaintenance
@@ -202,5 +141,140 @@ function ConnectedAppsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </Page>
+  );
+}
+
+const appHelper = createCubbyColumnHelper<ConnectedApp>();
+const appId = (app: ConnectedApp) => app.consentId;
+const appSearch = {
+  text: (app: ConnectedApp) =>
+    [app.name, app.clientId, ...app.scopes].join(" "),
+  placeholder: "Search connected apps",
+};
+function ConnectedAppsTable({
+  apps,
+  onRevoke,
+}: {
+  apps: ConnectedApp[];
+  onRevoke: (app: ConnectedApp) => void;
+}) {
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ConnectedApp>((add) => {
+        add(
+          appHelper.accessor((app) => app.name ?? "Unnamed client", {
+            id: "app",
+            header: "App",
+            size: 220,
+            meta: attachCubbyColumnMeta<ConnectedApp>({
+              mobile: { slot: "title", priority: 0 },
+            }),
+          }),
+        );
+        add(
+          appHelper.accessor("clientId", {
+            header: "Client ID",
+            size: 220,
+            meta: attachCubbyColumnMeta<ConnectedApp>({
+              mono: true,
+              mobile: { slot: "subtitle", priority: 0 },
+            }),
+          }),
+        );
+        add(
+          appHelper.accessor((app) => app.scopes.join(" "), {
+            id: "scopes",
+            header: "Scopes",
+            size: 260,
+            meta: attachCubbyColumnMeta<ConnectedApp>({
+              mobile: { slot: "meta", priority: 1 },
+            }),
+            cell: ({ row }) => (
+              <Row gap="xs" wrap>
+                {row.original.scopes.map((scope) => (
+                  <Badge key={scope} variant="secondary">
+                    {scope}
+                  </Badge>
+                ))}
+              </Row>
+            ),
+          }),
+        );
+        add(
+          appHelper.accessor("grantedAt", {
+            header: "Granted",
+            size: 150,
+            meta: attachCubbyColumnMeta<ConnectedApp>({
+              mobile: { slot: "meta", priority: 2 },
+            }),
+            cell: ({ row }) =>
+              row.original.grantedAt ? (
+                <DateDisplay timestamp={row.original.grantedAt} />
+              ) : (
+                "—"
+              ),
+          }),
+        );
+        add(
+          appHelper.accessor("lastActiveAt", {
+            header: "Last active",
+            size: 150,
+            meta: attachCubbyColumnMeta<ConnectedApp>({
+              mobile: { slot: "meta", priority: 3 },
+            }),
+            cell: ({ row }) =>
+              row.original.lastActiveAt ? (
+                <DateDisplay timestamp={row.original.lastActiveAt} />
+              ) : (
+                "never"
+              ),
+          }),
+        );
+        add(
+          appHelper.accessor("activeTokens", {
+            header: "Active tokens",
+            size: 100,
+            meta: attachCubbyColumnMeta<ConnectedApp>({
+              numeric: true,
+              mobile: { slot: "trailing", priority: 0 },
+            }),
+          }),
+        );
+        add(
+          appHelper.display({
+            id: "actions",
+            header: "Actions",
+            size: 100,
+            meta: attachCubbyColumnMeta<ConnectedApp>({
+              entityColumnRole: "action",
+              mobile: { slot: "actions", priority: 0 },
+            }),
+            cell: ({ row }) => (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onRevoke(row.original)}
+              >
+                Revoke
+              </Button>
+            ),
+          }),
+        );
+      }),
+    [onRevoke],
+  );
+  const table = useLocalTable({
+    rows: apps,
+    columns,
+    getRowId: appId,
+    search: appSearch,
+  });
+  return (
+    <RTable
+      table={table}
+      embedded
+      ariaLabel="Connected apps"
+      withoutImages="OAuth consents have client names and scopes, not household record images."
+    />
   );
 }

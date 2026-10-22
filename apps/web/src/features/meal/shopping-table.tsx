@@ -1,22 +1,20 @@
-import type { ShoppingListItem } from "@cubby/schemas/meal";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { entityDetailLink } from "~/entity/entities";
+import RTable from "~/entity/table/table";
 import { formatCalendarDay } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
-import { Row } from "~/ui/layout";
-import { Checkbox } from "~/ui/primitives/checkbox";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { useLocalTable } from "~/ui/data-table/use-local-table";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import {
   formatAmount,
@@ -33,10 +31,87 @@ import {
   visibleContributions,
 } from "./shopping-model";
 
-/**
- * Desktop list renderer: one row per ingredient, with an expandable per-meal
- * breakdown. Stays on the `<Table>` primitives — it's a list, not a cross-tab.
- */
+const helper = createCubbyColumnHelper<ShoppingRow>();
+const rowId = (row: ShoppingRow) => row.key;
+const search = {
+  text: (row: ShoppingRow) => row.item.name,
+  placeholder: "Search ingredients",
+};
+
+function MealBreakdown({
+  row,
+  excluded,
+}: {
+  row: ShoppingRow;
+  excluded: ReadonlySet<string>;
+}) {
+  return (
+    <StaticTable
+      aria-label={`Meals needing ${row.item.name}`}
+      rows={visibleContributions(row.item, excluded)}
+      rowKey={(contribution) => String(contribution.lineIndex)}
+      columns={[
+        {
+          id: "meal",
+          header: "Meal",
+          cell: (c) => (
+            <Link
+              {...entityDetailLink("meal", c.mealId)}
+              className="hover:underline"
+            >
+              {c.mealName || "Meal"} ·{" "}
+              {formatCalendarDay(c.date, "weekdayNumeric")}
+            </Link>
+          ),
+        },
+        {
+          id: "recipe",
+          header: "Recipe",
+          cell: (c) => {
+            const via = c.via.at(-1);
+            return (
+              <span>
+                {c.scale !== 1 ? `${c.scale}× ` : ""}
+                <Link
+                  {...entityDetailLink("recipe", c.recipeId)}
+                  className="hover:underline"
+                >
+                  {c.recipeName}
+                </Link>
+                {via ? (
+                  <span title={c.via.map((v) => v.name).join(" → ")}>
+                    {" "}
+                    · via{" "}
+                    <Link
+                      {...entityDetailLink("recipe", via.recipeId)}
+                      className="hover:underline"
+                    >
+                      {via.name}
+                    </Link>
+                  </span>
+                ) : null}
+              </span>
+            );
+          },
+        },
+        {
+          id: "need",
+          header: "Need",
+          headClassName: "text-right",
+          cellClassName: "text-right",
+          cell: (c) =>
+            c.needValue == null
+              ? c.amount == null
+                ? "Unspecified"
+                : formatAmount(c.amount.value, c.amount.unit)
+              : formatAmount(c.needValue, row.item.basisUnit),
+        },
+      ]}
+    />
+  );
+}
+
+/** Shared interactive rows; checked shopping state stays separate from bulk selection. */
 export function ShoppingTable({
   rows,
   excluded,
@@ -49,182 +124,164 @@ export function ShoppingTable({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-
-  return (
-    <Table
-      containerClassName="hidden overflow-hidden border border-[var(--border)] sm:block print:block"
-      className="table-auto"
-    >
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-8" />
-          <TableHead>Ingredient</TableHead>
-          <TableHead className="text-right">Need</TableHead>
-          <TableHead className="text-right">Have</TableHead>
-          <TableHead className="text-right">Short</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <RowGroup
-            key={row.key}
-            row={row}
-            isOpen={expanded.has(row.key)}
-            perMeal={visibleContributions(row.item, excluded)}
-            onToggleCheck={() => onToggleCheck(row.key)}
-            onToggle={() => setExpanded((s) => toggleInSet(s, row.key))}
-          />
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-function RowGroup({
-  row,
-  isOpen,
-  perMeal,
-  onToggleCheck,
-  onToggle,
-}: {
-  row: ShoppingRow;
-  isOpen: boolean;
-  perMeal: ShoppingListItem["perMeal"];
-  onToggleCheck: () => void;
-  onToggle: () => void;
-}) {
-  const { item, status, isChecked } = row;
-  return (
-    <>
-      {/* Open: drop the parent's bottom border so its meal rows read as one
-          cluster; the divider falls below the group's last row instead. */}
-      <TableRow
-        className={cn(isOpen && "border-b-0", isChecked && "opacity-60")}
-      >
-        <TableCell className="pr-0">
-          {item.membership === "buy" && (
-            <Checkbox
-              aria-label={`Check ${item.name}`}
-              checked={isChecked}
-              onCheckedChange={onToggleCheck}
-            />
-          )}
-        </TableCell>
-        <TableCell className="whitespace-normal">
-          {/* Chevron toggles, name navigates — the same split `createNameColumn`
-              uses for expandable rows, so the name can be a real link. */}
-          <Row align="center" gap="snug">
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-expanded={isOpen}
-              aria-label={isOpen ? "Collapse" : "Expand"}
-              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {isOpen ? (
-                <CaretDownIcon className="size-3.5" />
-              ) : (
-                <CaretRightIcon className="size-3.5" />
-              )}
-            </button>
-            {item.ingredientId ? (
-              <Link
-                {...entityDetailLink("ingredient", item.ingredientId)}
-                title={item.name}
-                className={cn(
-                  "font-medium hover:underline",
-                  isChecked && "line-through",
-                )}
-              >
-                {item.name}
-              </Link>
-            ) : (
-              <span
-                title={item.name}
-                className={cn("font-medium", isChecked && "line-through")}
-              >
-                {item.name}
-              </span>
-            )}
-            <span
-              className={`text-xs ${item.membership === "usuallyOnHand" ? "text-muted-foreground" : statusClass(status)}`}
-            >
-              ·{" "}
-              {item.membership === "usuallyOnHand"
-                ? "Assumed available"
-                : statusLabel(status)}
-            </span>
-          </Row>
-        </TableCell>
-        <TableCell className="text-right tabular-nums">
-          {needText(row)}
-        </TableCell>
-        <TableCell className="text-right text-muted-foreground tabular-nums">
-          {haveText(row)}
-        </TableCell>
-        <TableCell
-          className={cn("text-right font-medium tabular-nums", shortClass(row))}
-        >
-          {shortText(row)}
-        </TableCell>
-      </TableRow>
-      {isOpen &&
-        perMeal.map((c, i) => (
-          <TableRow
-            key={c.lineIndex}
-            className={cn(
-              "bg-muted/20 text-xs text-muted-foreground",
-              i !== perMeal.length - 1 && "border-b-0",
-            )}
-          >
-            <TableCell className="py-1" />
-            <TableCell className="py-1 pl-6 whitespace-normal">
-              <Link
-                {...entityDetailLink("meal", c.mealId)}
-                className="hover:underline"
-              >
-                {c.mealName || "Meal"} ·{" "}
-                {formatCalendarDay(c.date, "weekdayNumeric")}
-              </Link>
-              <span className="ml-1">
-                — {c.scale !== 1 ? `${c.scale}× ` : ""}
-                <Link
-                  {...entityDetailLink("recipe", c.recipeId)}
-                  title={c.recipeName}
-                  className="hover:underline"
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ShoppingRow>((add) => {
+        add(
+          helper.display({
+            id: "check",
+            header: "Checked",
+            size: 60,
+            meta: attachCubbyColumnMeta<ShoppingRow>({
+              mobile: { slot: "trailing", interactive: true, priority: 0 },
+            }),
+            cell: ({ row: { original: row } }) =>
+              row.item.membership === "buy" ? (
+                <Checkbox
+                  aria-label={`Check ${row.item.name}`}
+                  checked={row.isChecked}
+                  onCheckedChange={() => onToggleCheck(row.key)}
+                />
+              ) : null,
+          }),
+        );
+        add(
+          helper.accessor((row) => row.item.name, {
+            id: "ingredient",
+            header: "Ingredient",
+            size: 320,
+            meta: attachCubbyColumnMeta<ShoppingRow>({
+              mobile: { slot: "title", priority: 0 },
+            }),
+            cell: ({ row: { original: row } }) => (
+              <span className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-label={`${expanded.has(row.key) ? "Collapse" : "Expand"} ${row.item.name}`}
+                  aria-expanded={expanded.has(row.key)}
+                  onClick={() =>
+                    setExpanded((current) => toggleInSet(current, row.key))
+                  }
+                  className="flex min-h-8 items-center text-muted-foreground"
                 >
-                  {c.recipeName}
-                </Link>
-                {/* Provenance for a need that came through a sub-recipe. The
-                    last hop is the useful one ("via Dough"); the full chain is
-                    in the title for the rare nested case. */}
-                {c.via.length > 0 && (
-                  <span title={c.via.map((v) => v.name).join(" → ")}>
-                    {" · via "}
-                    <Link
-                      {...entityDetailLink(
-                        "recipe",
-                        c.via[c.via.length - 1]!.recipeId,
-                      )}
-                      className="hover:underline"
-                    >
-                      {c.via[c.via.length - 1]!.name}
-                    </Link>
+                  {expanded.has(row.key) ? (
+                    <CaretDownIcon className="size-3.5" />
+                  ) : (
+                    <CaretRightIcon className="size-3.5" />
+                  )}
+                </button>
+                {row.item.ingredientId ? (
+                  <Link
+                    {...entityDetailLink("ingredient", row.item.ingredientId)}
+                    className={cn(
+                      "font-medium hover:underline",
+                      row.isChecked && "line-through",
+                    )}
+                  >
+                    {row.item.name}
+                  </Link>
+                ) : (
+                  <span className={cn(row.isChecked && "line-through")}>
+                    {row.item.name}
                   </span>
                 )}
               </span>
-            </TableCell>
-            <TableCell className="py-1 text-right tabular-nums">
-              {c.needValue == null
-                ? c.amount == null
-                  ? "Unspecified"
-                  : formatAmount(c.amount.value, c.amount.unit)
-                : formatAmount(c.needValue, item.basisUnit)}
-            </TableCell>
-            <TableCell className="py-1" />
-            <TableCell className="py-1" />
-          </TableRow>
-        ))}
-    </>
+            ),
+          }),
+        );
+        add(
+          helper.accessor(
+            (row) =>
+              row.item.membership === "usuallyOnHand"
+                ? "Assumed available"
+                : statusLabel(row.status),
+            {
+              id: "status",
+              header: "Status",
+              size: 160,
+              meta: attachCubbyColumnMeta<ShoppingRow>({
+                mobile: { slot: "subtitle", priority: 0 },
+                filterConfig: { placeholder: "Filter status" },
+              }),
+              cell: ({ row: { original: row }, getValue }) => (
+                <span className={statusClass(row.status)}>{getValue()}</span>
+              ),
+            },
+          ),
+        );
+        add(
+          helper.accessor((row) => row.need, {
+            id: "need",
+            header: "Need",
+            size: 110,
+            meta: attachCubbyColumnMeta<ShoppingRow>({
+              numeric: true,
+              mobile: { slot: "meta", priority: 0, showWhenEmpty: true },
+            }),
+            cell: ({ row }) => needText(row.original),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.item.haveValue, {
+            id: "have",
+            header: "Have",
+            size: 110,
+            meta: attachCubbyColumnMeta<ShoppingRow>({
+              numeric: true,
+              mobile: { slot: "meta", priority: 1, showWhenEmpty: true },
+            }),
+            cell: ({ row }) => haveText(row.original),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.shortfall, {
+            id: "short",
+            header: "Short",
+            size: 110,
+            meta: attachCubbyColumnMeta<ShoppingRow>({
+              numeric: true,
+              mobile: { slot: "meta", priority: 2, showWhenEmpty: true },
+            }),
+            cell: ({ row: { original: row } }) => (
+              <span className={shortClass(row)}>{shortText(row)}</span>
+            ),
+          }),
+        );
+      }),
+    [expanded, onToggleCheck],
+  );
+  const table = useLocalTable({
+    rows,
+    columns,
+    getRowId: rowId,
+    search,
+    rowContentVersion: expanded,
+  });
+  return (
+    <RTable
+      table={table}
+      printable
+      embedded
+      ariaLabel="Shopping ingredients"
+      withoutImages="Shopping needs are computed ingredient aggregates, including unresolved ingredient names."
+      onRowClick={(row) =>
+        setExpanded((current) => toggleInSet(current, row.id))
+      }
+      disableMobileDetailsHref
+      getRowClassName={(row) =>
+        row.original.isChecked ? "opacity-60" : undefined
+      }
+      rowDetail={{
+        openIds: expanded,
+        render: (row) => (
+          <MealBreakdown row={row.original} excluded={excluded} />
+        ),
+      }}
+      renderMobileRowFooter={(row) =>
+        expanded.has(row.key) ? (
+          <MealBreakdown row={row} excluded={excluded} />
+        ) : null
+      }
+    />
   );
 }

@@ -17,14 +17,7 @@ import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 const labelValue = (nutrition: ProductLabelNutrition, key: NutrientKey) => {
   const measured = nutrition.nutrients[key];
@@ -108,38 +101,39 @@ export function LabelNutritionReview({
               <Disclosure
                 summary={`Current nutrition · ${current.servingGrams} g per serving`}
               >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nutrient</TableHead>
-                      <TableHead>Current</TableHead>
-                      <TableHead>Detected</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[
-                      ...new Set([
-                        ...Object.keys(current.nutrients),
-                        ...Object.keys(proposal.nutrients),
-                        ...(current.inferredZeroNutrients ?? []),
-                        ...(proposal.inferredZeroNutrients ?? []),
-                      ]),
-                    ]
-                      .filter(isNutrientKey)
-                      .map((key) => (
-                        <TableRow key={key}>
-                          <TableCell>
-                            {TIER1_NUTRIENTS[key].displayName}
-                          </TableCell>
-                          <TableCell>{labelValue(current, key)}</TableCell>
-                          <TableCell>
-                            {labelValue(proposal, key)}{" "}
-                            {TIER1_NUTRIENTS[key].unit.toLowerCase()}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
+                <StaticTable
+                  rows={[
+                    ...new Set([
+                      ...Object.keys(current.nutrients),
+                      ...Object.keys(proposal.nutrients),
+                      ...(current.inferredZeroNutrients ?? []),
+                      ...(proposal.inferredZeroNutrients ?? []),
+                    ]),
+                  ].filter(isNutrientKey)}
+                  rowKey={(key) => key}
+                  columns={[
+                    {
+                      id: "column-0",
+                      header: "Nutrient",
+                      cell: (key) => TIER1_NUTRIENTS[key].displayName,
+                    },
+                    {
+                      id: "column-1",
+                      header: "Current",
+                      cell: (key) => labelValue(current, key),
+                    },
+                    {
+                      id: "column-2",
+                      header: "Detected",
+                      cell: (key) => (
+                        <>
+                          {labelValue(proposal, key)}{" "}
+                          {TIER1_NUTRIENTS[key].unit.toLowerCase()}
+                        </>
+                      ),
+                    },
+                  ]}
+                />
               </Disclosure>
             ) : (
               <Description>No nutrition currently on file.</Description>

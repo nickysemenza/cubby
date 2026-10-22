@@ -48,9 +48,25 @@ function getLedgerFields<TData extends RowData>(
     const header = column.columnDef.header;
     const label =
       config.label ?? (isColumnLabel(header) ? header : humanize(column.id));
-    return [
-      barFieldFromConfig(column.id, label, config, optionHints?.[column.id]),
-    ];
+    let hints = optionHints?.[column.id];
+    if (!hints && config.facetCount && table.options.meta?.completeLocalData) {
+      // Only complete bounded lists may count locally. A server page is not
+      // evidence for the full result set's facet counts.
+      const counts = new Map<unknown, number>();
+      for (const row of table.getCoreRowModel().rows) {
+        const value = row.getValue<unknown>(column.id);
+        for (const item of Array.isArray(value) ? value : [value]) {
+          counts.set(item, (counts.get(item) ?? 0) + 1);
+        }
+      }
+      hints = Object.fromEntries(
+        (config.options ?? []).map((option) => [
+          option.value,
+          String(counts.get(option.value) ?? 0),
+        ]),
+      );
+    }
+    return [barFieldFromConfig(column.id, label, config, hints)];
   });
   const fields = [...columnFields, ...(table.options.meta?.filterFields ?? [])];
   return primarySearch
@@ -104,13 +120,16 @@ export function LedgerFilters<TData extends RowData>({
     .filter((column) => column.columnDef.meta?.filterConfig)
     .map((column) => column.id)
     .join("|");
-  const primarySearch = entity ? entitySummary[entity].primarySearch : null;
+  const primarySearch =
+    table.options.meta?.primarySearch ??
+    (entity ? entitySummary[entity].primarySearch : null);
   const declaredFields = useMemo(
     () => getLedgerFields(table, optionHints, primarySearch),
     // oxlint-disable-next-line react/exhaustive-deps -- filterColumnsKey is the late-materializing TanStack v9 signal described above
     [
       table,
       table.options.columns,
+      table.options.data,
       table.options.meta?.filterFields,
       optionHints,
       filterColumnsKey,
@@ -202,8 +221,16 @@ export function LedgerFilters<TData extends RowData>({
       onEditorChange={setOpenEditor}
       editRequest={editRequest}
       resultCount={{
-        matching: query?.matching,
-        total,
+        matching:
+          query?.matching ??
+          (table.options.meta?.completeLocalData
+            ? table.getFilteredRowModel().rows.length
+            : undefined),
+        total:
+          total ??
+          (table.options.meta?.completeLocalData
+            ? table.getCoreRowModel().rows.length
+            : undefined),
         noun: pluralLower,
       }}
     />

@@ -21,6 +21,7 @@ import {
 } from "~/lib/perf/perf-store";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import { type LiveQueryStats, readLiveQueryStats } from "./use-query-stats";
 
@@ -260,39 +261,52 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
     return <Empty label="No jank (≥16ms) yet — interact or load a page." />;
   const now = performance.now();
   return (
-    <table className="w-full">
-      <tbody>
-        {events.map((e) => (
-          <tr
-            key={`${e.at}-${e.kind}-${e.label}-${e.ms}`}
-            className="border-t border-border/30"
-          >
-            <td className="py-0.5 pr-1 align-middle" /* tight */>
-              <span
-                className="text-3xs font-semibold"
-                style={{ color: `var(--chart-${SLOW_TONE[e.kind]})` }}
-              >
-                {SLOW_TAG[e.kind]}
-              </span>
-            </td>
-            <td className="truncate py-0.5" /* tight */ title={e.label}>
-              {e.label}
-            </td>
-            <td className="pl-1 text-right text-2xs whitespace-nowrap text-muted-foreground">
-              {Math.round((now - e.at) / 1000)}s
-            </td>
-            <td
-              className={cn(
-                "pl-1 text-right font-semibold whitespace-nowrap",
-                e.ms > 100 ? "text-destructive" : "text-warning-ink",
-              )}
+    <StaticTable
+      className="w-full table-auto"
+      rows={events}
+      rowKey={(e) => `${e.at}-${e.kind}-${e.label}-${e.ms}`}
+      hideHeader
+      rowClassName={() => "border-t border-border/30"}
+      columns={[
+        {
+          id: "column-0",
+          header: null,
+          cellClassName: "py-0.5 pr-1 align-middle",
+          cell: (e) => (
+            <span
+              className="text-3xs font-semibold"
+              style={{ color: `var(--chart-${SLOW_TONE[e.kind]})` }}
             >
-              {ms(e.ms)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+              {SLOW_TAG[e.kind]}
+            </span>
+          ),
+        },
+        {
+          id: "column-1",
+          header: null,
+          cellProps: (e) => ({ className: "truncate py-0.5", title: e.label }),
+          cell: (e) => e.label,
+        },
+        {
+          id: "column-2",
+          header: null,
+          cellClassName:
+            "pl-1 text-right text-2xs whitespace-nowrap text-muted-foreground",
+          cell: (e) => <>{Math.round((now - e.at) / 1000)}s</>,
+        },
+        {
+          id: "column-3",
+          header: null,
+          cellProps: (e) => ({
+            className: cn(
+              "pl-1 text-right font-semibold whitespace-nowrap",
+              e.ms > 100 ? "text-destructive" : "text-warning-ink",
+            ),
+          }),
+          cell: (e) => ms(e.ms),
+        },
+      ]}
+    />
   );
 }
 
@@ -307,52 +321,73 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
       <div className="px-1 text-2xs text-muted-foreground">
         cache: {snap.cacheSize} entries
       </div>
-      <table className="w-full">
-        <thead className="text-2xs text-muted-foreground">
-          <tr className="text-left">
-            <th className="font-normal">method</th>
-            <th className="text-right font-normal">calls</th>
-            <th className="text-right font-normal">avg</th>
-            <th className="text-right font-normal">max</th>
-            <th className="text-right font-normal">hit%</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([name, s]) => {
-            const lookups = s.hits + s.misses;
-            const hitPct = lookups > 0 ? (s.hits / lookups) * 100 : null;
-            const avg = s.executions > 0 ? s.totalMs / s.executions : 0;
-            return (
-              <tr key={name} className="border-t border-border/30">
-                <td className="truncate py-0.5" /* tight */>
-                  {name}
-                  {s.throws > 0 && (
-                    <span
-                      className="ml-1 text-3xs text-destructive"
-                      title={`${s.throws} executions threw (uncached, re-run each call)`}
-                    >
-                      ⚠{s.throws}
-                    </span>
-                  )}
-                </td>
-                <td className="text-right">{s.executions}</td>
-                <td className="text-right text-muted-foreground">{ms(avg)}</td>
-                <td
-                  className={cn(
-                    "text-right",
-                    s.maxMs > 16 ? "text-destructive" : "text-muted-foreground",
-                  )}
-                >
-                  {ms(s.maxMs)}
-                </td>
-                <td className="text-right">
-                  {hitPct === null ? "—" : `${hitPct.toFixed(0)}%`}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <StaticTable
+        className="w-full table-auto"
+        rows={rows}
+        rowKey={([name]) => name}
+        rowClassName={() => "border-t border-border/30"}
+        columns={[
+          {
+            id: "column-0",
+            header: "method",
+            headClassName: "font-normal",
+            cellClassName: "truncate py-0.5",
+            cell: ([name, s]) => (
+              <>
+                {name}
+                {s.throws > 0 && (
+                  <span
+                    className="ml-1 text-3xs text-destructive"
+                    title={`${s.throws} executions threw (uncached, re-run each call)`}
+                  >
+                    ⚠{s.throws}
+                  </span>
+                )}
+              </>
+            ),
+          },
+          {
+            id: "column-1",
+            header: "calls",
+            headClassName: "text-right font-normal",
+            cellClassName: "text-right",
+            cell: ([, s]) => s.executions,
+          },
+          {
+            id: "column-2",
+            header: "avg",
+            headClassName: "text-right font-normal",
+            cellClassName: "text-right text-muted-foreground",
+            cell: ([, s]) => {
+              const avg = s.executions > 0 ? s.totalMs / s.executions : 0;
+              return ms(avg);
+            },
+          },
+          {
+            id: "column-3",
+            header: "max",
+            headClassName: "text-right font-normal",
+            cellProps: ([, s]) => ({
+              className: cn(
+                "text-right",
+                s.maxMs > 16 ? "text-destructive" : "text-muted-foreground",
+              ),
+            }),
+            cell: ([, s]) => ms(s.maxMs),
+          },
+          {
+            id: "column-4",
+            header: "hit%",
+            headClassName: "text-right font-normal",
+            cellClassName: "text-right",
+            cell: ([, s]) => {
+              const lookups = s.hits + s.misses;
+              const hitPct = lookups > 0 ? (s.hits / lookups) * 100 : null;
+              return hitPct === null ? "—" : `${hitPct.toFixed(0)}%`;
+            },
+          },
+        ]}
+      />
     </Stack>
   );
 }
@@ -386,27 +421,22 @@ function QueriesTab({
         <Empty label="No operations recorded yet." />
       ) : (
         <>
-          <table className="w-full">
-            <thead className="text-2xs text-muted-foreground">
-              <tr className="text-left">
-                <th className="font-normal">operation</th>
-                <th
-                  className="text-right font-normal"
-                  title="fetch/reuse/cancel/error"
-                >
-                  f/r/c/e
-                </th>
-                <th className="text-right font-normal">avg</th>
-                <th className="text-right font-normal">max</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(([key, stat]) => (
-                <tr key={key} className="border-t border-border/30">
-                  <td
-                    className="max-w-36 truncate py-0.5"
-                    title={stat.operation}
-                  >
+          <StaticTable
+            className="w-full table-auto"
+            rows={rows}
+            rowKey={([key]) => key}
+            rowClassName={() => "border-t border-border/30"}
+            columns={[
+              {
+                id: "column-0",
+                header: "operation",
+                headClassName: "font-normal",
+                cellProps: ([, stat]) => ({
+                  className: "max-w-36 truncate py-0.5",
+                  title: stat.operation,
+                }),
+                cell: ([, stat]) => (
+                  <>
                     <span className="mr-1 text-3xs font-medium text-muted-foreground">
                       {stat.transport}
                     </span>
@@ -424,20 +454,40 @@ function QueriesTab({
                         N+1
                       </span>
                     )}
-                  </td>
-                  <td className="text-right text-2xs whitespace-nowrap">
+                  </>
+                ),
+              },
+              {
+                id: "column-1",
+                header: "f/r/c/e",
+                headProps: {
+                  className: "text-right font-normal",
+                  title: "fetch/reuse/cancel/error",
+                },
+                cellClassName: "text-right text-2xs whitespace-nowrap",
+                cell: ([, stat]) => (
+                  <>
                     {stat.fetches}/{stat.reuses}/{stat.cancelled}/{stat.errors}
-                  </td>
-                  <td className="text-right text-muted-foreground">
-                    {ms(stat.fetches > 0 ? stat.totalMs / stat.fetches : 0)}
-                  </td>
-                  <td className="text-right text-muted-foreground">
-                    {ms(stat.maxMs)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </>
+                ),
+              },
+              {
+                id: "column-2",
+                header: "avg",
+                headClassName: "text-right font-normal",
+                cellClassName: "text-right text-muted-foreground",
+                cell: ([, stat]) =>
+                  ms(stat.fetches > 0 ? stat.totalMs / stat.fetches : 0),
+              },
+              {
+                id: "column-3",
+                header: "max",
+                headClassName: "text-right font-normal",
+                cellClassName: "text-right text-muted-foreground",
+                cell: ([, stat]) => ms(stat.maxMs),
+              },
+            ]}
+          />
           <div className="px-1 pt-1 text-3xs text-muted-foreground">
             Hydrated/cache baselines may predate this browser recorder. H ={" "}
             {rows.reduce((total, [, stat]) => total + stat.hydrated, 0)}.
@@ -449,38 +499,49 @@ function QueriesTab({
           <div className="px-1 text-2xs font-semibold text-muted-foreground">
             recent mutations
           </div>
-          <table className="w-full">
-            <tbody>
-              {snap.mutations.slice(0, 8).map((mutation) => (
-                <tr
-                  key={`${mutation.id}-${mutation.at}`}
-                  className="border-t border-border/30"
-                >
-                  <td
-                    className="max-w-44 truncate py-0.5"
-                    title={mutation.operation}
-                  >
+          <StaticTable
+            className="w-full table-auto"
+            rows={snap.mutations.slice(0, 8)}
+            rowKey={(mutation) => `${mutation.id}-${mutation.at}`}
+            hideHeader
+            rowClassName={() => "border-t border-border/30"}
+            columns={[
+              {
+                id: "column-0",
+                header: null,
+                cellProps: (mutation) => ({
+                  className: "max-w-44 truncate py-0.5",
+                  title: mutation.operation,
+                }),
+                cell: (mutation) => (
+                  <>
                     <span className="mr-1 text-3xs font-medium text-muted-foreground">
                       {mutation.transport}
                     </span>
                     {mutation.operation}
-                  </td>
-                  <td
-                    className={cn(
-                      "text-right text-2xs",
-                      mutation.outcome === "error" && "text-destructive",
-                      mutation.outcome === "cancelled" && "text-warning",
-                    )}
-                  >
-                    {mutation.outcome}
-                  </td>
-                  <td className="text-right text-muted-foreground">
-                    {ms(mutation.durationMs)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </>
+                ),
+              },
+              {
+                id: "column-1",
+                header: null,
+                cellProps: (mutation) => ({
+                  className: cn(
+                    "text-right text-2xs",
+                    mutation.outcome === "error" && "text-destructive",
+                    mutation.outcome === "cancelled" && "text-warning",
+                  ),
+                }),
+                cell: (mutation) => mutation.outcome,
+              },
+              {
+                id: "column-2",
+                header: null,
+                cellClassName: "text-right text-muted-foreground",
+                cell: (mutation) => ms(mutation.durationMs),
+              },
+            ]}
+          />
         </div>
       )}
     </Stack>
@@ -509,19 +570,19 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
   const maxCount = rows[0]![1].count;
   return (
     <div>
-      <table className="w-full">
-        <thead className="text-2xs text-muted-foreground">
-          <tr className="text-left">
-            <th className="font-normal">component</th>
-            <th className="text-right font-normal">renders</th>
-            <th className="text-right font-normal">avg</th>
-            <th className="text-right font-normal">max</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([id, s]) => (
-            <tr key={id} className="border-t border-border/30 align-top">
-              <td className="py-0.5" /* tight */>
+      <StaticTable
+        className="w-full table-auto"
+        rows={rows}
+        rowKey={([id]) => id}
+        rowClassName={() => "border-t border-border/30 align-top"}
+        columns={[
+          {
+            id: "column-0",
+            header: "component",
+            headClassName: "font-normal",
+            cellClassName: "py-0.5",
+            cell: ([id, s]) => (
+              <>
                 <Row align="center" gap="xs">
                   <span className="truncate">{id}</span>
                   {s.lastPhase && (
@@ -541,18 +602,32 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
                   pct={(s.count / maxCount) * 100}
                   tone={s.count > 10 ? 4 : 3}
                 />
-              </td>
-              <td className="text-right font-semibold">{s.count}</td>
-              <td className="text-right text-muted-foreground">
-                {ms(s.count > 0 ? s.totalMs / s.count : 0)}
-              </td>
-              <td className="text-right text-muted-foreground">
-                {ms(s.maxMs)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </>
+            ),
+          },
+          {
+            id: "column-1",
+            header: "renders",
+            headClassName: "text-right font-normal",
+            cellClassName: "text-right font-semibold",
+            cell: ([, s]) => s.count,
+          },
+          {
+            id: "column-2",
+            header: "avg",
+            headClassName: "text-right font-normal",
+            cellClassName: "text-right text-muted-foreground",
+            cell: ([, s]) => ms(s.count > 0 ? s.totalMs / s.count : 0),
+          },
+          {
+            id: "column-3",
+            header: "max",
+            headClassName: "text-right font-normal",
+            cellClassName: "text-right text-muted-foreground",
+            cell: ([, s]) => ms(s.maxMs),
+          },
+        ]}
+      />
       <div className="px-1 pt-1 text-3xs text-muted-foreground">{caveat}</div>
     </div>
   );

@@ -17,14 +17,7 @@ import {
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
 import { Stack } from "~/ui/layout";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 import { EntityActionButtons } from "../../entity/actions/entity-actions";
 import {
@@ -182,26 +175,30 @@ export const USDAFoodDetail: React.FC<{
       {portionInfoRaw.length > 0 && (
         <div className="mt-4">
           <h4 className="mb-2 font-heading font-medium">Portion Information</h4>
-          <Table className="table-auto">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Amount</TableHead>
-                <TableHead>Portion</TableHead>
-                <TableHead>Grams</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {portionInfoRaw.map((portion) => (
-                <TableRow
-                  key={`${portion.amount}-${portion.modifier ?? "default"}-${portion.gram_weight}`}
-                >
-                  <TableCell>{portion.amount}</TableCell>
-                  <TableCell>{portion.modifier || "portion"}</TableCell>
-                  <TableCell>{portion.gram_weight}g</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <StaticTable
+            className="table-auto"
+            rows={portionInfoRaw}
+            rowKey={(portion) =>
+              `${portion.amount}-${portion.modifier ?? "default"}-${portion.gram_weight}`
+            }
+            columns={[
+              {
+                id: "column-0",
+                header: "Amount",
+                cell: (portion) => portion.amount,
+              },
+              {
+                id: "column-1",
+                header: "Portion",
+                cell: (portion) => portion.modifier || "portion",
+              },
+              {
+                id: "column-2",
+                header: "Grams",
+                cell: (portion) => <> {portion.gram_weight}g </>,
+              },
+            ]}
+          />
         </div>
       )}
     </div>

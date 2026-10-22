@@ -31,6 +31,7 @@ type DecisionColumn = {
   id: string;
   header: string;
   cell: (row: RunDecision) => ReactNode;
+  value: (row: RunDecision) => string | number | null;
   align?: "right";
   className?: string;
 };
@@ -50,8 +51,6 @@ export type DecisionPresenter = {
   searchText: (row: RunDecision) => string;
   /** The drawer's title line. */
   title: (row: RunDecision) => ReactNode;
-  /** Phone rows: a title line and a quiet line. */
-  phone: (row: RunDecision) => { title: ReactNode; meta: ReactNode };
   Evidence: (props: { row: RunDecision }) => ReactNode;
 };
 
@@ -142,6 +141,7 @@ const genericPresenter = (family: AssessmentFamily): DecisionPresenter => ({
     {
       id: "summary",
       header: "Judgment",
+      value: (row) => summaryOf(row.judgment),
       cell: (row) => (
         <span className="block max-w-[28rem] truncate">
           {summaryOf(row.judgment)}
@@ -151,22 +151,25 @@ const genericPresenter = (family: AssessmentFamily): DecisionPresenter => ({
     {
       id: "producer",
       header: "Producer",
+      value: (row) => row.producer?.model ?? row.producer?.kind ?? null,
       cell: (row) => row.producer?.model ?? row.producer?.kind ?? "—",
       className: "text-muted-foreground",
     },
-    { id: "created", header: "Published", cell: (row) => when(row.createdAt) },
+    {
+      id: "created",
+      header: "Published",
+      value: (row) => row.createdAt,
+      cell: (row) => when(row.createdAt),
+    },
     {
       id: "id",
       header: "Assessment",
+      value: (row) => row.id,
       cell: (row) => <span className="font-mono">{shortId(row.id)}</span>,
     },
   ],
   searchText: (row) => `${summaryOf(row.judgment)} ${row.id}`,
   title: (row) => summaryOf(row.judgment),
-  phone: (row) => ({
-    title: summaryOf(row.judgment),
-    meta: when(row.createdAt),
-  }),
   Evidence: ({ row }) => (
     <>
       <SidePanelSection title="Stored judgment">
@@ -471,6 +474,7 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "outflow",
       header: "Outflow",
+      value: (row) => parse(row)?.outflow.accountName ?? null,
       cell: (row) => {
         const judgment = parse(row);
         return judgment ? <Leg leg={judgment.outflow} direction="out" /> : "—";
@@ -479,6 +483,7 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "inflow",
       header: "Inflow",
+      value: (row) => parse(row)?.inflow.accountName ?? null,
       cell: (row) => {
         const judgment = parse(row);
         return judgment ? <Leg leg={judgment.inflow} direction="in" /> : "—";
@@ -487,6 +492,7 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "amount",
       header: "Amount",
+      value: (row) => parse(row)?.amount ?? null,
       align: "right",
       className: "font-mono",
       cell: (row) => {
@@ -497,6 +503,7 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "gap",
       header: "Gap",
+      value: (row) => parse(row)?.dateGapDays ?? null,
       align: "right",
       className: "font-mono",
       cell: (row) => {
@@ -507,6 +514,10 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "reason",
       header: "Reason",
+      value: (row) => {
+        const judgment = parse(row);
+        return judgment ? reasonOf(row, judgment) : null;
+      },
       className: "text-muted-foreground",
       cell: (row) => {
         const judgment = parse(row);
@@ -520,6 +531,10 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "checks",
       header: "Checks",
+      value: (row) => {
+        const judgment = parse(row);
+        return judgment ? passed(judgment) : null;
+      },
       align: "right",
       className: "font-mono",
       cell: (row) => {
@@ -536,6 +551,7 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "id",
       header: "Assessment",
+      value: (row) => row.id,
       className: "font-mono text-muted-foreground",
       cell: (row) => shortId(row.id),
     },
@@ -561,15 +577,6 @@ const transferPairPresenter: DecisionPresenter = {
     return judgment
       ? `${judgment.outflow.accountName} → ${judgment.inflow.accountName}`
       : shortId(row.id);
-  },
-  phone: (row) => {
-    const judgment = parse(row);
-    return judgment
-      ? {
-          title: `${judgment.outflow.accountName} → ${judgment.inflow.accountName}`,
-          meta: `${formatCurrency(judgment.amount)} · ${judgment.dateGapDays}d · ${reasonOf(row, judgment)}`,
-        }
-      : { title: shortId(row.id), meta: when(row.createdAt) };
   },
   Evidence: TransferEvidence,
 };

@@ -16,11 +16,13 @@ import {
   filterStateToBarFilters,
 } from "../../ui/data-table/filter-bar-core";
 import {
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
 import { requestColumnFilterEdit } from "../../ui/data-table/table-meta";
 import { useFilterBarDraft } from "../../ui/data-table/use-filter-bar-draft";
+import { useLocalTable } from "../../ui/data-table/use-local-table";
 import { LedgerFilters } from "./ledger-filters";
 
 type LedgerRow = { id: string; name: string; trade: string };
@@ -99,7 +101,51 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   </QueryClientProvider>
 );
 
+const localRows = [
+  { id: "first", name: "Synthetic A", trade: "Orchard" },
+  { id: "second", name: "Synthetic B", trade: "Workshop" },
+];
+const localSearch = {
+  text: (row: LedgerRow) => `${row.name} ${row.trade}`,
+  placeholder: "Search synthetic evidence",
+};
+const localId = (row: LedgerRow) => row.id;
+const localColumns = createCubbyColumnCollection<LedgerRow>((add) => {
+  add(helper.accessor("name", { header: "Name" }));
+});
+function LocalSearchHarness() {
+  const table = useLocalTable({
+    rows: localRows,
+    columns: localColumns,
+    getRowId: localId,
+    search: localSearch,
+  });
+  return (
+    <>
+      <LedgerFilters table={table} />
+      <ul>
+        {table.getRowModel().rows.map((row) => (
+          <li key={row.id}>{row.original.name}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 describe("LedgerFilters", () => {
+  it("searches non-entity evidence outside the displayed columns and clears back to all rows", async () => {
+    render(<LocalSearchHarness />, { wrapper });
+    const search = screen.getByRole("textbox", {
+      name: "Search synthetic evidence",
+    });
+    fireEvent.change(search, { target: { value: "workshop" } });
+    await screen.findByText("Synthetic B");
+    await vi.waitFor(() =>
+      expect(screen.queryByText("Synthetic A")).toBeNull(),
+    );
+    fireEvent.change(search, { target: { value: "" } });
+    expect(await screen.findByText("Synthetic A")).toBeVisible();
+  });
   it("writes a picked multiselect value to the table without an Apply step", async () => {
     render(<LedgerFiltersHarness />, { wrapper });
 

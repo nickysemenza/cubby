@@ -31,15 +31,8 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { StaticTable } from "~/ui/primitives/static-table";
 import { Switch } from "~/ui/primitives/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
 import {
   Visualization,
   visualizationState,
@@ -121,56 +114,67 @@ function ScenarioEditor({
   return (
     <Stack gap="sm">
       {scenarios.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Scenario</TableHead>
-              <TableHead>Starts</TableHead>
-              <TableHead>Repeats</TableHead>
-              <TableHead className={numeric}>Amount</TableHead>
-              <TableHead className="w-8">
-                <span className="sr-only">Remove</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {scenarios.map((scenario, index) => (
-              <TableRow key={JSON.stringify(scenario)}>
-                <TableCell>{scenario.label}</TableCell>
-                <TableCell className="tabular-nums">{scenario.date}</TableCell>
-                <TableCell>
-                  {scenario.recurrence === "once"
-                    ? "Once"
-                    : scenario.until
-                      ? `Monthly until ${scenario.until}`
-                      : "Monthly"}
-                </TableCell>
-                <TableCell
-                  className={
-                    scenario.direction === "inflow"
-                      ? `${numeric} text-positive`
-                      : numeric
-                  }
-                >
+        <StaticTable
+          rows={scenarios}
+          rowKey={(scenario) => JSON.stringify(scenario)}
+          columns={[
+            {
+              id: "column-0",
+              header: "Scenario",
+              cell: (scenario) => scenario.label,
+            },
+            {
+              id: "column-1",
+              header: "Starts",
+              cellClassName: "tabular-nums",
+              cell: (scenario) => scenario.date,
+            },
+            {
+              id: "column-2",
+              header: "Repeats",
+              cell: (scenario) =>
+                scenario.recurrence === "once"
+                  ? "Once"
+                  : scenario.until
+                    ? `Monthly until ${scenario.until}`
+                    : "Monthly",
+            },
+            {
+              id: "column-3",
+              header: "Amount",
+              headClassName: numeric,
+              cellProps: (scenario) => ({
+                className:
+                  scenario.direction === "inflow"
+                    ? `${numeric} text-positive`
+                    : numeric,
+              }),
+              cell: (scenario) => (
+                <>
                   {scenario.direction === "inflow" ? "+" : "−"}
                   {formatCurrency(scenario.amount)}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={`Remove ${scenario.label}`}
-                    onClick={() =>
-                      onChange(scenarios.filter((_, at) => at !== index))
-                    }
-                  >
-                    <XIcon />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                </>
+              ),
+            },
+            {
+              id: "column-4",
+              header: <span className="sr-only">Remove</span>,
+              headClassName: "w-8",
+              cell: (scenario, index) => (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Remove ${scenario.label}`}
+                  onClick={() =>
+                    onChange(scenarios.filter((_row0, at) => at !== index))
+                  }
+                >
+                  <XIcon />
+                </Button>
+              ),
+            },
+          ]}
+        />
       ) : (
         <p className="my-0 text-xs text-muted-foreground">
           No scenarios. Add a planned inflow or outflow to see its effect on
@@ -509,25 +513,15 @@ export function CashFlowView({
                       overflowVisible: true,
                       title: "Baseline by Spending Category",
                       content: (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Category</TableHead>
-                              <TableHead className={numeric}>
-                                Months with spend
-                              </TableHead>
-                              <TableHead className={numeric}>
-                                Trailing 12 months
-                              </TableHead>
-                              <TableHead className={numeric}>
-                                Per month
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {data.baseline.map((row) => (
-                              <TableRow key={row.key}>
-                                <TableCell>
+                        <StaticTable
+                          rows={data.baseline}
+                          rowKey={(row) => row.key}
+                          columns={[
+                            {
+                              id: "column-0",
+                              header: "Category",
+                              cell: (row) => (
+                                <>
                                   {row.ledgerFilter ? (
                                     <Link
                                       to="/expenses"
@@ -549,20 +543,32 @@ export function CashFlowView({
                                         : "Irregular"}
                                     </span>
                                   ) : null}
-                                </TableCell>
-                                <TableCell className={numeric}>
-                                  {row.activeMonths} of 12
-                                </TableCell>
-                                <TableCell className={numeric}>
-                                  {formatCurrency(row.trailingTotal)}
-                                </TableCell>
-                                <TableCell className={numeric}>
-                                  {formatCurrency(row.monthly)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                                </>
+                              ),
+                            },
+                            {
+                              id: "column-1",
+                              header: "Months with spend",
+                              headClassName: numeric,
+                              cellClassName: numeric,
+                              cell: (row) => <>{row.activeMonths} of 12</>,
+                            },
+                            {
+                              id: "column-2",
+                              header: "Trailing 12 months",
+                              headClassName: numeric,
+                              cellClassName: numeric,
+                              cell: (row) => formatCurrency(row.trailingTotal),
+                            },
+                            {
+                              id: "column-3",
+                              header: "Per month",
+                              headClassName: numeric,
+                              cellClassName: numeric,
+                              cell: (row) => formatCurrency(row.monthly),
+                            },
+                          ]}
+                        />
                       ),
                     },
                     {
@@ -629,21 +635,15 @@ function ProjectTable({
       {rows.length === 0 ? (
         <p className="my-0 text-xs text-muted-foreground">{empty}</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Project</TableHead>
-              <TableHead>Ends</TableHead>
-              <TableHead className={numeric}>Estimate</TableHead>
-              <TableHead className={numeric}>Actual</TableHead>
-              <TableHead className={numeric}>Committed</TableHead>
-              <TableHead className={numeric}>Remaining</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>
+        <StaticTable
+          rows={rows}
+          rowKey={(row) => row.id}
+          columns={[
+            {
+              id: "column-0",
+              header: "Project",
+              cell: (row) => (
+                <>
                   <Link
                     to="/projects/$shortcode"
                     params={{ shortcode: row.id }}
@@ -656,26 +656,45 @@ function ProjectTable({
                       {row.note}
                     </span>
                   ) : null}
-                </TableCell>
-                <TableCell className="tabular-nums">
-                  {row.endDate ?? "No end date"}
-                </TableCell>
-                <TableCell className={numeric}>
-                  {formatCurrency(row.estimate)}
-                </TableCell>
-                <TableCell className={numeric}>
-                  {formatCurrency(row.actual)}
-                </TableCell>
-                <TableCell className={numeric}>
-                  {formatCurrency(row.committed)}
-                </TableCell>
-                <TableCell className={`${numeric} font-medium`}>
-                  {formatCurrency(row.remaining)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                </>
+              ),
+            },
+            {
+              id: "column-1",
+              header: "Ends",
+              cellClassName: "tabular-nums",
+              cell: (row) => row.endDate ?? "No end date",
+            },
+            {
+              id: "column-2",
+              header: "Estimate",
+              headClassName: numeric,
+              cellClassName: numeric,
+              cell: (row) => formatCurrency(row.estimate),
+            },
+            {
+              id: "column-3",
+              header: "Actual",
+              headClassName: numeric,
+              cellClassName: numeric,
+              cell: (row) => formatCurrency(row.actual),
+            },
+            {
+              id: "column-4",
+              header: "Committed",
+              headClassName: numeric,
+              cellClassName: numeric,
+              cell: (row) => formatCurrency(row.committed),
+            },
+            {
+              id: "column-5",
+              header: "Remaining",
+              headClassName: numeric,
+              cellClassName: `${numeric} font-medium`,
+              cell: (row) => formatCurrency(row.remaining),
+            },
+          ]}
+        />
       )}
     </>
   );

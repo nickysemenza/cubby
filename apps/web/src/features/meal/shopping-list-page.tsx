@@ -256,20 +256,22 @@ export function ShoppingListPage({
                   </Description>
                 ) : (
                   <>
-                    <Stack gap="sm" className="sm:hidden print:hidden">
-                      {view === "matrix" && (
-                        <Description as="div" size="xs">
-                          Matrix view needs a wider screen — showing the list.
-                        </Description>
-                      )}
-                      {sectionRows.map((r) => (
-                        <ShoppingCard
-                          key={r.key}
-                          row={r}
-                          onToggleCheck={() => toggleChecked(r.key)}
-                        />
-                      ))}
-                    </Stack>
+                    {view === "matrix" && (
+                      <Stack gap="sm" className="sm:hidden print:hidden">
+                        {view === "matrix" && (
+                          <Description as="div" size="xs">
+                            Matrix view needs a wider screen — showing the list.
+                          </Description>
+                        )}
+                        {sectionRows.map((r) => (
+                          <ShoppingCard
+                            key={r.key}
+                            row={r}
+                            onToggleCheck={() => toggleChecked(r.key)}
+                          />
+                        ))}
+                      </Stack>
+                    )}
                     {match(view)
                       .with("matrix", () => (
                         <ShoppingMatrix

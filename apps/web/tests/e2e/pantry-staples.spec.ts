@@ -46,7 +46,9 @@ test("usually-on-hand marking persists and changes planning without inventory", 
     exact: true,
   });
   await expect(staples.getByRole("link", { name, exact: true })).toBeVisible();
-  await expect(staples.getByText(/^10\s*g$/)).toBeVisible();
+  await expect(
+    staples.getByText(/^10\s*g$/).filter({ visible: true }),
+  ).toBeVisible();
   await expect(staples.getByRole("checkbox")).toHaveCount(0);
   await reloadAuthenticatedPage(page);
   await expect(staples.getByRole("link", { name, exact: true })).toBeVisible();

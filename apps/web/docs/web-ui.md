@@ -102,8 +102,44 @@ does not register the popup's empty state and lets Escape close its parent
 dialog. Keep the library's live region mounted and test dismissal through the
 real dialog journey.
 
-Use `RTable` for interactive lists, Table primitives for static tables, and raw
-tables only for matrices/debug/external content. `useTableColumnLayout` owns
+Use `RTable` for interactive lists and review queues, and `StaticTable` for
+simple read-only summaries, reports, comparisons, and form previews. Links and
+bounded form actions may live in static cells; search, filters, sorting, row
+navigation, and inspection belong to `RTable`, not a second list implementation.
+Bounded non-entity lists use `useLocalTable` for client-side search/filter/sort
+and the shared column layout. Its search accessor may include evidence absent
+from displayed columns; table metadata declares that search to the shared
+filter controls. Complete local data may supply result and opted-in facet
+counts; a server page must never masquerade as the full result set. The local
+table's `totalCount` identifies truncated source reads and suppresses those
+counts; its caller labels the loaded scope. The table does not read or write
+the page's URL state.
+
+`RTable`'s `inspector` composes the shared `SidePanelLayout`: a right column at
+wide widths and the shared sheet below, including embedded detail sections.
+Its content receives table row stepping over the filtered/sorted row model;
+domain presenters own evidence and actions. `desktopInspector` remains the
+docked slot for entity-list hosts whose shared inspection owner already
+handles responsive presentation and navigation. Bulk selection and the
+inspector's current row remain independent.
+An open inspector owns Escape before the grid resets cell selection. Nested
+links, buttons, and ARIA controls own their clicks and keys, including SVG
+icon targets; they must not also activate the row. A phone row's own
+`role=button` is the row activation surface, not a nested control.
+
+An opt-in `printable` RTable renders its filtered/sorted loaded rows and open
+row details through `StaticTable`, outside the virtualized screen pane. This
+preserves shopping-list printing; it does not fetch unloaded server pages.
+
+`StaticTable` shares the table atoms with `RTable`, including accessible native
+table attributes. Use its columns, conditional visibility, row headers,
+row styling, and cell props for static reports rather than hand-writing a
+body. Spanning cells may return null cell props for covered cells. Do not add
+filtering, navigation, or inspection state to `StaticTable`.
+
+Table primitives/raw tables remain for actual matrices, spanning dependency
+grids, authored document tables, and loading skeletons. Debug reports use
+`StaticTable` too; being diagnostic is not an exception. `useTableColumnLayout` owns
 table order/pinning/visibility/sizing. Grid wrappers around tables use a
 zero-minimum track (`grid-cols-1`) so wide columns scroll inside the table
 instead of expanding the page. Decorated cells render through

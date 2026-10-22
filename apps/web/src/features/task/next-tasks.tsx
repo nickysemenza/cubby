@@ -23,14 +23,7 @@ import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge } from "~/ui/primitives/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/ui/primitives/table";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({
@@ -93,13 +86,8 @@ function BlockedReasonChips({
   );
 }
 
-/**
- * Read-only, non-paginated, non-selectable rows — a static `<Table>` fits
- * this better than `<RTable>` (see AGENTS.md's Tables guidance: `<RTable>`
- * would be overkill for a "here's your list" view). `next`/`later` arrive
- * pre-sorted server-side (`task.listActionable`), so this renders them as-is
- * — no client sort.
- */
+/** Actionable tasks arrive pre-sorted by task.listActionable; this report
+ * preserves that server order without paging or client sorting. */
 function TaskRows({
   rows,
   displayImages,
@@ -108,75 +96,83 @@ function TaskRows({
   displayImages: EntityDisplayImageMap;
 }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-64">Task</TableHead>
-          <TableHead className="w-32">Status</TableHead>
-          <TableHead className="w-40">Project</TableHead>
-          <TableHead className="w-28">Due</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((t) => (
-          <TableRow key={t.id}>
-            <TableCell>
-              <Row align="center" gap="xs" className="min-w-0">
-                <EntityRefLink
-                  displayImage={
-                    displayImages[
-                      entityDisplayImageKey({
-                        entityKind: "task",
-                        entityId: t.id,
-                      })
-                    ] ?? null
-                  }
-                  entity="task"
-                  data={{ id: t.id, name: t.name }}
-                  truncate
-                />
-                {t.subtaskCount > 0 && (
-                  <Badge variant="outline">
-                    {t.doneSubtaskCount}/{t.subtaskCount}
-                  </Badge>
-                )}
-              </Row>
-            </TableCell>
-            <TableCell>
-              {renderOptionCell(t.status, fieldEnumOptions("task", "status"))}
-            </TableCell>
-            <TableCell>
-              {t.projectId && t.projectName && t.projectId ? (
-                <EntityRefLink
-                  displayImage={
-                    displayImages[
-                      entityDisplayImageKey({
-                        entityKind: "project",
-                        entityId: t.projectId,
-                      })
-                    ] ?? null
-                  }
-                  entity="project"
-                  data={{
-                    id: t.projectId,
-                    name: t.projectName,
-                  }}
-                  truncate
-                />
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </TableCell>
-            <TableCell>
-              <DateDisplay
-                start={t.due?.start ?? null}
-                end={t.due?.end ?? null}
+    <StaticTable
+      rows={rows}
+      rowKey={(t) => t.id}
+      columns={[
+        {
+          id: "column-0",
+          header: "Task",
+          headClassName: "w-64",
+          cell: (t) => (
+            <Row align="center" gap="xs" className="min-w-0">
+              <EntityRefLink
+                displayImage={
+                  displayImages[
+                    entityDisplayImageKey({
+                      entityKind: "task",
+                      entityId: t.id,
+                    })
+                  ] ?? null
+                }
+                entity="task"
+                data={{ id: t.id, name: t.name }}
+                truncate
               />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+              {t.subtaskCount > 0 && (
+                <Badge variant="outline">
+                  {t.doneSubtaskCount}/{t.subtaskCount}
+                </Badge>
+              )}
+            </Row>
+          ),
+        },
+        {
+          id: "column-1",
+          header: "Status",
+          headClassName: "w-32",
+          cell: (t) =>
+            renderOptionCell(t.status, fieldEnumOptions("task", "status")),
+        },
+        {
+          id: "column-2",
+          header: "Project",
+          headClassName: "w-40",
+          cell: (t) =>
+            t.projectId && t.projectName && t.projectId ? (
+              <EntityRefLink
+                displayImage={
+                  displayImages[
+                    entityDisplayImageKey({
+                      entityKind: "project",
+                      entityId: t.projectId,
+                    })
+                  ] ?? null
+                }
+                entity="project"
+                data={{
+                  id: t.projectId,
+                  name: t.projectName,
+                }}
+                truncate
+              />
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        },
+        {
+          id: "column-3",
+          header: "Due",
+          headClassName: "w-28",
+          cell: (t) => (
+            <DateDisplay
+              start={t.due?.start ?? null}
+              end={t.due?.end ?? null}
+            />
+          ),
+        },
+      ]}
+    />
   );
 }
 
