@@ -14,7 +14,7 @@ import { PageWrapper } from "~/ui/layout/page-wrapper";
  * Detail routes override this with `DetailPagePending`; ordinary routes retain
  * their destination name and the ruled dashboard/ledger cadence. */
 export function RoutePending() {
-  const pathname = useLocation().pathname;
+  const pathname = useLocation({ select: (location) => location.pathname });
   const activeTo = findActiveTo(pathname);
   const destination =
     completeNavLeaves.find((item) => item.to === activeTo)?.label ?? "Cubby";

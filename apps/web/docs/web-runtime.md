@@ -34,6 +34,11 @@ siblings from a failed batch can coalesce again.
 
 A mutation function must not read changing selection state from its closure:
 observer options can lag the render that enabled the action.
+Equivalent controls for one record share pending state through the mutation
+cache, filtered by operation and validated record identity. Check the live cache
+at submission too, before another control's observers rerender. Keep the request's
+pending state separate from accepted background work and readiness polling;
+other records remain usable and failed requests allow retry.
 Resolve table selection updaters at the event boundary: they look up live rows
 and must not be deferred to a React state replay after optimistic removal.
 Successful bulk actions clear only the row IDs passed to that action. A new

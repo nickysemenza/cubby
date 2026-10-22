@@ -18,7 +18,6 @@ import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { type LinkProps, useLocation } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { useMemo } from "react";
 
 import { entities } from "~/entity/entities";
 
@@ -298,6 +297,5 @@ export function findActiveTo(pathname: string): string | undefined {
 
 /** Reactive {@link findActiveTo} keyed on the current pathname. */
 export function useActiveTo(): string | undefined {
-  const pathname = useLocation().pathname;
-  return useMemo(() => findActiveTo(pathname), [pathname]);
+  return useLocation({ select: (location) => findActiveTo(location.pathname) });
 }
