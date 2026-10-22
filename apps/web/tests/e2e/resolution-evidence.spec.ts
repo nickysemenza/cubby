@@ -5,7 +5,7 @@ import {
   inlineExplanation,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { createEntityFixture } from "./fixtures/core";
+import { createFixtureGraph } from "./fixtures/core";
 import { seedWardrobePrerequisites } from "./fixtures/catalog";
 
 test.setTimeout(60_000);
@@ -16,44 +16,48 @@ test("explains allocated trades with expandable contributor precedence", async (
   page,
   baseURL,
 }) => {
-  const { id: project } = await createEntityFixture(page, "project", {
-    name: "Synthetic evidence renovation",
-    defaultTrade: "building",
+  const { cable, fee } = await createFixtureGraph(page, async (create) => {
+    const { id: project } = await create("project", {
+      name: "Synthetic evidence renovation",
+      defaultTrade: "building",
+    });
+    const { id: vendor } = await create("vendor", {
+      name: "Synthetic evidence supplier",
+    });
+    const { id: purchase } = await create("purchase", {
+      vendorId: vendor,
+      date: "2026-09-01",
+      defaultProjectId: project,
+      defaultTrade: "plumbing",
+    });
+    const { id: cable } = await create("expense", {
+      name: "Synthetic evidence cable",
+      purchaseId: purchase,
+      date: "2026-09-01",
+      cost: 20,
+      costType: "materials",
+      trade: "electrical",
+    });
+    await create("expense", {
+      name: "Synthetic evidence valve",
+      purchaseId: purchase,
+      date: "2026-09-01",
+      cost: 10,
+      costType: "materials",
+      trade: null,
+    });
+    const { id: fee } = await create("expense", {
+      name: "Synthetic evidence fee",
+      purchaseId: purchase,
+      date: "2026-09-01",
+      cost: 3,
+      costType: "services",
+      lineKind: "fee",
+      trade: null,
+    });
+    return { cable, fee };
   });
-  const { id: vendor } = await createEntityFixture(page, "vendor", {
-    name: "Synthetic evidence supplier",
-  });
-  const { id: purchase } = await createEntityFixture(page, "purchase", {
-    vendorId: vendor,
-    date: "2026-09-01",
-    defaultProjectId: project,
-    defaultTrade: "plumbing",
-  });
-  const { id: cable } = await createEntityFixture(page, "expense", {
-    name: "Synthetic evidence cable",
-    purchaseId: purchase,
-    date: "2026-09-01",
-    cost: 20,
-    costType: "materials",
-    trade: "electrical",
-  });
-  await createEntityFixture(page, "expense", {
-    name: "Synthetic evidence valve",
-    purchaseId: purchase,
-    date: "2026-09-01",
-    cost: 10,
-    costType: "materials",
-    trade: null,
-  });
-  const { id: fee } = await createEntityFixture(page, "expense", {
-    name: "Synthetic evidence fee",
-    purchaseId: purchase,
-    date: "2026-09-01",
-    cost: 3,
-    costType: "services",
-    lineKind: "fee",
-    trade: null,
-  });
+
   await gotoAuthenticatedPage(page, `/expenses/${fee}`);
   const trigger = page.getByRole("button", {
     name: "How trade is determined",

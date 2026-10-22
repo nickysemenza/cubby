@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { entityApi } from "./support/entity-api";
 import { chooseListView } from "./support/e2e-helpers";
 import { formatInstant } from "~/lib/date-format";
@@ -162,9 +163,7 @@ test("declared record lists retain identities, relationships and amounts on desk
   ).toBeLessThanOrEqual(1281);
 });
 
-test("purchase and expense totals follow the full filtered set in tables and cards", async ({
-  page,
-}) => {
+async function seedRecordTotals(page: Page) {
   const tag = `RecordTotals${Date.now()}`;
   await createFixtureGraph(page, async (create) => {
     const vendor = await create("vendor", {
@@ -198,13 +197,48 @@ test("purchase and expense totals follow the full filtered set in tables and car
     await expense("zero C", 0, c.id);
   });
 
-  const summaryValue = (label: string) =>
-    page
-      .getByText("All matching", { exact: true })
-      .locator("..")
-      .getByText(label, { exact: true })
-      .locator("..")
-      .locator("dd");
+  return tag;
+}
+
+function recordSummaryValue(page: Page, label: string) {
+  return page
+    .getByText("All matching", { exact: true })
+    .locator("..")
+    .getByText(label, { exact: true })
+    .locator("..")
+    .locator("dd");
+}
+
+async function expectRecordTotalPages(
+  page: Page,
+  tag: string,
+  path: "purchases" | "expenses",
+  sums: Record<string, number>,
+) {
+  for (const pageNumber of [1, 2]) {
+    const response = await entityApi(page.request).list(
+      path === "purchases" ? "purchase" : "expense",
+      {
+        filters: { search: tag },
+        pagination: { pageIndex: pageNumber - 1, pageSize: 1 },
+      },
+    );
+    expect(response.status(), await response.text()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      items: [expect.any(Object)],
+      meta: {
+        pageIndex: pageNumber - 1,
+        totalCount: path === "purchases" ? 3 : 4,
+        sums,
+      },
+    });
+  }
+}
+
+test("purchase table totals follow the full filtered set after reload", async ({
+  page,
+}) => {
+  const tag = await seedRecordTotals(page);
   const purchaseSearch = page.getByRole("textbox", {
     name: "Search purchases or shortcode",
     exact: true,
@@ -212,31 +246,46 @@ test("purchase and expense totals follow the full filtered set in tables and car
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await gotoAuthenticatedPage(page, `/purchases?q=${encodeURIComponent(tag)}`);
-  await expect(summaryValue("Spend")).toHaveText("$8.00");
-  await expect(summaryValue("Expense lines")).toHaveText("4");
+  await expect(recordSummaryValue(page, "Spend")).toHaveText("$8.00");
+  await expect(recordSummaryValue(page, "Expense lines")).toHaveText("4");
   await expect(
     page.getByRole("link", { name: `${tag} CopperDebit`, exact: true }),
   ).toBeVisible();
 
   await purchaseSearch.fill("QuartzRefund");
-  await expect(summaryValue("Spend")).toHaveText("-$7.00");
-  await expect(summaryValue("Expense lines")).toHaveText("1");
+  await expect(recordSummaryValue(page, "Spend")).toHaveText("-$7.00");
+  await expect(recordSummaryValue(page, "Expense lines")).toHaveText("1");
   await page.reload();
-  await expect(summaryValue("Spend")).toHaveText("-$7.00");
+  await expect(recordSummaryValue(page, "Spend")).toHaveText("-$7.00");
   await purchaseSearch.fill("FreeMarker");
-  await expect(summaryValue("Spend")).toHaveText("$0.00");
-  await expect(summaryValue("Expense lines")).toHaveText("1");
+  await expect(recordSummaryValue(page, "Spend")).toHaveText("$0.00");
+  await expect(recordSummaryValue(page, "Expense lines")).toHaveText("1");
 
+  await expectRecordTotalPages(page, tag, "purchases", {
+    expenseTotal: 8,
+    expenseCount: 4,
+  });
+});
+
+test("expense table totals follow the full filtered set", async ({ page }) => {
+  const tag = await seedRecordTotals(page);
   await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(tag)}`);
-  await expect(summaryValue("Ledger cost")).toHaveText("$8.00");
+  await expect(recordSummaryValue(page, "Ledger cost")).toHaveText("$8.00");
   await page
     .getByRole("textbox", { name: "Search expenses or shortcode", exact: true })
     .fill("credit");
-  await expect(summaryValue("Ledger cost")).toHaveText("-$12.00");
+  await expect(recordSummaryValue(page, "Ledger cost")).toHaveText("-$12.00");
   await page
     .getByRole("textbox", { name: "Search expenses or shortcode", exact: true })
     .fill("zero");
-  await expect(summaryValue("Ledger cost")).toHaveText("$0.00");
+  await expect(recordSummaryValue(page, "Ledger cost")).toHaveText("$0.00");
+  await expectRecordTotalPages(page, tag, "expenses", { cost: 8 });
+});
+
+test("purchase and expense card totals follow the full filtered set", async ({
+  page,
+}) => {
+  const tag = await seedRecordTotals(page);
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [path, label, value, count] of [
     ["purchases", "Spend", "$8.00", 3],
@@ -250,31 +299,7 @@ test("purchase and expense totals follow the full filtered set in tables and car
     await expect(
       page.getByTestId("entity-card-grid").locator("[data-entity-card]"),
     ).toHaveCount(count);
-    await expect(summaryValue(label)).toHaveText(value);
-  }
-
-  for (const [path, sums] of [
-    ["purchases", { expenseTotal: 8, expenseCount: 4 }],
-    ["expenses", { cost: 8 }],
-  ] as const) {
-    for (const pageNumber of [1, 2]) {
-      const response = await entityApi(page.request).list(
-        path === "purchases" ? "purchase" : "expense",
-        {
-          filters: { search: tag },
-          pagination: { pageIndex: pageNumber - 1, pageSize: 1 },
-        },
-      );
-      expect(response.status(), await response.text()).toBe(200);
-      expect(await response.json()).toMatchObject({
-        items: [expect.any(Object)],
-        meta: {
-          pageIndex: pageNumber - 1,
-          totalCount: path === "purchases" ? 3 : 4,
-          sums,
-        },
-      });
-    }
+    await expect(recordSummaryValue(page, label)).toHaveText(value);
   }
 });
 

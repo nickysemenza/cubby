@@ -9,7 +9,11 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
-import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import {
+  dispatchesOperation,
+  performOperation,
+  unbatchFor,
+} from "./support/dispatch-wire";
 
 test("linked Expense categories display their readable label and transaction expectation", async ({
   page,
@@ -221,32 +225,32 @@ test("linked Expense categories display their readable label and transaction exp
   await expect(
     page.getByText("Set here", { exact: true }).first(),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Use inherited", exact: true })
-    .first()
-    .click();
-  await expect
-    .poll(async () => {
-      const response = await entityApi(page.request).get(
-        "financialTransaction",
-        transactionId,
-        {},
-      );
-      return z
-        .object({
-          itemizationExpectation: z.string().nullable(),
-          fieldResolutions: z.object({
-            itemizationExpectation: fieldResolutionSchema,
-          }),
-        })
-        .parse(await response.json());
-    })
-    .toMatchObject({
-      itemizationExpectation: null,
-      fieldResolutions: {
-        itemizationExpectation: { mode: "inherit", value: "not_expected" },
-      },
-    });
+  await performOperation(page, "entity.mutate", () =>
+    page
+      .getByRole("button", { name: "Use inherited", exact: true })
+      .first()
+      .click(),
+  );
+  const inherited = await entityApi(page.request).get(
+    "financialTransaction",
+    transactionId,
+    {},
+  );
+  expect(
+    z
+      .object({
+        itemizationExpectation: z.string().nullable(),
+        fieldResolutions: z.object({
+          itemizationExpectation: fieldResolutionSchema,
+        }),
+      })
+      .parse(await inherited.json()),
+  ).toMatchObject({
+    itemizationExpectation: null,
+    fieldResolutions: {
+      itemizationExpectation: { mode: "inherit", value: "not_expected" },
+    },
+  });
   await expect(
     page
       .locator(
@@ -364,38 +368,32 @@ test("draft category edits hide obsolete policy provenance while the replacement
     spendingCategoryId: oldCategory,
     itemizationExpectation: null,
   });
-  await dialog
-    .getByRole("button", { name: "Save changes", exact: true })
-    .click();
+  await performOperation(page, "entity.mutate", () =>
+    dialog.getByRole("button", { name: "Save changes", exact: true }).click(),
+  );
   await expect(dialog).toHaveCount(0);
-  await expect
-    .poll(async () => {
-      const response = await entityApi(page.request).get(
-        "purchase",
-        purchaseId,
-        {},
-      );
-      return z
-        .object({
-          spendingCategoryId: z.string(),
-          itemizationExpectation: z.null(),
-          fieldResolutions: z.object({
-            itemizationExpectation: fieldResolutionSchema,
-          }),
-        })
-        .parse(await response.json());
-    })
-    .toMatchObject({
-      spendingCategoryId: newCategory,
-      itemizationExpectation: null,
-      fieldResolutions: {
-        itemizationExpectation: {
-          mode: "inherit",
-          value: "not_expected",
-          sourceEntity: { entityId: newCategory },
-        },
+  const updated = await entityApi(page.request).get("purchase", purchaseId, {});
+  expect(
+    z
+      .object({
+        spendingCategoryId: z.string(),
+        itemizationExpectation: z.null(),
+        fieldResolutions: z.object({
+          itemizationExpectation: fieldResolutionSchema,
+        }),
+      })
+      .parse(await updated.json()),
+  ).toMatchObject({
+    spendingCategoryId: newCategory,
+    itemizationExpectation: null,
+    fieldResolutions: {
+      itemizationExpectation: {
+        mode: "inherit",
+        value: "not_expected",
+        sourceEntity: { entityId: newCategory },
       },
-    });
+    },
+  });
 });
 
 // A complete allocation can have no singular category id. Tables must expose

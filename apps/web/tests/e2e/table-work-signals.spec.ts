@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import { householdDaysFromNow } from "~/lib/household-date";
@@ -6,49 +7,56 @@ import { run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import {
-  createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-// Empty denominators must not look complete; settled dates must not stay red;
-// a paused or stale work sample must not advertise a live processing rate.
-test("list cells show project completion, open deadlines, and sampled run work", async ({
+// Empty denominators, deadline state, and live work samples are independent contracts.
+async function seedWorkGrid(page: Page) {
+  const prefix = `Synthetic work grid ${Date.now()}`;
+  const { project } = await createFixtureGraph(page, async (create) => {
+    const project = await create("project", {
+      name: `${prefix} project`,
+      status: "in_progress",
+    });
+    await create("project", {
+      name: `${prefix} empty`,
+      status: "in_progress",
+    });
+    await create("task", {
+      name: `${prefix} overdue`,
+      trade: "other",
+      projectId: project.id,
+      status: "not_started",
+      due: { start: householdDaysFromNow(-2), end: null },
+    });
+    await create("task", {
+      name: `${prefix} finished`,
+      trade: "other",
+      projectId: project.id,
+      status: "done",
+      due: { start: householdDaysFromNow(-2), end: null },
+    });
+    await create("task", {
+      name: `${prefix} future`,
+      trade: "other",
+      projectId: project.id,
+      status: "not_started",
+      due: { start: householdDaysFromNow(2), end: null },
+    });
+    return { project };
+  });
+
+  return { prefix, project };
+}
+
+test("project progress preserves empty denominators on desktop and phone", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const prefix = `Synthetic work grid ${Date.now()}`;
-  const project = await createEntityFixture(page, "project", {
-    name: `${prefix} project`,
-    status: "in_progress",
-  });
-  await createEntityFixture(page, "project", {
-    name: `${prefix} empty`,
-    status: "in_progress",
-  });
-  await createEntityFixture(page, "task", {
-    name: `${prefix} overdue`,
-    trade: "other",
-    projectId: project.id,
-    status: "not_started",
-    due: { start: householdDaysFromNow(-2), end: null },
-  });
-  await createEntityFixture(page, "task", {
-    name: `${prefix} finished`,
-    trade: "other",
-    projectId: project.id,
-    status: "done",
-    due: { start: householdDaysFromNow(-2), end: null },
-  });
-  await createEntityFixture(page, "task", {
-    name: `${prefix} future`,
-    trade: "other",
-    projectId: project.id,
-    status: "not_started",
-    due: { start: householdDaysFromNow(2), end: null },
-  });
-
+  const { prefix } = await seedWorkGrid(page);
   await gotoAuthenticatedPage(
     page,
     `/projects?q=${encodeURIComponent(prefix)}`,
@@ -68,6 +76,15 @@ test("list cells show project completion, open deadlines, and sampled run work",
     path: testInfo.outputPath("project-progress.png"),
   });
 
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText("1 / 3", { exact: true })).toBeVisible();
+});
+
+test("task deadlines distinguish overdue, future and completed work", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const { prefix, project } = await seedWorkGrid(page);
   await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
   const tasks = page.getByRole("table");
   const overdue = tasks
@@ -94,7 +111,12 @@ test("list cells show project completion, open deadlines, and sampled run work",
     .getByRole("row", { name: new RegExp(`${prefix} finished`) })
     .locator('[data-column-id="dueDate"]');
   await expect(finished.locator("[data-overdue]")).toHaveCount(0);
+});
 
+test("run work samples preserve throughput, paused and stale states on desktop and phone", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const { db, actor } = await createEvidenceHarnessContext(page);
   const at = new Date().toISOString();
   const runId = await ensureRun(db, actor, {
@@ -168,12 +190,6 @@ test("list cells show project completion, open deadlines, and sampled run work",
   await expect(work).toContainText("Stale sample");
   await expect(work).not.toContainText("30 items/min");
   await page.setViewportSize({ width: 390, height: 844 });
-  await gotoAuthenticatedPage(
-    page,
-    `/projects?q=${encodeURIComponent(prefix)}`,
-  );
-  await expect(page.getByText("1 / 3", { exact: true })).toBeVisible();
-  await gotoAuthenticatedPage(page, "/runs");
   await expect(
     page.getByText("12 / 40 items; Stale sample", { exact: true }),
   ).toBeVisible();

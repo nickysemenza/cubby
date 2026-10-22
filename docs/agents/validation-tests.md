@@ -52,6 +52,12 @@ Setup that consumes only identities uses `createRepoIdentity` or
 `createProductIdentityFixture`; retain the full-response fixture when its
 returned fields are under test. Validation, audit, financial allocations and
 publication still execute; unused presentation hydration does not.
+E2E `createFixture`, `createEntityFixture` and `createFixtureGraph` return only
+an identity and request only `id` through the kernel mutation reader. Browser
+assertions still load the real detail/list projections. After a browser write,
+use `performOperation` from `tests/e2e/support/dispatch-wire.ts` when direct
+read-back needs the commit: it observes the named operation and decodes success
+for singleton and batched responses. Poll only genuinely eventual work.
 Filter/sort SQL-plan matrices use production progressive core reads when
 available, retaining full kernel baselines and unmatched-identity checks.
 `list-read.integration.test.ts` owns complete-row/enrichment equivalence;
