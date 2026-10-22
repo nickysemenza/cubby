@@ -1,0 +1,6 @@
+{
+  "maxBatchSize": 1,
+  "maxBatchTimeout": 0,
+  "maxConcurrency": 2,
+  "maxRetries": 0
+}

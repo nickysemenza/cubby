@@ -83,8 +83,8 @@ export function isAiGatewayRateLimit(error: UnparsedError): boolean {
   );
 }
 
-const DEFAULT_RATE_LIMIT_DELAY_MS = 60_000;
-const MAX_RATE_LIMIT_DELAY_MS = 15 * 60_000;
+export const DEFAULT_RATE_LIMIT_DELAY_MS = 60_000;
+export const MAX_RATE_LIMIT_DELAY_MS = 15 * 60_000;
 
 const retryAfterHeader = (error: UnparsedError): string | null => {
   for (let current = error; current instanceof Error; current = current.cause)

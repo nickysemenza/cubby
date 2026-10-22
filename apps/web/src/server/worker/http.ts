@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { createLogger, originalLoggedError } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 
@@ -301,22 +300,6 @@ export async function handleHttpRequest(
                         workerVersion: env.CF_VERSION_METADATA.id,
                       },
                     );
-                  if (
-                    !import.meta.env.CUBBY_LOCAL_RUNTIME &&
-                    env.E2E_AUTH_TEST_MODE !== "true"
-                  ) {
-                    ctx.waitUntil(
-                      Promise.resolve()
-                        .then(() =>
-                          env.AI_GATEWAY_EGRESS.getByName(
-                            CUBBY_AI_GATEWAY_ID,
-                          ).observeAiRefresh(),
-                        )
-                        .catch((error) => {
-                          Sentry.captureException(error);
-                        }),
-                    );
-                  }
                   return await interceptedErrorStore.run({ error: null }, () =>
                     withManualTrace(
                       startTraceContext

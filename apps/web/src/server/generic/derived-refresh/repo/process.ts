@@ -4,20 +4,30 @@ import {
   searchableEntities,
   searchableEntitySchema,
 } from "@cubby/schemas/search";
-import { and, asc, gt, isNull } from "drizzle-orm";
+import { and, asc, count, gt, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { getDb } from "~/server/db/helpers";
-import { recipe } from "~/server/db/retained-tables";
-import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { recipe, searchDocument } from "~/server/db/retained-tables";
+import { countProductCoverageSources } from "~/server/domains/product/repo/conversion-coverage";
+import {
+  commitRecipeTotals,
+  selectStaleRecipeIds,
+} from "~/server/domains/recipe/repo/totals";
+import {
+  routineStepHandler,
+  type RoutineStepDriversFor,
+} from "~/server/domains/run/repo/routine-run";
 import {
   refreshFamilyInput,
   REFRESH_PAGE_SIZE,
 } from "~/server/generic/derived-refresh/repo/families";
 import { retireStillOrphanedSearchArtifacts } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
-import type { JobHandler, PreparedJobPage } from "~/server/generic/jobs/types";
+import type { JobHandler } from "~/server/generic/jobs/types";
 import {
+  countSearchDocumentSources,
   getSearchDocumentSourceRepairPage,
   getSearchDocumentOrphanPage,
   prepareSearchDocuments,
@@ -32,7 +42,6 @@ const cursorSchema = z.object({
   entityId: z.uuid().optional(),
 });
 
-/** Each family is a bounded corpus pass; Job owns its sole cursor and retry budget. */
 type RecipePreparation = (
   db: Database,
   id: RecipeId,
@@ -45,177 +54,233 @@ export type RefreshFamilyPreparation = {
   prepareRecipe: RecipePreparation;
   prepareConversions: (
     db: Database,
-    options: { after?: string; limit: number },
+    options: { after?: string; limit: number; createdBefore: string },
   ) => Promise<{
     nextCursor: string | null;
+    scanned: number;
+    changed: number;
     publish: (tx: Database) => Promise<void>;
   }>;
+  /** Null when embeddings are not configured. */
+  countEmbeddings: (
+    db: Database,
+    updatedBefore: string,
+  ) => Promise<number | null>;
   prepareEmbeddings: (
     db: Database,
-    options: { cursor?: SearchDocumentCursor; pageSize: number },
+    options: {
+      cursor?: SearchDocumentCursor;
+      pageSize: number;
+      updatedBefore: string;
+    },
   ) => Promise<{
     nextCursor: SearchDocumentCursor | null;
+    pending: number;
     publish: (tx: Database) => Promise<number>;
   } | null>;
 };
 
+const countSearchDocuments = async (db: Database, createdBefore: string) => {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(searchDocument)
+    .where(
+      and(
+        isNull(searchDocument.deletedAt),
+        lte(searchDocument.createdAt, new Date(createdBefore)),
+      ),
+    );
+  return row?.n ?? 0;
+};
+
+/** Live recipes created by a pass's frozen cutoff; its COUNT and pager share it. */
+const recipeSourceWhere = (createdBefore: string) =>
+  and(notDeleted(recipe), lte(recipe.createdAt, new Date(createdBefore)));
+
+const VECTOR_PHASE = { phase: "vectors" };
+
+const searchCursorOf = (at: Record<string, string> | null) => {
+  const cursor = cursorSchema.parse(at ?? {});
+  return cursor.entityKind && cursor.entityId
+    ? { entityKind: cursor.entityKind, entityId: cursor.entityId }
+    : undefined;
+};
+
+/**
+ * Each family is a bounded corpus pass over current source data. Its COUNT
+ * and every page apply the pass's frozen cutoff, so records created after
+ * the count wait for the next pass.
+ */
+function refreshFamilyDrivers(
+  ports: RefreshFamilyPreparation,
+): RoutineStepDriversFor<"derived_refresh"> {
+  return {
+    search: {
+      count: (db, boundary) =>
+        countSearchDocumentSources(db, [...searchableEntities], boundary),
+      page: async (db, at, boundary) => {
+        const page = await getSearchDocumentSourceRepairPage(
+          db,
+          [...searchableEntities],
+          {
+            cursor: searchCursorOf(at),
+            pageSize: REFRESH_PAGE_SIZE,
+            createdBefore: boundary,
+          },
+        );
+        const prepared = await prepareSearchDocuments(db, page.refs);
+        return {
+          next: page.nextCursor,
+          scanned: page.scannedCount,
+          pending: page.refs.length,
+          publish: async (tx) => {
+            if (
+              JSON.stringify(await prepareSearchDocuments(tx, page.refs)) !==
+              JSON.stringify(prepared)
+            )
+              throw new Error("Search inputs changed during preparation");
+            await publishPreparedSearchDocuments(tx, prepared);
+            return {
+              missing: page.missingCount,
+              stale: page.staleCount,
+              rebuilt: prepared.entries.length,
+            };
+          },
+        };
+      },
+    },
+    recipes: {
+      count: async (db, boundary) => {
+        const [row] = await getDb(db)
+          .select({ n: count() })
+          .from(recipe)
+          .where(recipeSourceWhere(boundary));
+        return row?.n ?? 0;
+      },
+      page: async (db, at, boundary) => {
+        const { after } = cursorSchema.parse(at ?? {});
+        // A recipe's authoritative closure can be large; one owner bounds each provider preparation.
+        const rows = await getDb(db)
+          .select({ id: recipe.id })
+          .from(recipe)
+          .where(
+            and(
+              recipeSourceWhere(boundary),
+              after ? gt(recipe.id, parseEntityId("recipe", after)) : undefined,
+            ),
+          )
+          .orderBy(asc(recipe.id))
+          .limit(1);
+        const id = rows[0]?.id;
+        if (!id) return { next: null, scanned: 0, pending: 0 };
+        const prepare = ports.prepareRecipe;
+        const prepared = await prepare(db, id);
+        const totals = await prepared.compute();
+        // Fresh recipes are recomputed too, but only stale ones are work.
+        const stale = (await selectStaleRecipeIds(db, [id])).length;
+        return {
+          next: { after: id },
+          scanned: 1,
+          pending: totals ? stale : 0,
+          publish: async (tx) => {
+            if ((await prepare(tx, id)).fingerprint !== prepared.fingerprint)
+              throw new Error("Recipe inputs changed during preparation");
+            if (totals)
+              await commitRecipeTotals(tx, {
+                updates: [{ id, totals }],
+                freshOnlyIds: [],
+              });
+            return { recomputed: totals ? stale : 0 };
+          },
+        };
+      },
+    },
+    conversions: {
+      count: countProductCoverageSources,
+      page: async (db, at, boundary) => {
+        const prepared = await ports.prepareConversions(db, {
+          after: cursorSchema.parse(at ?? {}).after,
+          limit: REFRESH_PAGE_SIZE,
+          createdBefore: boundary,
+        });
+        return {
+          next: prepared.nextCursor ? { after: prepared.nextCursor } : null,
+          scanned: prepared.scanned,
+          pending: prepared.changed,
+          publish: async (tx) => {
+            await prepared.publish(tx);
+            return { changed: prepared.changed };
+          },
+        };
+      },
+    },
+    embeddings: {
+      count: async (db, boundary) =>
+        (await ports.countEmbeddings(db, boundary)) ?? 0,
+      page: async (db, at, boundary) => {
+        const prepared = await ports.prepareEmbeddings(db, {
+          cursor: searchCursorOf(at),
+          pageSize: REFRESH_PAGE_SIZE,
+          updatedBefore: boundary,
+        });
+        if (!prepared) return null;
+        return {
+          next: prepared.nextCursor,
+          scanned: prepared.pending,
+          pending: prepared.pending,
+          publish: async (tx) => ({ admitted: await prepared.publish(tx) }),
+        };
+      },
+    },
+    orphans: {
+      count: countSearchDocuments,
+      page: async (db, at, boundary) => {
+        const cursor = cursorSchema.parse(at ?? {});
+        if (cursor.phase === "vectors") {
+          const { prepareEmbeddingCleanupPage } =
+            await import("~/server/generic/embedding/repo/embedding-cleanup");
+          const prepared = await prepareEmbeddingCleanupPage(
+            db,
+            cursor.after,
+            REFRESH_PAGE_SIZE,
+          );
+          return {
+            next: prepared.nextCursor
+              ? { phase: "vectors", after: prepared.nextCursor }
+              : null,
+            scanned: 0,
+            pending: prepared.pending,
+            publish: async (tx) => {
+              await prepared.publish(tx);
+              return { vectors: prepared.pending };
+            },
+          };
+        }
+        const page = await getSearchDocumentOrphanPage(db, {
+          cursor: searchCursorOf(at),
+          pageSize: REFRESH_PAGE_SIZE,
+          createdBefore: boundary,
+        });
+        return {
+          next: page.nextCursor ?? VECTOR_PHASE,
+          scanned: page.scannedCount,
+          pending: page.orphanedCount,
+          publish: async (tx) => ({
+            retired: await retireStillOrphanedSearchArtifacts(tx, page.refs),
+          }),
+        };
+      },
+    },
+  };
+}
+
+/** One `derived_refresh` Run per family pass that found work. */
 export function createRefreshFamilyHandler(
   ports: RefreshFamilyPreparation,
 ): JobHandler {
-  return {
-    prepare: async (db, claim): Promise<PreparedJobPage> => {
-      const { family } = refreshFamilyInput.parse(claim.input);
-      const cursor = cursorSchema.parse(claim.cursor ?? {});
-      const counters = (delta: Record<string, number>) => {
-        const previous = z
-          .record(z.string(), z.unknown())
-          .safeParse(claim.result);
-        return Object.fromEntries(
-          Object.entries(delta).map(([key, amount]) => {
-            const value = previous.success ? previous.data[key] : undefined;
-            return [key, (typeof value === "number" ? value : 0) + amount];
-          }),
-        );
-      };
-      const searchCursor =
-        cursor.entityKind && cursor.entityId
-          ? { entityKind: cursor.entityKind, entityId: cursor.entityId }
-          : undefined;
-      switch (family) {
-        case "search": {
-          const page = await getSearchDocumentSourceRepairPage(
-            db,
-            [...searchableEntities],
-            { cursor: searchCursor, pageSize: REFRESH_PAGE_SIZE },
-          );
-          const prepared = await prepareSearchDocuments(db, page.refs);
-          return {
-            page: {
-              done: !page.nextCursor,
-              ...(page.nextCursor ? { cursor: page.nextCursor } : {}),
-            },
-            publish: async (tx) => {
-              if (
-                JSON.stringify(await prepareSearchDocuments(tx, page.refs)) !==
-                JSON.stringify(prepared)
-              )
-                throw new Error("Search inputs changed during preparation");
-              await publishPreparedSearchDocuments(tx, prepared);
-              return counters({
-                scanned: page.scannedCount,
-                missing: page.missingCount,
-                stale: page.staleCount,
-                rebuilt: prepared.entries.length,
-              });
-            },
-          };
-        }
-        case "recipes": {
-          // A recipe's authoritative closure can be large; one owner bounds each provider preparation.
-          const rows = await getDb(db)
-            .select({ id: recipe.id })
-            .from(recipe)
-            .where(
-              and(
-                isNull(recipe.deletedAt),
-                cursor.after
-                  ? gt(recipe.id, parseEntityId("recipe", cursor.after))
-                  : undefined,
-              ),
-            )
-            .orderBy(asc(recipe.id))
-            .limit(1);
-          const id = rows[0]?.id;
-          if (!id) return { page: { done: true } };
-          const prepare = ports.prepareRecipe;
-          const prepared = await prepare(db, id);
-          const totals = await prepared.compute();
-          return {
-            page: { done: false, cursor: { after: id } },
-            publish: async (tx) => {
-              if ((await prepare(tx, id)).fingerprint !== prepared.fingerprint)
-                throw new Error("Recipe inputs changed during preparation");
-              if (totals)
-                await commitRecipeTotals(tx, {
-                  updates: [{ id, totals }],
-                  freshOnlyIds: [],
-                });
-            },
-          };
-        }
-        case "conversions": {
-          const prepared = await ports.prepareConversions(db, {
-            after: cursor.after,
-            limit: REFRESH_PAGE_SIZE,
-          });
-          return {
-            page: {
-              done: !prepared.nextCursor,
-              ...(prepared.nextCursor
-                ? { cursor: { after: prepared.nextCursor } }
-                : {}),
-            },
-            publish: prepared.publish,
-          };
-        }
-        case "embeddings": {
-          const prepared = await ports.prepareEmbeddings(db, {
-            cursor: searchCursor,
-            pageSize: REFRESH_PAGE_SIZE,
-          });
-          if (!prepared)
-            return { page: { done: true, result: { outcome: "unavailable" } } };
-          return {
-            page: {
-              done: !prepared.nextCursor,
-              ...(prepared.nextCursor ? { cursor: prepared.nextCursor } : {}),
-            },
-            publish: async (tx) =>
-              counters({ published: await prepared.publish(tx) }),
-          };
-        }
-        case "orphans": {
-          if (cursor.phase === "vectors") {
-            const { prepareEmbeddingCleanupPage } =
-              await import("~/server/generic/embedding/repo/embedding-cleanup");
-            const prepared = await prepareEmbeddingCleanupPage(
-              db,
-              cursor.after,
-              REFRESH_PAGE_SIZE,
-            );
-            return {
-              page: {
-                done: !prepared.nextCursor,
-                ...(prepared.nextCursor
-                  ? { cursor: { phase: "vectors", after: prepared.nextCursor } }
-                  : {}),
-              },
-              publish: prepared.publish,
-            };
-          }
-          const page = await getSearchDocumentOrphanPage(db, {
-            cursor: searchCursor,
-            pageSize: REFRESH_PAGE_SIZE,
-          });
-          return {
-            page: {
-              done: false,
-              cursor: page.nextCursor ?? { phase: "vectors" },
-            },
-            publish: async (tx) => {
-              const retired = await retireStillOrphanedSearchArtifacts(
-                tx,
-                page.refs,
-              );
-              return counters({
-                scanned: page.scannedCount,
-                orphaned: page.orphanedCount,
-                retired,
-              });
-            },
-          };
-        }
-      }
-    },
-  };
+  return routineStepHandler("derived_refresh", {
+    key: (claim) => refreshFamilyInput.parse(claim.input).family,
+    input: (family) => ({ kind: "derived_refresh", family }),
+    drivers: refreshFamilyDrivers(ports),
+  });
 }

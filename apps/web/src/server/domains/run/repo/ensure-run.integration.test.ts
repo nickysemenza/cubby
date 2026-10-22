@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { run as runTable, user } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   type PreviewEntityPorts,
@@ -106,14 +106,6 @@ describe("ephemeral AI runs", () => {
       aiCallRunInput(web, { now: HOUR }),
     );
     const system = systemActor();
-    await getDb(ctx.db).insert(user).values({
-      id: system.userId,
-      name: "System",
-      email: "system@example.test",
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
     const systemRun = await ensureRun(
       ctx.db,
       system,

@@ -4,11 +4,10 @@ import { formatInstant } from "~/lib/date-format";
 import { formatDateSpan, stackedDateSpan } from "~/lib/date-span";
 import { householdLocalDate, householdDaysFromNow } from "~/lib/household-date";
 import {
-  seedVendorDisplayPrerequisite,
   seedLocationPrerequisite,
   seedProductPrerequisite,
 } from "./fixtures/catalog";
-import { createFixture } from "./fixtures/core";
+import { createFixture, createFixtureGraph } from "./fixtures/core";
 import {
   seedPurchaseHeicAttachment,
   seedRecordListDisplayPrerequisite,
@@ -167,32 +166,37 @@ test("purchase and expense totals follow the full filtered set in tables and car
   page,
 }) => {
   const tag = `RecordTotals${Date.now()}`;
-  const vendor = await seedVendorDisplayPrerequisite(page, `${tag} vendor`);
-  const purchase = async (suffix: string) =>
-    createFixture(page, "purchase", {
-      vendorId: vendor.id,
-      orderId: `${tag} ${suffix}`,
-      date: "2026-09-10",
+  await createFixtureGraph(page, async (create) => {
+    const vendor = await create("vendor", {
+      name: `${tag} vendor`,
+      website: "https://example.com",
+      orderUrlTemplate: "https://example.com/orders/{orderId}",
+      notes: `${tag} vendor notes`,
     });
-  const [a, b, c] = [
-    await purchase("CopperDebit"),
-    await purchase("QuartzRefund"),
-    await purchase("FreeMarker"),
-  ];
-  const expense = (name: string, cost: number, purchaseId: string) =>
-    createFixture(page, "expense", {
-      lineKind: "principal",
-      name: `${tag} ${name}`,
-      cost,
-      purchaseId,
-      date: "2026-09-10",
-      costType: "materials",
-      trade: "other",
-    });
-  await expense("debit A", 20, a.id);
-  await expense("credit A", -5, a.id);
-  await expense("credit B", -7, b.id);
-  await expense("zero C", 0, c.id);
+    const purchase = (suffix: string) =>
+      create("purchase", {
+        vendorId: vendor.id,
+        orderId: `${tag} ${suffix}`,
+        date: "2026-09-10",
+      });
+    const a = await purchase("CopperDebit");
+    const b = await purchase("QuartzRefund");
+    const c = await purchase("FreeMarker");
+    const expense = (name: string, cost: number, purchaseId: string) =>
+      create("expense", {
+        lineKind: "principal",
+        name: `${tag} ${name}`,
+        cost,
+        purchaseId,
+        date: "2026-09-10",
+        costType: "materials",
+        trade: "other",
+      });
+    await expense("debit A", 20, a.id);
+    await expense("credit A", -5, a.id);
+    await expense("credit B", -7, b.id);
+    await expense("zero C", 0, c.id);
+  });
 
   const summaryValue = (label: string) =>
     page

@@ -21,6 +21,8 @@ export interface KeyNumber {
   onSelect?: () => void;
   /** The drill-through this number currently applies. */
   active?: boolean;
+  /** Tallies only: the count asks for a member (needs review), marked in signal. */
+  attention?: boolean;
 }
 
 type KeyNumbersProps = {
@@ -29,8 +31,10 @@ type KeyNumbersProps = {
    * `strip`: joined cells between hairlines — detail headers, inspectors
    * (two-up when narrow) and dashboards. `inline`: one sentence of figures
    * ("$2,481.20 this year · 38 purchases") for list headers and dense places.
+   * `tallies`: value-first running counts beneath a step or stage, between
+   * soft hairlines.
    */
-  layout: "strip" | "inline";
+  layout: "strip" | "inline" | "tallies";
   /** Accessible name of the region ("Key numbers", "Spend summary"). */
   label: string;
   /** Strip only: a trailing chart cell (the detail monthly spend). */
@@ -68,6 +72,22 @@ export function KeyNumbers({
               {index > 0 && <span aria-hidden>·</span>}
               <InlineNumber item={item} />
             </Fragment>
+          ))}
+        </dl>
+      </section>
+    );
+  }
+  if (layout === "tallies") {
+    if (items.length === 0) return null;
+    return (
+      <section
+        aria-label={label}
+        className={cn("min-w-0 border-y border-border/60", className)}
+        data-testid={testId}
+      >
+        <dl className="flex min-w-0 flex-wrap">
+          {items.map((item) => (
+            <TallyNumber key={item.id ?? item.label} item={item} />
           ))}
         </dl>
       </section>
@@ -137,6 +157,34 @@ function StripNumber({ item }: { item: KeyNumber }) {
           {item.context}
         </dd>
       )}
+    </div>
+  );
+}
+
+function TallyNumber({ item }: { item: KeyNumber }) {
+  const labelId = useId();
+  return (
+    <div
+      className={cn(
+        "relative flex min-w-24 flex-col-reverse py-1.5 pr-4 not-first:border-l not-first:border-border/60 not-first:pl-4 max-md:min-w-20",
+        item.onSelect && "hover:[&_dt]:text-foreground hover:[&_dt]:underline",
+      )}
+    >
+      <dt id={labelId} className="text-xs/4 text-muted-foreground">
+        {item.label}
+      </dt>
+      <dd
+        className={cn(
+          "flex items-center gap-1.5 font-mono text-sm/5.5 font-semibold text-foreground-strong tabular-nums",
+          item.tone && TONE_TEXT[item.tone],
+          item.active && "text-link",
+        )}
+      >
+        {item.attention ? (
+          <span aria-hidden className="h-3.5 w-0.75 rounded-xs bg-signal" />
+        ) : null}
+        <Value item={item} labelId={labelId} />
+      </dd>
     </div>
   );
 }

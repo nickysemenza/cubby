@@ -41,6 +41,10 @@ For a same-kind fixture cohort without intermediate reads, use
 settles the frontier after the cohort commits. This keeps background publication
 from repeatedly processing partially created fixture cohorts. Simulator product
 fixtures also settle the derived frontier before search-based native journeys begin.
+After a browser write, call `drainDerivedRefreshFrontier(db)` before a direct
+serializable fixture import such as `recordSourceTransactionRecords`. The
+offline search pump can otherwise update the shared refresh Job under the
+import's snapshot and fail it intermittently.
 For a mixed-entity prerequisite graph, use `createFixtureGraph` with its supplied
 kernel writer. It commits the graph and settles projections once; keep fixtures
 with intermediate browser reads outside that transaction.
@@ -122,7 +126,10 @@ For a named-case handoff, copy the exact replay selector or confirm the literal
 test title with `rg` before invoking the runner. A title inferred from the task
 description can select no cases; that setup failure supplies no regression evidence.
 
-CI retries a failed Vitest or Playwright test once; locally nothing retries.
+CI retries a failed Playwright test, or a failed test in a service-backed
+Vitest project (`integration`, `integration-workerd`, `capability`, `preview`,
+`workers`), once; Node unit, UI, tooling and package projects never retry, and
+locally nothing retries.
 A test that passes only on retry is reported as flaky, not failed. The second
 time a test is reported flaky, fix it or delete it, recording the named
 failure and the deleting commit in a GitHub issue so it can be
@@ -264,7 +271,6 @@ queue consumer to one of:
 - `real`: the built Worker's own consumer, with production settings except
   `max_batch_timeout: 0`.
 - `dropped`: `local-offline-peers` acknowledges and discards each message.
-- `unconsumed`: no consumer; messages stay queued.
 
 `WORKERD_PROFILES` owns profile names, peers, queue modes and harness-lock
 selection. Choose the declared profile that exercises the real boundary rather
@@ -360,15 +366,14 @@ changes the affected layout.
 
 The `capability` Vitest project runs the explicitly selected shared list/table/explanation
 coverage in `vitest.config.ts`. Production renderers run in headless Chromium
-with the real Tailwind CSS. It is part of `pnpm test` and the existing Auxiliary lane;
-that runner installs Chromium before running the tests. No additional runner
+with the real Tailwind CSS. It is part of `pnpm test` and the Vitest shards;
+those runners install Chromium before running the tests. No additional runner
 is allocated. Other `**/*.preview.test.tsx` files remain opt-in through
 `pnpm --dir apps/web test:preview`; they are not retained merge-gate coverage
 until migrated into the required roster. A direct preview-file run selects
 required files through `capability` once; explicit `--project preview` retains
-the full optional preview command. Auxiliary uploads its JSON report and browser
-failure attachments (`.vitest/attachments/`) before Worker tests can overwrite
-the shared report.
+the full optional preview command. Each Vitest shard uploads its blob and browser
+failure attachments (`.vitest/attachments/`) for the merged CI report.
 
 The compound date editor owner verifies local drafts, atomic replace/clear and
 responsive nested popovers on desktop and phone.

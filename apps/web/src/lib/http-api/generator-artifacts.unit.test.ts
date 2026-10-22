@@ -25,6 +25,6 @@ it("preserves modification times for unchanged generated artifacts", async () =>
     ).toEqual([artifact.relativePath]);
     expect(await readFile(path, "utf8")).toBe('{"changed":true}\n');
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });

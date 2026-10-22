@@ -43,7 +43,6 @@ export const sweepEstimateOut = z.object({
         "transfer_pair",
       ]),
       records: z.number().int().nonnegative(),
-      decisions: z.number().int().nonnegative(),
     }),
   ),
 });

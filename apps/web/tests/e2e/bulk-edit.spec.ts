@@ -10,7 +10,7 @@ import {
   seedTaskPrerequisite,
   seedUnlinkedExpensePrerequisite,
 } from "./fixtures/catalog";
-import { createEntityFixture, seedConcurrently } from "./fixtures/core";
+import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
 import { defaultPagination } from "~/ui/data-table/table-utils";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
@@ -86,13 +86,14 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
   test.slow();
   const prefix = uniqueName(test.info(), "Complete matching tasks");
   const count = defaultPagination.pageSize + 1;
-  const selected = await seedConcurrently(
-    Array.from({ length: count }, (_, index) => index),
-    (index) =>
-      seedTaskPrerequisite(page, {
-        name: `${prefix} ${index}`,
-        status: "in_progress",
-      }),
+  const selected = await createEntityFixtures(
+    page,
+    "task",
+    Array.from({ length: count }, (_, index) => ({
+      name: `${prefix} ${index}`,
+      status: "in_progress",
+      trade: "other",
+    })),
   );
   const outside = await seedTaskPrerequisite(page, {
     name: uniqueName(test.info(), "Outside matching scope"),

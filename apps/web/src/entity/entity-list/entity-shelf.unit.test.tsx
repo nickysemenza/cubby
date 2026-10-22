@@ -6,7 +6,6 @@ import { ShelfGrid } from "~/entity/table/shelf";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityShelf } from "./entity-shelf";
-import { recordCaption } from "./record-caption";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 afterEach(() => {
@@ -14,21 +13,6 @@ afterEach(() => {
 });
 
 describe("entity cards", () => {
-  it("keeps dedicated Product fields out of the table identity caption", () => {
-    expect(
-      recordCaption(
-        "product",
-        {
-          id: "PRD-2345",
-          price: 12,
-          categoryId: "CAT-2345",
-          category: { id: "CAT-2345", name: "Synthetic category" },
-        },
-        { excludeListFields: true },
-      ),
-    ).toBeUndefined();
-  });
-
   it("retains card identity while deferred media is pending or fails", () => {
     harness = createBrowserTestHarness();
     const { rerender } = render(

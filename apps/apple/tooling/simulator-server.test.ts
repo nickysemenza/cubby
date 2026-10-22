@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { localSimulatorServer } from "./lib/simulator-server.ts";
 
 // Failure modes: a launcher silently selects production, or a URL with credentials

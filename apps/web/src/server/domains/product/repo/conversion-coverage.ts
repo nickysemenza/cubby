@@ -1,7 +1,7 @@
 /** Persistence seam for the catalog-wide conversion projection. */
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import type { ProductConversionCoverageFreshness } from "@cubby/schemas/problems";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
@@ -180,17 +180,36 @@ export const markProductConversionCoverageInputStale = async (
   );
 };
 
+/** Products a broad pass covers; `createdBefore` is its frozen cutoff. */
+const coverageSourceWhere = (createdBefore?: string) =>
+  and(
+    notDeleted(product),
+    createdBefore ? lte(product.createdAt, new Date(createdBefore)) : undefined,
+  );
+
+/** The population the broad conversions pass pages, under the same cutoff. */
+export async function countProductCoverageSources(
+  db: Database,
+  createdBefore?: string,
+) {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(product)
+    .where(coverageSourceWhere(createdBefore));
+  return row?.n ?? 0;
+}
+
 /** A broad pass pages product owners, independently of changed endpoints. */
 export async function selectProductCoverageIdsPage(
   db: Database,
-  options: { after?: string; limit: number },
+  options: { after?: string; limit: number; createdBefore?: string },
 ) {
   return getDb(db)
     .select({ id: product.id })
     .from(product)
     .where(
       and(
-        notDeleted(product),
+        coverageSourceWhere(options.createdBefore),
         options.after
           ? gt(product.id, parseEntityId("product", options.after))
           : undefined,

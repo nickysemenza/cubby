@@ -1,7 +1,7 @@
 // An early boot must pick the same iPhone as the harness, respect explicit
 // device choices and never fall back to a different device when one is missing.
 import { strict as assert } from "node:assert";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import { selectIOSSimulator } from "./apple-simulator-selection.ts";
 

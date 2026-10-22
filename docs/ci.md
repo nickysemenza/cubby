@@ -359,9 +359,12 @@ to that step). Failures do not block the deterministic merge gate. Real member
 inputs are refused in CI.
 
 `Validation and docs` installs the workspace and runs the cached generate,
-design-token, types, lint, Knip, bindings, script-test, Worker-test, Swift
-lint and format targets, then the offline relative-link check, as individual
-steps. `pnpm check:all` runs those targets locally.
+design-token, types, lint, Knip, bindings, Swift lint and format targets, then
+the offline relative-link check, as individual steps. It runs no tests; every
+Vitest suite runs in the Vitest shards. `pnpm check:all` runs those targets and
+the fast web `test` target locally. It stays a separate job rather than part of
+`Plan`: `Plan` gates the Rust and Apple lanes on a 1-vCPU runner, so the static
+checks there would delay them and run several times slower.
 Dependency advisory audits and deduplication are not CI or local validation
 gates; dependency maintenance is handled separately from code validation. The
 link check runs through the pinned Lychee action, a composite action that
@@ -378,22 +381,24 @@ Generated output is never committed; web and Apple jobs generate it during
 `Validation`'s `generate` gate checks that it generates cleanly and that the
 OpenAPI document lints.
 
-The `lanes` job is one static matrix: four E2E shards, PostgreSQL integration,
-and the auxiliary and Worker tests. Browser shards run alone, so no companion
-check waits behind one. Every failure still fails the job and `CI passed`, and
-each Nx target retains its own cache key.
+The `lanes` job is one static matrix: four E2E shards and two Vitest shards.
+Browser shards run alone, so no companion check waits behind one. Every
+failure still fails the job and `CI passed`, and each Nx target retains its own
+cache key.
 
 Each entry uses one standard runner with PostgreSQL and IntegreSQL service
 containers.
-`Auxiliary tests and builds` runs `nx run-many -t test`: every auxiliary
-package's tests and the `unit`, `mcp-contract`, `worker-safety`, and `ui`
-Vitest projects of the web app, each a cached target. Node projects run first,
-then UI uses Vitest's standard project group ordering, keeping each phase's
-worker environment together. `Build Workers and runtime tests` runs the
-`db-check` migration drift check against disposable scratch databases and the
-`integration-workerd` Vitest project against a Worker it builds itself. Both
-share one runner as `Auxiliary, Worker, and runtime tests`, two steps that each
-run despite the other's failure.
+`Vitest (n/2)` runs the `vitest-ci` target: one Vitest run of every merge-gate
+project (`unit`, `mcp-contract`, `worker-safety`, `ui`, `capability`, `scripts`,
+`packages`, `integration`, `integration-workerd` and `workers`), split by file
+with `CUBBY_VITEST_SHARD`. Vitest assigns files to shards by path hash, so the
+split does not follow duration. Project groups run in order within a shard,
+so PostgreSQL forks never start beside workerd. The target builds the Worker
+itself for `integration-workerd`. Shard 2 then runs the `db-check` migration
+drift check against disposable scratch databases, which runs despite a test
+failure. Service-backed projects (`integration`, `integration-workerd`,
+`capability`, `workers`) retry a failed test once on CI; Node unit, tooling and
+package projects never retry.
 Desktop Chromium runs as four Playwright shards (two workers each) through the
 `e2e` target, each building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
@@ -407,7 +412,17 @@ crash recovery. SQL constraints, transactions, and the full reset still run.
 CI records a Playwright trace only for the retry of a failed test
 (`on-first-retry`), so passing tests pay no tracing cost; local runs keep
 failure traces. Each browser job uploads Playwright's HTML report and those
-traces for seven days, named by commit SHA and shard. CI runs use only
+traces for seven days, named by commit SHA and shard, and a blob report.
+
+`Test report` waits for Validation and the test lanes (not Rust or Apple),
+downloads the Vitest and Playwright blobs,
+and merges each runner's shards into one HTML report (`vitest --merge-reports`,
+`playwright merge-reports`), kept for 14 days. The Vitest report opens in
+[Vitest Viewer](https://viewer.vitest.dev/) from its artifact URL. The job
+summary (`apps/web/tooling/ci-report/summary.ts`) lists each Linux test lane's
+result and duration from the Actions API, shard balance, per-runner totals, failures,
+tests that passed only on retry, and the slowest tests. It is informative and
+outside `CI passed`, so merging never delays or fails the gate. CI runs use only
 synthetic data and test credentials, so the report is safe to publish. Local
 runs, including the manually dispatched native simulator E2E, keep their
 reports, traces, and run bundles local because they may contain household data
@@ -573,6 +588,12 @@ links remain in Git history.
   parallelizes internally. Concurrent full runs caused contention and timeouts.
 - Cache dependency artifacts when build savings exceed transfer costs. Store
   and `node_modules` caching lost to registry installation.
+- `vitest doctor` (local, non-PostgreSQL projects, one run each) favoured
+  `isolate: false` (−14%) and more workers. The worker gain needs more cores
+  than a hosted runner has; `worker-safety` must stay isolated. Only the
+  `workers` project measured a reliable per-project gain (21 s to 9 s), and
+  `scripts`/`packages` stayed within noise. `vmThreads`/`vmForks` fail the
+  process and file-system tooling tests.
 
 ## Operational checks
 

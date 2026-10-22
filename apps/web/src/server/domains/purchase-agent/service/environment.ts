@@ -36,7 +36,7 @@ export type McpToolDefinition = {
   inputSchema: { [key: string]: JSONType };
 };
 
-/** One queue event for a Run's coordinator. */
+/** One durable event for a Run's coordinator. */
 export type DispatchInput = {
   identity: { runId: string; purpose: AgentImportRunPurpose };
   operationId: string;
@@ -156,25 +156,10 @@ export interface PurchaseAgentEnvironment {
   settlementPollMs?: number;
 }
 
-/** The narrowed environment of the queue consumer, which serves every Run. */
-export interface PurchaseAgentQueueEnvironment {
+/** The narrowed environment of the dispatch handler, which serves every Run. */
+export interface PurchaseDispatchEnvironment {
   /** The services of the Run an event names. */
   run(runId: string): RunServices;
   /** The coordinator Durable Object for an agent identity. */
   coordinator(agentId: string): PurchaseImportRunAgentRpc;
-}
-
-/** One `cubby-purchase-agent` delivery. */
-export interface PurchaseAgentQueueDeliveredMessage {
-  /** Raw queue JSON; only parsePurchaseAgentEvent narrows it to an event. */
-  readonly body: unknown;
-  /** Delivery attempts, starting at 1. */
-  readonly attempts: number;
-  ack(): void;
-  retry(): void;
-}
-
-export interface PurchaseAgentQueueBatch {
-  readonly queue: "cubby-purchase-agent";
-  readonly messages: readonly PurchaseAgentQueueDeliveredMessage[];
 }

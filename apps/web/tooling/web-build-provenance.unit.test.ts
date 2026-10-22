@@ -24,7 +24,7 @@ import {
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0))
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
 });
 const writer =
   (root: string) =>
@@ -35,7 +35,8 @@ const writer =
 // One committed checkout per file; each test mutates its own copy.
 let template: string | undefined;
 afterAll(() => {
-  if (template) rmSync(template, { recursive: true, force: true });
+  if (template)
+    rmSync(template, { recursive: true, force: true, maxRetries: 5 });
 });
 function committedTemplate() {
   if (template) return template;

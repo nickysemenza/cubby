@@ -9,7 +9,9 @@ import {
   importOperationStatusOut,
 } from "@cubby/schemas/purchase-import";
 import {
+  OWNED_AI_WORK_PURPOSES,
   runPurpose,
+  RUN_KINDS,
   RUN_PURPOSE_LABEL,
   type RunPurpose,
 } from "@cubby/schemas/run-fields";
@@ -43,6 +45,8 @@ import { listRunSteps, isTerminalStep, type RunStepRow } from "./run-step";
 /** First-phase samples can start after a deployment; the older ledger remains authoritative. */
 export function stepWorkSamples(step: RunStepRow) {
   const work = step.meta?.work;
+  // A declared step's samples already carry its frozen count, or none.
+  if (step.meta?.input) return work;
   if (
     !work ||
     work.completed.length ||
@@ -149,28 +153,8 @@ const processedTargetStates = Object.entries(RUN_TARGET_BUCKET).flatMap(
       : [],
 );
 
-/** Every purpose declares a useful fallback count source; unknown populations stay unknown. */
-const countSources = {
-  account_sync: "targets",
-  mail_import: "targets",
-  purchase_validation: "targets",
-  product_enrichment: "targets",
-  photo_inventory: "targets",
-  ai_suggest: "calls",
-  suggestion_sweep: "checkpoint",
-  ai_refresh: "checkpoint",
-  background: "operations",
-  file_import: "records",
-  mail_search: "operations",
-  mail_discovery: "checkpoint",
-  mail_reclassify: "checkpoint",
-  maintenance: "steps",
-  derived_refresh: "steps",
-  sweep: "steps",
-} satisfies Record<
-  RunPurpose,
-  "targets" | "calls" | "operations" | "checkpoint" | "records" | "steps"
->;
+/** Every purpose declares a useful fallback count source (`RUN_KINDS[*].progress`); unknown populations stay unknown. */
+const countSourceOf = (purpose: RunPurpose) => RUN_KINDS[purpose].progress;
 
 function targetWorkCounts(
   rows: Awaited<ReturnType<typeof readRunProgressTargets>>,
@@ -225,10 +209,9 @@ function checkpointWorkItems(
   items: RunWorkItems,
   previous: RunWorkSamples | undefined,
 ): RunWorkItems {
-  const ai =
-    purpose === "ai_refresh"
-      ? aiRefreshProgress.safeParse(owner.progress).data
-      : undefined;
+  const ai = OWNED_AI_WORK_PURPOSES.includes(purpose)
+    ? aiRefreshProgress.safeParse(owner.progress).data
+    : undefined;
   const sweep =
     purpose === "suggestion_sweep"
       ? suggestionSweepRunProgress.safeParse(owner.progress).data
@@ -321,8 +304,12 @@ export function readRunStepWorkProgress(
           unit: "items",
           processed:
             currentStep.done + currentStep.skipped + currentStep.failed,
-          total:
-            currentStep.found > 0 || isTerminalStep(currentStep.state)
+          // Only a frozen count is a denominator; a tally or estimate has no %/ETA.
+          total: currentStep.meta?.input
+            ? currentStep.meta.input.mode === "count"
+              ? currentStep.found
+              : null
+            : currentStep.found > 0 || isTerminalStep(currentStep.state)
               ? currentStep.found
               : null,
           failures: currentStep.failed,
@@ -360,7 +347,7 @@ export function readRunStepWorkProgress(
 }
 
 export const usesStepWorkProgress = (purpose: RunPurpose) =>
-  countSources[purpose] === "steps";
+  countSourceOf(purpose) === "steps";
 
 /** The same storage-only projection feeds reports and MCP work snapshots. */
 export async function getRunWorkProgress(
@@ -405,7 +392,7 @@ export async function getRunWorkProgress(
   const purpose = runPurpose.parse(owner.purpose);
   const previous = runWorkSamples.safeParse(owner.work).data;
   const steps =
-    countSources[purpose] === "steps" ? await listRunSteps(db, owner.id) : [];
+    countSourceOf(purpose) === "steps" ? await listRunSteps(db, owner.id) : [];
   const stepProgress = readRunStepWorkProgress(
     steps,
     status,
@@ -414,7 +401,7 @@ export async function getRunWorkProgress(
   );
   if (stepProgress) return stepProgress;
   const photos = photoCounts.parse(owner.photos);
-  const source = countSources[purpose];
+  const source = countSourceOf(purpose);
   const missingMailRoster = purpose === "mail_import" && owner.input === null;
   const targetRows =
     source === "targets" && purpose !== "photo_inventory" && !missingMailRoster

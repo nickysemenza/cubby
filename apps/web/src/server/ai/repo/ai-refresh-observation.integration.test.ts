@@ -14,6 +14,9 @@ import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import {
   activateAiRefresh,
+  admitAiRefreshDeployment,
+  activateAiRefreshDeployment,
+  aiRefreshDeploymentInput,
   readAiRefreshActivation,
   readAiDiscoveryCursor,
   saveAiDiscoveryCursor,
@@ -32,6 +35,78 @@ describe("application-owned AI feature observation", () => {
       })
       .onConflictDoNothing();
   });
+  it("admits one activation per deployment occurrence, fences old cron work and reactivates rollback", async () => {
+    let current = "synthetic-version-a";
+    const readVersion = async () => current;
+    const a = await admitAiRefreshDeployment(
+      ctx.db,
+      current,
+      "synthetic-commit-a",
+      readVersion,
+    );
+    expect(
+      await admitAiRefreshDeployment(
+        ctx.db,
+        current,
+        "synthetic-commit-a",
+        readVersion,
+      ),
+    ).toMatchObject({ id: a?.id });
+    if (!a) throw new Error("Expected deployment admission");
+    const first = await activateAiRefreshDeployment(
+      ctx.db,
+      aiRefreshDeploymentInput.parse(a.input),
+    );
+    current = "synthetic-version-b";
+    expect(
+      await admitAiRefreshDeployment(
+        ctx.db,
+        "synthetic-version-a",
+        "synthetic-commit-a",
+        readVersion,
+      ),
+    ).toBeNull();
+    const b = await admitAiRefreshDeployment(
+      ctx.db,
+      current,
+      "synthetic-commit-b",
+      readVersion,
+    );
+    if (!b) throw new Error("Expected second deployment");
+    expect(
+      await activateAiRefreshDeployment(
+        ctx.db,
+        aiRefreshDeploymentInput.parse(a.input),
+      ),
+    ).toBeNull();
+    await activateAiRefreshDeployment(
+      ctx.db,
+      aiRefreshDeploymentInput.parse(b.input),
+    );
+    current = "synthetic-version-a";
+    const rollback = await admitAiRefreshDeployment(
+      ctx.db,
+      current,
+      "synthetic-commit-a",
+      readVersion,
+    );
+    expect(rollback?.id).not.toBe(a.id);
+    if (!rollback) throw new Error("Expected rollback admission");
+    expect(
+      await activateAiRefreshDeployment(
+        ctx.db,
+        aiRefreshDeploymentInput.parse(b.input),
+      ),
+    ).toBeNull();
+    const restored = await activateAiRefreshDeployment(
+      ctx.db,
+      aiRefreshDeploymentInput.parse(rollback.input),
+    );
+    expect(restored?.observationEpoch).toBeGreaterThan(first!.observationEpoch);
+    expect(restored?.manifest).toEqual(first?.manifest);
+    expect(restored?.discoveryRunId).toBe(first?.discoveryRunId);
+  });
+
   it("creates one durable discovery Run across concurrent observations", async () => {
     const manifest = await compiledRefreshManifest();
     await Promise.all(

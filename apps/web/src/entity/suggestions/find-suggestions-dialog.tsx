@@ -81,11 +81,12 @@ const FAMILY_ROWS = [
   },
 ] as const satisfies readonly { family: Family; label: string; hint: string }[];
 
+/** The unit of each family's first counted step, which the estimate reports. */
 const FAMILY_NOUN = {
   statement_transaction: "charge",
-  transfer_pair: "pair",
+  transfer_pair: "movement",
   recommendation: "record",
-  field: "field",
+  field: "entity",
 } satisfies Record<Family, string>;
 
 /** The dialog's starting scope; an entity list presets its own fields. */
@@ -452,8 +453,7 @@ export function FindSuggestionsDialog({
                   </span>
                   {countLabel(row.records, FAMILY_NOUN[row.family], {
                     formatted: true,
-                  })}{" "}
-                  ≈ {countLabel(row.decisions, "decision", { formatted: true })}
+                  })}
                 </li>
               ))}
             </ul>

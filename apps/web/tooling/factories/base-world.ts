@@ -6,13 +6,15 @@ import {
   entityIdentity,
   location,
   productCategory,
+  user,
 } from "../../src/server/db/schema";
 import { taxonomyRootFixtures } from "../product-category-fixtures";
 
 /**
- * The rows every Cubby database starts with: the one real location-hierarchy
- * root ("Home"), the product-category taxonomy roots and the Automatic rule
- * switches as migration 0091 seeds them. Seeded here for Vitest
+ * The rows every Cubby database starts with: the reserved system user that
+ * routine Runs act as, the one real location-hierarchy root ("Home"), the
+ * product-category taxonomy roots and the Automatic rule switches as
+ * migration 0091 seeds them. Seeded here for Vitest
  * integration databases, browser E2E workers, the dev corpus, simulator
  * scenarios, and the Mac import lane, so none of them re-inserts its own copy.
  *
@@ -46,6 +48,19 @@ export const SEEDED_RULE_REVISIONS = {
 export async function seedBaseWorld(db: InsertClient): Promise<void> {
   await db.transaction(async (tx) => {
     const createdAt = new Date();
+    // `systemActor()`'s user; production has it, and a background drain
+    // creates routine Runs as it before any fixture runs.
+    await tx
+      .insert(user)
+      .values({
+        id: "cubby-system",
+        name: "System",
+        email: "system@example.test",
+        emailVerified: true,
+        createdAt,
+        updatedAt: createdAt,
+      })
+      .onConflictDoNothing();
     // Fixed fixture identities are idempotent, and precede payload FK checks.
     await tx
       .insert(entityIdentity)

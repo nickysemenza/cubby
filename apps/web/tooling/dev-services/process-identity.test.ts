@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 import { processIdentity, processStatus } from "./process-identity.ts";
 
 // PID reuse is death only when both births use the same identity format.
@@ -38,6 +38,6 @@ test("retains unknown ownership when ps cannot read the process birth", () => {
   } finally {
     if (previous === undefined) delete process.env.PATH;
     else process.env.PATH = previous;
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
   }
 });

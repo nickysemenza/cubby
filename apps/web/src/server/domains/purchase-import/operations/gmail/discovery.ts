@@ -14,14 +14,13 @@ import {
   type MailboxCoverage,
   type MailboxDiscoveryStartOutput,
 } from "@cubby/schemas/mailbox-research";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
   getDb,
   notDeleted,
-  withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { email as emailTable, run as runTable } from "~/server/db/schema";
@@ -114,7 +113,6 @@ export async function recordDeletedHistoryEvent(
   });
 }
 
-const ROUTINE_RETENTION_MS = 30 * 86_400_000;
 const MAIL_DISCOVERY_CONSTRAINT = "Run_one_active_mail_discovery";
 type DiscoveryMode = "new_mail" | "targeted";
 /** A paginated new-mail catch-up finishes first; otherwise pending targets alternate with new mail. */
@@ -692,63 +690,4 @@ export async function failMailDiscovery(
     message: runFailureText(error, eventId),
   });
   return null;
-}
-
-/**
- * Delete month-old routine passes only when they own no durable evidence.
- * Unpaid predictions, retrieval failures, previews, and operation receipts
- * preserve the original Run and its history just as paid usage does.
- */
-export async function pruneRoutineRuns(
-  db: Database,
-  now = new Date(),
-): Promise<number> {
-  const cutoff = new Date(now.getTime() - ROUTINE_RETENTION_MS);
-  const prunable = and(
-    eq(runTable.routine, true),
-    lt(runTable.endedAt, cutoff),
-    // Hand-qualified: an interpolated `runTable.id` renders unqualified and
-    // would bind to the subquery's own table. includes-deleted: a deleted
-    // usage row still holds its foreign key to the Run.
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."runId" = "Run"."id")`,
-    ),
-    // A pass that filed a finding (mail from an unknown sender) owns it.
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "Assessment" a WHERE a.family = 'run_finding' AND a.producer->>'runId' = "Run"."id"::text)`,
-    ),
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "EmailClassificationObservation" o WHERE o."runId" = "Run"."id")`,
-    ),
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "EmailRetrievalFailure" f WHERE f."runId" = "Run"."id")`,
-    ),
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "EmailCandidateObservation" o WHERE o."runId" = "Run"."id")`,
-    ),
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "RunOperation" o WHERE o."runId" = "Run"."id")`,
-    ),
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e."runId" = "Run"."id")`,
-    ),
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."runId" = "Run"."id")`,
-    ),
-    // ImageProcessingJob.runId is ON DELETE NO ACTION: a run that requested
-    // image work is kept. includes-deleted: any job row holds the FK.
-    sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."runId" = "Run"."id")`,
-    ),
-  );
-  return withTransaction(db, async (tx) => {
-    const ids = (
-      await tx.select({ id: runTable.id }).from(runTable).where(prunable)
-    ).map((row) => row.id);
-    if (ids.length === 0) return 0;
-    for (const id of ids) {
-      await tx.delete(runTable).where(eq(runTable.id, id));
-    }
-    return ids.length;
-  });
 }

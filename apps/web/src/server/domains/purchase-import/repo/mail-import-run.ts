@@ -23,10 +23,8 @@ import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, eq, inArray, isNull, ne, notInArray, or } from "drizzle-orm";
 
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
-import { runAfterCommit } from "~/server/db/helpers/core";
 import {
   ledgerParty,
   email as emailTable,
@@ -37,7 +35,6 @@ import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
-import type { PurchaseAgentQueueProducer } from "~/server/domains/purchase-agent/service/purchase-agent-queue-types";
 import {
   assertMailSourceIdentityReady,
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
@@ -48,7 +45,7 @@ import {
 } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
+import { dispatchStartedRun } from "./dispatch";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",
@@ -285,84 +282,28 @@ export async function admitMailImport(
       .returning({ orderMailId: emailTable.orderMailId });
     if (assigned.length !== fresh.length)
       throw new Error("Mail source ownership assignment is incomplete.");
+    await dispatchStartedRun(tx, {
+      id: row.id,
+      eventId: row.dispatchEventId!,
+      purpose: row.purpose,
+    });
     return [...existing, { created: true, row }];
   });
 }
 
-/** Admit, then hand each new or undispatched Run to Pi after commit. */
+/** Admission and its dispatch intent commit together. */
 export async function startMailImport(
   db: Database,
   input: MailImportAdmission,
-  queue: PurchaseAgentQueueProducer | undefined = getPurchaseAgentQueue(),
-): Promise<{ runId: string; status: string }[]> {
-  const admitted = await admitMailImport(db, input);
-  const results = admitted.map((admission) => ({
-    runId: admission.row.id,
-    status: admission.row.status,
+) {
+  return (await admitMailImport(db, input)).map(({ row }) => ({
+    runId: row.id,
+    status: row.status,
   }));
-  for (const admission of admitted) {
-    if (
-      admission.row.retiredAt ||
-      admission.row.deletedAt ||
-      !(
-        admission.created ||
-        admission.row.status === "dispatch_failed" ||
-        (admission.row.status === "running" &&
-          admission.row.dispatchAttempts === 0)
-      )
-    )
-      continue;
-    const eventId = admission.row.dispatchEventId;
-    if (!eventId) throw new Error("Mail import Run has no dispatch identity.");
-    await runAfterCommit(db, async (committedDb) => {
-      const [live] = await getDb(committedDb)
-        .select()
-        .from(run)
-        .where(eq(run.id, admission.row.id));
-      if (
-        !live ||
-        live.retiredAt ||
-        live.deletedAt ||
-        !["running", "dispatch_failed"].includes(live.status)
-      )
-        return;
-      if (!queue)
-        await recordRunDispatchAttempt(committedDb, {
-          runId: admission.row.id,
-          eventId,
-          error: "Purchase agent queue is unavailable",
-        });
-      else
-        try {
-          await dispatchRunEvent(committedDb, queue, {
-            version: 1,
-            type: "start_or_resume",
-            runId: admission.row.id,
-            purpose: "mail_import",
-            eventId,
-            generation: eventId,
-          });
-        } catch {
-          // SILENT: dispatchRunEvent retained the error; the caller receives dispatch_failed and retries the same admission.
-        }
-      const [saved] = await getDb(committedDb)
-        .select({ status: run.status })
-        .from(run)
-        .where(eq(run.id, admission.row.id));
-      const summary = results.find(
-        (result) => result.runId === admission.row.id,
-      );
-      if (summary && saved) summary.status = saved.status;
-    });
-  }
-  return results;
 }
 
 /** Revisit retained related Emails that predate automatic import admission. */
-export async function importPendingEmails(
-  db: Database,
-  queue: PurchaseAgentQueueProducer | undefined = getPurchaseAgentQueue(),
-) {
+export async function importPendingEmails(db: Database) {
   const { listMemberMailboxes } =
     await import("~/server/domains/purchase-import/repo/gmail/targets");
   const { mailImportEnabled } = await import("./mail-import-settings");
@@ -414,16 +355,12 @@ export async function importPendingEmails(
       .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
       .limit(50);
     const admit = (messageIds: readonly string[]) =>
-      startMailImport(
-        db,
-        {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          messageIds,
-        },
-        queue,
-      );
+      startMailImport(db, {
+        ledgerPartyId: target.ledgerPartyId,
+        userId: actorId,
+        mailboxId: target.mailboxId,
+        messageIds,
+      });
     try {
       await admit(pending.map(({ id }) => id));
     } catch {

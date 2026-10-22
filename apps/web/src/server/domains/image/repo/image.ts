@@ -62,6 +62,7 @@ import {
   isNull,
   like,
   lt,
+  lte,
   not,
   or,
   type SQL,
@@ -1722,9 +1723,10 @@ export const getImageByKey = async (
 export const countCullablePendingImages = async (
   db: Database,
   olderThanHours: number,
+  /** A maintenance step's frozen cutoff, shared with its cull. */
+  createdBefore?: Date,
 ): Promise<number> => {
-  const cutoffDate = new Date();
-  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+  const cutoffDate = createdBefore ?? pendingCullCutoff(olderThanHours);
   const [row] = await getDb(db)
     .select({ count: sql<number>`count(*)::int` })
     .from(image)
@@ -1732,17 +1734,23 @@ export const countCullablePendingImages = async (
   return row?.count ?? 0;
 };
 
+export const pendingCullCutoff = (olderThanHours: number) => {
+  const cutoffDate = new Date();
+  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+  return cutoffDate;
+};
+
 export const cullPendingImages = async (
   db: Database,
   olderThanHours: number,
+  createdBefore?: Date,
 ) => {
   // Claim and delete in one transaction. Commit holds the same image-row locks
   // while it creates associations and performs its final activation, so
   // SKIP LOCKED makes this culler leave in-flight imports untouched instead of
   // deleting rows selected by a stale pre-lock snapshot.
   const result = await withTransaction(db, async (tx) => {
-    const cutoffDate = new Date();
-    cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+    const cutoffDate = createdBefore ?? pendingCullCutoff(olderThanHours);
     const pendingImages = await tx
       .select({ id: image.id })
       .from(image)
@@ -2666,11 +2674,19 @@ export interface ImageMetadataExtractionRow {
 
 export type ImageMetadataCursor = { createdAt: string; id: string };
 
+/** A maintenance step's frozen cutoff bounds both its COUNT and its pages. */
+const metadataExtractionWhere = (createdBefore?: string | null) =>
+  and(
+    metadataExtractionCandidateWhere,
+    createdBefore ? lte(image.createdAt, new Date(createdBefore)) : undefined,
+  );
+
 /** One keyset page of the EXIF/GPS backlog, oldest first. */
 export async function selectImagesForMetadataExtraction(
   db: Database,
   limit: number,
   after?: ImageMetadataCursor | null,
+  createdBefore?: string | null,
 ): Promise<
   Array<ImageMetadataExtractionRow & { cursor: ImageMetadataCursor }>
 > {
@@ -2684,7 +2700,7 @@ export async function selectImagesForMetadataExtraction(
     .from(image)
     .where(
       and(
-        metadataExtractionCandidateWhere,
+        metadataExtractionWhere(createdBefore),
         after
           ? sql`(${image.createdAt}, ${image.id}) > (${after.createdAt}::timestamp, ${after.id}::uuid)`
           : undefined,
@@ -2699,11 +2715,14 @@ export async function selectImagesForMetadataExtraction(
   }));
 }
 
-export async function countImagesStaleMetadata(db: Database): Promise<number> {
+export async function countImagesStaleMetadata(
+  db: Database,
+  createdBefore?: string,
+): Promise<number> {
   const [row] = await getDb(db)
     .select({ count: count() })
     .from(image)
-    .where(metadataExtractionCandidateWhere);
+    .where(metadataExtractionWhere(createdBefore));
   return row?.count ?? 0;
 }
 
@@ -3236,8 +3255,9 @@ export const getImagesByProjectIds = async (
 export const cullPendingImageStorage = async (
   db: Database,
   olderThanHours: number,
+  createdBefore?: Date,
 ) => {
-  const result = await cullPendingImages(db, olderThanHours);
+  const result = await cullPendingImages(db, olderThanHours, createdBefore);
   await deleteStoredObjects(result.deletedKeys);
   return result;
 };

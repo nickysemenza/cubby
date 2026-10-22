@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { resolveDevProfile } from "./dev-profile.ts";
 
 // Failure modes: inherited production targets, cross-checkout state collisions,

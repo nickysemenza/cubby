@@ -1,19 +1,23 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { RunId } from "@cubby/schemas/identifiers";
+import { jobState, jobWaitReason } from "@cubby/schemas/job";
 import {
   runPurpose,
   runStatus,
   STEP_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import type { AiBudgetExhaustedError } from "~/server/ai/budget";
-import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import {
+  unwrapDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 const boundEvaluation = new AsyncLocalStorage<{
   runId: RunId;
@@ -69,6 +73,7 @@ export async function pauseExecutionRun(
       endedAt: sql`CASE WHEN ${recoverable} THEN NULL ELSE ${new Date().toISOString()}::timestamp END`,
       failureCode: "execution_limit",
       dispatchError: message,
+      updatedAt: new Date(),
     })
     .where(
       and(
@@ -95,9 +100,20 @@ export async function pauseForFunding(
   runId: RunId,
   error: AiBudgetExhaustedError,
 ) {
-  await pauseExecutionRun(db, runId, error.message);
-  await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleFundingResume(
-    // Just past the boundary, so the resume reads the new window.
-    Date.parse(error.status.windowEnd) + RESUME_MARGIN_MS,
-  );
+  await withTransactionDatabase(db, async (tx) => {
+    await pauseExecutionRun(tx, runId, error.message);
+    const until = new Date(
+      Date.parse(error.status.windowEnd) + RESUME_MARGIN_MS,
+    );
+    await enqueueJob(tx, {
+      key: `funding-resume:${runId}:${error.status.windowEnd}`,
+      kind: "run.funding-resume",
+      runId,
+      input: { runId, until: until.toISOString() },
+      availableAt: until,
+    });
+    await unwrapDb(tx)
+      .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "waitUntil"=${until.toISOString()}::timestamp
+      WHERE key=${`funding-resume:${runId}:${error.status.windowEnd}`} AND state=${jobState.enum.queued}`);
+  });
 }

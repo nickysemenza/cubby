@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 import { withKitPackageResolution } from "./apple-package-resolution.ts";
 
 // Xcode app resolution must not change CubbyKit's owned pins; app-only pins
@@ -73,7 +73,7 @@ test("app-only resolution leaves the Kit lockfile bytes unchanged, including aft
       );
       assert.equal(readFileSync(lock, "utf8"), original);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true, maxRetries: 5 });
     }
   }
 });

@@ -59,18 +59,15 @@ export async function recoverMissedWork(
     await retireCoordinators(db, coordinatorRetireBefore);
 }
 
-/** Expires stale import Runs, projects terminal Job outcomes, and prunes routine history. */
+/** Expires stale import Runs and projects terminal Job outcomes; every Run is kept. */
 export async function maintainRunHistory(db: Database) {
-  const [{ expireStaleRuns }, { reconcileWorkflowRuns }, { pruneRoutineRuns }] =
-    await Promise.all([
-      import("~/server/domains/purchase-import/operations/run-review"),
-      import("~/server/workflows/runs/lifecycle"),
-      import("~/server/domains/purchase-import/operations/gmail/discovery"),
-    ]);
+  const [{ expireStaleRuns }, { reconcileWorkflowRuns }] = await Promise.all([
+    import("~/server/domains/purchase-import/operations/run-review"),
+    import("~/server/workflows/runs/lifecycle"),
+  ]);
   const stale = await expireStaleRuns(db);
   const reconciled = await reconcileWorkflowRuns(db);
-  const pruned = await pruneRoutineRuns(db);
-  return { ...stale, reconciled, pruned };
+  return { ...stale, reconciled };
 }
 
 /**

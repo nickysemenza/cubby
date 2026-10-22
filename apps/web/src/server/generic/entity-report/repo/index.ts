@@ -236,6 +236,8 @@ const REPORTS = {
   "run.steps": runBuilder("run.steps"),
   "run.ai-usage": runBuilder("run.ai-usage"),
   "run.suggestions": runBuilder("run.suggestions"),
+  "run.decisions": runBuilder("run.decisions"),
+  "run.diagnostics": runBuilder("run.diagnostics"),
   "run.changes": runBuilder("run.changes"),
 } satisfies Record<
   Exclude<EntityReportInput["slot"], "task.briefing">,

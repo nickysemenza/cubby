@@ -12,14 +12,20 @@ import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
 
 // Read shared data as bytes: importing runtime modules here makes Cloudflare's
-// Vite plugin deny them to the Worker module loader.
-const workflowPlatformLimits = z
-  .object({ subrequests: z.number().int().positive() })
+// Vite plugin deny them to the Worker module loader. The Run page's limits
+// catalog imports the same file.
+const backgroundQueueConsumer = z
+  .object({
+    maxBatchSize: z.number().int().positive(),
+    maxBatchTimeout: z.number().int().nonnegative(),
+    maxConcurrency: z.number().int().positive(),
+    maxRetries: z.number().int().nonnegative(),
+  })
   .parse(
     JSON.parse(
       readFileSync(
         new URL(
-          "../../packages/shared/src/workflow-platform-limits.json",
+          "../../packages/shared/src/background-queue-consumer.json",
           import.meta.url,
         ),
         "utf8",
@@ -42,7 +48,6 @@ const identityName = <T extends object>(record: T) => {
 const workerQueueNames = {
   background: identityName(workerIdentity.queues.background),
   telemetry: identityName(workerIdentity.queues.telemetry),
-  purchaseAgent: identityName(workerIdentity.queues.purchaseAgent),
 };
 const workerCronSchedules = {
   backgroundRecovery: identityName(workerIdentity.crons.backgroundRecovery),
@@ -64,7 +69,7 @@ export const productionWorker = defineWorker({
   },
   limits: {
     cpuMs: 45000,
-    subrequests: workflowPlatformLimits.subrequests,
+    subrequests: 4_000_000,
   },
   observability: {
     enabled: true,
@@ -99,10 +104,7 @@ export const productionWorker = defineWorker({
     }),
 
     triggers.queue({
-      maxBatchSize: 1,
-      maxBatchTimeout: 0,
-      maxConcurrency: 2,
-      maxRetries: 3,
+      ...backgroundQueueConsumer,
       name: workerQueueNames.background,
     }),
     triggers.queue({
@@ -112,17 +114,12 @@ export const productionWorker = defineWorker({
       maxRetries: 3,
       name: workerQueueNames.telemetry,
     }),
-    triggers.queue({
-      maxBatchSize: 10,
-      maxBatchTimeout: 5,
-      maxRetries: 3,
-      name: workerQueueNames.purchaseAgent,
-    }),
   ],
   env: {
     BETTER_AUTH_SECRET: bindings.secret(),
     R2_ACCESS_KEY_ID: bindings.secret(),
     R2_SECRET_ACCESS_KEY: bindings.secret(),
+    // Also queries Workers Observability for the Run page's inline Job logs.
     AI_GATEWAY_API_KEY: bindings.secret(),
 
     NODE_ENV: bindings.text("production"),
@@ -156,9 +153,6 @@ export const productionWorker = defineWorker({
     }),
     TELEMETRY_QUEUE: bindings.queue({
       name: workerQueueNames.telemetry,
-    }),
-    PURCHASE_AGENT_QUEUE: bindings.queue({
-      name: workerQueueNames.purchaseAgent,
     }),
     AI_GATEWAY_EGRESS: bindings.durableObject({
       worker: "cubby",

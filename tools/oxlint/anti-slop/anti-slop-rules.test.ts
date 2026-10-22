@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(
@@ -77,7 +77,7 @@ function lintFixture(
       (diagnostic) => diagnostic.code === `${plugin}(${ruleName})`,
     );
   } finally {
-    rmSync(temporaryDirectory, { recursive: true });
+    rmSync(temporaryDirectory, { recursive: true, maxRetries: 5 });
   }
 }
 
@@ -105,7 +105,7 @@ function lintScopedFixture(
       (diagnostic) => diagnostic.code === `${plugin}(${ruleName})`,
     );
   } finally {
-    rmSync(temporaryDirectory, { recursive: true });
+    rmSync(temporaryDirectory, { recursive: true, maxRetries: 5 });
   }
 }
 
@@ -445,7 +445,7 @@ function lintStyleFixture(
         diagnostic.code !== "cubby(no-hand-rolled-plural)",
     );
   } finally {
-    rmSync(temporaryDirectory, { recursive: true });
+    rmSync(temporaryDirectory, { recursive: true, maxRetries: 5 });
   }
 }
 

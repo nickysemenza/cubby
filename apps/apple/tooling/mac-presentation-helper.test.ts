@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 
 // Failure modes: each run gets a new AX executable identity; stale or tampered
 // code is reused; changed source/toolchain is ignored; an ad-hoc helper is used.
@@ -75,6 +75,6 @@ test("presentation helper keeps a signed path across runs and rebuilds stale byt
       ),
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });

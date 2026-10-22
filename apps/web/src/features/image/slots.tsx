@@ -5,6 +5,7 @@ import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { AttachExistingImageDialog } from "~/features/image/attach-existing-image-dialog";
 import { ImageDetailMedia } from "~/features/image/image-detail";
+import { SubjectJobsDisclosure } from "~/features/job/job-diagnostics";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -21,6 +22,7 @@ export const ImageAssociations: DetailSlotComponent<"image"> = ({
   <Stack gap="md">
     <ImageDetailMedia image={image} />
     <ImageProcessingPanel image={image} />
+    <SubjectJobsDisclosure subject={{ kind: "image", id: image.id }} />
     <EntityReportSlot slot="image.associations" id={image.id} record={image} />
   </Stack>
 );

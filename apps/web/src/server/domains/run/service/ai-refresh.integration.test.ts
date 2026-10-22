@@ -12,7 +12,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import {
@@ -72,7 +72,6 @@ import {
 import {
   createProductIdentityFixture,
   makeProductInput,
-  createSystemUserFixture,
   insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
@@ -91,11 +90,19 @@ import {
   PRIMARY_MODEL,
   kernelCtx,
   productCategoryId,
-  productFixture,
   seedPending,
   runCode,
   startSuggestionSweep,
 } from "./suggestion-sweep.fixtures";
+
+// Refresh scenarios consume identities; the refreshed fields are read back
+// through their owning queries after the mutation under test.
+const productFixture = (ctx: Parameters<typeof kernelCtx>[0], name: string) =>
+  createProductIdentityFixture(
+    ctx.db,
+    makeProductInput({ name, manufacturer: "Synthetic maker" }),
+    ctx.actor,
+  );
 
 const evaluationExecution = <T>(
   db: import("~/server/db").Database,
@@ -193,7 +200,6 @@ describe("targeted prompt refresh", () => {
   const emailTarget = aiEvaluationTarget.options.find(
     (target) => target.shape.kind.value === "email",
   )!;
-  beforeEach(() => createSystemUserFixture(ctx.db));
   const fieldTarget = aiEvaluationTarget.options.find(
     (target) => target.shape.kind.value === "field",
   )!;
@@ -918,8 +924,9 @@ describe("targeted prompt refresh", () => {
         }),
       ).toEqual([]);
       expect(errors).not.toHaveBeenCalledWith(
-        "[ai-refresh] Field refresh discovery failed",
-        expect.anything(),
+        expect.objectContaining({
+          message: "[ai-refresh] Field refresh discovery failed",
+        }),
       );
     } finally {
       errors.mockRestore();

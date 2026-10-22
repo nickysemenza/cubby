@@ -2,6 +2,7 @@ import type { ReportSlot } from "@cubby/schemas/entity-report";
 import type { RunOut } from "@cubby/schemas/run";
 import {
   hasImportRunReports,
+  isExecutedRunPurpose,
   isStepRunPurpose,
   type RunPurpose,
 } from "@cubby/schemas/run-fields";
@@ -279,8 +280,20 @@ const detailSlots = {
   },
   run: {
     // Progress, usage and changes are server-composed report slots; `runReportSlot` is their one
-    // component (`features/run/slots.tsx`).
-    steps: runReportSlot("steps", (run) => isStepRunPurpose(run.purpose)),
+    // component (`features/run/slots.tsx`). Steps, Decisions and Diagnostics are web's richer
+    // fills of the `run.steps`, `run.decisions` and `run.diagnostics` reports native draws.
+    steps: slot(
+      () => named(import("~/features/run/run-detail"), "RunStepsDetail"),
+      (run) => isStepRunPurpose(run.purpose),
+    ),
+    decisions: slot(
+      () => named(import("~/features/run/run-detail"), "RunDecisions"),
+      (run) => isStepRunPurpose(run.purpose),
+    ),
+    diagnostics: slot(
+      () => named(import("~/features/run/run-detail"), "RunDiagnostics"),
+      (run) => isExecutedRunPurpose(run.purpose),
+    ),
     "live-progress": runReportSlot("live-progress"),
     "import-controls": slot(
       () =>

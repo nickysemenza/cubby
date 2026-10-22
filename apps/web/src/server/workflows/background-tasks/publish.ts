@@ -5,12 +5,15 @@ import {
 } from "@cubby/schemas/background-tasks";
 import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 import { createLogger } from "@cubby/worker-tracing";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getBackgroundQueue, getExecutionCtx } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers/core";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
+import { imageProcessingJob } from "~/server/db/schema";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
@@ -22,7 +25,7 @@ export interface PublishOptions {
 
 /** Queue failure affects latency only. Intent is already committed in Postgres. */
 export async function wakeJobs(
-  options: PublishOptions & { queue?: BackgroundQueueProducer; jobId?: string },
+  options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
   const queue = options.queue ?? getBackgroundQueue();
   if (!queue) return;
@@ -32,7 +35,6 @@ export async function wakeJobs(
         body: {
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
-          ...(options.jobId ? { jobId: options.jobId } : {}),
         },
       },
     ]);
@@ -73,9 +75,16 @@ export async function publishBackgroundTasks(
     for (const input of tasks) {
       const task = backgroundTaskSchema.parse(input);
       if (task.kind === "image-processing.wakeup") {
+        const [processing] = await repositoryQueries(tx)
+          .select({ imageId: imageProcessingJob.imageId })
+          .from(imageProcessingJob)
+          .where(eq(imageProcessingJob.id, task.jobId));
+        if (!processing) continue;
         await enqueueJob(tx, {
           key: `image-processing:${task.jobId}`,
           kind: "image.processing",
+          subjectKind: "image",
+          subjectId: processing.imageId,
           input: { processingId: task.jobId },
           runId: task.runId,
         });
@@ -96,6 +105,13 @@ export async function publishBackgroundTasks(
       await enqueueJob(tx, {
         key: taskKey(input),
         kind: task.kind,
+        ...("locationId" in task
+          ? { subjectKind: "location", subjectId: task.locationId }
+          : "imageId" in task
+            ? { subjectKind: "image", subjectId: task.imageId }
+            : task.kind === "calendar-feed.mark-dirty"
+              ? { subjectKind: "calendar", subjectId: task.origin }
+              : {}),
         input: z.json().parse(JSON.parse(JSON.stringify(input))),
         runId: task.runId,
         invalidate: true,

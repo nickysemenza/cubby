@@ -62,7 +62,6 @@ import {
   canAutomaticallyFillField,
   acceptSuggestion,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
@@ -318,7 +317,6 @@ describe("clean import booking controls", () => {
   });
 
   it("holds clean spending while paused even when measured attach is on, then resumes once", async () => {
-    await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
@@ -442,7 +440,6 @@ describe("Automatic rules", () => {
   // charge's suggestion on evidence the attach changed, so the resumed label
   // pass skipped it as stale.
   it("republishes evidence an automatic attach moved before a budget pause", async () => {
-    await createSystemUserFixture(ctx.db);
     await soleCandidateCharge(ctx);
     await competingCharge(ctx);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
@@ -466,7 +463,6 @@ describe("Automatic rules", () => {
   it.each(["decisions", "capacity"])(
     "republishes evidence moved by a rule before a %s yield",
     async (reason) => {
-      await createSystemUserFixture(ctx.db);
       await soleCandidateCharge(ctx);
       await competingCharge(ctx);
       await generateStatementSuggestionPage(ctx.db, {
@@ -506,7 +502,6 @@ describe("Automatic rules", () => {
 
   // A later round can exhaust its budget after an earlier rule changed evidence.
   it("keeps moved later-round work queued across a decision-cap yield", async () => {
-    await createSystemUserFixture(ctx.db);
     const { account } = await soleCandidateCharge(ctx);
     await competingCharge(ctx);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
@@ -562,7 +557,6 @@ describe("Automatic rules", () => {
   });
 
   it("leaves no stale suggestion after an automatic attach mid-page", async () => {
-    await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
     await competingCharge(ctx);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
@@ -582,7 +576,6 @@ describe("Automatic rules", () => {
   // of a charge already published on the same page; published labels leave
   // the label queue, so that attach stayed pending for good.
   it("applies automatic rules to published charges before a budget pause", async () => {
-    await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
     await recordSourceTransactionRecords(
       ctx.db,
@@ -636,7 +629,6 @@ describe("Automatic rules", () => {
   // Failure modes: an automatic attach ticks diff fields, bypasses the
   // family apply path, records member Feedback, or applies twice on replay.
   it("attaches a sole same-charge candidate through the review path, once", async () => {
-    await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
@@ -744,7 +736,6 @@ describe("Automatic rules", () => {
   // Failure mode (#2722 review): a rule turned off after the application
   // snapshot still applied, because the transaction never rechecked it.
   it("refuses an automatic application once the rule is off", async () => {
-    await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
     await label(ctx);
     const suggestion = await chargeSuggestion(ctx);
@@ -785,7 +776,6 @@ describe("Automatic rules", () => {
   // Failure modes: a rule applies while off; evidence that drifted after
   // publication is applied anyway.
   it("applies nothing while off or for drifted evidence", async () => {
-    await createSystemUserFixture(ctx.db);
     const { account } = await soleCandidateCharge(ctx);
     await label(ctx);
     const suggestion = await chargeSuggestion(ctx);

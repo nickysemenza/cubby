@@ -13,7 +13,7 @@ import {
 let root: string | undefined;
 
 afterEach(() => {
-  if (root) rmSync(root, { recursive: true, force: true });
+  if (root) rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   root = undefined;
 });
 

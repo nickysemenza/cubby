@@ -1,9 +1,10 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { connectionDiscoveryRunInput } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import { CONNECTION_ROSTER_PAGE } from "~/server/domains/run/repo/connection-refresh";
 import {
   claimDerivedDiscovery,
   prepareConnectionDiscoveryPage,
@@ -15,40 +16,51 @@ import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 const cursorSchema = z.object({
   after: z.string().nullable(),
-  runId: runEntityId,
+  // Cursors from before lazy Run creation carry no runId.
+  runId: runEntityId.nullable().default(null),
 });
+
+/**
+ * The routine connection discovery pass. Its Job owns the pass; the
+ * `connection_discovery` Run appears only once a page admits work, and its
+ * id rides in the Job cursor until the last page launches it.
+ */
 export const connectionDiscoveryJobHandler = defineJobHandler(
   z.object({}),
   async (db, claim) => {
     const activation = await readAiRefreshActivation(db);
     if (!activation?.enabled || !activation.manifest["entity-connections"])
       return { page: { done: true, result: { outcome: "disabled" } } };
-    const previous = claim.cursor ? cursorSchema.parse(claim.cursor) : null;
-    const runId =
-      previous?.runId ??
-      (await ensureRun(db, systemActor(), {
-        purpose: "ai_refresh",
-        trigger: "scheduled",
-        status: "running",
-        execution: false,
-        clientKey: `connection-discovery:${claim.id}:${claim.generation}`,
-        input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
-      }));
+    const previous = cursorSchema.parse(claim.cursor ?? { after: null });
     const page = await prepareConnectionDiscoveryPage(db, {
-      childRunId: runId,
-      after: previous?.after ?? null,
-      limit: 25,
+      runId: previous.runId,
+      after: previous.after,
+      limit: CONNECTION_ROSTER_PAGE,
+      createRun: (tx) =>
+        ensureRun(tx, systemActor(), {
+          purpose: "connection_discovery",
+          trigger: "scheduled",
+          status: "running",
+          execution: false,
+          clientKey: `connection-discovery:${claim.id}:${claim.generation}`,
+          input: connectionDiscoveryRunInput.parse({
+            kind: "connection_discovery",
+            activation,
+          }),
+        }),
     });
     return {
       page: {
         done: !page.next,
-        ...(page.next ? { cursor: { after: page.next, runId } } : {}),
+        ...(page.next
+          ? { cursor: { after: page.next, runId: page.runId } }
+          : { result: { outcome: page.runId ? "admitted" : "nothing" } }),
       },
       publish: async (tx) => {
-        if (!page.next)
+        if (!page.next && page.runId)
           await launchWorkflowRun(tx, {
-            runId,
-            purpose: "ai_refresh",
+            runId: page.runId,
+            purpose: "connection_discovery",
             automatic: true,
           });
       },

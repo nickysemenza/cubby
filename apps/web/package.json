@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "generate:claude-plugin": "node generator/claude-plugin.ts",
-    "test": "vitest run --project unit --project mcp-contract --project worker-safety --project ui --project capability",
+    "test": "vitest run --project unit --project mcp-contract --project worker-safety --project ui --project capability --project scripts --project packages",
     "test:unit": "vitest run --project unit",
     "test:ui": "NODE_OPTIONS=--no-experimental-webstorage vitest run --project ui",
     "test:preview": "vitest run --project preview",
@@ -34,7 +34,7 @@
     "build:cf": "tsx tooling/build-cf.ts",
     "deploy:cf": "pnpm run build:cf && cf deploy --prebuilt --mode production",
     "preview:cf": "tsx tooling/dev/index.ts preview",
-    "test:calendar": "pnpm --dir ../web-worker-tests test:workers"
+    "test:calendar": "vitest run --project workers"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

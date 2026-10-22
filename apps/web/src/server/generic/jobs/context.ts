@@ -4,11 +4,23 @@ import type { Database } from "~/server/db/database";
 
 import type { JobClaim } from "./repo/jobs";
 
-const execution = new AsyncLocalStorage<{ db: Database; claim: JobClaim }>();
+export type JobExecutionDetails = { stepKey: string | null };
+const execution = new AsyncLocalStorage<{
+  db: Database;
+  claim: JobClaim;
+  details: JobExecutionDetails;
+}>();
+
+/** The selected domain step annotates page logs without changing execution state. */
+export const setJobStepKey = (stepKey: string) => {
+  const current = execution.getStore();
+  if (current) current.details.stepKey = stepKey;
+};
 
 export const currentJobExecution = () => execution.getStore();
 export const withJobExecution = <T>(
   db: Database,
   claim: JobClaim,
   work: () => Promise<T>,
-) => execution.run({ db, claim }, work);
+  details: JobExecutionDetails = { stepKey: null },
+) => execution.run({ db, claim, details }, work);

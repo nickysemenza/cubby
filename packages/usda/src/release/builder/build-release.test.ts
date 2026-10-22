@@ -227,7 +227,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
 });
 
 describe("buildRelease", () => {

@@ -687,7 +687,6 @@ export const runScope = z.object({
   skillRevision: z.string().trim().min(1).max(200),
   runtimeRevision: z.string().trim().min(1).max(200),
   dispatchEventId: z.string().uuid().nullable(),
-  dispatchAttempts: z.number().int().nonnegative(),
   dispatchError: z.string().nullable(),
   coordinatorStartedAt: z.iso.datetime().nullable(),
 });

@@ -804,12 +804,7 @@ function statementColumns(
         cell: ({ row }) => {
           const value = evidence(row.original);
           if (!value) return null;
-          return (
-            <StackedValue
-              primary={value.merchant ?? value.rawDescription}
-              secondary={value.merchant ? value.rawDescription : null}
-            />
-          );
+          return value.merchant ?? value.rawDescription;
         },
       }),
     );

@@ -107,6 +107,10 @@ enum DetailSlotRegistry {
             return runReportSlot(.run_aiUsage, row, imports: false)
         case .runSuggestions:
             return runReportSlot(.run_suggestions, row, imports: false)
+        case .runDecisions:
+            return runReportSlot(.run_decisions, row, imports: false)
+        case .runDiagnostics:
+            return runReportSlot(.run_diagnostics, row, imports: false)
         case .runChanges:
             return runReportSlot(.run_changes, row, imports: false)
         // Native has no control command (resume and stop are web's), so a paused import says so

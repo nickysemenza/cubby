@@ -125,7 +125,6 @@ describe("explicit member-search cache expiry", () => {
           ],
         },
         ctx.actor,
-        { send: async () => {} },
       );
       const [owner] = await getDb(ctx.db)
         .select()

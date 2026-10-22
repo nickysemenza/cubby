@@ -84,6 +84,12 @@ const spendingTarget = (judgment: StatementTransactionJudgment) =>
     ? judgment.candidates[0]!.transactionId
     : null);
 
+/**
+ * Spending previews prepared at once per statement page. It leaves pooled
+ * connections for publication and speculative label work.
+ */
+export const STATEMENT_SPENDING_PREPARATION_CONCURRENCY = 4;
+
 /** Account/transaction metadata is shared only while this read-only page is built. */
 export async function prepareStatementSpendingPage(
   db: Database,
@@ -98,13 +104,16 @@ export async function prepareStatementSpendingPage(
       return target ? [parseEntityId("financialTransaction", target)] : [];
     }),
   });
-  // Leave pooled connections for publication and speculative label work.
-  await forEachConcurrently(judgments, 4, async (judgment) => {
-    judgment.spending = await prepareStatementSpending(
-      db,
-      judgment,
-      null,
-      page,
-    );
-  });
+  await forEachConcurrently(
+    judgments,
+    STATEMENT_SPENDING_PREPARATION_CONCURRENCY,
+    async (judgment) => {
+      judgment.spending = await prepareStatementSpending(
+        db,
+        judgment,
+        null,
+        page,
+      );
+    },
+  );
 }

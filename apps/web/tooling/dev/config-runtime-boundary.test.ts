@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { productionWorker } from "../../cloudflare.config.ts";
-import { test } from "node:test";
+import { test } from "vitest";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { isFileLoadingAllowed, resolveConfig } from "vite";
 
 // Config imports become denied runtime modules. Startup must still be able to
-// load shared Workflow policy and identity without exposing deployment configuration.
-test("Cloudflare config keeps the runtime policy and identity loadable", async () => {
+// load the shared Job page limits and Worker identity without exposing
+// deployment configuration.
+test("Cloudflare config keeps the runtime Job limits and identity loadable", async () => {
   const root = path.resolve(import.meta.dirname, "../..");
   // Deny derivation is independent of the app's environment/persistence options.
   // Keep this real plugin boundary cheap instead of preparing a dev database.
@@ -32,14 +33,18 @@ test("Cloudflare config keeps the runtime policy and identity loadable", async (
       );
     }
   }
-  for (const file of ["workflow-limits.ts", "workflow-platform-limits.json"]) {
+  for (const file of [
+    "job-page-limits.ts",
+    "background-queue.ts",
+    "background-queue-consumer.json",
+  ]) {
     assert.equal(
       isFileLoadingAllowed(
         config,
         path.resolve(root, "../../packages/shared/src", file),
       ),
       true,
-      `${file} must remain loadable by the Workflow runtime`,
+      `${file} must remain loadable by the Job runtime`,
     );
   }
   for (const file of [

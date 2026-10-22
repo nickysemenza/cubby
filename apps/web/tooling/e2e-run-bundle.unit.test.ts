@@ -18,7 +18,7 @@ import { writeWebBuildProvenance } from "./web-build-provenance";
 const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0))
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
 });
 // A watch rebuild or commit during tests must not label the final output/HEAD
 // as the Worker that was tested, even when the final output is independently fresh.

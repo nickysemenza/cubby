@@ -16,7 +16,7 @@ dependency.
 | Concern                       | Provider                           | Production resource                                                                      |
 | ----------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------- |
 | Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                   |
-| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: queue `cubby-purchase-agent`, Durable Object `PurchaseImportRunAgent`    |
+| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: `purchase.dispatch` Job, Durable Object `PurchaseImportRunAgent`         |
 | PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                           |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                             |
 | Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                      |
@@ -42,226 +42,68 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 ### Main Worker
 
 [`apps/web/cloudflare.config.ts`](../apps/web/cloudflare.config.ts) owns Worker bindings,
-Durable Objects, Workflows, queues, placement, asset routing, crons and plaintext
+Durable Objects, queues, placement, asset routing, crons and plaintext
 variables. Deploy creates/updates those resources. This page records provider
 state and reconstruction constraints that configuration cannot reproduce.
 
 Vectorize's string metadata index is named `entityType`: that provider-side
 name predates `entityKind` and must remain when recreating the index.
 
-### Workflow-backed Runs
+### Durable Jobs and Runs
 
-Mailbox discovery is a Workflow-backed Run. Its page/retention/admission
-contract lives in the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end).
-Workflow instances are attempts, not the durable record; retries must resume
-persisted progress without depending on provider retention. Instance diagnostics
-expire independently of Run history.
+Postgres `Job` owns background execution, including Run pages, shared AI
+evaluations, derived refresh and purchase dispatch. Admission and its Job intent
+commit together. Run checkpoints, paid results, receipts and member decisions
+remain in their domain records. [ADR 0015](adr/0015-unified-durable-work-coordination.md)
+owns the execution contract; mailbox page and retention behavior lives in the
+[purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end).
 
-The step runtime memoizes a checkpoint inspection before naming each page.
-Names show its declared phase and scope, for example `generate p4 · charges
-61–80 · statement_transaction`; the range is a planned bound, not a promise that
-the last page is full. The ledger step key keeps identical phase/page labels
-from different steps from sharing a replay result.
-Only persisted checkpoint counts and declaration constants enter names, because
-[step names are replay cache keys](https://developers.cloudflare.com/workflows/build/rules-of-workflows/).
-Inspection adds two reads per page (and initializes a missing ledger once),
-never a live candidate count or a model call. Page outputs retain phase, unit,
-page processed count, cumulative phase processed/total/failures across instances,
-and supported reused/new label counts. The cursor is a RunStep id and checkpoint
-ordinal: private driver cursors remain in PostgreSQL. No observations, descriptors,
-model prompts or label values are copied into dashboard outputs.
-Deployment guards report pinned/current version ids and their handoff reason;
-handoffs report queue acceptance, the requested successor id and the last
-committed counts. Queue acceptance does not prove the successor has launched.
-Outputs stay constant-sized, far below the non-stream
-[step result limit](https://developers.cloudflare.com/workflows/reference/limits/).
-Pinned instances retain their old code and step names until their normal
-handoff. No Run checkpoint migration or restart is required.
+`cubby-background` carries only the version-3 wake envelope. Every delivery,
+including an unreadable envelope, attempts the same due-Job drain and is always
+acknowledged. Transport has no retry budget. Lost wakes are recovered by the
+minute cron and app-open catch-up. Telemetry has its separate queue.
 
-Step-ledger Runs hand off after bounded committed pages; the subrequest cap
-belongs to the Workflow instance, so a new `step.do` alone does not reset it
-([Cloudflare limits](https://developers.cloudflare.com/workflows/reference/limits/)).
-Statement Sweeps also bound generation and label page sizes. The driver owns
-those executable bounds; continuation retains the RunStep cursors and the
-attempt/cancellation fences instead of starting generation over.
-`packages/shared/src/workflow-platform-limits.json` owns the platform allowance.
-Deployment config reads its bytes; the runtime `WORKFLOW_EXECUTION_LIMITS`
-policy imports it to size application paths. The policy configures a four-million
-subrequest allowance, 512 suggestions / 1,024 new questions per model page,
-three batch attempts and a 500-page hard ceiling. Model pages spend 1/65 and
-database-only pages 1/400 of one shared allowance across all phases. Generation
-that also speculates on model answers spends the model share. Unknown drivers
-and child waits use the conservative fallback share; changing phase does not
-replenish the allowance. There is no elapsed-time rollover.
+One SQL window query interleaves due kinds, starting with the least recently
+served kind derived from existing Job timestamps. Priority ranks only within a
+kind; manual Run execution has raised priority. The drain reselects batches of
+25 with a default 256-page / 20-second budget. Budget exhaustion publishes a
+new wake. Claims use `SKIP LOCKED`, renewed leases and generation/token fences;
+successful pages reset consecutive failures. Exhausted failures and member
+pauses require explicit action.
 
-Statement generation commits at most 512 charges per page. It overlaps the next
-generation page with bounded computation for already generated suggestions.
-Speculation reads the generation's published judgment and retains per-question
-answers and evidence identities in existing checkpoints; it neither publishes conclusions nor applies rules. Its admission
-window is bounded by question count, encoded evidence bytes and preparation time.
-The generation write lane settles before speculative checkpoints publish. After
-all generation and separately paged vanished-hold checks, labels consume those
-answers in the original `(createdAt, id)` order, rebuilding fresh evidence before
-publication and discarding incompatible answers.
-Transfer discovery finishes before statement work. Its raw seed/pair cursor
-retains complete competitor pools and resumes oversized fanout; retirement starts
-only after discovery coverage and freshly verifies bounded stored-identity pages.
-A charge reserves missing decisions before inference; candidates are never truncated.
+Typed `waitReason` and `waitUntil` distinguish provider capacity, AI funding
+windows, device availability and rate limiting from retry backoff. Claim,
+successful ordinary publication and failure clear waits. Single-item Jobs
+retain `subjectKind` / `subjectId` for diagnostics on their owning record.
+`retry_wait` retains the raw scrubbed error and consecutive failure attempt of
+`maxAttempts`. Application page sizes live in `JOB_PAGE_LIMITS`.
 
-Both labelers submit a whole page's independent questions to the shared decision
-runner. Statement identity, kind and counterparty answers use their original
-per-question evidence; neither create vote depends on another model answer.
-Transfer pairs submit both legs together across the page. Feature, sampled
-Jev/Clef model, usage context, media, question count and serialized context bounds
-still determine actual request groups. The gateway's 180/minute limit counts
-requests, not questions or completed suggestions; batching can complete many
-suggestions per admitted request. Prompts, confidence thresholds, per-question
-cache keys and model selection remain unchanged.
+The minute cron publishes `ai-refresh.activate`, keyed by deployment version
+and its observed occurrence. A transaction serializes occurrence admission,
+checks the gateway DO's running version and fences activation to the recorded
+occurrence. A rollback A → B → A receives a new occurrence and restarts automatic
+discovery without replacing policy generations. Member automatic-rule controls
+remain independent. No fetch observation, observation epoch alarm or funding
+resume alarm schedules this work.
 
-Model work holds no publication transaction. Statement checkpoint/publication
-runs at `STATEMENT_PUBLISH_CONCURRENCY = 4` against the twelve-connection
-Hyperdrive pool. Transfer-pair builds and publications share a separate
-four-slot DB lane; movement decisions run outside it. Pool connections are
-leased for database operations, never across model latency.
-A partial label page saves its unpublished judgment in the pending
-AssessmentState and resumes inclusively at the earliest unfinished suggestion,
-independently of completion order. Compatible evidence re-exports retain paid
-labels. A member-settled or suppressed charge is skipped; moved evidence remains
-queued when any rule round yields. Cache/admission contention yields Workflow
-label work after one admission attempt, checkpoints all started work, then
-requests a durable wake no sooner than fifteen seconds after contention.
-Checkpoint/publication time can consume part of that interval before `step.sleep`.
-Transfer-pair Workflow pages also return a durable wake time and resume before
-the earliest deferred pair, retaining completed publications; a null cursor
-with a wake time means retry from the start, never completion.
-Interactive callers retain their waiting behavior. Pages retain a 15-minute
-platform timeout; decision requests retain their 30-second deadline. Temporary
-item failures retain completed answers/effects, persist a bounded retry deadline,
-and retry the input checkpoint before advancing. Exhausted items remain visible
-and skipped identities are deduplicated within that bounded retry batch,
-while independent work continues. Cancellation is final. Model publication saves
-an application-pending receipt atomically; dependent application or statement
-refresh clears it only after completion, so a crash cannot silently drop that stage.
-Statement label-round logs retain logical charge and question counts.
+Purchase `purchase.dispatch` Jobs complete after the coordinator accepts a
+stable operation identity. The coordinator owns conversation settlement and
+its SDK lifecycle alarms. Acknowledged coordinators are never submitted again
+by retrying a start Job. Funding pauses persist a `run.funding-resume` Job with
+`ai_funding_window` and the window deadline; domain resumption regenerates
+funding-paused purchase dispatches. Explicit budget increases can resume early;
+manual pauses stay stopped.
 
-The static application-path allowance assumes **no batching savings**:
-`65 model pages × 1,024 questions × 3 attempts × 16 transport operations = 3,194,880`,
-leaving over 800,000 operations for bookkeeping, continuation and
-recovery. The runner sums phase shares; database-only work permits at most 400
-pages before continuation. The separate 500-page ceiling still applies.
-
-Sixteen allows three cache claims, three invalidations, two lease renewals during
-the 30-second decision deadline, three provider attempts with DO/upstream
-transport, publication/release and telemetry. Repeated invalid-cache replacement
-races stop after three rejected entries and compute uncached. Busy Workflow
-cache/admission paths yield after one lookup rather than polling. A retry
-reserves the full page allowance again even when individual cache hits avoid it.
-This is conservative application-path sizing, not a platform usage meter; SQL
-over Hyperdrive is not one HTTP subrequest per query. Explicit caller limits
-cannot enlarge a label page or its new-question allowance.
-
-The egress DO forwards each admitted model call in one request/response round
-trip and owns completion/permit release. Rejection does not poll inside a
-Workflow page or increase RPC ancestry. Cloudflare defaults to 10,000
-subrequests per instance and permits configuration up to ten million; Cubby
-configures four million. The separate step-count ceiling remains 10,000 by
-default. Page wall time is unlimited by the platform, while active CPU is
-bounded independently ([Workflow limits](https://developers.cloudflare.com/workflows/reference/limits/)).
-The real-DO regression verifies 180 admitted starts in a rolling minute with
-synthetic ten-second request lifetimes. The full synthetic Sweep regression
-measures completed suggestions through actual batching, PostgreSQL publication,
-page checkpoints and Workflow handoffs; its reported latency costs are simulated
-capacity evidence, not production measurements. The virtual clock charges model,
-label-publication and handoff latency, and waits for outstanding real SQL before
-advancing; host PostgreSQL/setup time is reported separately and excluded from
-that capacity estimate.
-
-Page failures are logged before database failure bookkeeping. If bookkeeping
-also fails, the original error and the complete recording-error chain survive
-in the retry's message. Failure status and timeline commit together, so a
-partial failure cannot make the next retry skip the combined diagnostic.
-Each Workflow failure-write retry opens a fresh database
-scope. If all retries fail, the combined raw diagnostic is the terminal instance
-error, allowing reconciliation in a later invocation to save it on the Run.
-Only credential-shaped values are scrubbed; SQL, parameters, SQLSTATE codes and
-upstream bodies remain visible. An unrecoverable CPU termination can bypass
-JavaScript catches and must be diagnosed from provider invocation outcomes.
-
-Retired executor purposes preserve recorded inputs/checkpoints but cannot resume.
-Catch-up reconciles attempts that ended without finishing their Run. Discovery
-readiness and usage reads remain storage-only; current cursor coverage is not a
-snapshot of one historical Run and a read never grants execution.
-
-Workflow instances keep their creation version across deploys. Cloudflare's
-[instance API](https://developers.cloudflare.com/api/resources/workflows/subresources/instances/methods/get/)
-reports each instance's `versionId`; it does not document a hot migration of
-in-flight steps. Read-only provider inspection confirmed an older Workflow
-version still starting steps after newer versions were deployed.
-
-Every Workflow checks deployment at a committed page or target-cycle boundary.
-The active page finishes first, including its publication and cursor checkpoint.
-The Workflow compares its own `CF_VERSION_METADATA.id` with the Gateway Durable
-Object's running version, not the stored AI-refresh activation `release` or
-observed-version marker. Durable Objects follow deployments
-([Cloudflare version guarantees](https://developers.cloudflare.com/workers/versions-and-deployments/gradual-deployments/with-durable-objects/));
-the DO accepts successor dispatch through the shared background queue. A fresh
-queue-consumer invocation creates the successor through current bindings, behind
-the persisted attempt and cancellation fences. Duplicate deliveries are harmless.
-The old DO RPC remains an enqueue-only bridge for pinned Workflow versions.
-The former synchronous Workflow → DO → Workflow creation path is confirmed in
-code; Cloudflare documents a separate 16-invocation Worker loop limit, but does
-not establish whether ancestry propagates across these Workflow instances.
-Queue dispatch removes that dependency without relying on a failed retry.
-Queue acceptance is the dispatch boundary. A lost delivery uses the existing
-30-minute quiet-Run reconciliation and cron/app-open recovery; a delivery later
-than that grace can be diagnosed as an ended attempt and consume the bounded
-infrastructure-recovery allowance.
-A rollback is a
-version change too. Version checks are durable steps: replay reuses each recorded
-decision instead of moving the handoff backwards over already-completed work.
-Persist that decision in its own step before dispatching the successor: a lost
-create reply followed by rollback must not let the predecessor resume the same
-checkpoint. Each RPC attempt acquires a fresh DO stub because an exception can
-leave the previous stub permanently broken
-([Cloudflare error handling](https://developers.cloudflare.com/durable-objects/best-practices/error-handling/)).
-At an instance's first boundary, allow one bounded page without a version RPC
-or settle sleep; forced instance-budget handoffs still apply. A fresh Workflow
-can reach a DO still running the preceding deployment in another location
-([DO lifecycle](https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/)).
-The next committed-page boundary compares versions normally, including rollback.
-This gives deployment propagation useful work to catch up and prevents
-zero-progress successor loops. Even a freshly created older pinned instance
-can run only that bounded page before rechecking; an in-flight page has the
-same committed-page cutover contract. The DO is a running-version observation,
-not an atomic global deployment authority; lag can still cause an unnecessary
-handoff at a later boundary.
-
-Run-backed Workflows reuse `claimWorkflowRun` and the `launchWorkflowRun`
-`expectedAttempt` fence. The same Run retains its cursors, receipts and cancellation;
-only the attempt changes. Cancelled, finished or superseded owners cannot relaunch.
-The existing stuck-Run reconcile still repairs interrupted dispatches. Search
-repair has no Run: its deterministic successor carries the committed phase,
-cursor, counters and original request timestamp, and its progress subscription
-follows that successor without reporting a premature completion.
-Successor creation uses `createBatch`'s documented duplicate code rather than
-matching `create()` error text, so a lost response safely reuses the same instance.
-Instance page bounds remain a fallback even without a deploy; idle AI waits recheck within a
-minute. An active page and its retries can delay cutover until its checkpoint.
-
-This rule first applies to instances created with the boundary check installed.
-Instances already executing older code cannot acquire that check from a deploy;
-their existing bounded continuation or an explicitly authorized operator action
-must create the first updated instance. Production deploys send all traffic to
-one version; this does not select a globally newest version during a gradual
-deployment with multiple active versions.
+Job claim/page/publish/defer/fail logs emit one JSON object with `runId`, `jobId`,
+`kind`, `stepKey`, `generation`, `attempt` and `waitReason`. Workers Logs indexes
+[structured JSON objects](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects);
+raw errors retain their credential-scrubbed diagnostic detail.
 
 One-time creation commands that cannot be inferred or safely rerun by deploy:
 
 ```bash
 pnpm --dir apps/web exec cf queues create --queue-name cubby-background
-pnpm --dir apps/web exec cf queues create --queue-name cubby-image-cloud
 pnpm --dir apps/web exec cf queues create --queue-name cubby-telemetry
-pnpm --dir apps/web exec cf queues create --queue-name cubby-purchase-agent
 pnpm --dir apps/web exec cf vectorize create \
   --name cubby-openai-text-embedding-3-small-1536 \
   --index-config-dimensions 1536 --index-config-metric cosine
@@ -270,7 +112,7 @@ pnpm --dir apps/web exec cf vectorize metadata-index create \
   --property-name entityType --index-type string
 ```
 
-The Workflow, Durable Object namespaces, bindings, consumers, crons, and route
+The Durable Object namespaces, bindings, consumers, crons, and route
 are created or updated by `cf deploy` from the checked-in configuration's Build Output.
 
 ### Purchase agent
@@ -286,10 +128,13 @@ Its checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   `photo-inventory:<Run.id>` per run (`importRunAgentIdentity`); pi keeps the
   transcript, inbox, and tasks in the object's SQLite, and Lifecycle jobs wake
   it through its alarm after eviction;
-- the `cubby-purchase-agent` queue consumer (`server/domains/purchase-agent/service/queue.ts`),
-  which fences duplicate and late `start_or_resume` deliveries with the Run's
-  dispatch generation (`canDispatchCoordinator` / `acknowledgeCoordinator`),
-  retries a transient failure, and fails the Run after three attempts;
+- the `purchase.dispatch` Job handler, admitted in the Run transaction, which
+  fences duplicate and late starts with the Run's dispatch generation and
+  `coordinatorStartedAt`; stable operation IDs survive lost replies. Job owns
+  bounded retries and raw terminal errors; the coordinator owns settlement.
+  Cutover preserves `dispatchAttempts` as `run` AuditLog rows before dropping
+  it (SQL-only: audit reads list auditable kinds),
+  backfills unacknowledged dispatch intent and preserves stopped failures;
 - every model call through AI Gateway `cubby` on the Worker's `AI` binding,
   by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The gateway
   shim disables parallel tool calls: pi ends a run on a terminating tool only
@@ -345,7 +190,7 @@ runs in this Worker behind an in-process boundary enforced by construction:
   scripted test model in the workerd harness, the purpose's MCP tool
   definitions, and the services of the one Run the object's name identifies
   (`importRunIdFromAgentIdentity`), so a coordinator cannot address another
-  Run. The queue consumer gets a separate environment that resolves any Run's
+  Run. The dispatch Job gets a separate environment that resolves any Run's
   services and coordinator. The Agents SDK base class gets an empty
   environment.
 - Every Cubby effect is a Run service (`server/domains/purchase-import/operations/agent-services.ts`):
@@ -389,8 +234,8 @@ linted instead of a deployment topology.
 
 The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
 request: the exported Durable Object is a shell that loads
-`server/domains/purchase-agent/service/run-agent.ts` on its first event, and the queue handler
-loads the consumer when a `cubby-purchase-agent` batch arrives
+`server/domains/purchase-agent/service/run-agent.ts` on its first event, and the Job handler loads the dispatch host only when
+a purchase dispatch is due
 (`apps/web/tooling/checks/check-server-closure.ts` reports the static entry, browser
 API bootstrap, combined page path, and total output). The API bootstrap includes
 the dispatch adapter's static imports; individual operation loaders remain
@@ -437,13 +282,8 @@ request.
 Pi-durable conversations live in the coordinator's Durable Object, so moving
 the class between Workers or replacing it does not carry them over: terminate
 the Runs whose coordinator is active (`running` and `paused_*`) before such a
-deploy. A queue has one consumer; to move `cubby-purchase-agent` to another
-Worker, remove the old consumer first
-(`cf queues consumers delete <consumer-id> --queue-id <queue-id>`); events wait
-in the queue until the new consumer deploys.
-Resolve these provider IDs with `cf queues list` and
-`cf queues consumers list --queue-id <queue-id>`; the delete command does not
-accept a queue or Worker name.
+deploy. Job dispatch intent remains in Postgres; coordinator SQLite receipts
+and conversations must be preserved across the cutover.
 
 After deployment, authorize each member once from Settings and verify the
 client/grant without printing token values:
@@ -464,11 +304,10 @@ data; profile/provenance contracts belong in
 
 ### PostgreSQL and Hyperdrive
 
-Frequent crons must not open Neon merely to check for work. Keep their idle
-checks in Durable Object storage; pending durable handoffs may use alarms.
-Nightly maintenance is the exception and may reconcile PostgreSQL state.
-AI refresh follows this rule; its scheduling details live in the
-[refresh runbook](runbooks/ai-refresh.md).
+Minute cron and app-open catch-up inspect Postgres Job intent and use the same
+drain as background wakes. Stateful Durable Objects retain only their provider
+admission, cache or coordinator responsibilities. AI refresh policy details
+live in the [refresh runbook](runbooks/ai-refresh.md).
 
 Neon owns the PostgreSQL database. Production compute is autoscaling
 0.25–4 CU and keeps scale-to-zero (300 s idle) by choice: the first query after
@@ -485,9 +324,9 @@ queue runs one message per invocation with `max_concurrency: 2`, a conservative
 starting policy to reduce competing database work, not a measured optimum or
 an interactive connection reservation. Tune it against queue backlog and oldest
 message age, origin pool waits, and interactive latency together. Telemetry
-concurrency remains 1. Purchase-agent delivery is serial within each batch, but
-starts coordinator work outside delivery; capping that queue would not bound
-active agent database work. That workload policy remains separate.
+concurrency remains 1. Purchase dispatch starts coordinator work outside Job delivery; the background
+queue cap does not bound active coordinator database work. That workload policy
+remains separate.
 
 Editing Neon's autoscaling bounds restarts the endpoint and disconnects active
 sessions; automatic resizing within those bounds does not. Apply a range change
@@ -556,18 +395,18 @@ pnpm --dir apps/web exec wrangler secret put NAME --name cubby
 pnpm --dir apps/web exec cf workers secrets list --worker cubby
 ```
 
-| Name                   | Storage                        | Purpose                                                       |
-| ---------------------- | ------------------------------ | ------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                |
-| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                         |
-| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                         |
-| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                          |
-| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                         |
-| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts) |
-| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                |
-| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent         |
-| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Authenticated REST inference, including named subscriber BYOK |
-| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                   |
+| Name                   | Storage                        | Purpose                                                                                                                                                           |
+| ---------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                                                                    |
+| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                             |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                             |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                                                              |
+| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                                                             |
+| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                                                                     |
+| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                                                                    |
+| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                                                             |
+| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK; with account-scoped Workers Observability Edit it also reads inline Job logs |
+| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                                                                                                                       |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -736,13 +575,10 @@ Past one, `beforeFreeRequest` returns a `cubby_credit_budget_reached` or
 `cubby_plan_budget_reached` funding refusal and the ladder moves on; an
 unladdered plan call skips the plan for its paid or subscription-required
 path. Every Run then pays within the paid budget, and once that is spent
-`paidRunPreflight` pauses the Run (`paused_auth`, `execution_limit`). The `AI_GATEWAY_EGRESS` Durable Object holds one
-`fundingResumeAt` alarm at the window end. Before recovery it consumes that
-wake into a persisted, generation-tagged in-flight record; recovery retries
-retain that record and any newly requested window remains pending separately.
-`resumeFundingPausedRuns` then redispatches paused agent imports and relaunches
-paused Mail discovery, and the
-nightly/app-open recovery calls it too. A member's `run_now_paid` control
+`paidRunPreflight` pauses the Run (`paused_auth`, `execution_limit`). The funding pause transaction records a `run.funding-resume` Job due just after
+the window end, with `waitReason=ai_funding_window` and `waitUntil`.
+`resumeFundingPausedRuns` redispatches eligible agent imports and resumes paused
+Mail discovery; nightly/app-open recovery calls the same domain path. A member's `run_now_paid` control
 event ("Run now, paid allowed" on the Run page, "Run discovery now, paid
 allowed" on the Mail import card, or MCP `run.lifecycle`/`run.discover_mail`)
 resumes that Run now and lets it and the imports its discovery starts pay past
@@ -816,7 +652,7 @@ Decision assignment, caching, request bounds and response envelopes belong to
 the shared decision runner. Independent all-or-fail decisions use
 `runDecisionChoices`; callers retaining partial answers use the generic
 `settleDecisionChoices(items, questionFor)`, whose outcomes carry their original
-typed work item. Its cooperative option owns the Workflow's yield scope. Both wait for every started request before returning, including
+typed work item. Its cooperative option owns the Job's yield scope. Both wait for every started request before returning, including
 when a sibling fails. Callers do not maintain parallel question-index arrays.
 Cache hits retain their individual keys, while owned cache misses share requests
 only within the same feature, selected model, usage context, and embedded image
@@ -888,7 +724,7 @@ changed source content are filtered out. AVIF sources wait, without consuming
 attempts, for the normalization job's verified JPEG snapshot.
 
 An available Apple companion claims compatible waiting image jobs immediately
-when it connects. The queue's no-device cooldown does not delay that claim;
+when it connects. The Job's no-device cooldown does not delay that claim;
 pending retries still honor backoff. A job the device claimed but could not
 take (refused assignment, failed command preparation) returns to `pending`
 with that backoff, so the same device cannot reclaim it on its next pull.
@@ -899,36 +735,24 @@ that exhausts it leaves the job `failed` with its last error. An operator retry
 restores the full budget. The claim and retry policy belongs to
 `server/domains/image-processing/repo/image-processing.ts`.
 
-Cloud image execution uses `cubby-image-cloud`, separate from
-`cubby-background`. Shared image wakeups await durable queue acceptance before
-acknowledging and leave the existing job pending; only the destination claims
-the source-matching attempt. A failed publication is retried by the shared
-consumer, and existing image dispatch repair republishes pending or expired
-jobs. The image job and its attempt history remain the only execution ledger.
-Queue redelivery cannot create a second active attempt, and a caught provider
-failure persists the job retry/backoff before acknowledging its delivery;
-transport retries do not independently multiply paid calls.
-Companion normalization results that require cloud description use the same
-cloud lane; Apple execution and its capability/participation policy remain
-owned by the companion transport.
-
-The cloud lane accepts one image per invocation and bounds concurrency at four,
-before download or claim. The shared consumer remains bounded at two, so those
-two lanes can hold at most six Worker-side database clients; interactive work,
-other queues and Workflows also share the Hyperdrive origin pool. Gateway
-admission separately bounds paid model starts. These limits do not increase the
-old shared batch size: ten tasks in one invocation previously exhausted Worker
-memory. JPEG analysis reads are bounded before buffering: description and
+Cloud and native image execution share one Job lease and generation fence.
+The background drain dispatches cloud work; a compatible native pull can claim
+a device-waiting Job before its cooldown. Processing attempts preserve executor
+attribution and output receipts; late completions cannot adopt after ownership
+expires. Job failures use the same retry budget as other background work.
+The background consumer remains bounded at two concurrent deliveries; provider
+admission separately bounds paid model starts. These limits do not reserve
+interactive Hyperdrive connections. JPEG analysis reads are bounded before buffering: description and
 companion normalization at 4 MiB, identification at 2 MiB. Four overlapping
 description invocations hold at most 16 MiB of retained rendition bytes, with
 additional bounded streaming, inspection and upload copies; this is a payload
 bound, not a measurement of total isolate memory. Originals remain unchanged
 when an oversized rendition fails with its raw size diagnostic.
 
-Both shared and cloud consumers log `queue_wait_ms` from Cloudflare's transport
+The background consumer logs `queue_wait_ms` from Cloudflare's transport
 enqueue timestamp at consumer entry, with the queue name. Local delivery
 adapters preserve that metadata; older fixture messages without it report an
-unavailable wait rather than inventing one. Cloud logs separately retain
+unavailable wait rather than inventing one. Image logs separately retain
 `intent_age_ms` from the job's persisted creation time, which includes shared
 queue, device, normalization and retry/backoff delays. `execution_ms` measures
 destination claim, preparation, provider work and adoption. Retried jobs retain
@@ -953,6 +777,76 @@ because the `AI` binding supplies Worker-identity authentication.
 
 ## Observability
 
+### Inline Job logs and limits
+
+A Run's Diagnostics section and an Image's or Location's Jobs slot read one
+Job's raw Worker lines through `job.logs`
+(`server/generic/jobs/service/job-logs.ts`). It calls the Workers
+Observability telemetry query API, `POST /accounts/{account}/workers/observability/telemetry/query`.
+
+- **Filter.** `jobId` OR `runId` (the top-level fields `@cubby/worker-tracing`
+  logs), view `events`, at most 500 lines.
+- **Window.** The Job's active window, with a minute of margin either side.
+- **Credentials.** The query authenticates with the `AI_GATEWAY_API_KEY`
+  Worker secret. That Cloudflare API token must also carry the account-scoped
+  Workers Observability Edit permission: the telemetry query endpoint requires
+  Write even for reads.
+- **Missing token.** Without `AI_GATEWAY_API_KEY` the panel reads "not
+  configured". A token without the permission returns 401/403, which the panel
+  shows as the scrubbed raw error. A local run with the key queries the
+  account's logs, which hold no local Job lines.
+- **Retention.** A window older than Workers Logs' 7-day retention reads
+  "raw logs expired".
+- **Failures.** A failed query shows its raw response, redacted only by
+  `scrubErrorMessage`, with Retry and the dashboard link.
+
+`server/generic/jobs/limits-catalog.ts` lists every limit that can set a Run's
+speed, imported from the constant or config that enforces it:
+
+- queue consumers;
+- drain pages, time and batch;
+- lease and heartbeat;
+- attempts and backoff;
+- step page caps and in-page preparation and publication concurrency;
+- AI Gateway in-flight, rate and deadline;
+- AI refresh slots;
+- the funding window;
+- provider retry wait;
+- database connections.
+
+Change a value at its source, never in the catalog.
+
+`evaluateBinding` names the limit binding now:
+
+- **Typed Job waits.** A wait (`provider_capacity`, `ai_funding_window`,
+  `rate_limit`, `device`) and a retry backoff each name their limit.
+- **Due Jobs.** A due Job is held by drain capacity, counted with its same-kind
+  Jobs ahead.
+- **Running pages.** A running step reads its last page sample (`RunStep.meta.page`):
+  - a page near the drain budget is cut by it;
+  - a phase whose peak in-flight work reaches its cap is "concurrency N of N
+    busy";
+  - otherwise the page's own work sets the pace ("preparation 61% of page time
+    · 106 queries/page").
+- **No sample.** Without a sample the verdict is "Unknown — no recent samples".
+
+Step pages record their own sample through `measurePage`
+(`server/generic/jobs/page-work.ts`). Executed steps get it as
+`StepPageContext.work`; routine passes are measured by `routineStepHandler`
+(selection, then publication).
+
+- **Phases.** A driver times a phase with `work.time` or adds the timings its
+  repository already measured with `work.add`. Statement generation passes the
+  same selection, preparation, publication and application times it logs.
+- **Concurrency.** Peaks are `min(cap, items)`, the workers
+  `forEachConcurrently` starts.
+- **Queries.** The page runs inside `withDatabaseOperationMetrics`, so
+  `queries` counts the traced pool's statements. Zero counted means the page ran
+  outside the traced pool and stores null ("not measured").
+- **Unmeasured drivers.** A page that records no phase stores no sample.
+
+### Error tracking and traces
+
 The web/Workers Sentry DSN is intentionally public and defined exactly once,
 in `packages/worker-tracing/src/sentry-dsn.ts`; the web client and Worker, the
 dev-only Node preload, and every auxiliary Worker import it from there. The
@@ -968,13 +862,13 @@ spans. Trace context never propagates to services outside Cloudflare.
 
 `withInvocationTrace` loads the native tracing runtime before looking up the
 active invocation span, then annotates that span and creates a timing child.
-Fetch handlers, queue batches (including the purchase-agent consumer), scheduled maintenance,
+Fetch handlers, queue batches, scheduled maintenance,
 Durable Object alarms, purchase-agent dispatch RPCs, and search-index repair
-workflow runs use this entry helper, so a fresh isolate needs no preceding fetch.
+Jobs use this entry helper, so a fresh isolate needs no preceding fetch.
 Batch spans carry queue name and size; individual messages retain their own run
 context instead of assigning one actor or run to an entire batch. Cron spans
 include the trigger and scheduled time, including maintenance-mode skips.
-Alarm and workflow spans identify their workload; purchase-agent alarm/RPC
+Alarm and Job spans identify their workload; purchase-agent alarm/RPC
 spans also identify the Run. Entry annotation never ends the platform-owned
 span. Other code uses `withTrace` for child operations and
 `annotateActiveSpan` for an already initialized active span. Outside the Worker
@@ -1077,7 +971,7 @@ For a new account or disaster recovery:
 5. Recreate Google Auth Platform configuration and rotate the Google client
    secret rather than copying it through documentation.
 6. Deploy `cubby`; verify its exact source revision, that it is the only
-   consumer of each of its queues (including `cubby-purchase-agent`), the
+   consumer of each of its queues (background wakes and telemetry), the
    `PURCHASE_IMPORT_RUN` agent namespace, Gateway usage, and run authenticated
    database, media, AI, Gmail, purchase-agent, and auxiliary-service smoke
    tests.

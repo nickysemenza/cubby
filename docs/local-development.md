@@ -315,9 +315,10 @@ The default `offline` profile reads USDA from the real release Durable Object,
 which the dev Worker seeds with the synthetic release `2000-01`; UPC upstream
 lookups are disabled. Images use local R2, and auth uses local
 PostgreSQL. External provider operations return unavailable diagnostics.
-Purchase-agent starts fail immediately with `dispatch_failed` before an offline
-producer can enqueue work. Unexpected queue deliveries are retried and throw
-rather than acknowledged as successful work. Telemetry is off unless `CUBBY_DEV_TELEMETRY=true` is explicit.
+Purchase-agent starts commit dispatch intent. The offline dispatch host refuses
+to open a coordinator; the Job retains the unavailable diagnostic and bounded
+retry budget. Background wake deliveries always acknowledge; Job rows retain
+execution failures for recovery. Unexpected local queue names throw. Telemetry is off unless `CUBBY_DEV_TELEMETRY=true` is explicit.
 
 For billed AI/provider work, use `pnpm dev integrations`. AI requests use the
 shared `cubby` gateway with `environment=development`; the Vectorize binding

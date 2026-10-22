@@ -1,10 +1,7 @@
-import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
 import { getAuth } from "~/lib/auth";
 import { APP_ORIGIN, MCP_RESOURCE } from "~/lib/auth-constants";
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
   clearPurchaseAgentOAuthCookie,
@@ -35,14 +32,8 @@ type PurchaseAgentGrant = {
   expiresAt: Date | null;
   sessionId: string | null;
 };
-type DispatchAttempt = {
-  id: string;
-  status: string;
-};
 
-export type ResumedRun = Awaited<
-  ReturnType<typeof resumeAuthorizedRuns>
->[number];
+type ResumedRun = Awaited<ReturnType<typeof resumeAuthorizedRuns>>[number];
 
 export type CallbackDependencies = {
   getContext(request: Request): Promise<{ db: Database; userId: string }>;
@@ -53,11 +44,6 @@ export type CallbackDependencies = {
   ): Promise<TokenResponse>;
   findGrant(db: Database, userId: string): Promise<PurchaseAgentGrant | null>;
   resumeRuns(db: Database, userId: string): Promise<ResumedRun[]>;
-  getQueue(): { send(event: PurchaseAgentEvent): Promise<void> } | undefined;
-  recordDispatch(
-    db: Database,
-    input: { runId: string; eventId: string; error?: string },
-  ): Promise<DispatchAttempt>;
   verifyState(token: string): Promise<{
     state: string;
     verifier: string;
@@ -93,11 +79,6 @@ const callbackDependencies: CallbackDependencies = {
     (
       await import("~/server/domains/purchase-import/repo/run-service")
     ).resumeAuthorizedRuns(db, userId),
-  getQueue: getPurchaseAgentQueue,
-  recordDispatch: async (db, input) =>
-    (
-      await import("~/server/domains/purchase-import/repo/dispatch")
-    ).recordRunDispatchAttempt(db, input),
   verifyState(token) {
     return verifyPurchaseAgentOAuthState(token, getAuthSecret());
   },
@@ -113,50 +94,6 @@ function callbackResponse(status: PurchaseAgentConnectionStatus) {
       ),
     },
   });
-}
-
-async function dispatchResumedRuns(
-  db: Database,
-  runs: ResumedRun[],
-  dependencies: CallbackDependencies,
-) {
-  const queue = dependencies.getQueue();
-  let failed = false;
-  await Promise.all(
-    runs.map(async (run) => {
-      try {
-        if (!run.eventId)
-          throw new Error("Purchase Agent queue event is unavailable");
-        if (!queue) throw new Error("Purchase Agent queue is unavailable");
-        await queue.send({
-          version: 1,
-          runId: run.id,
-          purpose: agentImportRunPurpose.parse(run.purpose),
-          eventId: run.eventId,
-          generation: run.eventId,
-          type: "start_or_resume",
-        });
-      } catch (error) {
-        failed = true;
-        if (run.eventId) {
-          await dependencies.recordDispatch(db, {
-            runId: run.id,
-            eventId: run.eventId,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Purchase Agent dispatch failed",
-          });
-        }
-        return;
-      }
-      await dependencies.recordDispatch(db, {
-        runId: run.id,
-        eventId: run.eventId!,
-      });
-    }),
-  );
-  return failed;
 }
 
 export async function handlePurchaseAgentOAuthCallback(
@@ -195,11 +132,8 @@ export async function handlePurchaseAgentOAuthCallback(
       context.db,
       context.userId,
     );
-    const dispatchFailed = await dispatchResumedRuns(
-      context.db,
-      resumedRuns,
-      dependencies,
-    );
+    // resumeRuns committed dispatch intent with each resumed generation.
+    const dispatchFailed = resumedRuns.some((run) => !run.eventId);
     return callbackResponse(dispatchFailed ? "dispatch_failed" : "authorized");
   } catch {
     return callbackResponse(authorized ? "dispatch_failed" : "failed");

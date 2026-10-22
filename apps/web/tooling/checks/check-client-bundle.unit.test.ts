@@ -30,7 +30,7 @@ describe("client bundle boundary", () => {
         await expect(assertNoDevRoutes(directory)).rejects.toThrow(/local/i);
       }
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await rm(directory, { recursive: true, force: true, maxRetries: 5 });
     }
   });
   it("rejects server-only markers in every client asset", async () => {
@@ -70,7 +70,7 @@ describe("client bundle boundary", () => {
         /compact_email_html/,
       );
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true, maxRetries: 5 });
     }
   });
 });

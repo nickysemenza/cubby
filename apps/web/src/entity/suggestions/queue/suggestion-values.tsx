@@ -20,7 +20,6 @@ import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { StackedValue } from "~/ui/common/stacked-value";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -157,9 +156,11 @@ export function ImpactLabels({ impact }: { impact: SuggestionImpact[] }) {
 export function RecordLink({
   record,
   wrap,
+  name,
 }: {
   record: SuggestionRecordRef;
   wrap?: boolean;
+  name?: string | null;
 }) {
   const mobile = useIsMobile();
   const wraps = wrap ?? mobile;
@@ -168,6 +169,7 @@ export function RecordLink({
       variant="byId"
       entityKind={record.entity}
       entityId={record.id}
+      name={name}
       compact={!wraps}
       wrap={wraps}
     />
@@ -303,19 +305,19 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
 export function SuggestionRecord({ row }: { row: SuggestionListRow }) {
   if (row.family === "transfer_pair")
     return (
-      <StackedValue
-        primary={
+      <RecordLink
+        record={row.record}
+        name={
           row.evidence.outflow.description ?? row.evidence.outflow.accountName
         }
-        secondary={<RecordLink record={row.record} />}
       />
     );
   if (row.family === "statement_transaction") {
     const charge = row.evidence;
     return (
-      <StackedValue
-        primary={charge.merchant ?? charge.rawDescription}
-        secondary={<RecordLink record={row.record} />}
+      <RecordLink
+        record={row.record}
+        name={charge.merchant ?? charge.rawDescription}
       />
     );
   }

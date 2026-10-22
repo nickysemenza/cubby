@@ -2,7 +2,7 @@ import { bindings, defineConfig, defineWorker } from "cf/config";
 
 export const testWorker = defineWorker({
   name: "cubby-calendar-test",
-  entrypoint: "../web/tooling/calendar-test-worker.ts",
+  entrypoint: "./calendar-test-worker.ts",
   compatibilityDate: "2026-09-19",
   compatibilityFlags: ["nodejs_compat"],
   env: {
@@ -38,7 +38,6 @@ export const testWorker = defineWorker({
       worker: "cubby-calendar-test",
       exportName: "PurchaseImportRunAgent",
     }),
-    PURCHASE_AGENT_QUEUE: bindings.queue({ name: "cubby-purchase-agent-test" }),
   },
   exports: {
     AiGatewayEgressDurableObject: { type: "durable-object", storage: "sqlite" },

@@ -22,12 +22,18 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`apps/web/src/entity/display/entity-display.tsx`); named renderers in
   `apps/web/src/entity/display/list-field-renderers.tsx`. Hand overrides in
   `entity/list-columns/` are only for mutation-bound cells.
-- Bulk passes and backlogs: a step-ledger Run (`STEP_RUN_PURPOSES`) whose purpose
-  registers drivers with `server/domains/run/service/step-run.ts`; each step's counts,
-  raw errors, cursor and Retry failed render through the `run.steps` slot. Suggestion
-  families extend the Sweep's drivers (`server/domains/run/service/sweep.ts`); backlogs
-  extend maintenance (`server/domains/maintenance/service/maintenance-run.ts`). Never a
-  queue chain or an ad hoc counter.
+- Bulk passes and backlogs: declare the Run kind and its ordered steps once in
+  `RUN_KINDS` (`packages/schemas/src/activity-fields.ts`: label, purpose text, unit,
+  input mode `count`/`estimate`/`tally`, results family). Executed kinds register one
+  driver per step in `server/domains/run/service/run-step-registry.ts`
+  (`StepDriversFor<P>`: a `count` step must supply its COUNT); `step-run.ts` freezes
+  that population once per step generation and pages it. Routine passes use
+  `routineStepHandler` (`service/routine-run.ts`) so their Job creates the Run lazily.
+  Counts, tallies, no-result reasons, raw errors and Retry failed render through the
+  `run.steps` slot. Suggestion families add Sweep steps (`service/sweep.ts`); backlogs
+  add maintenance steps (`server/domains/maintenance/service/maintenance-run.ts`). AI
+  work fans out as `ai.evaluation` Jobs owned or requested by the Run itself, never a
+  child Run, queue chain or ad hoc counter.
 - Suggestion review: `suggestions.list`/`acceptClean` over the family registry
   (`server/generic/assessment/repo/suggestion-families.ts`) and the Suggestions page; apply
   stays the family's `reviewAssessment` handler. `review-families.ts` declares affected

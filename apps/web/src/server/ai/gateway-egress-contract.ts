@@ -2,6 +2,26 @@ import { aiGatewayMetadataSchema } from "@cubby/shared/ai/gateway-metadata";
 import { gatewayProviderSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
+// Checked 2026-10-20: Unified Billing is 200 requests/60s/gateway (BYOK
+// excluded); Cubby reserves 20 for other clients. Workers AI defaults are
+// 300 RPM text generation / 2,000 classification, with no published fixed
+// concurrency ceiling. 64 unified permits leave >2x the 30 needed at 10s.
+// https://developers.cloudflare.com/ai-gateway/reference/limits/
+// https://developers.cloudflare.com/workers-ai/platform/limits/
+// Anthropic BYOK has organization/model RPM and token limits, not one universal
+// concurrency number: honor its 429 Retry-After without inventing a flat cap.
+// https://platform.claude.com/docs/en/api/rate-limits
+// ChatGPT plan transport bypasses AI Gateway; its plan-dependent usage limits
+// publish no fixed concurrency allowance and it has no local fan-out cap.
+// https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
+/** What the egress Durable Object admits; the Run page's limits catalog reads the same values. */
+export const GATEWAY_EGRESS_LIMITS = {
+  windowMs: 60_000,
+  requestsPerWindow: 180,
+  unifiedMaxInFlight: 64,
+  requestDeadlineMs: 10 * 60_000,
+} as const;
+
 export const gatewayEgressInput = z.object({
   provider: gatewayProviderSchema,
   endpoint: z.string().min(1),
@@ -38,8 +58,6 @@ export type CreditRefusal = Omit<
 >;
 export interface AiGatewayEgressRpc {
   currentDeploymentVersion(): Promise<string>;
-  scheduleAiWorkRecovery(runId?: string): Promise<void>;
-  scheduleFundingResume(at: number): Promise<void>;
   fetch(request: Request): Promise<Response>;
   admit(bucket: string, now?: number): Promise<GatewayAdmission>;
   creditRefusal(now?: number): Promise<CreditRefusal | null>;

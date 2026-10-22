@@ -114,9 +114,6 @@
       "vite": { "config": [] },
       "playwright": { "config": "playwright.config.ts" }
     },
-    "apps/web-worker-tests": {
-      "entry": ["cloudflare.config.ts!"]
-    },
     "packages/schemas": {
       "entry": [
         "src/index.ts!",

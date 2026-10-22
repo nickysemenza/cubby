@@ -132,10 +132,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a step-ledger Run's own ordered steps",
   },
-  "RunStep.childRunId": {
-    classification: "metadata",
-    reason: "the child Run a step delegated its work to",
-  },
   "PhotoRunImage.runId": {
     classification: "ownership",
     reason: "actual photo membership owned by its Run",

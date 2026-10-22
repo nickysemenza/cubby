@@ -5,7 +5,7 @@ import {
 import type { DispatchInput } from "./environment";
 
 /**
- * One queue event as the coordinator reads it. The Durable Object needs the
+ * One durable event as the coordinator reads it. The Durable Object needs the
  * private run UUID, but the signal is part of the authenticated, member-
  * visible transcript, so its body carries only the public handle.
  */
@@ -17,7 +17,7 @@ export function dispatchInputForEvent(
   return {
     identity: { runId: event.runId, purpose },
     generation: event.generation,
-    // Queue redelivery converges on exactly one submission.
+    // Job retries converges on exactly one submission.
     operationId: purchaseAgentEventIdempotencyKey(event),
     signal: {
       type: `purchase-import.${event.type}`,

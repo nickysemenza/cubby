@@ -142,6 +142,7 @@ import {
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { dispatchStartedRun } from "./dispatch";
 import { isRunFinding, runFindingColumns } from "./run-finding";
 import { listRunTargetOutcomes } from "./run-target";
 
@@ -505,34 +506,42 @@ async function armPhotoCoordinator(
   actorUserId: UserId,
   guards: readonly SQL[],
 ) {
-  const eventId = crypto.randomUUID();
-  const [started] = await getDb(db)
-    .update(runTable)
-    .set({
-      dispatchEventId: eventId,
-      dispatchError: null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(runTable.shortcode, publicId),
-        eq(runTable.actorUserId, actorUserId),
-        eq(runTable.purpose, "photo_inventory"),
-        eq(runTable.status, "running"),
-        isNull(runTable.dispatchEventId),
-        sql`EXISTS (SELECT 1 FROM ${photoRunImage} WHERE ${photoRunImage.runId} = ${runTable.id} AND ${photoRunImage.state} = ${runTargetState.enum.pending})`,
-        ...guards,
-      ),
-    )
-    .returning({ id: runTable.id, publicId: runTable.shortcode });
-  return started
-    ? {
+  return withTransaction(db, async (tx) => {
+    const eventId = crypto.randomUUID();
+    const [started] = await tx
+      .update(runTable)
+      .set({
+        dispatchEventId: eventId,
+        dispatchError: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(runTable.shortcode, publicId),
+          eq(runTable.actorUserId, actorUserId),
+          eq(runTable.purpose, "photo_inventory"),
+          eq(runTable.status, "running"),
+          isNull(runTable.dispatchEventId),
+          sql`EXISTS (SELECT 1 FROM ${photoRunImage} WHERE ${photoRunImage.runId} = ${runTable.id} AND ${photoRunImage.state} = ${runTargetState.enum.pending})`,
+          ...guards,
+        ),
+      )
+      .returning({ id: runTable.id, publicId: runTable.shortcode });
+    if (started)
+      await dispatchStartedRun(tx, {
         id: started.id,
-        publicId: runShortcode.parse(started.publicId),
         eventId,
-        created: true as const,
-      }
-    : null;
+        purpose: "photo_inventory",
+      });
+    return started
+      ? {
+          id: started.id,
+          publicId: runShortcode.parse(started.publicId),
+          eventId,
+          created: true as const,
+        }
+      : null;
+  });
 }
 
 /**
@@ -605,7 +614,6 @@ export async function loadRunScope(db: Database, runId: string) {
       skillRevision: runTable.skillRevision,
       runtimeRevision: runTable.runtimeRevision,
       dispatchEventId: runTable.dispatchEventId,
-      dispatchAttempts: runTable.dispatchAttempts,
       dispatchError: runTable.dispatchError,
       coordinatorStartedAt: runTable.coordinatorStartedAt,
       runUpdatedAt: runTable.updatedAt,
@@ -653,7 +661,6 @@ export async function loadRunScope(db: Database, runId: string) {
       skillRevision: row.skillRevision,
       runtimeRevision: row.runtimeRevision,
       dispatchEventId: row.dispatchEventId,
-      dispatchAttempts: row.dispatchAttempts,
       dispatchError: row.dispatchError,
       coordinatorStartedAt: row.coordinatorStartedAt?.toISOString() ?? null,
     }),
@@ -976,6 +983,9 @@ export async function resumeAuthorizedRuns(
         and(
           eq(runTable.actorUserId, owner),
           eq(runTable.status, "paused_auth"),
+          inArray(runTable.purpose, [...agentImportRunPurpose.options]),
+          notDeleted(runTable),
+          isNull(runTable.retiredAt),
         ),
       )
       .returning({
@@ -996,79 +1006,59 @@ export async function resumeAuthorizedRuns(
         and(
           eq(runTable.actorUserId, owner),
           eq(runTable.status, "running"),
+          inArray(runTable.purpose, [...agentImportRunPurpose.options]),
+          notDeleted(runTable),
+          isNull(runTable.retiredAt),
           isNull(runTable.coordinatorStartedAt),
           isNotNull(runTable.dispatchEventId),
           lt(runTable.updatedAt, repairCutoff),
         ),
       );
+    for (const item of [...resumed, ...interrupted])
+      if (item.eventId)
+        await dispatchStartedRun(tx, { ...item, eventId: item.eventId });
     return [...resumed, ...interrupted];
   });
 }
 
-/** A pending budget resume this old was interrupted before its send was recorded. */
-const BUDGET_RESUME_RECLAIM_MS = 5 * 60_000;
-
-/**
- * Redispatch agent imports a funding stop paused before `pausedBefore`; the
- * caller chooses the window (`resumeFundingPausedRuns`). A resumed Run stays `budget_resume_pending`
- * until its queue send is recorded. Each send is claimed atomically (the
- * resuming update, or reclaiming a stale pending generation), so concurrent
- * recoveries never send one generation twice and a late failed duplicate
- * cannot overwrite a recorded success.
- */
+/** Resume only funding-paused imports; manual and authorization pauses stay stopped. */
 export async function redispatchBudgetPausedImports(
   db: Database,
   now = new Date(),
   pausedBefore = now,
 ) {
-  const sent = {
-    id: runTable.id,
-    purpose: runTable.purpose,
-    eventId: runTable.dispatchEventId,
-  };
-  const resumed = await getDb(db)
-    .update(runTable)
-    .set({
-      status: "running",
-      dispatchEventId: sql`gen_random_uuid()`,
-      dispatchError: null,
-      failureCode: "budget_resume_pending",
-      endedAt: null,
-      coordinatorStartedAt: null,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(runTable.status, "paused_auth"),
-        eq(runTable.failureCode, "execution_limit"),
-        inArray(runTable.purpose, [...agentImportRunPurpose.options]),
-        lt(runTable.updatedAt, pausedBefore),
-        notDeleted(runTable),
-      ),
-    )
-    .returning(sent);
-  const reclaimed = await getDb(db)
-    .update(runTable)
-    .set({ updatedAt: now })
-    .where(
-      and(
-        eq(runTable.status, "running"),
-        eq(runTable.failureCode, "budget_resume_pending"),
-        isNotNull(runTable.dispatchEventId),
-        lt(
-          runTable.updatedAt,
-          new Date(now.getTime() - BUDGET_RESUME_RECLAIM_MS),
+  return withTransaction(db, async (tx) => {
+    const resumed = await tx
+      .update(runTable)
+      .set({
+        status: "running",
+        dispatchEventId: sql`gen_random_uuid()`,
+        dispatchError: null,
+        failureCode: null,
+        endedAt: null,
+        coordinatorStartedAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(runTable.status, "paused_auth"),
+          eq(runTable.failureCode, "execution_limit"),
+          inArray(runTable.purpose, [...agentImportRunPurpose.options]),
+          lt(runTable.updatedAt, pausedBefore),
+          notDeleted(runTable),
+          isNull(runTable.retiredAt),
         ),
-        notDeleted(runTable),
-      ),
-    )
-    .returning(sent);
-  const { dispatchStartedRun } = await import("./dispatch");
-  // A recorded send clears the pending marker (`recordRunDispatchAttempt`).
-  for (const run of [...resumed, ...reclaimed])
-    if (run.eventId)
-      await dispatchStartedRun(db, { ...run, eventId: run.eventId });
-  return resumed.length + reclaimed.length;
+      )
+      .returning({
+        id: runTable.id,
+        purpose: runTable.purpose,
+        eventId: runTable.dispatchEventId,
+      });
+    for (const item of resumed)
+      if (item.eventId)
+        await dispatchStartedRun(tx, { ...item, eventId: item.eventId });
+    return resumed.length;
+  });
 }
 
 export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
@@ -1549,7 +1539,6 @@ export async function loadRunDetail(
         : header.dispatchError
           ? "failed"
           : "pending",
-      attempts: header.dispatchAttempts,
       error: header.dispatchError,
       coordinatorStartedAt: iso(header.coordinatorStartedAt),
     },
@@ -1987,6 +1976,11 @@ export async function controlRun(
       } else if (locked.purpose === "mail_import") {
         await transferMailRunSources(tx, scope.runId, successorId);
       }
+      await dispatchStartedRun(tx, {
+        id: successorId,
+        eventId: dispatchEventId,
+        purpose: locked.purpose,
+      });
       return {
         publicId: input.runPublicId,
         status: locked.status,
@@ -2032,6 +2026,11 @@ export async function controlRun(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
+      await dispatchStartedRun(tx, {
+        id: scope.runId,
+        eventId: dispatchEventId,
+        purpose: locked.purpose,
+      });
       return {
         publicId: input.runPublicId,
         status: "running" as const,
@@ -2167,6 +2166,11 @@ export async function controlRun(
           unresolvedTargets.map((target) => target.workKey),
         );
       }
+      await dispatchStartedRun(tx, {
+        id: successorId,
+        eventId: dispatchEventId,
+        purpose: locked.purpose,
+      });
       return {
         publicId: input.runPublicId,
         status: locked.status,
@@ -2252,6 +2256,11 @@ export async function controlRun(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
+      await dispatchStartedRun(tx, {
+        id: scope.runId,
+        eventId: dispatchEventId,
+        purpose: locked.purpose,
+      });
       return {
         publicId: input.runPublicId,
         status: "running" as const,

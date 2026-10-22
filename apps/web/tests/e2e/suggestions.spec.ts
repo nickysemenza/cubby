@@ -19,7 +19,6 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { user } from "~/server/db/auth.schema";
 import { product as productTable, feedback } from "~/server/db/schema";
 import {
   publishEntityConnection,
@@ -64,22 +63,6 @@ async function generateStatementSuggestions(db: Db, importId: string) {
     if (!page.next) return;
     after = page.next;
   }
-}
-
-/**
- * The reserved system user an import's routine Sweep runs as. Production
- * has it; a fresh E2E database does not.
- */
-// TODO(#2722): seed the system user in the E2E base world instead.
-async function ensureSystemUser(db: Db) {
-  await getDb(db)
-    .insert(user)
-    .values({
-      id: "cubby-system",
-      name: "Cubby",
-      email: "cubby-system@example.invalid",
-    })
-    .onConflictDoNothing();
 }
 
 /** Synthetic Monarch rows on one account alias. */
@@ -300,7 +283,6 @@ test("Suggestions lists every family with named records and category pills, and 
   page,
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
-  await ensureSystemUser(db);
   const categoryName = uniqueName(testInfo, "Suggested category");
   const category = await createEntityFixture(page, "productCategory", {
     name: categoryName,
@@ -485,7 +467,6 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
 }, testInfo) => {
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
-  await ensureSystemUser(db);
   const alias = uniqueName(testInfo, "Statement card");
   const owner = await ensureMemberParty(page, alias);
   const category = await createEntityFixture(page, "spendingCategory", {
@@ -661,6 +642,10 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await expect(rowFor(hold)).toHaveCount(0);
   expect(await spendingTotal()).toBe(103.57);
 
+  // The preceding acceptance commits search work before the row disappears.
+  // Settle that work before this serializable fixture import updates the same
+  // refresh Job; the offline pump can otherwise change it under our snapshot.
+  await drainDerivedRefreshFrontier(db);
   // Publish manual review work without scheduling import-clean execution,
   // which would legitimately finish the same booking before the bulk click.
   const posted = await recordSourceTransactionRecords(
@@ -735,7 +720,8 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
     await dialog.getByRole("checkbox", { name: family }).click();
   const estimate = dialog.getByRole("list", { name: "Sweep estimate" });
   await expect(estimate).toContainText("Statements");
-  await expect(estimate).toContainText(/decision/);
+  // The estimate counts what each family's first step reads.
+  await expect(estimate).toContainText(/\d+ charges?/);
   await dialog.getByRole("button", { name: "Start Sweep" }).click();
   const status = page.getByLabel("Sweep status");
   await expect(status).toBeVisible();

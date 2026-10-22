@@ -7,13 +7,12 @@ import { and, eq } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, product, run } from "~/server/db/schema";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
@@ -23,7 +22,6 @@ import { ensureRun, systemActor } from "./ensure-run";
 // Real transactions expose races between shared Jobs and their requesters.
 describe("AI refresh scheduling admission", () => {
   const ctx = withTestDb();
-  beforeEach(() => createSystemUserFixture(ctx.db));
   const target = (recordId = crypto.randomUUID()) => ({
     target: aiEvaluationTarget.parse({
       kind: "email",

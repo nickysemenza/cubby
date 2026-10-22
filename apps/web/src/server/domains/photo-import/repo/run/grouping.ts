@@ -3,7 +3,6 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 import { storedPhotoRunInput } from "@cubby/schemas/photo-import-run";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
@@ -12,7 +11,6 @@ import {
   listPhotoRunImages,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { findActivePurchaseAgentGrant } from "~/server/domains/purchase-import/repo/agent-auth";
-import { dispatchRunEvent } from "~/server/domains/purchase-import/repo/dispatch";
 import { startPhotoInventoryCoordinator } from "~/server/domains/purchase-import/repo/run-service";
 
 import { advancePhotoRun } from "./lifecycle";
@@ -79,8 +77,6 @@ export async function startPhotoGroupingForActor(
   // Legacy Run (no processor choice): the original manual start.
   const grant = await findActivePurchaseAgentGrant(db, actorUserId);
   if (!grant) throw new Error("Connect the Cubby agent before grouping photos");
-  const queue = getPurchaseAgentQueue();
-  if (!queue) throw new Error("Photo import agent is unavailable");
   const waitingForAnalysis = (await listPhotoRunImages(db, runId)).filter(
     (image) =>
       image.targetState === "pending" &&
@@ -93,14 +89,5 @@ export async function startPhotoGroupingForActor(
     publicId: runId,
     actorUserId,
   });
-  if (run.created)
-    await dispatchRunEvent(db, queue, {
-      version: 1,
-      runId: run.id,
-      eventId: run.eventId,
-      generation: run.eventId,
-      purpose: "photo_inventory",
-      type: "start_or_resume",
-    });
   return { runId: run.publicId, started: run.created, waitingForAnalysis: 0 };
 }

@@ -50,7 +50,7 @@ it("invalidates corpus templates for tooling fixtures, src calculations and imag
       expect(corpusTemplateHash(root)).not.toBe(before);
     }
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -74,7 +74,7 @@ it("retains corpus templates across unrelated UI source edits", () => {
     }
     expect(corpusTemplateHash(root)).toBe(before);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -89,7 +89,7 @@ it("forces a fresh corpus generation for an explicit reseed", () => {
       corpusTemplateHash(root, "synthetic-new-generation"),
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -124,6 +124,6 @@ it("invalidates templates for workspace runtime sources and export manifests", (
       expect(corpusTemplateHash(root)).not.toBe(before);
     }
   } finally {
-    rmSync(workspace, { recursive: true, force: true });
+    rmSync(workspace, { recursive: true, force: true, maxRetries: 5 });
   }
 });

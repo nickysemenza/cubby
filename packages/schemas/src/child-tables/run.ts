@@ -1040,12 +1040,6 @@ export const runChildren = [
       { key: "failed", kind: "integer", notNull: true, default: 0 },
       { key: "skipped", kind: "integer", notNull: true, default: 0 },
       { key: "pages", kind: "integer", notNull: true, default: 0 },
-      {
-        key: "childRunId",
-        kind: "uuid",
-        type: "RunId",
-        reference: { table: "run", column: "id", onDelete: "set null" },
-      },
       /** Driver-owned resume point; opaque to the ledger. */
       { key: "cursor", kind: "jsonb" },
       { key: "pausedReason", kind: "text" },
@@ -1081,14 +1075,7 @@ export const runChildren = [
         exports: ["RunStepState", "RunStepError", "RunStepMeta"],
       },
     ],
-    indexes: [
-      { name: "RunStep_run_key", unique: true, on: ["runId", "key"] },
-      {
-        name: "RunStep_child_idx",
-        on: ["childRunId"],
-        where: "{childRunId} IS NOT NULL",
-      },
-    ],
+    indexes: [{ name: "RunStep_run_key", unique: true, on: ["runId", "key"] }],
     checks: [
       {
         name: "RunStep_state_check",

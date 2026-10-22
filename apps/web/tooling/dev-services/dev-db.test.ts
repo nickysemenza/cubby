@@ -4,7 +4,7 @@ import { resolveDevProfile } from "./dev-profile.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // The low-level migration launcher must reject inherited production targets
 // before invoking a container command, just as the development supervisor does.
@@ -86,6 +86,6 @@ test("reset preserves consistent database overrides across repeated owned bindin
     assert.match(result.stderr, /synthetic-stop-after-rebind/u);
     assert.doesNotMatch(result.stderr, /Refusing inherited DATABASE_URL/u);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 5 });
   }
 });

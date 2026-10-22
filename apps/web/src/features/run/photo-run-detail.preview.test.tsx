@@ -80,7 +80,6 @@ const run: RunDetail = {
   dispatch: {
     eventId: null,
     state: "pending",
-    attempts: 0,
     error: null,
     coordinatorStartedAt: null,
   },

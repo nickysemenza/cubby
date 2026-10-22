@@ -21,31 +21,25 @@ export type BackgroundQueueMessageOutcome =
   | "unreadable"
   | "failed";
 
-/** Execution errors are persisted by Job; queue retries only unavailable DB/transport work. */
+/** Every delivery wakes durable work; unreadable bodies and failed drains always ack. */
 export async function handleBackgroundQueueMessage(
   db: Database,
   message: BackgroundQueueDeliveredMessage,
   ports: BackgroundQueueConsumerPorts,
 ): Promise<BackgroundQueueMessageOutcome> {
   const parsed = backgroundTaskMessageSchema.safeParse(message.body);
-  if (!parsed.success) {
-    // Deployment requires a verified drain of old queues, in-flight work and
-    // dead letters before the cutover. Old duplicate envelopes are obsolete.
-    message.ack();
-    return "unreadable";
-  }
   try {
     if (ports.handlers)
       await (
         await import("~/server/generic/jobs/service/jobs")
       ).drainDueJobs(db, ports.handlers);
     else await drainProductionJobs(db);
-    message.ack();
-    return "succeeded";
+    return parsed.success ? "succeeded" : "unreadable";
   } catch (error) {
     ports.captureException(error);
-    message.retry();
     return "failed";
+  } finally {
+    message.ack();
   }
 }
 
@@ -57,15 +51,12 @@ export async function handleBackgroundQueueBatch(
   let succeeded = false;
   // One wake drains a bounded fair budget; duplicate wake messages need no second drain.
   for (const message of batch.messages) {
-    if (
-      succeeded &&
-      backgroundTaskMessageSchema.safeParse(message.body).success
-    ) {
+    if (succeeded) {
       message.ack();
       continue;
     }
     const outcome = await handleBackgroundQueueMessage(db, message, ports);
-    succeeded ||= outcome === "succeeded";
+    succeeded ||= outcome === "succeeded" || outcome === "unreadable";
   }
   if (succeeded) await ports.afterSuccess?.();
 }

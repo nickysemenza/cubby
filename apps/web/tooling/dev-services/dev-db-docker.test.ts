@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 
 // Failure modes: Docker's inspect shape bypasses the identity guard; an
 // unrelated container sharing the fixed name is stopped.
@@ -86,6 +86,6 @@ test("Docker dev down stops the owned server and refuses a foreign one", async (
       foreignCalls.every((args) => args[0] !== "stop" && args[0] !== "rm"),
     );
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 5 });
   }
 });

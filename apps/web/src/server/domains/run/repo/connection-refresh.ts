@@ -6,17 +6,23 @@ import {
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, count, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityIdentity, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import {
@@ -25,16 +31,11 @@ import {
 } from "~/server/domains/connection/repo/discovery-fingerprint";
 
 import {
-  hasAiRefreshRunCapacity,
-  tryLockAiRefreshScheduling,
-} from "./ai-refresh-admission";
-import {
+  hasAdmissibleTarget,
   insertEvaluationTargets,
   scheduleEvaluationRun,
 } from "./ai-refresh-state";
-import { ensureRun, systemActor } from "./ensure-run";
-
-export class ConnectionAdmissionDeferred extends Error {}
+import { systemActor } from "./ensure-run";
 
 const discoveryEntities = [
   "product",
@@ -137,78 +138,28 @@ export async function scheduleConnectionRefresh(
   };
 }
 
-/**
- * The child `ai_refresh` Run that evaluates one Sweep's connection sources.
- * It is created `running` at attempt 0 and launched once its roster is ready.
- */
-export async function ensureConnectionSweepRun(
-  db: Database,
-  actor: Parameters<typeof ensureRun>[1],
-  parentRunId: RunId,
-  /** The parent's: a scheduled Sweep's child is background work. */
-  trigger: "scheduled" | "manual",
-) {
-  const activation = await readAiRefreshActivation(db);
-  if (!activation?.enabled || !activation.manifest["entity-connections"])
-    return null;
-  return withTransactionDatabase(db, async (tx) => {
-    const [existing] = await getDb(tx)
-      .select({ id: run.id })
-      .from(run)
-      .where(eq(run.clientKey, `sweep:${parentRunId}:recommendation`))
-      .limit(1);
-    if (existing) return existing.id;
-    if (
-      trigger === "scheduled" &&
-      (!(await tryLockAiRefreshScheduling(tx)) ||
-        !(await hasAiRefreshRunCapacity(tx)))
-    )
-      throw new ConnectionAdmissionDeferred(
-        "Connection discovery waits for AI capacity",
-      );
-    return ensureRun(tx, actor, {
-      purpose: "ai_refresh",
-      execution: false,
-      trigger,
-      status: "running",
-      clientKey: `sweep:${parentRunId}:recommendation`,
-      parentRunId,
-      input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
-    });
-  });
-}
+type RosterInput = {
+  after: string | null;
+  limit: number;
+  entityKinds?: readonly string[];
+  /** The population cutoff a Sweep step froze with its count. */
+  createdBefore?: Date | null;
+};
 
-/**
- * One roster page of a connection Sweep: eligible sources after the cursor,
- * each queued on the child Run unless its current fingerprint was already
- * evaluated (or is being evaluated) under any Run.
- */
-export async function prepareConnectionSweepPage(
-  db: Database,
-  input: {
-    childRunId: RunId;
-    after: string | null;
-    limit: number;
-    entityKinds?: readonly string[];
-  },
-) {
+/** One roster page's eligible sources as evaluation targets under the current activation. */
+async function connectionRosterTargets(db: Database, input: RosterInput) {
   const activation = await readAiRefreshActivation(db);
   if (!activation?.enabled || !activation.manifest["entity-connections"])
     throw new Error(
       "Connection discovery requires an active AI refresh generation",
     );
-  const page = await connectionDiscoveryRecords(
+  const page = await connectionDiscoveryRecords(db, input);
+  const fingerprints = await connectionSourceFingerprints(
     db,
-    input.after,
-    input.limit,
-    input.entityKinds,
+    page.map((record) => record.source),
   );
-  const sources = page.map((record) => record.source);
-  const fingerprints = await connectionSourceFingerprints(db, sources);
-  const inserted = await insertEvaluationTargets(
-    db,
-    input.childRunId,
-    page.map((record, index) => ({
+  return {
+    targets: page.map((record, index) => ({
       target: aiEvaluationTarget.parse({
         kind: "connection",
         entity: record.source.entityKind,
@@ -226,31 +177,74 @@ export async function prepareConnectionSweepPage(
       }),
       snapshot: record.source,
     })),
-  );
-  return {
     scanned: page.length,
-    inserted,
     next: page.length === input.limit ? (page.at(-1)?.id ?? null) : null,
   };
 }
 
-/** How many sources a connection Sweep's scope covers. */
+/**
+ * One roster page of connection evaluation: eligible sources after the
+ * cursor, each queued as an evaluation the Run owns unless its current
+ * fingerprint was already evaluated (or is being evaluated) under any Run.
+ */
+export async function prepareConnectionSweepPage(
+  db: Database,
+  input: RosterInput & { runId: RunId },
+) {
+  const page = await connectionRosterTargets(db, input);
+  const inserted = await insertEvaluationTargets(db, input.runId, page.targets);
+  return { scanned: page.scanned, inserted, next: page.next };
+}
+
+/**
+ * A routine discovery page: its Run is created only by the first page with
+ * admissible work, in the same transaction as that work.
+ */
+export async function prepareConnectionDiscoveryRoster(
+  db: Database,
+  input: RosterInput & {
+    runId: RunId | null;
+    createRun: (tx: Database) => Promise<RunId>;
+  },
+) {
+  const page = await connectionRosterTargets(db, input);
+  const runId =
+    input.runId ??
+    ((await hasAdmissibleTarget(db, page.targets))
+      ? await input.createRun(db)
+      : null);
+  const inserted = runId
+    ? await insertEvaluationTargets(db, runId, page.targets)
+    : 0;
+  return { scanned: page.scanned, inserted, next: page.next, runId };
+}
+
+/** Records one connection roster page queues, for Sweeps and routine discovery alike. */
+export const CONNECTION_ROSTER_PAGE = 25;
+
+/** How many sources a connection Sweep's scope covers; the roster pages the same predicate. */
 export async function countConnectionSweepSources(
   db: Database,
   entityKinds?: readonly string[],
+  createdBefore?: Date | null,
 ) {
   const [row] = await getDb(db)
     .select({ count: count() })
     .from(entityIdentity)
-    .where(
-      and(
-        isNull(entityIdentity.deletedAt),
-        isNull(entityIdentity.mergedIntoId),
-        inArray(entityIdentity.kind, sweepKinds(entityKinds)),
-      ),
-    );
+    .where(sourcePredicate(entityKinds, createdBefore));
   return row?.count ?? 0;
 }
+
+const sourcePredicate = (
+  entityKinds?: readonly string[],
+  createdBefore?: Date | null,
+) =>
+  and(
+    isNull(entityIdentity.deletedAt),
+    isNull(entityIdentity.mergedIntoId),
+    inArray(entityIdentity.kind, sweepKinds(entityKinds)),
+    createdBefore ? lte(entityIdentity.createdAt, createdBefore) : undefined,
+  );
 
 const sweepKinds = (entityKinds?: readonly string[]) =>
   entityKinds?.length
@@ -263,9 +257,7 @@ export const connectionSourceFingerprints = connectionDiscoveryFingerprints;
 /** Cursor coverage includes records without stock or prior acquisition. */
 async function connectionDiscoveryRecords(
   db: Database,
-  after: string | null,
-  limit: number,
-  entityKinds?: readonly string[],
+  { after, limit, entityKinds, createdBefore }: RosterInput,
 ) {
   const rows = await getDb(db)
     .select({
@@ -276,9 +268,7 @@ async function connectionDiscoveryRecords(
     .from(entityIdentity)
     .where(
       and(
-        isNull(entityIdentity.deletedAt),
-        isNull(entityIdentity.mergedIntoId),
-        inArray(entityIdentity.kind, sweepKinds(entityKinds)),
+        sourcePredicate(entityKinds, createdBefore),
         after ? gt(entityIdentity.id, after) : undefined,
       ),
     )

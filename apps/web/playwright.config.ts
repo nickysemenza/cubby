@@ -62,8 +62,15 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
      the `e2e-navigation-ms` annotation in the HTML report. */
   reportSlowTests: { max: 10, threshold: 60_000 },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  /* CI shards also write a blob; the CI report job merges them into one HTML
+     report and the combined job summary. */
   reporter: isCI
-    ? [["github"], ["html"], ["./tests/e2e/support/e2e-harness-reporter.ts"]]
+    ? [
+        ["github"],
+        ["html"],
+        ["blob"],
+        ["./tests/e2e/support/e2e-harness-reporter.ts"],
+      ]
     : // `line` so a failing pre-push or verify run says which test failed in the
       // terminal; the HTML report alone leaves the hook's output blank.
       [["line"], ["html"], ["./tests/e2e/support/e2e-harness-reporter.ts"]],

@@ -18,7 +18,6 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
@@ -33,7 +32,6 @@ import { generateStatementSuggestionPage } from "./statement-suggestions";
 describe("statement spending review and re-import", () => {
   const ctx = withTestDb();
   async function fixture(providerTransactionId: string | null = null) {
-    await createSystemUserFixture(ctx.db);
     const owner = await createRepoEntity(ctx, "ledgerParty", {
       name: "Synthetic statement member",
       kind: "member",

@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/financial-booking";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -36,17 +36,17 @@ import { updateFinancialTransaction } from "./financial-transaction";
 describe("shared spending booking", () => {
   const ctx = withTestDb();
   async function fixture() {
-    const owner = await createRepoEntity(ctx, "ledgerParty", {
+    const owner = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic spending member",
       kind: "member",
     });
-    const account = await createRepoEntity(ctx, "financialAccount", {
+    const account = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic spending account",
       identity: { kind: "cash" },
       ledgerPartyId: owner.output.id,
       provisional: false,
     });
-    const vendor = await createRepoEntity(ctx, "vendor", {
+    const vendor = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Orchard",
     });
     const category = await createEntity(
@@ -56,7 +56,7 @@ describe("shared spending booking", () => {
         name: "Synthetic groceries",
       },
     );
-    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -81,7 +81,7 @@ describe("shared spending booking", () => {
   // ordinary high-confidence advice must never silently override either.
   it("requires review to choose an ambiguous Vendor and override conflicting category history", async () => {
     const { vendor, transaction, advice } = await fixture();
-    await createRepoEntity(ctx, "vendor", {
+    await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic competing orchard",
       aliases: ["Synthetic Orchard"],
     });
@@ -92,11 +92,11 @@ describe("shared spending booking", () => {
         name: "Synthetic historic supplies",
       },
     );
-    const oldPurchase = await createRepoEntity(ctx, "purchase", {
+    const oldPurchase = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2025-01-01",
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: oldPurchase.output.id,
       name: "Synthetic prior supplies",
       cost: 20,
@@ -167,7 +167,7 @@ describe("shared spending booking", () => {
       const saved = await commitFinancialSpending(ctx.db, plan, ctx.actor);
       if (!saved) throw new Error("Expected spending booking");
       if (changed === "owner") {
-        const other = await createRepoEntity(ctx, "ledgerParty", {
+        const other = await createRepoIdentity(ctx, "ledgerParty", {
           name: "Synthetic changed owner",
           kind: "member",
         });
@@ -176,7 +176,7 @@ describe("shared spending booking", () => {
           .set({ ledgerPartyId: other.entityId })
           .where(eq(financialAccount.id, account.entityId));
       } else {
-        const other = await createRepoEntity(ctx, "vendor", {
+        const other = await createRepoIdentity(ctx, "vendor", {
           name: "Synthetic changed Vendor",
         });
         await getDb(ctx.db)
@@ -194,12 +194,12 @@ describe("shared spending booking", () => {
   );
   it("holds a nearby same-vendor Purchase instead of duplicating its spending", async () => {
     const { transaction, vendor, advice } = await fixture();
-    const receipt = await createRepoEntity(ctx, "purchase", {
+    const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-05-01",
       statedTotal: 40,
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: receipt.output.id,
       name: "Synthetic receipt",
       cost: 40,
@@ -240,7 +240,11 @@ describe("shared spending booking", () => {
     });
     const plan = await previewFinancialSpending(ctx.db, { source, advice });
     expect(plan.status).toBe("ready");
-    const created = await createRepoEntity(ctx, "financialTransaction", source);
+    const created = await createRepoIdentity(
+      ctx,
+      "financialTransaction",
+      source,
+    );
     await commitFinancialSpending(ctx.db, plan, ctx.actor, created.output.id);
     expect(
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
@@ -423,7 +427,7 @@ describe("shared spending booking", () => {
       transactionId: transaction.output.id,
       advice,
     });
-    await createRepoEntity(ctx, "purchase", {
+    await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-05-04",
       statedTotal: 42.5,
@@ -447,7 +451,7 @@ describe("shared spending booking", () => {
       advice: proposed,
     });
     expect(plan.status).toBe("ready");
-    const competing = await createRepoEntity(ctx, "vendor", {
+    const competing = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Harbor",
       aliases: ["SYNTHETIC HARBOR 008"],
     });
@@ -511,11 +515,11 @@ describe("shared spending booking", () => {
   });
   it("does not call a fully allocated but underpriced receipt already booked", async () => {
     const { transaction, advice, vendor } = await fixture();
-    const receipt = await createRepoEntity(ctx, "purchase", {
+    const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-05-04",
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: receipt.output.id,
       name: "Synthetic short receipt",
       cost: 1,
@@ -535,11 +539,11 @@ describe("shared spending booking", () => {
   });
   it("does not prove booked spending with unpriced or unclassified Expense lines", async () => {
     const { transaction, advice, vendor } = await fixture();
-    const receipt = await createRepoEntity(ctx, "purchase", {
+    const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-05-04",
     });
-    const line = await createRepoEntity(ctx, "expense", {
+    const line = await createRepoIdentity(ctx, "expense", {
       purchaseId: receipt.output.id,
       name: "Synthetic unresolved receipt",
       cost: null,
@@ -595,7 +599,7 @@ describe("shared spending booking", () => {
     });
     const saved = await commitFinancialSpending(ctx.db, initial, ctx.actor);
     if (!saved) throw new Error("Expected booking");
-    const next = await createRepoEntity(ctx, "financialTransaction", {
+    const next = await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -619,7 +623,7 @@ describe("shared spending booking", () => {
   });
   it("allows a reviewed empty Purchase to receive exactly one conserved aggregate", async () => {
     const { transaction, advice, vendor } = await fixture();
-    const receipt = await createRepoEntity(ctx, "purchase", {
+    const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-05-04",
       statedTotal: 42.5,
@@ -641,11 +645,11 @@ describe("shared spending booking", () => {
   });
   it("uses an identified original's live category, excluding future and reimbursement lines, without fresh model advice", async () => {
     const { transaction, vendor, category, advice } = await fixture();
-    const original = await createRepoEntity(ctx, "purchase", {
+    const original = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2025-01-01",
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: original.output.id,
       name: "Synthetic categorized original",
       cost: 100,
@@ -657,7 +661,7 @@ describe("shared spending booking", () => {
       "spendingCategory",
       { name: "Synthetic future reimbursement category" },
     );
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: original.output.id,
       name: "Synthetic future item",
       cost: 200,
@@ -665,7 +669,7 @@ describe("shared spending booking", () => {
       trade: "other",
       spendingCategoryId: otherCategory.id,
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: original.output.id,
       name: "Synthetic shared-cost repayment",
       cost: -20,
@@ -716,17 +720,17 @@ describe("shared spending booking", () => {
         })
       ).status,
     ).toBe("review_required");
-    const original = await createRepoEntity(ctx, "purchase", {
+    const original = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2025-05-01",
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: original.output.id,
       name: "Synthetic original",
       cost: 100,
       trade: "other",
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: original.output.id,
       name: "Synthetic refund",
       cost: -12,

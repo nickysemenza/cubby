@@ -1,7 +1,10 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import type { ActorContext } from "@cubby/schemas/context";
 import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
-import type { RunControlAction } from "@cubby/schemas/run-fields";
+import {
+  OWNED_AI_WORK_PURPOSES,
+  type RunControlAction,
+} from "@cubby/schemas/run-fields";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -18,12 +21,17 @@ import {
   enqueueJob,
 } from "~/server/generic/jobs/repo/jobs";
 
-import {
-  isStepRunPurpose,
-  isWorkflowRunPurpose,
-  type WorkflowRunPurpose,
-} from "./contract";
+import type { ExecutedRunPurpose } from "./contract";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
+
+/** Kinds whose evaluations name the Run as owner; a Sweep owns its connection evaluations. */
+const ownsAiWork = (purpose: ExecutedRunPurpose) =>
+  OWNED_AI_WORK_PURPOSES.some((owned) => owned === purpose) ||
+  purpose === "sweep";
+/** Kinds that request shared evaluations; discovery's requests outlive a cancel. */
+const requestsAiWork = (purpose: ExecutedRunPurpose) =>
+  purpose !== "mail_discovery" &&
+  !OWNED_AI_WORK_PURPOSES.some((owned) => owned === purpose);
 
 /**
  * `run.control` stops or retries the Run's universal Job and its child demand.
@@ -38,7 +46,7 @@ export async function controlWorkflowRun(
     action: RunControlAction;
     paidOverBudgetUsd?: number;
   },
-  purpose: WorkflowRunPurpose,
+  purpose: ExecutedRunPurpose,
 ): Promise<void> {
   const database = getDb(db);
   const [row] = await database
@@ -116,95 +124,24 @@ export async function controlWorkflowRun(
         "RUN_CONTROL_REFUSED",
         `Only a failed Run can be retried (${row.status})`,
       );
-    if (purpose === "ai_refresh") {
-      const { aiEvaluation } = await import("~/server/db/schema");
-      const failed = await database
-        .select()
-        .from(aiEvaluation)
-        .where(
-          and(
-            eq(aiEvaluation.runId, row.id),
-            inArray(aiEvaluation.state, ["failed", "cancelled"]),
-            sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
-          ),
-        );
-      await withTransactionDatabase(db, async (tx) => {
-        const database = getDb(tx);
-        for (const item of failed) {
-          const retryId = crypto.randomUUID();
-          const [replacement] = await database
-            .insert(aiEvaluation)
-            .values({
-              id: retryId,
-              runId: item.runId,
-              workKey: `${item.workKey}:operator-retry:${row.attempt + 1}`,
-              feature: item.feature,
-              target: item.target,
-              provenance: item.provenance,
-              snapshot: item.snapshot,
-              result: item.result,
-              state: item.result ? "result_ready" : "queued",
-            })
-            .onConflictDoNothing()
-            .returning({ id: aiEvaluation.id });
-          if (replacement) {
-            await enqueueJob(tx, {
-              key: `ai-evaluation:${replacement.id}`,
-              kind: "ai.evaluation",
-              input: { evaluationId: replacement.id },
-            });
-            await database
-              .update(aiEvaluation)
-              .set({ receipt: { retryEvaluationId: replacement.id } })
-              .where(eq(aiEvaluation.id, item.id));
-          }
-        }
-      });
-    }
-    if (purpose === "mail_reclassify" || purpose === "suggestion_sweep") {
-      const { aiEvaluationRequest } = await import("~/server/db/schema");
-      const { enqueueAiEvaluation, requestedAiEvaluations } =
+    if (purpose === "mail_reclassify") {
+      const { requestedAiEvaluations } =
         await import("~/server/ai/repo/ai-evaluation-requests");
-      const requested = await requestedAiEvaluations(db, row.id, {
-        currentOnly: true,
-      });
-      if (purpose === "mail_reclassify" && !requested.length)
+      if (
+        !(await requestedAiEvaluations(db, row.id, { currentOnly: true }))
+          .length
+      )
         throw createAppError(
           "RUN_CONTROL_REFUSED",
           "This legacy Run retains historical receipts; historical recovery creates a linked continuation rather than retrying its empty roster.",
         );
-      for (const item of requested) {
-        if (!["failed", "cancelled"].includes(item.state)) continue;
-        const replacement = await enqueueAiEvaluation(db, {
-          runId: row.id,
-          executionKind: item.executionKind,
-          shareKey:
-            item.state === "cancelled"
-              ? `${item.workKey}:member-retry:${row.attempt + 1}`
-              : (item.shareKey ?? item.workKey),
-          feature: item.feature,
-          target: item.target,
-          provenance: item.provenance,
-          snapshot: item.snapshot,
-          result: item.result,
-          state: item.result ? "result_ready" : "queued",
-        });
-        await database
-          .update(aiEvaluationRequest)
-          .set({
-            receipt: {
-              retainedReceipt: item.receipt,
-              retryEvaluationId: replacement.id,
-            },
-          })
-          .where(
-            and(
-              eq(aiEvaluationRequest.runId, row.id),
-              eq(aiEvaluationRequest.evaluationId, item.id),
-            ),
-          );
-      }
     }
+    if (ownsAiWork(purpose) || requestsAiWork(purpose))
+      await readmitFailedAiWork(db, row.id, {
+        owned: ownsAiWork(purpose),
+        requested: requestsAiWork(purpose),
+        attempt: row.attempt,
+      });
     await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }
@@ -244,18 +181,42 @@ export async function controlWorkflowRun(
         "RUN_CONTROL_REFUSED",
         "The Run finished before it was cancelled",
       );
-    if (purpose === "ai_refresh") {
+    await cancelRunJobs(tx, row.id);
+    return cancelRunAiWork(tx, row.id, "Cancelled by a member", {
+      owned: ownsAiWork(purpose),
+      requested: requestsAiWork(purpose),
+    });
+  });
+  await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member", {
+    attempt: row.attempt,
+    sequence: Number.MAX_SAFE_INTEGER,
+  });
+}
+
+/**
+ * Stops a Run's pending AI work: evaluations it owns become cancelled and
+ * its requests on shared evaluations are withdrawn; their Jobs stop.
+ * Returns whether another requester still shares cancelled demand.
+ */
+export async function cancelRunAiWork(
+  db: Database,
+  runId: RunId,
+  reason: string,
+  scope: { owned: boolean; requested: boolean } = {
+    owned: true,
+    requested: true,
+  },
+) {
+  return withTransactionDatabase(db, async (tx) => {
+    const database = getDb(tx);
+    if (scope.owned) {
       const { aiEvaluation } = await import("~/server/db/schema");
       await database
         .update(aiEvaluation)
-        .set({
-          state: "cancelled",
-          error: "Cancelled by a member",
-          updatedAt: new Date(),
-        })
+        .set({ state: "cancelled", error: reason, updatedAt: new Date() })
         .where(
           and(
-            eq(aiEvaluation.runId, row.id),
+            eq(aiEvaluation.runId, runId),
             inArray(aiEvaluation.state, [
               "queued",
               "running",
@@ -266,42 +227,113 @@ export async function controlWorkflowRun(
         );
     }
     let sharedDemand = false;
-    if (purpose !== "ai_refresh" && purpose !== "mail_discovery") {
+    if (scope.requested) {
       const { cancelAiEvaluationRequests } =
         await import("~/server/ai/repo/ai-evaluation-requests");
-      sharedDemand = await cancelAiEvaluationRequests(tx, row.id);
+      sharedDemand = await cancelAiEvaluationRequests(tx, runId);
     }
-    await cancelRunJobs(tx, row.id);
     const stopped = await database.execute<{ id: string }>(
-      sql`SELECT j.id FROM "Job" j JOIN "AiEvaluation" e ON j.key='ai-evaluation:' || e.id::text WHERE e.state=${aiEvaluationState.enum.cancelled} AND e."runId"=${row.id}::uuid`,
+      sql`SELECT j.id FROM "Job" j JOIN "AiEvaluation" e ON j.key='ai-evaluation:' || e.id::text WHERE e.state=${aiEvaluationState.enum.cancelled} AND e."runId"=${runId}::uuid`,
     );
     for (const execution of stopped.rows) await cancelJob(tx, execution.id);
     return sharedDemand;
   });
-  await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member", {
-    attempt: row.attempt,
-    sequence: Number.MAX_SAFE_INTEGER,
-  });
-  if (isStepRunPurpose(purpose)) await cancelStepChildren(db, actor, row.id);
 }
 
 /**
- * A step-ledger Run's children are its own work: cancelling a Sweep stops
- * the field or connection Runs it started, keeping what committed.
+ * Re-admits a Run's failed or cancelled AI work as linked replacements:
+ * owned evaluations copy into the Run, requested ones re-request shared work.
  */
-export async function cancelStepChildren(
+export async function readmitFailedAiWork(
   db: Database,
-  actor: ActorContext,
   runId: RunId,
+  {
+    owned,
+    requested,
+    attempt,
+  }: { owned: boolean; requested: boolean; attempt: number },
 ) {
-  const { unfinishedStepChildren } =
-    await import("~/server/domains/run/repo/run-step");
-  for (const child of await unfinishedStepChildren(db, runId))
-    if (isWorkflowRunPurpose(child.purpose))
-      await controlWorkflowRun(
-        db,
-        actor,
-        { runPublicId: child.shortcode, action: "cancel" },
-        child.purpose,
+  const database = getDb(db);
+  if (owned) {
+    const { aiEvaluation } = await import("~/server/db/schema");
+    const failed = await database
+      .select()
+      .from(aiEvaluation)
+      .where(
+        and(
+          eq(aiEvaluation.runId, runId),
+          inArray(aiEvaluation.state, ["failed", "cancelled"]),
+          sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
+        ),
       );
+    await withTransactionDatabase(db, async (tx) => {
+      const database = getDb(tx);
+      for (const item of failed) {
+        const retryId = crypto.randomUUID();
+        const [replacement] = await database
+          .insert(aiEvaluation)
+          .values({
+            id: retryId,
+            runId: item.runId,
+            workKey: `${item.workKey}:operator-retry:${attempt + 1}`,
+            feature: item.feature,
+            target: item.target,
+            provenance: item.provenance,
+            snapshot: item.snapshot,
+            result: item.result,
+            state: item.result ? "result_ready" : "queued",
+          })
+          .onConflictDoNothing()
+          .returning({ id: aiEvaluation.id });
+        if (replacement) {
+          await enqueueJob(tx, {
+            key: `ai-evaluation:${replacement.id}`,
+            kind: "ai.evaluation",
+            input: { evaluationId: replacement.id },
+          });
+          await database
+            .update(aiEvaluation)
+            .set({ receipt: { retryEvaluationId: replacement.id } })
+            .where(eq(aiEvaluation.id, item.id));
+        }
+      }
+    });
+  }
+  if (!requested) return;
+  const { aiEvaluationRequest } = await import("~/server/db/schema");
+  const { enqueueAiEvaluation, requestedAiEvaluations } =
+    await import("~/server/ai/repo/ai-evaluation-requests");
+  for (const item of await requestedAiEvaluations(db, runId, {
+    currentOnly: true,
+  })) {
+    if (!["failed", "cancelled"].includes(item.state)) continue;
+    const replacement = await enqueueAiEvaluation(db, {
+      runId,
+      executionKind: item.executionKind,
+      shareKey:
+        item.state === "cancelled"
+          ? `${item.workKey}:member-retry:${attempt + 1}`
+          : (item.shareKey ?? item.workKey),
+      feature: item.feature,
+      target: item.target,
+      provenance: item.provenance,
+      snapshot: item.snapshot,
+      result: item.result,
+      state: item.result ? "result_ready" : "queued",
+    });
+    await database
+      .update(aiEvaluationRequest)
+      .set({
+        receipt: {
+          retainedReceipt: item.receipt,
+          retryEvaluationId: replacement.id,
+        },
+      })
+      .where(
+        and(
+          eq(aiEvaluationRequest.runId, runId),
+          eq(aiEvaluationRequest.evaluationId, item.id),
+        ),
+      );
+  }
 }

@@ -31,9 +31,6 @@ export class DatabaseFreshnessDurableObject
     void ctx.blockConcurrencyWhile(() => ctx.storage.deleteAlarm());
   }
 
-  /** An older deploy's refresh alarm may fire before the constructor deletes it. */
-  async alarm() {}
-
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
       return new Response("WebSocket upgrade required", { status: 426 });

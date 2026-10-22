@@ -16,7 +16,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { setImmediate } from "node:timers/promises";
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 
 import {
   removablePairContainers,
@@ -116,7 +116,7 @@ test("run records fail closed and prune only proven-dead owners", () => {
       "synthetic.json",
     ]);
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -149,7 +149,7 @@ test("a live command group retains a dead wrapper's run record", async () => {
       child.kill("SIGKILL");
       await exited;
     }
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -194,6 +194,6 @@ test("atomic adoption never exposes partial run records to concurrent readers", 
       child.kill("SIGKILL");
       await exited;
     }
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
   }
 });

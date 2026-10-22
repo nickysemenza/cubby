@@ -308,6 +308,8 @@ async function ensureImageProcessingJob(
       await enqueueJob(tx, {
         key: `image-processing:${row.id}`,
         kind: "image.processing",
+        subjectKind: "image",
+        subjectId: row.imageId,
         input: { processingId: row.id },
         runId: row.runId,
       });
@@ -724,7 +726,8 @@ export async function markImageProcessingWaitingForDevice(
     if (!execution) return;
     await publishJobPage(databaseForTransaction(tx), execution, {
       done: false,
-      availableAt: new Date(Date.now() + 60_000),
+      waitUntil: new Date(Date.now() + 60_000),
+      waitReason: "device",
     });
     const rows = await tx
       .update(imageProcessingJob)

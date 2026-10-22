@@ -94,7 +94,6 @@ const run: RunDetail = {
   dispatch: {
     eventId: "event-1",
     state: "started",
-    attempts: 1,
     error: null,
     coordinatorStartedAt: "2026-09-20T16:00:01.000Z",
   },

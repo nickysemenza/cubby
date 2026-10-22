@@ -1,13 +1,14 @@
+import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { describe, expect, it } from "vitest";
 
-import { parsePurchaseAgentEvent } from "./contracts";
-import { dispatchInputForEvent } from "./queue-dispatch";
+import { dispatchInputForEvent } from "./dispatch-input";
 
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
-describe("purchase-agent queue dispatch", () => {
+describe("purchase-agent durable dispatch", () => {
   it("admits a redelivery-safe signal whose transcript body omits the private run id", () => {
-    const event = parsePurchaseAgentEvent({
+    const event = purchaseAgentEvent.parse({
+      version: 1,
       type: "retry",
       runId,
       // A historical body: the field must not reach the member-visible transcript.
