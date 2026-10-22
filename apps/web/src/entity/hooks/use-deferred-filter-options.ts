@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { recordSource } from "~/entity/picker/picker";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import type { PickerEntity } from "~/ui/combobox/combobox-types";
 import type { DeferredFilterOptionSource } from "~/ui/hooks/filter-option-types";
 

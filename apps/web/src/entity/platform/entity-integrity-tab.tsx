@@ -17,10 +17,8 @@ import { useMemo, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { REFERENTIAL_LIVENESS_INPUT } from "~/entity/entity-integrity";
-import {
-  entityIntegrity,
-  integrityProblems,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityIntegrity } from "~/integrations/tanstack-query/generated/catalog/entityIntegrity.gen";
+import { integrityProblems } from "~/integrations/tanstack-query/generated/catalog/integrityProblems.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { KeyNumbers } from "~/ui/common/key-numbers";

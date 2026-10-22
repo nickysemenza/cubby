@@ -14,10 +14,8 @@ import { useMemo } from "react";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
-import {
-  financialTransaction,
-  entityFilterOptions,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 
 import { defineListOverride } from "../../entity/list-columns/types";
 

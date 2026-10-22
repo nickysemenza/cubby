@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog/entityTimeline.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityTimeline } from "./entity-timeline";

@@ -8,7 +8,7 @@ import {
   referenceFilterOptionsKey,
 } from "~/entity/filter-manifest";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 /**

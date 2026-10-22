@@ -655,7 +655,7 @@ const withoutCacheData = (member: OperationContractMember): object =>
 /**
  * Bind a transport-neutral contract to the browser transport, layering the
  * resolved cache/invalidation/parse policy each member needs. The generated
- * catalog (`generated/catalog.gen.ts`) is the only production caller: it
+ * catalog modules (`generated/catalog/*.gen.ts`) are the production callers: it
  * resolves each contract member's cache data and passes the result here. The
  * contract is the only source of ids, kinds, and schemas; a policy for a
  * member the contract does not declare is a type error.

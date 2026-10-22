@@ -13,7 +13,7 @@ import { z } from "zod";
 
 import { PickerField } from "~/entity/forms/picker-field";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
 import { Stack } from "~/ui/layout";

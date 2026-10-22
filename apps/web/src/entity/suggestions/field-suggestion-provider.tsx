@@ -27,7 +27,7 @@ import {
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { assessment } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
 

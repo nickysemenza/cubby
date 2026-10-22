@@ -136,6 +136,24 @@ const POST_QUERIES = httpRoutes(httpContract)
   .map((route) => route.path.replace(":id", "{id}"));
 
 describe("generated HTTP OpenAPI document", () => {
+  it("keeps the native calendar window free of web-only filter graphs", () => {
+    const input = schemas.CalendarWindowInput;
+    expect(input?.required).toEqual(
+      expect.arrayContaining(["startDate", "endDateExclusive"]),
+    );
+    expect(Object.keys(input?.properties ?? {}).sort()).toEqual([
+      "endDateExclusive",
+      "kinds",
+      "startDate",
+    ]);
+    const route = paths["/api/v1/calendar/range"]?.post;
+    expect(route).toBeDefined();
+    expect(JSON.stringify(route?.requestBody)).toContain(
+      "#/components/schemas/CalendarWindowInput",
+    );
+    expect(schemas.CalendarRangeInput).toBeUndefined();
+  });
+
   it("keeps shared native presentation open without its unused typed graphs", () => {
     // Pin the reviewed native erasures; expanding the emitter policy needs a consumer review.
     for (const name of [

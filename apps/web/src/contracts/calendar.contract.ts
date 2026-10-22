@@ -4,6 +4,7 @@ import {
   calendarFeedOut,
   calendarFeedInspectionOut,
   calendarRangeInput,
+  calendarWindowInput,
   calendarRangeOut,
   calendarScheduleOut,
   calendarRevokeCredentialOut,
@@ -21,6 +22,9 @@ export const calendarContract = defineContract("calendar", {
       note: "Agents read meals and tasks by date through entity_read.list",
     },
     native: "Meal calendar",
+    // Native applies list filters through the meal list, so its typed range
+    // request does not need every calendar source's filter model.
+    httpWire: { input: calendarWindowInput, output: calendarRangeOut },
     input: calendarRangeInput,
     output: calendarRangeOut,
   }),

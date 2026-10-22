@@ -11,7 +11,7 @@ import { z } from "zod";
 import type { EntitySuggestionsOperations } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { installFeatures } from "~/features/registry";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 

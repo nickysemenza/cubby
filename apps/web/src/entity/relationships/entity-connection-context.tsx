@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section, Disclosure } from "~/ui/layout";
 

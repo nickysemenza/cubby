@@ -5,7 +5,7 @@ import type {
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 
 /** Call only when entitySummary[entity].detail.hero.chart is declared. */
 export function useMonthlyExpenseSpend(

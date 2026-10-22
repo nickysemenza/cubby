@@ -2,7 +2,7 @@ import type { ListGroupBy, ListNesting } from "@cubby/schemas/pagination";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { z } from "zod";
 
-import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import {
   infiniteOperationQueryKey,
   type OperationQueryKey,

@@ -1673,14 +1673,25 @@ declares them only when they differ (`tags: []` opts out of tagging).
 The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
 import; no contract holds React, query-client, or input-dependent code.
 
-The Start operation stage of `pnpm generate` resolves that data into one
-generated browser catalog, `integrations/tanstack-query/generated/catalog.gen.ts`,
-with a domain object per contract (`product`, `recipe`, ...) that call sites
-import. Policy that must read the call's input (the per-entity output schema and
-cache profile of `entity.list`/`entity.detail`/`entity.timeline`, the payload-keyed
-fan-out of `entity.mutate`) cannot be data; it lives in
-`integrations/tanstack-query/operation-overrides.ts`, and the catalog spreads it
-onto its member. There are no per-domain client wrapper modules.
+The Start operation stage of `pnpm generate` resolves that data into
+`integrations/tanstack-query/generated/catalog/<domain>.gen.ts`. Call sites
+import their domain (`product`, `recipe`, ...), whose generated module imports
+only its contract and policy owner. `catalog/all.gen.ts` enumerates domains for
+tests only; production code must not import that facade.
+
+Policy that must read the input (per-entity output parsing and cache profiles,
+and the payload-keyed fan-out of `entity.mutate`) lives in the matching
+`integrations/tanstack-query/operation-overrides/<domain>.ts`. The generator
+checks the roster through `operation-overrides.ts`, but browser modules import
+the policy directly. Input and output schemas still validate every call.
+
+`generated/commands.gen.ts` carries plain workflow-command metadata and lazy
+loaders for the owning domain. Report rendering reads labels, confirmations,
+and input declarations without importing every command's schemas. Execution
+loads and validates the actual body inside the existing pending/error flow.
+Deferred specialized actions use `useDeferredActionMutation`, whose inner
+TanStack mutation retains operation metadata, key, scope and retry ownership;
+its outer mutation supplies loading state and presentation only.
 
 ## Progressive lists
 

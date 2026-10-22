@@ -13,10 +13,8 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
-import {
-  run as runOperations,
-  photoImport,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { AiCost } from "~/ui/common/ai-cost";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

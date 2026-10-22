@@ -14,7 +14,7 @@ import type {
 } from "~/entity/audit-log/audit-log-list";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
 import { authClient } from "~/lib/auth-client";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";

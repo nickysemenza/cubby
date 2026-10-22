@@ -4,10 +4,8 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
-import {
-  recipe,
-  image,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { image } from "~/integrations/tanstack-query/generated/catalog/image.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../hooks/use-action-mutation";

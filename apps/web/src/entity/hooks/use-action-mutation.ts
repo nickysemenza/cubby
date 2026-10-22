@@ -119,6 +119,47 @@ export function useActionMutation<
   });
 }
 
+/**
+ * Presentation around a mutation whose operation options are loaded on demand.
+ * The outer mutation owns pending state; the actual operation still executes
+ * through TanStack's mutation cache with its declared key and metadata.
+ */
+export function useDeferredActionMutation<
+  TData,
+  TError extends Error,
+  TVariables,
+  TContext,
+>({
+  loadMutation,
+  ...presentation
+}: ActionPresentation<TData, TError> & {
+  loadMutation: () => Promise<
+    UseMutationOptions<TData, TError, TVariables, TContext>
+  >;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation<TData, TError, TVariables, TContext>({
+    // The cache-owned operation applies the configured retry policy itself.
+    retry: false,
+    mutationFn: async (variables) => {
+      const options = await loadMutation();
+      return await queryClient
+        .getMutationCache()
+        .build(queryClient, { ...options, onError: () => undefined })
+        .execute(variables);
+    },
+    onSuccess: (data) =>
+      showSuccess(
+        presentation.success,
+        presentation.successToastId,
+        presentation.onSuccess,
+        data,
+      ),
+    onError: (error) => showError(presentation.error, error),
+  });
+}
+
 type EntityActionExecutors<E extends StandardEntity> = {
   [A in StandardAction]: MutationFunction<
     EntityActionData<E, A>,

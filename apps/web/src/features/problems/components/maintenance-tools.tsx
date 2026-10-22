@@ -15,11 +15,9 @@ import {
 import { openSearchIndexRepairStream } from "~/features/problems/search-streams";
 import { openRecipeRecomputeAllStream } from "~/features/recipe/recipe-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  maintenance,
-  recipe,
-  problems,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { maintenance } from "~/integrations/tanstack-query/generated/catalog/maintenance.gen";
+import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";

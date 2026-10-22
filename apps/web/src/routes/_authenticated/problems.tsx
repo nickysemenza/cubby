@@ -4,7 +4,7 @@ import { lazy, Suspense } from "react";
 
 import { RoutePending } from "~/entity/navigation/route-pending";
 import { Page } from "~/entity/page/page";
-import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";

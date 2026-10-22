@@ -6,7 +6,7 @@ import { EntityListCardDensityProvider } from "~/entity/entity-list/generic-enti
 import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { listChromePage } from "~/entity/routing/list-page";
 import { installFeatures } from "~/features/registry";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

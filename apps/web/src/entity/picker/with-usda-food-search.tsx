@@ -10,10 +10,8 @@ import {
   AiProposalCard,
   AiProvenance,
 } from "~/entity/suggestions/ai-proposal-card";
-import {
-  usdaFood,
-  ai,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
 import { parseUsdaFoodRef } from "~/ui/combobox/parse-usda-food-ref";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";

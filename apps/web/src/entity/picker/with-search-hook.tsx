@@ -13,10 +13,8 @@ import { captureRequest } from "~/entity/editing/editor-requests";
 import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
 import { entityListFor, type EntityListParams } from "~/entity/entity-list";
 import { featureRegistry } from "~/entity/feature-registry";
-import {
-  location,
-  product,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
+import { product } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";

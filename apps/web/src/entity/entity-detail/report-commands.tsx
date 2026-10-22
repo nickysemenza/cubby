@@ -16,16 +16,12 @@ import { match } from "ts-pattern";
 import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { useDeferredActionMutation } from "~/entity/hooks/use-action-mutation";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { Picker } from "~/entity/picker/picker";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { readPathValue } from "~/entity/read-path";
-import {
-  recipe,
-  run,
-  workflowCommandOptions,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { workflowCommandMetadata } from "~/integrations/tanstack-query/generated/commands.gen";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
@@ -37,16 +33,25 @@ import { Input } from "~/ui/primitives/input";
 /** Runs ordinary commands with the catalog's validation, cache ripple and result effects. */
 export function useReportCommands() {
   const ordinary = useWorkflowCommand();
-  const reprocess = useActionMutation({
-    mutationFn: recipe.reprocessCookbookOnce.mutationOptions,
+  const reprocess = useDeferredActionMutation({
+    loadMutation: async () =>
+      (
+        await import("~/integrations/tanstack-query/generated/catalog/recipe.gen")
+      ).recipe.reprocessCookbookOnce.mutationOptions(),
     error: "Could not reprocess the cookbook",
   });
-  const importRecipes = useActionMutation({
-    mutationFn: recipe.importCookbookRecipesOnce.mutationOptions,
+  const importRecipes = useDeferredActionMutation({
+    loadMutation: async () =>
+      (
+        await import("~/integrations/tanstack-query/generated/catalog/recipe.gen")
+      ).recipe.importCookbookRecipesOnce.mutationOptions(),
     error: "Could not add the recipes",
   });
-  const commit = useActionMutation({
-    mutationFn: run.commitPrepared.mutationOptions,
+  const commit = useDeferredActionMutation({
+    loadMutation: async () =>
+      (
+        await import("~/integrations/tanstack-query/generated/catalog/run.gen")
+      ).run.commitPrepared.mutationOptions(),
     error: "Could not import the prepared orders",
   });
   return {
@@ -57,7 +62,7 @@ export function useReportCommands() {
         JSON.stringify(ordinary.data.request) !== JSON.stringify(request)
       )
         return [];
-      const path = workflowCommandOptions(request.operation).command.runIdsPath;
+      const path = workflowCommandMetadata(request.operation).runIdsPath;
       const value = path
         ? readPathValue(ordinary.data.result, path)
         : undefined;
@@ -129,17 +134,6 @@ export function useReportCommands() {
 
 export type ReportCommands = ReturnType<typeof useReportCommands>;
 
-function validCommandBody(
-  request: Extract<ReportCommandRequest, { kind: "operation" }>,
-): boolean {
-  try {
-    workflowCommandOptions(request.operation).parse(request.body);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** Collects the declared operands, then confirms the exact command before dispatch. */
 export function CommandButton({
   command,
@@ -176,7 +170,7 @@ export function CommandButton({
   );
   const metadata =
     command.request.kind === "operation"
-      ? workflowCommandOptions(command.request.operation).command
+      ? workflowCommandMetadata(command.request.operation)
       : undefined;
   const confirmation = command.confirm ?? metadata?.confirmation;
   const request = reportCommandRequest.safeParse(
@@ -191,9 +185,9 @@ export function CommandButton({
         }
       : command.request,
   );
-  const validBody =
-    request.success &&
-    (request.data.kind !== "operation" || validCommandBody(request.data));
+  // The selected command's validator loads at execution, inside the existing
+  // pending/error flow, rather than pulling every command schema into the page.
+  const validBody = request.success;
   return (
     <Row gap="sm" wrap align={compact ? "center" : "end"}>
       <Overlay

@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
 import { formatSmallCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";

@@ -15,7 +15,7 @@ import {
   formatFieldProvenance,
   isInspectableFieldProvenance,
 } from "~/entity/fields/field-provenance";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

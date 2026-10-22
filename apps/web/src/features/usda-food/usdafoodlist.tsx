@@ -19,7 +19,7 @@ import { useEntityList } from "~/entity/hooks/use-entity-list";
 import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListWorkbench } from "~/entity/table/list-workbench";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog/usdaFood.gen";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";

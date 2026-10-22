@@ -21,7 +21,7 @@ import { page, userEvent } from "vitest/browser";
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import type { RunDetail } from "~/contracts/run.contract";
 import { installFeatures } from "~/features/registry";
-import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";

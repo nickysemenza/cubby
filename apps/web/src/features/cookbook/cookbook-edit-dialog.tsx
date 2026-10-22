@@ -3,7 +3,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/catalog/cookbook.gen";
 import { ChipsInput } from "~/ui/forms/chips-input";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Input } from "~/ui/primitives/input";

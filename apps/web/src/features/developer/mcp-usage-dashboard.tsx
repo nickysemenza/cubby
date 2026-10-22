@@ -13,7 +13,7 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
 import RTable from "~/entity/table/table";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { mcp } from "~/integrations/tanstack-query/generated/catalog/mcp.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 import { formatCount } from "~/lib/number-format";

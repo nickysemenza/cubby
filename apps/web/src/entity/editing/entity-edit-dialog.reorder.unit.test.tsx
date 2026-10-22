@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { installFeatures } from "~/features/registry";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";

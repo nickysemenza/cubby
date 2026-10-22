@@ -7,11 +7,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  entityMutation,
-  inventory,
-  location,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
+import { inventory } from "~/integrations/tanstack-query/generated/catalog/inventory.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { showErrorToast } from "~/ui/feedback/error-details";
 

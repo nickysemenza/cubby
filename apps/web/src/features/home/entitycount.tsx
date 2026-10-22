@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { entities } from "~/entity/entities";
-import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { dashboard } from "~/integrations/tanstack-query/generated/catalog/dashboard.gen";
 import { authClient } from "~/lib/auth-client";
 import { formatCompactCount } from "~/lib/number-format";
 import { useHydrated } from "~/ui/hooks/use-hydrated";

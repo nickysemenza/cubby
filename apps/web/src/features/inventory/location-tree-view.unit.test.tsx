@@ -13,7 +13,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { sampleLocations } from "~/features/design/data/samples";
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

@@ -9,7 +9,7 @@ import { useState } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { cn } from "~/lib/utils";
 import {
   RecordFold,

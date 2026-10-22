@@ -21,7 +21,7 @@ import { z } from "zod";
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

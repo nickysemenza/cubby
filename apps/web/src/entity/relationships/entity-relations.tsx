@@ -26,7 +26,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";

@@ -17,7 +17,7 @@ import { entityDetailLink } from "~/entity/entities";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";

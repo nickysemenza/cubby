@@ -23,10 +23,8 @@ import {
   taskListItem,
 } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
-import {
-  entityList,
-  entityGraph,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 

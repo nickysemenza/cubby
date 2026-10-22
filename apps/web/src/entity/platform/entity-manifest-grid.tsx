@@ -16,7 +16,7 @@ import {
 
 import { EntityIcon } from "~/entity/entities";
 import type { EntityInspectorHealth } from "~/entity/entity-inspector-health";
-import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/catalog/entityInspectorHealth.gen";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";

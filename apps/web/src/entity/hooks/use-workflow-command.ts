@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { readPathValue } from "~/entity/read-path";
 import { runHref } from "~/entity/routing/purchase-import-links";
-import { workflowCommandOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { loadWorkflowCommandOptions } from "~/integrations/tanstack-query/generated/commands.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 /** One catalog-backed executor; mutation scope serializes actual operation effects. */
@@ -23,7 +23,7 @@ export function useWorkflowCommand({
   return useActionMutation({
     mutationFn: () => ({
       mutationFn: async (request: WorkflowCommandRequest) => {
-        const declared = workflowCommandOptions(request.operation);
+        const declared = await loadWorkflowCommandOptions(request.operation);
         const { command } = declared;
         const options = {
           mutationFn: async (body: WorkflowCommandRequest["body"]) => {

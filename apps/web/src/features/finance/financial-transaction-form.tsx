@@ -19,7 +19,7 @@ import {
 } from "~/entity/editing/entity-primitive-fields";
 import { PickerField } from "~/entity/forms/picker-field";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
-import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

@@ -22,7 +22,7 @@ import {
 import { toast } from "sonner";
 
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
-import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";

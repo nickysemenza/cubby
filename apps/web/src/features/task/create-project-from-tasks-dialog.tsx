@@ -11,7 +11,7 @@ import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
-import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   FormWrapper,

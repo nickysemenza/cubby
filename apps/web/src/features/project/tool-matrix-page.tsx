@@ -49,7 +49,7 @@ import {
 } from "~/entity/presentation/product-image-summaries";
 import type { ToolMatrixSearch } from "~/features/tools/tool-search";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
 import { toolTimelineConflict } from "~/lib/tool-timeline";

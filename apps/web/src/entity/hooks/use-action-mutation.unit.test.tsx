@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
@@ -8,6 +9,7 @@ import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contra
 
 import {
   useActionMutation,
+  useDeferredActionMutation,
   useEntityActionMutation,
 } from "./use-action-mutation";
 
@@ -56,6 +58,113 @@ it("finishes an accepted write while caller follow-up work is still pending", as
   });
   await waitFor(() => expect(result.current.isPending).toBe(false));
   expect(settled).toHaveBeenCalledTimes(1);
+});
+
+it("keeps deferred loading pending and executes the declared operation in the mutation cache", async () => {
+  let finishLoad: (options: {
+    mutationKey: readonly string[];
+    meta: { entity: string };
+    mutationFn: (body: { value: string }) => Promise<string>;
+  }) => void = () => undefined;
+  const load = vi.fn(
+    () =>
+      new Promise<{
+        mutationKey: readonly string[];
+        meta: { entity: string };
+        mutationFn: (body: { value: string }) => Promise<string>;
+      }>((resolve) => {
+        finishLoad = resolve;
+      }),
+  );
+  const operation = vi.fn(async (body: { value: string }) => body.value);
+  const { result } = renderHook(
+    () => useDeferredActionMutation({ loadMutation: load }),
+    { wrapper: harness.wrapper },
+  );
+  const body = { value: "synthetic payload" };
+  let write: Promise<string> = Promise.resolve("");
+  act(() => {
+    write = result.current.mutateAsync(body);
+  });
+  await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+  expect(result.current.isPending).toBe(true);
+  expect(operation).not.toHaveBeenCalled();
+
+  await act(async () => {
+    finishLoad({
+      mutationKey: ["catalog", "synthetic-operation"],
+      meta: { entity: "synthetic-entity" },
+      mutationFn: operation,
+    });
+    await expect(write).resolves.toBe("synthetic payload");
+  });
+  expect(operation).toHaveBeenCalledWith(
+    body,
+    expect.objectContaining({
+      client: harness.queryClient,
+      mutationKey: ["catalog", "synthetic-operation"],
+      meta: { entity: "synthetic-entity" },
+    }),
+  );
+  expect(
+    harness.queryClient
+      .getMutationCache()
+      .findAll({ mutationKey: ["catalog", "synthetic-operation"] })
+      .map((mutation) => mutation.meta),
+  ).toContainEqual({ entity: "synthetic-entity" });
+  await waitFor(() => expect(result.current.isPending).toBe(false));
+});
+
+it("routes loader and operation failures through the action error presentation", async () => {
+  const toastError = vi
+    .spyOn(toast, "error")
+    .mockImplementation(() => "toast-id");
+  const loaderError = new Error("catalog load failed");
+  const loaderHook = renderHook(
+    () =>
+      useDeferredActionMutation({
+        loadMutation: async () => {
+          throw loaderError;
+        },
+        error: "Could not run action",
+      }),
+    { wrapper: harness.wrapper },
+  );
+  await act(async () => {
+    await expect(loaderHook.result.current.mutateAsync("input")).rejects.toBe(
+      loaderError,
+    );
+  });
+  expect(toastError).toHaveBeenCalledWith(
+    "Could not run action: catalog load failed",
+    expect.anything(),
+  );
+
+  toastError.mockClear();
+  const operationError = new Error("operation failed");
+  const operationHook = renderHook(
+    () =>
+      useDeferredActionMutation({
+        loadMutation: async () => ({
+          mutationFn: async (_input: string) => {
+            throw operationError;
+          },
+        }),
+        error: "Could not run action",
+      }),
+    { wrapper: harness.wrapper },
+  );
+  await act(async () => {
+    await expect(
+      operationHook.result.current.mutateAsync("input"),
+    ).rejects.toBe(operationError);
+  });
+  expect(toastError).toHaveBeenCalledTimes(1);
+  expect(toastError).toHaveBeenCalledWith(
+    "Could not run action: operation failed",
+    expect.anything(),
+  );
+  toastError.mockRestore();
 });
 
 // Detail fields delegate through an outer presentation mutation. The command

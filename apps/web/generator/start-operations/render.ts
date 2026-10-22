@@ -5,6 +5,7 @@ import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   collectDeclaredOperations,
+  loadContracts,
   collectNativeOperationIds,
   collectStartOperationHandlers,
   validateStrongQueryOperations,
@@ -117,9 +118,20 @@ const renderHttpContract = async (): Promise<string> => {
     ([a], [b]) => a.localeCompare(b),
   );
   const wire = await loadWire();
+  const contractModules = new Map(
+    (await loadContracts()).map(({ exportName, module }) => [
+      exportName,
+      module,
+    ]),
+  );
+  const usedContracts = new Map<string, string>();
   const domains = new Map<string, string[]>();
   for (const [id, declaration] of declarations) {
     if (declaration.kind === "subscription" || !declaration.native) continue;
+    const module = contractModules.get(declaration.exportName);
+    if (!module)
+      throw new Error(`No contract module for ${declaration.exportName}`);
+    usedContracts.set(declaration.exportName, module);
     const domain = id.slice(0, id.length - declaration.member.length - 1);
     const helper =
       declaration.kind === "query"
@@ -129,13 +141,16 @@ const renderHttpContract = async (): Promise<string> => {
         : "rpcMutation";
     const members = domains.get(domain) ?? [];
     members.push(
-      `${JSON.stringify(declaration.member)}: ${helper}(${JSON.stringify(domain)}, ${JSON.stringify(declaration.member)}, contracts.${declaration.exportName}.ops[${JSON.stringify(declaration.member)}]),`,
+      `${JSON.stringify(declaration.member)}: ${helper}(${JSON.stringify(domain)}, ${JSON.stringify(declaration.member)}, ${declaration.exportName}.ops[${JSON.stringify(declaration.member)}]),`,
     );
     domains.set(domain, members);
   }
   return (
     generatedHeader +
-    `import * as contracts from "~/contracts/index";\n` +
+    [...usedContracts]
+      .map(([name, module]) => `import { ${name} } from "${module}";`)
+      .join("\n") +
+    "\n" +
     `import { httpContractBuilder, httpRouterOptions, rpcMutation, rpcQuery, rpcQueryPost } from "~/lib/http-api/router";\n` +
     `export const httpContract = httpContractBuilder.router({\n` +
     [...domains]
@@ -157,27 +172,28 @@ export const renderStartOperationArtifacts = async (): Promise<{
   artifacts: EntityArtifacts[];
   /** RPC ids flagged `native:`, for the OpenAPI stage's client filter. */
   nativeOperations: string[];
-}> => ({
-  artifacts: [
-    {
-      relativePath:
-        "apps/web/src/lib/generated/start-operation-registry.gen.ts",
-      source: await renderStartOperationRegistry(),
-    },
-    {
-      relativePath:
-        "apps/web/src/server/generated/start-operation-handlers.gen.ts",
-      source: await renderStartOperationHandlers(),
-    },
-    {
-      relativePath:
-        "apps/web/src/integrations/tanstack-query/generated/catalog.gen.ts",
-      source: await renderClientCatalog(),
-    },
-    {
-      relativePath: "apps/web/src/lib/generated/http-contract.gen.ts",
-      source: await renderHttpContract(),
-    },
-  ],
-  nativeOperations: await collectNativeOperationIds(),
-});
+}> => {
+  const catalog = await renderClientCatalog();
+  return {
+    artifacts: [
+      {
+        relativePath:
+          "apps/web/src/lib/generated/start-operation-registry.gen.ts",
+        source: await renderStartOperationRegistry(),
+      },
+      {
+        relativePath:
+          "apps/web/src/server/generated/start-operation-handlers.gen.ts",
+        source: await renderStartOperationHandlers(),
+      },
+      ...catalog.domains,
+      catalog.all,
+      catalog.commands,
+      {
+        relativePath: "apps/web/src/lib/generated/http-contract.gen.ts",
+        source: await renderHttpContract(),
+      },
+    ],
+    nativeOperations: await collectNativeOperationIds(),
+  };
+};

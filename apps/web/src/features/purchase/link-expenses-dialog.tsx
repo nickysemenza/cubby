@@ -30,7 +30,7 @@ import {
   useBoundedListWorkbench,
 } from "~/entity/table/list-workbench";
 import { TradeBadge } from "~/features/project/trade-badge";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { Picker } from "~/ui/combobox/picker";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";

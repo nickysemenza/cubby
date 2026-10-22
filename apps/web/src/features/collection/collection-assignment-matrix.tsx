@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { EntityIcon, entityDetailLink } from "~/entity/entities";
 import { Picker } from "~/entity/picker/picker";
 import { type CollectionMatrixRow } from "~/features/collection/collection-types";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog/collection.gen";
 import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
