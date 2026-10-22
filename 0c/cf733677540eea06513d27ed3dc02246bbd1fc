@@ -1,0 +1,25 @@
+apps/apple/CubbyKit/Tests/CubbyKitTests/Format/DisplayFormatTests.swift
+  s_51e123cbeb9183::t_9d793f306942b2 110-111
+recipebridge/src/costing/engine.rs
+  s_51e123cbeb9183::t_960ecce182758f 1282-1283
+recipebridge/src/food_mappings.rs
+  s_51e123cbeb9183::t_fcf0984d1ce83b 311
+recipebridge/src/html.rs
+  s_51e123cbeb9183::t_8f1e63d4af242b 139,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0ccf733677540eea06513d27ed3dc02246bbd1fc",
+  "prompts": {},
+  "sessions": {
+    "s_51e123cbeb9183": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1650c-f629-7cd2-a585-c1c7808a98d3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
