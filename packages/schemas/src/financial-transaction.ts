@@ -415,7 +415,14 @@ export const financialStatementImportRow = z.strictObject({
   importFingerprint: z.string().min(1).optional(),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
-  providerAccountId: z.string().min(1).nullable().optional(),
+  providerAccountId: z
+    .string()
+    .min(1)
+    .nullable()
+    .optional()
+    .describe(
+      "Opaque upstream account ID scoped to the provider; not a Cubby FinancialAccount shortcode.",
+    ),
   providerStatus: financialTransactionProviderStatus.optional(),
   key: z.string().min(1),
   source: externalIdSource

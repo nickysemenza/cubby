@@ -31,7 +31,7 @@ import { generateStatementSuggestionPage } from "./statement-suggestions";
 // work; the automatic sample/optional switch withholds clean import spending.
 describe("statement spending review and re-import", () => {
   const ctx = withTestDb();
-  async function fixture() {
+  async function fixture(providerTransactionId: string | null = null) {
     await createSystemUserFixture(ctx.db);
     const owner = await createRepoEntity(ctx, "ledgerParty", {
       name: "Synthetic statement member",
@@ -82,6 +82,7 @@ describe("statement spending review and re-import", () => {
           merchant: "Synthetic Orchard",
           rawDescription: "SYNTHETIC ORCHARD",
           sourceCategory: "Groceries",
+          providerTransactionId,
           providerStatus: "posted",
           providerNotes: null,
           rowPosition: 1,
@@ -329,7 +330,7 @@ describe("statement spending review and re-import", () => {
   });
   // Categories are provider observations, never a fuzzy same-merchant join.
   it("retains conflicting category observations and scopes source evidence to charge membership", async () => {
-    const { input, account } = await fixture();
+    const { input, account } = await fixture("synthetic-category-charge");
     await recordStatementRows(
       ctx.db,
       recordStatementRowsInput.parse({
@@ -348,6 +349,7 @@ describe("statement spending review and re-import", () => {
           {
             ...input.rows[0],
             statementDate: "2026-05-05",
+            providerTransactionId: "synthetic-unrelated-charge",
             sourceCategory: "Unrelated category",
           },
         ],

@@ -31,6 +31,8 @@ const transaction = mock(financialTransactionOut, {
     merchant: "Example Hardware",
     displayName: "Example Hardware",
     allocations: [],
+    status: "posted",
+    postedDate: "2026-03-04",
   },
 });
 

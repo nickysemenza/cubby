@@ -734,9 +734,10 @@ describe("MCP catalog schemas", () => {
       "expectedExternalId",
       "externalAccountId",
       "providerId",
-      // The statement provider's opaque transaction key is source evidence,
-      // never a Cubby FinancialTransaction id or shortcode.
+      // Opaque upstream account/transaction keys are source evidence, never
+      // Cubby FinancialAccount/FinancialTransaction ids or shortcodes.
       "providerTransactionId",
+      "providerAccountId",
       // Device.installationId (and the photo-import commit's top-level
       // `deviceId`, which is the same installation id, not a `DEV-`
       // shortcode) is the native app's own local identifier — never a

@@ -187,7 +187,14 @@ export type StatementImportInput = z.infer<typeof statementImportInput>;
 export const statementRowInput = z.strictObject({
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
-  providerAccountId: z.string().min(1).nullable().optional(),
+  providerAccountId: z
+    .string()
+    .min(1)
+    .nullable()
+    .optional()
+    .describe(
+      "Opaque upstream account ID scoped to the provider; not a Cubby FinancialAccount shortcode.",
+    ),
   providerData: z.json().nullable().optional(),
   accountDescriptor: z.string().min(1),
   statementDate: plainDate,
