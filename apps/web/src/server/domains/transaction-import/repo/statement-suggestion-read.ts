@@ -18,7 +18,7 @@ import {
   chargeKeyOf,
   chargeStateOf,
   LIVE_REFS,
-} from "~/server/domains/statement-import/repo/statement-charge";
+} from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   automaticApplicationRule,
   matchedRulesOf,
@@ -72,7 +72,7 @@ const FROM = sql`FROM "AssessmentState" s
   JOIN "Assessment" a ON a.id = s.id
   JOIN "FinancialAccount" fa ON fa.id = (${suggestionField("accountId")})::uuid AND fa."deletedAt" IS NULL
   LEFT JOIN "LedgerParty" account_owner ON account_owner.id = fa."ledgerPartyId"
-  JOIN "StatementRow" r ON r.id = s."recordId"`;
+  JOIN "SourceTransactionRecord" r ON r.id = s."recordId"`;
 
 /** Every pending suggestion in scope with its list columns, before hydration. */
 export async function statementSuggestionKeys(
@@ -184,12 +184,12 @@ export async function readStatementSuggestions(
       UNION
       SELECT matched.id, observed.source, ${chargeKeyOf("observed")} AS "chargeKey"
       FROM matched JOIN ${LIVE_REFS} refs ON refs.shortcode = matched.shortcode
-      JOIN "StatementRow" observed ON observed.source = refs.source
+      JOIN "SourceTransactionRecord" observed ON observed.source = refs.source
         AND (observed."externalId" = refs."externalId" OR observed."legacyReference" = refs."externalId")
         AND observed."deletedAt" IS NULL
     )
     SELECT DISTINCT members.id, r.source, r."sourceCategory"
-    FROM members JOIN "StatementRow" r
+    FROM members JOIN "SourceTransactionRecord" r
       ON r.source = members.source AND ${chargeKeyOf("r")} = members."chargeKey"
     WHERE r."deletedAt" IS NULL
     ORDER BY members.id, r.source, r."sourceCategory" NULLS FIRST

@@ -730,7 +730,7 @@ describe("image repository", () => {
    * Both are plain `references(() => image.id)` with no `onDelete`, so Postgres
    * defaults to NO ACTION. A regression therefore fails LOUD — the FK violation
    * rolls the transaction back — which is why this ranks below the fail-open
-   * statement-row guard. It is still the exact shape this file's own comment
+   * source-transaction-record guard. It is still the exact shape this file's own comment
    * says already happened once for `PurchaseImage`, so the assertion is on the
    * promise RESOLVING as much as on the columns reading null.
    */

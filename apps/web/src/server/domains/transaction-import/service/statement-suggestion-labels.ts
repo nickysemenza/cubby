@@ -43,8 +43,8 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   statementLabelSubject,
   statementCandidateSubject,
-} from "~/server/domains/statement-import/repo/statement-label-input";
-import { prepareStatementSpending } from "~/server/domains/statement-import/repo/statement-spending";
+} from "~/server/domains/transaction-import/repo/statement-label-input";
+import { prepareStatementSpending } from "~/server/domains/transaction-import/repo/statement-spending";
 import {
   buildChargeProposals,
   chargeId,
@@ -58,8 +58,8 @@ import {
   type LabelCursor,
   recordStatementLabelCheckpoint,
   completeStatementApplications,
-} from "~/server/domains/statement-import/repo/statement-suggestions";
-import { decideStatementKind } from "~/server/domains/statement-import/repo/statement-transaction-kind";
+} from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";

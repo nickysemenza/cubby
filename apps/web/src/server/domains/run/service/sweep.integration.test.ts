@@ -1,6 +1,6 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
-import type { StatementRowInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -11,8 +11,8 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   drainDerivedRefreshFrontier,
@@ -26,8 +26,8 @@ import { estimateSweep, startSweep } from "./sweep";
 
 let position = 0;
 const row = (
-  overrides: Partial<StatementRowInput> = {},
-): StatementRowInput => ({
+  overrides: Partial<SourceTransactionRecordInput> = {},
+): SourceTransactionRecordInput => ({
   accountDescriptor: "Synthetic Card (...4242)",
   statementDate: "2026-05-04",
   providerAmount: -12.5,
@@ -69,10 +69,13 @@ describe("Sweeps", () => {
       sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
     });
 
-  const recordRows = (rows: StatementRowInput[], fingerprint: string) =>
-    recordStatementRows(
+  const recordRows = (
+    rows: SourceTransactionRecordInput[],
+    fingerprint: string,
+  ) =>
+    recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         import: {
           source: "monarch",
           label: "synthetic-export.csv",

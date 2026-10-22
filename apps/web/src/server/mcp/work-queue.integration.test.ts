@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { testUserId } from "@cubby/schemas/testing";
 import {
   workQueueHouseholdInput,
@@ -21,7 +21,7 @@ import {
   run as runTable,
   photoRunImage,
   photoGroupProposal,
-  statementRow,
+  sourceTransactionRecord,
   vendorAccount,
 } from "~/server/db/schema";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/image-processing";
@@ -29,7 +29,7 @@ import { proposePhotoGroups } from "~/server/domains/photo-import/repo/run/propo
 import { stopRunForReview } from "~/server/domains/purchase-import/operations/run-review";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -1077,9 +1077,9 @@ describe("member actionable Work queue", () => {
       },
     );
     const statement = (label: string) =>
-      recordStatementRows(
+      recordSourceTransactionRecords(
         ctx.db,
-        recordStatementRowsInput.parse({
+        recordSourceTransactionRecordsInput.parse({
           import: {
             source,
             label,
@@ -1102,9 +1102,9 @@ describe("member actionable Work queue", () => {
     await statement("Synthetic unresolved statement");
     const linkedStatement = await statement("Synthetic owned statement");
     await getDb(ctx.db)
-      .update(statementRow)
+      .update(sourceTransactionRecord)
       .set({ accountId: financialAccount.id })
-      .where(eq(statementRow.batchId, linkedStatement.batchId!));
+      .where(eq(sourceTransactionRecord.batchId, linkedStatement.batchId!));
     const expiredFinding = await seedRunFinding(ctx.db, {
       runId: mine.id,
       ledgerPartyId: first.id,
@@ -1152,7 +1152,7 @@ describe("member actionable Work queue", () => {
     ).toMatchObject({
       entity: null,
       id: null,
-      problemKey: "incompleteStatementImports",
+      problemKey: "incompleteTransactionImports",
       waitingFor: { kind: "unresolved" },
     });
     expect(
@@ -1288,7 +1288,7 @@ describe("member actionable Work queue", () => {
     ).toMatchObject({
       entity: null,
       id: null,
-      problemKey: "incompleteStatementImports",
+      problemKey: "incompleteTransactionImports",
       waitingFor: { kind: "members", members: [{ id: second.shortcode }] },
     });
     expect(

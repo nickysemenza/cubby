@@ -88,12 +88,6 @@ const NON_ENTITY_FK_TARGETS = {
   oauth_client: "OAuth 2.1 provider table (registered MCP clients)",
   oauth_resource: "OAuth 2.1 provider table (protected resource policy)",
   oauth_refresh_token: "OAuth 2.1 provider table (issued refresh tokens)",
-  // The provider-statement ledger: verbatim evidence Cubby is compared
-  // against, deliberately not entities. At 15k+ rows they would swamp global
-  // semantic search, and they carry no shortcode because nothing links to a
-  // statement line by public id.
-  StatementImport: "provider export bookkeeping, not a domain entity",
-  StatementRow: "verbatim statement evidence, not a domain entity",
   SourceOrderObservation:
     "immutable source extraction history, not a domain entity",
   AiUsage: "append-only model accounting, not a domain entity",
@@ -418,10 +412,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "ProductUnitMapping.productId": {
     classification: "ownership",
     reason: "derived unit-mapping state owned by the product",
-  },
-  "StatementRow.accountId": {
-    classification: "metadata",
-    reason: "verbatim imported banking evidence, not a navigable entity",
   },
 } as const satisfies Record<
   string,

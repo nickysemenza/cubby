@@ -6,24 +6,18 @@ import type { Page } from "@playwright/test";
 import superjson from "superjson";
 import { settledSuggestionQuestionsInput } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
-  recordStatementRowsOut,
-  listStatementRowsInput,
-  recordStatementRowsInput,
-  type StatementRowInput,
-} from "@cubby/schemas/statement-row";
+  recordSourceTransactionRecordsOut,
+  recordSourceTransactionRecordsInput,
+  type SourceTransactionRecordInput,
+} from "@cubby/schemas/source-transaction-record";
 import { eq, sql } from "drizzle-orm";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
-import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
-import {
-  recordStatementRows,
-  updateStatementRows,
-} from "~/server/domains/statement-import/repo/statement-row";
+import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { z } from "zod";
 
-import { shiftPlainDate } from "~/lib/household-date";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { user } from "~/server/db/auth.schema";
 import { product as productTable, feedback } from "~/server/db/schema";
@@ -32,7 +26,7 @@ import {
   readEntityConnections,
 } from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { generateStatementSuggestionPage } from "~/server/domains/statement-import/repo/statement-suggestions";
+import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -90,28 +84,35 @@ async function ensureSystemUser(db: Db) {
 
 /** Synthetic Monarch rows on one account alias. */
 const recordRows =
-  (page: Page, alias: string) =>
-  async (fingerprint: string, rows: Partial<StatementRowInput>[]) => {
-    const response = await startOperation(page.request, "statementRow.record", {
-      import: {
-        source: "monarch",
-        label: `${fingerprint}.csv`,
-        fingerprint,
-        dateKind: "posted",
+  (page: Page, alias: string, db: Db) =>
+  async (
+    fingerprint: string,
+    rows: Partial<SourceTransactionRecordInput>[],
+  ) => {
+    const response = await startOperation(
+      page.request,
+      "sourceTransactionRecord.record",
+      {
+        import: {
+          source: "monarch",
+          label: `${fingerprint}.csv`,
+          fingerprint,
+          dateKind: "posted",
+        },
+        rows: rows.map((row, index) => ({
+          accountDescriptor: alias,
+          merchant: null,
+          providerStatus: "posted",
+          sourceCategory: null,
+          rowPosition: index + 1,
+          ...row,
+        })),
       },
-      rows: rows.map((row, index) => ({
-        accountDescriptor: alias,
-        merchant: null,
-        providerStatus: "posted",
-        sourceCategory: null,
-        rowPosition: index + 1,
-        ...row,
-      })),
-    });
+    );
     expect(response.ok(), await response.text()).toBe(true);
-    return recordStatementRowsOut
-      .extend({ batchId: z.string() })
-      .parse(response.body).batchId;
+    const receipt = recordSourceTransactionRecordsOut.parse(response.body);
+    if (!receipt.batchId) throw new Error("Transaction import missing");
+    return resolveOrThrow(db, "transactionImport", receipt.batchId);
   };
 
 const suggestionsTable = (page: Page) =>
@@ -335,7 +336,11 @@ test("Suggestions lists every family with named records and category pills, and 
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
   });
-  const importId = await recordRows(page, alias)(alias, [
+  const importId = await recordRows(
+    page,
+    alias,
+    db,
+  )(alias, [
     {
       statementDate: "2026-05-11",
       providerAmount: -17.25,
@@ -525,7 +530,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const hardware = `${alias} HARDWARE 0441`;
   const hold = `${alias} HOLD`;
   const cafe = `${alias} CAFE`;
-  const record = recordRows(page, alias);
+  const record = recordRows(page, alias, db);
   const importId = await record(alias, [
     {
       statementDate: "2026-05-12",
@@ -658,9 +663,9 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
 
   // Publish manual review work without scheduling import-clean execution,
   // which would legitimately finish the same booking before the bulk click.
-  const posted = await recordStatementRows(
+  const posted = await recordSourceTransactionRecords(
     db,
-    recordStatementRowsInput.parse({
+    recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         label: "synthetic-posted.csv",
@@ -706,136 +711,14 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
 
   await gotoAuthenticatedPage(
     page,
-    `/statement-rows?matchState=all&q=${encodeURIComponent(hardware)}`,
+    `/source-transaction-records?q=${encodeURIComponent(hardware)}`,
   );
   await expect(
     page
-      .getByRole("table", { name: "Statement Rows Table" })
+      .getByRole("table", { name: "Source transaction records Table" })
       .getByRole("row")
       .filter({ hasText: hardware }),
   ).toContainText("Matched");
-});
-
-// Shared infinite paging must cross the first page while totals still cover
-// the full scope. Switching provider must replace both rows and amount.
-test("Statement rows page observations with full totals and keep existing review links", async ({
-  page,
-}, testInfo) => {
-  test.slow();
-  const { db, actor } = await createEvidenceHarnessContext(page);
-  const name = uniqueName(testInfo, "Paged observations");
-  const account = await createEntityFixture(page, "financialAccount", {
-    name,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
-  });
-  const rows = Array.from({ length: 101 }, (_, index) => ({
-    rowPosition: index + 1,
-    accountDescriptor: name,
-    statementDate: shiftPlainDate("2026-05-04", 100 - index),
-    providerAmount: -1,
-    merchant: name,
-    rawDescription: `${name} ${String(index + 1).padStart(3, "0")}`,
-  }));
-  await recordStatementRows(
-    db,
-    recordStatementRowsInput.parse({
-      import: {
-        source: "monarch",
-        fingerprint: `${name}-first`,
-        label: "synthetic-pages.csv",
-        dateKind: "posted",
-        rowCountDeclared: rows.length,
-      },
-      rows,
-    }),
-    actor,
-  );
-  await recordStatementRows(
-    db,
-    recordStatementRowsInput.parse({
-      import: {
-        source: "mint",
-        fingerprint: `${name}-other`,
-        label: "synthetic-other.csv",
-        dateKind: "posted",
-        rowCountDeclared: 1,
-      },
-      rows: [
-        {
-          ...rows[0],
-          rowPosition: 1,
-          accountDescriptor: name,
-          statementDate: "2026-05-04",
-          providerAmount: -7,
-          rawDescription: `${name} other`,
-        },
-      ],
-    }),
-    actor,
-  );
-  // Raw observations do not acquire a resolved account from an alias alone.
-  await updateStatementRows(
-    db,
-    {
-      selector: {
-        filter: { source: "mint", importFingerprint: `${name}-other` },
-      },
-      data: { accountId: parseShortcodeFor("financialAccount", account.id) },
-    },
-    actor,
-  );
-  const pages: number[] = [];
-  page.on("request", (request) => {
-    for (const item of dispatchOperations(request)) {
-      if (item.operation !== "statementRow.list") continue;
-      const parsed = listStatementRowsInput.safeParse(item.input);
-      if (parsed.success && parsed.data.filters?.source === "monarch")
-        pages.push(parsed.data.pagination?.pageIndex ?? 0);
-    }
-  });
-  await gotoAuthenticatedPage(
-    page,
-    `/statement-rows?source=monarch&matchState=unmatched&q=${encodeURIComponent(name)}`,
-  );
-  const table = page.getByRole("table", { name: "Statement Rows Table" });
-  await expect(table.locator("tfoot")).toContainText("$101.00");
-  const pane = page.getByRole("region", {
-    name: "Statement Rows Table keyboard navigation",
-    exact: true,
-  });
-  await pane.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await expect.poll(() => pages.includes(1)).toBe(true);
-  await pane.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await expect(
-    table.getByRole("row").filter({ hasText: `${name} 101` }),
-  ).toBeVisible();
-  await expect(table.locator("tfoot")).toContainText("$101.00");
-  await page.getByRole("combobox", { name: "Source", exact: true }).click();
-  await page.getByRole("option", { name: "mint", exact: true }).click();
-  await expect(
-    table.getByRole("row").filter({ hasText: `${name} other` }),
-  ).toBeVisible();
-  await expect(table.locator("tfoot")).toContainText("$7.00");
-  await expect(
-    table.getByRole("row").filter({ hasText: `${name} 101` }),
-  ).toHaveCount(0);
-  const review = table.getByRole("link", {
-    name: "Review suggestions",
-    exact: true,
-  });
-  await expect(review).toHaveAttribute(
-    "href",
-    new RegExp(
-      `record=financialAccount%3A${account.id}|record=financialAccount:${account.id}`,
-    ),
-  );
-  await review.click();
-  await expect(page).toHaveURL(/\/suggestions\?/);
-  await expect(page).toHaveURL(new RegExp(account.id));
 });
 
 // Failure mode: Find suggestions starts a Sweep without showing what it will

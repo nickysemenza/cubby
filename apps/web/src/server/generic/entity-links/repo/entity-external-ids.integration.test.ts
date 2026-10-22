@@ -1,5 +1,5 @@
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -20,7 +20,7 @@ import {
   getNotionRecipePageIds,
   upsertNotionRecipe,
 } from "~/server/domains/recipe/repo/crud";
-import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   findOrCreateVendor,
   getVendorByID,
@@ -272,7 +272,7 @@ describe("EntityExternalId", () => {
   });
 
   it("treats a statement re-import as a no-op", async () => {
-    const input = recordStatementRowsInput.parse({
+    const input = recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         label: "monarch-2026-03.csv",
@@ -296,10 +296,10 @@ describe("EntityExternalId", () => {
       dryRun: false,
     });
     await expect(
-      recordStatementRows(ctx.db, input, ctx.actor),
+      recordSourceTransactionRecords(ctx.db, input, ctx.actor),
     ).resolves.toMatchObject({ inserted: 1 });
     await expect(
-      recordStatementRows(ctx.db, input, ctx.actor),
+      recordSourceTransactionRecords(ctx.db, input, ctx.actor),
     ).resolves.toMatchObject({ inserted: 0 });
   });
 

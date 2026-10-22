@@ -222,7 +222,7 @@ receipt and refuses conflicting reuse rather than repeating a domain mutation.
 ## Amendment: statement Transaction suggestions (2026-10)
 
 The `statement_transaction` family targets a non-shortcode record, the
-canonical StatementRow observation of one provider charge, as `email_link`
+canonical SourceTransactionRecord observation of one provider charge, as `email_link`
 targets a retained mail event. Its judgment is proposal-shaped: one
 Assessment per charge carries the recommended action, every attach candidate
 and the create payload, because rejecting the candidates is what makes a

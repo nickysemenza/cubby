@@ -12,7 +12,7 @@ import {
   commitFinancialBookingCorrection,
 } from "~/server/domains/financial-transaction/repo/financial-booking-correction";
 import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
-import { previewFinancialStatementImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import { previewFinancialTransactionImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { financialTransactionSourceOptions } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { convergeFinancialEvidence } from "~/server/domains/financial-transaction/service/financial-convergence";
@@ -62,8 +62,8 @@ export const financialTransactionHandlers = implementOperationDomain(
       previewFinancialBooking(context.db, input),
     commitBooking: (context, input) =>
       commitFinancialBooking(context.db, input, context.actorContext),
-    previewStatementImport: (context, input) =>
-      previewFinancialStatementImport(context.db, input),
+    previewTransactionImport: (context, input) =>
+      previewFinancialTransactionImport(context.db, input),
     sourceOptions: (context) => financialTransactionSourceOptions(context.db),
     vendorInference: (context, input) =>
       merchantVendorInferenceFor(context.db, input.merchant),

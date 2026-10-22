@@ -3,7 +3,9 @@ import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq, getTableColumns, getTableName, sql } from "drizzle-orm";
+import { TEST_ACTOR } from "tooling/test-setup";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -49,14 +51,16 @@ import {
   runControlEvent,
   runOperation,
   runStep,
-  statementImport,
-  statementRow,
+  sourceTransactionRecord,
+  transactionImport,
   user,
 } from "~/server/db/schema";
 import {
   retainedMailFixture,
   sourceOrderObservationFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
@@ -488,6 +492,28 @@ const mkRecipeSection = async (db: Database) => {
 /** One live-row factory per entity that appears as a `targetEntity` among the
  * must-target-live edges below. */
 const TARGET_FACTORIES = {
+  sourceTransactionRecord: async (db: Database) =>
+    (await createFinancialEvidenceFixture(db)).record,
+  transactionImport: async (db: Database) => {
+    const receipt = await recordSourceTransactionRecords(
+      db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "synthetic-liveness",
+          label: "Synthetic empty import",
+          fingerprint: crypto.randomUUID(),
+        },
+        rows: [],
+      }),
+      TEST_ACTOR,
+    );
+    if (!receipt.batchId) throw new Error("Synthetic import missing");
+    const collection = await getDb(db).query.transactionImport.findFirst({
+      where: eq(transactionImport.id, receipt.batchId),
+    });
+    if (!collection) throw new Error("Synthetic import missing");
+    return collection;
+  },
   spendingCategory: (db: Database) =>
     insertWithShortcode(db, "spendingCategory", {
       name: uniq("Spending category"),
@@ -533,6 +559,44 @@ const insertLedgerClaim = async (
 };
 
 const SOURCE_FACTORIES = {
+  "SourceTransactionRecord.supersededByRowId": async (
+    db: Database,
+    targetId: string,
+  ) => {
+    const { record } = await createFinancialEvidenceFixture(db);
+    await getDb(db)
+      .update(sourceTransactionRecord)
+      .set({
+        supersededByRowId: parseEntityId("sourceTransactionRecord", targetId),
+      })
+      .where(eq(sourceTransactionRecord.id, record.id));
+    return record;
+  },
+  "SourceTransactionRecord.batchId": async (db: Database, targetId: string) => {
+    const { record } = await createFinancialEvidenceFixture(db);
+    await getDb(db)
+      .update(sourceTransactionRecord)
+      .set({
+        batchId: parseEntityId("transactionImport", targetId),
+        rowPosition: null,
+      })
+      .where(eq(sourceTransactionRecord.id, record.id));
+    return record;
+  },
+  "SourceTransactionRecord.withdrawalImportId": async (
+    db: Database,
+    targetId: string,
+  ) => {
+    const { record } = await createFinancialEvidenceFixture(db);
+    await getDb(db)
+      .update(sourceTransactionRecord)
+      .set({
+        withdrawalImportId: parseEntityId("transactionImport", targetId),
+        withdrawnAt: new Date(),
+      })
+      .where(eq(sourceTransactionRecord.id, record.id));
+    return record;
+  },
   "ExternalSource.vendorId": async (db, targetId) => {
     const slug = uniq("synthetic-source")
       .toLowerCase()
@@ -1471,24 +1535,35 @@ const SOURCE_FACTORIES = {
       amount: 1,
     }),
 
-  "StatementRow.accountId": async (db, targetId) => {
-    await ensureExternalSources(db, ["monarch"]);
-    const batch = await insertAndReturn(db, statementImport, {
-      source: "monarch",
-      label: "liveness-fixture.csv",
-      fingerprint: `fp-${targetId}`,
-    });
-    return insertAndReturn(db, statementRow, {
-      batchId: batch.id,
-      source: "monarch",
-      externalId: `v1:${targetId.replace(/-/g, "").padEnd(64, "0").slice(0, 64)}`,
-      accountDescriptor: "Liveness Fixture Card",
-      statementDate: "2026-01-01",
-      amount: 1,
-      providerAmount: -1,
-      rawDescription: "LIVENESS FIXTURE",
-      accountId: parseEntityId("financialAccount", targetId),
-    });
+  "SourceTransactionRecord.accountId": async (db, targetId) => {
+    const retained = await recordSourceTransactionRecords(
+      db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "monarch",
+          label: "liveness-fixture.csv",
+          fingerprint: `fp-${targetId}`,
+        },
+        rows: [
+          {
+            rowPosition: 1,
+            accountDescriptor: "Liveness Fixture Card",
+            statementDate: "2026-01-01",
+            providerAmount: -1,
+            rawDescription: "LIVENESS FIXTURE",
+          },
+        ],
+      }),
+      TEST_ACTOR,
+    );
+    if (!retained.batchId) throw new Error("Synthetic liveness import missing");
+    const [row] = await getDb(db)
+      .update(sourceTransactionRecord)
+      .set({ accountId: parseEntityId("financialAccount", targetId) })
+      .where(eq(sourceTransactionRecord.batchId, retained.batchId))
+      .returning();
+    if (!row) throw new Error("Synthetic liveness record missing");
+    return row;
   },
 
   "FinancialTransactionAllocation.purchaseId": async (db, targetId) => {

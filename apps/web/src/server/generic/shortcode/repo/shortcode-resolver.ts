@@ -29,6 +29,7 @@ import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   financialTransaction,
+  sourceTransactionRecord,
   gardenEntry,
   run as runTable,
   inventoryEntry,
@@ -273,6 +274,11 @@ export async function lookupShortcodes(
  * `shortcode-resolver-labels.unit.test.ts` for the parity check this backs.
  */
 export const LABEL_COLUMN_OVERRIDES = {
+  sourceTransactionRecord: {
+    column: sourceTransactionRecord.rawDescription,
+    reason:
+      "displayName falls back from source description to merchant and account; rawDescription is the best-effort stored label",
+  },
   imageJob: {
     column: imageProcessingJobTable.kind,
     reason:

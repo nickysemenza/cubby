@@ -261,7 +261,7 @@ it("carries populated history and pending paid work into the unified job cutover
       )
     ).rows;
 
-    await migrateDatabase(db);
+    await migrateDatabase(db, { through: "0005_thin_blink" });
 
     expect(
       (

@@ -152,7 +152,8 @@ import {
   recipeSectionIngredient,
   plant,
   planting,
-  statementRow,
+  sourceTransactionRecord,
+  transactionImportRecord,
   assessmentState,
   task,
   vendorAccount,
@@ -326,6 +327,56 @@ function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
 }
 
 export const ENTITY_EDGES = {
+  sourceTransactionRecord: edges({
+    "SourceTransactionRecord.supersededByRowId": {
+      column: sourceTransactionRecord.supersededByRowId,
+      role: "reference",
+      label: "superseded records",
+      description:
+        "The explicit reviewed successor of an earlier source record.",
+      liveness: { kind: "must-target-live" },
+    },
+    "TransactionImportRecord.statementRowId": {
+      column: transactionImportRecord.statementRowId,
+      role: "history",
+      label: "import memberships",
+      description:
+        "The imports that received this immutable source observation.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Intake history retains the original record identity through deletion.",
+      },
+    },
+  }),
+  transactionImport: edges({
+    "SourceTransactionRecord.batchId": {
+      column: sourceTransactionRecord.batchId,
+      role: "history",
+      label: "first-ingest provenance",
+      description: "The import that first retained a source observation.",
+      liveness: { kind: "must-target-live" },
+    },
+    "SourceTransactionRecord.withdrawalImportId": {
+      column: sourceTransactionRecord.withdrawalImportId,
+      role: "history",
+      label: "withdrawal proof",
+      description: "The completed import that confirmed a source withdrawal.",
+      liveness: { kind: "must-target-live" },
+    },
+    "TransactionImportRecord.importId": {
+      column: transactionImportRecord.importId,
+      role: "history",
+      label: "received record memberships",
+      description:
+        "The retained membership of one resumable transaction import.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Retained import membership survives retirement of its collection.",
+      },
+    },
+  }),
   imageJob: edges({
     "ImageProcessingAttempt.jobId": {
       column: imageProcessingAttempt.jobId,
@@ -1286,8 +1337,8 @@ export const ENTITY_EDGES = {
             "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
         },
       },
-      "StatementRow.accountId": {
-        column: statementRow.accountId,
+      "SourceTransactionRecord.accountId": {
+        column: sourceTransactionRecord.accountId,
         role: "reference",
         label: "statement rows",
         description:

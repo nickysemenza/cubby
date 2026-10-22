@@ -836,6 +836,22 @@ const buildMetadataSchemas = () => {
           .union([z.string(), z.number(), z.boolean(), z.null()])
           .optional(),
         reference: nonEmptyString().nullable().optional(),
+        referenceOptions: z
+          .object({
+            column: nonEmptyString(),
+            onUpdate: z
+              .enum([
+                "cascade",
+                "restrict",
+                "no action",
+                "set null",
+                "set default",
+              ])
+              .optional(),
+          })
+          .strict()
+          .optional(),
+        defaultSql: nonEmptyString().optional(),
         specialized: nonEmptyString().nullable().optional(),
       })
       .strict()
@@ -846,6 +862,8 @@ const buildMetadataSchemas = () => {
           defaultOverride,
           defaultValue,
           reference,
+          referenceOptions,
+          defaultSql,
           specialized,
         }) => ({
           key,
@@ -853,6 +871,8 @@ const buildMetadataSchemas = () => {
           default: defaultOverride,
           defaultValue,
           reference,
+          referenceOptions,
+          defaultSql,
           specialized,
         }),
       ),
@@ -887,7 +907,7 @@ const buildMetadataSchemas = () => {
   const entityFieldModelIntentsMetadataSchema = z
     .object({
       fields: z.record(nonEmptyString(), z.array(nonEmptyString()).min(1)),
-      create: z.array(nonEmptyString()).min(1),
+      create: z.array(nonEmptyString()),
       update: z.array(nonEmptyString()).min(1),
       editorFields: z.array(nonEmptyString()).optional().default([]),
       /**
@@ -1003,7 +1023,12 @@ const buildMetadataSchemas = () => {
           derivedKey,
           z.union([
             z.enum(["text", "number", "date", "boolean"]),
-            z.object({ reference: nonEmptyString() }).strict(),
+            z
+              .object({
+                reference: nonEmptyString(),
+                connection: z.boolean().optional(),
+              })
+              .strict(),
           ]),
         ),
       })

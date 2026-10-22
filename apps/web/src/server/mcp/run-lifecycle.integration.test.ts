@@ -497,9 +497,10 @@ describe("Mail import switch and discovery through MCP", () => {
         ),
       ),
       trusted: { runId: run.id, grantId: "synthetic-grant" },
-      toolName: "statement_rows.update",
+      toolName: "entity.update",
       args: {
-        selector: { source: "synthetic", externalIds: ["row-a"] },
+        entity: "sourceTransactionRecord",
+        id: "STR-ABCDE",
         data: { disposition: "open", dispositionNote: null },
       },
       execution: { runId: run.id, operationId: "synthetic:mcp-approve" },

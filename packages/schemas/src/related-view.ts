@@ -523,6 +523,10 @@ type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
  * same empty `.filter()` result.
  */
 const ENTITIES_WITHOUT_RELATED_VIEWS = {
+  sourceTransactionRecord:
+    "Imports and accepted transactions render as detail relation sections.",
+  transactionImport:
+    "Retained source records render as a detail relation section.",
   email:
     "Email report generic records derive accepted source-family/lifecycle Purchases, their Expenses/Products and same-Purchase owned Emails; mailbox-scoped thread context and dismissed candidates remain separate. Owner/Run use declared related views.",
   spendingCategory:

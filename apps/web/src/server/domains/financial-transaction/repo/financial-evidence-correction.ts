@@ -20,7 +20,7 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   purchase,
-  statementRow,
+  sourceTransactionRecord,
 } from "~/server/db/schema";
 import {
   deleteExpenses,
@@ -44,7 +44,7 @@ import {
 } from "./financial-convergence";
 import { updateFinancialTransaction } from "./financial-transaction";
 
-type Observation = typeof statementRow.$inferSelect;
+type Observation = typeof sourceTransactionRecord.$inferSelect;
 type EvidenceVerification =
   | { status: "verified" }
   | { status: "review"; reason: string };
@@ -87,11 +87,11 @@ async function loadCorrectionObservation(
   db: Database,
   input: FinancialEvidenceCorrectionInput,
 ): Promise<{ status: "verified"; observation: Observation } | Review> {
-  const observation = await getDb(db).query.statementRow.findFirst({
+  const observation = await getDb(db).query.sourceTransactionRecord.findFirst({
     where: and(
-      eq(statementRow.source, input.source),
-      eq(statementRow.externalId, input.externalId),
-      notDeleted(statementRow),
+      eq(sourceTransactionRecord.source, input.source),
+      eq(sourceTransactionRecord.externalId, input.externalId),
+      notDeleted(sourceTransactionRecord),
     ),
   });
   if (!observation)
@@ -180,7 +180,7 @@ const hasSourceUpdates = (
 ) => previousRefs !== currentRefs || Object.keys(lifecycle).length > 0;
 
 function sourceLifecycle(
-  observation: typeof statementRow.$inferSelect,
+  observation: typeof sourceTransactionRecord.$inferSelect,
   row: typeof financialTransaction.$inferSelect,
 ) {
   if (
@@ -247,21 +247,21 @@ export async function reconcileFinancialEvidenceCorrection(
       const refs = (await settlementRefsFor(txDb, [row.id])).get(row.id) ?? [];
       const sourceRefs = refs.filter((ref) => ref.source === input.source);
       const acceptedObservation = sourceRefs.length
-        ? await tx.query.statementRow.findFirst({
+        ? await tx.query.sourceTransactionRecord.findFirst({
             where: and(
-              eq(statementRow.source, input.source),
-              eq(statementRow.chargeKey, observation.chargeKey),
+              eq(sourceTransactionRecord.source, input.source),
+              eq(sourceTransactionRecord.chargeKey, observation.chargeKey),
               or(
                 inArray(
-                  statementRow.externalId,
+                  sourceTransactionRecord.externalId,
                   sourceRefs.map((ref) => ref.externalId),
                 ),
                 inArray(
-                  statementRow.legacyReference,
+                  sourceTransactionRecord.legacyReference,
                   sourceRefs.map((ref) => ref.externalId),
                 ),
               ),
-              notDeleted(statementRow),
+              notDeleted(sourceTransactionRecord),
             ),
           })
         : undefined;

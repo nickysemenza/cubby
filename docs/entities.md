@@ -1429,9 +1429,11 @@ kernel's progressive list, whether or not the browser writes the entity
 where rows come from. Its repository then implements `listRead`. Only a
 generated index feeds inline relation tables. The **CRUD roster**
 (`generatedBrowserCrudEntities`) is the list-roster entities with create and
-update contracts; mutation results and the generic editor key on it. Bulk edit
+update contracts; mutation results key on it. Bulk edit
 uses the derived bulk roster across all mutable shortcode entities, including
-update-only entities such as imported Cookbooks.
+update-only entities such as imported Cookbooks. The generic editor accepts
+entities with declared create or update intents; an update-only entity exposes
+no create operation.
 
 Complete client vocabularies use `entityListBaseFor`'s projected infinite read:
 each page loads base rows and only the declared enrichment groups the consumer
@@ -2246,6 +2248,20 @@ presence key it was already published under (expense
 `projectPresenceFilter`); others get the generated
 `<columnId>PresenceFilter`.
 
+A repository reference column may opt into `entity_read.connections` with
+`{ reference: "financialTransaction", connection: true }`. Only mark the
+canonical direction: the row's `owner` is the source and the reference is the
+target; the reader exposes both outgoing and incoming groups under
+`rows:<entity>.<rowSet>.<column>`. The repository must register its list scaffold
+before the request and supply static SQL; prepared row sets are refused.
+Both endpoints must be live Entity rows of the declared kinds with shortcodes.
+The reader filters by the subject, deduplicates owner/target pairs, and computes
+the exact count and deterministic bounded sample in SQL before hydrating labels.
+These groups have role `reference` and disposition `null`. They add no stored
+edges and do not enter `ENTITY_EDGES`, lifecycle policy, orphan detection, or
+graph traversal. Inverse list projections reuse the same relation without
+opting in again.
+
 Every include filter through one row set matches the same row: the
 compiler builds one `EXISTS` for the group, so account `source` Plaid with
 `externalAccountId` `ACME-0042` means one Plaid alias holding that id. To
@@ -2300,6 +2316,8 @@ a filter's. Expense analytics keep it in their where beside the allocation
 filters their own scope expresses, since it selects whole expenses as the
 list does.
 
+Audit change fields can name a declared relationship when recording reference lists, such as newly received import records. Store UUID references in those changes; the generic audit reader resolves scalar foreign keys and declared relationship arrays to public shortcodes, including retained tombstones.
+
 ## Child storage
 
 An entity's `children` declares its physical child tables using
@@ -2313,9 +2331,8 @@ use `{columnKey}` placeholders validated against that child's columns.
 Child read consumers explicitly opt into the shared list workbench with their
 existing scoped query, stable read handle, navigation and named workflow
 commands. Physical storage does not opt them in. Suggestions uses immutable
-Assessment handles, so republishing evidence replaces review identity;
-StatementRow exposes an opaque read UUID while source/externalId remains its
-mutation selector. Neither acquires a UUID route or generic CRUD. Run findings
+Assessment handles, so republishing evidence replaces review identity.
+SourceTransactionRecord and TransactionImport are manifest entities with shortcodes and generic reads; their intake remains workflow-owned. Run findings
 and photo reviews keep their parent-scoped commands and specialized editors.
 Photo review's selected-Product evidence read supplies canonical notes, tags,
 category and structured external identifiers alongside purchase and image
@@ -2334,7 +2351,7 @@ A filter over child or shared rows (import targets, settlement references,
 barcodes) reads them through a `model.rows` row set
 ([row sets](#row-sets-and-same-row-matching)), not a declared predicate.
 
-Mail, statement-import, and image-processing storage belongs to the explicit
+Mail, transaction-import, and image-processing storage belongs to the explicit
 module registry (`child-tables/modules.ts`) because those rows are not owned
 by one entity. Both registries generate canonical definitions in
 `entity-table-definitions.gen.ts` and relations in `entity-tables.gen.ts`,
@@ -2511,7 +2528,7 @@ A writer introducing finding deadlines must dismiss an expired holder of the
 same evidence key inside its write transaction before inserting fresh evidence;
 ordinary reads never perform that transition.
 
-Independent entity-predicate, diagnostic-backed and statement-import account
+Independent entity-predicate, diagnostic-backed and transaction-import account
 branches share the existing bounded Problems scheduler with four concurrent
 tasks. Entity branches precede diagnostics in declaration order, followed by
 account work; Project attention remains one request-local promise shared by

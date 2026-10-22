@@ -351,7 +351,7 @@ const assessmentFamilies = {
           "Applying a Transaction suggestion requires the chosen statement action",
         );
       const { applyStatementTransactionSuggestion } =
-        await import("~/server/domains/statement-import/repo/statement-suggestion-apply");
+        await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
       await applyStatementTransactionSuggestion(db, context, state, {
         application: input.application,
         corrected: input.correction.present,

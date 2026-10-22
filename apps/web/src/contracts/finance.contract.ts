@@ -14,8 +14,8 @@ import {
   financialSettlementAllocationInput,
 } from "@cubby/schemas/financial-booking";
 import {
-  financialStatementImportPreviewInput,
-  financialStatementImportPreviewOut,
+  financialTransactionImportPreviewInput,
+  financialTransactionImportPreviewOut,
   financialTransactionSourceOptionsOut,
   merchantVendorInference,
   merchantVendorInferenceInput,
@@ -163,9 +163,9 @@ export const financialTransactionContract = defineContract(
       native: "Book reviewed spending",
       invalidates: ["financialTransaction", "purchase", "expense"],
     }),
-    previewStatementImport: query({
-      input: financialStatementImportPreviewInput,
-      output: financialStatementImportPreviewOut,
+    previewTransactionImport: query({
+      input: financialTransactionImportPreviewInput,
+      output: financialTransactionImportPreviewOut,
       cache: { tags: [["financialTransaction"], ["financialAccount"]] },
     }),
     sourceOptions: query({

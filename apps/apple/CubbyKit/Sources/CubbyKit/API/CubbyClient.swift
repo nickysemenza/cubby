@@ -118,6 +118,8 @@ public actor CubbyClient {
             case .purchase: .purchase
             case .financialAccount: .financialAccount
             case .financialTransaction: .financialTransaction
+            case .sourceTransactionRecord: .sourceTransactionRecord
+            case .transactionImport: .transactionImport
             case .wish: .wish
             case .expense: .expense
             case .email: .email

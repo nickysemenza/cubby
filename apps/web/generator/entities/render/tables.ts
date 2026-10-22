@@ -155,8 +155,8 @@ const renderTable = (
   exportOf: (entity: string) => string,
 ) => {
   const { table } = entity;
-  const reference = (target: string) =>
-    `(): AnyPgColumn => ${exportOf(target)}.id`;
+  const reference = (target: string, column = "id") =>
+    `(): AnyPgColumn => ${exportOf(target)}.${column}`;
   const columns = [
     ...entity.fieldModel.storage.map((field) =>
       renderStorageColumn(entity, field, reference),
@@ -229,7 +229,9 @@ export const renderEntityTableArtifacts = (
     tabled.map((entity) => [entity.key, entity.table.exportName]),
   );
   const exportOf = (entity: string) => {
-    const name = exports.get(entity);
+    const name =
+      exports.get(entity) ??
+      (retainedTableExports.includes(entity) ? entity : undefined);
     if (name === undefined)
       throw new Error(`Entity ${entity} has no generated table.`);
     return name;
@@ -258,6 +260,13 @@ export const renderEntityTableArtifacts = (
   ]);
   const childTables = [
     ...new Set([
+      ...tabled.flatMap((entity) =>
+        entity.fieldModel.storage.flatMap(({ reference }) =>
+          reference !== null && retainedTableExports.includes(reference)
+            ? [reference]
+            : [],
+        ),
+      ),
       ...childTableDependencies(declaredChildren).filter(
         (name) =>
           !tableExports.has(name) &&

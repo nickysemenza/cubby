@@ -17,7 +17,7 @@ domains between `src/app/` and `src/features/` under different names.
   mappings in `product`, growing guides in `plant`); `planting` and
   `garden-entry` share `domains/garden/`. Cross-entity workflows are
   sibling feature folders in `domains/` (`purchase-import`, `purchase-agent`,
-  `photo-import`, `calendar`, `usda-release`, `statement-import`,
+  `photo-import`, `calendar`, `usda-release`, `transaction-import`,
   `household-contribution`, `mail`, `image-processing`, `garden`,
   `dashboard`, `recommendation`).
 - **Generic capabilities.** Entity-agnostic capabilities live in

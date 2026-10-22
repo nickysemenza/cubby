@@ -41,7 +41,7 @@ export const suggestionsContract = defineContract("suggestions", {
     transport: "post",
     cache: {
       profile: "stable",
-      tags: [["suggestions"], ["statementRow"], ["connections"]],
+      tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
     },
   }),
   list: query({
@@ -51,7 +51,7 @@ export const suggestionsContract = defineContract("suggestions", {
     transport: "post",
     cache: {
       profile: "stable",
-      tags: [["suggestions"], ["statementRow"], ["connections"]],
+      tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
     },
   }),
   counts: query({
@@ -65,7 +65,7 @@ export const suggestionsContract = defineContract("suggestions", {
     transport: "post",
     cache: {
       profile: "stable",
-      tags: [["suggestions"], ["statementRow"], ["connections"]],
+      tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
     },
   }),
   acceptClean: mutation({
@@ -87,7 +87,7 @@ export const suggestionsContract = defineContract("suggestions", {
       "project",
       "inventory",
       "cookbook",
-      "statementRow",
+      "sourceTransactionRecord",
       "financialTransaction",
       "settledSuggestions",
     ],

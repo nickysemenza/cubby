@@ -2,7 +2,7 @@ import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily, feedbackAuthority } from "@cubby/schemas/assessment";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -37,17 +37,15 @@ import {
   productCategoryId,
   startSuggestionSweep,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { answering } from "~/server/domains/statement-import/repo/statement-decision-port.fixtures";
-import {
-  listStatementRows,
-  recordStatementRows,
-} from "~/server/domains/statement-import/repo/statement-row";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
+import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import {
   buildChargeProposals,
   generateStatementSuggestionPage,
   suggestionsNeedingLabels,
-} from "~/server/domains/statement-import/repo/statement-suggestions";
-import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+} from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -161,9 +159,9 @@ async function soleCandidateCharge(ctx: Ctx) {
       sourceRefs: [],
     })
   ).output;
-  await recordStatementRows(
+  await recordSourceTransactionRecords(
     ctx.db,
-    recordStatementRowsInput.parse({
+    recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         label: "synthetic-export.csv",
@@ -194,9 +192,9 @@ async function soleCandidateCharge(ctx: Ctx) {
 
 /** A second charge of the same money, a day after the sole candidate's. */
 const competingCharge = (ctx: Ctx) =>
-  recordStatementRows(
+  recordSourceTransactionRecords(
     ctx.db,
-    recordStatementRowsInput.parse({
+    recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         label: "synthetic-export.csv",
@@ -573,7 +571,7 @@ describe("Automatic rules", () => {
       enabled: true,
     });
     await label(ctx);
-    const rows = (await listStatementRows(ctx.db, {})).data;
+    const rows = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(rows.filter((row) => row.matchState === "matched")).toEqual([
       expect.objectContaining({ transactionId: existing.id }),
     ]);
@@ -586,9 +584,9 @@ describe("Automatic rules", () => {
   it("applies automatic rules to published charges before a budget pause", async () => {
     await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
-    await recordStatementRows(
+    await recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         import: {
           source: "monarch",
           label: "synthetic-export.csv",
@@ -627,9 +625,9 @@ describe("Automatic rules", () => {
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
       }),
     ).rejects.toThrow("AI budget reached: synthetic");
-    const matched = (await listStatementRows(ctx.db, {})).data.filter(
-      (row) => row.matchState === "matched",
-    );
+    const matched = (
+      await listSourceTransactionRecords(ctx.db, {})
+    ).data.filter((row) => row.matchState === "matched");
     expect(matched).toEqual([
       expect.objectContaining({ transactionId: existing.id }),
     ]);
@@ -685,7 +683,7 @@ describe("Automatic rules", () => {
         metadata: expect.objectContaining({ kind: "assessment_application" }),
       }),
     ]);
-    const [row] = (await listStatementRows(ctx.db, {})).data;
+    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(row).toMatchObject({
       matchState: "matched",
       transactionId: existing.id,
@@ -822,7 +820,9 @@ describe("Automatic rules", () => {
     ]);
     expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
     expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
-    expect((await listStatementRows(ctx.db, {})).data[0]).toMatchObject({
+    expect(
+      (await listSourceTransactionRecords(ctx.db, {})).data[0],
+    ).toMatchObject({
       matchState: "unmatched",
     });
   });

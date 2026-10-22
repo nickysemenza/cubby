@@ -88,7 +88,7 @@ export type RippleKey =
   | "ledgerTransfer"
   | "financialTransaction"
   | "wish"
-  | "statementRow"
+  | "sourceTransactionRecord"
   | "problems";
 
 /** The cache policy of a query member. */

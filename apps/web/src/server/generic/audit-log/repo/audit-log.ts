@@ -13,6 +13,7 @@ import {
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   entityManifest,
+  shortcodeEntities,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import {
@@ -353,6 +354,21 @@ export async function logAuditEntries(
  * inside `changes` (e.g. `vendorId`, `purchaseId`) never reaches an MCP
  * payload any more than the top-level `entityId` does.
  */
+const changeTargetEntity = (
+  entityKind: AuditEntityKind,
+  field: string,
+): ShortcodeEntity | undefined => {
+  const declaration = entityManifest[entityKind];
+  const physical = declaration.dbTable
+    ? EDGE_KEY_TARGET_ENTITY.get(`${declaration.dbTable}.${field}`)
+    : undefined;
+  if (physical) return physical;
+  const relationship = declaration.relationships.find(
+    (relation) => relation.key === field,
+  );
+  return shortcodeEntities.find((entity) => entity === relationship?.target);
+};
+
 function collectChangeRefs(
   entityKind: AuditEntityKind,
   changes: AuditChanges | null,
@@ -363,10 +379,12 @@ function collectChangeRefs(
 
   const refs: EntityRef[] = [];
   for (const [field, diff] of Object.entries(changes)) {
-    const targetEntity = EDGE_KEY_TARGET_ENTITY.get(`${dbTable}.${field}`);
+    const targetEntity = changeTargetEntity(entityKind, field);
     if (!targetEntity) continue;
-    for (const value of [diff.from, diff.to]) {
-      if (isNonEmptyString(value))
+    for (const value of [diff.from, diff.to].flatMap((side) =>
+      Array.isArray(side) ? side : [side],
+    )) {
+      if (isNonEmptyString(value) && z.uuid().safeParse(value).success)
         refs.push(parseEntityRef(targetEntity, value));
     }
   }
@@ -386,24 +404,22 @@ function remapChangeShortcodes(
   shortcodeByRef: Map<string, string>,
 ): Record<string, { from?: AuditJsonValue; to?: AuditJsonValue }> | null {
   if (!changes) return null;
-  const dbTable = entityManifest[entityKind].dbTable;
-
   const resolveValue = (
     targetEntity: ShortcodeEntity,
     value: AuditJsonValue | undefined,
   ): AuditJsonValue | undefined =>
-    isNonEmptyString(value)
-      ? (shortcodeByRef.get(entityRefKey(targetEntity, value)) ?? value)
-      : value;
+    Array.isArray(value)
+      ? value.map((item) => resolveValue(targetEntity, item) ?? null)
+      : isNonEmptyString(value)
+        ? (shortcodeByRef.get(entityRefKey(targetEntity, value)) ?? value)
+        : value;
 
   const remapped: Record<
     string,
     { from?: AuditJsonValue; to?: AuditJsonValue }
   > = {};
   for (const [field, diff] of Object.entries(changes)) {
-    const targetEntity = dbTable
-      ? EDGE_KEY_TARGET_ENTITY.get(`${dbTable}.${field}`)
-      : undefined;
+    const targetEntity = changeTargetEntity(entityKind, field);
     remapped[field] = targetEntity
       ? {
           from: resolveValue(targetEntity, diff.from),

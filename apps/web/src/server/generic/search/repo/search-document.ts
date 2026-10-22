@@ -361,6 +361,15 @@ async function getSearchDocumentSources(
       FROM "GardenEntry" ge
       JOIN "Location" l ON l."id" = ge."locationId" AND l."deletedAt" IS NULL
       WHERE ge."deletedAt" IS NULL AND 'gardenEntry' IN (${types}) AND ${requested(sql`ge."id"`)}`,
+    sourceTransactionRecord: () => sql`
+      SELECT 'sourceTransactionRecord', r.id::text, r.shortcode,
+        COALESCE(NULLIF(r."rawDescription", ''), r.merchant, r."accountDescriptor"), r."accountDescriptor",
+        r.source, ARRAY[r."externalId"]::text[], ARRAY[r.merchant, r."sourceCategory", r.notes]::text[]
+      FROM "SourceTransactionRecord" r WHERE r."deletedAt" IS NULL AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)}`,
+    transactionImport: () => sql`
+      SELECT 'transactionImport', i.id::text, i.shortcode, i.label, i.fingerprint,
+        i.source, ARRAY[]::text[], ARRAY[i.notes]::text[]
+      FROM "TransactionImport" i WHERE i."deletedAt" IS NULL AND 'transactionImport' IN (${types}) AND ${requested(sql`i.id`)}`,
   } satisfies Record<SearchableEntity, () => SQL>;
 
   // An empty typed arm owns the shared columns independently of the first

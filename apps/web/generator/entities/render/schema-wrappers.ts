@@ -31,6 +31,8 @@ import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
  *   the hand-written module extends with its own extras.
  */
 const WRAPPERS = {
+  sourceTransactionRecord: "out+ update+ filtersBase",
+  transactionImport: "out+ filtersBase",
   email: "out+ filtersBase",
   device: "create+ update+ updateInput out+ filters+",
   expense: "update+ updateInput+ out+ listItem+ filtersBase",

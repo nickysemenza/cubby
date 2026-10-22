@@ -1,4 +1,4 @@
-import { recordStatementRowsOut } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsOut } from "@cubby/schemas/source-transaction-record";
 import type { ConvergenceNames } from "../../../tooling/convergence-harness";
 import { startOperation } from "./start-operation";
 import { entityApi } from "./entity-api";
@@ -71,22 +71,30 @@ export async function recordReviewedConvergenceStatement(
   names: ConvergenceNames,
   accountId: string,
 ) {
-  const { source, ...row } = names.statementRow;
+  const { source, ...row } = names.sourceTransactionRecord;
   const fingerprint = `synthetic-statement-${names.token}`;
-  const recorded = await startOperation(page.request, "statementRow.record", {
-    import: { source, label: fingerprint, fingerprint, dateKind: "posted" },
-    rows: [row],
-    complete: false,
-  });
+  const recorded = await startOperation(
+    page.request,
+    "sourceTransactionRecord.record",
+    {
+      import: { source, label: fingerprint, fingerprint, dateKind: "posted" },
+      rows: [row],
+      complete: false,
+    },
+  );
   expect(recorded.ok(), await recorded.text()).toBe(true);
-  const result = recordStatementRowsOut.parse(recorded.body);
+  const result = recordSourceTransactionRecordsOut.parse(recorded.body);
   expect(result.inserted).toBe(1);
   if (!result.batchId) throw new Error("Recorded statement batch missing");
-  const evidence = await getDb(db).query.statementRow.findFirst({
+  const collection = await getDb(db).query.transactionImport.findFirst({
+    where: eq(schema.transactionImport.shortcode, result.batchId),
+  });
+  if (!collection) throw new Error("Retained transaction import missing");
+  const evidence = await getDb(db).query.sourceTransactionRecord.findFirst({
     where: and(
-      eq(schema.statementRow.source, source),
-      eq(schema.statementRow.batchId, result.batchId),
-      notDeleted(schema.statementRow),
+      eq(schema.sourceTransactionRecord.source, source),
+      eq(schema.sourceTransactionRecord.batchId, collection.id),
+      notDeleted(schema.sourceTransactionRecord),
     ),
   });
   if (!evidence) throw new Error("Normalized statement evidence missing");

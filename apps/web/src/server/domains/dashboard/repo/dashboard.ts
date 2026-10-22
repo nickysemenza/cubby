@@ -36,6 +36,10 @@ import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchas
 import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
 import { buildSpendingCategoryWhere } from "~/server/domains/spending-category/repo/spending-category";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import {
+  buildSourceTransactionRecordWhere,
+  buildTransactionImportWhere,
+} from "~/server/domains/transaction-import/repo/entity-repositories";
 import { buildVendorAccountWhere } from "~/server/domains/vendor-account/repo/vendor-account";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { buildWishWhere } from "~/server/domains/wish/repo";
@@ -67,6 +71,8 @@ type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
 type LocalCountEntity = keyof DashboardLocalCounts;
 
 const COUNT_WHERE = {
+  sourceTransactionRecord: () => buildSourceTransactionRecordWhere(),
+  transactionImport: () => buildTransactionImportWhere(),
   product: (db) => buildProductWhere(db, {}),
   recipe: () => buildRecipeWhere({}),
   ingredient: () => buildIngredientListWhere({}),

@@ -1,6 +1,6 @@
 import { type FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -23,10 +23,10 @@ import {
   purchaseList,
 } from "~/server/domains/purchase/repo/purchase";
 import {
-  listStatementRows,
-  recordStatementRows,
-  updateStatementRows,
-} from "~/server/domains/statement-import/repo/statement-row";
+  recordSourceTransactionRecords,
+  updateSourceTransactionRecords,
+} from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import {
   findOrCreateVendor,
   getVendorByID,
@@ -38,7 +38,7 @@ import { findFinancialTransactionAllocationDefects } from "~/server/generic/prob
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
-import { previewFinancialStatementImport } from "./financial-statement-preview";
+import { previewFinancialTransactionImport } from "./financial-statement-preview";
 import {
   createFinancialTransaction,
   financialTransactionSourceOptions,
@@ -347,13 +347,13 @@ describe("financial repositories — critical invariants", () => {
       category: "Shopping",
       notes: null,
     } satisfies Parameters<
-      typeof previewFinancialStatementImport
+      typeof previewFinancialTransactionImport
     >[1]["rows"][number];
-    const first = await previewFinancialStatementImport(ctx.db, {
+    const first = await previewFinancialTransactionImport(ctx.db, {
       rows: [row],
     });
     // Equal account labels cannot override contradictory provider account IDs.
-    const scopedAccounts = await previewFinancialStatementImport(ctx.db, {
+    const scopedAccounts = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         {
           ...row,
@@ -422,7 +422,7 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    const scopedLegacy = await previewFinancialStatementImport(ctx.db, {
+    const scopedLegacy = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         {
           ...row,
@@ -434,7 +434,7 @@ describe("financial repositories — critical invariants", () => {
     expect(scopedLegacy.rows[0]?.accountId).toBe(scopedSecondAccount.id);
     expect(scopedLegacy.rows[0]?.existingTransactionIds).toEqual([]);
     expect(scopedLegacy.rows[0]?.status).not.toBe("already_recorded");
-    const rejectedLegacy = await previewFinancialStatementImport(ctx.db, {
+    const rejectedLegacy = await previewFinancialTransactionImport(ctx.db, {
       rows: [{ ...row, providerAccountId: "synthetic-provider-account-c" }],
     });
     expect(rejectedLegacy.rows[0]).toMatchObject({
@@ -442,7 +442,7 @@ describe("financial repositories — critical invariants", () => {
       existingTransactionIds: [],
     });
     // Provider transaction IDs are unique within accounts, not across them.
-    const reusedProviderIds = await previewFinancialStatementImport(ctx.db, {
+    const reusedProviderIds = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         {
           ...row,
@@ -473,12 +473,12 @@ describe("financial repositories — critical invariants", () => {
       ),
     ).toBe(true);
 
-    const laterExport = await previewFinancialStatementImport(ctx.db, {
+    const laterExport = await previewFinancialTransactionImport(ctx.db, {
       rows: [{ ...row, merchant: "Amazon.com", category: "Other" }],
     });
     expect(laterExport.rows[0]?.status).toBe("already_recorded");
 
-    const changedIdentity = await previewFinancialStatementImport(ctx.db, {
+    const changedIdentity = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         {
           ...row,
@@ -497,9 +497,12 @@ describe("financial repositories — critical invariants", () => {
       { postedDate: "2026-07-29" },
       ctx.actor,
     );
-    const correctedDateExport = await previewFinancialStatementImport(ctx.db, {
-      rows: [{ ...row, key: "corrected-date" }],
-    });
+    const correctedDateExport = await previewFinancialTransactionImport(
+      ctx.db,
+      {
+        rows: [{ ...row, key: "corrected-date" }],
+      },
+    );
     expect(correctedDateExport.rows[0]?.status).toBe("already_recorded");
 
     const manualEvidence = (
@@ -512,7 +515,7 @@ describe("financial repositories — critical invariants", () => {
         rawDescription: "MANUAL STATEMENT LINE",
       })
     ).output;
-    const possibleExisting = await previewFinancialStatementImport(ctx.db, {
+    const possibleExisting = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         {
           ...row,
@@ -558,7 +561,7 @@ describe("financial repositories — critical invariants", () => {
       })
     ).output;
     for (const digits of ["9999", "9997"]) {
-      const identityResolved = await previewFinancialStatementImport(ctx.db, {
+      const identityResolved = await previewFinancialTransactionImport(ctx.db, {
         rows: [
           {
             ...row,
@@ -589,7 +592,7 @@ describe("financial repositories — critical invariants", () => {
         },
       ],
     });
-    const ambiguous = await previewFinancialStatementImport(ctx.db, {
+    const ambiguous = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         {
           ...row,
@@ -604,7 +607,7 @@ describe("financial repositories — critical invariants", () => {
       accountId: null,
     });
 
-    const duplicates = await previewFinancialStatementImport(ctx.db, {
+    const duplicates = await previewFinancialTransactionImport(ctx.db, {
       rows: [row, { ...row, key: "row-2" }],
     });
     expect(duplicates.rows.map((item) => item.status)).toEqual([
@@ -621,7 +624,7 @@ describe("financial repositories — critical invariants", () => {
       originalStatement: "FINGERPRINTED LINE",
       importFingerprint: "fp-1",
     };
-    const fingerprintedDuplicates = await previewFinancialStatementImport(
+    const fingerprintedDuplicates = await previewFinancialTransactionImport(
       ctx.db,
       {
         rows: [fingerprinted, { ...fingerprinted, key: "row-2" }],
@@ -631,7 +634,7 @@ describe("financial repositories — critical invariants", () => {
       "indistinguishable_duplicate",
       "indistinguishable_duplicate",
     ]);
-    const positioned = await previewFinancialStatementImport(ctx.db, {
+    const positioned = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         { ...fingerprinted, rowPosition: 0 },
         { ...fingerprinted, key: "row-2", rowPosition: 1 },
@@ -645,7 +648,7 @@ describe("financial repositories — critical invariants", () => {
       positioned.rows[1]!.proposed.sourceRef.externalId,
     );
 
-    const unresolved = await previewFinancialStatementImport(ctx.db, {
+    const unresolved = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         {
           ...row,
@@ -669,7 +672,7 @@ describe("financial repositories — critical invariants", () => {
     // Another provider keeps its distinct source observation. The canonical
     // charge already exists within the date window, so attaching that evidence
     // requires review rather than creating another charge.
-    const otherProvider = await previewFinancialStatementImport(ctx.db, {
+    const otherProvider = await previewFinancialTransactionImport(ctx.db, {
       rows: [{ ...row, key: "copilot-view", source: "copilot" }],
     });
     expect(otherProvider.rows[0]?.status).toBe("possible_existing");
@@ -701,7 +704,7 @@ describe("financial repositories — critical invariants", () => {
     );
     expect(merged.output.sourceRefs).toHaveLength(2);
 
-    const bothRecorded = await previewFinancialStatementImport(ctx.db, {
+    const bothRecorded = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         { ...row, key: "monarch-again" },
         { ...row, key: "copilot-again", source: "copilot" },
@@ -844,7 +847,7 @@ describe("financial repositories — critical invariants", () => {
   });
 
   /**
-   * `StatementRow.accountId` is declared `block` in
+   * `SourceTransactionRecord.accountId` is declared `block` in
    * FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY, and it is the one edge in the
    * lifecycle registry that fails OPEN. The FK is nullable, so a missing guard
    * does not throw — the account simply vanishes while live triaged rows keep
@@ -866,9 +869,9 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
-    await recordStatementRows(
+    await recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         import: {
           source: "monarch",
           label: "block-guard.csv",
@@ -893,9 +896,9 @@ describe("financial repositories — critical invariants", () => {
       }),
       ctx.actor,
     );
-    const row = (await listStatementRows(ctx.db, {})).data[0];
+    const row = (await listSourceTransactionRecords(ctx.db, {})).data[0];
     expect(row).toBeDefined();
-    await updateStatementRows(
+    await updateSourceTransactionRecords(
       ctx.db,
       {
         selector: { source: "monarch", externalIds: [row!.externalId] },
@@ -911,12 +914,12 @@ describe("financial repositories — critical invariants", () => {
     });
     // The child survives with its triage intact — the half a fail-open guard
     // would destroy.
-    const stillThere = (await listStatementRows(ctx.db, {})).data[0];
+    const stillThere = (await listSourceTransactionRecords(ctx.db, {})).data[0];
     expect(stillThere?.accountId).toBe(acct.id);
 
     // Clearing the blocker lets the same delete through, so the guard is
     // narrow rather than a blanket refusal.
-    await updateStatementRows(
+    await updateSourceTransactionRecords(
       ctx.db,
       {
         selector: { source: "monarch", externalIds: [row!.externalId] },

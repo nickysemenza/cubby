@@ -6,8 +6,8 @@ description: Import financial evidence into Cubby from Monarch MCP or Monarch, M
 # Financial evidence import
 
 Claude and Codex fetch or parse authorized source evidence, normalize it, and
-call Cubby `statement_rows` with `action: "record"`. Read the live tool schema
-and [statement-row.ts](../../../packages/schemas/src/statement-row.ts) before
+call Cubby `source_transaction_records` with `action: "record"`. Read the live tool schema
+and [source-transaction-record.ts](../../../packages/schemas/src/source-transaction-record.ts) before
 building requests. That schema owns field names and batch limits. This skill
 does not write back to Monarch. Pi integration is deferred.
 
@@ -144,6 +144,24 @@ invalid rows and missing columns fail the whole parse without printing source
 data. A file proves its own row count, not exhaustive provider-window coverage.
 Verify currency, account identity and export scope separately. Do not hand-edit
 or transcribe thousands of evidence rows through a model.
+
+## Inspect retained evidence
+
+Use `entity_read.list` / `entity_read.search` with
+`entity: "sourceTransactionRecord"` for the declared evidence projection and
+`entity: "transactionImport"` for collection counts, scope and completion.
+Read a selected `STR-` or `TIM-` through `entity_read.get`. Consult the live
+schema for filters, related records and projection fields; the import fingerprint
+alone proves neither retained membership nor complete coverage.
+
+Use `finance_read.summary` to size reconciliation by match state and
+`finance_read.drift` to investigate possible descriptor revisions. These are
+workflow computations, not roster APIs. Judgment corrections use the declared
+`entity.update` fields on `sourceTransactionRecord`; obtain record IDs from
+retained reads before setting a reviewed successor. Transaction imports remain
+read-only outside intake. Provider facts and memberships change only through
+recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
+owns create/merge restrictions and deletion guards.
 
 ## Completion
 

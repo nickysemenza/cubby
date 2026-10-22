@@ -1,6 +1,6 @@
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { labelStatementSuggestions } from "~/server/domains/statement-import/service/statement-suggestion-labels";
+import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -20,8 +20,9 @@ import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automat
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
+import { recordSourceTransactionRecords } from "./source-transaction-record";
+import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
 import { answering } from "./statement-decision-port.fixtures";
-import { recordStatementRows, listStatementRows } from "./statement-row";
 import { previewStatementSuggestion } from "./statement-suggestion-preview";
 import { readStatementSuggestions } from "./statement-suggestion-read";
 import { generateStatementSuggestionPage } from "./statement-suggestions";
@@ -65,7 +66,7 @@ describe("statement spending review and re-import", () => {
       vendorConfidence: "high",
       counterparty: "business",
     });
-    const input = recordStatementRowsInput.parse({
+    const input = recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
         label: "synthetic-spending.csv",
@@ -89,7 +90,11 @@ describe("statement spending review and re-import", () => {
         },
       ],
     });
-    const recorded = await recordStatementRows(ctx.db, input, ctx.actor);
+    const recorded = await recordSourceTransactionRecords(
+      ctx.db,
+      input,
+      ctx.actor,
+    );
     return { input, recorded, account, advice };
   }
   const total = async () =>
@@ -154,7 +159,7 @@ describe("statement spending review and re-import", () => {
       }),
     ).rejects.toThrow(/fingerprint changed/i);
     await getDb(ctx.db).execute(
-      sql`UPDATE "StatementRow" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
+      sql`UPDATE "SourceTransactionRecord" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
     );
     await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
       /evidence changed/i,
@@ -173,7 +178,7 @@ describe("statement spending review and re-import", () => {
         'purchases', (SELECT jsonb_agg(to_jsonb(v)) FROM "Purchase" v),
         'expenses', (SELECT jsonb_agg(to_jsonb(v)) FROM "Expense" v),
         'refs', (SELECT jsonb_agg(to_jsonb(v)) FROM "EntityExternalId" v),
-        'rows', (SELECT jsonb_agg(to_jsonb(v)) FROM "StatementRow" v),
+        'rows', (SELECT jsonb_agg(to_jsonb(v)) FROM "SourceTransactionRecord" v),
         'assessments', (SELECT jsonb_agg(to_jsonb(v)) FROM "AssessmentState" v)
       ) AS state
     `)
@@ -331,18 +336,18 @@ describe("statement spending review and re-import", () => {
   // Categories are provider observations, never a fuzzy same-merchant join.
   it("retains conflicting category observations and scopes source evidence to charge membership", async () => {
     const { input, account } = await fixture("synthetic-category-charge");
-    await recordStatementRows(
+    await recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         ...input,
         import: { ...input.import, fingerprint: "synthetic-category-reexport" },
         rows: [{ ...input.rows[0], sourceCategory: "Food and drink" }],
       }),
       ctx.actor,
     );
-    await recordStatementRows(
+    await recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         ...input,
         import: { ...input.import, fingerprint: "synthetic-other-charge" },
         rows: [
@@ -369,9 +374,9 @@ describe("statement spending review and re-import", () => {
       { source: "monarch", sourceCategory: "Food and drink" },
       { source: "monarch", sourceCategory: "Groceries" },
     ]);
-    await recordStatementRows(
+    await recordSourceTransactionRecords(
       ctx.db,
-      recordStatementRowsInput.parse({
+      recordSourceTransactionRecordsInput.parse({
         ...input,
         import: {
           ...input.import,
@@ -382,7 +387,7 @@ describe("statement spending review and re-import", () => {
       }),
       ctx.actor,
     );
-    const observations = (await listStatementRows(ctx.db, {})).data;
+    const observations = (await listSourceTransactionRecords(ctx.db, {})).data;
     const primary = observations.find(
       (row) => row.source === "monarch" && row.statementDate === "2026-05-04",
     )!;
@@ -463,7 +468,7 @@ describe("statement spending review and re-import", () => {
   });
   it("automatically books an unchanged matched-but-unbooked import once, retains its audit and skips later Expense edits", async () => {
     const { input, account, advice, recorded } = await fixture();
-    const observed = (await listStatementRows(ctx.db, {})).data[0]!;
+    const observed = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
     await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
@@ -474,7 +479,11 @@ describe("statement spending review and re-import", () => {
       rawDescription: "SYNTHETIC ORCHARD",
       sourceRefs: [{ source: "monarch", externalId: observed.externalId }],
     });
-    const repeated = await recordStatementRows(ctx.db, input, ctx.actor);
+    const repeated = await recordSourceTransactionRecords(
+      ctx.db,
+      input,
+      ctx.actor,
+    );
     expect(repeated.inserted).toBe(0);
     await label(advice, recorded.batchId!);
     expect(await total()).toBe(42.5);
@@ -548,7 +557,7 @@ describe("statement spending review and re-import", () => {
   });
   it("retires a pending matched booking when another shared finance path books it", async () => {
     const { advice, account } = await fixture();
-    const row = (await listStatementRows(ctx.db, {})).data[0]!;
+    const row = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
@@ -599,7 +608,7 @@ describe("statement spending review and re-import", () => {
       "Willow Hardware",
       "Lotus Cinema",
     ];
-    const batch = recordStatementRowsInput.parse({
+    const batch = recordSourceTransactionRecordsInput.parse({
       ...input,
       import: { ...input.import, fingerprint: "synthetic-five-vendors" },
       rows: names.map((merchant, index) => ({
@@ -610,7 +619,11 @@ describe("statement spending review and re-import", () => {
         rowPosition: index + 1,
       })),
     });
-    const saved = await recordStatementRows(ctx.db, batch, ctx.actor);
+    const saved = await recordSourceTransactionRecords(
+      ctx.db,
+      batch,
+      ctx.actor,
+    );
     await generateStatementSuggestionPage(ctx.db, {
       after: null,
       runId: null,
@@ -635,9 +648,9 @@ describe("statement spending review and re-import", () => {
         row.automaticRule?.startsWith("statement_transaction.book_spending@"),
       ).length,
     ).toBe(5);
-    expect((await recordStatementRows(ctx.db, batch, ctx.actor)).inserted).toBe(
-      0,
-    );
+    expect(
+      (await recordSourceTransactionRecords(ctx.db, batch, ctx.actor)).inserted,
+    ).toBe(0);
     await generateStatementSuggestionPage(ctx.db, {
       after: null,
       runId: null,

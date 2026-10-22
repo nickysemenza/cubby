@@ -1288,11 +1288,11 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             "invalid-financial-json",
             allProblemsSchema.shape.invalidFinancialJson,
           ),
-        incompleteStatementImports: () =>
+        incompleteTransactionImports: () =>
           diagnosticItems(
             db,
-            "incomplete-statement-imports",
-            allProblemsSchema.shape.incompleteStatementImports,
+            "incomplete-transaction-imports",
+            allProblemsSchema.shape.incompleteTransactionImports,
           ),
         referentialLivenessViolations: () =>
           diagnosticItems(
@@ -1336,7 +1336,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     productIdentifiersOutsideIssuer: r.productIdentifiersOutsideIssuer.items,
     provisionalFinancialAccounts: r.provisionalFinancialAccounts.items,
     invalidFinancialJson: r.invalidFinancialJson.items,
-    incompleteStatementImports: r.incompleteStatementImports.items,
+    incompleteTransactionImports: r.incompleteTransactionImports.items,
     referentialLivenessViolations: r.referentialLivenessViolations.items,
     dependencyCycles: r.dependencyCycles.items,
   } satisfies Partial<Omit<ProblemsFast, "sectionTotals">>;

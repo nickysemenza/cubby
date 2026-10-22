@@ -13,9 +13,9 @@ import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 import { runShortcode } from "./identifiers";
 
 /**
- * One-hop physical connections of an entity, read from the generated
- * `EntityEdge` source (ADR 0006). `incoming` rows point at the entity;
- * `outgoing` rows are what the entity points at.
+ * One-hop physical and explicitly opted-in repository reference connections.
+ * `incoming` rows point at the entity; `outgoing` rows are what the entity
+ * points at. Repository connections do not participate in the physical graph.
  */
 export const entityConnectionDirection = z.enum(["incoming", "outgoing"]);
 export type EntityConnectionDirection = z.infer<
@@ -49,7 +49,7 @@ export const entityConnectionGroup = z.object({
   otherKind: entitySchema,
   count: z.number().int().nonnegative(),
   items: z.array(entityConnectionItem),
-  /** Present only when an `operation` was requested and this edge is incoming. */
+  /** Present only for an incoming physical edge when an `operation` was requested. */
   disposition: operationDispositionSchema.nullable(),
 });
 export type EntityConnectionGroup = z.infer<typeof entityConnectionGroup>;
