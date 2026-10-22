@@ -1,6 +1,7 @@
 import type { AiAnalysisEntityKind } from "@cubby/schemas/ai";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { isEqual } from "es-toolkit";
 import type { z } from "zod";
 
 import type { AiAnalysisFeature } from "~/server/ai/policy/features";
@@ -11,6 +12,7 @@ import {
   notDeleted,
   updateAndReturn,
 } from "~/server/db/helpers";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { aiAnalysis } from "~/server/db/schema";
 
 const log = createLogger("ai.analysis");
@@ -127,16 +129,18 @@ export async function upsertAiAnalysis<T>(
   const where = analysisWhere(key);
   const existing = await getDb(db).query.aiAnalysis.findFirst({
     where,
-    columns: { id: true },
+    columns: { id: true, result: true },
   });
 
   if (existing) {
+    if (isEqual(existing.result, parsed)) return parsed;
     await updateAndReturn(
       db,
       aiAnalysis,
       { result: parsed },
       eq(aiAnalysis.id, existing.id),
     );
+    await repositoryChanged(db, [key.entityKind]);
     return parsed;
   }
 
@@ -149,5 +153,6 @@ export async function upsertAiAnalysis<T>(
     inputFingerprint: key.inputFingerprint,
     result: parsed,
   });
+  await repositoryChanged(db, [key.entityKind]);
   return parsed;
 }

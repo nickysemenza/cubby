@@ -23,6 +23,7 @@ import * as Sentry from "@sentry/cloudflare";
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
 
 import { isBrowserOperationPath } from "./lib/browser-operation-path";
+import { DATABASE_CHANGES_SOCKET_PATH } from "./lib/database-changes";
 import {
   TELEMETRY_SCHEMA_VERSION,
   withHtmlNoCache,
@@ -317,6 +318,22 @@ const handler = {
                           async () => {
                             const imageProcessingSocket =
                               url.pathname === IMAGE_PROCESSING_SOCKET_PATH;
+                            if (url.pathname === DATABASE_CHANGES_SOCKET_PATH) {
+                              const response = await runWithExecutionCtx(
+                                ctx,
+                                async () =>
+                                  (
+                                    await import("./server/http/database-changes-socket")
+                                  ).handleDatabaseChangesSocket(request),
+                                url.origin,
+                              );
+                              span.setAttribute(
+                                "http.response.status_code",
+                                response.status,
+                              );
+                              endSpan();
+                              return response;
+                            }
                             if (imageProcessingSocket) {
                               const response = await withTrace(
                                 "cf.imageProcessingSocket",

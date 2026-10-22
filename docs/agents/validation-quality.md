@@ -4,6 +4,9 @@ Repository-owned modules are imported through their `~/server/...` aliases.
 Relative imports from server composition bypass the generated declaration
 mapping and pull implementations into the server check. Fix the import rather
 than weakening the boundary guard.
+Declaration boundaries own explicit public signatures. Exporting `typeof` an
+implementation function makes its emitted declaration import that implementation
+into the consuming compiler program.
 
 `pnpm typecheck:web` checks web app code for web-only work; it leaves out
 tests and test tooling. When tests or test tooling change,

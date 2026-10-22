@@ -49,3 +49,12 @@ export const cancelQueriesByTags = (
   tags.length === 0
     ? Promise.resolve()
     : queryClient.cancelQueries({ predicate: matchesTags(tags) });
+
+/** Subscription establishment/resume cannot know which hints were missed. */
+export async function resyncOperationQueries(queryClient: QueryClient) {
+  const predicate = (query: Query) => Boolean(query.meta?.cacheTags?.length);
+  await queryClient.cancelQueries({ predicate });
+  // Inactive queries can still own streamed markup awaiting hydration.
+  // Preserve that baseline; mount and detail loaders refetch invalidated data.
+  await queryClient.invalidateQueries({ predicate });
+}

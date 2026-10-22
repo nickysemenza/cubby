@@ -17,6 +17,7 @@ import {
   repositoryQueries as unwrapDb,
   repositoryTransaction as withTransaction,
   repositoryTransactionOn as withTransactionOn,
+  repositoryChanged,
 } from "~/server/db/repository-access.boundary";
 import {
   ingredient,
@@ -52,14 +53,24 @@ const updateRecipeTotalsBatch = async (
     ),
     sql`, `,
   );
-  await unwrapDb(db).execute(sql`
+  // Recalculation stamps advance even for equal totals; only value/readiness changes notify.
+  const changed = await unwrapDb(db).execute<{ changed: boolean }>(sql`
+    WITH input(id, totals) AS (VALUES ${values}), previous AS MATERIALIZED (
+      SELECT ${recipe.id} AS id, ${recipe.totals} AS totals,
+        ${recipe.totalsComputedAt} IS NULL AS stale
+      FROM ${recipe} JOIN input ON ${recipe.id} = input.id
+      FOR NO KEY UPDATE OF ${recipe}
+    )
     UPDATE ${recipe}
     SET
       ${sql.identifier("totals")} = v.totals,
       ${sql.identifier("totalsComputedAt")} = ${computedAt}
-    FROM (VALUES ${values}) AS v(id, totals)
-    WHERE ${recipe.id} = v.id
+    FROM input v, previous
+    WHERE ${recipe.id} = v.id AND previous.id = v.id
+    RETURNING (previous.totals IS DISTINCT FROM v.totals OR previous.stale) AS changed
   `);
+  if (changed.rows.some((row) => row.changed))
+    await repositoryChanged(db, ["recipe"]);
 };
 
 /**
@@ -71,14 +82,24 @@ const markRecipeTotalsFresh = async (
   ids: RecipeId[],
 ): Promise<void> => {
   if (ids.length === 0) return;
-  await unwrapDb(db).execute(sql`
+  const changed = await unwrapDb(db).execute<{ changed: boolean }>(sql`
+    WITH previous AS MATERIALIZED (
+      SELECT ${recipe.id} AS id, ${recipe.totalsComputedAt} IS NULL AS stale
+      FROM ${recipe}
+      WHERE ${recipe.id} IN (${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+      FOR NO KEY UPDATE OF ${recipe}
+    )
     UPDATE ${recipe}
     SET ${sql.identifier("totalsComputedAt")} = ${new Date()}
-    WHERE ${recipe.id} IN (${sql.join(
-      ids.map((id) => sql`${id}`),
-      sql`, `,
-    )})
+    FROM previous
+    WHERE ${recipe.id} = previous.id
+    RETURNING previous.stale AS changed
   `);
+  if (changed.rows.some((row) => row.changed))
+    await repositoryChanged(db, ["recipe"]);
 };
 
 /** Persist stale totals and refresh intent together, including standalone callers. */

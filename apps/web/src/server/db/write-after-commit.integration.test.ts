@@ -7,6 +7,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
+import {
+  recordCommittedChanges,
+  withTransactionDatabase,
+} from "~/server/db/helpers/core";
 import { job } from "~/server/db/schema";
 import {
   createLocation,
@@ -41,6 +45,42 @@ describe("repository writes publish after their commit", () => {
     );
 
   afterEach(() => setCfEnv(undefined));
+
+  it("publishes one outer-commit change set and drops rolled-back savepoint changes", async () => {
+    const messages: string[][] = [];
+    setCfEnv(
+      fromPartial<Env>({
+        DB_FRESHNESS: {
+          getByName: () => ({
+            publishChanges: async (categories: string[]) => {
+              messages.push(categories);
+            },
+          }),
+        },
+      }),
+    );
+    await withTransactionDatabase(ctx.db, async (outer) => {
+      await recordCommittedChanges(outer, ["task"]);
+      await withTransactionDatabase(outer, async (inner) => {
+        await recordCommittedChanges(inner, ["task", "project"]);
+      });
+      await expect(
+        withTransactionDatabase(outer, async (inner) => {
+          await recordCommittedChanges(inner, ["product"]);
+          throw new Error("Synthetic savepoint rollback");
+        }),
+      ).rejects.toThrow("Synthetic savepoint rollback");
+      expect(messages).toEqual([]);
+    });
+    expect(messages).toEqual([["task", "project"]]);
+    await expect(
+      withTransactionDatabase(ctx.db, async (outer) => {
+        await recordCommittedChanges(outer, ["product"]);
+        throw new Error("Synthetic transaction rollback");
+      }),
+    ).rejects.toThrow("Synthetic transaction rollback");
+    expect(messages).toEqual([["task", "project"]]);
+  });
 
   const recordingQueue = (observe: () => Promise<void> = async () => {}) => {
     const published: BackgroundTaskMessage[] = [];

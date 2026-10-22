@@ -7,7 +7,6 @@ import {
 import superjson from "superjson";
 import { z } from "zod";
 
-import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import {
@@ -69,11 +68,6 @@ const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
     void invalidateOperationTags(queryClient, invalidations, {
       removeInactive: true,
     });
-    // A mutation's own derived work (an AI description, a recomputed
-    // valuation, a refreshed embedding) lands on the queue shortly after this
-    // returns — there is no batch left to watch, so re-check on a fixed
-    // schedule instead.
-    scheduleDeferredInvalidation(queryClient, invalidations);
   },
 };
 

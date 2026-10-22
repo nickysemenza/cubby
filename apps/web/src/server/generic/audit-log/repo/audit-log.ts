@@ -40,6 +40,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { oauthClient } from "~/server/db/auth.schema";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { eqAny, unwrapDb } from "~/server/db/helpers";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { auditLog } from "~/server/db/schema";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
@@ -283,6 +284,7 @@ export async function logAuditEntry(
     .returning({ id: auditLog.id });
   if (inserted) {
     captureAuditId(inserted.id);
+    await repositoryChanged(db, [entry.entityKind, "auditLog"]);
     await captureDerivedRefresh(db, [
       {
         auditId: inserted.id,
@@ -331,6 +333,10 @@ export async function logAuditEntries(
       changes: auditLog.changes,
     });
   for (const row of inserted) captureAuditId(row.id);
+  await repositoryChanged(db, [
+    ...inserted.map((row) => row.entityKind),
+    "auditLog",
+  ]);
   await captureDerivedRefresh(
     db,
     inserted.map((row) => ({
