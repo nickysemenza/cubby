@@ -189,6 +189,7 @@ export const renderStartOperationArtifacts = async (): Promise<{
       ...catalog.domains,
       catalog.all,
       catalog.commands,
+      catalog.commandRuntime,
       {
         relativePath: "apps/web/src/lib/generated/http-contract.gen.ts",
         source: await renderHttpContract(),

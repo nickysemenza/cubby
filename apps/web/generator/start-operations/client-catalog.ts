@@ -257,6 +257,7 @@ export const renderClientCatalog = async (): Promise<{
   domains: { relativePath: string; source: string }[];
   all: { relativePath: string; source: string };
   commands: { relativePath: string; source: string };
+  commandRuntime: { relativePath: string; source: string };
 }> => {
   const modules = await loadClientModules();
   const loadedContracts = await loadContracts();
@@ -315,8 +316,9 @@ export const renderClientCatalog = async (): Promise<{
         );
       return [
         {
+          domain: name,
           metadata: `    case ${JSON.stringify(operation)}: return ${commandJson};`,
-          options: `    case ${JSON.stringify(operation)}: { const { ${name} } = await import("~/integrations/tanstack-query/generated/catalog/${name}.gen"); const descriptor = ${descriptor}; const input = descriptor.definition.input; if (!input) throw new Error(\`Command \${operation} has no input schema.\`); return { ...descriptor.mutationOptions(), command: workflowCommandMetadata(operation), mutationFn: async (body: Record<string, unknown>): Promise<unknown> => descriptor.call(input.parse(body)) }; }`,
+          options: `    case ${JSON.stringify(operation)}: { const descriptor = ${descriptor}; const input = descriptor.definition.input; if (!input) throw new Error(\`Command \${operation} has no input schema.\`); return { ...descriptor.mutationOptions(), command: workflowCommandMetadata(operation), mutationFn: async (body: Record<string, unknown>): Promise<unknown> => descriptor.call(input.parse(body)) }; }`,
         },
       ];
     }),
@@ -325,7 +327,17 @@ export const renderClientCatalog = async (): Promise<{
     generatedHeader +
     `import type { WorkflowCommandMetadata } from "@cubby/schemas/workflow-command";\n\n` +
     `export function workflowCommandMetadata(operation: string): WorkflowCommandMetadata {\n  switch (operation) {\n${commandCases.map(({ metadata }) => metadata).join("\n")}\n    default: throw new Error(\`Undeclared user command: \${operation}\`);\n  }\n}\n\n` +
-    `export async function loadWorkflowCommandOptions(operation: string) {\n  switch (operation) {\n${commandCases.map(({ options }) => options).join("\n")}\n    default: throw new Error(\`Undeclared user command: \${operation}\`);\n  }\n}\n`;
+    `export async function loadWorkflowCommandOptions(operation: string) {\n  const { workflowCommandOptions } = await import("~/integrations/tanstack-query/generated/command-runtime.gen");\n  return workflowCommandOptions(operation);\n}\n`;
+  const commandRuntimeSource =
+    generatedHeader +
+    `import { workflowCommandMetadata } from "~/integrations/tanstack-query/generated/commands.gen";\n` +
+    [...new Set(commandCases.map(({ domain }) => domain))]
+      .map(
+        (domain) =>
+          `import { ${domain} } from "~/integrations/tanstack-query/generated/catalog/${domain}.gen";`,
+      )
+      .join("\n") +
+    `\n\nexport function workflowCommandOptions(operation: string) {\n  switch (operation) {\n${commandCases.map(({ options }) => options).join("\n")}\n    default: throw new Error(\`Undeclared user command: \${operation}\`);\n  }\n}\n`;
   return {
     domains,
     all: {
@@ -337,6 +349,11 @@ export const renderClientCatalog = async (): Promise<{
       relativePath:
         "apps/web/src/integrations/tanstack-query/generated/commands.gen.ts",
       source: commandSource,
+    },
+    commandRuntime: {
+      relativePath:
+        "apps/web/src/integrations/tanstack-query/generated/command-runtime.gen.ts",
+      source: commandRuntimeSource,
     },
   };
 };
