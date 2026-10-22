@@ -1,5 +1,5 @@
 import { statementRowContract } from "~/contracts/statement-row.contract";
-import { withTransactionDatabase } from "~/server/db/helpers";
+import { withSnapshotWriteDatabase } from "~/server/db/helpers";
 import {
   deleteStatementRows,
   findStatementRowDrift,
@@ -18,7 +18,7 @@ export const statementRowHandlers = implementOperationDomain(
     previewSuggestion: (context, input) =>
       previewStatementSuggestion(context.db, input),
     record: (context, input) =>
-      withTransactionDatabase(
+      withSnapshotWriteDatabase(
         context.db,
         async (db) => {
           const result = await recordStatementRows(

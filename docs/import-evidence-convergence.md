@@ -202,7 +202,10 @@ Evidence, memberships, revisions and the existing Sweep's Job intent commit in
 one transaction; waking happens after commit. Corrections recheck the existing
 automatic spending switch under its transaction lock; pausing it blocks money
 changes and retirement as well as new booking. Scheduling failure rolls admission
-back. Dry runs and unchanged replays create no work; existing Jobs own interrupted
+back. The outer DB-only snapshot write uses bounded retries for serialization
+conflicts, including late derived-refresh Job contention, rebuilding evidence and
+Sweep admission together on each attempt. Dry runs and unchanged replays create
+no work; existing Jobs own interrupted
 execution recovery. A new collection can advance observation time without
 changing the original source record; `refreshed` counts those new observations
 of existing facts. Completed collections reject additional membership. A reappearing
