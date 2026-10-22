@@ -371,9 +371,9 @@ function JobLogPanel({ jobId }: { jobId: string }) {
       ) : data?.status === "not_configured" ? (
         <LogState logs={data} title="Inline logs aren't configured">
           <span>
-            Set the{" "}
-            <code className="font-mono">CLOUDFLARE_OBSERVABILITY_TOKEN</code>{" "}
-            secret (Workers Observability read) to read this Job's lines here.
+            Set the <code className="font-mono">AI_GATEWAY_API_KEY</code>{" "}
+            secret, with the account's Workers Observability Edit permission, to
+            read this Job's lines here.
           </span>
         </LogState>
       ) : data?.status === "expired" ? (

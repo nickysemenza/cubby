@@ -394,19 +394,18 @@ pnpm --dir apps/web exec wrangler secret put NAME --name cubby
 pnpm --dir apps/web exec cf workers secrets list --worker cubby
 ```
 
-| Name                             | Storage                        | Purpose                                                                   |
-| -------------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`             | `cubby` Worker secret          | Better Auth signing/encryption                                            |
-| `R2_ACCESS_KEY_ID`               | `cubby` Worker secret          | Main R2 S3 credential                                                     |
-| `R2_SECRET_ACCESS_KEY`           | `cubby` Worker secret          | Main R2 S3 credential                                                     |
-| `GOOGLE_CLIENT_SECRET`           | `cubby` Worker secret          | Google OAuth confidential credential                                      |
-| `GOOGLE_CLIENT_ID`               | Checked-in Worker `vars` value | Public Google OAuth client identifier                                     |
-| `APNS_KEY_ID`                    | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)             |
-| `APNS_TEAM_ID`                   | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                            |
-| `APNS_PRIVATE_KEY`               | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                     |
-| `AI_GATEWAY_API_KEY`             | Worker/local secret            | Authenticated REST inference, including named subscriber BYOK             |
-| `NOTION_API_KEY`                 | Optional Worker/local secret   | Optional Notion integration                                               |
-| `CLOUDFLARE_OBSERVABILITY_TOKEN` | Optional `cubby` Worker secret | Workers Observability read for inline Job logs; absent = "not configured" |
+| Name                   | Storage                        | Purpose                                                                                                                                                           |
+| ---------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                                                                    |
+| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                             |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                             |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                                                              |
+| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                                                             |
+| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                                                                     |
+| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                                                                    |
+| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                                                             |
+| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK; with account-scoped Workers Observability Edit it also reads inline Job logs |
+| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                                                                                                                       |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -787,10 +786,14 @@ Observability telemetry query API, `POST /accounts/{account}/workers/observabili
 - **Filter.** `jobId` OR `runId` (the top-level fields `@cubby/worker-tracing`
   logs), view `events`, at most 500 lines.
 - **Window.** The Job's active window, with a minute of margin either side.
-- **Credentials.** The token comes from `CLOUDFLARE_OBSERVABILITY_TOKEN` and
-  needs Workers Observability read.
-- **Missing token.** The panel reads "not configured". The dev config deletes
-  secrets, so local runs always show this.
+- **Credentials.** The query authenticates with the `AI_GATEWAY_API_KEY`
+  Worker secret. That Cloudflare API token must also carry the account-scoped
+  Workers Observability Edit permission: the telemetry query endpoint requires
+  Write even for reads.
+- **Missing token.** Without `AI_GATEWAY_API_KEY` the panel reads "not
+  configured". A token without the permission returns 401/403, which the panel
+  shows as the scrubbed raw error. A local run with the key queries the
+  account's logs, which hold no local Job lines.
 - **Retention.** A window older than Workers Logs' 7-day retention reads
   "raw logs expired".
 - **Failures.** A failed query shows its raw response, redacted only by

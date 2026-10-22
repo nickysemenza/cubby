@@ -97,10 +97,8 @@ export const productionWorker = defineWorker({
     BETTER_AUTH_SECRET: bindings.secret(),
     R2_ACCESS_KEY_ID: bindings.secret(),
     R2_SECRET_ACCESS_KEY: bindings.secret(),
+    // Also queries Workers Observability for the Run page's inline Job logs.
     AI_GATEWAY_API_KEY: bindings.secret(),
-    // Read-only Workers Observability query token for the Run page's inline
-    // Job logs; absent, the panel says logs are not configured.
-    CLOUDFLARE_OBSERVABILITY_TOKEN: bindings.secret(),
 
     NODE_ENV: bindings.text("production"),
     ALLOW_SIGNUP: bindings.text("false"),

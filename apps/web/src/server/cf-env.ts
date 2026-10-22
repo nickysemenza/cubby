@@ -94,18 +94,6 @@ export const getGmailOAuthCredentials = () => {
 };
 
 /**
- * The read-only Workers Observability token behind inline Job logs, or
- * undefined outside a configured Worker.
- */
-export const getObservabilityToken = (): string | undefined => {
-  // SAFETY: Wrangler secrets are runtime Env fields absent from generated binding types.
-  const token = (
-    cfEnv as (Env & { CLOUDFLARE_OBSERVABILITY_TOKEN?: string }) | undefined
-  )?.CLOUDFLARE_OBSERVABILITY_TOKEN;
-  return token || undefined;
-};
-
-/**
  * APNs token-auth credentials for photo-run Live Activity pushes: the key id,
  * team id, and the `.p8` PKCS8 PEM. Absent outside a configured Worker.
  */

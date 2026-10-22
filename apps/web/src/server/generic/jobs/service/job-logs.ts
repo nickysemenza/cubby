@@ -3,8 +3,8 @@ import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { z } from "zod";
 
 import type { JobLogLine, JobLogsOut } from "~/contracts/job.contract";
+import { env } from "~/env";
 import { describeErrorCauses } from "~/lib/error-diagnostics";
-import { getObservabilityToken } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 
 import { readJobWindow } from "../repo/job-diagnostics";
@@ -111,8 +111,10 @@ export type LogDeps = {
   now: () => number;
 };
 
+// The AI Gateway token also carries Workers Observability Edit, which the
+// telemetry query endpoint requires even for reads.
 const productionDeps = (): LogDeps => ({
-  token: getObservabilityToken(),
+  token: env.AI_GATEWAY_API_KEY || undefined,
   fetch: (input, init) => fetch(input, init),
   now: Date.now,
 });
