@@ -28,6 +28,9 @@
       "~/server/operation-runtime/start-operation-dispatch.boundary": [
         "./artifacts/server-contracts/server/operation-runtime/start-operation-dispatch.boundary"
       ],
+      "~/server/operation-runtime/workflow-stream-dispatch.boundary": [
+        "./artifacts/server-contracts/server/operation-runtime/workflow-stream-dispatch.boundary"
+      ],
       "~/server/operation-runtime/middleware/native-workspace": [
         "./artifacts/server-contracts/server/operation-runtime/middleware/native-workspace"
       ],

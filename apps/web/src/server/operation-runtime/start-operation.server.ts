@@ -291,7 +291,7 @@ function reportOperationFailure<TError>(
  * Resolve the actor for a Start request and record the one span fact both
  * transports report identically.
  *
- * This is the whole of what `runStartOperation` and `workflowStreamResponse`
+ * This is the whole of what `runStartOperation` and `workflowStream`
  * share. Everything downstream differs BECAUSE one transport returns a value
  * and the other a stream: read-policy selection, output parsing, and the
  * result envelope have no counterpart on the stream side, and the same-origin

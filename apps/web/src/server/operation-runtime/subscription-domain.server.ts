@@ -6,9 +6,12 @@ import type {
 } from "~/contracts/define";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
-import type { Workload } from "~/server/http/workload";
+import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
-import { workflowStreamResponse } from "~/server/operation-runtime/workflow-stream.server";
+import {
+  workflowStream,
+  type WorkflowStream,
+} from "~/server/operation-runtime/workflow-stream.server";
 
 type SubscriptionDomainDescriptor = {
   readonly id: StartOperationIdOfKind<"subscription">;
@@ -32,43 +35,10 @@ type SubscriptionRun<Descriptor extends SubscriptionDomainDescriptor> = (
   | AsyncIterable<z.input<Descriptor["definition"]["event"]>>
   | Promise<AsyncIterable<z.input<Descriptor["definition"]["event"]>>>;
 
-/** Produces the NDJSON response for one stream request. */
 export type WorkflowStreamHandler = (options: {
   request: Request;
-}) => Promise<Response>;
-
-export type WorkflowStreamExecutionOptions<
-  Input,
-  EventSchema extends z.ZodType,
-> = {
-  request: Request;
-  operation: StartOperationIdOfKind<"subscription">;
-  inputSchema: z.ZodType<Input>;
-  eventSchema: EventSchema;
-  workload?: Workload;
-  run: (
-    context: AuthenticatedStartOperationContext,
-    input: Input,
-    signal: AbortSignal,
-  ) =>
-    | AsyncIterable<z.input<EventSchema>>
-    | Promise<AsyncIterable<z.input<EventSchema>>>;
-};
-
-/** Injectable streaming seam; production delegates to workflowStreamResponse. */
-export interface WorkflowStreamExecutionAdapter {
-  respond<Input, EventSchema extends z.ZodType>(
-    options: WorkflowStreamExecutionOptions<Input, EventSchema>,
-  ): Promise<Response>;
-}
-
-const productionStreamExecutionAdapter = {
-  respond<Input, EventSchema extends z.ZodType>(
-    options: WorkflowStreamExecutionOptions<Input, EventSchema>,
-  ) {
-    return workflowStreamResponse(options);
-  },
-} satisfies WorkflowStreamExecutionAdapter;
+  input: UnparsedStartOperationData;
+}) => Promise<WorkflowStream>;
 
 type SubscriptionDescriptorOf<
   Contract extends OperationContract,
@@ -106,13 +76,13 @@ function declaredEventSchema(descriptor: SubscriptionDomainDescriptor) {
 function streamHandlerFor<Descriptor extends SubscriptionDomainDescriptor>(
   descriptor: Descriptor,
   run: SubscriptionRun<Descriptor>,
-  adapter: WorkflowStreamExecutionAdapter,
 ): WorkflowStreamHandler {
   const inputSchema = declaredInputSchema(descriptor);
   const eventSchema = declaredEventSchema(descriptor);
   return (options) =>
-    adapter.respond({
+    workflowStream({
       request: options.request,
+      input: options.input,
       operation: descriptor.id,
       inputSchema,
       eventSchema,
@@ -137,12 +107,10 @@ export function implementSubscriptionDomain<Contract extends OperationContract>(
       SubscriptionDescriptorOf<Contract, Member>
     >;
   },
-  adapter?: WorkflowStreamExecutionAdapter,
 ): SubscriptionImplementationMap<Contract>;
 export function implementSubscriptionDomain(
   contract: OperationContract,
   handlers: Record<string, SubscriptionRun<SubscriptionDomainDescriptor>>,
-  adapter: WorkflowStreamExecutionAdapter = productionStreamExecutionAdapter,
 ) {
   const streams: Record<string, WorkflowStreamHandler> = {};
   for (const [member, definition] of Object.entries(contract.ops)) {
@@ -152,7 +120,7 @@ export function implementSubscriptionDomain(
       throw new Error(`${id} is not registered as a subscription`);
     const run = handlers[member];
     if (!run) throw new Error(`Missing handler for ${id}`);
-    streams[member] = streamHandlerFor({ id, definition }, run, adapter);
+    streams[member] = streamHandlerFor({ id, definition }, run);
   }
   return { streams };
 }

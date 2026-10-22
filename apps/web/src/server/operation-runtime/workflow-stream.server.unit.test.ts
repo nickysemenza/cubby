@@ -1,5 +1,4 @@
 import { testUserId } from "@cubby/schemas/testing";
-import superjson from "superjson";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -13,7 +12,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   type WorkflowStreamRuntime,
-  workflowStreamResponse,
+  workflowStream,
 } from "./workflow-stream.server";
 
 const database = createDatabase(() => {
@@ -26,10 +25,9 @@ const context = requireActor(
 );
 
 const request = () =>
-  new Request(
-    "https://cubby.test/api/workflow-stream/ai.backfillLocationDescriptions",
-    { method: "POST", body: superjson.stringify({}) },
-  );
+  new Request("https://cubby.test/_serverFn/ai.backfillLocationDescriptions", {
+    method: "POST",
+  });
 
 type StreamRun = (
   context: AuthenticatedStartOperationContext,
@@ -56,9 +54,10 @@ const responseFor = (
   operation: "ai.backfillLocationDescriptions",
   run: StreamRun,
 ) =>
-  workflowStreamResponse(
+  workflowStream(
     {
       request: request(),
+      input: {},
       operation,
       inputSchema: z.object({}),
       eventSchema: z.object({ n: z.number() }),
@@ -67,8 +66,22 @@ const responseFor = (
     runtime,
   );
 
+const collect = async <T>(stream: ReadableStream<T>) => {
+  const values: T[] = [];
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return values;
+      values.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+};
+
 const streamFrameSchema = z.object({
-  kind: z.enum(["event", "error"]),
+  ok: z.boolean(),
   error: publicStartOperationErrorSchema.optional(),
 });
 
@@ -89,7 +102,7 @@ describe("workflow stream freshness notifications", () => {
       },
     );
 
-    await response.text();
+    await collect(response);
 
     expect(callsWhenSecondEventStarts).toBe(1);
     expect(recordDatabaseWrite).toHaveBeenCalledTimes(3);
@@ -110,12 +123,11 @@ describe("workflow stream freshness notifications", () => {
       () => "sample-stream-event",
     );
 
-    const frames = (await response.text())
-      .trim()
-      .split("\n")
-      .map((line) => streamFrameSchema.parse(JSON.parse(line)));
+    const frames = (await collect(response)).map((frame) =>
+      streamFrameSchema.parse(frame),
+    );
 
-    expect(frames.map((frame) => frame.kind)).toEqual(["event", "error"]);
+    expect(frames.map((frame) => frame.ok)).toEqual([true, false]);
     expect(frames[1]?.error).toMatchObject({
       message: "later batch failed",
       diagnostics: { sentryEventId: "sample-stream-event", stage: "run" },
@@ -123,19 +135,19 @@ describe("workflow stream freshness notifications", () => {
     expect(recordDatabaseWrite).toHaveBeenCalledTimes(2);
   });
 
-  it("authenticates before decoding a malformed stream body", async () => {
+  it("authenticates before validating malformed domain input", async () => {
     authenticate.mockRejectedValueOnce(
       new Error("private authentication backend detail"),
     );
     const run = vi.fn(async function* () {
       yield { n: 1 };
     });
-    const response = await workflowStreamResponse(
+    const response = await workflowStream(
       {
-        request: new Request("https://cubby.test/api/workflow-stream/test", {
+        request: new Request("https://cubby.test/_serverFn/test", {
           method: "POST",
-          body: "not-json",
         }),
+        input: "not-an-object",
         operation: "ai.backfillLocationDescriptions",
         inputSchema: z.object({}),
         eventSchema: z.object({ n: z.number() }),
@@ -143,13 +155,15 @@ describe("workflow stream freshness notifications", () => {
       },
       runtime,
     );
-    const body = await response.text();
-    const frame = streamFrameSchema.parse(JSON.parse(body.trim()));
+    const frames = await collect(response);
+    const frame = streamFrameSchema.parse(frames[0]);
     expect(frame.error?.diagnostics).toMatchObject({
       stage: "context",
       causes: [],
     });
-    expect(body).not.toContain("private authentication backend detail");
+    expect(JSON.stringify(frames)).not.toContain(
+      "private authentication backend detail",
+    );
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -163,8 +177,7 @@ describe("workflow stream freshness notifications", () => {
         );
       },
     );
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("Expected a readable workflow stream");
+    const reader = response.getReader();
 
     await reader.read();
     await reader.cancel("consumer cancelled");

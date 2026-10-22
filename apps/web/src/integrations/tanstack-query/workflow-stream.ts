@@ -1,133 +1,137 @@
-import superjson from "superjson";
-import { z } from "zod";
+import type { z } from "zod";
 
 import {
   beginObservedOperation,
   finishObservedOperation,
   operationHeaders,
 } from "~/integrations/tanstack-query/operation-recorder";
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
+import { unwrapStartOperationResult } from "~/integrations/tanstack-query/start-transport";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import { superJsonResultSchema } from "~/lib/superjson-wire";
-import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
-
-const streamFrameSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("event"), payload: superJsonResultSchema }),
-  z.object({
-    kind: z.literal("error"),
-    error: publicStartOperationErrorSchema,
-  }),
-]);
-
-type StreamFrame = z.infer<typeof streamFrameSchema>;
-
-/** The browser edge the stream owns; tests supply a local runtime. */
-export interface WorkflowStreamRuntime {
-  fetch: typeof fetch;
-}
-
-const productionWorkflowStreamRuntime: WorkflowStreamRuntime = {
-  // Wrap rather than store the native function: `runtime.fetch(...)` invokes
-  // it with the runtime object as `this`, which browsers reject with
-  // "Illegal invocation" and which broke every durable maintenance stream.
-  fetch: (input, init) => fetch(input, init),
-};
-
-const parseFrame = (line: string): StreamFrame => {
-  const parsed = streamFrameSchema.safeParse(JSON.parse(line));
-  if (parsed.success) return parsed.data;
-  throw new Error("Workflow stream returned an invalid frame", {
-    cause: parsed.error,
-  });
-};
-
-async function* readFrames<EventSchema extends z.ZodTypeAny>(options: {
-  response: Response;
-  eventSchema: EventSchema;
-}): AsyncGenerator<z.output<EventSchema>> {
-  if (!options.response.body) {
-    throw new Error("Workflow stream returned no body");
-  }
-  const reader = options.response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      buffer += decoder.decode(value, { stream: !done });
-      let newline = buffer.indexOf("\n");
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline).trim();
-        buffer = buffer.slice(newline + 1);
-        if (line) {
-          const frame = parseFrame(line);
-          if (frame.kind === "error")
-            throw new StartOperationError(frame.error);
-          yield options.eventSchema.parse(superjson.deserialize(frame.payload));
-        }
-        newline = buffer.indexOf("\n");
-      }
-      if (done) break;
-    }
-    if (buffer.trim()) {
-      const frame = parseFrame(buffer.trim());
-      if (frame.kind === "error") throw new StartOperationError(frame.error);
-      yield options.eventSchema.parse(superjson.deserialize(frame.payload));
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
+import { callWorkflowStream } from "~/lib/workflow-stream-call";
+import {
+  unparsedStartOperationDataSchema,
+  unparsedStartOperationResultSchema,
+} from "~/server/operation-runtime/start-operation.contract";
 
 export async function openWorkflowStream<
   Input,
   EventSchema extends z.ZodTypeAny,
->(
-  options: {
-    operation: StartOperationIdOfKind<"subscription">;
-    kind: "query" | "mutation";
-    url: string;
-    input: Input;
-    eventSchema: EventSchema;
-    signal?: AbortSignal;
-  },
-  runtime: WorkflowStreamRuntime = productionWorkflowStreamRuntime,
-): Promise<AsyncIterable<z.output<EventSchema>>> {
+>(options: {
+  operation: StartOperationIdOfKind<"subscription">;
+  kind: "query" | "mutation";
+  input: Input;
+  eventSchema: EventSchema;
+  signal?: AbortSignal;
+}): Promise<AsyncIterable<z.output<EventSchema>>> {
   const observed = beginObservedOperation({
     kind: options.kind,
     transport: "start",
     operation: options.operation,
     input: options.input,
   });
+  const controller = new AbortController();
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal])
+    : controller.signal;
+  let transportEnded = false;
+  let readPending = false;
+  const rejectIncompleteStream = () => {
+    if (!transportEnded || !readPending) return;
+    // Carrier values exclude promises. Let Start drain its synchronous patches
+    // through the microtask queue before checking for a missing closing patch.
+    setTimeout(() => {
+      if (readPending) {
+        controller.abort(
+          new Error("Workflow response ended before its stream completed"),
+        );
+      }
+    }, 0);
+  };
   try {
-    const response = await runtime.fetch(options.url, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "content-type": "application/json",
-        ...operationHeaders(observed),
+    const stream = await callWorkflowStream({
+      data: {
+        operation: options.operation,
+        input: unparsedStartOperationDataSchema.parse(options.input),
       },
-      body: superjson.stringify(options.input),
-      signal: options.signal,
-    });
-    if (!response.ok) {
-      throw new Error(`Workflow stream failed with HTTP ${response.status}`);
-    }
-    return (async function* () {
-      try {
-        for await (const event of readFrames({
+      headers: operationHeaders(observed),
+      signal,
+      fetch: async (url, init) => {
+        const response = await globalThis.fetch(url, init);
+        if (!response.body) return response;
+        const reader = response.body.getReader();
+        // Start currently logs framing read failures without rejecting streams
+        // it already deserialized. Abort those readers with the original error.
+        return new Response(
+          new ReadableStream({
+            async pull(body) {
+              try {
+                const chunk = await reader.read();
+                if (chunk.done) {
+                  transportEnded = true;
+                  body.close();
+                  rejectIncompleteStream();
+                } else body.enqueue(chunk.value);
+              } catch (error) {
+                controller.abort(error);
+                body.error(error);
+              }
+            },
+            cancel: (reason) => {
+              controller.abort(reason);
+              return reader.cancel(reason);
+            },
+          }),
           response,
-          eventSchema: options.eventSchema,
-        })) {
-          yield event;
+        );
+      },
+    });
+    return (async function* () {
+      const reader = stream.getReader();
+      const cancelReader = () => {
+        // Start can leave deserialized reads pending after a transport abort.
+        void reader.cancel(signal.reason).catch(() => {
+          // SILENT: the abort reason is surfaced by throwIfAborted below.
+        });
+      };
+      signal.addEventListener("abort", cancelReader, { once: true });
+      let finished = false;
+      try {
+        while (true) {
+          signal.throwIfAborted();
+          readPending = true;
+          rejectIncompleteStream();
+          const { value, done } = await reader.read().finally(() => {
+            readPending = false;
+          });
+          signal.throwIfAborted();
+          if (done) break;
+          const result = unparsedStartOperationResultSchema.parse(value);
+          yield options.eventSchema.parse(
+            unwrapStartOperationResult(options.operation, result),
+          );
         }
+        finished = true;
         finishObservedOperation(observed, { result: "stream-complete" });
       } catch (error) {
+        finished = true;
         finishObservedOperation(observed, { error });
         throw error;
+      } finally {
+        // Early iterator return must cancel the request, not just release its reader.
+        signal.removeEventListener("abort", cancelReader);
+        controller.abort();
+        try {
+          await reader.cancel();
+        } catch {
+          // SILENT: an already-aborted transport must not replace the stream's error.
+        }
+        reader.releaseLock();
+        if (!finished)
+          finishObservedOperation(observed, { result: "stream-cancelled" });
       }
     })();
   } catch (error) {
+    controller.abort();
     finishObservedOperation(observed, { error });
     throw error;
   }

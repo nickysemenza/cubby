@@ -49,8 +49,12 @@ The server render uses TanStack Start's local function execution, never an HTTP
 request to itself. Keep `~/server` imports behind the `.server()` branch of an
 isomorphic function. `ssr: false` is a measured cost choice, not a correctness
 workaround; a loader may await `ensureQueryData` when that latency is warranted.
-Workflow streams use typed JSONL server routes and an `AbortSignal`; the owning
-screen opens them explicitly rather than a generic dispatcher.
+Workflow streams use one typed Start server function and an `AbortSignal`;
+Start owns framing and serialization. The owning screen opens the stream
+explicitly. Shared operation result envelopes retain normalized diagnostics;
+domain input/events remain schema-validated inside the authenticated runtime.
+Producers observe the request signal, and early iterator return cancels the
+request. Global server-function middleware owns CSRF and private response headers.
 Cookbook import stays busy until its recipe stream and photo phase finish.
 The stream's done event precedes iterator completion; hand off recipe progress
 to photo progress atomically, with the outer import cleanup owning completion.

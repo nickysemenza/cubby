@@ -130,13 +130,6 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     template: "/api/v1/:resource/:operation",
   },
   { pattern: /^\/api\/auth(?:\/.*)?$/u, template: "/api/auth/:splat" },
-  // One route for every workflow stream since the 13 bespoke stream routes
-  // were replaced; the operation id is a registry key, but it stays out of
-  // the span name like every other path segment.
-  {
-    pattern: /^\/api\/workflow-stream\/[^/]+$/u,
-    template: "/api/workflow-stream/:operation",
-  },
   {
     pattern: /^\/recipes\/[^/]+\/export$/u,
     template: "/recipes/:shortcode/export",
