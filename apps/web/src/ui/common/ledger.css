@@ -497,11 +497,17 @@
 
 /* The proposal stays on one compact line; only deliberate Review expands evidence. */
 .suggestion-review {
+  --suggestion-ink: var(--action-change);
+  --suggestion-surface: var(--action-change-surface);
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--brand-space-2);
   width: 100%;
+}
+.suggestion-review[data-suggestion-action="remove"] {
+  --suggestion-ink: var(--destructive);
+  --suggestion-surface: var(--destructive-surface);
 }
 .suggestion-proposal {
   flex: 1 1 auto;
@@ -514,4 +520,30 @@
 }
 .suggestion-evidence {
   flex-basis: 100%;
+}
+
+.suggestion-proposal {
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border-block: 1px solid
+    color-mix(in srgb, var(--suggestion-ink) 25%, transparent);
+  background: var(--suggestion-surface);
+}
+.suggestion-value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--brand-space-1) var(--brand-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.suggestion-value-label,
+.suggestion-confidence {
+  color: color-mix(in srgb, var(--foreground) 75%, var(--suggestion-ink));
+}
+.suggestion-value-label {
+  font-weight: 500;
+}
+.suggestion-proposed-value {
+  color: var(--suggestion-ink);
+  font-weight: 500;
 }

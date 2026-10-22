@@ -189,6 +189,7 @@ export function RecordRow({
   actions,
   detail,
   clip = true,
+  stacked = false,
   className,
   ...props
 }: {
@@ -202,12 +203,18 @@ export function RecordRow({
   detail?: ReactNode;
   /** Clip evidence to one line on wide rows; off for text that must wrap in full. */
   clip?: boolean;
+  /** Keep non-columnar activity context below a wrapping primary line. */
+  stacked?: boolean;
   className?: string;
   "data-testid"?: string;
 }) {
   const columnOf = useContext(RecordColumnsContext);
   return (
-    <LedgerRow className={className} {...props}>
+    <LedgerRow
+      data-record-stacked={(stacked && !columnOf) || undefined}
+      className={className}
+      {...props}
+    >
       {leading !== undefined ? (
         <LedgerCell slot="leading">{leading}</LedgerCell>
       ) : null}
@@ -226,7 +233,7 @@ export function RecordRow({
         </LedgerCell>
       ) : null}
       {facts?.length ? (
-        <LedgerCell as="div" slot="facts">
+        <LedgerCell as="div" slot={stacked ? "secondary" : "facts"}>
           <Facts
             layout="inline"
             facts={facts}

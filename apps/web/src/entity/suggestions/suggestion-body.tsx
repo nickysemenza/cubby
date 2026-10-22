@@ -1,7 +1,6 @@
 import { formatConfidence, type Confidence } from "@cubby/schemas/ai";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import type { ReactNode } from "react";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
@@ -133,9 +132,6 @@ export function SuggestionBody({
   );
   const evidenceBody = (
     <Stack gap="xs" className="min-w-0 text-xs">
-      <Description size="xs">
-        Confidence: {formatConfidence(probability, confidence)}
-      </Description>
       {runnerUp ? (
         <Description size="xs">
           Alternative: {runnerUp.label}
@@ -189,22 +185,25 @@ export function SuggestionBody({
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Review controls own keyboard behavior; this wrapper only blocks the record row click.
     <div
       className="suggestion-review min-w-0 text-xs whitespace-normal"
+      data-suggestion-action={removal ? "remove" : "change"}
       onClick={stop}
       onMouseDown={stop}
     >
       <div className="suggestion-proposal flex min-w-0 flex-wrap items-center gap-2">
         {current !== null ? (
-          <>
-            <span className="text-muted-foreground">{current}</span>
-            <ArrowRightIcon
-              className="size-3.5 shrink-0"
-              aria-label="suggested replacement"
-            />
-          </>
+          <span className="suggestion-value">
+            <span className="suggestion-value-label">Current</span>
+            <span>{current}</span>
+          </span>
         ) : null}
-        <span className="font-medium text-primary">
-          {current === null && !removal ? "Suggested: " : null}
-          {proposed}
+        <span className="suggestion-value">
+          <span className="suggestion-value-label">
+            {removal ? "Proposed removal" : "Proposed"}
+          </span>
+          <span className="suggestion-proposed-value">{proposed}</span>
+        </span>
+        <span className="suggestion-confidence">
+          Confidence: {formatConfidence(probability, confidence)}
         </span>
         {accept}
       </div>

@@ -4,33 +4,26 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type AuditableEntity,
   isAuditableEntity,
-  shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { dateSpanParts } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatCurrency } from "~/lib/number-format";
-import { RecordList, RecordMore, RecordRow } from "~/ui/common/record-list";
+import {
+  RecordDot,
+  RecordList,
+  RecordMore,
+  RecordRow,
+} from "~/ui/common/record-list";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 
 import { AuditLogList } from "../audit-log/audit-log-list";
 import { useDetailActivity } from "./use-detail-data";
-
-function linkOf(event: DetailActivityEvent) {
-  const { entity, shortcode } = event;
-  if (event.kind !== "record" || !shortcode || !isBrowserRoutedEntity(entity))
-    return null;
-  const routed = shortcodeEntities.find((candidate) => candidate === entity);
-  return routed && isBrowserRoutedEntity(routed)
-    ? entityDetailLink(routed, shortcode)
-    : null;
-}
 
 const changeVerb = (action: string) =>
   action === "create"
@@ -135,43 +128,60 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
                 aria-label={`${formatCalendarDay(day, "dateShort")} activity`}
               >
                 {dayEvents.map((event) => {
-                  const link = linkOf(event);
                   const { title, subtitle } =
                     event.kind === "change"
                       ? changeText(event)
                       : { title: event.title, subtitle: event.subtitle };
-                  const primary = link ? (
-                    <Link
-                      {...link}
-                      className="truncate font-medium text-foreground-strong underline-offset-2 hover:underline"
-                    >
-                      {title}
-                    </Link>
-                  ) : (
-                    <span
-                      className={
-                        event.kind === "change"
-                          ? "truncate text-muted-foreground"
-                          : "truncate font-medium text-foreground-strong"
-                      }
-                    >
-                      {title}
-                    </span>
-                  );
+                  const primary =
+                    event.kind === "record" && event.shortcode ? (
+                      <EntityRefLink
+                        variant="audit"
+                        entityKind={event.entity}
+                        entityId={event.shortcode}
+                        name={title}
+                        displayImage={null}
+                        compact
+                      />
+                    ) : (
+                      <span className="font-medium text-foreground-strong">
+                        {title}
+                      </span>
+                    );
                   return (
                     <RecordRow
                       key={event.id}
+                      stacked
+                      leading={
+                        event.kind === "change" ? (
+                          <RecordDot
+                            label={title}
+                            color={
+                              event.title === "update"
+                                ? "var(--action-change)"
+                                : undefined
+                            }
+                            spoken={false}
+                            tone={
+                              event.title === "create"
+                                ? "positive"
+                                : event.title === "delete"
+                                  ? "destructive"
+                                  : undefined
+                            }
+                          />
+                        ) : undefined
+                      }
                       primary={
                         <>
                           {primary}
-                          {event.kind === "record" && event.shortcode ? (
-                            <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                              {event.shortcode}
+                          {event.kind === "change" && subtitle ? (
+                            <span className="text-xs text-muted-foreground">
+                              {subtitle}
                             </span>
                           ) : null}
                         </>
                       }
-                      secondary={subtitle}
+                      secondary={event.kind === "record" ? subtitle : undefined}
                       trailing={
                         event.amountCents !== undefined ? (
                           <span className="font-mono text-foreground-strong tabular-nums">
