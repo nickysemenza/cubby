@@ -6,7 +6,7 @@ import { run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import {
-  createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
@@ -19,34 +19,37 @@ test("list cells show project completion, open deadlines, and sampled run work",
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const prefix = `Synthetic work grid ${Date.now()}`;
-  const project = await createEntityFixture(page, "project", {
-    name: `${prefix} project`,
-    status: "in_progress",
-  });
-  await createEntityFixture(page, "project", {
-    name: `${prefix} empty`,
-    status: "in_progress",
-  });
-  await createEntityFixture(page, "task", {
-    name: `${prefix} overdue`,
-    trade: "other",
-    projectId: project.id,
-    status: "not_started",
-    due: { start: householdDaysFromNow(-2), end: null },
-  });
-  await createEntityFixture(page, "task", {
-    name: `${prefix} finished`,
-    trade: "other",
-    projectId: project.id,
-    status: "done",
-    due: { start: householdDaysFromNow(-2), end: null },
-  });
-  await createEntityFixture(page, "task", {
-    name: `${prefix} future`,
-    trade: "other",
-    projectId: project.id,
-    status: "not_started",
-    due: { start: householdDaysFromNow(2), end: null },
+  const { project } = await createFixtureGraph(page, async (create) => {
+    const project = await create("project", {
+      name: `${prefix} project`,
+      status: "in_progress",
+    });
+    await create("project", {
+      name: `${prefix} empty`,
+      status: "in_progress",
+    });
+    await create("task", {
+      name: `${prefix} overdue`,
+      trade: "other",
+      projectId: project.id,
+      status: "not_started",
+      due: { start: householdDaysFromNow(-2), end: null },
+    });
+    await create("task", {
+      name: `${prefix} finished`,
+      trade: "other",
+      projectId: project.id,
+      status: "done",
+      due: { start: householdDaysFromNow(-2), end: null },
+    });
+    await create("task", {
+      name: `${prefix} future`,
+      trade: "other",
+      projectId: project.id,
+      status: "not_started",
+      due: { start: householdDaysFromNow(2), end: null },
+    });
+    return { project };
   });
 
   await gotoAuthenticatedPage(

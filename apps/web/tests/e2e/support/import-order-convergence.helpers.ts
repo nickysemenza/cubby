@@ -37,6 +37,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import {
   createEvidenceHarnessContext,
   createEntityFixture,
+  createFixtureGraph,
 } from "../fixtures/core";
 import {
   completeDescribeImageJobs,
@@ -147,9 +148,10 @@ export async function applyReviewedSourceReconciliation(
         proposedImportFix.safeParse(row.proposedFix).data?.kind ===
         "reconcile_source_order",
     );
-  // A browser approval commits after its click returns.
-  await expect.poll(async () => (await openReconciliations()).length).toBe(1);
-  const [finding] = await openReconciliations();
+  // Callers await the import's committed receipt before reconciliation.
+  const findings = await openReconciliations();
+  expect(findings).toHaveLength(1);
+  const [finding] = findings;
   if (!finding) throw new Error("Reconciliation finding missing");
   const lines = () =>
     database.query.expense.findMany({
@@ -278,10 +280,8 @@ export async function createConvergenceHarness(
   const names = convergenceNames(token);
   const { productName, orderId } = names;
   const { vendor, card, location, category, productCategory } =
-    await createConvergenceFixtures(
-      (entity, overrides) => createEntityFixture(page, entity, overrides),
-      member.shortcode,
-      names,
+    await createFixtureGraph(page, (create) =>
+      createConvergenceFixtures(create, member.shortcode, names),
     );
   const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);

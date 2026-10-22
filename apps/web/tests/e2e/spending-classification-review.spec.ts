@@ -9,7 +9,7 @@ import {
   selectComboboxItem,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { createEntityFixture } from "./fixtures/core";
+import { createEntityFixture, createFixtureGraph } from "./fixtures/core";
 
 // One real browser/backend journey guards review freshness, live historical
 // mapping, explicit purpose precedence, reset and canonical cent totals.
@@ -19,41 +19,42 @@ test("reviews historical item classification and preserves explicit purpose", as
 }) => {
   const headers = { Origin: baseURL! };
   const categoryName = "Synthetic classification clothing";
-  const { id: clothing } = await createEntityFixture(page, "spendingCategory", {
-    name: categoryName,
-  });
-  const { id: gifts } = await createEntityFixture(page, "spendingCategory", {
-    name: "Synthetic classification gifts",
-  });
-  const { id: productCategory } = await createEntityFixture(
-    page,
-    "productCategory",
-    {
-      name: "Synthetic classification shoes",
-    },
-  );
-  const { id: vendor } = await createEntityFixture(page, "vendor", {
-    name: "Synthetic classification mixed shop",
-    spendingProfile: "mixed_retail",
-  });
-  const { id: product } = await createEntityFixture(page, "product", {
-    name: "Synthetic classification boots",
-    manufacturer: "Synthetic",
-    categoryId: productCategory,
-  });
-  const { id: purchase } = await createEntityFixture(page, "purchase", {
-    vendorId: vendor,
-    date: "2026-09-01",
-  });
-  const { id: expense } = await createEntityFixture(page, "expense", {
-    name: "Synthetic classification boots",
-    cost: 60,
-    date: "2026-09-01",
-    costType: "materials",
-    trade: "other",
-    productId: product,
-    purchaseId: purchase,
-  });
+  const { clothing, gifts, productCategory, product, purchase, expense } =
+    await createFixtureGraph(page, async (create) => {
+      const { id: clothing } = await create("spendingCategory", {
+        name: categoryName,
+      });
+      const { id: gifts } = await create("spendingCategory", {
+        name: "Synthetic classification gifts",
+      });
+      const { id: productCategory } = await create("productCategory", {
+        name: "Synthetic classification shoes",
+      });
+      const { id: vendor } = await create("vendor", {
+        name: "Synthetic classification mixed shop",
+        spendingProfile: "mixed_retail",
+      });
+      const { id: product } = await create("product", {
+        name: "Synthetic classification boots",
+        manufacturer: "Synthetic",
+        categoryId: productCategory,
+      });
+      const { id: purchase } = await create("purchase", {
+        vendorId: vendor,
+        date: "2026-09-01",
+      });
+      const { id: expense } = await create("expense", {
+        name: "Synthetic classification boots",
+        cost: 60,
+        date: "2026-09-01",
+        costType: "materials",
+        trade: "other",
+        productId: product,
+        purchaseId: purchase,
+      });
+      return { clothing, gifts, productCategory, product, purchase, expense };
+    });
+
   const patch = async (
     id: string,
     data: z.infer<ReturnType<typeof z.json>>,
